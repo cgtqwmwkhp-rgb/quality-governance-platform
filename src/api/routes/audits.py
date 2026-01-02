@@ -1,34 +1,912 @@
 """Audits & Inspections API routes."""
 
-from fastapi import APIRouter
+from datetime import datetime, timezone
+from typing import Optional
 
-from src.api.dependencies import DbSession, CurrentUser
+from fastapi import APIRouter, HTTPException, status, Query
+from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
+
+from src.api.dependencies import DbSession, CurrentUser, CurrentSuperuser
+from src.api.schemas.audit import (
+    AuditTemplateCreate,
+    AuditTemplateUpdate,
+    AuditTemplateResponse,
+    AuditTemplateDetailResponse,
+    AuditTemplateListResponse,
+    AuditSectionCreate,
+    AuditSectionUpdate,
+    AuditSectionResponse,
+    AuditQuestionCreate,
+    AuditQuestionUpdate,
+    AuditQuestionResponse,
+    AuditRunCreate,
+    AuditRunUpdate,
+    AuditRunResponse,
+    AuditRunDetailResponse,
+    AuditRunListResponse,
+    AuditResponseCreate,
+    AuditResponseUpdate,
+    AuditResponseResponse,
+    AuditFindingCreate,
+    AuditFindingUpdate,
+    AuditFindingResponse,
+    AuditFindingListResponse,
+)
+from src.domain.models.audit import (
+    AuditTemplate,
+    AuditSection,
+    AuditQuestion,
+    AuditRun,
+    AuditResponse,
+    AuditFinding,
+    AuditStatus,
+    FindingStatus,
+)
+from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 
 
-@router.get("")
-async def list_audits(
+# ============== Template Endpoints ==============
+
+@router.get("/templates", response_model=AuditTemplateListResponse)
+async def list_templates(
     db: DbSession,
     current_user: CurrentUser,
-) -> dict:
-    """List all audit templates and runs."""
-    return {"message": "Audits module - Coming in Phase 2"}
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    audit_type: Optional[str] = None,
+    is_published: Optional[bool] = None,
+) -> AuditTemplateListResponse:
+    """List all audit templates with pagination and filtering."""
+    query = select(AuditTemplate).where(AuditTemplate.is_active == True)
+
+    if search:
+        search_filter = f"%{search}%"
+        query = query.where(
+            (AuditTemplate.name.ilike(search_filter)) |
+            (AuditTemplate.description.ilike(search_filter))
+        )
+    if category:
+        query = query.where(AuditTemplate.category == category)
+    if audit_type:
+        query = query.where(AuditTemplate.audit_type == audit_type)
+    if is_published is not None:
+        query = query.where(AuditTemplate.is_published == is_published)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(AuditTemplate.name)
+
+    result = await db.execute(query)
+    templates = result.scalars().all()
+
+    return AuditTemplateListResponse(
+        items=[AuditTemplateResponse.model_validate(t) for t in templates],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
+    )
 
 
-@router.get("/templates")
-async def list_audit_templates(
+@router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def create_template(
+    template_data: AuditTemplateCreate,
     db: DbSession,
     current_user: CurrentUser,
-) -> dict:
-    """List all audit templates."""
-    return {"message": "Audit templates - Coming in Phase 2"}
+) -> AuditTemplateResponse:
+    """Create a new audit template."""
+    template = AuditTemplate(
+        **template_data.model_dump(exclude={"standard_ids"}),
+        created_by_id=current_user.id,
+    )
+    
+    # Generate reference number
+    template.reference_number = await ReferenceNumberService.generate(
+        db, "audit_template", AuditTemplate
+    )
+    
+    db.add(template)
+    await db.commit()
+    await db.refresh(template)
+
+    return AuditTemplateResponse.model_validate(template)
 
 
-@router.get("/runs")
-async def list_audit_runs(
+@router.get("/templates/{template_id}", response_model=AuditTemplateDetailResponse)
+async def get_template(
+    template_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> dict:
-    """List all audit runs."""
-    return {"message": "Audit runs - Coming in Phase 2"}
+) -> AuditTemplateDetailResponse:
+    """Get a specific audit template with sections and questions."""
+    result = await db.execute(
+        select(AuditTemplate)
+        .options(
+            selectinload(AuditTemplate.sections).selectinload(AuditSection.questions)
+        )
+        .where(AuditTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    response = AuditTemplateDetailResponse.model_validate(template)
+    response.section_count = len(template.sections)
+    response.question_count = sum(len(s.questions) for s in template.sections)
+    
+    return response
+
+
+@router.patch("/templates/{template_id}", response_model=AuditTemplateResponse)
+async def update_template(
+    template_id: int,
+    template_data: AuditTemplateUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditTemplateResponse:
+    """Update an audit template."""
+    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    # Increment version if published template is modified
+    if template.is_published:
+        template.version += 1
+        template.is_published = False
+
+    update_data = template_data.model_dump(exclude_unset=True, exclude={"standard_ids"})
+    for field, value in update_data.items():
+        setattr(template, field, value)
+
+    await db.commit()
+    await db.refresh(template)
+
+    return AuditTemplateResponse.model_validate(template)
+
+
+@router.post("/templates/{template_id}/publish", response_model=AuditTemplateResponse)
+async def publish_template(
+    template_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditTemplateResponse:
+    """Publish an audit template, making it available for use."""
+    result = await db.execute(
+        select(AuditTemplate)
+        .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
+        .where(AuditTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    # Validate template has at least one question
+    question_count = sum(len(s.questions) for s in template.sections)
+    if question_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Template must have at least one question before publishing",
+        )
+
+    template.is_published = True
+    await db.commit()
+    await db.refresh(template)
+
+    return AuditTemplateResponse.model_validate(template)
+
+
+@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template(
+    template_id: int,
+    db: DbSession,
+    current_user: CurrentSuperuser,
+) -> None:
+    """Soft delete an audit template (superuser only)."""
+    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    template.is_active = False
+    await db.commit()
+
+
+# ============== Section Endpoints ==============
+
+@router.post("/templates/{template_id}/sections", response_model=AuditSectionResponse, status_code=status.HTTP_201_CREATED)
+async def create_section(
+    template_id: int,
+    section_data: AuditSectionCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditSectionResponse:
+    """Create a new section in an audit template."""
+    # Verify template exists
+    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    template = result.scalar_one_or_none()
+    
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    section = AuditSection(
+        template_id=template_id,
+        **section_data.model_dump(),
+    )
+    
+    db.add(section)
+    await db.commit()
+    await db.refresh(section)
+
+    return AuditSectionResponse.model_validate(section)
+
+
+@router.patch("/sections/{section_id}", response_model=AuditSectionResponse)
+async def update_section(
+    section_id: int,
+    section_data: AuditSectionUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditSectionResponse:
+    """Update an audit section."""
+    result = await db.execute(
+        select(AuditSection)
+        .options(selectinload(AuditSection.questions))
+        .where(AuditSection.id == section_id)
+    )
+    section = result.scalar_one_or_none()
+
+    if not section:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found",
+        )
+
+    update_data = section_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(section, field, value)
+
+    await db.commit()
+    await db.refresh(section)
+
+    return AuditSectionResponse.model_validate(section)
+
+
+@router.delete("/sections/{section_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_section(
+    section_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    """Soft delete an audit section."""
+    result = await db.execute(select(AuditSection).where(AuditSection.id == section_id))
+    section = result.scalar_one_or_none()
+
+    if not section:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found",
+        )
+
+    section.is_active = False
+    await db.commit()
+
+
+# ============== Question Endpoints ==============
+
+@router.post("/templates/{template_id}/questions", response_model=AuditQuestionResponse, status_code=status.HTTP_201_CREATED)
+async def create_question(
+    template_id: int,
+    question_data: AuditQuestionCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditQuestionResponse:
+    """Create a new question in an audit template."""
+    # Verify template exists
+    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    template = result.scalar_one_or_none()
+    
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    # Convert options to JSON if provided
+    question_dict = question_data.model_dump()
+    if question_dict.get("options"):
+        question_dict["options_json"] = [opt.model_dump() if hasattr(opt, 'model_dump') else opt for opt in question_dict["options"]]
+    del question_dict["options"]
+    
+    if question_dict.get("evidence_requirements"):
+        er = question_dict["evidence_requirements"]
+        question_dict["evidence_requirements_json"] = er.model_dump() if hasattr(er, 'model_dump') else er
+    del question_dict["evidence_requirements"]
+    
+    if question_dict.get("conditional_logic"):
+        question_dict["conditional_logic_json"] = [cl.model_dump() if hasattr(cl, 'model_dump') else cl for cl in question_dict["conditional_logic"]]
+    del question_dict["conditional_logic"]
+    
+    # Handle clause_ids and control_ids
+    clause_ids = question_dict.pop("clause_ids", None)
+    control_ids = question_dict.pop("control_ids", None)
+    if clause_ids:
+        question_dict["clause_ids_json"] = clause_ids
+    if control_ids:
+        question_dict["control_ids_json"] = control_ids
+
+    question = AuditQuestion(
+        template_id=template_id,
+        **question_dict,
+    )
+    
+    db.add(question)
+    await db.commit()
+    await db.refresh(question)
+
+    return AuditQuestionResponse.model_validate(question)
+
+
+@router.patch("/questions/{question_id}", response_model=AuditQuestionResponse)
+async def update_question(
+    question_id: int,
+    question_data: AuditQuestionUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditQuestionResponse:
+    """Update an audit question."""
+    result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
+    question = result.scalar_one_or_none()
+
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    update_data = question_data.model_dump(exclude_unset=True)
+    
+    # Handle JSON fields
+    if "options" in update_data:
+        update_data["options_json"] = update_data.pop("options")
+    if "evidence_requirements" in update_data:
+        update_data["evidence_requirements_json"] = update_data.pop("evidence_requirements")
+    if "conditional_logic" in update_data:
+        update_data["conditional_logic_json"] = update_data.pop("conditional_logic")
+    if "clause_ids" in update_data:
+        update_data["clause_ids_json"] = update_data.pop("clause_ids")
+    if "control_ids" in update_data:
+        update_data["control_ids_json"] = update_data.pop("control_ids")
+    
+    for field, value in update_data.items():
+        setattr(question, field, value)
+
+    await db.commit()
+    await db.refresh(question)
+
+    return AuditQuestionResponse.model_validate(question)
+
+
+@router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_question(
+    question_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    """Soft delete an audit question."""
+    result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
+    question = result.scalar_one_or_none()
+
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    question.is_active = False
+    await db.commit()
+
+
+# ============== Audit Run Endpoints ==============
+
+@router.get("/runs", response_model=AuditRunListResponse)
+async def list_runs(
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    template_id: Optional[int] = None,
+    assigned_to_id: Optional[int] = None,
+) -> AuditRunListResponse:
+    """List all audit runs with pagination and filtering."""
+    query = select(AuditRun)
+
+    if status_filter:
+        query = query.where(AuditRun.status == status_filter)
+    if template_id:
+        query = query.where(AuditRun.template_id == template_id)
+    if assigned_to_id:
+        query = query.where(AuditRun.assigned_to_id == assigned_to_id)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(AuditRun.created_at.desc())
+
+    result = await db.execute(query)
+    runs = result.scalars().all()
+
+    return AuditRunListResponse(
+        items=[AuditRunResponse.model_validate(r) for r in runs],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
+    )
+
+
+@router.post("/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED)
+async def create_run(
+    run_data: AuditRunCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditRunResponse:
+    """Create a new audit run from a template."""
+    # Verify template exists and is published
+    result = await db.execute(
+        select(AuditTemplate).where(
+            and_(
+                AuditTemplate.id == run_data.template_id,
+                AuditTemplate.is_published == True,
+                AuditTemplate.is_active == True,
+            )
+        )
+    )
+    template = result.scalar_one_or_none()
+    
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Published template not found",
+        )
+
+    run = AuditRun(
+        **run_data.model_dump(),
+        template_version=template.version,
+        status=AuditStatus.SCHEDULED,
+        created_by_id=current_user.id,
+    )
+    
+    # Generate reference number
+    run.reference_number = await ReferenceNumberService.generate(
+        db, "audit_run", AuditRun
+    )
+    
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+
+    return AuditRunResponse.model_validate(run)
+
+
+@router.get("/runs/{run_id}", response_model=AuditRunDetailResponse)
+async def get_run(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditRunDetailResponse:
+    """Get a specific audit run with responses and findings."""
+    result = await db.execute(
+        select(AuditRun)
+        .options(
+            selectinload(AuditRun.responses),
+            selectinload(AuditRun.findings),
+            selectinload(AuditRun.template),
+        )
+        .where(AuditRun.id == run_id)
+    )
+    run = result.scalar_one_or_none()
+
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit run not found",
+        )
+
+    response = AuditRunDetailResponse.model_validate(run)
+    response.template_name = run.template.name if run.template else None
+    
+    # Calculate completion percentage
+    if run.template:
+        total_questions = await db.scalar(
+            select(func.count())
+            .select_from(AuditQuestion)
+            .where(
+                and_(
+                    AuditQuestion.template_id == run.template_id,
+                    AuditQuestion.is_active == True,
+                )
+            )
+        )
+        answered_questions = len(run.responses)
+        response.completion_percentage = (
+            (answered_questions / total_questions * 100) if total_questions > 0 else 0
+        )
+    
+    return response
+
+
+@router.patch("/runs/{run_id}", response_model=AuditRunResponse)
+async def update_run(
+    run_id: int,
+    run_data: AuditRunUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditRunResponse:
+    """Update an audit run."""
+    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    run = result.scalar_one_or_none()
+
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit run not found",
+        )
+
+    update_data = run_data.model_dump(exclude_unset=True)
+    
+    # Handle status transitions
+    if "status" in update_data:
+        new_status = update_data["status"]
+        if new_status == AuditStatus.IN_PROGRESS.value and run.started_at is None:
+            run.started_at = datetime.now(timezone.utc)
+        elif new_status == AuditStatus.COMPLETED.value:
+            run.completed_at = datetime.now(timezone.utc)
+    
+    for field, value in update_data.items():
+        setattr(run, field, value)
+
+    await db.commit()
+    await db.refresh(run)
+
+    return AuditRunResponse.model_validate(run)
+
+
+@router.post("/runs/{run_id}/start", response_model=AuditRunResponse)
+async def start_run(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditRunResponse:
+    """Start an audit run."""
+    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    run = result.scalar_one_or_none()
+
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit run not found",
+        )
+
+    if run.status != AuditStatus.SCHEDULED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Audit run can only be started from scheduled status",
+        )
+
+    run.status = AuditStatus.IN_PROGRESS
+    run.started_at = datetime.now(timezone.utc)
+    
+    await db.commit()
+    await db.refresh(run)
+
+    return AuditRunResponse.model_validate(run)
+
+
+@router.post("/runs/{run_id}/complete", response_model=AuditRunResponse)
+async def complete_run(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditRunResponse:
+    """Complete an audit run and calculate scores."""
+    result = await db.execute(
+        select(AuditRun)
+        .options(selectinload(AuditRun.responses))
+        .where(AuditRun.id == run_id)
+    )
+    run = result.scalar_one_or_none()
+
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit run not found",
+        )
+
+    if run.status != AuditStatus.IN_PROGRESS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Audit run must be in progress to complete",
+        )
+
+    # Calculate scores
+    total_score = sum(r.score or 0 for r in run.responses)
+    max_score = sum(r.max_score or 0 for r in run.responses)
+    
+    run.score = total_score
+    run.max_score = max_score
+    run.score_percentage = (total_score / max_score * 100) if max_score > 0 else 0
+    
+    # Get template to check passing score
+    template_result = await db.execute(
+        select(AuditTemplate).where(AuditTemplate.id == run.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+    
+    if template and template.passing_score is not None:
+        run.passed = run.score_percentage >= template.passing_score
+    
+    run.status = AuditStatus.COMPLETED
+    run.completed_at = datetime.now(timezone.utc)
+    
+    await db.commit()
+    await db.refresh(run)
+
+    return AuditRunResponse.model_validate(run)
+
+
+# ============== Response Endpoints ==============
+
+@router.post("/runs/{run_id}/responses", response_model=AuditResponseResponse, status_code=status.HTTP_201_CREATED)
+async def create_response(
+    run_id: int,
+    response_data: AuditResponseCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditResponseResponse:
+    """Submit a response to an audit question."""
+    # Verify run exists and is in progress
+    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    run = result.scalar_one_or_none()
+    
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit run not found",
+        )
+    
+    if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot submit responses to a completed audit",
+        )
+
+    # Auto-start if scheduled
+    if run.status == AuditStatus.SCHEDULED:
+        run.status = AuditStatus.IN_PROGRESS
+        run.started_at = datetime.now(timezone.utc)
+
+    # Check if response already exists for this question
+    existing = await db.execute(
+        select(AuditResponse).where(
+            and_(
+                AuditResponse.run_id == run_id,
+                AuditResponse.question_id == response_data.question_id,
+            )
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Response already exists for this question. Use PATCH to update.",
+        )
+
+    response = AuditResponse(
+        run_id=run_id,
+        **response_data.model_dump(),
+    )
+    
+    db.add(response)
+    await db.commit()
+    await db.refresh(response)
+
+    return AuditResponseResponse.model_validate(response)
+
+
+@router.patch("/responses/{response_id}", response_model=AuditResponseResponse)
+async def update_response(
+    response_id: int,
+    response_data: AuditResponseUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditResponseResponse:
+    """Update an audit response."""
+    result = await db.execute(
+        select(AuditResponse)
+        .options(selectinload(AuditResponse.run))
+        .where(AuditResponse.id == response_id)
+    )
+    response = result.scalar_one_or_none()
+
+    if not response:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Response not found",
+        )
+
+    if response.run.status == AuditStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot update responses on a completed audit",
+        )
+
+    update_data = response_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(response, field, value)
+
+    await db.commit()
+    await db.refresh(response)
+
+    return AuditResponseResponse.model_validate(response)
+
+
+# ============== Finding Endpoints ==============
+
+@router.get("/findings", response_model=AuditFindingListResponse)
+async def list_findings(
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    severity: Optional[str] = None,
+    run_id: Optional[int] = None,
+) -> AuditFindingListResponse:
+    """List all audit findings with pagination and filtering."""
+    query = select(AuditFinding)
+
+    if status_filter:
+        query = query.where(AuditFinding.status == status_filter)
+    if severity:
+        query = query.where(AuditFinding.severity == severity)
+    if run_id:
+        query = query.where(AuditFinding.run_id == run_id)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(AuditFinding.created_at.desc())
+
+    result = await db.execute(query)
+    findings = result.scalars().all()
+
+    return AuditFindingListResponse(
+        items=[AuditFindingResponse.model_validate(f) for f in findings],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
+    )
+
+
+@router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)
+async def create_finding(
+    run_id: int,
+    finding_data: AuditFindingCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditFindingResponse:
+    """Create a new finding for an audit run."""
+    # Verify run exists
+    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    run = result.scalar_one_or_none()
+    
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit run not found",
+        )
+
+    finding_dict = finding_data.model_dump()
+    
+    # Handle list fields
+    clause_ids = finding_dict.pop("clause_ids", None)
+    control_ids = finding_dict.pop("control_ids", None)
+    risk_ids = finding_dict.pop("risk_ids", None)
+    
+    finding = AuditFinding(
+        run_id=run_id,
+        status=FindingStatus.OPEN,
+        created_by_id=current_user.id,
+        **finding_dict,
+    )
+    
+    # Store list fields as JSON
+    if clause_ids:
+        finding.clause_ids_json = clause_ids
+    if control_ids:
+        finding.control_ids_json = control_ids
+    if risk_ids:
+        finding.risk_ids_json = risk_ids
+    
+    # Generate reference number
+    finding.reference_number = await ReferenceNumberService.generate(
+        db, "audit_finding", AuditFinding
+    )
+    
+    db.add(finding)
+    await db.commit()
+    await db.refresh(finding)
+
+    return AuditFindingResponse.model_validate(finding)
+
+
+@router.patch("/findings/{finding_id}", response_model=AuditFindingResponse)
+async def update_finding(
+    finding_id: int,
+    finding_data: AuditFindingUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditFindingResponse:
+    """Update an audit finding."""
+    result = await db.execute(select(AuditFinding).where(AuditFinding.id == finding_id))
+    finding = result.scalar_one_or_none()
+
+    if not finding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finding not found",
+        )
+
+    update_data = finding_data.model_dump(exclude_unset=True)
+    
+    # Handle list fields
+    if "clause_ids" in update_data:
+        finding.clause_ids_json = update_data.pop("clause_ids")
+    if "control_ids" in update_data:
+        finding.control_ids_json = update_data.pop("control_ids")
+    if "risk_ids" in update_data:
+        finding.risk_ids_json = update_data.pop("risk_ids")
+    
+    for field, value in update_data.items():
+        setattr(finding, field, value)
+
+    await db.commit()
+    await db.refresh(finding)
+
+    return AuditFindingResponse.model_validate(finding)

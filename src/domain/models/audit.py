@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, Integer, DateTime, JSON, Enum as SQLEnum
+from sqlalchemy import Boolean, ForeignKey, String, Text, Integer, Float, DateTime, JSON, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -21,30 +21,25 @@ class AuditStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class FindingStatus(str, enum.Enum):
+    """Status of an audit finding."""
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    PENDING_VERIFICATION = "pending_verification"
+    CLOSED = "closed"
+    DEFERRED = "deferred"
+
+
 class FindingSeverity(str, enum.Enum):
     """Severity level of an audit finding."""
     CRITICAL = "critical"
-    MAJOR = "major"
-    MINOR = "minor"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
     OBSERVATION = "observation"
-    OPPORTUNITY = "opportunity"
 
 
-class QuestionType(str, enum.Enum):
-    """Type of audit question."""
-    CHECKBOX = "checkbox"
-    TEXT = "text"
-    NUMBER = "number"
-    SCORE = "score"
-    YES_NO = "yes_no"
-    YES_NO_NA = "yes_no_na"
-    MULTIPLE_CHOICE = "multiple_choice"
-    DATE = "date"
-    PHOTO = "photo"
-    SIGNATURE = "signature"
-
-
-class AuditTemplate(Base, TimestampMixin, AuditTrailMixin):
+class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Audit template model for defining audit structures."""
 
     __tablename__ = "audit_templates"
@@ -53,17 +48,42 @@ class AuditTemplate(Base, TimestampMixin, AuditTrailMixin):
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Template type and configuration
+    audit_type: Mapped[str] = mapped_column(String(50), default="inspection")
+    frequency: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Version control
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
     
-    # Template settings
-    scoring_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    max_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    pass_threshold: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    evidence_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Scoring configuration
+    scoring_method: Mapped[str] = mapped_column(String(50), default="percentage")
+    passing_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
+    # Mobile configuration
+    allow_offline: Mapped[bool] = mapped_column(Boolean, default=False)
+    require_gps: Mapped[bool] = mapped_column(Boolean, default=False)
+    require_signature: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Workflow configuration
+    require_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_create_findings: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Standard mapping (JSON array of standard IDs)
+    standard_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    
+    # Ownership
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     
     # Relationships
+    sections: Mapped[List["AuditSection"]] = relationship(
+        "AuditSection",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="AuditSection.sort_order",
+    )
     questions: Mapped[List["AuditQuestion"]] = relationship(
         "AuditQuestion",
         back_populates="template",
@@ -76,50 +96,99 @@ class AuditTemplate(Base, TimestampMixin, AuditTrailMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<AuditTemplate(id={self.id}, name='{self.name}')>"
+        return f"<AuditTemplate(id={self.id}, name='{self.name}', v{self.version})>"
+
+
+class AuditSection(Base, TimestampMixin):
+    """Audit section model for grouping questions within a template."""
+
+    __tablename__ = "audit_sections"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False)
+    
+    # Section details
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Configuration
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    is_repeatable: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_repeats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Relationships
+    template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="sections")
+    questions: Mapped[List["AuditQuestion"]] = relationship(
+        "AuditQuestion",
+        back_populates="section",
+        order_by="AuditQuestion.sort_order",
+    )
+
+    def __repr__(self) -> str:
+        return f"<AuditSection(id={self.id}, title='{self.title}')>"
 
 
 class AuditQuestion(Base, TimestampMixin):
-    """Audit question model for individual questions within a template."""
+    """Audit question model with feature-rich configuration."""
 
     __tablename__ = "audit_questions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False)
+    section_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_sections.id", ondelete="SET NULL"), nullable=True)
     
     # Question content
-    section: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
-    question_type: Mapped[QuestionType] = mapped_column(SQLEnum(QuestionType), default=QuestionType.YES_NO_NA)
-    help_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    question_type: Mapped[str] = mapped_column(String(50), default="yes_no")
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    help_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
-    # Question settings
-    is_mandatory: Mapped[bool] = mapped_column(Boolean, default=False)
-    allows_na: Mapped[bool] = mapped_column(Boolean, default=True)
-    requires_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
-    requires_comment: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Question configuration
+    is_required: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_na: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Scoring
-    weight: Mapped[int] = mapped_column(Integer, default=1)
-    max_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
     
-    # Conditional logic (JSON)
-    conditions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Options for MCQ/dropdown/radio (JSON array)
+    options_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     
-    # Options for multiple choice (JSON array)
-    options: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Numeric constraints
+    min_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    max_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    decimal_places: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # Text constraints
+    min_length: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_length: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # Evidence requirements (JSON object)
+    evidence_requirements_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Conditional logic (JSON array of rules)
+    conditional_logic_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    
+    # Standard mapping (JSON arrays)
+    clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    
+    # Risk scoring
+    risk_category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    risk_weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     
     # Ordering
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     
-    # Standard mapping
-    clause_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated clause IDs
-    
     # Relationships
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="questions")
+    section: Mapped[Optional["AuditSection"]] = relationship("AuditSection", back_populates="questions")
 
     def __repr__(self) -> str:
-        return f"<AuditQuestion(id={self.id}, text='{self.question_text[:50]}...')>"
+        return f"<AuditQuestion(id={self.id}, type='{self.question_type}')>"
 
 
 class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -129,42 +198,84 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id"), nullable=False)
+    template_version: Mapped[int] = mapped_column(Integer, default=1)
     
     # Audit details
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    location_details: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # GPS coordinates
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     
     # Status and dates
-    status: Mapped[AuditStatus] = mapped_column(SQLEnum(AuditStatus), default=AuditStatus.DRAFT)
+    status: Mapped[AuditStatus] = mapped_column(SQLEnum(AuditStatus), default=AuditStatus.SCHEDULED)
     scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Assignment
-    auditor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    reviewer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     
     # Scoring
-    total_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    max_possible_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    pass_status: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    
-    # Responses stored as JSON
-    responses: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    max_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    score_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     
     # Relationships
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="runs")
+    responses: Mapped[List["AuditResponse"]] = relationship(
+        "AuditResponse",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
     findings: Mapped[List["AuditFinding"]] = relationship(
         "AuditFinding",
-        back_populates="audit_run",
+        back_populates="run",
         cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
         return f"<AuditRun(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"
+
+
+class AuditResponse(Base, TimestampMixin):
+    """Audit response model for individual question answers."""
+
+    __tablename__ = "audit_responses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
+    question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False)
+    
+    # Response values (use appropriate field based on question type)
+    response_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    response_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    response_number: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    response_bool: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    response_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    response_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # N/A handling
+    is_na: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Scoring
+    score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    max_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
+    # Notes
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Relationships
+    run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="responses")
+
+    def __repr__(self) -> str:
+        return f"<AuditResponse(id={self.id}, run_id={self.run_id}, question_id={self.question_id})>"
 
 
 class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -173,30 +284,32 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "audit_findings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    audit_run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
+    run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
     question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_questions.id"), nullable=True)
     
     # Finding details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    severity: Mapped[FindingSeverity] = mapped_column(SQLEnum(FindingSeverity), default=FindingSeverity.MINOR)
+    severity: Mapped[str] = mapped_column(String(50), default="medium")
+    finding_type: Mapped[str] = mapped_column(String(50), default="nonconformity")
+    status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus), default=FindingStatus.OPEN)
     
-    # Standard mapping
-    clause_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated clause IDs
+    # Standard mapping (JSON arrays)
+    clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     
-    # Evidence
-    evidence_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Risk linkage (JSON array)
+    risk_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     
-    # Action tracking
-    action_required: Mapped[bool] = mapped_column(Boolean, default=True)
-    action_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    action_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    action_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    action_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    action_status: Mapped[str] = mapped_column(String(50), default="open")  # open, in_progress, completed, verified
+    # Corrective action
+    corrective_action_required: Mapped[bool] = mapped_column(Boolean, default=True)
+    corrective_action_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Ownership
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     
     # Relationships
-    audit_run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
+    run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
 
     def __repr__(self) -> str:
         return f"<AuditFinding(id={self.id}, ref='{self.reference_number}', severity='{self.severity}')>"
