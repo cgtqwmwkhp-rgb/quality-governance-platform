@@ -12,14 +12,26 @@ from alembic import context
 # Import all models to ensure they are registered with Base.metadata
 from src.infrastructure.database import Base
 from src.domain.models import (
-    User, Role,
-    Standard, Clause, Control,
-    AuditTemplate, AuditQuestion, AuditRun, AuditFinding,
-    Risk, RiskControl, RiskAssessment,
-    Incident, IncidentAction,
-    RoadTrafficCollision, RTAAction,
-    Complaint, ComplaintAction,
-    Policy, PolicyVersion,
+    User,
+    Role,
+    Standard,
+    Clause,
+    Control,
+    AuditTemplate,
+    AuditQuestion,
+    AuditRun,
+    AuditFinding,
+    Risk,
+    RiskControl,
+    RiskAssessment,
+    Incident,
+    IncidentAction,
+    RoadTrafficCollision,
+    RTAAction,
+    Complaint,
+    ComplaintAction,
+    Policy,
+    PolicyVersion,
 )
 from src.core.config import settings
 
@@ -77,15 +89,15 @@ async def run_async_migrations() -> None:
     # Get the config and ensure we have the async driver in the URL
     config_section = config.get_section(config.config_ini_section, {})
     url = config_section.get("sqlalchemy.url", db_url)
-    
+
     # Ensure async driver is used
     if "sqlite" in url and "+aiosqlite" not in url:
         url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
     elif "postgresql" in url and "+asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://")
-    
+
     config_section["sqlalchemy.url"] = url
-    
+
     connectable = async_engine_from_config(
         config_section,
         prefix="sqlalchemy.",

@@ -337,10 +337,10 @@ async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers
         headers=auth_headers,
     )
     assert get_after_delete.status_code == 404
-    
+
     # Verify it's gone from the database
     from sqlalchemy import select
     from src.domain.models.policy import Policy
-    
+
     db_check = await test_session.execute(select(Policy).where(Policy.id == policy_id))
     assert db_check.scalar_one_or_none() is None
