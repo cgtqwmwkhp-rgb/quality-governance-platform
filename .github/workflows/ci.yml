@@ -44,6 +44,9 @@ jobs:
   branch-protection-proof:
     name: Branch Protection Proof (Stage 1.0)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     
     steps:
       - name: Checkout code
@@ -55,6 +58,8 @@ jobs:
           python-version: '3.11'
 
       - name: Export branch protection settings (BLOCKING)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "=== Stage 1.0: Branch Protection Proof (BLOCKING) ==="
           ./scripts/export_branch_protection.sh
