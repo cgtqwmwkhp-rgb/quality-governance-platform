@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column('problem_statement', sa.Text(), nullable=False),
         sa.Column('root_cause', sa.Text(), nullable=True),
         sa.Column('corrective_actions', sa.Text(), nullable=True),
-        sa.Column('status', sa.Enum('draft', 'in_review', 'approved', name='rcastatus'), nullable=False),
+        sa.Column('status', sa.Enum('draft', 'in_review', 'approved', name='rcastatus', create_type=False), nullable=False),
         sa.Column('reference_number', sa.String(length=20), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
