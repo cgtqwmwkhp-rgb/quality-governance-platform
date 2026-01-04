@@ -263,20 +263,20 @@ async def clone_template(
             template_id=cloned_template.id,
             title=original_section.title,
             description=original_section.description,
-            order=original_section.order,
+            sort_order=original_section.sort_order,
         )
         db.add(cloned_section)
         await db.flush()  # Get the ID for the cloned section
 
         for original_question in original_section.questions:
             cloned_question = AuditQuestion(
+                template_id=cloned_template.id,
                 section_id=cloned_section.id,
                 question_text=original_question.question_text,
                 question_type=original_question.question_type,
                 is_required=original_question.is_required,
-                order=original_question.order,
-                scoring_weight=original_question.scoring_weight,
-                options=original_question.options,
+                weight=original_question.weight,
+                options_json=original_question.options_json,
             )
             db.add(cloned_question)
 
