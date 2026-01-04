@@ -22,19 +22,6 @@ def upgrade() -> None:
     """Upgrade database schema."""
     # Create rcastatus enum type for Postgres
     # Note: SQLite ignores this and uses the Enum column as a check constraint
-    # Create rcastatus enum type for Postgres if it doesn't exist
-    # Note: Postgres doesn't support CREATE TYPE IF NOT EXISTS directly for ENUMs in all versions,
-    # so we use a DO block for safety.
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rcastatus') THEN
-                CREATE TYPE rcastatus AS ENUM ('draft', 'in_review', 'approved');
-            END IF;
-        END
-        $$;
-    """)
-
     # Create root_cause_analyses table
     op.create_table(
         'root_cause_analyses',
@@ -44,7 +31,7 @@ def upgrade() -> None:
         sa.Column('problem_statement', sa.Text(), nullable=False),
         sa.Column('root_cause', sa.Text(), nullable=True),
         sa.Column('corrective_actions', sa.Text(), nullable=True),
-        sa.Column('status', sa.Enum('draft', 'in_review', 'approved', name='rcastatus', create_type=False), nullable=False),
+        sa.Column('status', sa.Enum('draft', 'in_review', 'approved', name='rca_status_enum'), nullable=False),
         sa.Column('reference_number', sa.String(length=20), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
@@ -64,4 +51,4 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_root_cause_analyses_title'), table_name='root_cause_analyses')
     op.drop_index(op.f('ix_root_cause_analyses_reference_number'), table_name='root_cause_analyses')
     op.drop_table('root_cause_analyses')
-    op.execute("DROP TYPE rcastatus")
+    sa.Enum(name='rca_status_enum').drop(op.get_bind())
