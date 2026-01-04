@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
-from src.api.schemas.rta import RTAResponse
+from src.api.schemas.rta import RTAListResponse, RTAResponse
 from src.domain.models.incident import Incident
 from src.domain.models.rta_analysis import RootCauseAnalysis
 from src.domain.services.audit_service import record_audit_event
@@ -132,12 +132,12 @@ async def list_incidents(
     )
 
 
-@router.get("/{incident_id}/rtas", response_model=list[RTAResponse])
+@router.get("/{incident_id}/rtas", response_model=RTAListResponse)
 async def list_incident_rtas(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[RootCauseAnalysis]:
+) -> RTAListResponse:
     """
     List RTAs for a specific incident.
 
@@ -157,7 +157,13 @@ async def list_incident_rtas(
         .where(RootCauseAnalysis.incident_id == incident_id)
         .order_by(RootCauseAnalysis.created_at.desc(), RootCauseAnalysis.id.asc())
     )
-    return list(result.scalars().all())
+    rtas = result.scalars().all()
+    return RTAListResponse(
+        items=[RTAResponse.model_validate(rta) for rta in rtas],
+        total=len(rtas),
+        page=1,
+        page_size=len(rtas),
+    )
 
 
 @router.patch("/{incident_id}", response_model=IncidentResponse)

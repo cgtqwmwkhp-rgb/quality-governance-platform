@@ -98,7 +98,8 @@ async def test_list_incident_rtas_linkage(client: AsyncClient, test_incident, au
 
     response = await client.get(f"/api/v1/incidents/{test_incident.id}/rtas", headers=auth_headers)
     assert response.status_code == 200
-    items = response.json()
+    data = response.json()
+    items = data["items"]
     assert len(items) >= 1
     assert items[0]["incident_id"] == test_incident.id
     assert items[0]["title"] == "Linked RTA"
