@@ -63,7 +63,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 f"status_code={log_data['status_code']} "
                 f"duration_ms={log_data['duration_ms']}"
             )
-            
+
             return response  # type: ignore[no-any-return]
 
         except Exception as e:

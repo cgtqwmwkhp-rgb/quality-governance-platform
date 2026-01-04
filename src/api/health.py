@@ -46,6 +46,7 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> dict:
     # Test database connection
     try:
         from sqlalchemy import text
+
         await db.execute(text("SELECT 1"))
         return {"status": "ready", "database": "connected"}
     except Exception as e:
