@@ -13,7 +13,7 @@ alembic==1.13.1
 psycopg2-binary==2.9.9
 
 # Authentication & Security
-python-jose[cryptography]==3.5.0
+PyJWT[crypto]==2.10.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.18
