@@ -256,19 +256,29 @@ echo "$response" | head -n 20
 
 ## CI Status
 
-**PR**: #5 - https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/5
+**PR #5** (stage-1.2-policy-consistency → stage-1.1-release-rehearsal): Local validation only
 
-**Target Branch**: `stage-1.1-release-rehearsal`
+**PR #6** (stage-1.2-policy-consistency → main): ✅ **CI EXECUTED AND PASSED**
 
-**CI Trigger**: Not triggered automatically (workflow only runs on PRs targeting `main` or `develop`)
+**CI Run URL**: https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/6
 
-**Mitigation Strategy**:
-1. Local validation provided for all changes
-2. Changes are defensive (timeouts, diagnostics, documentation)
-3. No functional changes to validation logic
-4. CI will verify when merging to main via PR chain (PR #5 → PR #4 → main)
+**Date**: 2026-01-04
 
-**Risk Assessment**: LOW
+**Status**: ✅ All Checks Passed
+
+**Jobs Executed**:
+- ✅ Code Quality
+- ✅ Branch Protection Proof (Stage 1.0) - includes drift prevention
+- ✅ ADR-0002 Fail-Fast Proof
+- ✅ Unit Tests
+- ✅ Integration Tests
+- ✅ Security Scan
+- ✅ Build Check
+- ✅ Governance Evidence (Stage 0.7 Gate 1)
+- ✅ Release Rehearsal (Stage 1.1)
+- ✅ All Checks Passed
+
+**Evidence**: Real CI execution on main-targeting PR confirms Stage 1.2 changes work correctly.
 - Policy alignment: Documentation-only changes
 - Validator enhancement: Output-only changes, no logic changes
 - Release rehearsal: Defensive timeouts (generous values), diagnostics on failure paths only
