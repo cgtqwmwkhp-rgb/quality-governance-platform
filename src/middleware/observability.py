@@ -64,7 +64,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 f"duration_ms={log_data['duration_ms']}"
             )
 
-            return response  # type: ignore[no-any-return]  # TYPE-IGNORE: Middleware response type from call_next
+            return response  # type: ignore[no-any-return]  # TYPE-IGNORE: MYPY-1 Middleware response type from call_next
 
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
