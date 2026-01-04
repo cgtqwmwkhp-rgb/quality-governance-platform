@@ -213,6 +213,78 @@ async def publish_template(
     return AuditTemplateResponse.model_validate(template)
 
 
+@router.post("/templates/{template_id}/clone", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def clone_template(
+    template_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditTemplateResponse:
+    """Clone an existing audit template."""
+    # Fetch the original template with all relationships
+    result = await db.execute(
+        select(AuditTemplate)
+        .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
+        .where(AuditTemplate.id == template_id)
+    )
+    original = result.scalar_one_or_none()
+
+    if not original:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
+        )
+
+    # Generate reference number for the cloned template
+    from src.services.reference_number import ReferenceNumberService
+    reference_number = await ReferenceNumberService.generate(
+        db, "TPL", AuditTemplate
+    )
+
+    # Create a new template with copied attributes
+    cloned_template = AuditTemplate(
+        name=f"Copy of {original.name}",
+        description=original.description,
+        category=original.category,
+        audit_type=original.audit_type,
+        scoring_method=original.scoring_method,
+        passing_score=original.passing_score,
+        is_active=original.is_active,
+        is_published=False,  # Clones start as unpublished
+        created_by_id=current_user.id,
+        reference_number=reference_number,
+    )
+    db.add(cloned_template)
+    await db.flush()  # Get the ID for the cloned template
+
+    # Clone sections and questions
+    for original_section in original.sections:
+        cloned_section = AuditSection(
+            template_id=cloned_template.id,
+            title=original_section.title,
+            description=original_section.description,
+            order=original_section.order,
+        )
+        db.add(cloned_section)
+        await db.flush()  # Get the ID for the cloned section
+
+        for original_question in original_section.questions:
+            cloned_question = AuditQuestion(
+                section_id=cloned_section.id,
+                question_text=original_question.question_text,
+                question_type=original_question.question_type,
+                is_required=original_question.is_required,
+                order=original_question.order,
+                scoring_weight=original_question.scoring_weight,
+                options=original_question.options,
+            )
+            db.add(cloned_question)
+
+    await db.commit()
+    await db.refresh(cloned_template)
+
+    return AuditTemplateResponse.model_validate(cloned_template)
+
+
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: int,

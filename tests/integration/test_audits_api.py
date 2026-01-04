@@ -231,7 +231,6 @@ class TestAuditsAPI:
         assert "items" in data
         assert len(data["items"]) == 3
 
-    @pytest.mark.skip(reason="Quarantined - feature not implemented, see docs/TEST_QUARANTINE_POLICY.md")
     @pytest.mark.asyncio
     async def test_clone_audit_template(
         self,

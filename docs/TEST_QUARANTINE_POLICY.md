@@ -19,21 +19,7 @@ A test may be quarantined **only** if all of the following conditions are met:
 
 ## Current Quarantined Tests
 
-### test_clone_audit_template
-
-**Test File**: `tests/integration/test_audits_api.py`
-
-**Reason**: The audit template cloning endpoint (`POST /api/v1/audits/templates/{id}/clone`) is not implemented in the application. The test returns a 404 Not Found response.
-
-**Issue**: [#1 - Implement audit template clone endpoint](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/issues/1)
-
-**Owner**: Development Team
-
-**Quarantined Date**: 2026-01-04
-
-**Expiry Date**: 2026-02-04 (30 days from quarantine date)
-
-**Action Required**: Implement the clone endpoint in `src/api/routes/audits.py` or remove the test if the feature is not planned.
+**None** - All integration tests are currently passing.
 
 ## Merge Gate Policy
 
