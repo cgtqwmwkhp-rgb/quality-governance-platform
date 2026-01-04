@@ -117,7 +117,7 @@ async def list_policies(
     policies = result.scalars().all()
 
     return PolicyListResponse(
-        items=policies,
+        items=[PolicyResponse.model_validate(p) for p in policies],
         total=total,
         page=page,
         page_size=page_size,
