@@ -86,7 +86,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -94,6 +94,14 @@ jobs:
           file: ./coverage.xml
           flags: unit
           name: codecov-umbrella
+        if: always()
+
+      - name: Upload JUnit XML (Stage 2.0)
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-unit-tests
+          path: junit-unit.xml
+          retention-days: 30
         if: always()
 
   integration-tests:
@@ -144,7 +152,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term
+          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --junit-xml=junit-integration.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -152,6 +160,14 @@ jobs:
           file: ./coverage.xml
           flags: integration
           name: codecov-umbrella
+        if: always()
+
+      - name: Upload JUnit XML (Stage 2.0)
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-integration-tests
+          path: junit-integration.xml
+          retention-days: 30
         if: always()
 
   security-scan:
@@ -238,6 +254,21 @@ jobs:
     needs: [code-quality, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, ci-security-covenant]
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate gate summary (Stage 2.0)
+        run: |
+          bash scripts/generate_gate_summary.sh
+
+      - name: Upload gate summary (Stage 2.0)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-summary
+          path: gate-summary.txt
+          retention-days: 90
+        if: always()
+
       - name: All checks passed
         run: |
           echo "✅ All CI checks passed successfully!"
