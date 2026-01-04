@@ -102,7 +102,7 @@ async def create_user(
     if user_data.role_ids:
         result = await db.execute(select(Role).where(Role.id.in_(user_data.role_ids)))
         roles = result.scalars().all()
-        user.roles = list(roles)  # type: ignore[arg-type]
+        user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
 
     db.add(user)
     await db.commit()
@@ -155,7 +155,7 @@ async def update_user(
     if role_ids is not None:
         result = await db.execute(select(Role).where(Role.id.in_(role_ids)))
         roles = result.scalars().all()
-        user.roles = list(roles)  # type: ignore[arg-type]
+        user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
 
     # Update other fields
     for field, value in update_data.items():

@@ -29,7 +29,7 @@ class ReferenceNumberService:
         cls,
         db: AsyncSession,
         record_type: str,
-        model_class: type[Any],  # type: ignore[misc]
+        model_class: type[Any],  # type: ignore[misc]  # TYPE-IGNORE: MYPY-001
         year: Optional[int] = None,
     ) -> str:
         """
