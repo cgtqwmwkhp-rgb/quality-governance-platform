@@ -40,8 +40,8 @@ A GitHub Actions workflow (`.github/workflows/ci.yml`) will be triggered on ever
     2.  Apply all Alembic migrations (`alembic upgrade head`) to the test database.
     3.  Run the integration test suite (`tests/integration/`).
 - **`security-scan`**: Performs basic security analysis.
-    - **Dependency Check (Safety)**: Scans for known vulnerabilities in installed packages.
-    - **Static Analysis (Bandit)**: Scans for common security issues in the codebase.
+    - **Dependency Vulnerability Scan (pip-audit)**: Scans for known vulnerabilities in installed packages using the official PyPA tool. This replaced Safety due to compatibility issues with the project's dependency resolver.
+    - **Static Analysis (Bandit)**: Scans for common security issues in the codebase (e.g., hardcoded secrets, insecure function usage).
 
 Only if all checks pass can code be merged.
 
