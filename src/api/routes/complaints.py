@@ -3,16 +3,11 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.complaint import (
-    ComplaintCreate,
-    ComplaintListResponse,
-    ComplaintResponse,
-    ComplaintUpdate,
-)
+from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
 
@@ -51,7 +46,7 @@ async def create_complaint(
         db=db,
         event_type="complaint.created",
         resource_type="complaint",
-        resource_id=complaint.id,
+        resource_id=str(complaint.id),
         action="create",
         payload=complaint_in.model_dump(mode="json"),
         user_id=current_user.id,
@@ -158,7 +153,7 @@ async def update_complaint(
         db=db,
         event_type="complaint.updated",
         resource_type="complaint",
-        resource_id=complaint.id,
+        resource_id=str(complaint.id),
         action="update",
         payload={
             "updates": update_data,
