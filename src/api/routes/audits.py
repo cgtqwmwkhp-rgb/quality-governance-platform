@@ -213,7 +213,9 @@ async def publish_template(
     return AuditTemplateResponse.model_validate(template)
 
 
-@router.post("/templates/{template_id}/clone", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates/{template_id}/clone", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
+)
 async def clone_template(
     template_id: int,
     db: DbSession,
@@ -236,9 +238,8 @@ async def clone_template(
 
     # Generate reference number for the cloned template
     from src.services.reference_number import ReferenceNumberService
-    reference_number = await ReferenceNumberService.generate(
-        db, "TPL", AuditTemplate
-    )
+
+    reference_number = await ReferenceNumberService.generate(db, "TPL", AuditTemplate)
 
     # Create a new template with copied attributes
     cloned_template = AuditTemplate(
