@@ -6,8 +6,10 @@ without attempting a database connection.
 """
 
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
+
 from src.core.config import Settings
 
 
