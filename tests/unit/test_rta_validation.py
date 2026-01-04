@@ -13,7 +13,7 @@ def test_rta_create_valid():
         "incident_id": 1,
         "title": "Root Cause Analysis for Incident 1",
         "problem_statement": "The system failed due to a memory leak.",
-        "status": RTAStatus.DRAFT
+        "status": RTAStatus.DRAFT,
     }
     rta = RTACreate(**data)
     assert rta.title == data["title"]
@@ -25,11 +25,11 @@ def test_rta_create_invalid_title():
     # Empty title
     with pytest.raises(ValidationError):
         RTACreate(incident_id=1, title="", problem_statement="test")
-    
+
     # Whitespace title
     with pytest.raises(ValidationError):
         RTACreate(incident_id=1, title="   ", problem_statement="test")
-    
+
     # Too long title
     with pytest.raises(ValidationError):
         RTACreate(incident_id=1, title="a" * 301, problem_statement="test")

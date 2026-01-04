@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from src.domain.models.incident import Incident, IncidentType, IncidentSeverity, IncidentStatus
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.rta_analysis import RootCauseAnalysis, RTAStatus
 
 
@@ -12,6 +12,7 @@ from src.domain.models.rta_analysis import RootCauseAnalysis, RTAStatus
 async def test_incident(test_session, test_user):
     """Create a test incident."""
     from datetime import datetime, timezone
+
     incident = Incident(
         title="Test Incident for RTA",
         description="Description",
@@ -37,7 +38,7 @@ async def test_create_rta(client: AsyncClient, test_incident, auth_headers):
         "incident_id": test_incident.id,
         "title": "RTA for Test Incident",
         "problem_statement": "The root cause was X.",
-        "status": "draft"
+        "status": "draft",
     }
     response = await client.post("/api/v1/rtas/", json=data, headers=auth_headers)
     assert response.status_code == 201
@@ -68,7 +69,7 @@ async def test_list_rtas_deterministic_ordering(client: AsyncClient, test_incide
             title=f"RTA {i}",
             problem_statement="test",
             reference_number=f"RTA-2026-000{i+1}",
-            status=RTAStatus.DRAFT
+            status=RTAStatus.DRAFT,
         )
         test_session.add(rta)
     await test_session.commit()
@@ -77,7 +78,7 @@ async def test_list_rtas_deterministic_ordering(client: AsyncClient, test_incide
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) >= 3
-    
+
     # Verify ordering: newest first (by created_at DESC)
     # Since they are created in the same transaction, we check the order
     # In a real scenario, created_at would differ.
@@ -91,7 +92,7 @@ async def test_list_incident_rtas_linkage(client: AsyncClient, test_incident, au
         title="Linked RTA",
         problem_statement="test",
         reference_number="RTA-2026-9999",
-        status=RTAStatus.DRAFT
+        status=RTAStatus.DRAFT,
     )
     test_session.add(rta)
     await test_session.commit()
@@ -111,7 +112,7 @@ async def test_update_rta_status(client: AsyncClient, test_incident, auth_header
         title="Update Me",
         problem_statement="test",
         reference_number="RTA-2026-8888",
-        status=RTAStatus.DRAFT
+        status=RTAStatus.DRAFT,
     )
     test_session.add(rta)
     await test_session.commit()

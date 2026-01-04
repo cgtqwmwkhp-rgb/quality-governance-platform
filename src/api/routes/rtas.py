@@ -1,8 +1,7 @@
 """API routes for Root Cause Analysis (RTA)."""
 
-from typing import Optional
-
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -33,7 +32,7 @@ async def create_rta(
 
     # Generate reference number (format: RTA-YYYY-NNNN)
     year = datetime.now(timezone.utc).year
-    
+
     # Count existing RTAs for this year to generate sequence
     query = select(func.count()).select_from(RootCauseAnalysis)
     result = await db.execute(query)
@@ -88,23 +87,23 @@ async def list_rtas(
 ):
     """List RTAs with deterministic ordering and pagination."""
     query = select(RootCauseAnalysis)
-    
+
     if incident_id:
         query = query.where(RootCauseAnalysis.incident_id == incident_id)
-    
+
     # Deterministic ordering: created_at DESC, id ASC
     query = query.order_by(RootCauseAnalysis.created_at.desc(), RootCauseAnalysis.id.asc())
-    
+
     # Total count
     count_query = select(func.count()).select_from(query.subquery())
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
-    
+
     # Pagination
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    
+
     return {
         "items": items,
         "total": total,
@@ -127,11 +126,11 @@ async def update_rta(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"RTA with id {rta_id} not found",
         )
-    
+
     update_data = rta_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(rta, field, value)
-    
+
     await record_audit_event(
         db=db,
         event_type="rta.updated",

@@ -5,13 +5,14 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from src.domain.models.audit_log import AuditEvent
-from src.domain.models.incident import Incident, IncidentType, IncidentSeverity, IncidentStatus
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 
 
 @pytest.fixture
 async def test_incident(test_session, test_user):
     """Create a test incident."""
     from datetime import datetime, timezone
+
     incident = Incident(
         title="Test Incident for Audit",
         description="Description",
@@ -40,7 +41,7 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
         "severity": IncidentSeverity.MEDIUM,
         "status": IncidentStatus.REPORTED,
         "incident_date": "2026-01-04T12:00:00Z",
-        "location": "Test Lab"
+        "location": "Test Lab",
     }
     response = await client.post("/api/v1/incidents", json=data, headers=auth_headers)
     assert response.status_code == 201
@@ -51,7 +52,7 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
         select(AuditEvent).where(
             AuditEvent.resource_type == "incident",
             AuditEvent.resource_id == str(incident_id),
-            AuditEvent.event_type == "incident.created"
+            AuditEvent.event_type == "incident.created",
         )
     )
     event = result.scalar_one_or_none()
@@ -66,7 +67,7 @@ async def test_rta_creation_records_audit_event(client: AsyncClient, auth_header
         "incident_id": test_incident.id,
         "title": "Audit Test RTA",
         "problem_statement": "Testing audit log",
-        "status": "draft"
+        "status": "draft",
     }
     response = await client.post("/api/v1/rtas/", json=data, headers=auth_headers)
     assert response.status_code == 201
@@ -77,7 +78,7 @@ async def test_rta_creation_records_audit_event(client: AsyncClient, auth_header
         select(AuditEvent).where(
             AuditEvent.resource_type == "rta",
             AuditEvent.resource_id == str(rta_id),
-            AuditEvent.event_type == "rta.created"
+            AuditEvent.event_type == "rta.created",
         )
     )
     event = result.scalar_one_or_none()

@@ -58,7 +58,7 @@ async def create_incident(
 
     db.add(incident)
     await db.flush()  # Get ID before recording event
-    
+
     await record_audit_event(
         db=db,
         event_type="incident.created",
@@ -68,7 +68,7 @@ async def create_incident(
         description=f"Incident {incident.reference_number} created",
         user_id=current_user.id,
     )
-    
+
     await db.commit()
     await db.refresh(incident)
     return incident
