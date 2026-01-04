@@ -8,7 +8,10 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
+from src.api.schemas.rta import RTAListResponse, RTAResponse
 from src.domain.models.incident import Incident
+from src.domain.models.rta_analysis import RootCauseAnalysis
+from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
 
@@ -54,6 +57,18 @@ async def create_incident(
     )
 
     db.add(incident)
+    await db.flush()  # Get ID before recording event
+
+    await record_audit_event(
+        db=db,
+        event_type="incident.created",
+        resource_type="incident",
+        resource_id=str(incident.id),
+        action="create",
+        description=f"Incident {incident.reference_number} created",
+        user_id=current_user.id,
+    )
+
     await db.commit()
     await db.refresh(incident)
     return incident
@@ -117,6 +132,40 @@ async def list_incidents(
     )
 
 
+@router.get("/{incident_id}/rtas", response_model=RTAListResponse)
+async def list_incident_rtas(
+    incident_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> RTAListResponse:
+    """
+    List RTAs for a specific incident.
+
+    Requires authentication.
+    """
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found",
+        )
+
+    result = await db.execute(
+        select(RootCauseAnalysis)
+        .where(RootCauseAnalysis.incident_id == incident_id)
+        .order_by(RootCauseAnalysis.created_at.desc(), RootCauseAnalysis.id.asc())
+    )
+    rtas = result.scalars().all()
+    return RTAListResponse(
+        items=[RTAResponse.model_validate(rta) for rta in rtas],
+        total=len(rtas),
+        page=1,
+        page_size=len(rtas),
+    )
+
+
 @router.patch("/{incident_id}", response_model=IncidentResponse)
 async def update_incident(
     incident_id: int,
@@ -145,6 +194,17 @@ async def update_incident(
 
     incident.updated_by_id = current_user.id
     incident.updated_at = datetime.now(timezone.utc)
+
+    await record_audit_event(
+        db=db,
+        event_type="incident.updated",
+        resource_type="incident",
+        resource_id=str(incident.id),
+        action="update",
+        description=f"Incident {incident.reference_number} updated",
+        payload=update_dict,
+        user_id=current_user.id,
+    )
 
     await db.commit()
     await db.refresh(incident)
