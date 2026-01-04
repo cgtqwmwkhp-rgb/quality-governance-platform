@@ -41,6 +41,33 @@ jobs:
       - name: Type check with mypy
         run: mypy src/ --ignore-missing-imports
 
+  branch-protection-proof:
+    name: Branch Protection Proof (Stage 1.0)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Export branch protection settings (BLOCKING)
+        run: |
+          echo "=== Stage 1.0: Branch Protection Proof (BLOCKING) ==="
+          ./scripts/export_branch_protection.sh
+          echo ""
+          echo "✅ Branch protection settings exported"
+
+      - name: Validate branch protection settings (BLOCKING)
+        run: |
+          echo "=== Validating branch protection settings ==="
+          python3 scripts/validate_branch_protection.py
+          echo ""
+          echo "✅ Branch protection validation passed"
+
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
     runs-on: ubuntu-latest
@@ -212,10 +239,30 @@ jobs:
         run: |
           python -c "from src.main import app; print('✅ Application imports successfully')"
 
+  governance-evidence:
+    name: Governance Evidence (Stage 0.7 Gate 1)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate governance evidence presence (BLOCKING)
+        run: |
+          echo "=== Stage 0.7 Gate 1: Governance Evidence Validation (BLOCKING) ==="
+          python3 scripts/validate_governance_evidence.py
+          echo ""
+          echo "✅ Governance evidence validation passed"
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [code-quality, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check]
+    needs: [code-quality, branch-protection-proof, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, governance-evidence]
     
     steps:
       - name: All checks passed
