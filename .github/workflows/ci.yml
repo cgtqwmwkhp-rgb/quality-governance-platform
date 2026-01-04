@@ -189,6 +189,12 @@ jobs:
           pip install pip-audit bandit
           pip install -r requirements.txt
 
+      - name: Dependency Audit with pip-audit (BLOCKING)
+        run: |
+          echo "=== pip-audit: Dependency Vulnerability Scan (BLOCKING) ==="
+          pip-audit -r requirements.txt
+          echo "✅ pip-audit passed: No vulnerabilities found"
+
       - name: Validate security waivers (BLOCKING)
         run: |
           echo "=== Security Waiver Validation (BLOCKING) ==="
