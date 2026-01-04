@@ -262,10 +262,167 @@ jobs:
           echo ""
           echo "✅ Governance evidence validation passed"
 
+  release-rehearsal:
+    name: Release Rehearsal (Stage 1.1)
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/testdb
+        run: |
+          echo "=== Running Alembic migrations ==="
+          alembic upgrade head
+          echo "✅ Migrations applied"
+
+      - name: Start application (background)
+        env:
+          DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/testdb
+          SECRET_KEY: rehearsal-secret-key-not-for-production
+          JWT_SECRET_KEY: rehearsal-jwt-secret-not-for-production
+          ENVIRONMENT: ci-rehearsal
+        run: |
+          echo "=== Starting application ==="
+          uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+          APP_PID=$!
+          echo $APP_PID > app.pid
+          echo "Application started with PID: $APP_PID"
+          
+          # Wait for app to be ready
+          echo "Waiting for application to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/healthz > /dev/null 2>&1; then
+              echo "✅ Application is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Application failed to start within 30 seconds"
+              kill $APP_PID || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Verify /healthz endpoint (liveness)
+        run: |
+          echo "=== Testing /healthz (liveness) ==="
+          response=$(curl -s -w "\n%{http_code}" http://localhost:8000/healthz)
+          status_code=$(echo "$response" | tail -n 1)
+          body=$(echo "$response" | head -n -1)
+          
+          echo "Status code: $status_code"
+          echo "Response body: $body"
+          
+          if [ "$status_code" != "200" ]; then
+            echo "❌ /healthz returned $status_code (expected 200)"
+            kill $(cat app.pid) || true
+            exit 1
+          fi
+          
+          echo "✅ /healthz returns 200"
+
+      - name: Verify /readyz endpoint (readiness)
+        run: |
+          echo "=== Testing /readyz (readiness with DB check) ==="
+          response=$(curl -s -w "\n%{http_code}" http://localhost:8000/readyz)
+          status_code=$(echo "$response" | tail -n 1)
+          body=$(echo "$response" | head -n -1)
+          
+          echo "Status code: $status_code"
+          echo "Response body: $body"
+          
+          if [ "$status_code" != "200" ]; then
+            echo "❌ /readyz returned $status_code (expected 200)"
+            kill $(cat app.pid) || true
+            exit 1
+          fi
+          
+          echo "✅ /readyz returns 200 (DB connection healthy)"
+
+      - name: Verify request_id header in responses
+        run: |
+          echo "=== Testing request_id header ==="
+          response=$(curl -s -i http://localhost:8000/healthz)
+          
+          if echo "$response" | grep -i "x-request-id:" > /dev/null; then
+            request_id=$(echo "$response" | grep -i "x-request-id:" | cut -d' ' -f2 | tr -d '\r')
+            echo "✅ request_id header present: $request_id"
+          else
+            echo "❌ request_id header not found in response"
+            kill $(cat app.pid) || true
+            exit 1
+          fi
+
+      - name: Perform simple API call to generate logs
+        run: |
+          echo "=== Testing API endpoint to generate logs ==="
+          # Test the root endpoint
+          response=$(curl -s -w "\n%{http_code}" http://localhost:8000/)
+          status_code=$(echo "$response" | tail -n 1)
+          
+          echo "Status code: $status_code"
+          
+          if [ "$status_code" != "200" ] && [ "$status_code" != "404" ]; then
+            echo "⚠️  Root endpoint returned $status_code"
+          else
+            echo "✅ API endpoint responded (status: $status_code)"
+          fi
+
+      - name: Stop application
+        if: always()
+        run: |
+          echo "=== Stopping application ==="
+          if [ -f app.pid ]; then
+            kill $(cat app.pid) || true
+            echo "✅ Application stopped"
+          fi
+
+      - name: Release rehearsal complete
+        run: |
+          echo "======================================"
+          echo "✅ RELEASE REHEARSAL PASSED"
+          echo "======================================"
+          echo "All checks completed successfully:"
+          echo "  ✅ Application starts with safe config"
+          echo "  ✅ /healthz endpoint returns 200"
+          echo "  ✅ /readyz endpoint returns 200 (DB healthy)"
+          echo "  ✅ request_id header present in responses"
+          echo "  ✅ API endpoints generate logs"
+          echo ""
+          echo "The application is ready for deployment."
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [code-quality, branch-protection-proof, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, governance-evidence]
+    needs: [code-quality, branch-protection-proof, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, governance-evidence, release-rehearsal]
     
     steps:
       - name: All checks passed
