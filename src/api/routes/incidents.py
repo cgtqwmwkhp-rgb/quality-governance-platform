@@ -66,6 +66,7 @@ async def create_incident(
         resource_id=str(incident.id),
         action="create",
         description=f"Incident {incident.reference_number} created",
+        payload=incident_data.model_dump(mode="json"),
         user_id=current_user.id,
     )
 
@@ -209,3 +210,39 @@ async def update_incident(
     await db.commit()
     await db.refresh(incident)
     return incident
+
+
+@router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_incident(
+    incident_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    """
+    Delete an incident.
+
+    Requires authentication.
+    """
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found",
+        )
+
+    # Record audit event
+    await record_audit_event(
+        db=db,
+        event_type="incident.deleted",
+        resource_type="incident",
+        resource_id=str(incident.id),
+        action="delete",
+        description=f"Incident {incident.reference_number} deleted",
+        payload={"incident_id": incident_id, "reference_number": incident.reference_number},
+        user_id=current_user.id,
+    )
+
+    await db.delete(incident)
+    await db.commit()
