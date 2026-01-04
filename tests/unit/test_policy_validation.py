@@ -34,7 +34,7 @@ class TestPolicyCreateValidation:
         """Test that empty title is rejected."""
         with pytest.raises(ValidationError) as exc_info:
             PolicyCreate(title="")
-        
+
         errors = exc_info.value.errors()
         assert any("title" in str(error["loc"]) for error in errors)
 
@@ -42,7 +42,7 @@ class TestPolicyCreateValidation:
         """Test that whitespace-only title is rejected."""
         with pytest.raises(ValidationError) as exc_info:
             PolicyCreate(title="   ")
-        
+
         errors = exc_info.value.errors()
         assert any("title" in str(error["loc"]) for error in errors)
 
@@ -51,7 +51,7 @@ class TestPolicyCreateValidation:
         long_title = "A" * 301  # Max is 300
         with pytest.raises(ValidationError) as exc_info:
             PolicyCreate(title=long_title)
-        
+
         errors = exc_info.value.errors()
         assert any("title" in str(error["loc"]) for error in errors)
 
@@ -95,7 +95,7 @@ class TestPolicyUpdateValidation:
         """Test that empty title is rejected in update."""
         with pytest.raises(ValidationError) as exc_info:
             PolicyUpdate(title="")
-        
+
         errors = exc_info.value.errors()
         assert any("title" in str(error["loc"]) for error in errors)
 
@@ -103,7 +103,7 @@ class TestPolicyUpdateValidation:
         """Test that whitespace-only title is rejected in update."""
         with pytest.raises(ValidationError) as exc_info:
             PolicyUpdate(title="   ")
-        
+
         errors = exc_info.value.errors()
         assert any("title" in str(error["loc"]) for error in errors)
 
@@ -127,7 +127,7 @@ class TestDeterministicOrdering:
     def test_ordering_specification(self):
         """
         Test that ordering is explicitly specified.
-        
+
         This is a documentation test to ensure the ordering contract is clear:
         - Primary sort: created_at DESC (newest first)
         - Secondary sort: id ASC (stable tie-breaker)
@@ -139,7 +139,7 @@ class TestDeterministicOrdering:
             "secondary": "id ASC",
             "rationale": "Deterministic ordering for auditability",
         }
-        
+
         assert ordering_contract["primary"] == "created_at DESC"
         assert ordering_contract["secondary"] == "id ASC"
         assert "Deterministic" in ordering_contract["rationale"]

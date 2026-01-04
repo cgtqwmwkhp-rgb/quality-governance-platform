@@ -31,19 +31,17 @@ async def create_policy(
 ) -> Policy:
     """
     Create a new policy document.
-    
+
     Requires authentication.
     """
     # Generate reference number (format: POL-YYYY-NNNN)
     year = datetime.now(timezone.utc).year
-    
+
     # Get the count of policies created this year
-    count_result = await db.execute(
-        select(sa_func.count()).select_from(Policy)
-    )
+    count_result = await db.execute(select(sa_func.count()).select_from(Policy))
     count = count_result.scalar_one()
     reference_number = f"POL-{year}-{count + 1:04d}"
-    
+
     # Create new policy
     policy = Policy(
         title=policy_data.title,
@@ -54,11 +52,11 @@ async def create_policy(
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
-    
+
     db.add(policy)
     await db.commit()
     await db.refresh(policy)
-    
+
     return policy
 
 
@@ -74,20 +72,18 @@ async def get_policy(
 ) -> Policy:
     """
     Get a specific policy by ID.
-    
+
     Requires authentication.
     """
-    result = await db.execute(
-        select(Policy).where(Policy.id == policy_id)
-    )
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
     policy = result.scalar_one_or_none()
-    
+
     if not policy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Policy with id {policy_id} not found",
         )
-    
+
     return policy
 
 
@@ -104,19 +100,17 @@ async def list_policies(
 ) -> PolicyListResponse:
     """
     List all policies with deterministic ordering.
-    
+
     Policies are ordered by:
     1. created_at DESC (newest first)
     2. id ASC (stable secondary sort)
-    
+
     Requires authentication.
     """
     # Count total
-    count_result = await db.execute(
-        select(sa_func.count()).select_from(Policy)
-    )
+    count_result = await db.execute(select(sa_func.count()).select_from(Policy))
     total = count_result.scalar_one()
-    
+
     # Get paginated results with deterministic ordering
     offset = (page - 1) * page_size
     result = await db.execute(
@@ -126,7 +120,7 @@ async def list_policies(
         .offset(offset)
     )
     policies = result.scalars().all()
-    
+
     return PolicyListResponse(
         items=policies,
         total=total,
@@ -148,31 +142,29 @@ async def update_policy(
 ) -> Policy:
     """
     Update an existing policy.
-    
+
     Requires authentication.
     """
     # Get existing policy
-    result = await db.execute(
-        select(Policy).where(Policy.id == policy_id)
-    )
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
     policy = result.scalar_one_or_none()
-    
+
     if not policy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Policy with id {policy_id} not found",
         )
-    
+
     # Update fields
     update_data = policy_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(policy, field, value)
-    
+
     policy.updated_by_id = current_user.id
-    
+
     await db.commit()
     await db.refresh(policy)
-    
+
     return policy
 
 
@@ -188,20 +180,18 @@ async def delete_policy(
 ) -> None:
     """
     Delete a policy.
-    
+
     Requires authentication.
     """
     # Get existing policy
-    result = await db.execute(
-        select(Policy).where(Policy.id == policy_id)
-    )
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
     policy = result.scalar_one_or_none()
-    
+
     if not policy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Policy with id {policy_id} not found",
         )
-    
+
     await db.delete(policy)
     await db.commit()
