@@ -1,6 +1,6 @@
 """Database connection and session management."""
 
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -15,7 +15,6 @@ class Base(DeclarativeBase):
 
 
 # Create async engine with conditional pooling (SQLite doesn't support pool_size)
-from typing import Any
 
 engine_kwargs: dict[str, Any] = {
     "echo": settings.database_echo,
