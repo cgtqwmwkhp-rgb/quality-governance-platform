@@ -7,12 +7,7 @@ from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.incident import (
-    IncidentCreate,
-    IncidentListResponse,
-    IncidentResponse,
-    IncidentUpdate,
-)
+from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.domain.models.incident import Incident
 
 router = APIRouter()
@@ -30,19 +25,17 @@ async def create_incident(
 ) -> Incident:
     """
     Report a new incident.
-    
+
     Requires authentication.
     """
     # Generate reference number (format: INC-YYYY-NNNN)
     year = datetime.now(timezone.utc).year
-    
+
     # Get the count of incidents created this year
-    count_result = await db.execute(
-        select(sa_func.count()).select_from(Incident)
-    )
+    count_result = await db.execute(select(sa_func.count()).select_from(Incident))
     count = count_result.scalar_one()
     reference_number = f"INC-{year}-{count + 1:04d}"
-    
+
     # Create new incident
     incident = Incident(
         title=incident_data.title,
@@ -59,7 +52,7 @@ async def create_incident(
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
-    
+
     db.add(incident)
     await db.commit()
     await db.refresh(incident)
@@ -74,18 +67,18 @@ async def get_incident(
 ) -> Incident:
     """
     Get an incident by ID.
-    
+
     Requires authentication.
     """
     result = await db.execute(select(Incident).where(Incident.id == incident_id))
     incident = result.scalar_one_or_none()
-    
+
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Incident with ID {incident_id} not found",
         )
-    
+
     return incident
 
 
@@ -98,27 +91,24 @@ async def list_incidents(
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
-    
+
     Incidents are ordered by:
     1. reported_date DESC (newest first)
     2. id ASC (stable secondary sort)
-    
+
     Requires authentication.
     """
     # Count total
     count_result = await db.execute(select(sa_func.count()).select_from(Incident))
     total = count_result.scalar_one()
-    
+
     # Get paginated results with deterministic ordering
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(Incident)
-        .order_by(Incident.reported_date.desc(), Incident.id.asc())
-        .limit(page_size)
-        .offset(offset)
+        select(Incident).order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
     )
     incidents = result.scalars().all()
-    
+
     return IncidentListResponse(
         items=[IncidentResponse.model_validate(i) for i in incidents],
         total=total,
@@ -136,26 +126,26 @@ async def update_incident(
 ) -> Incident:
     """
     Partially update an incident.
-    
+
     Requires authentication.
     """
     result = await db.execute(select(Incident).where(Incident.id == incident_id))
     incident = result.scalar_one_or_none()
-    
+
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Incident with ID {incident_id} not found",
         )
-    
+
     # Update fields
     update_dict = incident_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
         setattr(incident, key, value)
-    
+
     incident.updated_by_id = current_user.id
     incident.updated_at = datetime.now(timezone.utc)
-    
+
     await db.commit()
     await db.refresh(incident)
     return incident

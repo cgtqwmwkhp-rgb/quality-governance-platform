@@ -53,7 +53,7 @@ async def test_get_incident_by_id(client: AsyncClient, auth_headers: dict, test_
 async def test_list_incidents_deterministic_ordering(client: AsyncClient, auth_headers: dict, test_session):
     """Test that incidents are returned in deterministic order (reported_date DESC, id ASC)."""
     now = datetime.now(timezone.utc)
-    
+
     # Create 3 incidents with different reported dates
     incidents = [
         Incident(
@@ -72,7 +72,7 @@ async def test_list_incidents_deterministic_ordering(client: AsyncClient, auth_h
     response = await client.get("/api/v1/incidents", headers=auth_headers)
     assert response.status_code == 200
     items = response.json()["items"]
-    
+
     # Should be ordered by reported_date DESC (newest first)
     # Incident 0 is newest, Incident 2 is oldest
     assert items[0]["title"] == "Incident 0"
@@ -123,13 +123,13 @@ async def test_list_incidents_pagination(client: AsyncClient, auth_headers: dict
     data = response.json()
     assert len(data["items"]) == 2
     assert data["total"] >= 5
-    
+
     # Get page 2, size 2
     response2 = await client.get("/api/v1/incidents?page=2&page_size=2", headers=auth_headers)
     assert response2.status_code == 200
     data2 = response2.json()
     assert len(data2["items"]) == 2
-    
+
     # Ensure no overlap
     page1_ids = [item["id"] for item in data["items"]]
     page2_ids = [item["id"] for item in data2["items"]]
