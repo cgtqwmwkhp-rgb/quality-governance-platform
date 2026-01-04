@@ -3,11 +3,12 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ControlBase(BaseModel):
     """Base schema for Control."""
+
     control_number: str = Field(..., min_length=1, max_length=20)
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
@@ -19,11 +20,13 @@ class ControlBase(BaseModel):
 
 class ControlCreate(ControlBase):
     """Schema for creating a Control."""
+
     clause_id: int
 
 
 class ControlUpdate(BaseModel):
     """Schema for updating a Control."""
+
     control_number: Optional[str] = Field(None, min_length=1, max_length=20)
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
@@ -36,6 +39,7 @@ class ControlUpdate(BaseModel):
 
 class ControlResponse(ControlBase):
     """Schema for Control response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -47,6 +51,7 @@ class ControlResponse(ControlBase):
 
 class ClauseBase(BaseModel):
     """Base schema for Clause."""
+
     clause_number: str = Field(..., min_length=1, max_length=20)
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
@@ -56,12 +61,14 @@ class ClauseBase(BaseModel):
 
 class ClauseCreate(ClauseBase):
     """Schema for creating a Clause."""
+
     standard_id: int
     parent_clause_id: Optional[int] = None
 
 
 class ClauseUpdate(BaseModel):
     """Schema for updating a Clause."""
+
     clause_number: Optional[str] = Field(None, min_length=1, max_length=20)
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
@@ -73,6 +80,7 @@ class ClauseUpdate(BaseModel):
 
 class ClauseResponse(ClauseBase):
     """Schema for Clause response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -86,6 +94,7 @@ class ClauseResponse(ClauseBase):
 
 class StandardBase(BaseModel):
     """Base schema for Standard."""
+
     code: str = Field(..., min_length=1, max_length=20)
     name: str = Field(..., min_length=1, max_length=200)
     full_name: str = Field(..., min_length=1, max_length=500)
@@ -96,11 +105,13 @@ class StandardBase(BaseModel):
 
 class StandardCreate(StandardBase):
     """Schema for creating a Standard."""
+
     pass
 
 
 class StandardUpdate(BaseModel):
     """Schema for updating a Standard."""
+
     code: Optional[str] = Field(None, min_length=1, max_length=20)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     full_name: Optional[str] = Field(None, min_length=1, max_length=500)
@@ -112,6 +123,7 @@ class StandardUpdate(BaseModel):
 
 class StandardResponse(StandardBase):
     """Schema for Standard response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -122,11 +134,13 @@ class StandardResponse(StandardBase):
 
 class StandardDetailResponse(StandardResponse):
     """Schema for detailed Standard response with clauses."""
+
     clauses: List[ClauseResponse] = []
 
 
 class StandardListResponse(BaseModel):
     """Schema for paginated standard list response."""
+
     items: List[StandardResponse]
     total: int
     page: int

@@ -1,18 +1,21 @@
 """Policy and Document Library models."""
 
+import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, Integer, DateTime, JSON, Enum as SQLEnum
+from sqlalchemy import JSON, Boolean, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-import enum
 
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
-from src.domain.models.base import TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
 
 
 class DocumentType(str, enum.Enum):
     """Type of document."""
+
     POLICY = "policy"
     PROCEDURE = "procedure"
     WORK_INSTRUCTION = "work_instruction"
@@ -27,6 +30,7 @@ class DocumentType(str, enum.Enum):
 
 class DocumentStatus(str, enum.Enum):
     """Status of document."""
+
     DRAFT = "draft"
     UNDER_REVIEW = "under_review"
     APPROVED = "approved"
@@ -41,34 +45,34 @@ class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "policies"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    
+
     # Document identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     document_type: Mapped[DocumentType] = mapped_column(SQLEnum(DocumentType), default=DocumentType.POLICY)
     status: Mapped[DocumentStatus] = mapped_column(SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT)
-    
+
     # Classification
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     tags: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated tags
-    
+
     # Ownership
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    
+
     # Review cycle
     review_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+
     # Standard mapping
     clause_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # Access control
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     restricted_to_roles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated role IDs
     restricted_to_departments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # Relationships
     versions: Mapped[List["PolicyVersion"]] = relationship(
         "PolicyVersion",
@@ -96,20 +100,20 @@ class PolicyVersion(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id", ondelete="CASCADE"), nullable=False)
-    
+
     # Version info
     version_number: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., "1.0", "1.1", "2.0"
     version_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Change summary
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
     is_major_revision: Mapped[bool] = mapped_column(Boolean, default=False)
-    
+
     # Content
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Rich text content
     file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # Path to uploaded file
     file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # In bytes
     file_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # MIME type
-    
+
     # Approval workflow
     status: Mapped[DocumentStatus] = mapped_column(SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -119,17 +123,17 @@ class PolicyVersion(Base, TimestampMixin, AuditTrailMixin):
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     approved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+
     # Effective dates
     effective_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+
     # Supersession
     supersedes_version_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("policy_versions.id"),
         nullable=True,
     )
-    
+
     # Relationships
     policy: Mapped["Policy"] = relationship("Policy", back_populates="versions")
 

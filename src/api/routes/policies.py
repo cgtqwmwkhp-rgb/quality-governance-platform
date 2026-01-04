@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from src.api.dependencies import DbSession, CurrentUser
+from src.api.dependencies import CurrentUser, DbSession
 
 router = APIRouter()
 

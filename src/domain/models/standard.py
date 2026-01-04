@@ -2,11 +2,11 @@
 
 from typing import List, Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, Integer, Date
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.infrastructure.database import Base
 from src.domain.models.base import TimestampMixin
+from src.infrastructure.database import Base
 
 
 class Standard(Base, TimestampMixin):
@@ -90,7 +90,9 @@ class Control(Base, TimestampMixin):
     # For ISO 27001 Statement of Applicability
     is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
     applicability_justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    implementation_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # implemented, partial, planned, not_implemented
+    implementation_status: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # implemented, partial, planned, not_implemented
 
     # Relationships
     clause: Mapped["Clause"] = relationship("Clause", back_populates="controls")

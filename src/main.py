@@ -6,9 +6,9 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.core.config import settings
-from src.infrastructure.database import init_db, close_db
 from src.api import router as api_router
+from src.core.config import settings
+from src.infrastructure.database import close_db, init_db
 
 
 @asynccontextmanager

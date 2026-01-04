@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -34,13 +34,13 @@ class ReferenceNumberService:
     ) -> str:
         """
         Generate a unique reference number in format: PREFIX-YYYY-####
-        
+
         Args:
             db: Database session
             record_type: Type of record (e.g., "audit_run", "incident")
             model_class: SQLAlchemy model class to query
             year: Optional year override (defaults to current year)
-        
+
         Returns:
             Unique reference number string
         """
@@ -49,10 +49,9 @@ class ReferenceNumberService:
 
         # Find the highest sequence number for this prefix and year
         pattern = f"{prefix}-{current_year}-%"
-        
+
         result = await db.execute(
-            select(func.max(model_class.reference_number))
-            .where(model_class.reference_number.like(pattern))
+            select(func.max(model_class.reference_number)).where(model_class.reference_number.like(pattern))
         )
         max_ref = result.scalar()
 
@@ -71,10 +70,10 @@ class ReferenceNumberService:
     def parse(cls, reference_number: str) -> dict:
         """
         Parse a reference number into its components.
-        
+
         Args:
             reference_number: Reference number string
-        
+
         Returns:
             Dictionary with prefix, year, and sequence
         """

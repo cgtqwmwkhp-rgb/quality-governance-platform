@@ -1,16 +1,17 @@
 """Unit tests for Risk schemas."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 from pydantic import ValidationError
 
 from src.api.schemas.risk import (
+    RiskAssessmentCreate,
     RiskControlCreate,
     RiskControlUpdate,
-    RiskAssessmentCreate,
     RiskCreate,
-    RiskUpdate,
     RiskMatrixCell,
+    RiskUpdate,
 )
 
 

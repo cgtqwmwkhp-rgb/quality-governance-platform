@@ -3,13 +3,13 @@
 from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.infrastructure.database import get_db
 from src.core.security import decode_token
 from src.domain.models.user import User
+from src.infrastructure.database import get_db
 
 # Security scheme
 security = HTTPBearer()
@@ -78,6 +78,7 @@ async def get_current_superuser(
 
 def require_permission(permission: str):
     """Dependency factory for permission checking."""
+
     async def permission_checker(
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
@@ -87,6 +88,7 @@ def require_permission(permission: str):
                 detail=f"Permission '{permission}' required",
             )
         return current_user
+
     return permission_checker
 
 

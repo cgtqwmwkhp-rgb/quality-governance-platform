@@ -2,27 +2,28 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import DbSession, CurrentUser, CurrentSuperuser
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.user import (
-    UserCreate,
-    UserUpdate,
-    UserResponse,
-    UserListResponse,
     RoleCreate,
-    RoleUpdate,
     RoleResponse,
+    RoleUpdate,
+    UserCreate,
+    UserListResponse,
+    UserResponse,
+    UserUpdate,
 )
 from src.core.security import get_password_hash
-from src.domain.models.user import User, Role
+from src.domain.models.user import Role, User
 
 router = APIRouter()
 
 
 # ============== User Endpoints ==============
+
 
 @router.get("", response_model=UserListResponse)
 async def list_users(
@@ -42,9 +43,9 @@ async def list_users(
     if search:
         search_filter = f"%{search}%"
         query = query.where(
-            (User.email.ilike(search_filter)) |
-            (User.first_name.ilike(search_filter)) |
-            (User.last_name.ilike(search_filter))
+            (User.email.ilike(search_filter))
+            | (User.first_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter))
         )
     if department:
         query = query.where(User.department == department)
@@ -117,11 +118,7 @@ async def get_user(
     current_user: CurrentUser,
 ) -> UserResponse:
     """Get a specific user by ID."""
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.roles))
-        .where(User.id == user_id)
-    )
+    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -141,11 +138,7 @@ async def update_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Update a user (superuser only)."""
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.roles))
-        .where(User.id == user_id)
-    )
+    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -156,7 +149,7 @@ async def update_user(
 
     # Update fields
     update_data = user_data.model_dump(exclude_unset=True)
-    
+
     # Handle role assignment separately
     role_ids = update_data.pop("role_ids", None)
     if role_ids is not None:
@@ -201,6 +194,7 @@ async def delete_user(
 
 
 # ============== Role Endpoints ==============
+
 
 @router.get("/roles/", response_model=list[RoleResponse])
 async def list_roles(

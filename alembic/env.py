@@ -27,7 +27,11 @@ from src.core.config import settings
 config = context.config
 
 # Override sqlalchemy.url with the value from settings
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
+# For offline mode (migration generation), we need a sync driver URL
+db_url = settings.database_url.replace("+asyncpg", "")
+if "+aiosqlite" in db_url:
+    db_url = db_url.replace("+aiosqlite", "")
+config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
@@ -70,8 +74,20 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
+    # Get the config and ensure we have the async driver in the URL
+    config_section = config.get_section(config.config_ini_section, {})
+    url = config_section.get("sqlalchemy.url", db_url)
+    
+    # Ensure async driver is used
+    if "sqlite" in url and "+aiosqlite" not in url:
+        url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+    elif "postgresql" in url and "+asyncpg" not in url:
+        url = url.replace("postgresql://", "postgresql+asyncpg://")
+    
+    config_section["sqlalchemy.url"] = url
+    
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        config_section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

@@ -3,44 +3,44 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, and_
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import DbSession, CurrentUser, CurrentSuperuser
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.audit import (
-    AuditTemplateCreate,
-    AuditTemplateUpdate,
-    AuditTemplateResponse,
-    AuditTemplateDetailResponse,
-    AuditTemplateListResponse,
-    AuditSectionCreate,
-    AuditSectionUpdate,
-    AuditSectionResponse,
+    AuditFindingCreate,
+    AuditFindingListResponse,
+    AuditFindingResponse,
+    AuditFindingUpdate,
     AuditQuestionCreate,
-    AuditQuestionUpdate,
     AuditQuestionResponse,
+    AuditQuestionUpdate,
+    AuditResponseCreate,
+    AuditResponseResponse,
+    AuditResponseUpdate,
     AuditRunCreate,
-    AuditRunUpdate,
-    AuditRunResponse,
     AuditRunDetailResponse,
     AuditRunListResponse,
-    AuditResponseCreate,
-    AuditResponseUpdate,
-    AuditResponseResponse,
-    AuditFindingCreate,
-    AuditFindingUpdate,
-    AuditFindingResponse,
-    AuditFindingListResponse,
+    AuditRunResponse,
+    AuditRunUpdate,
+    AuditSectionCreate,
+    AuditSectionResponse,
+    AuditSectionUpdate,
+    AuditTemplateCreate,
+    AuditTemplateDetailResponse,
+    AuditTemplateListResponse,
+    AuditTemplateResponse,
+    AuditTemplateUpdate,
 )
 from src.domain.models.audit import (
-    AuditTemplate,
-    AuditSection,
-    AuditQuestion,
-    AuditRun,
-    AuditResponse,
     AuditFinding,
+    AuditQuestion,
+    AuditResponse,
+    AuditRun,
+    AuditSection,
     AuditStatus,
+    AuditTemplate,
     FindingStatus,
 )
 from src.services.reference_number import ReferenceNumberService
@@ -49,6 +49,7 @@ router = APIRouter()
 
 
 # ============== Template Endpoints ==============
+
 
 @router.get("/templates", response_model=AuditTemplateListResponse)
 async def list_templates(
@@ -67,8 +68,7 @@ async def list_templates(
     if search:
         search_filter = f"%{search}%"
         query = query.where(
-            (AuditTemplate.name.ilike(search_filter)) |
-            (AuditTemplate.description.ilike(search_filter))
+            (AuditTemplate.name.ilike(search_filter)) | (AuditTemplate.description.ilike(search_filter))
         )
     if category:
         query = query.where(AuditTemplate.category == category)
@@ -108,12 +108,10 @@ async def create_template(
         **template_data.model_dump(exclude={"standard_ids"}),
         created_by_id=current_user.id,
     )
-    
+
     # Generate reference number
-    template.reference_number = await ReferenceNumberService.generate(
-        db, "audit_template", AuditTemplate
-    )
-    
+    template.reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
+
     db.add(template)
     await db.commit()
     await db.refresh(template)
@@ -130,9 +128,7 @@ async def get_template(
     """Get a specific audit template with sections and questions."""
     result = await db.execute(
         select(AuditTemplate)
-        .options(
-            selectinload(AuditTemplate.sections).selectinload(AuditSection.questions)
-        )
+        .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
         .where(AuditTemplate.id == template_id)
     )
     template = result.scalar_one_or_none()
@@ -146,7 +142,7 @@ async def get_template(
     response = AuditTemplateDetailResponse.model_validate(template)
     response.section_count = len(template.sections)
     response.question_count = sum(len(s.questions) for s in template.sections)
-    
+
     return response
 
 
@@ -239,7 +235,10 @@ async def delete_template(
 
 # ============== Section Endpoints ==============
 
-@router.post("/templates/{template_id}/sections", response_model=AuditSectionResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/templates/{template_id}/sections", response_model=AuditSectionResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_section(
     template_id: int,
     section_data: AuditSectionCreate,
@@ -250,7 +249,7 @@ async def create_section(
     # Verify template exists
     result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
     template = result.scalar_one_or_none()
-    
+
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -261,7 +260,7 @@ async def create_section(
         template_id=template_id,
         **section_data.model_dump(),
     )
-    
+
     db.add(section)
     await db.commit()
     await db.refresh(section)
@@ -278,9 +277,7 @@ async def update_section(
 ) -> AuditSectionResponse:
     """Update an audit section."""
     result = await db.execute(
-        select(AuditSection)
-        .options(selectinload(AuditSection.questions))
-        .where(AuditSection.id == section_id)
+        select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section_id)
     )
     section = result.scalar_one_or_none()
 
@@ -322,7 +319,10 @@ async def delete_section(
 
 # ============== Question Endpoints ==============
 
-@router.post("/templates/{template_id}/questions", response_model=AuditQuestionResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/templates/{template_id}/questions", response_model=AuditQuestionResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_question(
     template_id: int,
     question_data: AuditQuestionCreate,
@@ -333,7 +333,7 @@ async def create_question(
     # Verify template exists
     result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
     template = result.scalar_one_or_none()
-    
+
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -343,18 +343,22 @@ async def create_question(
     # Convert options to JSON if provided
     question_dict = question_data.model_dump()
     if question_dict.get("options"):
-        question_dict["options_json"] = [opt.model_dump() if hasattr(opt, 'model_dump') else opt for opt in question_dict["options"]]
+        question_dict["options_json"] = [
+            opt.model_dump() if hasattr(opt, "model_dump") else opt for opt in question_dict["options"]
+        ]
     del question_dict["options"]
-    
+
     if question_dict.get("evidence_requirements"):
         er = question_dict["evidence_requirements"]
-        question_dict["evidence_requirements_json"] = er.model_dump() if hasattr(er, 'model_dump') else er
+        question_dict["evidence_requirements_json"] = er.model_dump() if hasattr(er, "model_dump") else er
     del question_dict["evidence_requirements"]
-    
+
     if question_dict.get("conditional_logic"):
-        question_dict["conditional_logic_json"] = [cl.model_dump() if hasattr(cl, 'model_dump') else cl for cl in question_dict["conditional_logic"]]
+        question_dict["conditional_logic_json"] = [
+            cl.model_dump() if hasattr(cl, "model_dump") else cl for cl in question_dict["conditional_logic"]
+        ]
     del question_dict["conditional_logic"]
-    
+
     # Handle clause_ids and control_ids
     clause_ids = question_dict.pop("clause_ids", None)
     control_ids = question_dict.pop("control_ids", None)
@@ -367,7 +371,7 @@ async def create_question(
         template_id=template_id,
         **question_dict,
     )
-    
+
     db.add(question)
     await db.commit()
     await db.refresh(question)
@@ -393,7 +397,7 @@ async def update_question(
         )
 
     update_data = question_data.model_dump(exclude_unset=True)
-    
+
     # Handle JSON fields
     if "options" in update_data:
         update_data["options_json"] = update_data.pop("options")
@@ -405,7 +409,7 @@ async def update_question(
         update_data["clause_ids_json"] = update_data.pop("clause_ids")
     if "control_ids" in update_data:
         update_data["control_ids_json"] = update_data.pop("control_ids")
-    
+
     for field, value in update_data.items():
         setattr(question, field, value)
 
@@ -436,6 +440,7 @@ async def delete_question(
 
 
 # ============== Audit Run Endpoints ==============
+
 
 @router.get("/runs", response_model=AuditRunListResponse)
 async def list_runs(
@@ -495,7 +500,7 @@ async def create_run(
         )
     )
     template = result.scalar_one_or_none()
-    
+
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -508,12 +513,10 @@ async def create_run(
         status=AuditStatus.SCHEDULED,
         created_by_id=current_user.id,
     )
-    
+
     # Generate reference number
-    run.reference_number = await ReferenceNumberService.generate(
-        db, "audit_run", AuditRun
-    )
-    
+    run.reference_number = await ReferenceNumberService.generate(db, "audit_run", AuditRun)
+
     db.add(run)
     await db.commit()
     await db.refresh(run)
@@ -547,7 +550,7 @@ async def get_run(
 
     response = AuditRunDetailResponse.model_validate(run)
     response.template_name = run.template.name if run.template else None
-    
+
     # Calculate completion percentage
     if run.template:
         total_questions = await db.scalar(
@@ -561,10 +564,8 @@ async def get_run(
             )
         )
         answered_questions = len(run.responses)
-        response.completion_percentage = (
-            (answered_questions / total_questions * 100) if total_questions > 0 else 0
-        )
-    
+        response.completion_percentage = (answered_questions / total_questions * 100) if total_questions > 0 else 0
+
     return response
 
 
@@ -586,7 +587,7 @@ async def update_run(
         )
 
     update_data = run_data.model_dump(exclude_unset=True)
-    
+
     # Handle status transitions
     if "status" in update_data:
         new_status = update_data["status"]
@@ -594,7 +595,7 @@ async def update_run(
             run.started_at = datetime.now(timezone.utc)
         elif new_status == AuditStatus.COMPLETED.value:
             run.completed_at = datetime.now(timezone.utc)
-    
+
     for field, value in update_data.items():
         setattr(run, field, value)
 
@@ -628,7 +629,7 @@ async def start_run(
 
     run.status = AuditStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
-    
+
     await db.commit()
     await db.refresh(run)
 
@@ -642,11 +643,7 @@ async def complete_run(
     current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
-    result = await db.execute(
-        select(AuditRun)
-        .options(selectinload(AuditRun.responses))
-        .where(AuditRun.id == run_id)
-    )
+    result = await db.execute(select(AuditRun).options(selectinload(AuditRun.responses)).where(AuditRun.id == run_id))
     run = result.scalar_one_or_none()
 
     if not run:
@@ -664,23 +661,21 @@ async def complete_run(
     # Calculate scores
     total_score = sum(r.score or 0 for r in run.responses)
     max_score = sum(r.max_score or 0 for r in run.responses)
-    
+
     run.score = total_score
     run.max_score = max_score
     run.score_percentage = (total_score / max_score * 100) if max_score > 0 else 0
-    
+
     # Get template to check passing score
-    template_result = await db.execute(
-        select(AuditTemplate).where(AuditTemplate.id == run.template_id)
-    )
+    template_result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
     template = template_result.scalar_one_or_none()
-    
+
     if template and template.passing_score is not None:
         run.passed = run.score_percentage >= template.passing_score
-    
+
     run.status = AuditStatus.COMPLETED
     run.completed_at = datetime.now(timezone.utc)
-    
+
     await db.commit()
     await db.refresh(run)
 
@@ -688,6 +683,7 @@ async def complete_run(
 
 
 # ============== Response Endpoints ==============
+
 
 @router.post("/runs/{run_id}/responses", response_model=AuditResponseResponse, status_code=status.HTTP_201_CREATED)
 async def create_response(
@@ -700,13 +696,13 @@ async def create_response(
     # Verify run exists and is in progress
     result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
     run = result.scalar_one_or_none()
-    
+
     if not run:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Audit run not found",
         )
-    
+
     if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -737,7 +733,7 @@ async def create_response(
         run_id=run_id,
         **response_data.model_dump(),
     )
-    
+
     db.add(response)
     await db.commit()
     await db.refresh(response)
@@ -754,9 +750,7 @@ async def update_response(
 ) -> AuditResponseResponse:
     """Update an audit response."""
     result = await db.execute(
-        select(AuditResponse)
-        .options(selectinload(AuditResponse.run))
-        .where(AuditResponse.id == response_id)
+        select(AuditResponse).options(selectinload(AuditResponse.run)).where(AuditResponse.id == response_id)
     )
     response = result.scalar_one_or_none()
 
@@ -783,6 +777,7 @@ async def update_response(
 
 
 # ============== Finding Endpoints ==============
+
 
 @router.get("/findings", response_model=AuditFindingListResponse)
 async def list_findings(
@@ -835,7 +830,7 @@ async def create_finding(
     # Verify run exists
     result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
     run = result.scalar_one_or_none()
-    
+
     if not run:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -843,19 +838,19 @@ async def create_finding(
         )
 
     finding_dict = finding_data.model_dump()
-    
+
     # Handle list fields
     clause_ids = finding_dict.pop("clause_ids", None)
     control_ids = finding_dict.pop("control_ids", None)
     risk_ids = finding_dict.pop("risk_ids", None)
-    
+
     finding = AuditFinding(
         run_id=run_id,
         status=FindingStatus.OPEN,
         created_by_id=current_user.id,
         **finding_dict,
     )
-    
+
     # Store list fields as JSON
     if clause_ids:
         finding.clause_ids_json = clause_ids
@@ -863,12 +858,10 @@ async def create_finding(
         finding.control_ids_json = control_ids
     if risk_ids:
         finding.risk_ids_json = risk_ids
-    
+
     # Generate reference number
-    finding.reference_number = await ReferenceNumberService.generate(
-        db, "audit_finding", AuditFinding
-    )
-    
+    finding.reference_number = await ReferenceNumberService.generate(db, "audit_finding", AuditFinding)
+
     db.add(finding)
     await db.commit()
     await db.refresh(finding)
@@ -894,7 +887,7 @@ async def update_finding(
         )
 
     update_data = finding_data.model_dump(exclude_unset=True)
-    
+
     # Handle list fields
     if "clause_ids" in update_data:
         finding.clause_ids_json = update_data.pop("clause_ids")
@@ -902,7 +895,7 @@ async def update_finding(
         finding.control_ids_json = update_data.pop("control_ids")
     if "risk_ids" in update_data:
         finding.risk_ids_json = update_data.pop("risk_ids")
-    
+
     for field, value in update_data.items():
         setattr(finding, field, value)
 

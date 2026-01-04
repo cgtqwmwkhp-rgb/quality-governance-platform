@@ -1,15 +1,16 @@
 """Pydantic schemas for Audit & Inspection API."""
 
 from datetime import datetime
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Question Types & Options ==============
 
+
 class QuestionOptionBase(BaseModel):
     """Base schema for question options (MCQ, dropdown, etc.)."""
+
     value: str = Field(..., min_length=1, max_length=200)
     label: str = Field(..., min_length=1, max_length=200)
     score: Optional[float] = None
@@ -20,6 +21,7 @@ class QuestionOptionBase(BaseModel):
 
 class ConditionalLogicRule(BaseModel):
     """Schema for conditional logic rules."""
+
     source_question_id: int
     operator: str = Field(..., pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$")
     value: Optional[Any] = None
@@ -28,6 +30,7 @@ class ConditionalLogicRule(BaseModel):
 
 class EvidenceRequirement(BaseModel):
     """Schema for evidence requirements."""
+
     required: bool = False
     min_attachments: int = 0
     max_attachments: int = 10
@@ -38,61 +41,65 @@ class EvidenceRequirement(BaseModel):
 
 # ============== Audit Question Schemas ==============
 
+
 class AuditQuestionBase(BaseModel):
     """Base schema for Audit Question."""
+
     question_text: str = Field(..., min_length=1, max_length=1000)
     question_type: str = Field(
-        ..., 
-        pattern="^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score)$"
+        ...,
+        pattern="^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score)$",
     )
     description: Optional[str] = Field(None, max_length=2000)
     help_text: Optional[str] = Field(None, max_length=500)
-    
+
     # Question configuration
     is_required: bool = True
     allow_na: bool = False
-    
+
     # Scoring
     max_score: Optional[float] = None
     weight: float = 1.0
-    
+
     # Options for MCQ/dropdown/radio
     options: Optional[List[QuestionOptionBase]] = None
-    
+
     # Numeric constraints
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     decimal_places: Optional[int] = None
-    
+
     # Text constraints
     min_length: Optional[int] = None
     max_length: Optional[int] = None
-    
+
     # Evidence requirements
     evidence_requirements: Optional[EvidenceRequirement] = None
-    
+
     # Conditional logic
     conditional_logic: Optional[List[ConditionalLogicRule]] = None
-    
+
     # Standard mapping
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
-    
+
     # Risk scoring
     risk_category: Optional[str] = None
     risk_weight: Optional[float] = None
-    
+
     # Display
     sort_order: int = 0
 
 
 class AuditQuestionCreate(AuditQuestionBase):
     """Schema for creating an Audit Question."""
+
     section_id: Optional[int] = None
 
 
 class AuditQuestionUpdate(BaseModel):
     """Schema for updating an Audit Question."""
+
     question_text: Optional[str] = Field(None, min_length=1, max_length=1000)
     question_type: Optional[str] = None
     description: Optional[str] = None
@@ -114,6 +121,7 @@ class AuditQuestionUpdate(BaseModel):
 
 class AuditQuestionResponse(AuditQuestionBase):
     """Schema for Audit Question response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -126,8 +134,10 @@ class AuditQuestionResponse(AuditQuestionBase):
 
 # ============== Audit Section Schemas ==============
 
+
 class AuditSectionBase(BaseModel):
     """Base schema for Audit Section."""
+
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
     sort_order: int = 0
@@ -138,11 +148,13 @@ class AuditSectionBase(BaseModel):
 
 class AuditSectionCreate(AuditSectionBase):
     """Schema for creating an Audit Section."""
+
     pass
 
 
 class AuditSectionUpdate(BaseModel):
     """Schema for updating an Audit Section."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     sort_order: Optional[int] = None
@@ -154,6 +166,7 @@ class AuditSectionUpdate(BaseModel):
 
 class AuditSectionResponse(AuditSectionBase):
     """Schema for Audit Section response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -166,28 +179,30 @@ class AuditSectionResponse(AuditSectionBase):
 
 # ============== Audit Template Schemas ==============
 
+
 class AuditTemplateBase(BaseModel):
     """Base schema for Audit Template."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
     category: Optional[str] = Field(None, max_length=100)
-    
+
     # Template configuration
     audit_type: str = Field(default="inspection", pattern="^(inspection|audit|assessment|checklist|survey)$")
     frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$")
-    
+
     # Scoring configuration
     scoring_method: str = Field(default="percentage", pattern="^(percentage|points|weighted|pass_fail)$")
     passing_score: Optional[float] = None
-    
+
     # Standard mapping
     standard_ids: Optional[List[int]] = None
-    
+
     # Mobile configuration
     allow_offline: bool = False
     require_gps: bool = False
     require_signature: bool = False
-    
+
     # Workflow
     require_approval: bool = False
     auto_create_findings: bool = True
@@ -195,11 +210,13 @@ class AuditTemplateBase(BaseModel):
 
 class AuditTemplateCreate(AuditTemplateBase):
     """Schema for creating an Audit Template."""
+
     pass
 
 
 class AuditTemplateUpdate(BaseModel):
     """Schema for updating an Audit Template."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     category: Optional[str] = None
@@ -219,6 +236,7 @@ class AuditTemplateUpdate(BaseModel):
 
 class AuditTemplateResponse(AuditTemplateBase):
     """Schema for Audit Template response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -233,6 +251,7 @@ class AuditTemplateResponse(AuditTemplateBase):
 
 class AuditTemplateDetailResponse(AuditTemplateResponse):
     """Schema for detailed Audit Template response with sections and questions."""
+
     sections: List[AuditSectionResponse] = []
     question_count: int = 0
     section_count: int = 0
@@ -240,6 +259,7 @@ class AuditTemplateDetailResponse(AuditTemplateResponse):
 
 class AuditTemplateListResponse(BaseModel):
     """Schema for paginated audit template list response."""
+
     items: List[AuditTemplateResponse]
     total: int
     page: int
@@ -249,15 +269,17 @@ class AuditTemplateListResponse(BaseModel):
 
 # ============== Audit Run Schemas ==============
 
+
 class AuditRunBase(BaseModel):
     """Base schema for Audit Run."""
+
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = Field(None, max_length=200)
     location_details: Optional[str] = Field(None, max_length=500)
     scheduled_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     notes: Optional[str] = None
-    
+
     # GPS coordinates
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -265,12 +287,14 @@ class AuditRunBase(BaseModel):
 
 class AuditRunCreate(AuditRunBase):
     """Schema for creating an Audit Run."""
+
     template_id: int
     assigned_to_id: Optional[int] = None
 
 
 class AuditRunUpdate(BaseModel):
     """Schema for updating an Audit Run."""
+
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = None
     location_details: Optional[str] = None
@@ -283,6 +307,7 @@ class AuditRunUpdate(BaseModel):
 
 class AuditRunResponse(AuditRunBase):
     """Schema for Audit Run response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -304,6 +329,7 @@ class AuditRunResponse(AuditRunBase):
 
 class AuditRunDetailResponse(AuditRunResponse):
     """Schema for detailed Audit Run response with responses."""
+
     template_name: Optional[str] = None
     responses: List["AuditResponseResponse"] = []
     findings: List["AuditFindingResponse"] = []
@@ -312,6 +338,7 @@ class AuditRunDetailResponse(AuditRunResponse):
 
 class AuditRunListResponse(BaseModel):
     """Schema for paginated audit run list response."""
+
     items: List[AuditRunResponse]
     total: int
     page: int
@@ -321,8 +348,10 @@ class AuditRunListResponse(BaseModel):
 
 # ============== Audit Response Schemas ==============
 
+
 class AuditResponseBase(BaseModel):
     """Base schema for Audit Response (answer to a question)."""
+
     response_value: Optional[str] = None
     response_text: Optional[str] = None
     response_number: Optional[float] = None
@@ -336,11 +365,13 @@ class AuditResponseBase(BaseModel):
 
 class AuditResponseCreate(AuditResponseBase):
     """Schema for creating an Audit Response."""
+
     question_id: int
 
 
 class AuditResponseUpdate(BaseModel):
     """Schema for updating an Audit Response."""
+
     response_value: Optional[str] = None
     response_text: Optional[str] = None
     response_number: Optional[float] = None
@@ -354,6 +385,7 @@ class AuditResponseUpdate(BaseModel):
 
 class AuditResponseResponse(AuditResponseBase):
     """Schema for Audit Response response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -365,20 +397,22 @@ class AuditResponseResponse(AuditResponseBase):
 
 # ============== Audit Finding Schemas ==============
 
+
 class AuditFindingBase(BaseModel):
     """Base schema for Audit Finding."""
+
     title: str = Field(..., min_length=1, max_length=300)
     description: str = Field(..., min_length=1)
     severity: str = Field(default="medium", pattern="^(critical|high|medium|low|observation)$")
     finding_type: str = Field(default="nonconformity", pattern="^(nonconformity|observation|opportunity|positive)$")
-    
+
     # Standard mapping
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
-    
+
     # Risk linkage
     risk_ids: Optional[List[int]] = None
-    
+
     # Corrective action
     corrective_action_required: bool = True
     corrective_action_due_date: Optional[datetime] = None
@@ -386,11 +420,13 @@ class AuditFindingBase(BaseModel):
 
 class AuditFindingCreate(AuditFindingBase):
     """Schema for creating an Audit Finding."""
+
     question_id: Optional[int] = None
 
 
 class AuditFindingUpdate(BaseModel):
     """Schema for updating an Audit Finding."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     severity: Optional[str] = None
@@ -405,6 +441,7 @@ class AuditFindingUpdate(BaseModel):
 
 class AuditFindingResponse(AuditFindingBase):
     """Schema for Audit Finding response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -419,6 +456,7 @@ class AuditFindingResponse(AuditFindingBase):
 
 class AuditFindingListResponse(BaseModel):
     """Schema for paginated audit finding list response."""
+
     items: List[AuditFindingResponse]
     total: int
     page: int

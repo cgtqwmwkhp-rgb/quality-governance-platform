@@ -3,32 +3,27 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, and_
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import DbSession, CurrentUser, CurrentSuperuser
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.risk import (
-    RiskCreate,
-    RiskUpdate,
-    RiskResponse,
-    RiskDetailResponse,
-    RiskListResponse,
-    RiskControlCreate,
-    RiskControlUpdate,
-    RiskControlResponse,
     RiskAssessmentCreate,
     RiskAssessmentResponse,
-    RiskMatrixResponse,
+    RiskControlCreate,
+    RiskControlResponse,
+    RiskControlUpdate,
+    RiskCreate,
+    RiskDetailResponse,
+    RiskListResponse,
     RiskMatrixCell,
+    RiskMatrixResponse,
+    RiskResponse,
     RiskStatistics,
+    RiskUpdate,
 )
-from src.domain.models.risk import (
-    Risk,
-    RiskControl,
-    RiskAssessment,
-    RiskStatus,
-)
+from src.domain.models.risk import Risk, RiskAssessment, RiskControl, RiskStatus
 from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
@@ -37,11 +32,41 @@ router = APIRouter()
 # ============== Risk Matrix Configuration ==============
 
 RISK_MATRIX = {
-    1: {1: ("very_low", "#22c55e"), 2: ("low", "#84cc16"), 3: ("low", "#84cc16"), 4: ("medium", "#eab308"), 5: ("medium", "#eab308")},
-    2: {1: ("low", "#84cc16"), 2: ("low", "#84cc16"), 3: ("medium", "#eab308"), 4: ("medium", "#eab308"), 5: ("high", "#f97316")},
-    3: {1: ("low", "#84cc16"), 2: ("medium", "#eab308"), 3: ("medium", "#eab308"), 4: ("high", "#f97316"), 5: ("high", "#f97316")},
-    4: {1: ("medium", "#eab308"), 2: ("medium", "#eab308"), 3: ("high", "#f97316"), 4: ("high", "#f97316"), 5: ("critical", "#ef4444")},
-    5: {1: ("medium", "#eab308"), 2: ("high", "#f97316"), 3: ("high", "#f97316"), 4: ("critical", "#ef4444"), 5: ("critical", "#ef4444")},
+    1: {
+        1: ("very_low", "#22c55e"),
+        2: ("low", "#84cc16"),
+        3: ("low", "#84cc16"),
+        4: ("medium", "#eab308"),
+        5: ("medium", "#eab308"),
+    },
+    2: {
+        1: ("low", "#84cc16"),
+        2: ("low", "#84cc16"),
+        3: ("medium", "#eab308"),
+        4: ("medium", "#eab308"),
+        5: ("high", "#f97316"),
+    },
+    3: {
+        1: ("low", "#84cc16"),
+        2: ("medium", "#eab308"),
+        3: ("medium", "#eab308"),
+        4: ("high", "#f97316"),
+        5: ("high", "#f97316"),
+    },
+    4: {
+        1: ("medium", "#eab308"),
+        2: ("medium", "#eab308"),
+        3: ("high", "#f97316"),
+        4: ("high", "#f97316"),
+        5: ("critical", "#ef4444"),
+    },
+    5: {
+        1: ("medium", "#eab308"),
+        2: ("high", "#f97316"),
+        3: ("high", "#f97316"),
+        4: ("critical", "#ef4444"),
+        5: ("critical", "#ef4444"),
+    },
 }
 
 
@@ -53,6 +78,7 @@ def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
 
 
 # ============== Risk Endpoints ==============
+
 
 @router.get("", response_model=RiskListResponse)
 async def list_risks(
@@ -71,10 +97,7 @@ async def list_risks(
 
     if search:
         search_filter = f"%{search}%"
-        query = query.where(
-            (Risk.title.ilike(search_filter)) |
-            (Risk.description.ilike(search_filter))
-        )
+        query = query.where((Risk.title.ilike(search_filter)) | (Risk.description.ilike(search_filter)))
     if category:
         query = query.where(Risk.category == category)
     if status_filter:
@@ -113,9 +136,11 @@ async def create_risk(
     """Create a new risk."""
     # Calculate risk score and level
     score, level, _ = calculate_risk_level(risk_data.likelihood, risk_data.impact)
-    
-    risk_dict = risk_data.model_dump(exclude={"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"})
-    
+
+    risk_dict = risk_data.model_dump(
+        exclude={"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
+    )
+
     risk = Risk(
         **risk_dict,
         risk_score=score,
@@ -123,7 +148,7 @@ async def create_risk(
         status=RiskStatus.IDENTIFIED,
         created_by_id=current_user.id,
     )
-    
+
     # Handle JSON array fields
     if risk_data.clause_ids:
         risk.clause_ids_json = risk_data.clause_ids
@@ -135,12 +160,10 @@ async def create_risk(
         risk.linked_incident_ids_json = risk_data.linked_incident_ids
     if risk_data.linked_policy_ids:
         risk.linked_policy_ids_json = risk_data.linked_policy_ids
-    
+
     # Generate reference number
-    risk.reference_number = await ReferenceNumberService.generate(
-        db, "risk", Risk
-    )
-    
+    risk.reference_number = await ReferenceNumberService.generate(db, "risk", Risk)
+
     db.add(risk)
     await db.commit()
     await db.refresh(risk)
@@ -157,28 +180,22 @@ async def get_risk_statistics(
     # Total and active risks
     total_result = await db.execute(select(func.count()).select_from(Risk))
     total_risks = total_result.scalar() or 0
-    
-    active_result = await db.execute(
-        select(func.count()).select_from(Risk).where(Risk.is_active == True)
-    )
+
+    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active == True))
     active_risks = active_result.scalar() or 0
-    
+
     # Risks by category
     category_result = await db.execute(
-        select(Risk.category, func.count())
-        .where(Risk.is_active == True)
-        .group_by(Risk.category)
+        select(Risk.category, func.count()).where(Risk.is_active == True).group_by(Risk.category)
     )
     risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
-    
+
     # Risks by level
     level_result = await db.execute(
-        select(Risk.risk_level, func.count())
-        .where(Risk.is_active == True)
-        .group_by(Risk.risk_level)
+        select(Risk.risk_level, func.count()).where(Risk.is_active == True).group_by(Risk.risk_level)
     )
     risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
-    
+
     # Risks requiring review (next_review_date in past)
     review_result = await db.execute(
         select(func.count())
@@ -191,7 +208,7 @@ async def get_risk_statistics(
         )
     )
     risks_requiring_review = review_result.scalar() or 0
-    
+
     # Overdue treatments
     overdue_result = await db.execute(
         select(func.count())
@@ -205,14 +222,11 @@ async def get_risk_statistics(
         )
     )
     overdue_treatments = overdue_result.scalar() or 0
-    
+
     # Average risk score
-    avg_result = await db.execute(
-        select(func.avg(Risk.risk_score))
-        .where(Risk.is_active == True)
-    )
+    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True))
     average_risk_score = float(avg_result.scalar() or 0)
-    
+
     return RiskStatistics(
         total_risks=total_risks,
         active_risks=active_risks,
@@ -237,31 +251,33 @@ async def get_risk_matrix(
         .group_by(Risk.likelihood, Risk.impact)
     )
     risk_counts = {(row[0], row[1]): row[2] for row in result.all()}
-    
+
     # Build matrix
     matrix = []
     risks_by_level = {"very_low": 0, "low": 0, "medium": 0, "high": 0, "critical": 0}
     total_risks = 0
-    
+
     for likelihood in range(5, 0, -1):  # 5 to 1 (top to bottom)
         row = []
         for impact in range(1, 6):  # 1 to 5 (left to right)
             score, level, color = calculate_risk_level(likelihood, impact)
             count = risk_counts.get((likelihood, impact), 0)
-            
-            row.append(RiskMatrixCell(
-                likelihood=likelihood,
-                impact=impact,
-                score=score,
-                level=level,
-                color=color,
-                risk_count=count,
-            ))
-            
+
+            row.append(
+                RiskMatrixCell(
+                    likelihood=likelihood,
+                    impact=impact,
+                    score=score,
+                    level=level,
+                    color=color,
+                    risk_count=count,
+                )
+            )
+
             risks_by_level[level] += count
             total_risks += count
         matrix.append(row)
-    
+
     return RiskMatrixResponse(
         matrix=matrix,
         total_risks=total_risks,
@@ -294,10 +310,10 @@ async def get_risk(
 
     response = RiskDetailResponse.model_validate(risk)
     response.control_count = len(risk.controls)
-    
+
     # Count open actions (simplified - would need action linkage)
     response.open_action_count = 0
-    
+
     return response
 
 
@@ -319,13 +335,13 @@ async def update_risk(
         )
 
     update_data = risk_data.model_dump(exclude_unset=True)
-    
+
     # Handle JSON array fields
     json_fields = ["clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"]
     for field in json_fields:
         if field in update_data:
             setattr(risk, f"{field}_json", update_data.pop(field))
-    
+
     # Recalculate risk score if likelihood or impact changed
     likelihood = update_data.get("likelihood", risk.likelihood)
     impact = update_data.get("impact", risk.impact)
@@ -333,7 +349,7 @@ async def update_risk(
         score, level, _ = calculate_risk_level(likelihood, impact)
         risk.risk_score = score
         risk.risk_level = level
-    
+
     for field, value in update_data.items():
         setattr(risk, field, value)
 
@@ -366,6 +382,7 @@ async def delete_risk(
 
 # ============== Risk Control Endpoints ==============
 
+
 @router.post("/{risk_id}/controls", response_model=RiskControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     risk_id: int,
@@ -377,7 +394,7 @@ async def create_control(
     # Verify risk exists
     result = await db.execute(select(Risk).where(Risk.id == risk_id))
     risk = result.scalar_one_or_none()
-    
+
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -385,18 +402,18 @@ async def create_control(
         )
 
     control_dict = control_data.model_dump(exclude={"clause_ids", "control_ids"})
-    
+
     control = RiskControl(
         risk_id=risk_id,
         **control_dict,
     )
-    
+
     # Handle JSON array fields
     if control_data.clause_ids:
         control.clause_ids_json = control_data.clause_ids
     if control_data.control_ids:
         control.control_ids_json = control_data.control_ids
-    
+
     db.add(control)
     await db.commit()
     await db.refresh(control)
@@ -422,7 +439,7 @@ async def list_controls(
         .order_by(RiskControl.created_at)
     )
     controls = result.scalars().all()
-    
+
     return [RiskControlResponse.model_validate(c) for c in controls]
 
 
@@ -444,13 +461,13 @@ async def update_control(
         )
 
     update_data = control_data.model_dump(exclude_unset=True)
-    
+
     # Handle JSON array fields
     if "clause_ids" in update_data:
         control.clause_ids_json = update_data.pop("clause_ids")
     if "control_ids" in update_data:
         control.control_ids_json = update_data.pop("control_ids")
-    
+
     for field, value in update_data.items():
         setattr(control, field, value)
 
@@ -482,6 +499,7 @@ async def delete_control(
 
 # ============== Risk Assessment Endpoints ==============
 
+
 @router.post("/{risk_id}/assessments", response_model=RiskAssessmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_assessment(
     risk_id: int,
@@ -493,7 +511,7 @@ async def create_assessment(
     # Verify risk exists
     result = await db.execute(select(Risk).where(Risk.id == risk_id))
     risk = result.scalar_one_or_none()
-    
+
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -507,7 +525,7 @@ async def create_assessment(
     residual_score, residual_level, _ = calculate_risk_level(
         assessment_data.residual_likelihood, assessment_data.residual_impact
     )
-    
+
     target_score = None
     target_level = None
     if assessment_data.target_likelihood and assessment_data.target_impact:
@@ -526,15 +544,15 @@ async def create_assessment(
         target_level=target_level,
         assessed_by_id=assessment_data.assessed_by_id or current_user.id,
     )
-    
+
     db.add(assessment)
-    
+
     # Update risk with latest residual values
     risk.likelihood = assessment_data.residual_likelihood
     risk.impact = assessment_data.residual_impact
     risk.risk_score = residual_score
     risk.risk_level = residual_level
-    
+
     await db.commit()
     await db.refresh(assessment)
 
@@ -549,10 +567,8 @@ async def list_assessments(
 ) -> list[RiskAssessmentResponse]:
     """List all assessments for a risk (history)."""
     result = await db.execute(
-        select(RiskAssessment)
-        .where(RiskAssessment.risk_id == risk_id)
-        .order_by(RiskAssessment.assessment_date.desc())
+        select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
     )
     assessments = result.scalars().all()
-    
+
     return [RiskAssessmentResponse.model_validate(a) for a in assessments]

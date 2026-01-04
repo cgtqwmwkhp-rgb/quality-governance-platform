@@ -2,12 +2,11 @@
 
 from typing import List, Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Table, Column, Integer, Text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.domain.models.base import SoftDeleteMixin, TimestampMixin
 from src.infrastructure.database import Base
-from src.domain.models.base import TimestampMixin, SoftDeleteMixin
-
 
 # Association table for User-Role many-to-many relationship
 user_roles = Table(

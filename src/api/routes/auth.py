@@ -5,20 +5,15 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from src.api.dependencies import DbSession, CurrentUser
-from src.api.schemas.auth import (
-    LoginRequest,
-    TokenResponse,
-    RefreshTokenRequest,
-    PasswordChangeRequest,
-)
+from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.auth import LoginRequest, PasswordChangeRequest, RefreshTokenRequest, TokenResponse
 from src.api.schemas.user import UserResponse
 from src.core.security import (
-    verify_password,
-    get_password_hash,
     create_access_token,
     create_refresh_token,
     decode_token,
+    get_password_hash,
+    verify_password,
 )
 from src.domain.models.user import User
 

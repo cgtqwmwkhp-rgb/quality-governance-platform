@@ -1,22 +1,23 @@
 """Pytest configuration and fixtures."""
 
 import asyncio
+
+# Test database URL (use Postgres if available, fallback to SQLite)
+import os
 from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from src.core.security import create_access_token, get_password_hash
+from src.domain.models.user import Role, User
 from src.infrastructure.database import Base, get_db
 from src.main import app
-from src.domain.models.user import User, Role
-from src.core.security import get_password_hash, create_access_token
 
-
-# Test database URL (in-memory SQLite for testing)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+TEST_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
 
 @pytest.fixture(scope="session")
@@ -30,20 +31,22 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 @pytest_asyncio.fixture(scope="function")
 async def test_engine():
     """Create a test database engine."""
-    engine = create_async_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    
+    # Configure engine based on database type
+    engine_kwargs = {}
+    if "sqlite" in TEST_DATABASE_URL:
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+        engine_kwargs["poolclass"] = StaticPool
+
+    engine = create_async_engine(TEST_DATABASE_URL, **engine_kwargs)
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    
+
     await engine.dispose()
 
 
@@ -55,7 +58,7 @@ async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    
+
     async with async_session() as session:
         yield session
 
@@ -63,16 +66,16 @@ async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture(scope="function")
 async def client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Create a test client with overridden database dependency."""
-    
+
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield test_session
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -132,3 +135,11 @@ def auth_headers(user_token: str) -> dict:
 def superuser_auth_headers(superuser_token: str) -> dict:
     """Create authorization headers for the test superuser."""
     return {"Authorization": f"Bearer {superuser_token}"}
+
+
+def generate_test_reference(prefix: str, sequence: int = 1) -> str:
+    """Generate a test reference number."""
+    from datetime import datetime
+
+    year = datetime.now().year
+    return f"{prefix}-{year}-{sequence:04d}"

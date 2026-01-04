@@ -2,11 +2,7 @@
 
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from src.core.config import settings
@@ -18,15 +14,23 @@ class Base(DeclarativeBase):
     pass
 
 
-# Create async engine
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.database_echo,
-    future=True,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-)
+# Create async engine with conditional pooling (SQLite doesn't support pool_size)
+engine_kwargs = {
+    "echo": settings.database_echo,
+    "future": True,
+}
+
+# Only add pooling args for PostgreSQL (not SQLite)
+if "postgresql" in settings.database_url:
+    engine_kwargs.update(
+        {
+            "pool_pre_ping": True,
+            "pool_size": 10,
+            "max_overflow": 20,
+        }
+    )
+
+engine = create_async_engine(settings.database_url, **engine_kwargs)
 
 # Create async session factory
 async_session_maker = async_sessionmaker(

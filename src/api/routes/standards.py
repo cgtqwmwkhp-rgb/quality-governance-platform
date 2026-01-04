@@ -2,30 +2,31 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import DbSession, CurrentUser, CurrentSuperuser
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.standard import (
+    ClauseCreate,
+    ClauseResponse,
+    ClauseUpdate,
+    ControlCreate,
+    ControlResponse,
+    ControlUpdate,
     StandardCreate,
-    StandardUpdate,
-    StandardResponse,
     StandardDetailResponse,
     StandardListResponse,
-    ClauseCreate,
-    ClauseUpdate,
-    ClauseResponse,
-    ControlCreate,
-    ControlUpdate,
-    ControlResponse,
+    StandardResponse,
+    StandardUpdate,
 )
-from src.domain.models.standard import Standard, Clause, Control
+from src.domain.models.standard import Clause, Control, Standard
 
 router = APIRouter()
 
 
 # ============== Standard Endpoints ==============
+
 
 @router.get("", response_model=StandardListResponse)
 async def list_standards(
@@ -42,9 +43,9 @@ async def list_standards(
     if search:
         search_filter = f"%{search}%"
         query = query.where(
-            (Standard.code.ilike(search_filter)) |
-            (Standard.name.ilike(search_filter)) |
-            (Standard.full_name.ilike(search_filter))
+            (Standard.code.ilike(search_filter))
+            | (Standard.name.ilike(search_filter))
+            | (Standard.full_name.ilike(search_filter))
         )
     if is_active is not None:
         query = query.where(Standard.is_active == is_active)
@@ -101,9 +102,7 @@ async def get_standard(
     """Get a specific standard with its clauses."""
     result = await db.execute(
         select(Standard)
-        .options(
-            selectinload(Standard.clauses).selectinload(Clause.controls)
-        )
+        .options(selectinload(Standard.clauses).selectinload(Clause.controls))
         .where(Standard.id == standard_id)
     )
     standard = result.scalar_one_or_none()
@@ -145,6 +144,7 @@ async def update_standard(
 
 
 # ============== Clause Endpoints ==============
+
 
 @router.get("/{standard_id}/clauses", response_model=list[ClauseResponse])
 async def list_clauses(
@@ -204,7 +204,10 @@ async def create_clause(
     )
     db.add(clause)
     await db.commit()
-    await db.refresh(clause)
+
+    # Reload with relationships
+    result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause.id))
+    clause = result.scalar_one()
 
     return ClauseResponse.model_validate(clause)
 
@@ -216,11 +219,7 @@ async def get_clause(
     current_user: CurrentUser,
 ) -> ClauseResponse:
     """Get a specific clause."""
-    result = await db.execute(
-        select(Clause)
-        .options(selectinload(Clause.controls))
-        .where(Clause.id == clause_id)
-    )
+    result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause_id))
     clause = result.scalar_one_or_none()
 
     if not clause:
@@ -260,6 +259,7 @@ async def update_clause(
 
 
 # ============== Control Endpoints ==============
+
 
 @router.post("/clauses/{clause_id}/controls", response_model=ControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(

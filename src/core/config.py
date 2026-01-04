@@ -15,6 +15,40 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    def __init__(self, **kwargs):
+        """Initialize settings with validation."""
+        super().__init__(**kwargs)
+        self._validate_production_settings()
+
+    def _validate_production_settings(self) -> None:
+        """Validate critical settings, especially for production."""
+        if self.is_production:
+            # Check for insecure secret keys
+            if self.secret_key in ["change-me-in-production", "__CHANGE_ME__", "changeme"]:
+                raise ValueError(
+                    "SECURITY ERROR: SECRET_KEY must be changed in production! "
+                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
+            if self.jwt_secret_key in ["change-me-in-production", "__CHANGE_ME__", "changeme"]:
+                raise ValueError(
+                    "SECURITY ERROR: JWT_SECRET_KEY must be changed in production! "
+                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
+            # Ensure database URL is set
+            if not self.database_url or "localhost" in self.database_url:
+                raise ValueError(
+                    "CONFIGURATION ERROR: DATABASE_URL must be set to a production database in production mode!"
+                )
+
+        # Always validate database URL format
+        if not self.database_url.startswith(("postgresql", "sqlite")):
+            raise ValueError(
+                f"CONFIGURATION ERROR: Invalid DATABASE_URL format: {self.database_url}. "
+                "Must start with 'postgresql' or 'sqlite'."
+            )
+
     # Application
     app_name: str = "Quality Governance Platform"
     app_env: str = "development"
