@@ -63,7 +63,7 @@ async def list_templates(
     is_published: Optional[bool] = None,
 ) -> AuditTemplateListResponse:
     """List all audit templates with pagination and filtering."""
-    query = select(AuditTemplate).where(AuditTemplate.is_active is True)
+    query = select(AuditTemplate).where(AuditTemplate.is_active == True)
 
     if search:
         search_filter = f"%{search}%"
@@ -494,8 +494,8 @@ async def create_run(
         select(AuditTemplate).where(
             and_(
                 AuditTemplate.id == run_data.template_id,
-                AuditTemplate.is_published is True,
-                AuditTemplate.is_active is True,
+                AuditTemplate.is_published == True,
+                AuditTemplate.is_active == True,
             )
         )
     )
@@ -559,7 +559,7 @@ async def get_run(
             .where(
                 and_(
                     AuditQuestion.template_id == run.template_id,
-                    AuditQuestion.is_active is True,
+                    AuditQuestion.is_active == True,
                 )
             )
         )

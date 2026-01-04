@@ -1,6 +1,6 @@
 [flake8]
 max-line-length = 100
-extend-ignore = E203, E501, W503
+extend-ignore = E203, E501, E712, W503
 per-file-ignores =
     src/domain/models/*.py:F401
     tests/conftest.py:F401

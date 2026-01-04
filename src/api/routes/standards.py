@@ -166,7 +166,7 @@ async def list_clauses(
         select(Clause)
         .options(selectinload(Clause.controls))
         .where(Clause.standard_id == standard_id)
-        .where(Clause.is_active is True)
+        .where(Clause.is_active == True)
     )
 
     if parent_clause_id is not None:
