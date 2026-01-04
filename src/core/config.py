@@ -23,23 +23,37 @@ class Settings(BaseSettings):
     def _validate_production_settings(self) -> None:
         """Validate critical settings, especially for production."""
         if self.is_production:
-            # Check for insecure secret keys
-            if self.secret_key in ["change-me-in-production", "__CHANGE_ME__", "changeme"]:
+            # Check for placeholder secret keys (ADR-0002)
+            placeholder_keys = [
+                "change-me-in-production",
+                "__CHANGE_ME__",
+                "changeme",
+                "your-secret-key-here",
+                "secret",
+                "dev-secret",
+            ]
+            if self.secret_key in placeholder_keys:
                 raise ValueError(
-                    "SECURITY ERROR: SECRET_KEY must be changed in production! "
+                    "SECURITY ERROR: SECRET_KEY contains a placeholder value in production! "
                     "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
                 )
 
-            if self.jwt_secret_key in ["change-me-in-production", "__CHANGE_ME__", "changeme"]:
+            if self.jwt_secret_key in placeholder_keys:
                 raise ValueError(
-                    "SECURITY ERROR: JWT_SECRET_KEY must be changed in production! "
+                    "SECURITY ERROR: JWT_SECRET_KEY contains a placeholder value in production! "
                     "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
                 )
 
-            # Ensure database URL is set
-            if not self.database_url or "localhost" in self.database_url:
+            # Ensure database URL is not localhost/127.0.0.1 (ADR-0002)
+            if not self.database_url:
                 raise ValueError(
-                    "CONFIGURATION ERROR: DATABASE_URL must be set to a production database in production mode!"
+                    "CONFIGURATION ERROR: DATABASE_URL must be set in production mode!"
+                )
+            
+            if "localhost" in self.database_url.lower() or "127.0.0.1" in self.database_url:
+                raise ValueError(
+                    "CONFIGURATION ERROR: DATABASE_URL must not use localhost or 127.0.0.1 in production mode! "
+                    "Use a production database hostname."
                 )
 
         # Always validate database URL format
