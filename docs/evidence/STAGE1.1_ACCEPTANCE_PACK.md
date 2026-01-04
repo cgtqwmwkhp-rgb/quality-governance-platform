@@ -46,7 +46,7 @@ Both capabilities are integrated as blocking CI gates, ensuring continuous verif
 
 **Validation Rules**:
 1. Snapshot file must exist
-2. Snapshot must be <7 days old
+2. Snapshot must be <30 days old
 3. Snapshot must include CI workflow hash
 4. Snapshot hash must match current CI workflow
 
@@ -173,7 +173,7 @@ Documents the drift prevention workflow:
 ### Drift Prevention
 - **Benefit**: Prevents governance evidence from becoming stale
 - **Trigger**: Automatic on every CI run
-- **Action Required**: Re-export snapshot if >7 days old or CI workflow changes
+- **Action Required**: Re-export snapshot if >30 days old or CI workflow changes
 - **Documentation**: `docs/GOVERNANCE_DRIFT_PREVENTION.md`
 
 ### Release Rehearsal
@@ -189,7 +189,7 @@ Documents the drift prevention workflow:
 1. **Merge PR #4** to `main` branch
 2. **Verify** drift prevention and release rehearsal in subsequent PRs
 3. **Monitor** CI run times (should remain <5 minutes total)
-4. **Update** branch protection snapshot within 7 days or when CI changes
+4. **Update** branch protection snapshot within 30 days or when CI changes
 
 ---
 

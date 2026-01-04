@@ -82,7 +82,10 @@ def check_snapshot_freshness(snapshot: Dict) -> bool:
         print(f"      Format: 'YYYY-MM-DD: Reason for keeping stale snapshot'")
         return False
     
-    print(f"✓ Snapshot freshness OK ({age.days} days old, max {MAX_SNAPSHOT_AGE_DAYS})")
+    print(f"✓ Snapshot freshness OK")
+    print(f"  Current age: {age.days} days")
+    print(f"  Threshold: {MAX_SNAPSHOT_AGE_DAYS} days")
+    print(f"  Margin: {MAX_SNAPSHOT_AGE_DAYS - age.days} days remaining")
     return True
 
 

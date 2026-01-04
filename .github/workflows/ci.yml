@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: ['**']  # Run on PRs targeting any branch (including stage-* branches)
 
 jobs:
   code-quality:
@@ -316,15 +316,18 @@ jobs:
           echo $APP_PID > app.pid
           echo "Application started with PID: $APP_PID"
           
-          # Wait for app to be ready
+          # Wait for app to be ready (max 30 seconds)
           echo "Waiting for application to start..."
           for i in {1..30}; do
-            if curl -s http://localhost:8000/healthz > /dev/null 2>&1; then
+            if curl -s --max-time 2 --connect-timeout 2 http://localhost:8000/healthz > /dev/null 2>&1; then
               echo "✅ Application is ready"
               break
             fi
             if [ $i -eq 30 ]; then
-              echo "❌ Application failed to start within 30 seconds"
+              echo "❌ FAILURE: Application failed to start within 30 seconds"
+              echo "Diagnostics:"
+              ps aux | grep uvicorn || echo "  No uvicorn process found"
+              netstat -tuln | grep 8000 || echo "  Port 8000 not listening"
               kill $APP_PID || true
               exit 1
             fi
@@ -334,7 +337,7 @@ jobs:
       - name: Verify /healthz endpoint (liveness)
         run: |
           echo "=== Testing /healthz (liveness) ==="
-          response=$(curl -s -w "\n%{http_code}" http://localhost:8000/healthz)
+          response=$(curl -s --max-time 5 --connect-timeout 2 -w "\n%{http_code}" http://localhost:8000/healthz)
           status_code=$(echo "$response" | tail -n 1)
           body=$(echo "$response" | head -n -1)
           
@@ -342,7 +345,10 @@ jobs:
           echo "Response body: $body"
           
           if [ "$status_code" != "200" ]; then
-            echo "❌ /healthz returned $status_code (expected 200)"
+            echo "❌ FAILURE: /healthz returned $status_code (expected 200)"
+            echo "Response body: $body"
+            echo "Diagnostics:"
+            curl -v --max-time 5 http://localhost:8000/healthz 2>&1 || true
             kill $(cat app.pid) || true
             exit 1
           fi
@@ -352,7 +358,7 @@ jobs:
       - name: Verify /readyz endpoint (readiness)
         run: |
           echo "=== Testing /readyz (readiness with DB check) ==="
-          response=$(curl -s -w "\n%{http_code}" http://localhost:8000/readyz)
+          response=$(curl -s --max-time 5 --connect-timeout 2 -w "\n%{http_code}" http://localhost:8000/readyz)
           status_code=$(echo "$response" | tail -n 1)
           body=$(echo "$response" | head -n -1)
           
@@ -360,7 +366,10 @@ jobs:
           echo "Response body: $body"
           
           if [ "$status_code" != "200" ]; then
-            echo "❌ /readyz returned $status_code (expected 200)"
+            echo "❌ FAILURE: /readyz returned $status_code (expected 200)"
+            echo "Response body: $body"
+            echo "Diagnostics:"
+            curl -v --max-time 5 http://localhost:8000/readyz 2>&1 || true
             kill $(cat app.pid) || true
             exit 1
           fi
@@ -370,13 +379,15 @@ jobs:
       - name: Verify request_id header in responses
         run: |
           echo "=== Testing request_id header ==="
-          response=$(curl -s -i http://localhost:8000/healthz)
+          response=$(curl -s --max-time 5 --connect-timeout 2 -i http://localhost:8000/healthz)
           
           if echo "$response" | grep -i "x-request-id:" > /dev/null; then
             request_id=$(echo "$response" | grep -i "x-request-id:" | cut -d' ' -f2 | tr -d '\r')
             echo "✅ request_id header present: $request_id"
           else
-            echo "❌ request_id header not found in response"
+            echo "❌ FAILURE: request_id header not found in response"
+            echo "Full response headers:"
+            echo "$response" | head -n 20
             kill $(cat app.pid) || true
             exit 1
           fi
@@ -385,7 +396,7 @@ jobs:
         run: |
           echo "=== Testing API endpoint to generate logs ==="
           # Test the root endpoint
-          response=$(curl -s -w "\n%{http_code}" http://localhost:8000/)
+          response=$(curl -s --max-time 5 --connect-timeout 2 -w "\n%{http_code}" http://localhost:8000/)
           status_code=$(echo "$response" | tail -n 1)
           
           echo "Status code: $status_code"
@@ -419,10 +430,30 @@ jobs:
           echo ""
           echo "The application is ready for deployment."
 
+  policy-consistency:
+    name: Policy Consistency Check (Stage 1.3)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate policy consistency (BLOCKING)
+        run: |
+          echo "=== Stage 1.3: Policy Consistency Validation (BLOCKING) ==="
+          python3 scripts/validate_policy_consistency.py
+          echo ""
+          echo "✅ Policy consistency validation passed"
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [code-quality, branch-protection-proof, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, governance-evidence, release-rehearsal]
+    needs: [code-quality, branch-protection-proof, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, governance-evidence, release-rehearsal, policy-consistency]
     
     steps:
       - name: All checks passed
