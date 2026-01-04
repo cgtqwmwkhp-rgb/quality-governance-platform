@@ -340,6 +340,7 @@ async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers
 
     # Verify it's gone from the database
     from sqlalchemy import select
+
     from src.domain.models.policy import Policy
 
     db_check = await test_session.execute(select(Policy).where(Policy.id == policy_id))
