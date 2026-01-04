@@ -1,0 +1,8 @@
+remote: error: GH006: Protected branch update failed for refs/heads/main.        
+remote: 
+remote: - Changes must be made through a pull request.        
+remote: 
+remote: - Required status check "all-checks" is expected.        
+To https://github.com/cgtqwmwkhp-rgb/quality-governance-platform.git
+ ! [remote rejected] temp-evidence-branch -> main (protected branch hook declined)
+error: failed to push some refs to 'https://github.com/cgtqwmwkhp-rgb/quality-governance-platform.git'
