@@ -331,9 +331,16 @@ async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers
     )
     assert delete_response.status_code == 204
 
-    # 6. Verify deletion
+    # 6. Verify deletion (Hard Delete)
     get_after_delete = await client.get(
         f"/api/v1/policies/{policy_id}",
         headers=auth_headers,
     )
     assert get_after_delete.status_code == 404
+    
+    # Verify it's gone from the database
+    from sqlalchemy import select
+    from src.domain.models.policy import Policy
+    
+    db_check = await test_session.execute(select(Policy).where(Policy.id == policy_id))
+    assert db_check.scalar_one_or_none() is None

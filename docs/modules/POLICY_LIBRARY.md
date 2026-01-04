@@ -27,7 +27,7 @@ The Policy Library exposes a minimal set of CRUD (Create, Read, Update, Delete) 
 | `GET` | `/api/v1/policies/{policy_id}` | Retrieves a single policy by its ID. | Returns 404 if not found. |
 | `GET` | `/api/v1/policies` | Lists all policies. | **Deterministic Ordering:** Sorted by `created_at DESC` then `id ASC`. Supports pagination. |
 | `PUT` | `/api/v1/policies/{policy_id}` | Updates an existing policy. | Supports partial updates. |
-| `DELETE` | `/api/v1/policies/{policy_id}` | Soft-deletes a policy. | Sets a `deleted_at` timestamp (not implemented in this minimal version, but tested for 204 response). |
+| `DELETE` | `/api/v1/policies/{policy_id}` | Deletes a policy document. | **Hard Delete:** The record is permanently removed from the database. |
 
 ## Governance and Quality Gates
 
