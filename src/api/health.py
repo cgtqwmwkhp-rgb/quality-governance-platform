@@ -45,7 +45,8 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> dict:
     """
     # Test database connection
     try:
-        await db.execute("SELECT 1")
+        from sqlalchemy import text
+        await db.execute(text("SELECT 1"))
         return {"status": "ready", "database": "connected"}
     except Exception as e:
         # Let the exception propagate - FastAPI will return 500
