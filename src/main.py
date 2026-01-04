@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api import router as api_router
+from src.api.health import router as health_router
 from src.core.config import settings
 from src.infrastructure.database import close_db, init_db
 from src.middleware.observability import ObservabilityMiddleware, configure_structured_logging
@@ -50,6 +51,9 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Include health endpoints at root level (for orchestrators)
+    app.include_router(health_router)
+
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")
 
@@ -59,11 +63,4 @@ def create_application() -> FastAPI:
 app = create_application()
 
 
-@app.get("/health", tags=["Health"])
-async def health_check() -> dict:
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "app_name": settings.app_name,
-        "environment": settings.app_env,
-    }
+# Health endpoints are now registered via health_router at root level
