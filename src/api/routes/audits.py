@@ -565,7 +565,7 @@ async def get_run(
         )
         answered_questions = len(run.responses)
         if total_questions and total_questions > 0:
-            response.completion_percentage = (answered_questions / total_questions * 100)
+            response.completion_percentage = answered_questions / total_questions * 100
         else:
             response.completion_percentage = 0
 
