@@ -93,7 +93,7 @@ async def list_risks(
     owner_id: Optional[int] = None,
 ) -> RiskListResponse:
     """List all risks with pagination and filtering."""
-    query = select(Risk).where(Risk.is_active == True)
+    query = select(Risk).where(Risk.is_active is True)
 
     if search:
         search_filter = f"%{search}%"
@@ -181,18 +181,18 @@ async def get_risk_statistics(
     total_result = await db.execute(select(func.count()).select_from(Risk))
     total_risks = total_result.scalar() or 0
 
-    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active == True))
+    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active is True))
     active_risks = active_result.scalar() or 0
 
     # Risks by category
     category_result = await db.execute(
-        select(Risk.category, func.count()).where(Risk.is_active == True).group_by(Risk.category)
+        select(Risk.category, func.count()).where(Risk.is_active is True).group_by(Risk.category)
     )
     risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
 
     # Risks by level
     level_result = await db.execute(
-        select(Risk.risk_level, func.count()).where(Risk.is_active == True).group_by(Risk.risk_level)
+        select(Risk.risk_level, func.count()).where(Risk.is_active is True).group_by(Risk.risk_level)
     )
     risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
 
@@ -202,7 +202,7 @@ async def get_risk_statistics(
         .select_from(Risk)
         .where(
             and_(
-                Risk.is_active == True,
+                Risk.is_active is True,
                 Risk.next_review_date <= datetime.now(timezone.utc),
             )
         )
@@ -215,7 +215,7 @@ async def get_risk_statistics(
         .select_from(Risk)
         .where(
             and_(
-                Risk.is_active == True,
+                Risk.is_active is True,
                 Risk.treatment_due_date <= datetime.now(timezone.utc),
                 Risk.status != RiskStatus.CLOSED,
             )
@@ -224,7 +224,7 @@ async def get_risk_statistics(
     overdue_treatments = overdue_result.scalar() or 0
 
     # Average risk score
-    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True))
+    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active is True))
     average_risk_score = float(avg_result.scalar() or 0)
 
     return RiskStatistics(
@@ -247,7 +247,7 @@ async def get_risk_matrix(
     # Get risk counts by likelihood and impact
     result = await db.execute(
         select(Risk.likelihood, Risk.impact, func.count())
-        .where(Risk.is_active == True)
+        .where(Risk.is_active is True)
         .group_by(Risk.likelihood, Risk.impact)
     )
     risk_counts = {(row[0], row[1]): row[2] for row in result.all()}
@@ -433,7 +433,7 @@ async def list_controls(
         .where(
             and_(
                 RiskControl.risk_id == risk_id,
-                RiskControl.is_active == True,
+                RiskControl.is_active is True,
             )
         )
         .order_by(RiskControl.created_at)

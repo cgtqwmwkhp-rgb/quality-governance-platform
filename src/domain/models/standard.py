@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import TimestampMixin

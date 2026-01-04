@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.risk import Risk, RiskControl, RiskStatus
+from src.domain.models.risk import Risk, RiskControl
 from src.domain.models.user import User
 from tests.conftest import generate_test_reference
 
