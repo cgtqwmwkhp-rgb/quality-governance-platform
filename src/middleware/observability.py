@@ -4,7 +4,6 @@ Observability Middleware
 Provides request ID tracking and structured logging for operational visibility.
 """
 
-import json
 import logging
 import time
 import uuid
