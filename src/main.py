@@ -31,7 +31,7 @@ def configure_logging():
     """Configure structured JSON logging."""
     logger = logging.getLogger()
     logger.setLevel(settings.log_level)
-    
+
     # Remove default handler
     if logger.handlers:
         logger.handlers = []
@@ -104,7 +104,6 @@ async def health_check() -> dict:
     # Example of logging with request_id
     request_id = context.get("request_id", "N/A")
     logging.getLogger(__name__).info("Health check requested", extra={"request_id": request_id})
-    
     return {
         "status": "healthy",
         "app_name": settings.app_name,
