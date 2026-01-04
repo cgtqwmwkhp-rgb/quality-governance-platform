@@ -16,10 +16,10 @@ router = APIRouter(tags=["Health"])
 async def health_check() -> dict:
     """
     Liveness probe endpoint.
-    
+
     Returns 200 if the application is running.
     Used by orchestrators (Kubernetes, Docker Compose) to determine if the container is alive.
-    
+
     Returns:
         dict: Status message
     """
@@ -30,16 +30,16 @@ async def health_check() -> dict:
 async def readiness_check(db: AsyncSession = Depends(get_db)) -> dict:
     """
     Readiness probe endpoint.
-    
+
     Returns 200 if the application is ready to serve traffic (database connection is healthy).
     Used by orchestrators to determine if the container should receive traffic.
-    
+
     Args:
         db: Database session (dependency injection)
-        
+
     Returns:
         dict: Status message with database connection status
-        
+
     Raises:
         HTTPException: If database connection fails
     """

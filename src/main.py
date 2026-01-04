@@ -37,10 +37,10 @@ def create_application() -> FastAPI:
 
     # Configure structured logging
     configure_structured_logging()
-    
+
     # Add observability middleware (request IDs, structured logging)
     app.add_middleware(ObservabilityMiddleware)
-    
+
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,

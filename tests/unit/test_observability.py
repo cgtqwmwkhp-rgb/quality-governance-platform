@@ -16,11 +16,11 @@ def app_with_observability():
     app = FastAPI()
     app.add_middleware(ObservabilityMiddleware)
     app.include_router(health_router)
-    
+
     @app.get("/test")
     async def test_endpoint():
         return {"message": "test"}
-    
+
     return app
 
 
@@ -57,11 +57,11 @@ def test_readiness_check_no_db():
     """Test readiness probe without database dependency."""
     # Create a minimal app without database
     app = FastAPI()
-    
+
     @app.get("/readyz")
     async def readiness():
         return {"status": "ready"}
-    
+
     client = TestClient(app)
     response = client.get("/readyz")
     assert response.status_code == 200
