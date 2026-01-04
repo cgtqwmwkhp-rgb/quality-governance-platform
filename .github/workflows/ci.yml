@@ -64,6 +64,13 @@ jobs:
           echo ""
           echo "✅ Branch protection validation passed"
 
+      - name: Check governance drift prevention (BLOCKING - Stage 1.1)
+        run: |
+          echo "=== Stage 1.1: Governance Drift Prevention ==="
+          python3 scripts/validate_branch_protection_drift.py
+          echo ""
+          echo "✅ Drift prevention checks passed"
+
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
     runs-on: ubuntu-latest
