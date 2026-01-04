@@ -22,7 +22,18 @@ def upgrade() -> None:
     """Upgrade database schema."""
     # Create rcastatus enum type for Postgres
     # Note: SQLite ignores this and uses the Enum column as a check constraint
-    op.execute("CREATE TYPE rcastatus AS ENUM ('draft', 'in_review', 'approved')")
+    # Create rcastatus enum type for Postgres if it doesn't exist
+    # Note: Postgres doesn't support CREATE TYPE IF NOT EXISTS directly for ENUMs in all versions,
+    # so we use a DO block for safety.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rcastatus') THEN
+                CREATE TYPE rcastatus AS ENUM ('draft', 'in_review', 'approved');
+            END IF;
+        END
+        $$;
+    """)
 
     # Create root_cause_analyses table
     op.create_table(
