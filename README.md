@@ -113,3 +113,9 @@ Proprietary - All rights reserved.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+
+## Stage 2.0 Covenants
+
+- [Stage 2.0 Covenants](./docs/STAGE2_COVENANTS.md)
+- [Pull Request Template](./.github/PULL_REQUEST_TEMPLATE.md)
