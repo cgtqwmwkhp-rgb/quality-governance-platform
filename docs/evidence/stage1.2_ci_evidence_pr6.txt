@@ -1,0 +1,26 @@
+Stage 1.2 CI Evidence - PR #6 to main
+
+PR: https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/6
+Date: 2026-01-04
+Status: ✅ ALL CHECKS PASSED
+
+CI Jobs Executed:
+✅ Code Quality - succeeded
+✅ Branch Protection Proof (Stage 1.0) - succeeded (includes drift prevention)
+✅ ADR-0002 Fail-Fast Proof - succeeded
+✅ Unit Tests - succeeded
+✅ Integration Tests - succeeded
+✅ Security Scan - succeeded
+✅ Build Check - succeeded (currently selected in screenshot, 2 minutes ago in 29s)
+✅ Governance Evidence (Stage 0.7 Gate 1) - succeeded
+✅ Release Rehearsal (Stage 1.1) - succeeded
+✅ All Checks Passed - succeeded
+
+Key Observations:
+- Build Check shows detailed steps including "Verify application starts" and "Post Set up Python 3.11"
+- All jobs completed successfully
+- CI triggered on pull_request targeting main branch
+- 23 commits merged from stage-1.2-policy-consistency
+- 50 files changed
+
+This CI run provides real evidence that Stage 1.2 changes (drift prevention, release rehearsal, policy consistency) execute successfully on a main-targeting PR.
