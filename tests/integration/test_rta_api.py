@@ -3,7 +3,6 @@
 import pytest
 from httpx import AsyncClient
 
-
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.rta_analysis import RootCauseAnalysis, RTAStatus
 
