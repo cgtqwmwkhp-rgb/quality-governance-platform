@@ -57,15 +57,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Export branch protection settings (BLOCKING)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "=== Stage 1.0: Branch Protection Proof (BLOCKING) ==="
-          ./scripts/export_branch_protection.sh
-          echo ""
-          echo "✅ Branch protection settings exported"
-
       - name: Validate branch protection settings (BLOCKING)
         run: |
           echo "=== Validating branch protection settings ==="
