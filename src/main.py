@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api import router as api_router
 from src.core.config import settings
 from src.infrastructure.database import close_db, init_db
+from src.middleware.observability import ObservabilityMiddleware, configure_structured_logging
 
 
 @asynccontextmanager
@@ -34,6 +35,12 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Configure structured logging
+    configure_structured_logging()
+    
+    # Add observability middleware (request IDs, structured logging)
+    app.add_middleware(ObservabilityMiddleware)
+    
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,

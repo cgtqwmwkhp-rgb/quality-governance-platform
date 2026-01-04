@@ -2,9 +2,13 @@
 
 from fastapi import APIRouter
 
+from src.api import health
 from src.api.routes import audits, auth, complaints, incidents, policies, risks, rta, standards, users
 
 router = APIRouter()
+
+# Include health check endpoints (no prefix, at root level)
+router.include_router(health.router)
 
 # Include all route modules
 router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
