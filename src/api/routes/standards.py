@@ -207,7 +207,7 @@ async def create_clause(
 
     # Reload with relationships
     result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause.id))
-    clause = result.scalar_one()
+    clause = result.scalar_one()  # type: ignore[assignment]
 
     return ClauseResponse.model_validate(clause)
 

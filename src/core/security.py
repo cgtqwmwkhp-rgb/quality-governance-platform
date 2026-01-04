@@ -14,12 +14,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against a hashed password."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bool(pwd_context.verify(plain_password, hashed_password))
 
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    return str(pwd_context.hash(password))
 
 
 def create_access_token(
@@ -48,7 +48,7 @@ def create_access_token(
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
-    return encoded_jwt
+    return str(encoded_jwt)
 
 
 def create_refresh_token(subject: str | Any) -> str:
@@ -67,10 +67,10 @@ def create_refresh_token(subject: str | Any) -> str:
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
-    return encoded_jwt
+    return str(encoded_jwt)
 
 
-def decode_token(token: str) -> Optional[dict]:
+def decode_token(token: str) -> Optional[dict[str, Any]]:
     """Decode and validate a JWT token."""
     try:
         payload = jwt.decode(
@@ -78,6 +78,6 @@ def decode_token(token: str) -> Optional[dict]:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-        return payload
+        return dict(payload)
     except JWTError:
         return None

@@ -15,7 +15,9 @@ class Base(DeclarativeBase):
 
 
 # Create async engine with conditional pooling (SQLite doesn't support pool_size)
-engine_kwargs = {
+from typing import Any
+
+engine_kwargs: dict[str, Any] = {
     "echo": settings.database_echo,
     "future": True,
 }

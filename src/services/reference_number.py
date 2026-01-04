@@ -1,7 +1,7 @@
 """Reference number generation service."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +29,7 @@ class ReferenceNumberService:
         cls,
         db: AsyncSession,
         record_type: str,
-        model_class: type,
+        model_class: type[Any],  # type: ignore[misc]
         year: Optional[int] = None,
     ) -> str:
         """
