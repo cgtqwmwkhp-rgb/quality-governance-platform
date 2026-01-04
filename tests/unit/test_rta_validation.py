@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.api.schemas.rta import RTACreate, RTAUpdate
-from src.domain.models.rta_analysis import RTAStatus
+from src.domain.models.rta_analysis import RCAStatus
 
 
 def test_rta_create_valid():
@@ -13,7 +13,7 @@ def test_rta_create_valid():
         "incident_id": 1,
         "title": "Root Cause Analysis for Incident 1",
         "problem_statement": "The system failed due to a memory leak.",
-        "status": RTAStatus.DRAFT,
+        "status": RCAStatus.DRAFT,
     }
     rta = RTACreate(**data)
     assert rta.title == data["title"]
@@ -37,9 +37,9 @@ def test_rta_create_invalid_title():
 
 def test_rta_update_partial():
     """Test partial RTA update schema."""
-    data = {"status": RTAStatus.APPROVED}
+    data = {"status": RCAStatus.APPROVED}
     update = RTAUpdate(**data)
-    assert update.status == RTAStatus.APPROVED
+    assert update.status == RCAStatus.APPROVED
     assert update.title is None
 
 

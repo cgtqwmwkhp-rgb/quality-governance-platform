@@ -14,7 +14,7 @@ if False:
     from src.domain.models.incident import Incident
 
 
-class RTAStatus(str, enum.Enum):
+class RCAStatus(str, enum.Enum):
     """Status of Root Cause Analysis."""
 
     DRAFT = "draft"
@@ -35,7 +35,7 @@ class RootCauseAnalysis(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMi
     problem_statement: Mapped[str] = mapped_column(Text, nullable=False)
     root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrective_actions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    status: Mapped[RTAStatus] = mapped_column(SQLEnum(RTAStatus), default=RTAStatus.DRAFT)
+    status: Mapped[RCAStatus] = mapped_column(SQLEnum(RCAStatus, name="rcastatus"), default=RCAStatus.DRAFT)
 
     # Relationships
     incident: Mapped["Incident"] = relationship("Incident", back_populates="rtas")

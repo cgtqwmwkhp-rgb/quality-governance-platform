@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
-from src.domain.models.rta_analysis import RootCauseAnalysis, RTAStatus
+from src.domain.models.rta_analysis import RCAStatus, RootCauseAnalysis
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ async def test_list_rtas_deterministic_ordering(client: AsyncClient, test_incide
             title=f"RTA {i}",
             problem_statement="test",
             reference_number=f"RTA-2026-000{i+1}",
-            status=RTAStatus.DRAFT,
+            status=RCAStatus.DRAFT,
         )
         test_session.add(rta)
     await test_session.commit()
@@ -91,7 +91,7 @@ async def test_list_incident_rtas_linkage(client: AsyncClient, test_incident, au
         title="Linked RTA",
         problem_statement="test",
         reference_number="RTA-2026-9999",
-        status=RTAStatus.DRAFT,
+        status=RCAStatus.DRAFT,
     )
     test_session.add(rta)
     await test_session.commit()
@@ -112,7 +112,7 @@ async def test_update_rta_status(client: AsyncClient, test_incident, auth_header
         title="Update Me",
         problem_statement="test",
         reference_number="RTA-2026-8888",
-        status=RTAStatus.DRAFT,
+        status=RCAStatus.DRAFT,
     )
     test_session.add(rta)
     await test_session.commit()

@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.domain.models.rta_analysis import RTAStatus
+from src.domain.models.rta_analysis import RCAStatus
 
 
 class RTABase(BaseModel):
@@ -15,7 +15,7 @@ class RTABase(BaseModel):
     problem_statement: str = Field(..., min_length=1)
     root_cause: Optional[str] = None
     corrective_actions: Optional[str] = None
-    status: RTAStatus = RTAStatus.DRAFT
+    status: RCAStatus = RCAStatus.DRAFT
 
     @field_validator("title")
     @classmethod
@@ -39,7 +39,7 @@ class RTAUpdate(BaseModel):
     problem_statement: Optional[str] = None
     root_cause: Optional[str] = None
     corrective_actions: Optional[str] = None
-    status: Optional[RTAStatus] = None
+    status: Optional[RCAStatus] = None
 
     @field_validator("title")
     @classmethod
