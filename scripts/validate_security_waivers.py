@@ -29,30 +29,32 @@ def run_pip_audit() -> List[Dict]:
             text=True,
             check=False,
         )
-        
+
         if result.returncode == 0:
             return []
-        
+
         # Parse JSON output
         try:
             data = json.loads(result.stdout)
             vulnerabilities = []
-            
+
             for package_data in data.get("dependencies", []):
                 package_name = package_data.get("name")
                 for vuln in package_data.get("vulns", []):
-                    vulnerabilities.append({
-                        "package": package_name,
-                        "version": package_data.get("version"),
-                        "id": vuln.get("id"),
-                        "description": vuln.get("description", "")[:100],
-                    })
-            
+                    vulnerabilities.append(
+                        {
+                            "package": package_name,
+                            "version": package_data.get("version"),
+                            "id": vuln.get("id"),
+                            "description": vuln.get("description", "")[:100],
+                        }
+                    )
+
             return vulnerabilities
         except json.JSONDecodeError:
             print("⚠️  Could not parse pip-audit JSON output")
             return []
-    
+
     except FileNotFoundError:
         print("❌ pip-audit not found. Install with: pip install pip-audit")
         sys.exit(1)
@@ -61,30 +63,30 @@ def run_pip_audit() -> List[Dict]:
 def parse_waivers(waiver_file: Path) -> Dict[str, datetime]:
     """
     Parse SECURITY_WAIVERS.md and return dict of {CVE_ID: expiry_date}.
-    
+
     Returns empty dict if file doesn't exist.
     """
     if not waiver_file.exists():
         return {}
-    
+
     content = waiver_file.read_text()
     waivers = {}
-    
+
     # Pattern to match CVE IDs and expiry dates
     # Looking for lines like: "**Expiry Date**: 2026-04-04 (90 days)"
-    cve_pattern = r'CVE-\d{4}-\d{4,7}|PYSEC-\d{4}-\d+'
-    expiry_pattern = r'\*\*Expiry Date\*\*:\s*(\d{4}-\d{2}-\d{2})'
-    
+    cve_pattern = r"CVE-\d{4}-\d{4,7}|PYSEC-\d{4}-\d+"
+    expiry_pattern = r"\*\*Expiry Date\*\*:\s*(\d{4}-\d{2}-\d{2})"
+
     # Split into sections by "###" headers
-    sections = re.split(r'^###\s+', content, flags=re.MULTILINE)
-    
+    sections = re.split(r"^###\s+", content, flags=re.MULTILINE)
+
     for section in sections:
         # Find all CVE IDs in this section
         cve_ids = re.findall(cve_pattern, section)
-        
+
         # Find expiry date in this section
         expiry_match = re.search(expiry_pattern, section)
-        
+
         if cve_ids and expiry_match:
             expiry_str = expiry_match.group(1)
             try:
@@ -93,7 +95,7 @@ def parse_waivers(waiver_file: Path) -> Dict[str, datetime]:
                     waivers[cve_id] = expiry_date
             except ValueError:
                 print(f"⚠️  Invalid date format in waiver: {expiry_str}")
-    
+
     return waivers
 
 
@@ -101,26 +103,26 @@ def main():
     """Main validation logic."""
     repo_root = Path(__file__).parent.parent
     waiver_file = repo_root / "docs" / "SECURITY_WAIVERS.md"
-    
+
     print("🔍 Running security waiver validation...")
     print()
-    
+
     # Step 1: Run pip-audit
     print("1. Running pip-audit...")
     vulnerabilities = run_pip_audit()
-    
+
     if not vulnerabilities:
         print("✅ No vulnerabilities detected by pip-audit")
         print()
         sys.exit(0)
-    
+
     print(f"⚠️  Found {len(vulnerabilities)} vulnerability/vulnerabilities")
     print()
-    
+
     # Step 2: Parse waivers
     print("2. Parsing security waivers...")
     waivers = parse_waivers(waiver_file)
-    
+
     if not waivers:
         print("❌ No waivers found in docs/SECURITY_WAIVERS.md")
         print()
@@ -129,22 +131,22 @@ def main():
         print("  2. Documented in docs/SECURITY_WAIVERS.md with expiry date")
         print()
         sys.exit(1)
-    
+
     print(f"✓ Found {len(waivers)} waived CVE(s)")
     print()
-    
+
     # Step 3: Check each vulnerability
     print("3. Validating vulnerabilities against waivers...")
     print()
-    
+
     now = datetime.now()
     unwaived = []
     expired = []
     waived_ok = []
-    
+
     for vuln in vulnerabilities:
         cve_id = vuln["id"]
-        
+
         if cve_id not in waivers:
             unwaived.append(vuln)
         else:
@@ -153,7 +155,7 @@ def main():
                 expired.append((vuln, expiry))
             else:
                 waived_ok.append((vuln, expiry))
-    
+
     # Report waived vulnerabilities
     if waived_ok:
         print(f"✓ {len(waived_ok)} vulnerability/vulnerabilities properly waived:")
@@ -161,10 +163,10 @@ def main():
             days_left = (expiry - now).days
             print(f"  - {vuln['id']} ({vuln['package']}) - expires in {days_left} days")
         print()
-    
+
     # Report violations
     has_violations = False
-    
+
     if unwaived:
         has_violations = True
         print(f"❌ {len(unwaived)} UNWAIVED vulnerability/vulnerabilities:")
@@ -177,7 +179,7 @@ def main():
         print("  2. Add a waiver entry to docs/SECURITY_WAIVERS.md with:")
         print("     - CVE ID, package, reason, mitigation, owner, expiry date")
         print()
-    
+
     if expired:
         has_violations = True
         print(f"❌ {len(expired)} EXPIRED waiver(s):")
@@ -189,12 +191,12 @@ def main():
         print("  1. Fix the vulnerability by upgrading dependencies, OR")
         print("  2. Extend the waiver in docs/SECURITY_WAIVERS.md with updated justification")
         print()
-    
+
     if has_violations:
         print("❌ Security gate FAILED")
         print()
         sys.exit(1)
-    
+
     print("✅ Security waiver validation passed!")
     print()
     print("Summary:")

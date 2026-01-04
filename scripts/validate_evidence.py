@@ -20,17 +20,17 @@ REQUIRED_ARTIFACTS = [
 def validate_evidence() -> int:
     """
     Validate that all required evidence artifacts exist.
-    
+
     Returns:
         0 if all artifacts exist, 1 otherwise
     """
     repo_root = Path(__file__).parent.parent
     missing_artifacts = []
-    
+
     print("=" * 60)
     print("Branch Protection Evidence Validator")
     print("=" * 60)
-    
+
     for artifact_path in REQUIRED_ARTIFACTS:
         full_path = repo_root / artifact_path
         if full_path.exists():
@@ -38,9 +38,9 @@ def validate_evidence() -> int:
         else:
             print(f"❌ MISSING: {artifact_path}")
             missing_artifacts.append(artifact_path)
-    
+
     print("=" * 60)
-    
+
     if missing_artifacts:
         print("\n❌ VALIDATION FAILED")
         print("\nMissing evidence artifacts:")
