@@ -9,6 +9,7 @@ from sqlalchemy import select
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.domain.models.policy import Policy
+from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
 
@@ -51,6 +52,17 @@ async def create_policy(
     db.add(policy)
     await db.commit()
     await db.refresh(policy)
+
+    # Record audit event
+    await record_audit_event(
+        db=db,
+        event_type="policy.created",
+        resource_type="policy",
+        resource_id=str(policy.id),
+        action="create",
+        payload=policy_data.model_dump(mode="json"),
+        user_id=current_user.id,
+    )
 
     return policy
 
@@ -97,7 +109,7 @@ async def list_policies(
     List all policies with deterministic ordering.
 
     Policies are ordered by:
-    1. created_at DESC (newest first)
+    1. reference_number DESC (newest first)
     2. id ASC (stable secondary sort)
 
     Requires authentication.
@@ -110,7 +122,7 @@ async def list_policies(
     offset = (page - 1) * page_size
     result = await db.execute(
         select(Policy)
-        .order_by(Policy.created_at.desc(), Policy.id.asc())  # Deterministic ordering
+        .order_by(Policy.reference_number.desc(), Policy.id.asc())  # Deterministic ordering
         .limit(page_size)
         .offset(offset)
     )
@@ -160,6 +172,17 @@ async def update_policy(
     await db.commit()
     await db.refresh(policy)
 
+    # Record audit event
+    await record_audit_event(
+        db=db,
+        event_type="policy.updated",
+        resource_type="policy",
+        resource_id=str(policy.id),
+        action="update",
+        payload=update_data,
+        user_id=current_user.id,
+    )
+
     return policy
 
 
@@ -188,5 +211,15 @@ async def delete_policy(
             detail=f"Policy with id {policy_id} not found",
         )
 
+    # Record audit event
+    await record_audit_event(
+        db=db,
+        event_type="policy.deleted",
+        resource_type="policy",
+        resource_id=str(policy.id),
+        action="delete",
+        payload={"policy_id": policy_id, "title": policy.title},
+        user_id=current_user.id,
+    )
     await db.delete(policy)
     await db.commit()
