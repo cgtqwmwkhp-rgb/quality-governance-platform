@@ -64,7 +64,7 @@ Stage 1.1 successfully adds two critical production-readiness capabilities as bl
 **Evidence**: CI run 20696326646  
 **Verification**:
 - Drift check runs in `branch-protection-proof` job
-- Validates snapshot freshness (<7 days)
+- Validates snapshot freshness (<30 days)
 - Validates snapshot hash matches CI workflow
 - Blocking gate in `all-checks`
 
@@ -146,7 +146,7 @@ Stage 1.1 successfully adds two critical production-readiness capabilities as bl
 - **CI Time**: +~30 seconds per run (negligible)
 
 ### For Operators
-- **Drift Prevention**: Re-export snapshot if >7 days old or CI changes
+- **Drift Prevention**: Re-export snapshot if >30 days old or CI changes
 - **Release Rehearsal**: Provides confidence in deployment readiness
 - **Documentation**: `docs/GOVERNANCE_DRIFT_PREVENTION.md`
 
