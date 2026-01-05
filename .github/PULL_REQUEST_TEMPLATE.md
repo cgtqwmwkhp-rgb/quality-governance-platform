@@ -18,9 +18,11 @@ _A clear and concise description of the change._
 
 ## Test Evidence
 
-- **Unit Tests:** [Link to CI run]
-- **Integration Tests:** [Link to CI run]
-- **Security Scan:** [Link to CI run]
+- **CI Run URL:** [Full URL to GitHub Actions run]
+- **Final Commit SHA:** `[commit_sha]`
+- **Unit Tests:** ✅ Passed / ❌ Failed
+- **Integration Tests:** ✅ Passed / ❌ Failed
+- **Security Scan:** ✅ Passed / ❌ Failed
 
 ## Migration Information
 
@@ -30,4 +32,12 @@ _A clear and concise description of the change._
 ## Risk and Rollback
 
 - **Risk:** _A clear and concise description of any risks associated with this change._
-- **Rollback:** _A clear and concise description of the rollback plan._
+- **Rollback:** _Step-by-step rollback instructions including commands and verification steps._
+
+## Acceptance Pack
+
+_For Stage deliveries, attach acceptance pack document with:_
+- CI run URL + final SHA
+- Touched files table with line counts
+- Phase summaries
+- Rollback notes
