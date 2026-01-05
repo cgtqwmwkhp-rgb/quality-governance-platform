@@ -3,10 +3,11 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.rta import RTACreate, RTAListResponse, RTAResponse, RTAUpdate
 from src.domain.models.incident import Incident
 from src.domain.models.rta_analysis import RootCauseAnalysis
@@ -20,6 +21,7 @@ async def create_rta(
     rta_in: RTACreate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ):
     """Create a new Root Cause Analysis (RTA)."""
     # Verify incident exists
@@ -54,6 +56,7 @@ async def create_rta(
         action="create",
         description=f"RTA {rta.reference_number} created for Incident {rta.incident_id}",
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     await db.commit()
@@ -118,6 +121,7 @@ async def update_rta(
     rta_in: RTAUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
     rta = await db.get(RootCauseAnalysis, rta_id)
@@ -140,6 +144,7 @@ async def update_rta(
         description=f"RTA {rta.reference_number} updated",
         payload=update_data,
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     await db.commit()

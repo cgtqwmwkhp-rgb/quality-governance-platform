@@ -12,8 +12,6 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from src.domain.models.audit_log import AuditEvent
-from src.domain.models.complaint import Complaint
-from src.domain.models.incident import Incident
 from src.domain.models.policy import Policy
 
 
@@ -53,8 +51,9 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.entity_id == str(policy_id)
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
-        # request_id should be present as a field (may be None in test environment)
-        assert hasattr(audit_event, "request_id")
+        # request_id must be non-empty for authenticated requests
+        assert audit_event.request_id is not None
+        assert len(audit_event.request_id) > 0
         assert audit_event.timestamp is not None
 
     @pytest.mark.asyncio
@@ -97,8 +96,9 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.entity_id == str(policy.id)
         assert audit_event.action == "update"
         assert audit_event.actor_user_id is not None
-        # request_id should be present as a field (may be None in test environment)
-        assert hasattr(audit_event, "request_id")
+        # request_id must be non-empty for authenticated requests
+        assert audit_event.request_id is not None
+        assert len(audit_event.request_id) > 0
 
     @pytest.mark.asyncio
     async def test_delete_policy_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
@@ -140,8 +140,9 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.entity_id == str(policy_id)
         assert audit_event.action == "delete"
         assert audit_event.actor_user_id is not None
-        # request_id should be present as a field (may be None in test environment)
-        assert hasattr(audit_event, "request_id")
+        # request_id must be non-empty for authenticated requests
+        assert audit_event.request_id is not None
+        assert len(audit_event.request_id) > 0
 
 
 class TestIncidentsAuditEventRuntimeContract:
@@ -184,8 +185,9 @@ class TestIncidentsAuditEventRuntimeContract:
         assert audit_event.entity_id == str(incident_id)
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
-        # request_id should be present as a field (may be None in test environment)
-        assert hasattr(audit_event, "request_id")
+        # request_id must be non-empty for authenticated requests
+        assert audit_event.request_id is not None
+        assert len(audit_event.request_id) > 0
 
 
 class TestComplaintsAuditEventRuntimeContract:
@@ -227,5 +229,6 @@ class TestComplaintsAuditEventRuntimeContract:
         assert audit_event.entity_id == str(complaint_id)
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
-        # request_id should be present as a field (may be None in test environment)
-        assert hasattr(audit_event, "request_id")
+        # request_id must be non-empty for authenticated requests
+        assert audit_event.request_id is not None
+        assert len(audit_event.request_id) > 0

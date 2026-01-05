@@ -3,7 +3,6 @@
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette_context import context
 
 from src.domain.models.audit_log import AuditEvent
 
@@ -43,9 +42,8 @@ async def record_audit_event(
     Returns:
         The created AuditEvent
     """
-    # Auto-populate request_id from context if not provided
-    if request_id is None:
-        request_id = context.get("request_id", None)
+    # request_id should be passed explicitly from route handlers
+    # If not provided, it will be None (which is acceptable for some operations)
 
     # Use actor_user_id if provided, otherwise fall back to user_id
     final_actor_user_id = actor_user_id if actor_user_id is not None else user_id

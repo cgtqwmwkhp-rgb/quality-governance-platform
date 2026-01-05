@@ -32,8 +32,9 @@ class TestPoliciesErrorEnvelopeRuntimeContract:
         assert data["error_code"] == "404"
 
         # Verify request_id is present and non-empty
-        assert data["request_id"]
+        assert data["request_id"] is not None
         assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
 
 
 class TestIncidentsErrorEnvelopeRuntimeContract:
@@ -57,8 +58,9 @@ class TestIncidentsErrorEnvelopeRuntimeContract:
         assert data["error_code"] == "404"
 
         # Verify request_id is present and non-empty
-        assert data["request_id"]
+        assert data["request_id"] is not None
         assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
 
 
 class TestComplaintsErrorEnvelopeRuntimeContract:
@@ -82,8 +84,9 @@ class TestComplaintsErrorEnvelopeRuntimeContract:
         assert data["error_code"] == "404"
 
         # Verify request_id is present and non-empty
-        assert data["request_id"]
+        assert data["request_id"] is not None
         assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
 
 
 class TestConflictErrorEnvelopeRuntimeContract:

@@ -3,7 +3,6 @@
 from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette_context import context
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -17,7 +16,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     Returns:
         JSONResponse with canonical error envelope
     """
-    request_id = context.get("request_id", "unknown")
+    request_id = getattr(request.state, "request_id", "unknown")
 
     return JSONResponse(
         status_code=exc.status_code,
@@ -41,7 +40,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Returns:
         JSONResponse with canonical error envelope
     """
-    request_id = context.get("request_id", "unknown")
+    request_id = getattr(request.state, "request_id", "unknown")
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

@@ -2,11 +2,12 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
@@ -24,6 +25,7 @@ async def create_policy(
     policy_data: PolicyCreate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> Policy:
     """
     Create a new policy document.
@@ -62,6 +64,7 @@ async def create_policy(
         action="create",
         payload=policy_data.model_dump(mode="json"),
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     return policy
@@ -149,6 +152,7 @@ async def update_policy(
     policy_data: PolicyUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> Policy:
     """
     Update an existing policy.
@@ -184,6 +188,7 @@ async def update_policy(
         action="update",
         payload=update_data,
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     return policy
@@ -198,6 +203,7 @@ async def delete_policy(
     policy_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> None:
     """
     Delete a policy.
@@ -223,6 +229,7 @@ async def delete_policy(
         action="delete",
         payload={"policy_id": policy_id, "title": policy.title},
         user_id=current_user.id,
+        request_id=request_id,
     )
     await db.delete(policy)
     await db.commit()
