@@ -223,3 +223,91 @@ class TestIncidentsInvestigationLinkage:
         items = response.json()
         assert isinstance(items, list)
         assert len(items) == 0
+
+    async def test_create_template_inactive_user_403(self, client: AsyncClient, test_session):
+        """Test that an inactive user cannot create a template (403 Forbidden)."""
+        from src.core.security import create_access_token, get_password_hash
+        from src.domain.models.user import User
+
+        # Create inactive user
+        inactive_user = User(
+            email="inactive@example.com",
+            hashed_password=get_password_hash("password123"),
+            first_name="Inactive",
+            last_name="User",
+            is_active=False,  # Inactive
+            is_superuser=False,
+        )
+        test_session.add(inactive_user)
+        await test_session.commit()
+        await test_session.refresh(inactive_user)
+
+        # Create token for inactive user
+        token = create_access_token(subject=inactive_user.id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        data = {
+            "name": "Should Fail Template",
+            "description": "Inactive user attempt",
+            "structure": {"sections": []},
+            "applicable_entity_types": ["reporting_incident"],
+        }
+        response = await client.post("/api/v1/investigation-templates/", json=data, headers=headers)
+
+        # Should get 403 Forbidden
+        assert response.status_code == 403
+        body = response.json()
+        assert "message" in body
+        assert "disabled" in body["message"].lower() or "inactive" in body["message"].lower()
+
+    async def test_create_investigation_inactive_user_403(
+        self, client: AsyncClient, test_session, test_incident, auth_headers
+    ):
+        """Test that an inactive user cannot create an investigation (403 Forbidden)."""
+        from src.core.security import create_access_token, get_password_hash
+        from src.domain.models.investigation import InvestigationTemplate
+        from src.domain.models.user import User
+
+        # Create a template first (using active user)
+        template = InvestigationTemplate(
+            name="Test Template for 403",
+            description="Template for testing",
+            structure={"sections": []},
+            applicable_entity_types=["reporting_incident"],
+            created_by_id=1,
+            updated_by_id=1,
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        # Create inactive user
+        inactive_user = User(
+            email="inactive2@example.com",
+            hashed_password=get_password_hash("password123"),
+            first_name="Inactive",
+            last_name="User2",
+            is_active=False,  # Inactive
+            is_superuser=False,
+        )
+        test_session.add(inactive_user)
+        await test_session.commit()
+        await test_session.refresh(inactive_user)
+
+        # Create token for inactive user
+        token = create_access_token(subject=inactive_user.id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        data = {
+            "template_id": template.id,
+            "assigned_entity_type": "reporting_incident",
+            "assigned_entity_id": test_incident.id,
+            "title": "Should Fail Investigation",
+        }
+        response = await client.post("/api/v1/investigations/", json=data, headers=headers)
+
+        # Should get 403 Forbidden
+        assert response.status_code == 403
+        body = response.json()
+        assert "message" in body
+        assert "disabled" in body["message"].lower() or "inactive" in body["message"].lower()
