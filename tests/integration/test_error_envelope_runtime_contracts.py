@@ -143,10 +143,6 @@ class TestConflictErrorEnvelopeRuntimeContract:
     async def test_409_conflict_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
         """Verify that 409 conflict errors return the canonical error envelope."""
         from datetime import datetime, timezone
-        
-
-        
-        
 
         # Create a policy via the API to establish a baseline
         response1 = await client.post(
