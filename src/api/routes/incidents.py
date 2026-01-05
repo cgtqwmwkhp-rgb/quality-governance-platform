@@ -155,18 +155,19 @@ async def list_incidents(
     )
 
 
-@router.get("/{incident_id}/investigations", response_model=dict)
+@router.get("/{incident_id}/investigations")
 async def list_incident_investigations(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> dict:
+):
     """
     List investigations for a specific incident.
 
     Requires authentication.
     Returns investigations assigned to this incident.
     """
+    from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
     result = await db.execute(select(Incident).where(Incident.id == incident_id))
@@ -187,12 +188,7 @@ async def list_incident_investigations(
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
     )
     investigations = result.scalars().all()
-    return {
-        "items": investigations,
-        "total": len(investigations),
-        "page": 1,
-        "page_size": len(investigations),
-    }
+    return [InvestigationRunResponse.model_validate(inv) for inv in investigations]
 
 
 @router.patch("/{incident_id}", response_model=IncidentResponse)
