@@ -34,6 +34,13 @@ async def create_policy(
     """
     # Generate or use provided reference number
     if policy_data.reference_number:
+        # Guard: Only authorized users can set explicit reference numbers
+        if not current_user.has_permission("policy:set_reference_number"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission 'policy:set_reference_number' required to set explicit reference number",
+            )
+
         reference_number = policy_data.reference_number
         # Check for duplicate reference number
         existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
