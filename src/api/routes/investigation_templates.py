@@ -86,11 +86,11 @@ async def list_templates(
     result = await db.execute(query)
     templates = result.scalars().all()
 
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    total_pages = math.ceil(total / page_size) if total and total > 0 else 1
 
     return InvestigationTemplateListResponse(
-        items=templates,
-        total=total,
+        items=[InvestigationTemplateResponse.model_validate(t) for t in templates],
+        total=total or 0,
         page=page,
         page_size=page_size,
         total_pages=total_pages,
@@ -206,7 +206,7 @@ async def delete_template(
     count_query = select(func.count()).where(InvestigationRun.template_id == template_id)
     run_count = await db.scalar(count_query)
 
-    if run_count > 0:
+    if run_count and run_count > 0:
         pass
         raise HTTPException(
             status_code=400,

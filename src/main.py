@@ -249,7 +249,7 @@ async def liveness_check(request: Request) -> dict:
 
 
 @app.get("/readyz", tags=["Health"])
-async def readiness_check(request: Request) -> dict:
+async def readiness_check(request: Request):
     """Readiness probe: Check if application is ready to accept traffic.
 
     Checks database connectivity. Returns 200 OK if ready, 503 if not ready.

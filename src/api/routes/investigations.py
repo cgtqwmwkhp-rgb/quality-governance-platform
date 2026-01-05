@@ -228,11 +228,11 @@ async def list_investigations(
     result = await db.execute(query)
     investigations = result.scalars().all()
 
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    total_pages = math.ceil(total / page_size) if total and total > 0 else 1
 
     return InvestigationRunListResponse(
-        items=investigations,
-        total=total,
+        items=[InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        total=total or 0,
         page=page,
         page_size=page_size,
         total_pages=total_pages,
@@ -311,11 +311,11 @@ async def update_investigation(
     # Update status timestamps
     if investigation_data.status:
         if investigation_data.status == "in_progress" and not investigation.started_at:
-            investigation.started_at = datetime.utcnow()
+            setattr(investigation, "started_at", datetime.utcnow())
         elif investigation_data.status == "completed" and not investigation.completed_at:
-            investigation.completed_at = datetime.utcnow()
+            setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
-            investigation.closed_at = datetime.utcnow()
+            setattr(investigation, "closed_at", datetime.utcnow())
 
     await db.commit()
     await db.refresh(investigation)

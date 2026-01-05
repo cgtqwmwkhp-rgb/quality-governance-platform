@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
@@ -96,11 +96,15 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     template_id = Column(Integer, ForeignKey("investigation_templates.id"), nullable=False, index=True)
 
     # Assignment to entity
-    assigned_entity_type = Column(Enum(AssignedEntityType), nullable=False, index=True)
-    assigned_entity_id = Column(Integer, nullable=False, index=True)
+    assigned_entity_type: Mapped[AssignedEntityType] = mapped_column(
+        Enum(AssignedEntityType), nullable=False, index=True
+    )
+    assigned_entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     # Investigation details
-    status = Column(Enum(InvestigationStatus), nullable=False, default=InvestigationStatus.DRAFT)
+    status: Mapped[InvestigationStatus] = mapped_column(
+        Enum(InvestigationStatus), nullable=False, default=InvestigationStatus.DRAFT
+    )
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
 
