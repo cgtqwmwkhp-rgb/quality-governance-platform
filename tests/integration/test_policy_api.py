@@ -75,7 +75,10 @@ async def test_get_policy_not_found(client: AsyncClient, auth_headers: dict):
     )
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    data = response.json()
+    assert "error_code" in data
+    assert "message" in data
+    assert "not found" in data["message"].lower()
 
 
 @pytest.mark.asyncio

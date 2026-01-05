@@ -84,3 +84,4 @@ class ComplaintListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    pages: int = Field(..., description="Total number of pages")

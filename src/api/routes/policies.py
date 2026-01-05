@@ -57,8 +57,8 @@ async def create_policy(
     await record_audit_event(
         db=db,
         event_type="policy.created",
-        resource_type="policy",
-        resource_id=str(policy.id),
+        entity_type="policy",
+        entity_id=str(policy.id),
         action="create",
         payload=policy_data.model_dump(mode="json"),
         user_id=current_user.id,
@@ -128,11 +128,14 @@ async def list_policies(
     )
     policies = result.scalars().all()
 
+    import math
+
     return PolicyListResponse(
         items=[PolicyResponse.model_validate(p) for p in policies],
         total=total,
         page=page,
         page_size=page_size,
+        pages=math.ceil(total / page_size) if total > 0 else 1,
     )
 
 
@@ -176,8 +179,8 @@ async def update_policy(
     await record_audit_event(
         db=db,
         event_type="policy.updated",
-        resource_type="policy",
-        resource_id=str(policy.id),
+        entity_type="policy",
+        entity_id=str(policy.id),
         action="update",
         payload=update_data,
         user_id=current_user.id,
@@ -215,8 +218,8 @@ async def delete_policy(
     await record_audit_event(
         db=db,
         event_type="policy.deleted",
-        resource_type="policy",
-        resource_id=str(policy.id),
+        entity_type="policy",
+        entity_id=str(policy.id),
         action="delete",
         payload={"policy_id": policy_id, "title": policy.title},
         user_id=current_user.id,

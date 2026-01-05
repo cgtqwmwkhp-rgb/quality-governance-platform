@@ -45,8 +45,8 @@ async def create_complaint(
     await record_audit_event(
         db=db,
         event_type="complaint.created",
-        resource_type="complaint",
-        resource_id=str(complaint.id),
+        entity_type="complaint",
+        entity_id=str(complaint.id),
         action="create",
         payload=complaint_in.model_dump(mode="json"),
         user_id=current_user.id,
@@ -110,11 +110,14 @@ async def list_complaints(
     result = await db.execute(query)
     complaints = result.scalars().all()
 
+    import math
+
     return ComplaintListResponse(
         items=[ComplaintResponse.model_validate(c) for c in complaints],
         total=total,
         page=page,
         page_size=page_size,
+        pages=math.ceil(total / page_size) if total > 0 else 1,
     )
 
 
@@ -152,8 +155,8 @@ async def update_complaint(
     await record_audit_event(
         db=db,
         event_type="complaint.updated",
-        resource_type="complaint",
-        resource_id=str(complaint.id),
+        entity_type="complaint",
+        entity_id=str(complaint.id),
         action="update",
         payload={
             "updates": update_data,

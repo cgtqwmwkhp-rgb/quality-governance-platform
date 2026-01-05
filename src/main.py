@@ -5,13 +5,15 @@ import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pythonjsonlogger import jsonlogger
 from starlette_context import context, middleware
 from starlette_context.plugins import RequestIdPlugin
 
 from src.api import router as api_router
+from src.api.exceptions import http_exception_handler, validation_exception_handler
 from src.core.config import settings
 from src.infrastructure.database import close_db, init_db
 
@@ -88,6 +90,10 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Register exception handlers
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")
