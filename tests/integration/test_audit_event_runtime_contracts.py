@@ -21,7 +21,7 @@ class TestPoliciesAuditEventRuntimeContract:
     """Test that Policies module records canonical audit events at runtime."""
 
     @pytest.mark.asyncio
-    async def test_create_policy_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
+    async def test_create_policy_records_audit_event(self, client: AsyncClient, test_session, test_user, auth_headers):
         """Verify that creating a policy records an audit event with canonical schema."""
         # Create a policy
         policy_data = {
@@ -53,12 +53,14 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.entity_id == str(policy_id)
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
+        # Verify actor_user_id matches the authenticated user
+        assert audit_event.actor_user_id == test_user.id, f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
         # request_id should be present as a field (may be None in test environment)
         assert hasattr(audit_event, "request_id")
         assert audit_event.timestamp is not None
 
     @pytest.mark.asyncio
-    async def test_update_policy_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
+    async def test_update_policy_records_audit_event(self, client: AsyncClient, test_session, test_user, auth_headers):
         """Verify that updating a policy records an audit event with canonical schema."""
         # Create a policy first
         policy = Policy(
@@ -97,6 +99,8 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.entity_id == str(policy.id)
         assert audit_event.action == "update"
         assert audit_event.actor_user_id is not None
+        # Verify actor_user_id matches the authenticated user
+        assert audit_event.actor_user_id == test_user.id, f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
         # request_id should be present as a field (may be None in test environment)
         assert hasattr(audit_event, "request_id")
 

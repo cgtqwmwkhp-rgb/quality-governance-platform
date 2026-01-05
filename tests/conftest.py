@@ -107,6 +107,30 @@ async def test_user(test_session: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture(scope="function")
+async def test_user_no_permissions(test_session: AsyncSession) -> User:
+    """Create a test user with no permissions."""
+    user = User(
+        email="noperm@example.com",
+        hashed_password=get_password_hash("testpassword123"),
+        first_name="No",
+        last_name="Permissions",
+        is_active=True,
+        is_superuser=False,
+    )
+    # Create a role with no permissions
+    role = Role(
+        name="viewer",
+        description="View-only role with no write permissions",
+        permissions="",  # Empty permissions
+    )
+    user.roles.append(role)
+    test_session.add(user)
+    await test_session.commit()
+    await test_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
 async def test_superuser(test_session: AsyncSession) -> User:
     """Create a test superuser."""
     user = User(
@@ -145,6 +169,18 @@ def auth_headers(user_token: str) -> dict:
 def superuser_auth_headers(superuser_token: str) -> dict:
     """Create authorization headers for the test superuser."""
     return {"Authorization": f"Bearer {superuser_token}"}
+
+
+@pytest.fixture
+def user_token_no_permissions(test_user_no_permissions: User) -> str:
+    """Create an access token for the no-permissions test user."""
+    return create_access_token(subject=test_user_no_permissions.id)
+
+
+@pytest.fixture
+def auth_headers_no_permissions(user_token_no_permissions: str) -> dict:
+    """Create authorization headers for the no-permissions test user."""
+    return {"Authorization": f"Bearer {user_token_no_permissions}"}
 
 
 def generate_test_reference(prefix: str, sequence: int = 1) -> str:

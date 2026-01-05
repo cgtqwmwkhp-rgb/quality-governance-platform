@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.security import require_permission
@@ -53,8 +54,19 @@ async def create_policy(
     )
 
     db.add(policy)
-    await db.commit()
-    await db.refresh(policy)
+    try:
+        await db.commit()
+        await db.refresh(policy)
+    except IntegrityError as e:
+        await db.rollback()
+        # Check if it's a duplicate reference_number error
+        if "reference_number" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Policy with reference number {reference_number} already exists",
+            )
+        # Re-raise if it's a different integrity error
+        raise
 
     # Record audit event
     await record_audit_event(
