@@ -3486,6 +3486,10 @@
           "page_size": {
             "title": "Page Size",
             "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
