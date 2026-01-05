@@ -2,7 +2,19 @@
 
 from fastapi import APIRouter
 
-from src.api.routes import audits, auth, complaints, incidents, policies, risks, rta, rtas, standards, users
+from src.api.routes import (
+    audits,
+    auth,
+    complaints,
+    incidents,
+    investigation_templates,
+    investigations,
+    policies,
+    risks,
+    rta,
+    standards,
+    users,
+)
 
 router = APIRouter()
 
@@ -14,7 +26,8 @@ router.include_router(audits.router, prefix="/audits", tags=["Audits & Inspectio
 router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(rta.router, prefix="/rta", tags=["Road Traffic Collisions"])
-router.include_router(rtas.router, prefix="/rtas", tags=["Root Cause Analysis"])
+router.include_router(investigation_templates.router, prefix="/investigation-templates", tags=["Investigations"])
+router.include_router(investigations.router, prefix="/investigations", tags=["Investigations"])
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 

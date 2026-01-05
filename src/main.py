@@ -104,7 +104,7 @@ app = create_application()
 async def root():
     """Root endpoint: Provides basic API information and links."""
     from fastapi.responses import HTMLResponse
-    
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -216,7 +216,7 @@ async def root():
     </body>
     </html>
     """
-    
+
     return HTMLResponse(content=html_content)
 
 
@@ -237,7 +237,7 @@ async def health_check(request: Request) -> dict:
 @app.get("/healthz", tags=["Health"])
 async def liveness_check(request: Request) -> dict:
     """Liveness probe: Check if application process is alive.
-    
+
     Returns 200 OK if the application is running.
     Used by container orchestrators to determine if the container should be restarted.
     """
@@ -251,24 +251,25 @@ async def liveness_check(request: Request) -> dict:
 @app.get("/readyz", tags=["Health"])
 async def readiness_check(request: Request) -> dict:
     """Readiness probe: Check if application is ready to accept traffic.
-    
+
     Checks database connectivity. Returns 200 OK if ready, 503 if not ready.
     Used by load balancers to determine if traffic should be routed to this instance.
-    
+
     Per ADR-0003: Readiness Probe Database Check
     """
     from fastapi.responses import JSONResponse
     from sqlalchemy import text
+
     from src.infrastructure.database import async_session_maker
-    
+
     request_id = getattr(request.state, "request_id", "N/A")
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Ping database with a simple query
         async with async_session_maker() as session:
             await session.execute(text("SELECT 1"))
-        
+
         logger.info("Readiness check passed", extra={"request_id": request_id})
         return {
             "status": "ready",
@@ -276,10 +277,7 @@ async def readiness_check(request: Request) -> dict:
             "request_id": request_id,
         }
     except Exception as e:
-        logger.error(
-            f"Readiness check failed: {e}",
-            extra={"request_id": request_id, "error": str(e)}
-        )
+        logger.error(f"Readiness check failed: {e}", extra={"request_id": request_id, "error": str(e)})
         return JSONResponse(
             status_code=503,
             content={
@@ -287,5 +285,5 @@ async def readiness_check(request: Request) -> dict:
                 "database": "disconnected",
                 "error": str(e),
                 "request_id": request_id,
-            }
+            },
         )

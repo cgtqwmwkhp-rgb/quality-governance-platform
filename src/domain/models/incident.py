@@ -12,9 +12,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
-if False:
-    from src.domain.models.rta_analysis import RootCauseAnalysis
-
 
 class IncidentType(str, enum.Enum):
     """Type of incident."""
@@ -121,11 +118,6 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Relationships
     actions: Mapped[List["IncidentAction"]] = relationship(
         "IncidentAction",
-        back_populates="incident",
-        cascade="all, delete-orphan",
-    )
-    rtas: Mapped[List["RootCauseAnalysis"]] = relationship(
-        "RootCauseAnalysis",
         back_populates="incident",
         cascade="all, delete-orphan",
     )

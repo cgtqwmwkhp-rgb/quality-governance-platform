@@ -9,9 +9,9 @@ from sqlalchemy import select
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
-from src.api.schemas.rta import RTAListResponse, RTAResponse
+
 from src.domain.models.incident import Incident
-from src.domain.models.rta_analysis import RootCauseAnalysis
+
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
@@ -157,17 +157,20 @@ async def list_incidents(
     )
 
 
-@router.get("/{incident_id}/rtas", response_model=RTAListResponse)
-async def list_incident_rtas(
+@router.get("/{incident_id}/investigations", response_model=dict)
+async def list_incident_investigations(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> RTAListResponse:
+) -> dict:
     """
-    List RTAs for a specific incident.
+    List investigations for a specific incident.
 
     Requires authentication.
+    Returns investigations assigned to this incident.
     """
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun
+
     result = await db.execute(select(Incident).where(Incident.id == incident_id))
     incident = result.scalar_one_or_none()
 
@@ -178,17 +181,20 @@ async def list_incident_rtas(
         )
 
     result = await db.execute(
-        select(RootCauseAnalysis)
-        .where(RootCauseAnalysis.incident_id == incident_id)
-        .order_by(RootCauseAnalysis.created_at.desc(), RootCauseAnalysis.id.asc())
+        select(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
+            InvestigationRun.assigned_entity_id == incident_id,
+        )
+        .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
     )
-    rtas = result.scalars().all()
-    return RTAListResponse(
-        items=[RTAResponse.model_validate(rta) for rta in rtas],
-        total=len(rtas),
-        page=1,
-        page_size=len(rtas),
-    )
+    investigations = result.scalars().all()
+    return {
+        "items": investigations,
+        "total": len(investigations),
+        "page": 1,
+        "page_size": len(investigations),
+    }
 
 
 @router.patch("/{incident_id}", response_model=IncidentResponse)

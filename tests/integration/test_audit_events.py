@@ -61,6 +61,7 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
     assert "created" in event.description
 
 
+@pytest.mark.skip(reason="RTA API removed in favor of Investigation API")
 async def test_rta_creation_records_audit_event(client: AsyncClient, auth_headers, test_session, test_incident):
     """Test that creating an RTA records an audit event."""
     data = {
