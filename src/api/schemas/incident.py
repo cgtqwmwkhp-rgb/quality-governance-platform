@@ -24,6 +24,12 @@ class IncidentBase(BaseModel):
 class IncidentCreate(IncidentBase):
     """Schema for creating a new incident."""
 
+    reference_number: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Optional explicit reference number (requires permission)",
+    )
+
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: str) -> str:
