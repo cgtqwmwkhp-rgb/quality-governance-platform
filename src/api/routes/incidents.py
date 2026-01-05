@@ -33,13 +33,31 @@ async def create_incident(
 
     Requires authentication.
     """
-    # Generate reference number (format: INC-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
+    # Generate or use provided reference number
+    if incident_data.reference_number:
+        # Guard: Only authorized users can set explicit reference numbers
+        if not current_user.has_permission("incident:set_reference_number"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission 'incident:set_reference_number' required to set explicit reference number",
+            )
 
-    # Get the count of incidents created this year
-    count_result = await db.execute(select(sa_func.count()).select_from(Incident))
-    count = count_result.scalar_one()
-    reference_number = f"INC-{year}-{count + 1:04d}"
+        reference_number = incident_data.reference_number
+        # Check for duplicate reference number
+        existing = await db.execute(select(Incident).where(Incident.reference_number == reference_number))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Incident with reference number {reference_number} already exists",
+            )
+    else:
+        # Generate reference number (format: INC-YYYY-NNNN)
+        year = datetime.now(timezone.utc).year
+
+        # Get the count of incidents created this year
+        count_result = await db.execute(select(sa_func.count()).select_from(Incident))
+        count = count_result.scalar_one()
+        reference_number = f"INC-{year}-{count + 1:04d}"
 
     # Create new incident
     incident = Incident(

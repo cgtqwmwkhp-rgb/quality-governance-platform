@@ -6,12 +6,14 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.main import app
 
+
 def sort_dict(d):
     if isinstance(d, dict):
         return {k: sort_dict(v) for k, v in sorted(d.items())}
     if isinstance(d, list):
         return [sort_dict(i) for i in d]
     return d
+
 
 def main():
     """Generate and save the OpenAPI schema."""
@@ -25,6 +27,7 @@ def main():
         json.dump(sorted_schema, f, indent=2)
 
     print(f"✅ OpenAPI schema generated at {output_path}")
+
 
 if __name__ == "__main__":
     main()

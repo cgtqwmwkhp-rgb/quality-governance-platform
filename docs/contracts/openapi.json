@@ -4209,6 +4209,19 @@
             "description": "Where the incident occurred",
             "title": "Location"
           },
+          "reference_number": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional explicit reference number (requires permission)",
+            "title": "Reference Number"
+          },
           "severity": {
             "$ref": "#/components/schemas/IncidentSeverity",
             "default": "medium",
@@ -4605,6 +4618,18 @@
             "$ref": "#/components/schemas/DocumentType",
             "default": "policy",
             "description": "Type of document"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional explicit reference number (for testing/admin use)",
+            "title": "Reference Number"
           },
           "status": {
             "$ref": "#/components/schemas/DocumentStatus",

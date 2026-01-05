@@ -91,8 +91,24 @@ class TestConflictErrorEnvelopeRuntimeContract:
     """Test that 409 conflict errors return canonical error envelopes at runtime."""
 
     @pytest.mark.asyncio
-    async def test_409_conflict_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
+    async def test_409_conflict_canonical_envelope(self, client: AsyncClient, test_user, test_session, auth_headers):
         """Verify that 409 conflict errors return the canonical error envelope."""
+        # Grant permission to set explicit reference numbers
+        from sqlalchemy import insert
+
+        from src.domain.models.user import Role, user_roles
+
+        role = Role(
+            name="policy_admin_409",
+            description="Can set explicit reference numbers",
+            permissions='["policy:set_reference_number"]',
+        )
+        test_session.add(role)
+        await test_session.flush()
+
+        await test_session.execute(insert(user_roles).values(user_id=test_user.id, role_id=role.id))
+        await test_session.commit()
+
         # Create first policy with explicit reference number
         policy_data = {
             "title": "Test Policy 409",
