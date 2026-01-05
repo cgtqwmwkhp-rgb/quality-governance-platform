@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.security import require_permission
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
@@ -23,8 +24,10 @@ async def create_complaint(
     """
     Create a new complaint.
 
-    Requires authentication.
+    Requires authentication and complaint:create permission.
     """
+    # Check permission
+    await require_permission("complaint:create", current_user, db)
     # Generate reference number: COMP-YYYY-NNNN
     year = datetime.now().year
     count_query = select(func.count()).select_from(Complaint)

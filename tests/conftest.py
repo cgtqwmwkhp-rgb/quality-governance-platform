@@ -81,7 +81,16 @@ async def client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None
 
 @pytest_asyncio.fixture(scope="function")
 async def test_user(test_session: AsyncSession) -> User:
-    """Create a test user."""
+    """Create a test user with all permissions."""
+    # Create a role with all permissions
+    role = Role(
+        name="test_role",
+        description="Test role with all permissions",
+        permissions="policy:create,policy:read,policy:update,policy:delete,incident:create,incident:read,incident:update,incident:delete,complaint:create,complaint:read,complaint:update,complaint:delete,rta:create,rta:read,rta:update,rta:delete",
+    )
+    test_session.add(role)
+    await test_session.flush()
+
     user = User(
         email="test@example.com",
         hashed_password=get_password_hash("testpassword123"),
@@ -90,6 +99,7 @@ async def test_user(test_session: AsyncSession) -> User:
         is_active=True,
         is_superuser=False,
     )
+    user.roles.append(role)
     test_session.add(user)
     await test_session.commit()
     await test_session.refresh(user)

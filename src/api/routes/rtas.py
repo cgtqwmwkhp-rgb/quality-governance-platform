@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.security import require_permission
 from src.api.schemas.rta import RTACreate, RTAListResponse, RTAResponse, RTAUpdate
 from src.domain.models.incident import Incident
 from src.domain.models.rta_analysis import RootCauseAnalysis
@@ -21,7 +22,9 @@ async def create_rta(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Create a new Root Cause Analysis (RTA)."""
+    """Create a new Root Cause Analysis (RTA). Requires rta:create permission."""
+    # Check permission
+    await require_permission("rta:create", current_user, db)
     # Verify incident exists
     incident = await db.get(Incident, rta_in.incident_id)
     if not incident:

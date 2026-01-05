@@ -7,6 +7,7 @@ from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.security import require_permission
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.rta import RTAListResponse, RTAResponse
 from src.domain.models.incident import Incident
@@ -29,8 +30,10 @@ async def create_incident(
     """
     Report a new incident.
 
-    Requires authentication.
+    Requires authentication and incident:create permission.
     """
+    # Check permission
+    await require_permission("incident:create", current_user, db)
     # Generate reference number (format: INC-YYYY-NNNN)
     year = datetime.now(timezone.utc).year
 

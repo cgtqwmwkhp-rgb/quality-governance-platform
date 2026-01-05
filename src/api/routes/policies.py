@@ -7,6 +7,7 @@ from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.security import require_permission
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
@@ -28,8 +29,10 @@ async def create_policy(
     """
     Create a new policy document.
 
-    Requires authentication.
+    Requires authentication and policy:create permission.
     """
+    # Check permission
+    await require_permission("policy:create", current_user, db)
     # Generate reference number (format: POL-YYYY-NNNN)
     year = datetime.now(timezone.utc).year
 
