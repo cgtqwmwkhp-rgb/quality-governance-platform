@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.domain.models.user import Role, User
+from src.domain.models.user import User
 
 
 async def require_permission(

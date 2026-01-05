@@ -12,8 +12,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from src.domain.models.audit_log import AuditEvent
-from src.domain.models.complaint import Complaint
-from src.domain.models.incident import Incident
+
+
 from src.domain.models.policy import Policy
 
 
