@@ -3,11 +3,10 @@
 import math
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import get_current_user
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.investigation import (
     InvestigationTemplateCreate,
     InvestigationTemplateListResponse,
@@ -15,8 +14,6 @@ from src.api.schemas.investigation import (
     InvestigationTemplateUpdate,
 )
 from src.domain.models.investigation import InvestigationTemplate
-from src.domain.models.user import User
-from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -24,9 +21,8 @@ router = APIRouter()
 @router.post("/", response_model=InvestigationTemplateResponse, status_code=201)
 async def create_template(
     template_data: InvestigationTemplateCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create a new investigation template.
 
@@ -53,12 +49,11 @@ async def create_template(
 
 @router.get("/", response_model=InvestigationTemplateListResponse)
 async def list_templates(
-    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """List investigation templates with pagination.
 
@@ -100,12 +95,11 @@ async def list_templates(
 @router.get("/{template_id}", response_model=InvestigationTemplateResponse)
 async def get_template(
     template_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get a specific investigation template by ID."""
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
     result = await db.execute(query)
@@ -130,15 +124,14 @@ async def get_template(
 async def update_template(
     template_id: int,
     template_data: InvestigationTemplateUpdate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Update an investigation template.
 
     Only provided fields will be updated (partial update).
     """
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     # Get existing template
     query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
@@ -173,15 +166,14 @@ async def update_template(
 @router.delete("/{template_id}", status_code=204)
 async def delete_template(
     template_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Delete an investigation template.
 
     Only safe if no investigation runs reference this template.
     """
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     # Get existing template
     query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)

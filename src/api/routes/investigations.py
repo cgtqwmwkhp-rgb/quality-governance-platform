@@ -4,11 +4,11 @@ import math
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import get_current_user
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.investigation import (
     InvestigationRunCreate,
     InvestigationRunListResponse,
@@ -21,8 +21,6 @@ from src.domain.models.investigation import (
     InvestigationStatus,
     InvestigationTemplate,
 )
-from src.domain.models.user import User
-from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -87,9 +85,8 @@ async def validate_assigned_entity(
 @router.post("/", response_model=InvestigationRunResponse, status_code=201)
 async def create_investigation(
     investigation_data: InvestigationRunCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create a new investigation run.
 
@@ -100,7 +97,7 @@ async def create_investigation(
 
     Returns 400 for invalid entity type, 404 for missing template or entity.
     """
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     # Validate template exists
     template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation_data.template_id)
@@ -154,21 +151,20 @@ async def create_investigation(
 
 @router.get("/", response_model=InvestigationRunListResponse)
 async def list_investigations(
-    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     entity_id: Optional[int] = Query(None, description="Filter by entity ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """List investigation runs with pagination.
 
     Returns investigations in deterministic order (created_at DESC, id ASC).
     Can filter by entity_type, entity_id, and status.
     """
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     # Build query
     query = select(InvestigationRun)
@@ -242,12 +238,11 @@ async def list_investigations(
 @router.get("/{investigation_id}", response_model=InvestigationRunResponse)
 async def get_investigation(
     investigation_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get a specific investigation run by ID."""
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
     result = await db.execute(query)
@@ -271,16 +266,15 @@ async def get_investigation(
 async def update_investigation(
     investigation_id: int,
     investigation_data: InvestigationRunUpdate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Update an investigation run.
 
     Only provided fields will be updated (partial update).
     Can update RCA section fields via the data field.
     """
-    request_id = getattr(request.state, "request_id", "N/A")
+    request_id = "N/A"  # TODO: Get from request context
 
     # Get existing investigation
     query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
