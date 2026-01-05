@@ -2,16 +2,18 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.helpers import apply_pagination, pagination_params
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.rta import RTAListResponse, RTAResponse
 from src.domain.models.incident import Incident
 from src.domain.models.rta_analysis import RootCauseAnalysis
 from src.domain.services.audit_service import record_audit_event
+from src.api.schemas.incident import IncidentResponse
 
 router = APIRouter()
 
@@ -62,12 +64,10 @@ async def create_incident(
     await record_audit_event(
         db=db,
         event_type="incident.created",
-        resource_type="incident",
-        resource_id=str(incident.id),
-        action="create",
-        description=f"Incident {incident.reference_number} created",
-        payload=incident_data.model_dump(mode="json"),
-        user_id=current_user.id,
+        entity_type="incident",
+        entity_id=str(incident.id),
+        actor_user_id=current_user.id,
+        after_value=IncidentResponse.model_validate(incident).model_dump(mode="json"),
     )
 
     await db.commit()
@@ -102,8 +102,7 @@ async def get_incident(
 async def list_incidents(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+    pagination: tuple[int, int] = Depends(pagination_params),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -119,10 +118,10 @@ async def list_incidents(
     total = count_result.scalar_one()
 
     # Get paginated results with deterministic ordering
-    offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Incident).order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
-    )
+    page, page_size = pagination
+    query = select(Incident).order_by(Incident.reported_date.desc(), Incident.id.asc())
+    paginated_query = apply_pagination(query, page, page_size)
+    result = await db.execute(paginated_query)
     incidents = result.scalars().all()
 
     return IncidentListResponse(
@@ -199,12 +198,11 @@ async def update_incident(
     await record_audit_event(
         db=db,
         event_type="incident.updated",
-        resource_type="incident",
-        resource_id=str(incident.id),
-        action="update",
-        description=f"Incident {incident.reference_number} updated",
-        payload=update_dict,
-        user_id=current_user.id,
+        entity_type="incident",
+        entity_id=str(incident.id),
+        actor_user_id=current_user.id,
+        before_value=incident_data.model_dump(exclude_unset=True),
+        after_value=IncidentResponse.model_validate(incident).model_dump(mode="json"),
     )
 
     await db.commit()
@@ -236,12 +234,10 @@ async def delete_incident(
     await record_audit_event(
         db=db,
         event_type="incident.deleted",
-        resource_type="incident",
-        resource_id=str(incident.id),
-        action="delete",
-        description=f"Incident {incident.reference_number} deleted",
-        payload={"incident_id": incident_id, "reference_number": incident.reference_number},
-        user_id=current_user.id,
+        entity_type="incident",
+        entity_id=str(incident.id),
+        actor_user_id=current_user.id,
+        before_value=IncidentResponse.model_validate(incident).model_dump(mode="json"),
     )
 
     await db.delete(incident)

@@ -3,13 +3,15 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.helpers import apply_pagination, pagination_params
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
+from src.api.schemas.complaint import ComplaintResponse
 
 router = APIRouter(tags=["Complaints"])
 
@@ -45,11 +47,10 @@ async def create_complaint(
     await record_audit_event(
         db=db,
         event_type="complaint.created",
-        resource_type="complaint",
-        resource_id=str(complaint.id),
-        action="create",
-        payload=complaint_in.model_dump(mode="json"),
-        user_id=current_user.id,
+        entity_type="complaint",
+        entity_id=str(complaint.id),
+        actor_user_id=current_user.id,
+        after_value=ComplaintResponse.model_validate(complaint).model_dump(mode="json"),
     )
 
     return complaint
@@ -82,8 +83,7 @@ async def get_complaint(
 async def list_complaints(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    pagination: tuple[int, int] = Depends(pagination_params),
     status_filter: Optional[str] = None,
 ) -> ComplaintListResponse:
     """
@@ -106,7 +106,8 @@ async def list_complaints(
     query = query.order_by(Complaint.received_date.desc(), Complaint.id.asc())
 
     # Pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
+    page, page_size = pagination
+    query = apply_pagination(query, page, page_size)
     result = await db.execute(query)
     complaints = result.scalars().all()
 
@@ -152,15 +153,11 @@ async def update_complaint(
     await record_audit_event(
         db=db,
         event_type="complaint.updated",
-        resource_type="complaint",
-        resource_id=str(complaint.id),
-        action="update",
-        payload={
-            "updates": update_data,
-            "old_status": old_status,
-            "new_status": complaint.status,
-        },
-        user_id=current_user.id,
+        entity_type="complaint",
+        entity_id=str(complaint.id),
+        actor_user_id=current_user.id,
+        before_value=complaint_in.model_dump(exclude_unset=True),
+        after_value=ComplaintResponse.model_validate(complaint).model_dump(mode="json"),
     )
 
     return complaint
