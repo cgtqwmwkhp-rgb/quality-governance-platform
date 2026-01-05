@@ -3629,11 +3629,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response List Incident Investigations Api V1 Incidents  Incident Id  Investigations Get"
-                }
+                "schema": {}
               }
             }
           },
@@ -4815,11 +4811,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Readiness Check Readyz Get"
-                }
+                "schema": {}
               }
             }
           }
