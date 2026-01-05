@@ -126,6 +126,7 @@ async def list_incidents(
     incidents = result.scalars().all()
 
     import math
+
     return IncidentListResponse(
         items=[IncidentResponse.model_validate(i) for i in incidents],
         total=total,

@@ -111,6 +111,7 @@ async def list_complaints(
     complaints = result.scalars().all()
 
     import math
+
     return ComplaintListResponse(
         items=[ComplaintResponse.model_validate(c) for c in complaints],
         total=total,

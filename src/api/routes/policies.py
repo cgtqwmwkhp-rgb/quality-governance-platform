@@ -129,6 +129,7 @@ async def list_policies(
     policies = result.scalars().all()
 
     import math
+
     return PolicyListResponse(
         items=[PolicyResponse.model_validate(p) for p in policies],
         total=total,
