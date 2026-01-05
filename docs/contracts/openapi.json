@@ -1,4 +1,5 @@
 {
+  "_test_drift": "This is a deliberate drift to prove the CI gate is blocking",
   "components": {
     "schemas": {
       "AuditFindingCreate": {
