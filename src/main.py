@@ -92,8 +92,8 @@ def create_application() -> FastAPI:
     )
 
     # Register exception handlers
-    app.add_exception_handler(HTTPException, http_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002
 
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")
