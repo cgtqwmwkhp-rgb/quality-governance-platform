@@ -180,35 +180,35 @@ async def root():
                 Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management.
                 Manage standards, audits, risks, incidents, complaints, and policies in one integrated system.
             </div>
-            
+
             <div class="endpoints">
                 <h2>Available Endpoints</h2>
-                
+
                 {'<div class="endpoint"><a href="/docs">/docs</a><div class="endpoint-desc">Interactive API Documentation (Swagger UI)</div></div>' if settings.is_development else ''}
-                
+
                 {'<div class="endpoint"><a href="/redoc">/redoc</a><div class="endpoint-desc">Alternative API Documentation (ReDoc)</div></div>' if settings.is_development else ''}
-                
+
                 <div class="endpoint">
                     <a href="/health">/health</a>
                     <div class="endpoint-desc">Legacy health check endpoint</div>
                 </div>
-                
+
                 <div class="endpoint">
                     <a href="/healthz">/healthz</a>
                     <div class="endpoint-desc">Liveness probe - Check if application is alive</div>
                 </div>
-                
+
                 <div class="endpoint">
                     <a href="/readyz">/readyz</a>
                     <div class="endpoint-desc">Readiness probe - Check if application is ready (includes DB check)</div>
                 </div>
-                
+
                 <div class="endpoint">
                     <a href="/api/v1">/api/v1</a>
                     <div class="endpoint-desc">API v1 endpoints (authentication required)</div>
                 </div>
             </div>
-            
+
             <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 14px;">
                 <strong>Modules:</strong> Standards Library, Audits & Inspections, Risk Management, Incidents, Root Cause Analysis, Complaints, Policy Library
             </div>
