@@ -159,6 +159,7 @@ class TestRTAsRBACDenyPath:
     ):
         """Test that creating an RTA without permission returns 403 with canonical error envelope."""
         from datetime import datetime, timezone
+
         from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 
         # Create a test incident first
