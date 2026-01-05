@@ -21,6 +21,7 @@ exclude = '''
     | \.mypy_cache
     | \.tox
     | \.venv
+    | venv
     | _build
     | buck-out
     | build
@@ -32,7 +33,7 @@ exclude = '''
 [tool.isort]
 profile = "black"
 line_length = 120
-skip = [".git", ".venv", "alembic/versions"]
+skip = [".git", ".venv", "venv", "alembic/versions"]
 known_first_party = ["src"]
 
 [tool.mypy]

@@ -8,32 +8,32 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from src.core.config import settings
+from src.domain.models import (
+    AuditFinding,
+    AuditQuestion,
+    AuditRun,
+    AuditTemplate,
+    Clause,
+    Complaint,
+    ComplaintAction,
+    Control,
+    Incident,
+    IncidentAction,
+    Policy,
+    PolicyVersion,
+    Risk,
+    RiskAssessment,
+    RiskControl,
+    RoadTrafficCollision,
+    Role,
+    RTAAction,
+    Standard,
+    User,
+)
 
 # Import all models to ensure they are registered with Base.metadata
 from src.infrastructure.database import Base
-from src.domain.models import (
-    User,
-    Role,
-    Standard,
-    Clause,
-    Control,
-    AuditTemplate,
-    AuditQuestion,
-    AuditRun,
-    AuditFinding,
-    Risk,
-    RiskControl,
-    RiskAssessment,
-    Incident,
-    IncidentAction,
-    RoadTrafficCollision,
-    RTAAction,
-    Complaint,
-    ComplaintAction,
-    Policy,
-    PolicyVersion,
-)
-from src.core.config import settings
 
 # this is the Alembic Config object
 config = context.config

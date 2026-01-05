@@ -19,7 +19,7 @@ class TestPoliciesRBACDenyPath:
         self,
         client: AsyncClient,
         test_user: User,
-        auth_headers: dict,
+        auth_headers_no_permissions: dict,
     ):
         """Test that creating a policy without permission returns 403 with canonical error envelope."""
         # Create a policy without the required permission
@@ -35,7 +35,7 @@ class TestPoliciesRBACDenyPath:
         response = await client.post(
             "/api/v1/policies",
             json=data,
-            headers=auth_headers,
+            headers=auth_headers_no_permissions,
         )
 
         # Assert 403 Forbidden
@@ -61,7 +61,7 @@ class TestIncidentsRBACDenyPath:
         self,
         client: AsyncClient,
         test_user: User,
-        auth_headers: dict,
+        auth_headers_no_permissions: dict,
     ):
         """Test that creating an incident without permission returns 403 with canonical error envelope."""
         from datetime import datetime, timezone
@@ -79,7 +79,7 @@ class TestIncidentsRBACDenyPath:
         response = await client.post(
             "/api/v1/incidents",
             json=data,
-            headers=auth_headers,
+            headers=auth_headers_no_permissions,
         )
 
         # Assert 403 Forbidden
@@ -105,7 +105,7 @@ class TestComplaintsRBACDenyPath:
         self,
         client: AsyncClient,
         test_user: User,
-        auth_headers: dict,
+        auth_headers_no_permissions: dict,
     ):
         """Test that creating a complaint without permission returns 403 with canonical error envelope."""
         from datetime import datetime, timezone
@@ -123,7 +123,7 @@ class TestComplaintsRBACDenyPath:
         response = await client.post(
             "/api/v1/complaints/",
             json=data,
-            headers=auth_headers,
+            headers=auth_headers_no_permissions,
         )
 
         # Debug: print response if not 403
@@ -154,7 +154,7 @@ class TestRTAsRBACDenyPath:
         self,
         client: AsyncClient,
         test_user: User,
-        auth_headers: dict,
+        auth_headers_no_permissions: dict,
         test_session,
     ):
         """Test that creating an RTA without permission returns 403 with canonical error envelope."""
@@ -190,7 +190,7 @@ class TestRTAsRBACDenyPath:
         response = await client.post(
             "/api/v1/rtas/",
             json=data,
-            headers=auth_headers,
+            headers=auth_headers_no_permissions,
         )
 
         # Assert 403 Forbidden
