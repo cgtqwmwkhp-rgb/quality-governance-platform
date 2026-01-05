@@ -2,11 +2,12 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.rta import RTAListResponse, RTAResponse
 from src.domain.models.incident import Incident
@@ -25,6 +26,7 @@ async def create_incident(
     incident_data: IncidentCreate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
     Report a new incident.
@@ -68,6 +70,7 @@ async def create_incident(
         description=f"Incident {incident.reference_number} created",
         payload=incident_data.model_dump(mode="json"),
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     await db.commit()
@@ -176,6 +179,7 @@ async def update_incident(
     incident_data: IncidentUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
     Partially update an incident.
@@ -208,6 +212,7 @@ async def update_incident(
         description=f"Incident {incident.reference_number} updated",
         payload=update_dict,
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     await db.commit()
@@ -220,6 +225,7 @@ async def delete_incident(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> None:
     """
     Delete an incident.
@@ -245,6 +251,7 @@ async def delete_incident(
         description=f"Incident {incident.reference_number} deleted",
         payload={"incident_id": incident_id, "reference_number": incident.reference_number},
         user_id=current_user.id,
+        request_id=request_id,
     )
 
     await db.delete(incident)

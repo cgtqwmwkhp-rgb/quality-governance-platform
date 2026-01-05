@@ -8,8 +8,6 @@ envelope contract defined in Stage 3.0.
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.policy import Policy
-
 
 class TestPoliciesErrorEnvelopeRuntimeContract:
     """Test that Policies module returns canonical error envelopes at runtime."""
@@ -32,8 +30,9 @@ class TestPoliciesErrorEnvelopeRuntimeContract:
         assert data["error_code"] == "404"
 
         # Verify request_id is present and non-empty
-        assert data["request_id"]
+        assert data["request_id"] is not None
         assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
 
 
 class TestIncidentsErrorEnvelopeRuntimeContract:
@@ -57,8 +56,9 @@ class TestIncidentsErrorEnvelopeRuntimeContract:
         assert data["error_code"] == "404"
 
         # Verify request_id is present and non-empty
-        assert data["request_id"]
+        assert data["request_id"] is not None
         assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
 
 
 class TestComplaintsErrorEnvelopeRuntimeContract:
@@ -82,8 +82,9 @@ class TestComplaintsErrorEnvelopeRuntimeContract:
         assert data["error_code"] == "404"
 
         # Verify request_id is present and non-empty
-        assert data["request_id"]
+        assert data["request_id"] is not None
         assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
 
 
 class TestConflictErrorEnvelopeRuntimeContract:
@@ -92,23 +93,34 @@ class TestConflictErrorEnvelopeRuntimeContract:
     @pytest.mark.asyncio
     async def test_409_conflict_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
         """Verify that 409 conflict errors return the canonical error envelope."""
-        # Create a policy with a specific reference number
-        policy = Policy(
-            title="Test Policy",
-            description="Test Description",
-            document_type="policy",
-            status="draft",
-            reference_number="POL-2026-0001",
-            created_by_id=1,
-            updated_by_id=1,
-        )
-        test_session.add(policy)
-        await test_session.commit()
+        # Create first policy with explicit reference number
+        policy_data = {
+            "title": "Test Policy 409",
+            "description": "Test Description",
+            "document_type": "policy",
+            "status": "draft",
+            "reference_number": "POL-2026-9999",
+        }
+        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
+        assert response.status_code == 201
 
-        # Try to create another policy with the same reference number (if the endpoint validates this)
-        # Note: This test assumes the endpoint has duplicate detection logic
-        # If not implemented yet, this test will need to be adjusted
+        # Attempt to create another policy with the same reference number
+        # This should trigger a 409 conflict due to duplicate reference_number
+        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
+        assert response.status_code == 409
 
-        # For now, we'll skip this test as it requires duplicate detection logic
-        # which may not be implemented yet
-        pytest.skip("Duplicate reference number detection not yet implemented")
+        data = response.json()
+        # Verify canonical error envelope keys
+        assert "error_code" in data
+        assert "message" in data
+        assert "details" in data
+        assert "request_id" in data
+
+        # Verify error_code is a string and equals "409"
+        assert isinstance(data["error_code"], str)
+        assert data["error_code"] == "409"
+
+        # Verify request_id is present and non-empty
+        assert data["request_id"] is not None
+        assert isinstance(data["request_id"], str)
+        assert len(data["request_id"]) > 0
