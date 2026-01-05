@@ -56,7 +56,10 @@ async def test_create_rta_invalid_incident(client: AsyncClient, auth_headers):
     }
     response = await client.post("/api/v1/rtas/", json=data, headers=auth_headers)
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]
+    res_data = response.json()
+    assert "error_code" in res_data
+    assert "message" in res_data
+    assert "not found" in res_data["message"].lower()
 
 
 async def test_list_rtas_deterministic_ordering(client: AsyncClient, test_incident, auth_headers, test_session):
