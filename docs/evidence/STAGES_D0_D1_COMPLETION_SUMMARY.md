@@ -344,8 +344,14 @@ docker-compose -f docker-compose.sandbox.yml up -d
 
 ### Stage D0
 
-1. Docker not available in Manus sandbox (scripts documented for external testing)
-2. Readiness probe (/readyz) doesn't check database yet
+1. **Docker not available in Manus sandbox** (scripts documented for external testing)
+   - **Gate 1 Status**: ⏳ PENDING EXECUTION
+   - **Action Required**: Repository owner must execute rehearsal and reset drill scripts on a Docker-enabled host
+   - **Evidence Required**: See `docs/evidence/STAGE_D0_REHEARSAL_EXECUTION_ADDENDUM.md` (template)
+   - **Runbook**: See `docs/runbooks/D0_REHEARSAL_RUNBOOK.md` (step-by-step guide)
+   - **Blocker**: Cannot proceed to Azure staging deployment (Phase 3) until Gate 1 evidence is committed
+
+2. Readiness probe (/readyz) database check decision documented in ADR-0003 (implementation pending)
 3. Single worker configuration (production should use multiple workers)
 4. No TLS/SSL configuration (should be terminated at load balancer)
 
