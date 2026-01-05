@@ -60,29 +60,3 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
     assert event.action == "create"
     assert "created" in event.description
 
-
-@pytest.mark.skip(reason="RTA API removed in favor of Investigation API")
-async def test_rta_creation_records_audit_event(client: AsyncClient, auth_headers, test_session, test_incident):
-    """Test that creating an RTA records an audit event."""
-    data = {
-        "incident_id": test_incident.id,
-        "title": "Audit Test RTA",
-        "problem_statement": "Testing audit log",
-        "status": "draft",
-    }
-    response = await client.post("/api/v1/rtas/", json=data, headers=auth_headers)
-    assert response.status_code == 201
-    rta_id = response.json()["id"]
-
-    # Verify audit event exists
-    result = await test_session.execute(
-        select(AuditEvent).where(
-            AuditEvent.resource_type == "rta",
-            AuditEvent.resource_id == str(rta_id),
-            AuditEvent.event_type == "rta.created",
-        )
-    )
-    event = result.scalar_one_or_none()
-    assert event is not None
-    assert event.action == "create"
-    assert "created" in event.description
