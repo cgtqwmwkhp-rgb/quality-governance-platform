@@ -90,7 +90,9 @@ class TestForbiddenErrorEnvelopeRuntimeContract:
     """Test that 403 forbidden errors return canonical error envelopes at runtime."""
 
     @pytest.mark.asyncio
-    async def test_403_forbidden_policies_canonical_envelope(self, client: AsyncClient, test_session, auth_headers_no_permissions):
+    async def test_403_forbidden_policies_canonical_envelope(
+        self, client: AsyncClient, test_session, auth_headers_no_permissions
+    ):
         """Verify that 403 forbidden errors return the canonical error envelope for policies."""
         response = await client.post(
             "/api/v1/policies",

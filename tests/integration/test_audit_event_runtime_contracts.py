@@ -54,7 +54,9 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
         # Verify actor_user_id matches the authenticated user
-        assert audit_event.actor_user_id == test_user.id, f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
+        assert (
+            audit_event.actor_user_id == test_user.id
+        ), f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
         # request_id should be present as a field (may be None in test environment)
         assert hasattr(audit_event, "request_id")
         assert audit_event.timestamp is not None
@@ -100,7 +102,9 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.action == "update"
         assert audit_event.actor_user_id is not None
         # Verify actor_user_id matches the authenticated user
-        assert audit_event.actor_user_id == test_user.id, f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
+        assert (
+            audit_event.actor_user_id == test_user.id
+        ), f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
         # request_id should be present as a field (may be None in test environment)
         assert hasattr(audit_event, "request_id")
 

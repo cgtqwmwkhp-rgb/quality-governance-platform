@@ -17,7 +17,7 @@ async def require_permission(
 ) -> None:
     """
     Check if the current user has the required permission.
-    
+
     Raises HTTPException 403 if the user does not have the permission.
     """
     # Superusers have all permissions
