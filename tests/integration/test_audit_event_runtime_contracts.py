@@ -154,7 +154,9 @@ class TestIncidentsAuditEventRuntimeContract:
     """Test that Incidents module records canonical audit events at runtime."""
 
     @pytest.mark.asyncio
-    async def test_create_incident_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
+    async def test_create_incident_records_audit_event(
+        self, client: AsyncClient, test_session, test_user, auth_headers
+    ):
         """Verify that creating an incident records an audit event with canonical schema."""
         # Create an incident
         incident_data = {
@@ -190,6 +192,10 @@ class TestIncidentsAuditEventRuntimeContract:
         assert audit_event.entity_id == str(incident_id)
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
+        # Verify actor_user_id matches the authenticated user
+        assert (
+            audit_event.actor_user_id == test_user.id
+        ), f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
         # request_id should be present as a field (may be None in test environment)
         assert hasattr(audit_event, "request_id")
 
@@ -198,7 +204,9 @@ class TestComplaintsAuditEventRuntimeContract:
     """Test that Complaints module records canonical audit events at runtime."""
 
     @pytest.mark.asyncio
-    async def test_create_complaint_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
+    async def test_create_complaint_records_audit_event(
+        self, client: AsyncClient, test_session, test_user, auth_headers
+    ):
         """Verify that creating a complaint records an audit event with canonical schema."""
         # Create a complaint
         complaint_data = {
@@ -233,5 +241,9 @@ class TestComplaintsAuditEventRuntimeContract:
         assert audit_event.entity_id == str(complaint_id)
         assert audit_event.action == "create"
         assert audit_event.actor_user_id is not None
+        # Verify actor_user_id matches the authenticated user
+        assert (
+            audit_event.actor_user_id == test_user.id
+        ), f"Expected actor_user_id={test_user.id}, got {audit_event.actor_user_id}"
         # request_id should be present as a field (may be None in test environment)
         assert hasattr(audit_event, "request_id")

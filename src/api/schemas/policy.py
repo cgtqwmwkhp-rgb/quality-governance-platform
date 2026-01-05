@@ -20,6 +20,10 @@ class PolicyBase(BaseModel):
 class PolicyCreate(PolicyBase):
     """Schema for creating a new policy."""
 
+    reference_number: Optional[str] = Field(
+        None, description="Optional explicit reference number (for testing/admin use)"
+    )
+
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: str) -> str:
