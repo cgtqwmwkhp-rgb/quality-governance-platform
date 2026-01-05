@@ -1,0 +1,83 @@
+# Quality Governance Platform - Sandbox Docker Compose
+# Purpose: Deterministic local deployment for rehearsal and testing
+# Usage: docker-compose -f docker-compose.sandbox.yml up
+
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: qgp-postgres-sandbox
+    environment:
+      POSTGRES_USER: qgp_user
+      POSTGRES_PASSWORD: qgp_sandbox_password
+      POSTGRES_DB: quality_governance_sandbox
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qgp_user -d quality_governance_sandbox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qgp-network
+
+  # Migration runner (runs once, then exits)
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qgp-migrate-sandbox
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qgp_user:qgp_sandbox_password@postgres:5432/quality_governance_sandbox
+      APP_ENV: development
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - qgp-network
+
+  # Application server
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qgp-app-sandbox
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qgp_user:qgp_sandbox_password@postgres:5432/quality_governance_sandbox
+      APP_ENV: development
+      SECRET_KEY: sandbox-secret-key-not-for-production-use-only
+      JWT_SECRET_KEY: sandbox-jwt-secret-key-not-for-production-use-only
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8080
+      DATABASE_ECHO: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - qgp-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  qgp-network:
+    driver: bridge
