@@ -59,4 +59,3 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
     assert event is not None
     assert event.action == "create"
     assert "created" in event.description
-
