@@ -1,7 +1,6 @@
 """Core middleware components for request processing."""
 
 import uuid
-
 from typing import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -26,9 +25,7 @@ class RequestStateMiddleware(BaseHTTPMiddleware):
     - Added to response headers as X-Request-ID
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and set request_id in request.state."""
         # Get or generate request_id BEFORE processing request
         request_id = request.headers.get("X-Request-ID")

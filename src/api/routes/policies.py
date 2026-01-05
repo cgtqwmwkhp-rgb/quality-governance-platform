@@ -32,13 +32,22 @@ async def create_policy(
 
     Requires authentication.
     """
-    # Generate reference number (format: POL-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
-
-    # Get the count of policies created this year
-    count_result = await db.execute(select(sa_func.count()).select_from(Policy))
-    count = count_result.scalar_one()
-    reference_number = f"POL-{year}-{count + 1:04d}"
+    # Generate or use provided reference number
+    if policy_data.reference_number:
+        reference_number = policy_data.reference_number
+        # Check for duplicate reference number
+        existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Policy with reference number {reference_number} already exists",
+            )
+    else:
+        # Generate reference number (format: POL-YYYY-NNNN)
+        year = datetime.now(timezone.utc).year
+        count_result = await db.execute(select(sa_func.count()).select_from(Policy))
+        count = count_result.scalar_one()
+        reference_number = f"POL-{year}-{count + 1:04d}"
 
     # Create new policy
     policy = Policy(
