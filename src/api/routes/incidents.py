@@ -62,8 +62,8 @@ async def create_incident(
     await record_audit_event(
         db=db,
         event_type="incident.created",
-        resource_type="incident",
-        resource_id=str(incident.id),
+        entity_type="incident",
+        entity_id=str(incident.id),
         action="create",
         description=f"Incident {incident.reference_number} created",
         payload=incident_data.model_dump(mode="json"),
@@ -125,11 +125,13 @@ async def list_incidents(
     )
     incidents = result.scalars().all()
 
+    import math
     return IncidentListResponse(
         items=[IncidentResponse.model_validate(i) for i in incidents],
         total=total,
         page=page,
         page_size=page_size,
+        pages=math.ceil(total / page_size) if total > 0 else 1,
     )
 
 
@@ -199,8 +201,8 @@ async def update_incident(
     await record_audit_event(
         db=db,
         event_type="incident.updated",
-        resource_type="incident",
-        resource_id=str(incident.id),
+        entity_type="incident",
+        entity_id=str(incident.id),
         action="update",
         description=f"Incident {incident.reference_number} updated",
         payload=update_dict,
@@ -236,8 +238,8 @@ async def delete_incident(
     await record_audit_event(
         db=db,
         event_type="incident.deleted",
-        resource_type="incident",
-        resource_id=str(incident.id),
+        entity_type="incident",
+        entity_id=str(incident.id),
         action="delete",
         description=f"Incident {incident.reference_number} deleted",
         payload={"incident_id": incident_id, "reference_number": incident.reference_number},

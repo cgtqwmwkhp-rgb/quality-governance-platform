@@ -49,8 +49,8 @@ async def create_rta(
     await record_audit_event(
         db=db,
         event_type="rta.created",
-        resource_type="rta",
-        resource_id=str(rta.id),
+        entity_type="rta",
+        entity_id=str(rta.id),
         action="create",
         description=f"RTA {rta.reference_number} created for Incident {rta.incident_id}",
         user_id=current_user.id,
@@ -134,8 +134,8 @@ async def update_rta(
     await record_audit_event(
         db=db,
         event_type="rta.updated",
-        resource_type="rta",
-        resource_id=str(rta.id),
+        entity_type="rta",
+        entity_id=str(rta.id),
         action="update",
         description=f"RTA {rta.reference_number} updated",
         payload=update_data,

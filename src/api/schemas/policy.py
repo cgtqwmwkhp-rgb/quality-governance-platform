@@ -69,3 +69,4 @@ class PolicyListResponse(BaseModel):
     total: int
     page: int = 1
     page_size: int = 50
+    pages: int = Field(..., description="Total number of pages")

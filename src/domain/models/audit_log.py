@@ -16,19 +16,26 @@ class AuditEvent(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    resource_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    resource_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    entity_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
 
     # Event details
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    # Metadata
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
+    # Actor and traceability
+    actor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    request_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+
+    # Legacy fields for backward compatibility (deprecated)
+    resource_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self) -> str:
         return f"<AuditEvent(id={self.id}, type='{self.event_type}', action='{self.action}')>"
