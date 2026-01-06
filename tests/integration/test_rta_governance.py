@@ -541,8 +541,6 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
 @pytest.mark.asyncio
 async def test_rta_investigations_invalid_page_param(client: AsyncClient, auth_headers: dict, test_session):
     """Test that invalid page parameter returns 422 validation error."""
-    from src.domain.models.investigation import InvestigationTemplate
-
     now = datetime.now(timezone.utc)
 
     # Create RTA
