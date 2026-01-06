@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from src.domain.models.audit_log import AuditEvent
-from src.domain.models.rta import RTAAction, RTASeverity, RTAStatus, RoadTrafficCollision
+from src.domain.models.rta import RoadTrafficCollision, RTAAction, RTASeverity, RTAStatus
 
 
 @pytest.mark.asyncio
@@ -307,9 +307,10 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
 
     # Create investigation template
     template = InvestigationTemplate(
-        title="Test Template",
+        name="Test Template",
         description="Test",
-        reference_number="INVTPL-2026-TEST",
+        structure={"sections": []},
+        applicable_entity_types=["road_traffic_collision"],
     )
     test_session.add(template)
     await test_session.commit()
@@ -356,6 +357,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
         description="Test",
         received_date=now,
         reference_number="COMP-2026-INV",
+        complainant_name="Test Complainant",
     )
     test_session.add(complaint)
     await test_session.commit()
@@ -363,9 +365,10 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
 
     # Create investigation template
     template = InvestigationTemplate(
-        title="Test Template",
+        name="Test Template",
         description="Test",
-        reference_number="INVTPL-2026-COMP",
+        structure={"sections": []},
+        applicable_entity_types=["complaint"],
     )
     test_session.add(template)
     await test_session.commit()

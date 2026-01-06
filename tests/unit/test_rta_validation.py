@@ -1,45 +1,61 @@
 """Unit tests for RTA validation and ordering contract."""
 
+from datetime import datetime, timezone
+
 import pytest
 from pydantic import ValidationError
 
 from src.api.schemas.rta import RTACreate, RTAUpdate
-from src.domain.models.rta_analysis import RCAStatus
+from src.domain.models.rta import RTASeverity, RTAStatus
 
 
 def test_rta_create_valid():
     """Test valid RTA creation schema."""
+    now = datetime.now(timezone.utc)
     data = {
-        "incident_id": 1,
-        "title": "Root Cause Analysis for Incident 1",
-        "problem_statement": "The system failed due to a memory leak.",
-        "status": RCAStatus.DRAFT,
+        "title": "Test RTA",
+        "description": "Test collision description",
+        "collision_date": now,
+        "reported_date": now,
+        "location": "Test Location",
+        "severity": RTASeverity.DAMAGE_ONLY,
+        "status": RTAStatus.REPORTED,
     }
     rta = RTACreate(**data)
     assert rta.title == data["title"]
-    assert rta.incident_id == data["incident_id"]
+    assert rta.location == data["location"]
+    assert rta.severity == RTASeverity.DAMAGE_ONLY
 
 
 def test_rta_create_invalid_title():
     """Test RTA creation with invalid title."""
+    now = datetime.now(timezone.utc)
+    base_data = {
+        "description": "Test",
+        "collision_date": now,
+        "reported_date": now,
+        "location": "Test Location",
+    }
+
     # Empty title
     with pytest.raises(ValidationError):
-        RTACreate(incident_id=1, title="", problem_statement="test")
+        RTACreate(title="", **base_data)
 
     # Whitespace title
     with pytest.raises(ValidationError):
-        RTACreate(incident_id=1, title="   ", problem_statement="test")
+        RTACreate(title="   ", **base_data)
 
     # Too long title
     with pytest.raises(ValidationError):
-        RTACreate(incident_id=1, title="a" * 301, problem_statement="test")
+        RTACreate(title="a" * 301, **base_data)
 
 
 def test_rta_update_partial():
     """Test partial RTA update schema."""
-    data = {"status": RCAStatus.APPROVED}
+    data = {"status": RTAStatus.CLOSED, "severity": RTASeverity.SERIOUS_INJURY}
     update = RTAUpdate(**data)
-    assert update.status == RCAStatus.APPROVED
+    assert update.status == RTAStatus.CLOSED
+    assert update.severity == RTASeverity.SERIOUS_INJURY
     assert update.title is None
 
 
