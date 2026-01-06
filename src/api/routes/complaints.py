@@ -214,7 +214,7 @@ async def list_complaint_investigations(
         )
     )
     total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = total_result.scalar() or 0
 
     # Calculate total pages
     total_pages = ceil(total / page_size) if total > 0 else 1
