@@ -380,18 +380,23 @@ async def delete_rta_action(
     await db.commit()
 
 
-@router.get("/{rta_id}/investigations")
+@router.get("/{rta_id}/investigations", response_model=dict)
 async def list_rta_investigations(
     rta_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
 ):
     """
-    List investigations for a specific RTA.
+    List investigations for a specific RTA (paginated).
 
     Requires authentication.
-    Returns investigations assigned to this RTA.
+    Returns investigations assigned to this RTA with pagination.
+    Deterministic ordering: created_at DESC, id ASC.
     """
+    from math import ceil
+
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
@@ -403,13 +408,39 @@ async def list_rta_investigations(
             detail=f"RTA with ID {rta_id} not found",
         )
 
-    result = await db.execute(
+    # Get total count
+    count_query = (
+        select(func.count())
+        .select_from(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            InvestigationRun.assigned_entity_id == rta_id,
+        )
+    )
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    # Calculate total pages
+    total_pages = ceil(total / page_size) if total > 0 else 1
+
+    # Get paginated results
+    query = (
         select(InvestigationRun)
         .where(
             InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
             InvestigationRun.assigned_entity_id == rta_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
+    result = await db.execute(query)
     investigations = result.scalars().all()
-    return [InvestigationRunResponse.model_validate(inv) for inv in investigations]
+
+    return {
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
