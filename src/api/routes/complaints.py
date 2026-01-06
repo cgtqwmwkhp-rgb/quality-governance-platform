@@ -174,7 +174,6 @@ async def update_complaint(
     return complaint
 
 
-
 @router.get("/{complaint_id}/investigations")
 async def list_complaint_investigations(
     complaint_id: int,

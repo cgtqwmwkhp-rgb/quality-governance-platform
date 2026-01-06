@@ -18,7 +18,7 @@ from src.api.schemas.rta import (
     RTAResponse,
     RTAUpdate,
 )
-from src.domain.models.rta import RTAAction, RoadTrafficCollision
+from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter(tags=["Road Traffic Collisions"])
@@ -195,6 +195,7 @@ async def delete_rta(
 
 
 # RTA Actions endpoints
+
 
 @router.post("/{rta_id}/actions", response_model=RTAActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_rta_action(
