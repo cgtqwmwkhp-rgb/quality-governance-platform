@@ -1,6 +1,6 @@
 """API routes package."""
 
-from src.api.routes import audits, auth, complaints, incidents, policies, risks, rta, standards, users
+from src.api.routes import audits, auth, complaints, incidents, policies, risks, rtas, standards, users
 
 __all__ = [
     "auth",
@@ -9,7 +9,7 @@ __all__ = [
     "audits",
     "risks",
     "incidents",
-    "rta",
+    "rtas",
     "complaints",
     "policies",
 ]
