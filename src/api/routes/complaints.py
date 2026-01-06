@@ -172,3 +172,41 @@ async def update_complaint(
     )
 
     return complaint
+
+
+
+@router.get("/{complaint_id}/investigations")
+async def list_complaint_investigations(
+    complaint_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    List investigations for a specific complaint.
+
+    Requires authentication.
+    Returns investigations assigned to this complaint.
+    """
+    from src.api.schemas.investigation import InvestigationRunResponse
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun
+
+    # Verify complaint exists
+    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
+    complaint = result.scalar_one_or_none()
+
+    if not complaint:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Complaint with ID {complaint_id} not found",
+        )
+
+    result = await db.execute(
+        select(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == AssignedEntityType.CUSTOMER_COMPLAINT,
+            InvestigationRun.assigned_entity_id == complaint_id,
+        )
+        .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
+    )
+    investigations = result.scalars().all()
+    return [InvestigationRunResponse.model_validate(inv) for inv in investigations]
