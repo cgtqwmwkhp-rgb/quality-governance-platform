@@ -199,11 +199,18 @@ class TestIncidentsInvestigationLinkage:
         assert response1.status_code == 200
         assert response2.status_code == 200
 
-        items1 = response1.json()
-        items2 = response2.json()
+        data1 = response1.json()
+        data2 = response2.json()
 
-        # Response is a list
-        assert isinstance(items1, list)
+        # Response is paginated envelope
+        assert "items" in data1
+        assert "total" in data1
+        assert "page" in data1
+        assert "page_size" in data1
+        assert "total_pages" in data1
+
+        items1 = data1["items"]
+        items2 = data2["items"]
 
         # Same order
         assert [item["id"] for item in items1] == [item["id"] for item in items2]
@@ -213,16 +220,26 @@ class TestIncidentsInvestigationLinkage:
             assert item["assigned_entity_id"] == test_incident.id
             assert item["assigned_entity_type"] == "reporting_incident"
 
+        # Pagination fields correct
+        assert data1["total"] == 3
+        assert data1["page"] == 1
+        assert data1["page_size"] == 25
+        assert data1["total_pages"] == 1
+
     async def test_get_incident_investigations_empty_list(
         self, client: AsyncClient, auth_headers, test_session, test_incident
     ):
-        """Test that incident with no investigations returns empty list."""
+        """Test that incident with no investigations returns empty paginated response."""
         response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers)
 
         assert response.status_code == 200
-        items = response.json()
-        assert isinstance(items, list)
-        assert len(items) == 0
+        data = response.json()
+        assert "items" in data
+        assert len(data["items"]) == 0
+        assert data["total"] == 0
+        assert data["page"] == 1
+        assert data["page_size"] == 25
+        assert data["total_pages"] == 1
 
     async def test_create_template_inactive_user_403(self, client: AsyncClient, test_session):
         """Test that an inactive user cannot create a template (403 Forbidden)."""
@@ -311,3 +328,106 @@ class TestIncidentsInvestigationLinkage:
         body = response.json()
         assert "message" in body
         assert "disabled" in body["message"].lower() or "inactive" in body["message"].lower()
+
+    async def test_incident_investigations_pagination_fields(
+        self, client: AsyncClient, auth_headers, test_session, test_incident
+    ):
+        """Test that incident investigations pagination fields are correct."""
+        # Create a template
+        template_data = {
+            "name": "Test Template",
+            "description": "Test",
+            "structure": {"sections": []},
+            "applicable_entity_types": ["reporting_incident"],
+        }
+        template_response = await client.post(
+            "/api/v1/investigation-templates/", json=template_data, headers=auth_headers
+        )
+        assert template_response.status_code == 201
+        template_id = template_response.json()["id"]
+
+        # Create 30 investigations for pagination testing
+        for i in range(30):
+            data = {
+                "template_id": template_id,
+                "assigned_entity_type": "reporting_incident",
+                "assigned_entity_id": test_incident.id,
+                "title": f"Investigation {i}",
+            }
+            response = await client.post("/api/v1/investigations/", json=data, headers=auth_headers)
+            assert response.status_code == 201
+
+        # Test page 1 (default page_size=25)
+        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 30
+        assert data["page"] == 1
+        assert data["page_size"] == 25
+        assert data["total_pages"] == 2
+        assert len(data["items"]) == 25
+
+        # Test page 2
+        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations?page=2", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 30
+        assert data["page"] == 2
+        assert data["page_size"] == 25
+        assert data["total_pages"] == 2
+        assert len(data["items"]) == 5
+
+        # Test custom page_size
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=10", headers=auth_headers
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 30
+        assert data["page"] == 1
+        assert data["page_size"] == 10
+        assert data["total_pages"] == 3
+        assert len(data["items"]) == 10
+
+    async def test_incident_investigations_invalid_page_param(
+        self, client: AsyncClient, auth_headers, test_session, test_incident
+    ):
+        """Test that invalid page parameter returns 422 validation error."""
+        # page=0 should fail (must be >= 1)
+        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations?page=0", headers=auth_headers)
+        assert response.status_code == 422
+
+        # page=-1 should fail
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page=-1", headers=auth_headers
+        )
+        assert response.status_code == 422
+
+    async def test_incident_investigations_invalid_page_size_param(
+        self, client: AsyncClient, auth_headers, test_session, test_incident
+    ):
+        """Test that invalid page_size parameter returns 422 validation error."""
+        # page_size=0 should fail (must be >= 1)
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=0", headers=auth_headers
+        )
+        assert response.status_code == 422
+
+        # page_size=101 should fail (must be <= 100)
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=101", headers=auth_headers
+        )
+        assert response.status_code == 422
+
+        # page_size=999 should fail
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=999", headers=auth_headers
+        )
+        assert response.status_code == 422
+
+    async def test_incident_investigations_404_for_nonexistent_incident(
+        self, client: AsyncClient, auth_headers, test_session
+    ):
+        """Test that requesting investigations for nonexistent incident returns 404."""
+        response = await client.get("/api/v1/incidents/999999/investigations", headers=auth_headers)
+        assert response.status_code == 404
