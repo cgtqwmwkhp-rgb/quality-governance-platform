@@ -202,7 +202,7 @@ async def list_complaint_investigations(
     result = await db.execute(
         select(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.CUSTOMER_COMPLAINT,
+            InvestigationRun.assigned_entity_type == AssignedEntityType.COMPLAINT,
             InvestigationRun.assigned_entity_id == complaint_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())

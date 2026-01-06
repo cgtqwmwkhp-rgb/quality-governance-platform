@@ -380,7 +380,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
             template_id=template.id,
             title=f"Complaint Investigation {i}",
             description="Test",
-            assigned_entity_type=AssignedEntityType.CUSTOMER_COMPLAINT,
+            assigned_entity_type=AssignedEntityType.COMPLAINT,
             assigned_entity_id=complaint.id,
             reference_number=f"INV-2026-COMP{i}",
             created_at=now - timedelta(minutes=i),
