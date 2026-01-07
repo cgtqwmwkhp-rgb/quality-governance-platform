@@ -40,6 +40,9 @@ All 8 CI quality gates are passing, and the system is ready for merge.
 - `page` (int, >= 1, default 1)
 - `page_size` (int, 1..100, default 25)
 
+**Validation Behavior**:
+- Invalid query parameters (e.g., `page=0`, `page_size=101`) return **422 Unprocessable Entity** with FastAPI validation error details
+
 **Deterministic Ordering**:
 - `created_at DESC, id ASC`
 
@@ -80,7 +83,7 @@ All 8 CI quality gates are passing, and the system is ready for merge.
   - Pagination fields correctness (`total`, `page`, `page_size`, `total_pages`)
   - Multi-page testing (30 items, 2 pages)
   - Custom `page_size`
-  - Query parameter validation (422 for invalid `page`/`page_size`)
+  - Query param validation (422 Unprocessable Entity for constraint violations)
   - 404 for nonexistent entities
   - Deterministic ordering stability
 
@@ -112,13 +115,19 @@ All 8 CI quality gates are passing, and the system is ready for merge.
 
 ## 9. Next Steps
 
-1. Merge PR #28 to main
-2. Deploy to staging
-3. Run smoke tests
-4. Deploy to production
+### Immediate
+1. Merge PR #28 to main (pending approval)
+2. Execute post-merge smoke tests (linkage endpoints)
+
+### Deployment (Staged)
+1. **D0 Gate 1**: External rehearsal execution (dry-run, no live changes)
+2. **D2 Staging**: Deploy to Azure staging environment
+3. **D2 Verification**: Run smoke tests on staging
+4. **D2 Rollback Drill**: Verify rollback procedure
+5. **D3+ Production**: Deploy to production (pending D2 success)
 
 ---
 
 ## 10. Conclusion
 
-**Stage 4.1.1 is ACCEPTED for production deployment.**
+**Stage 4.1.1 is ACCEPTED for merge; staging deployment execution pending D0/D2 deployment gates.**
