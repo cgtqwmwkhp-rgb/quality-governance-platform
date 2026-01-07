@@ -335,12 +335,26 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
     response = await client.get(f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 2
 
-    # Verify deterministic ordering: newest first
-    assert data[0]["title"] == "Investigation 0"
-    assert data[1]["title"] == "Investigation 1"
+    # Response is paginated envelope
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "page_size" in data
+    assert "total_pages" in data
+
+    items = data["items"]
+    assert len(items) >= 2
+
+    # Verify deterministic ordering: newest first (created_at DESC, id ASC)
+    assert items[0]["title"] == "Investigation 0"
+    assert items[1]["title"] == "Investigation 1"
+
+    # Pagination fields correct
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 1
 
 
 @pytest.mark.asyncio
@@ -393,12 +407,26 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 2
 
-    # Verify deterministic ordering: newest first
-    assert data[0]["title"] == "Complaint Investigation 0"
-    assert data[1]["title"] == "Complaint Investigation 1"
+    # Response is paginated envelope
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "page_size" in data
+    assert "total_pages" in data
+
+    items = data["items"]
+    assert len(items) >= 2
+
+    # Verify deterministic ordering: newest first (created_at DESC, id ASC)
+    assert items[0]["title"] == "Complaint Investigation 0"
+    assert items[1]["title"] == "Complaint Investigation 1"
+
+    # Pagination fields correct
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 1
 
 
 @pytest.mark.asyncio
@@ -431,3 +459,215 @@ async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dic
     # total_pages should be ceil(total / page_size)
     expected_pages = (data["total"] + 4) // 5  # ceiling division
     assert data["total_pages"] == expected_pages
+
+
+@pytest.mark.asyncio
+async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
+    """Test that RTA investigations pagination fields are correct."""
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
+
+    now = datetime.now(timezone.utc)
+
+    # Create RTA
+    rta = RoadTrafficCollision(
+        title="RTA for Pagination Test",
+        description="Test",
+        collision_date=now,
+        reported_date=now,
+        location="Test Location",
+        reference_number="RTA-2026-PAGE",
+    )
+    test_session.add(rta)
+    await test_session.commit()
+    await test_session.refresh(rta)
+
+    # Create investigation template
+    template = InvestigationTemplate(
+        name="Test Template",
+        description="Test",
+        structure={"sections": []},
+        applicable_entity_types=["road_traffic_collision"],
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    # Create 30 investigations for pagination testing
+    for i in range(30):
+        investigation = InvestigationRun(
+            template_id=template.id,
+            title=f"Investigation {i}",
+            description="Test",
+            assigned_entity_type=AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            assigned_entity_id=rta.id,
+            reference_number=f"INV-2026-PAGE{i}",
+            created_at=now - timedelta(minutes=i),
+        )
+        test_session.add(investigation)
+
+    await test_session.commit()
+
+    # Test page 1 (default page_size=25)
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 30
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 2
+    assert len(data["items"]) == 25
+
+    # Test page 2
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=2", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 30
+    assert data["page"] == 2
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 2
+    assert len(data["items"]) == 5
+
+    # Test custom page_size
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=10", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 30
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert data["total_pages"] == 3
+    assert len(data["items"]) == 10
+
+
+@pytest.mark.asyncio
+async def test_rta_investigations_invalid_page_param(client: AsyncClient, auth_headers: dict, test_session):
+    """Test that invalid page parameter returns 422 validation error."""
+    now = datetime.now(timezone.utc)
+
+    # Create RTA
+    rta = RoadTrafficCollision(
+        title="RTA for Validation Test",
+        description="Test",
+        collision_date=now,
+        reported_date=now,
+        location="Test Location",
+        reference_number="RTA-2026-VAL",
+    )
+    test_session.add(rta)
+    await test_session.commit()
+    await test_session.refresh(rta)
+
+    # page=0 should fail (must be >= 1)
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=0", headers=auth_headers)
+    assert response.status_code == 422
+
+    # page=-1 should fail
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=-1", headers=auth_headers)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_rta_investigations_invalid_page_size_param(client: AsyncClient, auth_headers: dict, test_session):
+    """Test that invalid page_size parameter returns 422 validation error."""
+    now = datetime.now(timezone.utc)
+
+    # Create RTA
+    rta = RoadTrafficCollision(
+        title="RTA for Page Size Validation Test",
+        description="Test",
+        collision_date=now,
+        reported_date=now,
+        location="Test Location",
+        reference_number="RTA-2026-PSVAL",
+    )
+    test_session.add(rta)
+    await test_session.commit()
+    await test_session.refresh(rta)
+
+    # page_size=0 should fail (must be >= 1)
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=0", headers=auth_headers)
+    assert response.status_code == 422
+
+    # page_size=101 should fail (must be <= 100)
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=101", headers=auth_headers)
+    assert response.status_code == 422
+
+    # page_size=999 should fail
+    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=999", headers=auth_headers)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_complaint_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
+    """Test that complaint investigations pagination fields are correct."""
+    from src.domain.models.complaint import Complaint
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
+
+    now = datetime.now(timezone.utc)
+
+    # Create complaint
+    complaint = Complaint(
+        title="Complaint for Pagination Test",
+        description="Test",
+        received_date=now,
+        reference_number="COMP-2026-PAGE",
+        complainant_name="Test Complainant",
+    )
+    test_session.add(complaint)
+    await test_session.commit()
+    await test_session.refresh(complaint)
+
+    # Create investigation template
+    template = InvestigationTemplate(
+        name="Test Template",
+        description="Test",
+        structure={"sections": []},
+        applicable_entity_types=["complaint"],
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    # Create 30 investigations for pagination testing
+    for i in range(30):
+        investigation = InvestigationRun(
+            template_id=template.id,
+            title=f"Complaint Investigation {i}",
+            description="Test",
+            assigned_entity_type=AssignedEntityType.COMPLAINT,
+            assigned_entity_id=complaint.id,
+            reference_number=f"INV-2026-CPAGE{i}",
+            created_at=now - timedelta(minutes=i),
+        )
+        test_session.add(investigation)
+
+    await test_session.commit()
+
+    # Test page 1 (default page_size=25)
+    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 30
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 2
+    assert len(data["items"]) == 25
+
+    # Test page 2
+    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations?page=2", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 30
+    assert data["page"] == 2
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 2
+    assert len(data["items"]) == 5
+
+    # Test custom page_size
+    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations?page_size=10", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 30
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert data["total_pages"] == 3
+    assert len(data["items"]) == 10
