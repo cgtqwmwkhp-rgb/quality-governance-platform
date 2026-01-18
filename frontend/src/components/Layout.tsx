@@ -4,7 +4,7 @@ import {
   AlertTriangle, 
   FileText, 
   Shield, 
-  Settings,
+  
   LogOut,
   Menu,
   X

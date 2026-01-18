@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, AlertTriangle, Search, Filter } from 'lucide-react'
+import { Plus, X, AlertTriangle, Search } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate } from '../api/client'
 
 export default function Incidents() {
