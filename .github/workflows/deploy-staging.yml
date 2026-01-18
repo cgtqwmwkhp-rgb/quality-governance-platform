@@ -51,6 +51,22 @@ jobs:
       - name: Run database migrations
         run: |
           echo "Running migrations via Azure Container Instance..."
+          
+          # Fetch secrets into variables first to avoid command substitution issues
+          ACR_USERNAME=$(az acr credential show --name ${{ env.ACR_NAME }} --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv)
+          DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
+          SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
+          JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
+          
+          # Validate secrets were retrieved
+          if [ -z "$DB_URL" ]; then
+            echo "ERROR: Failed to retrieve DATABASE_URL from Key Vault"
+            exit 1
+          fi
+          echo "Successfully retrieved secrets from Key Vault"
+          
+          # Create container with secure environment variables
           az container create \
             --name qgp-migration-${{ github.run_number }} \
             --resource-group rg-qgp-staging \
@@ -58,32 +74,44 @@ jobs:
             --os-type Linux \
             --image ${{ env.IMAGE_TAG }} \
             --registry-login-server ${{ env.ACR_NAME }}.azurecr.io \
-            --registry-username $(az acr credential show --name ${{ env.ACR_NAME }} --query username -o tsv) \
-            --registry-password $(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv) \
+            --registry-username "$ACR_USERNAME" \
+            --registry-password "$ACR_PASSWORD" \
             --restart-policy Never \
-            --environment-variables \
-              DATABASE_URL="$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)" \
-              SECRET_KEY="dummy" \
-              JWT_SECRET_KEY="dummy" \
+            --secure-environment-variables \
+              DATABASE_URL="$DB_URL" \
+              SECRET_KEY="$SECRET_KEY_VAL" \
+              JWT_SECRET_KEY="$JWT_SECRET_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
             --memory 1
           
           echo "Waiting for migration to complete..."
-          sleep 60
+          
+          # Poll for completion instead of fixed sleep
+          MAX_WAIT=300
+          WAITED=0
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            STATE=$(az container show --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
+            if [ "$STATE" = "Terminated" ]; then
+              echo "Migration container terminated after ${WAITED}s"
+              break
+            fi
+            echo "Migration still running... (${WAITED}s)"
+            sleep 10
+            WAITED=$((WAITED + 10))
+          done
           
           EXIT_CODE=$(az container show --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.exitCode" -o tsv)
           
           echo "Migration exit code: $EXIT_CODE"
           
-          if [ "$EXIT_CODE" != "0" ]; then
-            echo "Migration failed!"
-            az container logs --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging
-            exit 1
-          fi
-          
           echo "Migration logs:"
           az container logs --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging
+          
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration failed!"
+            exit 1
+          fi
           
           echo "Cleaning up migration container..."
           az container delete --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging --yes
