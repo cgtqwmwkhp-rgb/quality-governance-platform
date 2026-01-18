@@ -18,6 +18,9 @@ import {
   Zap,
   Users,
   TrendingUp,
+  HelpCircle,
+  Phone,
+  Siren,
 } from 'lucide-react';
 
 // Animated background gradient component
@@ -81,13 +84,29 @@ export default function Portal() {
                 <p className="text-gray-400 text-xs">Quality & Safety Reporting</p>
               </div>
             </div>
-            <button
-              onClick={() => navigate('/portal/track')}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-sm transition-all"
-            >
-              <Search className="w-4 h-4" />
-              <span className="hidden sm:inline">Track Report</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/portal/help')}
+                className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-sm transition-all"
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span className="hidden sm:inline">Help</span>
+              </button>
+              <button
+                onClick={() => navigate('/portal/track')}
+                className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-sm transition-all"
+              >
+                <Search className="w-4 h-4" />
+                <span className="hidden sm:inline">Track</span>
+              </button>
+              <button
+                onClick={() => navigate('/portal/sos')}
+                className="flex items-center gap-2 px-3 py-2 bg-red-500 hover:bg-red-600 rounded-xl text-white text-sm font-bold transition-all animate-pulse"
+              >
+                <Phone className="w-4 h-4" />
+                <span>SOS</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

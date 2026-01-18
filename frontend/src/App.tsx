@@ -15,6 +15,8 @@ import Documents from './pages/Documents'
 import Portal from './pages/Portal'
 import PortalReport from './pages/PortalReport'
 import PortalTrack from './pages/PortalTrack'
+import PortalSOS from './pages/PortalSOS'
+import PortalHelp from './pages/PortalHelp'
 import Layout from './components/Layout'
 
 function App() {
@@ -58,6 +60,8 @@ function App() {
         <Route path="/portal/report" element={<PortalReport />} />
         <Route path="/portal/track" element={<PortalTrack />} />
         <Route path="/portal/track/:referenceNumber" element={<PortalTrack />} />
+        <Route path="/portal/sos" element={<PortalSOS />} />
+        <Route path="/portal/help" element={<PortalHelp />} />
         
         {/* Auth Routes */}
         <Route

@@ -34,7 +34,9 @@ class QuickReportCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=200, description="Brief title")
     description: str = Field(..., min_length=10, description="What happened?")
     location: Optional[str] = Field(None, max_length=200, description="Where did it occur?")
-    severity: str = Field(default="medium", description="Severity: low, medium, high, critical")
+    severity: str = Field(
+        default="medium", description="Severity: low, medium, high, critical"
+    )
 
     # Reporter info (optional for anonymous)
     reporter_name: Optional[str] = Field(None, max_length=100)
@@ -458,11 +460,6 @@ async def get_report_types():
             {"id": "low", "label": "Low", "description": "Minor issue, no immediate action needed", "color": "#22c55e"},
             {"id": "medium", "label": "Medium", "description": "Moderate issue, attention needed", "color": "#eab308"},
             {"id": "high", "label": "High", "description": "Serious issue, prompt action required", "color": "#f97316"},
-            {
-                "id": "critical",
-                "label": "Critical",
-                "description": "Urgent! Immediate action required",
-                "color": "#ef4444",
-            },
+            {"id": "critical", "label": "Critical", "description": "Urgent! Immediate action required", "color": "#ef4444"},
         ],
     }
