@@ -97,13 +97,13 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     # Assignment to entity
     assigned_entity_type: Mapped[AssignedEntityType] = mapped_column(
-        Enum(AssignedEntityType), nullable=False, index=True
+        Enum(AssignedEntityType, native_enum=False), nullable=False, index=True
     )
     assigned_entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     # Investigation details
     status: Mapped[InvestigationStatus] = mapped_column(
-        Enum(InvestigationStatus), nullable=False, default=InvestigationStatus.DRAFT
+        Enum(InvestigationStatus, native_enum=False), nullable=False, default=InvestigationStatus.DRAFT
     )
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
