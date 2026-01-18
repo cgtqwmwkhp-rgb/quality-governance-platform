@@ -3,8 +3,9 @@ import {
   LayoutDashboard, 
   AlertTriangle, 
   FileText, 
-  Shield, 
-  
+  Shield,
+  Car,
+  MessageSquareWarning,
   LogOut,
   Menu,
   X
@@ -18,8 +19,10 @@ interface LayoutProps {
 const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/incidents', icon: AlertTriangle, label: 'Incidents' },
-  { path: '/policies', icon: FileText, label: 'Policies', disabled: true },
-  { path: '/risks', icon: Shield, label: 'Risks', disabled: true },
+  { path: '/rtas', icon: Car, label: 'RTAs' },
+  { path: '/complaints', icon: MessageSquareWarning, label: 'Complaints' },
+  { path: '/policies', icon: FileText, label: 'Policies' },
+  { path: '/risks', icon: Shield, label: 'Risks' },
 ]
 
 export default function Layout({ onLogout }: LayoutProps) {
@@ -56,28 +59,23 @@ export default function Layout({ onLogout }: LayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => (
               <NavLink
                 key={item.path}
-                to={item.disabled ? '#' : item.path}
-                onClick={(e) => item.disabled && e.preventDefault()}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) => `
                   flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
                   transition-all duration-200
-                  ${item.disabled 
-                    ? 'text-slate-600 cursor-not-allowed' 
-                    : isActive
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  ${isActive
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }
                 `}
               >
                 <item.icon size={20} />
                 {item.label}
-                {item.disabled && (
-                  <span className="ml-auto text-xs bg-slate-800 px-2 py-0.5 rounded">Soon</span>
-                )}
               </NavLink>
             ))}
           </nav>

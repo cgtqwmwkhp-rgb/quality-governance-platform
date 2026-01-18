@@ -3,6 +3,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Incidents from './pages/Incidents'
+import RTAs from './pages/RTAs'
+import Complaints from './pages/Complaints'
+import Policies from './pages/Policies'
+import Risks from './pages/Risks'
 import Layout from './components/Layout'
 
 function App() {
@@ -59,6 +63,10 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="incidents" element={<Incidents />} />
+          <Route path="rtas" element={<RTAs />} />
+          <Route path="complaints" element={<Complaints />} />
+          <Route path="policies" element={<Policies />} />
+          <Route path="risks" element={<Risks />} />
         </Route>
       </Routes>
     </BrowserRouter>
