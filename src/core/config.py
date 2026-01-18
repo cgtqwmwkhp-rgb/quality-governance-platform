@@ -87,8 +87,13 @@ class Settings(BaseSettings):
     email_username: str = ""
     email_password: str = ""
 
-    # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    # CORS - includes Azure Static Web Apps and local development
+    # Note: Azure Static Web Apps domains are handled via allow_origin_regex in main.py
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:5173",
+    ]
 
     # Logging
     log_level: str = "INFO"
