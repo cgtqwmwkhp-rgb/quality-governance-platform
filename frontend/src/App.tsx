@@ -12,6 +12,9 @@ import Investigations from './pages/Investigations'
 import Standards from './pages/Standards'
 import Actions from './pages/Actions'
 import Documents from './pages/Documents'
+import Portal from './pages/Portal'
+import PortalReport from './pages/PortalReport'
+import PortalTrack from './pages/PortalTrack'
 import Layout from './components/Layout'
 
 function App() {
@@ -50,6 +53,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Employee Portal Routes - No Auth Required */}
+        <Route path="/portal" element={<Portal />} />
+        <Route path="/portal/report" element={<PortalReport />} />
+        <Route path="/portal/track" element={<PortalTrack />} />
+        <Route path="/portal/track/:referenceNumber" element={<PortalTrack />} />
+        
+        {/* Auth Routes */}
         <Route
           path="/login"
           element={
@@ -60,6 +70,8 @@ function App() {
             )
           }
         />
+        
+        {/* Protected Admin Routes */}
         <Route
           path="/"
           element={

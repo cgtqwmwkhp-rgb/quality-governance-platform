@@ -7,6 +7,7 @@ from src.api.routes import (
     auth,
     complaints,
     documents,
+    employee_portal,
     incidents,
     investigation_templates,
     investigations,
@@ -32,5 +33,6 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
+router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
 
 __all__ = ["router"]
