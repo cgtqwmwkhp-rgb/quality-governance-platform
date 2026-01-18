@@ -218,7 +218,7 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Status and dates
-    status: Mapped[AuditStatus] = mapped_column(SQLEnum(AuditStatus), default=AuditStatus.SCHEDULED)
+    status: Mapped[AuditStatus] = mapped_column(SQLEnum(AuditStatus, native_enum=False), default=AuditStatus.SCHEDULED)
     scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -299,7 +299,7 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), default="medium")
     finding_type: Mapped[str] = mapped_column(String(50), default="nonconformity")
-    status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus), default=FindingStatus.OPEN)
+    status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus, native_enum=False), default=FindingStatus.OPEN)
 
     # Standard mapping (JSON arrays)
     clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)

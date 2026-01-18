@@ -60,9 +60,9 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Complaint identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    complaint_type: Mapped[ComplaintType] = mapped_column(SQLEnum(ComplaintType), default=ComplaintType.OTHER)
-    priority: Mapped[ComplaintPriority] = mapped_column(SQLEnum(ComplaintPriority), default=ComplaintPriority.MEDIUM)
-    status: Mapped[ComplaintStatus] = mapped_column(SQLEnum(ComplaintStatus), default=ComplaintStatus.RECEIVED)
+    complaint_type: Mapped[ComplaintType] = mapped_column(SQLEnum(ComplaintType, native_enum=False), default=ComplaintType.OTHER)
+    priority: Mapped[ComplaintPriority] = mapped_column(SQLEnum(ComplaintPriority, native_enum=False), default=ComplaintPriority.MEDIUM)
+    status: Mapped[ComplaintStatus] = mapped_column(SQLEnum(ComplaintStatus, native_enum=False), default=ComplaintStatus.RECEIVED)
 
     # Dates
     received_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -140,7 +140,7 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus), default=ActionStatus.OPEN)
+    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

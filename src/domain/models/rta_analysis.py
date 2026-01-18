@@ -35,7 +35,7 @@ class RootCauseAnalysis(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMi
     problem_statement: Mapped[str] = mapped_column(Text, nullable=False)
     root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrective_actions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    status: Mapped[RCAStatus] = mapped_column(SQLEnum(RCAStatus, name="rca_status_enum"), default=RCAStatus.DRAFT)
+    status: Mapped[RCAStatus] = mapped_column(SQLEnum(RCAStatus, native_enum=False), default=RCAStatus.DRAFT)
 
     # Relationships
     incident: Mapped["Incident"] = relationship("Incident", back_populates="rtas")

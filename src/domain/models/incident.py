@@ -68,9 +68,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Incident identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    incident_type: Mapped[IncidentType] = mapped_column(SQLEnum(IncidentType), default=IncidentType.OTHER)
-    severity: Mapped[IncidentSeverity] = mapped_column(SQLEnum(IncidentSeverity), default=IncidentSeverity.MEDIUM)
-    status: Mapped[IncidentStatus] = mapped_column(SQLEnum(IncidentStatus), default=IncidentStatus.REPORTED)
+    incident_type: Mapped[IncidentType] = mapped_column(SQLEnum(IncidentType, native_enum=False), default=IncidentType.OTHER)
+    severity: Mapped[IncidentSeverity] = mapped_column(SQLEnum(IncidentSeverity, native_enum=False), default=IncidentSeverity.MEDIUM)
+    status: Mapped[IncidentStatus] = mapped_column(SQLEnum(IncidentStatus, native_enum=False), default=IncidentStatus.REPORTED)
 
     # When and where
     incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -144,7 +144,7 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus), default=ActionStatus.OPEN)
+    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

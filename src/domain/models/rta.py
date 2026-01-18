@@ -44,8 +44,8 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     # Collision identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    severity: Mapped[RTASeverity] = mapped_column(SQLEnum(RTASeverity), default=RTASeverity.DAMAGE_ONLY)
-    status: Mapped[RTAStatus] = mapped_column(SQLEnum(RTAStatus), default=RTAStatus.REPORTED)
+    severity: Mapped[RTASeverity] = mapped_column(SQLEnum(RTASeverity, native_enum=False), default=RTASeverity.DAMAGE_ONLY)
+    status: Mapped[RTAStatus] = mapped_column(SQLEnum(RTAStatus, native_enum=False), default=RTAStatus.REPORTED)
 
     # When and where
     collision_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -138,7 +138,7 @@ class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus), default=ActionStatus.OPEN)
+    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

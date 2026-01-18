@@ -70,7 +70,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     treatment_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
-    status: Mapped[RiskStatus] = mapped_column(SQLEnum(RiskStatus), default=RiskStatus.IDENTIFIED)
+    status: Mapped[RiskStatus] = mapped_column(SQLEnum(RiskStatus, native_enum=False), default=RiskStatus.IDENTIFIED)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership
