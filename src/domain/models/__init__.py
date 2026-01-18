@@ -9,6 +9,14 @@ from src.domain.models.risk import Risk, RiskAssessment, RiskControl
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
+from src.domain.models.document import (
+    Document,
+    DocumentAnnotation,
+    DocumentChunk,
+    DocumentSearchLog,
+    DocumentVersion,
+    IndexJob,
+)
 
 __all__ = [
     # Base mixins
@@ -45,4 +53,11 @@ __all__ = [
     # Policy models
     "Policy",
     "PolicyVersion",
+    # Document models
+    "Document",
+    "DocumentChunk",
+    "DocumentAnnotation",
+    "DocumentVersion",
+    "DocumentSearchLog",
+    "IndexJob",
 ]

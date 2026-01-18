@@ -11,6 +11,7 @@ import Audits from './pages/Audits'
 import Investigations from './pages/Investigations'
 import Standards from './pages/Standards'
 import Actions from './pages/Actions'
+import Documents from './pages/Documents'
 import Layout from './components/Layout'
 
 function App() {
@@ -80,6 +81,7 @@ function App() {
           <Route path="investigations" element={<Investigations />} />
           <Route path="standards" element={<Standards />} />
           <Route path="actions" element={<Actions />} />
+          <Route path="documents" element={<Documents />} />
         </Route>
       </Routes>
     </BrowserRouter>

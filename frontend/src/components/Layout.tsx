@@ -13,7 +13,8 @@ import {
   LogOut,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  FolderOpen
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -43,6 +44,7 @@ const navSections = [
   {
     title: 'Library',
     items: [
+      { path: '/documents', icon: FolderOpen, label: 'Documents', color: 'text-sky-400' },
       { path: '/policies', icon: FileText, label: 'Policies', color: 'text-blue-400' },
       { path: '/risks', icon: Shield, label: 'Risks', color: 'text-rose-400' },
     ]
