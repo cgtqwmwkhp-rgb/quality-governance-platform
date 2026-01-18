@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, MessageSquareWarning, Search } from 'lucide-react'
+import { Plus, X, MessageSquare, Search } from 'lucide-react'
 import { complaintsApi, Complaint, ComplaintCreate } from '../api/client'
 
 export default function Complaints() {
@@ -166,7 +166,7 @@ export default function Complaints() {
               {filteredComplaints.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                    <MessageSquareWarning className="w-12 h-12 mx-auto mb-4 text-slate-600" />
+                    <MessageSquare className="w-12 h-12 mx-auto mb-4 text-slate-600" />
                     <p>No complaints found</p>
                     <p className="text-sm mt-1">Record a complaint to get started</p>
                   </td>

@@ -5,7 +5,7 @@ import {
   FileText, 
   Shield,
   Car,
-  MessageSquareWarning,
+  MessageSquare,
   LogOut,
   Menu,
   X
@@ -20,7 +20,7 @@ const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/incidents', icon: AlertTriangle, label: 'Incidents' },
   { path: '/rtas', icon: Car, label: 'RTAs' },
-  { path: '/complaints', icon: MessageSquareWarning, label: 'Complaints' },
+  { path: '/complaints', icon: MessageSquare, label: 'Complaints' },
   { path: '/policies', icon: FileText, label: 'Policies' },
   { path: '/risks', icon: Shield, label: 'Risks' },
 ]
