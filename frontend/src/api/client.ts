@@ -210,6 +210,139 @@ export interface RiskCreate {
   treatment_plan?: string
 }
 
+// ============ Audit Types ============
+export interface AuditRun {
+  id: number
+  reference_number: string
+  template_id: number
+  title?: string
+  location?: string
+  status: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
+  scheduled_date?: string
+  due_date?: string
+  started_at?: string
+  completed_at?: string
+  score?: number
+  max_score?: number
+  score_percentage?: number
+  passed?: boolean
+  created_at: string
+}
+
+export interface AuditFinding {
+  id: number
+  reference_number: string
+  run_id: number
+  title: string
+  description: string
+  severity: string
+  finding_type: string
+  status: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
+  corrective_action_required: boolean
+  corrective_action_due_date?: string
+  created_at: string
+}
+
+export interface AuditTemplate {
+  id: number
+  reference_number: string
+  name: string
+  description?: string
+  category?: string
+  audit_type: string
+  is_active: boolean
+  is_published: boolean
+  created_at: string
+}
+
+export interface AuditRunCreate {
+  template_id: number
+  title?: string
+  location?: string
+  scheduled_date?: string
+  due_date?: string
+}
+
+// ============ Investigation Types ============
+export interface Investigation {
+  id: number
+  reference_number: string
+  template_id: number
+  assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint'
+  assigned_entity_id: number
+  status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
+  title: string
+  description?: string
+  data: Record<string, unknown>
+  started_at?: string
+  completed_at?: string
+  created_at: string
+}
+
+export interface InvestigationCreate {
+  template_id: number
+  assigned_entity_type: string
+  assigned_entity_id: number
+  title: string
+  description?: string
+}
+
+// ============ Standard Types ============
+export interface Standard {
+  id: number
+  code: string
+  name: string
+  full_name: string
+  version: string
+  description?: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface Clause {
+  id: number
+  standard_id: number
+  clause_number: string
+  title: string
+  description?: string
+  level: number
+  is_active: boolean
+}
+
+export interface Control {
+  id: number
+  clause_id: number
+  control_number: string
+  title: string
+  description?: string
+  implementation_status?: string
+  is_applicable: boolean
+}
+
+// ============ Action Types ============
+export interface Action {
+  id: number
+  reference_number: string
+  title: string
+  description: string
+  action_type: string
+  priority: string
+  status: 'open' | 'in_progress' | 'pending_verification' | 'completed' | 'cancelled'
+  due_date?: string
+  completed_at?: string
+  source_type: string
+  source_id: number
+  created_at: string
+}
+
+export interface ActionCreate {
+  title: string
+  description: string
+  action_type?: string
+  priority?: string
+  due_date?: string
+}
+
 // ============ API Functions ============
 export const authApi = {
   login: (data: LoginRequest) => 
@@ -259,6 +392,50 @@ export const risksApi = {
     api.post<Risk>('/api/v1/risks', data),
   get: (id: number) => 
     api.get<Risk>(`/api/v1/risks/${id}`),
+}
+
+export const auditsApi = {
+  listRuns: (page = 1, size = 10) => 
+    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?page=${page}&size=${size}`),
+  listTemplates: (page = 1, size = 10) => 
+    api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates?page=${page}&size=${size}`),
+  listFindings: (page = 1, size = 10) => 
+    api.get<PaginatedResponse<AuditFinding>>(`/api/v1/audits/findings?page=${page}&size=${size}`),
+  createRun: (data: AuditRunCreate) => 
+    api.post<AuditRun>('/api/v1/audits/runs', data),
+  getRun: (id: number) => 
+    api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
+}
+
+export const investigationsApi = {
+  list: (page = 1, size = 10) => 
+    api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations?page=${page}&size=${size}`),
+  create: (data: InvestigationCreate) => 
+    api.post<Investigation>('/api/v1/investigations', data),
+  get: (id: number) => 
+    api.get<Investigation>(`/api/v1/investigations/${id}`),
+}
+
+export const standardsApi = {
+  list: (page = 1, size = 10) => 
+    api.get<PaginatedResponse<Standard>>(`/api/v1/standards?page=${page}&page_size=${size}`),
+  get: (id: number) => 
+    api.get<Standard & { clauses: Clause[] }>(`/api/v1/standards/${id}`),
+  getClauses: (standardId: number) => 
+    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses`),
+  getControls: (clauseId: number) => 
+    api.get<Control[]>(`/api/v1/clauses/${clauseId}/controls`),
+}
+
+export const actionsApi = {
+  list: (page = 1, size = 10, status?: string) => 
+    api.get<PaginatedResponse<Action>>(`/api/v1/actions?page=${page}&size=${size}${status ? `&status=${status}` : ''}`),
+  create: (data: ActionCreate) => 
+    api.post<Action>('/api/v1/actions', data),
+  get: (id: number) => 
+    api.get<Action>(`/api/v1/actions/${id}`),
+  update: (id: number, data: Partial<Action>) => 
+    api.patch<Action>(`/api/v1/actions/${id}`, data),
 }
 
 export default api

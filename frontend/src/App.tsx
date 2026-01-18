@@ -7,6 +7,10 @@ import RTAs from './pages/RTAs'
 import Complaints from './pages/Complaints'
 import Policies from './pages/Policies'
 import Risks from './pages/Risks'
+import Audits from './pages/Audits'
+import Investigations from './pages/Investigations'
+import Standards from './pages/Standards'
+import Actions from './pages/Actions'
 import Layout from './components/Layout'
 
 function App() {
@@ -31,8 +35,13 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-500/20 border-t-emerald-500"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500"></div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -67,6 +76,10 @@ function App() {
           <Route path="complaints" element={<Complaints />} />
           <Route path="policies" element={<Policies />} />
           <Route path="risks" element={<Risks />} />
+          <Route path="audits" element={<Audits />} />
+          <Route path="investigations" element={<Investigations />} />
+          <Route path="standards" element={<Standards />} />
+          <Route path="actions" element={<Actions />} />
         </Route>
       </Routes>
     </BrowserRouter>
