@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.post(
-    "",
+    "/",
     response_model=IncidentResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -117,7 +117,7 @@ async def get_incident(
     return incident
 
 
-@router.get("", response_model=IncidentListResponse)
+@router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
     current_user: CurrentUser,

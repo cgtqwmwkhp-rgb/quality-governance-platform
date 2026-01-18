@@ -80,7 +80,7 @@ def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
 # ============== Risk Endpoints ==============
 
 
-@router.get("", response_model=RiskListResponse)
+@router.get("/", response_model=RiskListResponse)
 async def list_risks(
     db: DbSession,
     current_user: CurrentUser,
@@ -127,7 +127,7 @@ async def list_risks(
     )
 
 
-@router.post("", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,

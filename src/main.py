@@ -69,9 +69,10 @@ def create_application() -> FastAPI:
         title=settings.app_name,
         description="Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management",
         version="1.0.0",
-        docs_url="/docs" if settings.is_development else None,
-        redoc_url="/redoc" if settings.is_development else None,
-        openapi_url="/openapi.json" if settings.is_development else None,
+        docs_url="/docs",  # Always enable API docs
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+        redirect_slashes=True,  # Auto-redirect /path to /path/ and vice versa
         lifespan=lifespan,
     )
 

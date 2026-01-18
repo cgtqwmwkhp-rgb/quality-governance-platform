@@ -25,7 +25,7 @@ router = APIRouter()
 # ============== User Endpoints ==============
 
 
-@router.get("", response_model=UserListResponse)
+@router.get("/", response_model=UserListResponse)
 async def list_users(
     db: DbSession,
     current_user: CurrentUser,
@@ -72,7 +72,7 @@ async def list_users(
     )
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
     db: DbSession,

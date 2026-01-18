@@ -304,7 +304,7 @@ async def upload_document(
 # =============================================================================
 
 
-@router.get("", response_model=DocumentListResponse)
+@router.get("/", response_model=DocumentListResponse)
 async def list_documents(
     db: DbSession,
     current_user: CurrentUser,
