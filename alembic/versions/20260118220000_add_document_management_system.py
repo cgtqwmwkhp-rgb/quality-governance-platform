@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '20260118220000'
-down_revision: Union[str, None] = '20260118183140'
+down_revision: Union[str, None] = 'convert_enums_varchar'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
