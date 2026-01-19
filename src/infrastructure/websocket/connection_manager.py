@@ -295,6 +295,7 @@ class ConnectionManager:
             await connection.websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
         except Exception:
             pass
+        return None
 
     def register_event_handler(self, event: str, handler: Callable):
         """Register a handler for WebSocket events"""
