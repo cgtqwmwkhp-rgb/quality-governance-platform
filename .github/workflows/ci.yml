@@ -30,7 +30,7 @@ jobs:
         run: black --check src/ tests/
 
       - name: Check import sorting (isort)
-        run: isort --check-only src/ tests/
+        run: isort --check-only --settings-path pyproject.toml src/ tests/
 
       - name: Lint with flake8
         run: flake8 src/ tests/ --count --show-source --statistics
