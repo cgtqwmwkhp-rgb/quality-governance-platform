@@ -9,6 +9,7 @@ from src.api.routes import (
     auth,
     complaints,
     compliance,
+    compliance_automation,
     documents,
     employee_portal,
     incidents,
@@ -21,6 +22,7 @@ from src.api.routes import (
     rtas,
     standards,
     users,
+    workflows,
 )
 
 router = APIRouter()
@@ -44,5 +46,7 @@ router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compli
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
+router.include_router(workflows.router, prefix="/workflows", tags=["Workflow Automation"])
+router.include_router(compliance_automation.router, prefix="/compliance-automation", tags=["Compliance Automation"])
 
 __all__ = ["router"]

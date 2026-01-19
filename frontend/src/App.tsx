@@ -38,6 +38,10 @@ import ComplianceEvidence from './pages/ComplianceEvidence'
 import AdvancedAnalytics from './pages/AdvancedAnalytics'
 import DashboardBuilder from './pages/DashboardBuilder'
 import ReportGenerator from './pages/ReportGenerator'
+// Phase 3: Workflow Automation
+import WorkflowCenter from './pages/WorkflowCenter'
+// Phase 4: Compliance Automation
+import ComplianceAutomation from './pages/ComplianceAutomation'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -168,6 +172,10 @@ function App() {
           <Route path="notifications" element={<Notifications />} />
           <Route path="exports" element={<ExportCenter />} />
           <Route path="compliance" element={<ComplianceEvidence />} />
+          {/* Phase 3: Workflow Automation */}
+          <Route path="workflows" element={<WorkflowCenter />} />
+          {/* Phase 4: Compliance Automation */}
+          <Route path="compliance-automation" element={<ComplianceAutomation />} />
         </Route>
       </Routes>
     </BrowserRouter>

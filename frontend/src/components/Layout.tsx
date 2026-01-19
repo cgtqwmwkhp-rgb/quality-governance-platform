@@ -23,7 +23,8 @@ import {
   Bell,
   Download,
   Settings,
-  Command
+  Command,
+  GitBranch
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -69,6 +70,13 @@ const navSections = [
       { path: '/analytics/reports', icon: FileText, label: 'Report Generator', color: 'text-amber-400' },
       { path: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-rose-400' },
       { path: '/exports', icon: Download, label: 'Export Center', color: 'text-teal-400' },
+    ]
+  },
+  {
+    title: 'Automation',
+    items: [
+      { path: '/workflows', icon: GitBranch, label: 'Workflow Center', color: 'text-purple-400' },
+      { path: '/compliance-automation', icon: Shield, label: 'Compliance Automation', color: 'text-emerald-400' },
     ]
   },
   {
