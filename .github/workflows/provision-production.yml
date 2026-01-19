@@ -24,6 +24,16 @@ on:
         required: true
         type: boolean
         default: true
+      app_service_sku:
+        description: 'App Service Plan SKU (B1=Basic, S1=Standard, P1V2=Premium)'
+        required: true
+        type: choice
+        options:
+          - B1
+          - B2
+          - S1
+          - P1V2
+        default: 'B1'
 
 env:
   LOCATION: westeurope
@@ -157,13 +167,13 @@ jobs:
             az appservice plan create \
               --resource-group ${{ env.RG_NAME }} \
               --name ${{ env.APP_PLAN_NAME }} \
-              --sku P1V2 \
+              --sku ${{ github.event.inputs.app_service_sku }} \
               --is-linux
           fi
           
           echo "## App Service Plan" >> $GITHUB_STEP_SUMMARY
           echo "- **Name**: ${{ env.APP_PLAN_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **SKU**: P1V2" >> $GITHUB_STEP_SUMMARY
+          echo "- **SKU**: ${{ github.event.inputs.app_service_sku }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Web App
         id: webapp
