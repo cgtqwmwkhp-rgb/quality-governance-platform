@@ -33,6 +33,7 @@ import AuditTrail from './pages/AuditTrail'
 import CalendarView from './pages/CalendarView'
 import Notifications from './pages/Notifications'
 import ExportCenter from './pages/ExportCenter'
+import ComplianceEvidence from './pages/ComplianceEvidence'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -159,6 +160,7 @@ function App() {
           <Route path="calendar" element={<CalendarView />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="exports" element={<ExportCenter />} />
+          <Route path="compliance" element={<ComplianceEvidence />} />
         </Route>
       </Routes>
     </BrowserRouter>

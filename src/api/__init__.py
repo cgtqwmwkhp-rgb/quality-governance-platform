@@ -7,6 +7,7 @@ from src.api.routes import (
     audit_templates,
     auth,
     complaints,
+    compliance,
     documents,
     employee_portal,
     incidents,
@@ -36,5 +37,6 @@ router.include_router(complaints.router, prefix="/complaints", tags=["Complaints
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
+router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
 
 __all__ = ["router"]

@@ -46,6 +46,7 @@ const navSections = [
     items: [
       { path: '/audits', icon: ClipboardCheck, label: 'Audits', color: 'text-indigo-400' },
       { path: '/audit-templates', icon: Sparkles, label: 'Audit Builder', color: 'text-pink-400' },
+      { path: '/compliance', icon: Shield, label: 'ISO Compliance', color: 'text-emerald-400' },
       { path: '/investigations', icon: FlaskConical, label: 'Investigations', color: 'text-violet-400' },
       { path: '/standards', icon: BookOpen, label: 'Standards', color: 'text-cyan-400' },
       { path: '/actions', icon: ListTodo, label: 'Actions', color: 'text-teal-400' },
