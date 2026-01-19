@@ -873,7 +873,7 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
             evidence = clause_evidence.get(clause.id, [])
             status = "full" if len(evidence) >= 2 else "partial" if len(evidence) == 1 else "gap"
 
-            detail = {
+            detail: Dict[str, Any] = {
                 "clause_id": clause.id,
                 "clause_number": clause.clause_number,
                 "title": clause.title,

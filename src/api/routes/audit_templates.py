@@ -228,9 +228,10 @@ async def list_templates(
     db: Session = Depends(get_db),
 ):
     """List all audit templates with filtering and pagination"""
+    from typing import Any, Dict
 
     # Mock data for demonstration (in production, query from database)
-    mock_templates = [
+    mock_templates: List[Dict[str, Any]] = [
         {
             "id": "1",
             "name": "ISO 9001:2015 Full Compliance Audit",
@@ -347,7 +348,7 @@ async def list_templates(
     if status and status != "all":
         filtered = [t for t in filtered if t["status"] == status]
     if iso_standard:
-        filtered = [t for t in filtered if iso_standard in (t.get("iso_standards") or [])]
+        filtered = [t for t in filtered if iso_standard in list(t.get("iso_standards") or [])]
 
     # Sort
     reverse = sort_order == "desc"
