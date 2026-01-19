@@ -37,8 +37,8 @@ import {
   Award,
   FileText,
   Sparkles,
-  Wand2,
 } from 'lucide-react';
+import AITemplateGenerator from '../components/AITemplateGenerator';
 
 // ============================================================================
 // TYPES
@@ -1185,52 +1185,41 @@ export default function AuditTemplateBuilder() {
         )}
       </main>
 
-      {/* AI Assist Modal */}
+      {/* AI Template Generator */}
       {showAIAssist && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAIAssist(false)} />
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                  <Wand2 className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">AI Template Assistant</h2>
-                  <p className="text-sm text-slate-400">Generate questions from standards or descriptions</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">What would you like to create?</label>
-                  <textarea
-                    placeholder="e.g., 'Create a vehicle safety inspection checklist' or 'Generate ISO 9001 clause 7 questions'"
-                    rows={4}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <button className="flex-1 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 text-sm">
-                    ISO 9001 Template
-                  </button>
-                  <button className="flex-1 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 text-sm">
-                    Safety Checklist
-                  </button>
-                  <button className="flex-1 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 text-sm">
-                    Vehicle Inspection
-                  </button>
-                </div>
-
-                <button className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                  <Sparkles className="w-5 h-5" />
-                  Generate with AI
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AITemplateGenerator
+          onClose={() => setShowAIAssist(false)}
+          onApply={(generatedSections) => {
+            // Convert generated sections to template format
+            const newSections: Section[] = generatedSections.map((gs, idx) => ({
+              id: gs.id,
+              title: gs.title,
+              description: gs.description,
+              questions: gs.questions.map((q) => ({
+                id: q.id,
+                text: q.text,
+                type: q.type as QuestionType,
+                required: q.required,
+                weight: q.weight,
+                riskLevel: (q.riskLevel as 'critical' | 'high' | 'medium' | 'low' | undefined),
+                evidenceRequired: q.evidenceRequired,
+                isoClause: q.isoClause,
+                guidance: q.guidance,
+                failureTriggersAction: false,
+              })),
+              isExpanded: true,
+              weight: 1,
+              order: template.sections.length + idx,
+              color: SECTION_COLORS[(template.sections.length + idx) % SECTION_COLORS.length],
+            }));
+            
+            setTemplate(prev => ({
+              ...prev,
+              sections: [...prev.sections, ...newSections],
+            }));
+            setShowAIAssist(false);
+          }}
+        />
       )}
     </div>
   );
