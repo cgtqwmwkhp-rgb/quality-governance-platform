@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 
-// PE Vehicle options (sample - would come from API)
+// PE Vehicle options
 const PE_VEHICLES = [
   { value: 'HV72ZUA', label: 'HV72ZUA', sublabel: 'Renault Trafic' },
   { value: 'ML23RRZ', label: 'ML23RRZ', sublabel: 'Ford Transit' },
@@ -39,41 +39,39 @@ const PE_VEHICLES = [
   { value: 'LA72VSM', label: 'LA72VSM', sublabel: 'VW Transporter' },
   { value: 'DY72EOX', label: 'DY72EOX', sublabel: 'Peugeot Expert' },
   { value: 'BD21NTJ', label: 'BD21NTJ', sublabel: 'Renault Master' },
-  { value: 'GK65RKA', label: 'GK65RKA', sublabel: 'Iveco Daily' },
   { value: 'other', label: 'Other', sublabel: 'Enter manually' },
 ];
 
-// Accident types with icons
+// Accident types
 const ACCIDENT_TYPES = [
-  { value: 'rear-end', label: 'Rear-end', icon: '🚗💥🚙', desc: 'Hit from behind or hit vehicle in front' },
-  { value: 'side-impact', label: 'Side Impact', icon: '🚗💥', desc: 'T-bone or sideswipe' },
-  { value: 'head-on', label: 'Head-on', icon: '🚗💥🚗', desc: 'Front to front collision' },
-  { value: 'animal', label: 'Animal', icon: '🦌', desc: 'Collision with animal' },
-  { value: 'hit-run', label: 'Hit & Run', icon: '🏃', desc: 'Other party fled scene' },
-  { value: 'single-vehicle', label: 'Single Vehicle', icon: '🚗', desc: 'Only your vehicle involved' },
-  { value: 'parking', label: 'Parking', icon: '🅿️', desc: 'Parking lot incident' },
+  { value: 'rear-end', label: 'Rear-end', icon: '🚗💥🚙' },
+  { value: 'side-impact', label: 'Side Impact', icon: '🚗💥' },
+  { value: 'head-on', label: 'Head-on', icon: '🚗💥🚗' },
+  { value: 'animal', label: 'Animal', icon: '🦌' },
+  { value: 'hit-run', label: 'Hit & Run', icon: '🏃' },
+  { value: 'single', label: 'Single Vehicle', icon: '🚗' },
 ];
 
-// Point of impact options
+// Impact points
 const IMPACT_POINTS = [
-  { value: 'front', label: 'Front', position: 'top-0 left-1/2 -translate-x-1/2' },
-  { value: 'front-left', label: 'Front Left', position: 'top-0 left-0' },
-  { value: 'front-right', label: 'Front Right', position: 'top-0 right-0' },
-  { value: 'left', label: 'Left Side', position: 'top-1/2 left-0 -translate-y-1/2' },
-  { value: 'right', label: 'Right Side', position: 'top-1/2 right-0 -translate-y-1/2' },
-  { value: 'rear', label: 'Rear', position: 'bottom-0 left-1/2 -translate-x-1/2' },
-  { value: 'rear-left', label: 'Rear Left', position: 'bottom-0 left-0' },
-  { value: 'rear-right', label: 'Rear Right', position: 'bottom-0 right-0' },
+  { value: 'front', label: 'Front' },
+  { value: 'front-left', label: 'Front Left' },
+  { value: 'front-right', label: 'Front Right' },
+  { value: 'left', label: 'Left Side' },
+  { value: 'right', label: 'Right Side' },
+  { value: 'rear', label: 'Rear' },
+  { value: 'rear-left', label: 'Rear Left' },
+  { value: 'rear-right', label: 'Rear Right' },
 ];
 
 // Weather options
 const WEATHER_OPTIONS = [
-  { value: 'clear', label: 'Clear/Sunny', icon: Sun },
+  { value: 'clear', label: 'Clear', icon: Sun },
   { value: 'cloudy', label: 'Cloudy', icon: Cloud },
   { value: 'rain', label: 'Rain', icon: CloudRain },
-  { value: 'fog', label: 'Fog/Mist', icon: CloudFog },
+  { value: 'fog', label: 'Fog', icon: CloudFog },
   { value: 'wind', label: 'Windy', icon: Wind },
-  { value: 'snow', label: 'Snow/Ice', icon: Snowflake },
+  { value: 'snow', label: 'Snow', icon: Snowflake },
 ];
 
 // Road conditions
@@ -82,66 +80,45 @@ const ROAD_CONDITIONS = [
   { value: 'wet', label: 'Wet' },
   { value: 'icy', label: 'Icy' },
   { value: 'muddy', label: 'Muddy' },
-  { value: 'gravel', label: 'Gravel/Loose' },
 ];
 
-interface ThirdPartyVehicle {
+interface ThirdParty {
   registration: string;
   driverName: string;
   driverPhone: string;
-  driverAddress: string;
-  passengerCount: number;
-  passengerNames: string;
   insuranceCompany: string;
   policyNumber: string;
-  damageDescription: string;
+  damage: string;
   hasInjuries: boolean | null;
-  injuryDetails: string;
-  photos: File[];
 }
 
 interface FormData {
-  // Employee & Vehicle
   employeeName: string;
-  peVehicleReg: string;
-  peVehicleRegOther: string;
+  peVehicle: string;
+  peVehicleOther: string;
   hasPassengers: boolean | null;
   passengerDetails: string;
-  
-  // Location & Time
   location: string;
   accidentDate: string;
   accidentTime: string;
-  
-  // Accident Details
-  vehicleCount: number;
-  thirdPartyVehicles: ThirdPartyVehicle[];
   accidentType: string;
+  vehicleCount: number;
+  thirdParties: ThirdParty[];
   impactPoint: string;
   damageDescription: string;
-  isVehicleDrivable: boolean | null;
-  
-  // Conditions
+  isDrivable: boolean | null;
   weather: string;
   roadCondition: string;
-  
-  // Additional Info
   hasWitnesses: boolean | null;
   witnessDetails: string;
-  emergencyServicesAttended: string;
-  policeReference: string;
+  emergencyServices: string;
+  policeRef: string;
   purposeOfJourney: string;
-  speedAtImpact: string;
+  speed: string;
   hasDashcam: boolean | null;
   hasCCTV: boolean | null;
-  cctvDetails: string;
-  
-  // Description
   fullDescription: string;
-  
-  // Photos
-  vehiclePhotos: File[];
-  additionalPhotos: File[];
+  photos: File[];
 }
 
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -154,133 +131,95 @@ export default function PortalRTAForm() {
   const [geolocating, setGeolocating] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
 
-  const createEmptyThirdParty = (): ThirdPartyVehicle => ({
+  const createEmptyThirdParty = (): ThirdParty => ({
     registration: '',
     driverName: '',
     driverPhone: '',
-    driverAddress: '',
-    passengerCount: 0,
-    passengerNames: '',
     insuranceCompany: '',
     policyNumber: '',
-    damageDescription: '',
+    damage: '',
     hasInjuries: null,
-    injuryDetails: '',
-    photos: [],
   });
 
   const [formData, setFormData] = useState<FormData>({
     employeeName: '',
-    peVehicleReg: '',
-    peVehicleRegOther: '',
+    peVehicle: '',
+    peVehicleOther: '',
     hasPassengers: null,
     passengerDetails: '',
     location: '',
     accidentDate: new Date().toISOString().split('T')[0],
     accidentTime: new Date().toTimeString().slice(0, 5),
-    vehicleCount: 0,
-    thirdPartyVehicles: [],
     accidentType: '',
+    vehicleCount: 0,
+    thirdParties: [],
     impactPoint: '',
     damageDescription: '',
-    isVehicleDrivable: null,
+    isDrivable: null,
     weather: '',
     roadCondition: '',
     hasWitnesses: null,
     witnessDetails: '',
-    emergencyServicesAttended: '',
-    policeReference: '',
+    emergencyServices: '',
+    policeRef: '',
     purposeOfJourney: '',
-    speedAtImpact: '',
+    speed: '',
     hasDashcam: null,
     hasCCTV: null,
-    cctvDetails: '',
     fullDescription: '',
-    vehiclePhotos: [],
-    additionalPhotos: [],
+    photos: [],
   });
 
-  // Update vehicle count and adjust third party array
+  const totalSteps = 5;
+
+  // Update vehicle count
   const setVehicleCount = (count: number) => {
     const newCount = Math.max(0, Math.min(3, count));
-    const currentVehicles = [...formData.thirdPartyVehicles];
-    
-    while (currentVehicles.length < newCount) {
-      currentVehicles.push(createEmptyThirdParty());
-    }
-    while (currentVehicles.length > newCount) {
-      currentVehicles.pop();
-    }
-    
-    setFormData((prev) => ({
-      ...prev,
-      vehicleCount: newCount,
-      thirdPartyVehicles: currentVehicles,
-    }));
+    const parties = [...formData.thirdParties];
+    while (parties.length < newCount) parties.push(createEmptyThirdParty());
+    while (parties.length > newCount) parties.pop();
+    setFormData((prev) => ({ ...prev, vehicleCount: newCount, thirdParties: parties }));
   };
 
-  // Update third party vehicle data
-  const updateThirdParty = (index: number, field: keyof ThirdPartyVehicle, value: any) => {
-    const updated = [...formData.thirdPartyVehicles];
+  // Update third party
+  const updateThirdParty = (index: number, field: keyof ThirdParty, value: any) => {
+    const updated = [...formData.thirdParties];
     updated[index] = { ...updated[index], [field]: value };
-    setFormData((prev) => ({ ...prev, thirdPartyVehicles: updated }));
+    setFormData((prev) => ({ ...prev, thirdParties: updated }));
   };
 
-  // Auto-detect location
+  // GPS detection
   const detectLocation = () => {
     setGeolocating(true);
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const coords = `GPS: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-          setFormData((prev) => ({ ...prev, location: coords }));
+        (pos) => {
+          setFormData((prev) => ({
+            ...prev,
+            location: `GPS: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
+          }));
           setGeolocating(false);
         },
         () => {
           setGeolocating(false);
-          alert('Could not detect location. Please enter manually.');
+          alert('Could not detect location');
         }
       );
     }
   };
 
-  // Voice recording
-  const toggleVoiceRecording = () => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      if (!isRecording) {
-        recognition.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0].transcript)
-            .join('');
-          setFormData((prev) => ({ ...prev, fullDescription: prev.fullDescription + ' ' + transcript }));
-        };
-        recognition.start();
-        setIsRecording(true);
-      } else {
-        recognition.stop();
-        setIsRecording(false);
-      }
-    }
-  };
+  // Voice recording toggle
+  const toggleVoiceRecording = () => setIsRecording(!isRecording);
 
   // Photo handling
-  const handlePhotoCapture = (field: 'vehiclePhotos' | 'additionalPhotos') => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newPhotos = Array.from(e.target.files);
-      setFormData((prev) => ({ ...prev, [field]: [...prev[field], ...newPhotos] }));
+      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...Array.from(e.target.files!)] }));
     }
   };
 
-  const removePhoto = (field: 'vehiclePhotos' | 'additionalPhotos', index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: prev[field].filter((_, i) => i !== index),
-    }));
+  const removePhoto = (index: number) => {
+    setFormData((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
   };
 
   // Submit
@@ -291,7 +230,7 @@ export default function PortalRTAForm() {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       setSubmittedRef(refNumber);
     } catch {
-      alert('Failed to submit. Please try again.');
+      alert('Failed to submit');
     } finally {
       setIsSubmitting(false);
     }
@@ -300,21 +239,12 @@ export default function PortalRTAForm() {
   // Validation
   const canProceed = (): boolean => {
     switch (step) {
-      case 1:
-        return !!formData.employeeName && !!formData.peVehicleReg && formData.hasPassengers !== null;
-      case 2:
-        return !!formData.location && !!formData.accidentType;
-      case 3:
-        if (formData.vehicleCount > 0) {
-          return formData.thirdPartyVehicles.every((v) => v.driverName || v.registration);
-        }
-        return true;
-      case 4:
-        return !!formData.damageDescription;
-      case 5:
-        return !!formData.fullDescription;
-      default:
-        return false;
+      case 1: return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null;
+      case 2: return !!formData.location && !!formData.accidentType;
+      case 3: return true;
+      case 4: return !!formData.damageDescription;
+      case 5: return !!formData.fullDescription;
+      default: return false;
     }
   };
 
@@ -329,15 +259,12 @@ export default function PortalRTAForm() {
           <h1 className="text-2xl font-bold text-white mb-2">RTA Report Submitted</h1>
           <p className="text-gray-400 mb-6">Your reference number is:</p>
           <div className="bg-white/5 border border-white/20 rounded-xl px-6 py-4 mb-6">
-            <span className="text-2xl font-mono font-bold text-purple-400">{submittedRef}</span>
+            <span className="text-2xl font-mono font-bold text-orange-400">{submittedRef}</span>
           </div>
-          <p className="text-sm text-gray-500 mb-6">
-            Keep this reference for insurance and tracking purposes
-          </p>
           <div className="flex gap-3">
             <button
               onClick={() => navigate('/portal/track/' + submittedRef)}
-              className="flex-1 px-4 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-medium transition-colors"
+              className="flex-1 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-colors"
             >
               Track Status
             </button>
@@ -357,101 +284,87 @@ export default function PortalRTAForm() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-900/10 to-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-4">
           <button
-            onClick={() => (step === 1 ? navigate('/portal') : setStep((s) => (s - 1) as Step))}
-            className="flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
+            onClick={() => step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-          
-          <div className="flex items-center gap-2">
-            <Car className="w-6 h-6 text-orange-400" />
-            <span className="font-semibold text-white">RTA Report</span>
-          </div>
-
-          <div className="text-sm text-gray-400">
-            Step {step}/5
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <Car className="w-5 h-5 text-orange-400" />
+              <span className="font-semibold text-white">RTA Report</span>
+            </div>
+            <div className="text-xs text-gray-500">Step {step} of {totalSteps}</div>
           </div>
         </div>
         
         <div className="h-1 bg-white/10">
           <div
             className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-300"
-            style={{ width: `${(step / 5) * 100}%` }}
+            style={{ width: `${(step / totalSteps) * 100}%` }}
           />
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-32">
+      <main className="max-w-lg mx-auto px-4 py-6 pb-28">
         {/* Step 1: Your Details */}
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">Your Details</h1>
-              <p className="text-gray-400">Driver and vehicle information</p>
+              <h1 className="text-xl font-bold text-white mb-1">Your Details</h1>
+              <p className="text-gray-400 text-sm">Driver and vehicle information</p>
             </div>
 
-            {/* Employee Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Your Name <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Your Name *</label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
                   value={formData.employeeName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, employeeName: e.target.value }))}
-                  placeholder="Your full name..."
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  placeholder="Full name..."
+                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                 />
               </div>
             </div>
 
-            {/* Vehicle Registration */}
             <FuzzySearchDropdown
               label="PE Vehicle Registration"
               options={PE_VEHICLES}
-              value={formData.peVehicleReg}
-              onChange={(val) => setFormData((prev) => ({ ...prev, peVehicleReg: val }))}
+              value={formData.peVehicle}
+              onChange={(val) => setFormData((prev) => ({ ...prev, peVehicle: val }))}
               placeholder="Search vehicle..."
               required
             />
 
-            {formData.peVehicleReg === 'other' && (
+            {formData.peVehicle === 'other' && (
               <input
                 type="text"
-                value={formData.peVehicleRegOther}
-                onChange={(e) => setFormData((prev) => ({ ...prev, peVehicleRegOther: e.target.value.toUpperCase() }))}
+                value={formData.peVehicleOther}
+                onChange={(e) => setFormData((prev) => ({ ...prev, peVehicleOther: e.target.value.toUpperCase() }))}
                 placeholder="Enter registration..."
-                className="w-full px-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 uppercase"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 uppercase"
               />
             )}
 
-            {/* Passengers */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Did you have any passengers? <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Any passengers? *</label>
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: true, label: 'Yes' },
-                  { value: false, label: 'No' },
-                ].map((opt) => (
+                {[true, false].map((val) => (
                   <button
-                    key={String(opt.value)}
+                    key={String(val)}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, hasPassengers: opt.value }))}
-                    className={`
-                      px-4 py-3 rounded-xl border-2 transition-all font-medium
-                      ${formData.hasPassengers === opt.value
+                    onClick={() => setFormData((prev) => ({ ...prev, hasPassengers: val }))}
+                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                      formData.hasPassengers === val
                         ? 'bg-orange-500/20 border-orange-500 text-white'
-                        : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                      }
-                    `}
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
                   >
-                    {opt.label}
+                    {val ? 'Yes' : 'No'}
                   </button>
                 ))}
               </div>
@@ -464,130 +377,114 @@ export default function PortalRTAForm() {
                   type="text"
                   value={formData.passengerDetails}
                   onChange={(e) => setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))}
-                  placeholder="Name and reason for being in vehicle..."
-                  className="w-full px-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  placeholder="Name and reason in vehicle..."
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                 />
               </div>
             )}
           </div>
         )}
 
-        {/* Step 2: Accident Details */}
+        {/* Step 2: Accident Info */}
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">Accident Details</h1>
-              <p className="text-gray-400">When and where did it happen?</p>
+              <h1 className="text-xl font-bold text-white mb-1">Accident Details</h1>
+              <p className="text-gray-400 text-sm">When and where did it happen?</p>
             </div>
 
-            {/* Location */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Location <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Location *</label>
               <div className="relative">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="Road name, junction, postcode..."
-                  className="w-full pl-12 pr-24 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  placeholder="Road name, junction..."
+                  className="w-full pl-12 pr-20 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                 />
                 <button
                   type="button"
                   onClick={detectLocation}
                   disabled={geolocating}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium"
                 >
                   {geolocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                  GPS
                 </button>
               </div>
             </div>
 
-            {/* Date & Time */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Date</label>
                 <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="date"
                     value={formData.accidentDate}
                     onChange={(e) => setFormData((prev) => ({ ...prev, accidentDate: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                    className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Time</label>
                 <div className="relative">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="time"
                     value={formData.accidentTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, accidentTime: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                    className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Accident Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Type of Accident <span className="text-red-400">*</span>
-              </label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Type of Accident *</label>
+              <div className="grid grid-cols-3 gap-2">
                 {ACCIDENT_TYPES.map((type) => (
                   <button
                     key={type.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, accidentType: type.value }))}
-                    className={`
-                      flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left
-                      ${formData.accidentType === type.value
+                    className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                      formData.accidentType === type.value
                         ? 'bg-orange-500/20 border-orange-500'
-                        : 'bg-white/5 border-white/20 hover:bg-white/10'
-                      }
-                    `}
+                        : 'bg-white/5 border-white/20'
+                    }`}
                   >
-                    <span className="text-2xl">{type.icon}</span>
-                    <div>
-                      <div className="text-white font-medium text-sm">{type.label}</div>
-                      <div className="text-gray-400 text-xs">{type.desc}</div>
-                    </div>
+                    <span className="text-xl">{type.icon}</span>
+                    <span className="text-xs text-white">{type.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Number of other vehicles */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                How many other vehicles were involved?
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Other vehicles involved?</label>
               <div className="flex items-center justify-center gap-6 bg-white/5 rounded-xl p-4">
                 <button
                   type="button"
                   onClick={() => setVehicleCount(formData.vehicleCount - 1)}
                   disabled={formData.vehicleCount === 0}
-                  className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl"
                 >
-                  <Minus className="w-6 h-6 text-white" />
+                  <Minus className="w-5 h-5 text-white" />
                 </button>
                 <div className="text-center">
-                  <span className="text-4xl font-bold text-white">{formData.vehicleCount}</span>
-                  <p className="text-gray-400 text-sm mt-1">vehicles</p>
+                  <span className="text-3xl font-bold text-white">{formData.vehicleCount}</span>
+                  <p className="text-gray-400 text-xs">vehicles</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setVehicleCount(formData.vehicleCount + 1)}
                   disabled={formData.vehicleCount >= 3}
-                  className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl"
                 >
-                  <Plus className="w-6 h-6 text-white" />
+                  <Plus className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
@@ -596,287 +493,188 @@ export default function PortalRTAForm() {
 
         {/* Step 3: Third Party Details */}
         {step === 3 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">
-                {formData.vehicleCount === 0 ? 'Additional Information' : 'Third Party Details'}
+              <h1 className="text-xl font-bold text-white mb-1">
+                {formData.vehicleCount === 0 ? 'Witnesses' : 'Third Party Details'}
               </h1>
-              <p className="text-gray-400">
-                {formData.vehicleCount === 0 ? 'Conditions and witnesses' : 'Details of other vehicles involved'}
+              <p className="text-gray-400 text-sm">
+                {formData.vehicleCount === 0 ? 'Any witnesses to the accident?' : 'Details of other vehicles involved'}
               </p>
             </div>
 
-            {formData.thirdPartyVehicles.map((vehicle, index) => (
-              <div key={index} className="bg-white/5 border border-white/20 rounded-2xl p-4 space-y-4">
+            {formData.thirdParties.map((party, index) => (
+              <div key={index} className="bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3">
                 <h3 className="font-semibold text-white flex items-center gap-2">
-                  <Car className="w-5 h-5 text-orange-400" />
+                  <Car className="w-4 h-4 text-orange-400" />
                   Vehicle {index + 1}
                 </h3>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Registration</label>
-                    <input
-                      type="text"
-                      value={vehicle.registration}
-                      onChange={(e) => updateThirdParty(index, 'registration', e.target.value.toUpperCase())}
-                      placeholder="REG..."
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm uppercase"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Driver Name</label>
-                    <input
-                      type="text"
-                      value={vehicle.driverName}
-                      onChange={(e) => updateThirdParty(index, 'driverName', e.target.value)}
-                      placeholder="Name..."
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Driver Phone</label>
-                  <input
-                    type="tel"
-                    value={vehicle.driverPhone}
-                    onChange={(e) => updateThirdParty(index, 'driverPhone', e.target.value)}
-                    placeholder="Phone number..."
-                    className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Insurance Company</label>
-                    <input
-                      type="text"
-                      value={vehicle.insuranceCompany}
-                      onChange={(e) => updateThirdParty(index, 'insuranceCompany', e.target.value)}
-                      placeholder="Insurer..."
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Policy Number</label>
-                    <input
-                      type="text"
-                      value={vehicle.policyNumber}
-                      onChange={(e) => updateThirdParty(index, 'policyNumber', e.target.value)}
-                      placeholder="Policy #..."
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Damage to their vehicle</label>
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
-                    value={vehicle.damageDescription}
-                    onChange={(e) => updateThirdParty(index, 'damageDescription', e.target.value)}
-                    placeholder="Describe damage..."
-                    className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
+                    value={party.registration}
+                    onChange={(e) => updateThirdParty(index, 'registration', e.target.value.toUpperCase())}
+                    placeholder="Reg..."
+                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm uppercase"
+                  />
+                  <input
+                    type="text"
+                    value={party.driverName}
+                    onChange={(e) => updateThirdParty(index, 'driverName', e.target.value)}
+                    placeholder="Driver name..."
+                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Any injuries reported?</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[false, true].map((hasInjury) => (
-                      <button
-                        key={String(hasInjury)}
-                        type="button"
-                        onClick={() => updateThirdParty(index, 'hasInjuries', hasInjury)}
-                        className={`
-                          px-3 py-2 rounded-lg border text-sm font-medium transition-all
-                          ${vehicle.hasInjuries === hasInjury
-                            ? hasInjury ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-green-500/20 border-green-500 text-green-400'
-                            : 'bg-white/5 border-white/20 text-gray-300'
-                          }
-                        `}
-                      >
-                        {hasInjury ? 'Yes' : 'No'}
-                      </button>
-                    ))}
-                  </div>
+                <input
+                  type="tel"
+                  value={party.driverPhone}
+                  onChange={(e) => updateThirdParty(index, 'driverPhone', e.target.value)}
+                  placeholder="Driver phone..."
+                  className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={party.insuranceCompany}
+                    onChange={(e) => updateThirdParty(index, 'insuranceCompany', e.target.value)}
+                    placeholder="Insurance..."
+                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={party.policyNumber}
+                    onChange={(e) => updateThirdParty(index, 'policyNumber', e.target.value)}
+                    placeholder="Policy #..."
+                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                  />
                 </div>
               </div>
             ))}
 
-            {/* Witnesses */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Were there any witnesses?
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Any witnesses?</label>
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: true, label: 'Yes' },
-                  { value: false, label: 'No' },
-                ].map((opt) => (
+                {[true, false].map((val) => (
                   <button
-                    key={String(opt.value)}
+                    key={String(val)}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, hasWitnesses: opt.value }))}
-                    className={`
-                      px-4 py-3 rounded-xl border-2 transition-all font-medium
-                      ${formData.hasWitnesses === opt.value
+                    onClick={() => setFormData((prev) => ({ ...prev, hasWitnesses: val }))}
+                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                      formData.hasWitnesses === val
                         ? 'bg-orange-500/20 border-orange-500 text-white'
-                        : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                      }
-                    `}
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
                   >
-                    {opt.label}
+                    {val ? 'Yes' : 'No'}
                   </button>
                 ))}
               </div>
             </div>
 
             {formData.hasWitnesses && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Witness Details</label>
-                <textarea
-                  value={formData.witnessDetails}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, witnessDetails: e.target.value }))}
-                  placeholder="Name, contact details..."
-                  rows={2}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none"
-                />
-              </div>
+              <input
+                type="text"
+                value={formData.witnessDetails}
+                onChange={(e) => setFormData((prev) => ({ ...prev, witnessDetails: e.target.value }))}
+                placeholder="Witness name and contact..."
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500"
+              />
             )}
           </div>
         )}
 
         {/* Step 4: Damage & Conditions */}
         {step === 4 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">Damage & Conditions</h1>
-              <p className="text-gray-400">Impact details and road conditions</p>
+              <h1 className="text-xl font-bold text-white mb-1">Damage & Conditions</h1>
+              <p className="text-gray-400 text-sm">Impact and road conditions</p>
             </div>
 
-            {/* Point of Impact - Visual selector */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Point of Impact on Your Vehicle
-              </label>
-              <div className="relative bg-white/5 border border-white/20 rounded-2xl p-8">
-                {/* Vehicle diagram */}
-                <div className="relative w-32 h-56 mx-auto">
-                  {/* Vehicle body */}
-                  <div className="absolute inset-0 bg-orange-500/20 rounded-lg border-2 border-orange-500/40" />
-                  
-                  {/* Impact points */}
-                  {IMPACT_POINTS.map((point) => (
-                    <button
-                      key={point.value}
-                      type="button"
-                      onClick={() => setFormData((prev) => ({ ...prev, impactPoint: point.value }))}
-                      className={`
-                        absolute w-10 h-10 rounded-full flex items-center justify-center transition-all
-                        ${point.position}
-                        ${formData.impactPoint === point.value
-                          ? 'bg-red-500 border-2 border-red-300 scale-110'
-                          : 'bg-white/20 border border-white/40 hover:bg-white/30'
-                        }
-                      `}
-                    >
-                      <AlertTriangle className={`w-4 h-4 ${formData.impactPoint === point.value ? 'text-white' : 'text-gray-400'}`} />
-                    </button>
-                  ))}
-                </div>
-                
-                {formData.impactPoint && (
-                  <p className="text-center text-white mt-4">
-                    Selected: <span className="text-orange-400 font-medium">{IMPACT_POINTS.find((p) => p.value === formData.impactPoint)?.label}</span>
-                  </p>
-                )}
+              <label className="block text-sm font-medium text-gray-300 mb-2">Point of Impact</label>
+              <div className="grid grid-cols-4 gap-2">
+                {IMPACT_POINTS.map((point) => (
+                  <button
+                    key={point.value}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, impactPoint: point.value }))}
+                    className={`px-2 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                      formData.impactPoint === point.value
+                        ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
+                  >
+                    {point.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Damage Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Damage Description <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Damage Description *</label>
               <textarea
                 value={formData.damageDescription}
                 onChange={(e) => setFormData((prev) => ({ ...prev, damageDescription: e.target.value }))}
-                placeholder="Describe all damage to your vehicle..."
+                placeholder="Describe all damage..."
                 rows={3}
-                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 resize-none"
               />
             </div>
 
-            {/* Vehicle Drivable */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Is the vehicle still drivable?
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Vehicle drivable?</label>
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: true, label: 'Yes', color: 'green' },
-                  { value: false, label: 'No', color: 'red' },
-                ].map((opt) => (
+                {[true, false].map((val) => (
                   <button
-                    key={String(opt.value)}
+                    key={String(val)}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, isVehicleDrivable: opt.value }))}
-                    className={`
-                      px-4 py-3 rounded-xl border-2 transition-all font-medium
-                      ${formData.isVehicleDrivable === opt.value
-                        ? opt.color === 'green' ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-red-500/20 border-red-500 text-red-400'
-                        : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                      }
-                    `}
+                    onClick={() => setFormData((prev) => ({ ...prev, isDrivable: val }))}
+                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                      formData.isDrivable === val
+                        ? val ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-red-500/20 border-red-500 text-red-400'
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
                   >
-                    {opt.label}
+                    {val ? 'Yes' : 'No'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Weather */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">Weather Conditions</label>
-              <div className="grid grid-cols-3 gap-2">
-                {WEATHER_OPTIONS.map((weather) => (
+              <label className="block text-sm font-medium text-gray-300 mb-2">Weather</label>
+              <div className="grid grid-cols-6 gap-2">
+                {WEATHER_OPTIONS.map((w) => (
                   <button
-                    key={weather.value}
+                    key={w.value}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, weather: weather.value }))}
-                    className={`
-                      flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all
-                      ${formData.weather === weather.value
+                    onClick={() => setFormData((prev) => ({ ...prev, weather: w.value }))}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                      formData.weather === w.value
                         ? 'bg-orange-500/20 border-orange-500'
-                        : 'bg-white/5 border-white/20 hover:bg-white/10'
-                      }
-                    `}
+                        : 'bg-white/5 border-white/20'
+                    }`}
                   >
-                    <weather.icon className={`w-6 h-6 ${formData.weather === weather.value ? 'text-orange-400' : 'text-gray-400'}`} />
-                    <span className="text-xs text-white">{weather.label}</span>
+                    <w.icon className={`w-5 h-5 ${formData.weather === w.value ? 'text-orange-400' : 'text-gray-400'}`} />
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Road Conditions */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">Road Conditions</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Road Condition</label>
               <div className="flex flex-wrap gap-2">
                 {ROAD_CONDITIONS.map((cond) => (
                   <button
                     key={cond.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, roadCondition: cond.value }))}
-                    className={`
-                      px-4 py-2 rounded-full border-2 transition-all text-sm font-medium
-                      ${formData.roadCondition === cond.value
+                    className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition-all ${
+                      formData.roadCondition === cond.value
                         ? 'bg-orange-500/20 border-orange-500 text-orange-400'
-                        : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                      }
-                    `}
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
                   >
                     {cond.label}
                   </button>
@@ -884,84 +682,61 @@ export default function PortalRTAForm() {
               </div>
             </div>
 
-            {/* Vehicle Photos */}
+            {/* Photos */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Photos of Damage
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Photos</label>
               <div className="grid grid-cols-4 gap-2">
-                {formData.vehiclePhotos.map((photo, index) => (
+                {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
-                    <img
-                      src={URL.createObjectURL(photo)}
-                      alt={`Damage ${index + 1}`}
-                      className="w-full h-full object-cover rounded-xl"
-                    />
+                    <img src={URL.createObjectURL(photo)} alt="" className="w-full h-full object-cover rounded-xl" />
                     <button
                       type="button"
-                      onClick={() => removePhoto('vehiclePhotos', index)}
+                      onClick={() => removePhoto(index)}
                       className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                <label className="aspect-square flex flex-col items-center justify-center bg-white/5 border-2 border-dashed border-white/20 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
+                <label className="aspect-square flex flex-col items-center justify-center bg-white/5 border-2 border-dashed border-white/20 rounded-xl cursor-pointer hover:bg-white/10">
                   <Camera className="w-6 h-6 text-gray-400" />
                   <span className="text-xs text-gray-400 mt-1">Add</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoCapture('vehiclePhotos')}
-                    className="hidden"
-                    multiple
-                  />
+                  <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" multiple />
                 </label>
               </div>
             </div>
           </div>
         )}
 
-        {/* Step 5: Description & Submit */}
+        {/* Step 5: Full Description */}
         {step === 5 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">What Happened?</h1>
-              <p className="text-gray-400">Describe the accident in your own words</p>
+              <h1 className="text-xl font-bold text-white mb-1">What Happened?</h1>
+              <p className="text-gray-400 text-sm">Describe the accident in full</p>
             </div>
 
-            {/* Full Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Full Description <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Full Description *</label>
               <div className="relative">
                 <textarea
                   value={formData.fullDescription}
                   onChange={(e) => setFormData((prev) => ({ ...prev, fullDescription: e.target.value }))}
-                  placeholder="Describe exactly what happened: where you were, what you were doing, what the other vehicle did, sequence of events..."
+                  placeholder="Describe exactly what happened..."
                   rows={6}
-                  className="w-full px-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 resize-none"
                 />
                 <button
                   type="button"
                   onClick={toggleVoiceRecording}
-                  className={`
-                    absolute right-3 bottom-3 p-2.5 rounded-full transition-all
-                    ${isRecording
-                      ? 'bg-red-500 text-white animate-pulse'
-                      : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                    }
-                  `}
+                  className={`absolute right-3 bottom-3 p-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-orange-500/20 text-orange-400'}`}
                 >
-                  {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {isRecording ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {/* Additional Quick Fields */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Purpose of Journey</label>
                 <input
@@ -969,107 +744,81 @@ export default function PortalRTAForm() {
                   value={formData.purposeOfJourney}
                   onChange={(e) => setFormData((prev) => ({ ...prev, purposeOfJourney: e.target.value }))}
                   placeholder="e.g. Work site visit"
-                  className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Speed at Impact</label>
                 <input
                   type="text"
-                  value={formData.speedAtImpact}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, speedAtImpact: e.target.value }))}
+                  value={formData.speed}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, speed: e.target.value }))}
                   placeholder="e.g. 20 mph"
-                  className="w-full px-3 py-2.5 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
                 />
               </div>
             </div>
 
-            {/* Quick toggles */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, hasDashcam: !prev.hasDashcam }))}
-                className={`
-                  flex items-center gap-3 p-3 rounded-xl border-2 transition-all
-                  ${formData.hasDashcam
-                    ? 'bg-green-500/20 border-green-500'
-                    : 'bg-white/5 border-white/20 hover:bg-white/10'
-                  }
-                `}
+                className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                  formData.hasDashcam ? 'bg-green-500/20 border-green-500' : 'bg-white/5 border-white/20'
+                }`}
               >
                 <Video className={`w-5 h-5 ${formData.hasDashcam ? 'text-green-400' : 'text-gray-400'}`} />
-                <span className="text-sm text-white">Dashcam Available</span>
+                <span className="text-sm text-white">Dashcam</span>
               </button>
-              
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, hasCCTV: !prev.hasCCTV }))}
-                className={`
-                  flex items-center gap-3 p-3 rounded-xl border-2 transition-all
-                  ${formData.hasCCTV
-                    ? 'bg-green-500/20 border-green-500'
-                    : 'bg-white/5 border-white/20 hover:bg-white/10'
-                  }
-                `}
+                className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                  formData.hasCCTV ? 'bg-green-500/20 border-green-500' : 'bg-white/5 border-white/20'
+                }`}
               >
                 <Eye className={`w-5 h-5 ${formData.hasCCTV ? 'text-green-400' : 'text-gray-400'}`} />
                 <span className="text-sm text-white">CCTV Nearby</span>
               </button>
             </div>
 
-            {/* Emergency Services */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Emergency Services Attended?
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Emergency Services?</label>
               <div className="relative">
                 <Siren className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  value={formData.emergencyServicesAttended}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServicesAttended: e.target.value }))}
+                  value={formData.emergencyServices}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.value }))}
                   placeholder="No / Police / Ambulance..."
-                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500"
                 />
               </div>
             </div>
-
-            {formData.emergencyServicesAttended && formData.emergencyServicesAttended.toLowerCase().includes('police') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Police Reference</label>
-                <input
-                  type="text"
-                  value={formData.policeReference}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, policeReference: e.target.value }))}
-                  placeholder="Reference number..."
-                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
-                />
-              </div>
-            )}
           </div>
         )}
       </main>
 
       {/* Fixed Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/50 backdrop-blur-xl border-t border-white/10 p-4">
-        <div className="max-w-2xl mx-auto flex gap-3">
+        <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
             <button
               type="button"
               onClick={() => setStep((s) => (s - 1) as Step)}
-              className="px-6 py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
+              className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
             >
               <ChevronLeft className="w-5 h-5" />
               Back
             </button>
           )}
           
-          {step < 5 ? (
+          {step < totalSteps ? (
             <button
               type="button"
               onClick={() => setStep((s) => (s + 1) as Step)}
               disabled={!canProceed()}
-              className="flex-1 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              className="flex-1 px-5 py-3 bg-gradient-to-r from-orange-500 to-red-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
             >
               Continue
               <ChevronRight className="w-5 h-5" />
@@ -1078,8 +827,8 @@ export default function PortalRTAForm() {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isSubmitting || !canProceed()}
-              className="flex-1 px-6 py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              disabled={isSubmitting}
+              className="flex-1 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>
@@ -1089,7 +838,7 @@ export default function PortalRTAForm() {
               ) : (
                 <>
                   <Check className="w-5 h-5" />
-                  Submit RTA Report
+                  Submit
                 </>
               )}
             </button>

@@ -66,14 +66,23 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Employee Portal Routes - No Auth Required */}
+        {/* Level 1: Portal Home */}
         <Route path="/portal" element={<Portal />} />
+        
+        {/* Level 2: Report Type Selection */}
         <Route path="/portal/report" element={<PortalReport />} />
+        
+        {/* Level 3: Report Forms */}
+        <Route path="/portal/report/incident" element={<PortalIncidentForm />} />
+        <Route path="/portal/report/near-miss" element={<PortalIncidentForm />} />
+        <Route path="/portal/report/complaint" element={<PortalIncidentForm />} />
+        <Route path="/portal/report/rta" element={<PortalRTAForm />} />
+        
+        {/* Other Portal Pages */}
         <Route path="/portal/track" element={<PortalTrack />} />
         <Route path="/portal/track/:referenceNumber" element={<PortalTrack />} />
         <Route path="/portal/sos" element={<PortalSOS />} />
         <Route path="/portal/help" element={<PortalHelp />} />
-        <Route path="/portal/incident" element={<PortalIncidentForm />} />
-        <Route path="/portal/rta" element={<PortalRTAForm />} />
         
         {/* Auth Routes */}
         <Route

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -14,19 +14,49 @@ import {
   User,
   Building,
   Phone,
-  FileText,
   Check,
   ChevronRight,
   ChevronLeft,
   Loader2,
-  Shield,
   Truck,
   Users,
   X,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 
-// Contract options based on CSV data
+// Determine report type from URL path
+const getReportTypeFromPath = (pathname: string) => {
+  if (pathname.includes('near-miss')) return 'near-miss';
+  if (pathname.includes('complaint')) return 'complaint';
+  return 'incident';
+};
+
+// Report type configurations
+const REPORT_CONFIGS = {
+  'incident': {
+    title: 'Incident Report',
+    subtitle: 'Injury or Accident',
+    icon: AlertTriangle,
+    color: 'red',
+    gradient: 'from-red-500 to-orange-500',
+  },
+  'near-miss': {
+    title: 'Near Miss Report',
+    subtitle: 'Close Call',
+    icon: AlertCircle,
+    color: 'yellow',
+    gradient: 'from-yellow-500 to-amber-500',
+  },
+  'complaint': {
+    title: 'Customer Complaint',
+    subtitle: 'Customer Concern',
+    icon: MessageSquare,
+    color: 'blue',
+    gradient: 'from-blue-500 to-cyan-500',
+  },
+};
+
+// Contract options
 const CONTRACT_OPTIONS = [
   { value: 'ukpn', label: 'UKPN', sublabel: 'UK Power Networks' },
   { value: 'openreach', label: 'Openreach', sublabel: 'BT Group' },
@@ -41,6 +71,7 @@ const CONTRACT_OPTIONS = [
   { value: 'other', label: 'Other', sublabel: 'Specify below' },
 ];
 
+// Role options
 const ROLE_OPTIONS = [
   { value: 'mobile-engineer', label: 'Mobile Engineer' },
   { value: 'workshop-pehq', label: 'Workshop (PE HQ)' },
@@ -51,61 +82,59 @@ const ROLE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ];
 
+// Body parts for injury selection
 const BODY_PARTS = [
   { value: 'head', label: 'Head', icon: '🧠' },
   { value: 'neck', label: 'Neck', icon: '🦴' },
-  { value: 'torso', label: 'Torso/Back', icon: '🫁' },
+  { value: 'torso', label: 'Torso', icon: '🫁' },
   { value: 'arms', label: 'Arms', icon: '💪' },
-  { value: 'hands', label: 'Hands/Fingers', icon: '🤚' },
+  { value: 'hands', label: 'Hands', icon: '🤚' },
   { value: 'legs', label: 'Legs', icon: '🦵' },
   { value: 'feet', label: 'Feet', icon: '🦶' },
 ];
 
-const MEDICAL_ASSISTANCE_OPTIONS = [
-  { value: 'none', label: 'No medical assistance needed' },
+// Medical assistance options
+const MEDICAL_OPTIONS = [
+  { value: 'none', label: 'No assistance needed' },
   { value: 'self', label: 'Self application' },
   { value: 'first-aider', label: 'First aider on site' },
-  { value: 'ambulance', label: 'Ambulance/A&E' },
-  { value: 'gp', label: 'GP/Hospital visit' },
+  { value: 'ambulance', label: 'Ambulance / A&E' },
+  { value: 'gp', label: 'GP / Hospital' },
 ];
 
-type ReportType = 'accident' | 'near-miss' | 'complaint';
 type Step = 1 | 2 | 3 | 4;
 
 interface FormData {
-  reportType: ReportType | '';
   contract: string;
   contractOther: string;
-  // Person details
   wasInvolved: boolean | null;
   personName: string;
   personRole: string;
-  personRoleOther: string;
   personContact: string;
-  // Incident details
   location: string;
   incidentDate: string;
   incidentTime: string;
   description: string;
   assetNumber: string;
-  // Witnesses
   hasWitnesses: boolean | null;
   witnessNames: string;
-  // Injury details (for accidents)
   hasInjuries: boolean | null;
   injuredBodyParts: string[];
   medicalAssistance: string;
-  // Complaint specifics
+  // Complaint specific
   complainantName: string;
   complainantRole: string;
   complainantContact: string;
-  complaintDescription: string;
-  // Files
+  // Photos
   photos: File[];
 }
 
 export default function PortalIncidentForm() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const reportType = getReportTypeFromPath(location.pathname);
+  const config = REPORT_CONFIGS[reportType];
+  
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -113,13 +142,11 @@ export default function PortalIncidentForm() {
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
-    reportType: '',
     contract: '',
     contractOther: '',
     wasInvolved: null,
     personName: '',
     personRole: '',
-    personRoleOther: '',
     personContact: '',
     location: '',
     incidentDate: new Date().toISOString().split('T')[0],
@@ -134,57 +161,35 @@ export default function PortalIncidentForm() {
     complainantName: '',
     complainantRole: '',
     complainantContact: '',
-    complaintDescription: '',
     photos: [],
   });
 
-  // Auto-detect location
+  // Total steps depends on report type
+  const totalSteps = reportType === 'complaint' ? 3 : 4;
+
+  // GPS location detection
   const detectLocation = () => {
     setGeolocating(true);
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            // Reverse geocode (in real app, call a geocoding API)
-            const coords = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-            setFormData((prev) => ({ ...prev, location: `GPS: ${coords}` }));
-          } catch {
-            setFormData((prev) => ({ ...prev, location: `GPS: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}` }));
-          } finally {
-            setGeolocating(false);
-          }
+        (position) => {
+          const coords = `GPS: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+          setFormData((prev) => ({ ...prev, location: coords }));
+          setGeolocating(false);
         },
         () => {
           setGeolocating(false);
-          alert('Could not detect location. Please enter manually.');
+          alert('Could not detect location');
         }
       );
     }
   };
 
-  // Voice recording for description
+  // Voice recording
   const toggleVoiceRecording = () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      if (!isRecording) {
-        recognition.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0].transcript)
-            .join('');
-          setFormData((prev) => ({ ...prev, description: prev.description + ' ' + transcript }));
-        };
-        recognition.start();
-        setIsRecording(true);
-      } else {
-        recognition.stop();
-        setIsRecording(false);
-      }
-    } else {
-      alert('Voice recording not supported in this browser');
+      setIsRecording(!isRecording);
+      // In production, implement actual speech recognition
     }
   };
 
@@ -207,15 +212,12 @@ export default function PortalIncidentForm() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Generate reference number
-      const refNumber = `INC-${Date.now().toString(36).toUpperCase()}`;
-      
-      // In production, this would POST to the API
+      const prefix = reportType === 'incident' ? 'INC' : reportType === 'near-miss' ? 'NM' : 'CMP';
+      const refNumber = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      
       setSubmittedRef(refNumber);
     } catch {
-      alert('Failed to submit. Please try again.');
+      alert('Failed to submit');
     } finally {
       setIsSubmitting(false);
     }
@@ -225,9 +227,9 @@ export default function PortalIncidentForm() {
   const canProceed = (): boolean => {
     switch (step) {
       case 1:
-        return !!formData.reportType && !!formData.contract;
+        return !!formData.contract;
       case 2:
-        if (formData.reportType === 'complaint') {
+        if (reportType === 'complaint') {
           return !!formData.complainantName && !!formData.location;
         }
         return formData.wasInvolved !== null && !!formData.personName && !!formData.location;
@@ -240,7 +242,7 @@ export default function PortalIncidentForm() {
     }
   };
 
-  // Render success screen
+  // Success screen
   if (submittedRef) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-green-900/20 to-slate-900 flex items-center justify-center p-4">
@@ -253,9 +255,6 @@ export default function PortalIncidentForm() {
           <div className="bg-white/5 border border-white/20 rounded-xl px-6 py-4 mb-6">
             <span className="text-2xl font-mono font-bold text-purple-400">{submittedRef}</span>
           </div>
-          <p className="text-sm text-gray-500 mb-6">
-            Save this reference to track your report status
-          </p>
           <div className="flex gap-3">
             <button
               onClick={() => navigate('/portal/track/' + submittedRef)}
@@ -279,103 +278,48 @@ export default function PortalIncidentForm() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-4">
           <button
-            onClick={() => (step === 1 ? navigate('/portal') : setStep((s) => (s - 1) as Step))}
-            className="flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
+            onClick={() => step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="hidden sm:inline">{step === 1 ? 'Back' : 'Previous'}</span>
+            <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-          
-          <div className="flex items-center gap-2">
-            <Shield className="w-6 h-6 text-purple-400" />
-            <span className="font-semibold text-white">Incident Report</span>
-          </div>
-
-          <div className="text-sm text-gray-400">
-            Step {step}/4
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <config.icon className={`w-5 h-5 text-${config.color}-400`} style={{ color: config.color === 'red' ? '#f87171' : config.color === 'yellow' ? '#facc15' : '#60a5fa' }} />
+              <span className="font-semibold text-white">{config.title}</span>
+            </div>
+            <div className="text-xs text-gray-500">Step {step} of {totalSteps}</div>
           </div>
         </div>
         
         {/* Progress bar */}
         <div className="h-1 bg-white/10">
           <div
-            className="h-full bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-300"
-            style={{ width: `${(step / 4) * 100}%` }}
+            className={`h-full bg-gradient-to-r ${config.gradient} transition-all duration-300`}
+            style={{ width: `${(step / totalSteps) * 100}%` }}
           />
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-32">
-        {/* Step 1: Type & Contract */}
+      <main className="max-w-lg mx-auto px-4 py-6 pb-28">
+        {/* Step 1: Contract */}
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-6">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">What are you reporting?</h1>
-              <p className="text-gray-400">Select the type of report</p>
+              <h1 className="text-xl font-bold text-white mb-1">Contract Details</h1>
+              <p className="text-gray-400 text-sm">Which contract does this relate to?</p>
             </div>
 
-            {/* Report Type Selection - Large touch targets */}
-            <div className="grid gap-3">
-              {[
-                { type: 'accident' as ReportType, icon: AlertTriangle, label: 'Injury / Accident', desc: 'Physical injury or accident', color: 'red' },
-                { type: 'near-miss' as ReportType, icon: AlertCircle, label: 'Near Miss', desc: 'Close call, no injury', color: 'yellow' },
-                { type: 'complaint' as ReportType, icon: MessageSquare, label: 'Customer Complaint', desc: 'Customer concern or issue', color: 'blue' },
-              ].map((item) => (
-                <button
-                  key={item.type}
-                  onClick={() => setFormData((prev) => ({ ...prev, reportType: item.type }))}
-                  className={`
-                    flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left
-                    ${formData.reportType === item.type
-                      ? `bg-${item.color}-500/20 border-${item.color}-500`
-                      : 'bg-white/5 border-white/20 hover:bg-white/10'
-                    }
-                  `}
-                  style={{
-                    backgroundColor: formData.reportType === item.type 
-                      ? item.color === 'red' ? 'rgba(239, 68, 68, 0.2)' 
-                      : item.color === 'yellow' ? 'rgba(234, 179, 8, 0.2)'
-                      : 'rgba(59, 130, 246, 0.2)'
-                      : undefined,
-                    borderColor: formData.reportType === item.type
-                      ? item.color === 'red' ? '#ef4444'
-                      : item.color === 'yellow' ? '#eab308'
-                      : '#3b82f6'
-                      : undefined,
-                  }}
-                >
-                  <div className={`
-                    p-3 rounded-xl
-                    ${item.color === 'red' ? 'bg-red-500/30 text-red-400' : ''}
-                    ${item.color === 'yellow' ? 'bg-yellow-500/30 text-yellow-400' : ''}
-                    ${item.color === 'blue' ? 'bg-blue-500/30 text-blue-400' : ''}
-                  `}>
-                    <item.icon className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-white font-semibold">{item.label}</div>
-                    <div className="text-gray-400 text-sm">{item.desc}</div>
-                  </div>
-                  {formData.reportType === item.type && (
-                    <Check className="w-6 h-6 text-green-400" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Contract Selection with Fuzzy Search */}
-            <div className="pt-4">
-              <FuzzySearchDropdown
-                label="Which contract does this relate to?"
-                options={CONTRACT_OPTIONS}
-                value={formData.contract}
-                onChange={(val) => setFormData((prev) => ({ ...prev, contract: val }))}
-                placeholder="Search contract..."
-                required
-              />
-            </div>
+            <FuzzySearchDropdown
+              label="Select Contract"
+              options={CONTRACT_OPTIONS}
+              value={formData.contract}
+              onChange={(val) => setFormData((prev) => ({ ...prev, contract: val }))}
+              placeholder="Search or select contract..."
+              required
+            />
 
             {formData.contract === 'other' && (
               <input
@@ -383,49 +327,44 @@ export default function PortalIncidentForm() {
                 value={formData.contractOther}
                 onChange={(e) => setFormData((prev) => ({ ...prev, contractOther: e.target.value }))}
                 placeholder="Specify contract..."
-                className="w-full px-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
               />
             )}
           </div>
         )}
 
-        {/* Step 2: People & Location */}
+        {/* Step 2: Person & Location */}
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">
-                {formData.reportType === 'complaint' ? 'Complaint Details' : 'Who was involved?'}
+              <h1 className="text-xl font-bold text-white mb-1">
+                {reportType === 'complaint' ? 'Complainant Details' : 'People & Location'}
               </h1>
-              <p className="text-gray-400">
-                {formData.reportType === 'complaint' ? 'Who raised the complaint?' : 'Tell us about the people involved'}
+              <p className="text-gray-400 text-sm">
+                {reportType === 'complaint' ? 'Who raised the complaint?' : 'Who was involved and where?'}
               </p>
             </div>
 
-            {formData.reportType !== 'complaint' && (
+            {reportType !== 'complaint' && (
               <>
                 {/* Were you involved? */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Were you directly involved?
                   </label>
                   <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: true, label: 'Yes, I was involved' },
-                      { value: false, label: 'No, someone else' },
-                    ].map((opt) => (
+                    {[true, false].map((val) => (
                       <button
-                        key={String(opt.value)}
+                        key={String(val)}
                         type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, wasInvolved: opt.value }))}
-                        className={`
-                          px-4 py-3 rounded-xl border-2 transition-all font-medium
-                          ${formData.wasInvolved === opt.value
+                        onClick={() => setFormData((prev) => ({ ...prev, wasInvolved: val }))}
+                        className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                          formData.wasInvolved === val
                             ? 'bg-purple-500/20 border-purple-500 text-white'
-                            : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                          }
-                        `}
+                            : 'bg-white/5 border-white/20 text-gray-300'
+                        }`}
                       >
-                        {opt.label}
+                        {val ? 'Yes' : 'No'}
                       </button>
                     ))}
                   </div>
@@ -434,7 +373,7 @@ export default function PortalIncidentForm() {
                 {/* Person Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    {formData.wasInvolved ? 'Your name' : 'Name of person involved'} <span className="text-red-400">*</span>
+                    {formData.wasInvolved ? 'Your Name' : 'Name of Person Involved'} *
                   </label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -443,7 +382,7 @@ export default function PortalIncidentForm() {
                       value={formData.personName}
                       onChange={(e) => setFormData((prev) => ({ ...prev, personName: e.target.value }))}
                       placeholder="Full name..."
-                      className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
                   </div>
                 </div>
@@ -459,13 +398,11 @@ export default function PortalIncidentForm() {
               </>
             )}
 
-            {formData.reportType === 'complaint' && (
+            {reportType === 'complaint' && (
               <>
                 {/* Complainant Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Complainant Name <span className="text-red-400">*</span>
-                  </label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Complainant Name *</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
@@ -473,22 +410,22 @@ export default function PortalIncidentForm() {
                       value={formData.complainantName}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantName: e.target.value }))}
                       placeholder="Full name..."
-                      className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
                   </div>
                 </div>
 
                 {/* Complainant Role */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Role/Title</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Their Role/Title</label>
                   <div className="relative">
                     <Building className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="text"
                       value={formData.complainantRole}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantRole: e.target.value }))}
-                      placeholder="e.g. Site Manager, Engineer..."
-                      className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      placeholder="e.g. Site Manager..."
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
                   </div>
                 </div>
@@ -503,7 +440,7 @@ export default function PortalIncidentForm() {
                       value={formData.complainantContact}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantContact: e.target.value }))}
                       placeholder="Phone or email..."
-                      className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
                   </div>
                 </div>
@@ -512,9 +449,7 @@ export default function PortalIncidentForm() {
 
             {/* Location */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Location <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Location *</label>
               <div className="relative">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -522,43 +457,42 @@ export default function PortalIncidentForm() {
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder="Where did this occur?"
-                  className="w-full pl-12 pr-24 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  className="w-full pl-12 pr-20 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                 />
                 <button
                   type="button"
                   onClick={detectLocation}
                   disabled={geolocating}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-500/20 text-purple-400 rounded-lg text-sm font-medium"
                 >
-                  {geolocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-                  GPS
+                  {geolocating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'GPS'}
                 </button>
               </div>
             </div>
 
             {/* Date & Time */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Date</label>
                 <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="date"
                     value={formData.incidentDate}
                     onChange={(e) => setFormData((prev) => ({ ...prev, incidentDate: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                    className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Time</label>
                 <div className="relative">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="time"
                     value={formData.incidentTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, incidentTime: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                    className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
               </div>
@@ -566,90 +500,66 @@ export default function PortalIncidentForm() {
           </div>
         )}
 
-        {/* Step 3: Details */}
+        {/* Step 3: Description & Details */}
         {step === 3 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">Describe what happened</h1>
-              <p className="text-gray-400">Provide as much detail as possible</p>
+              <h1 className="text-xl font-bold text-white mb-1">What Happened?</h1>
+              <p className="text-gray-400 text-sm">Describe the {reportType === 'complaint' ? 'complaint' : 'incident'} in detail</p>
             </div>
 
-            {/* Description with voice input */}
+            {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Description <span className="text-red-400">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Description *</label>
               <div className="relative">
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="What happened? Be specific about actions, conditions, and sequence of events..."
+                  placeholder="What happened? Be specific..."
                   rows={5}
-                  className="w-full px-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
                 />
                 <button
                   type="button"
                   onClick={toggleVoiceRecording}
-                  className={`
-                    absolute right-3 bottom-3 p-2.5 rounded-full transition-all
-                    ${isRecording
-                      ? 'bg-red-500 text-white animate-pulse'
-                      : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
-                    }
-                  `}
-                  title="Voice to text"
+                  className={`absolute right-3 bottom-3 p-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-purple-500/20 text-purple-400'}`}
                 >
-                  {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {isRecording ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5" />}
                 </button>
               </div>
-              {isRecording && (
-                <p className="text-sm text-red-400 mt-2 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  Recording... Tap to stop
-                </p>
-              )}
             </div>
 
             {/* Asset Number */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Asset Number / Vehicle Registration
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Asset / Vehicle Registration</label>
               <div className="relative">
                 <Truck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
                   value={formData.assetNumber}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetNumber: e.target.value.toUpperCase() }))}
-                  placeholder="e.g. PN22P102, BD21NTJ..."
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 uppercase"
+                  placeholder="e.g. PN22P102..."
+                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 uppercase"
                 />
               </div>
             </div>
 
             {/* Witnesses */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Were there any witnesses?
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Any witnesses?</label>
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: true, label: 'Yes' },
-                  { value: false, label: 'No' },
-                ].map((opt) => (
+                {[true, false].map((val) => (
                   <button
-                    key={String(opt.value)}
+                    key={String(val)}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, hasWitnesses: opt.value }))}
-                    className={`
-                      px-4 py-3 rounded-xl border-2 transition-all font-medium
-                      ${formData.hasWitnesses === opt.value
+                    onClick={() => setFormData((prev) => ({ ...prev, hasWitnesses: val }))}
+                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                      formData.hasWitnesses === val
                         ? 'bg-purple-500/20 border-purple-500 text-white'
-                        : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                      }
-                    `}
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
                   >
-                    {opt.label}
+                    {val ? 'Yes' : 'No'}
                   </button>
                 ))}
               </div>
@@ -665,125 +575,108 @@ export default function PortalIncidentForm() {
                     value={formData.witnessNames}
                     onChange={(e) => setFormData((prev) => ({ ...prev, witnessNames: e.target.value }))}
                     placeholder="Names of witnesses..."
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                   />
                 </div>
               </div>
             )}
+          </div>
+        )}
 
-            {/* Injury Details (for accidents) */}
-            {formData.reportType === 'accident' && (
+        {/* Step 4: Injuries & Photos (incident only) */}
+        {step === 4 && reportType !== 'complaint' && (
+          <div className="space-y-5">
+            <div>
+              <h1 className="text-xl font-bold text-white mb-1">Injuries & Evidence</h1>
+              <p className="text-gray-400 text-sm">Any injuries and supporting photos</p>
+            </div>
+
+            {/* Injuries */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Any injuries sustained?</label>
+              <div className="grid grid-cols-2 gap-3">
+                {[true, false].map((val) => (
+                  <button
+                    key={String(val)}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, hasInjuries: val }))}
+                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                      formData.hasInjuries === val
+                        ? val ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-green-500/20 border-green-500 text-green-400'
+                        : 'bg-white/5 border-white/20 text-gray-300'
+                    }`}
+                  >
+                    {val ? 'Yes' : 'No'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {formData.hasInjuries && (
               <>
+                {/* Body Parts */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Were any injuries sustained?
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: true, label: 'Yes' },
-                      { value: false, label: 'No' },
-                    ].map((opt) => (
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Which body parts? (tap all that apply)</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {BODY_PARTS.map((part) => (
                       <button
-                        key={String(opt.value)}
+                        key={part.value}
                         type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, hasInjuries: opt.value }))}
-                        className={`
-                          px-4 py-3 rounded-xl border-2 transition-all font-medium
-                          ${formData.hasInjuries === opt.value
-                            ? 'bg-purple-500/20 border-purple-500 text-white'
-                            : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                          }
-                        `}
+                        onClick={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            injuredBodyParts: prev.injuredBodyParts.includes(part.value)
+                              ? prev.injuredBodyParts.filter((p) => p !== part.value)
+                              : [...prev.injuredBodyParts, part.value],
+                          }));
+                        }}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                          formData.injuredBodyParts.includes(part.value)
+                            ? 'bg-red-500/20 border-red-500'
+                            : 'bg-white/5 border-white/20'
+                        }`}
                       >
-                        {opt.label}
+                        <span className="text-xl">{part.icon}</span>
+                        <span className="text-xs text-white">{part.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {formData.hasInjuries && (
-                  <>
-                    {/* Body Part Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        Which body parts were injured? (tap all that apply)
-                      </label>
-                      <div className="grid grid-cols-4 gap-2">
-                        {BODY_PARTS.map((part) => (
-                          <button
-                            key={part.value}
-                            type="button"
-                            onClick={() => {
-                              setFormData((prev) => ({
-                                ...prev,
-                                injuredBodyParts: prev.injuredBodyParts.includes(part.value)
-                                  ? prev.injuredBodyParts.filter((p) => p !== part.value)
-                                  : [...prev.injuredBodyParts, part.value],
-                              }));
-                            }}
-                            className={`
-                              flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all
-                              ${formData.injuredBodyParts.includes(part.value)
-                                ? 'bg-red-500/20 border-red-500 text-white'
-                                : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                              }
-                            `}
-                          >
-                            <span className="text-2xl">{part.icon}</span>
-                            <span className="text-xs">{part.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Medical Assistance */}
-                    <FuzzySearchDropdown
-                      label="Medical assistance required?"
-                      options={MEDICAL_ASSISTANCE_OPTIONS}
-                      value={formData.medicalAssistance}
-                      onChange={(val) => setFormData((prev) => ({ ...prev, medicalAssistance: val }))}
-                      placeholder="Select..."
-                    />
-                  </>
-                )}
+                {/* Medical Assistance */}
+                <FuzzySearchDropdown
+                  label="Medical assistance?"
+                  options={MEDICAL_OPTIONS}
+                  value={formData.medicalAssistance}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, medicalAssistance: val }))}
+                  placeholder="Select..."
+                />
               </>
             )}
-          </div>
-        )}
 
-        {/* Step 4: Photos & Review */}
-        {step === 4 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+            {/* Photos */}
             <div>
-              <h1 className="text-2xl font-bold text-white mb-2">Photos & Submit</h1>
-              <p className="text-gray-400">Add supporting photos and review your report</p>
-            </div>
-
-            {/* Photo Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                Upload Photos
-              </label>
-              <div className="grid grid-cols-3 gap-3">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Photos</label>
+              <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
                       src={URL.createObjectURL(photo)}
-                      alt={`Upload ${index + 1}`}
+                      alt={`Photo ${index + 1}`}
                       className="w-full h-full object-cover rounded-xl"
                     />
                     <button
                       type="button"
                       onClick={() => removePhoto(index)}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                <label className="aspect-square flex flex-col items-center justify-center bg-white/5 border-2 border-dashed border-white/20 rounded-xl cursor-pointer hover:bg-white/10 hover:border-white/30 transition-all">
-                  <Camera className="w-8 h-8 text-gray-400 mb-2" />
-                  <span className="text-xs text-gray-400">Add Photo</span>
+                <label className="aspect-square flex flex-col items-center justify-center bg-white/5 border-2 border-dashed border-white/20 rounded-xl cursor-pointer hover:bg-white/10">
+                  <Camera className="w-6 h-6 text-gray-400" />
+                  <span className="text-xs text-gray-400 mt-1">Add</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -795,66 +688,30 @@ export default function PortalIncidentForm() {
                 </label>
               </div>
             </div>
-
-            {/* Summary */}
-            <div className="bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3">
-              <h3 className="font-semibold text-white flex items-center gap-2">
-                <FileText className="w-5 h-5 text-purple-400" />
-                Report Summary
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Type:</span>
-                  <span className="text-white capitalize">{formData.reportType?.replace('-', ' ')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Contract:</span>
-                  <span className="text-white">{CONTRACT_OPTIONS.find((c) => c.value === formData.contract)?.label}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Location:</span>
-                  <span className="text-white truncate ml-4">{formData.location || 'Not specified'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Date/Time:</span>
-                  <span className="text-white">{formData.incidentDate} {formData.incidentTime}</span>
-                </div>
-                {formData.assetNumber && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Asset:</span>
-                    <span className="text-white">{formData.assetNumber}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Photos:</span>
-                  <span className="text-white">{formData.photos.length} attached</span>
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </main>
 
       {/* Fixed Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/50 backdrop-blur-xl border-t border-white/10 p-4">
-        <div className="max-w-2xl mx-auto flex gap-3">
+        <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
             <button
               type="button"
               onClick={() => setStep((s) => (s - 1) as Step)}
-              className="px-6 py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
+              className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
             >
               <ChevronLeft className="w-5 h-5" />
               Back
             </button>
           )}
           
-          {step < 4 ? (
+          {step < totalSteps ? (
             <button
               type="button"
               onClick={() => setStep((s) => (s + 1) as Step)}
               disabled={!canProceed()}
-              className="flex-1 px-6 py-3.5 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              className={`flex-1 px-5 py-3 bg-gradient-to-r ${config.gradient} disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2`}
             >
               Continue
               <ChevronRight className="w-5 h-5" />
@@ -864,7 +721,7 @@ export default function PortalIncidentForm() {
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="flex-1 px-6 py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              className="flex-1 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>
@@ -874,7 +731,7 @@ export default function PortalIncidentForm() {
               ) : (
                 <>
                   <Check className="w-5 h-5" />
-                  Submit Report
+                  Submit
                 </>
               )}
             </button>
