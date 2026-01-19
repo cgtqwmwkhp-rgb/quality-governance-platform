@@ -16,9 +16,7 @@ from typing import Optional
 from fastapi import APIRouter
 
 from src.api.dependencies import CurrentUser
-from src.domain.services.compliance_automation_service import (
-    compliance_automation_service,
-)
+from src.domain.services.compliance_automation_service import compliance_automation_service
 
 router = APIRouter()
 
