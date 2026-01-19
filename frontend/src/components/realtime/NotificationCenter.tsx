@@ -13,7 +13,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
-  Check,
   CheckCheck,
   X,
   AlertTriangle,
@@ -26,7 +25,6 @@ import {
   User,
   ChevronRight,
   Settings,
-  Trash2,
 } from 'lucide-react';
 
 interface Notification {
@@ -52,7 +50,6 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 

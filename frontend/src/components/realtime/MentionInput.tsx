@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
-import { User, Search, X } from 'lucide-react';
+import { User, Search } from 'lucide-react';
 
 interface MentionUser {
   id: number;
@@ -46,7 +46,6 @@ const MentionInput: React.FC<MentionInputProps> = ({
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
   const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
   const [users, setUsers] = useState<MentionUser[]>([]);
-  const [loading, setLoading] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -218,23 +217,6 @@ const MentionInput: React.FC<MentionInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Render mention chips in display
-  const renderDisplayValue = () => {
-    // Replace @[Name] with highlighted chips
-    const parts = value.split(/(@\[[^\]]+\])/g);
-    return parts.map((part, i) => {
-      if (part.match(/^@\[[^\]]+\]$/)) {
-        const name = part.slice(2, -1);
-        return (
-          <span key={i} className="inline-flex items-center px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-sm">
-            @{name}
-          </span>
-        );
-      }
-      return part;
-    });
-  };
-
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
@@ -284,20 +266,15 @@ const MentionInput: React.FC<MentionInputProps> = ({
 
           {/* User list */}
           <div className="max-h-48 overflow-y-auto custom-scrollbar">
-            {loading ? (
-              <div className="p-4 text-center text-gray-400">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-emerald-500 border-t-transparent mx-auto" />
-              </div>
-            ) : (
-              users.map((user, index) => (
-                <button
-                  key={user.id}
-                  onClick={() => insertMention(user)}
-                  className={`
-                    w-full px-3 py-2 flex items-center gap-3 text-left transition-colors
-                    ${index === selectedIndex ? 'bg-emerald-600 text-white' : 'hover:bg-slate-700 text-gray-300'}
-                  `}
-                >
+            {users.map((user, index) => (
+              <button
+                key={user.id}
+                onClick={() => insertMention(user)}
+                className={`
+                  w-full px-3 py-2 flex items-center gap-3 text-left transition-colors
+                  ${index === selectedIndex ? 'bg-emerald-600 text-white' : 'hover:bg-slate-700 text-gray-300'}
+                `}
+              >
                   {/* Avatar */}
                   <div className={`
                     w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
@@ -317,9 +294,8 @@ const MentionInput: React.FC<MentionInputProps> = ({
                       {user.email}
                     </div>
                   </div>
-                </button>
-              ))
-            )}
+              </button>
+            ))}
           </div>
 
           {/* Keyboard hints */}
