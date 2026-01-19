@@ -167,7 +167,7 @@ Respond with JSON matching this schema:
 
         # Extract keywords using simple frequency analysis
         words = re.findall(r"\b[a-zA-Z]{4,}\b", content.lower())
-        word_freq = {}
+        word_freq: dict[str, int] = {}
         for word in words:
             if word not in {
                 "that",
@@ -225,7 +225,7 @@ Respond with JSON matching this schema:
     ) -> list[DocumentChunk]:
         """Split document into semantic chunks for vector embedding."""
 
-        chunks = []
+        chunks: list[DocumentChunk] = []
 
         # Try to split by sections/headings first
         sections = self._split_by_sections(content)
