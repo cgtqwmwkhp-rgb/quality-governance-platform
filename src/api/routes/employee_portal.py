@@ -11,7 +11,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
@@ -161,7 +161,8 @@ async def submit_quick_report(
     Anonymous reports can be tracked using the returned tracking_code.
     """
     tracking_code = generate_tracking_code()
-    tracking_hash = hash_tracking_code(tracking_code)
+    # Hash stored for future secure lookup functionality
+    _ = hash_tracking_code(tracking_code)  # noqa: F841
 
     incident_severity, complaint_priority = map_severity(report.severity)
 

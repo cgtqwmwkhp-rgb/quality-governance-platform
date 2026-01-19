@@ -8,7 +8,6 @@ Enterprise document management with:
 - Access control
 """
 
-import io
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -25,10 +24,7 @@ from src.domain.models.document import (
     DocumentSearchLog,
     DocumentStatus,
     DocumentType,
-    DocumentVersion,
     FileType,
-    IndexJob,
-    IndexJobStatus,
     SensitivityLevel,
 )
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
