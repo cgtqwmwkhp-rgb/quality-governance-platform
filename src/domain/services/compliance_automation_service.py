@@ -274,10 +274,7 @@ class ComplianceAutomationService:
             certificates = [c for c in certificates if c["status"] == status]
         if expiring_within_days:
             cutoff = now + timedelta(days=expiring_within_days)
-            certificates = [
-                c for c in certificates
-                if datetime.strptime(c["expiry_date"], "%Y-%m-%d") <= cutoff
-            ]
+            certificates = [c for c in certificates if datetime.strptime(c["expiry_date"], "%Y-%m-%d") <= cutoff]
 
         return certificates
 
@@ -349,10 +346,7 @@ class ComplianceAutomationService:
             audits = [a for a in audits if a["status"] == "overdue"]
         elif upcoming_days:
             cutoff = now + timedelta(days=upcoming_days)
-            audits = [
-                a for a in audits
-                if datetime.strptime(a["next_due_date"], "%Y-%m-%d") <= cutoff
-            ]
+            audits = [a for a in audits if datetime.strptime(a["next_due_date"], "%Y-%m-%d") <= cutoff]
 
         return audits
 

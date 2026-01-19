@@ -294,15 +294,11 @@ class WorkflowEngine:
             "steps": self._initialize_steps(template["steps"], now),
         }
 
-        logger.info(
-            f"Started workflow {instance['id']} from template {template_code}"
-        )
+        logger.info(f"Started workflow {instance['id']} from template {template_code}")
 
         return instance
 
-    def _initialize_steps(
-        self, step_definitions: List[Dict], start_time: datetime
-    ) -> List[Dict[str, Any]]:
+    def _initialize_steps(self, step_definitions: List[Dict], start_time: datetime) -> List[Dict[str, Any]]:
         """Initialize step records from definitions."""
         steps = []
         cumulative_hours = 0
@@ -596,9 +592,7 @@ class WorkflowEngine:
             "priority": "normal",
         }
 
-    def _matches_condition(
-        self, entity_data: Dict[str, Any], condition: Dict[str, Any]
-    ) -> bool:
+    def _matches_condition(self, entity_data: Dict[str, Any], condition: Dict[str, Any]) -> bool:
         """Check if entity matches a routing condition."""
         for key, value in condition.items():
             if key not in entity_data:

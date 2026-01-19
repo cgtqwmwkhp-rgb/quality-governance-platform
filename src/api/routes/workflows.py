@@ -266,9 +266,7 @@ async def advance_workflow(
 
 
 @router.post("/instances/{workflow_id}/cancel")
-async def cancel_workflow(
-    workflow_id: str, current_user: CurrentUser, reason: Optional[str] = None
-):
+async def cancel_workflow(workflow_id: str, current_user: CurrentUser, reason: Optional[str] = None):
     """Cancel a workflow instance."""
     return {
         "workflow_id": workflow_id,
@@ -292,9 +290,7 @@ async def get_pending_approvals(current_user: CurrentUser):
 
 
 @router.post("/approvals/{approval_id}/approve")
-async def approve_request(
-    approval_id: str, current_user: CurrentUser, response: ApprovalResponse
-):
+async def approve_request(approval_id: str, current_user: CurrentUser, response: ApprovalResponse):
     """Approve an approval request."""
     result = workflow_engine.approve(
         approval_id=approval_id,
@@ -305,9 +301,7 @@ async def approve_request(
 
 
 @router.post("/approvals/{approval_id}/reject")
-async def reject_request(
-    approval_id: str, current_user: CurrentUser, response: ApprovalResponse
-):
+async def reject_request(approval_id: str, current_user: CurrentUser, response: ApprovalResponse):
     """Reject an approval request."""
     if not response.reason:
         raise HTTPException(status_code=400, detail="Reason required for rejection")
@@ -321,9 +315,7 @@ async def reject_request(
 
 
 @router.post("/approvals/bulk-approve")
-async def bulk_approve_requests(
-    request: BulkApprovalRequest, current_user: CurrentUser
-):
+async def bulk_approve_requests(request: BulkApprovalRequest, current_user: CurrentUser):
     """Bulk approve multiple requests."""
     result = workflow_engine.bulk_approve(
         approval_ids=request.approval_ids,
@@ -346,9 +338,7 @@ async def get_pending_escalations(current_user: CurrentUser):
 
 
 @router.post("/instances/{workflow_id}/escalate")
-async def escalate_workflow(
-    workflow_id: str, request: EscalationRequest, current_user: CurrentUser
-):
+async def escalate_workflow(workflow_id: str, request: EscalationRequest, current_user: CurrentUser):
     """Escalate a workflow."""
     result = workflow_engine.escalate(
         workflow_id=workflow_id,
