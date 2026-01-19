@@ -231,7 +231,7 @@ async def delete_dashboard(dashboard_id: int, current_user: CurrentUser):
 async def get_widget_data(
     widget_id: int,
     time_range: str = Query("last_30_days"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get data for a specific widget."""
     # Mock widget data based on ID
@@ -275,7 +275,7 @@ async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
 @router.get("/kpis")
 async def get_kpi_summary(
     time_range: str = Query("last_30_days"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get summary KPIs across all modules."""
     return analytics_service.get_kpi_summary(time_range)
@@ -288,7 +288,7 @@ async def get_trend_data(
     granularity: str = Query("daily"),
     time_range: str = Query("last_30_days"),
     group_by: Optional[str] = None,
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get trend data for charting."""
     return analytics_service.get_trend_data(
@@ -306,7 +306,7 @@ async def get_drill_down_data(
     dimension: str = Query(...),
     value: str = Query(...),
     time_range: str = Query("last_30_days"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get drill-down data for a specific dimension value."""
     # Mock drill-down data
@@ -384,7 +384,7 @@ async def generate_forecast(request: ForecastRequest, current_user: CurrentUser)
 @router.get("/benchmarks")
 async def get_benchmark_summary(
     industry: str = Query("utilities"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get benchmark comparison summary."""
     return analytics_service.get_benchmark_summary(industry)
@@ -395,7 +395,7 @@ async def get_benchmark_comparison(
     metric: str,
     industry: str = Query("utilities"),
     region: str = Query("uk"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get benchmark comparison for a specific metric."""
     return analytics_service.get_benchmark_comparison(metric, industry, region)
@@ -409,7 +409,7 @@ async def get_benchmark_comparison(
 @router.get("/costs/non-compliance")
 async def get_cost_of_non_compliance(
     time_range: str = Query("last_12_months"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Calculate cost of non-compliance."""
     return analytics_service.calculate_cost_of_non_compliance(time_range)
@@ -431,7 +431,7 @@ async def record_cost(cost: CostRecord, current_user: CurrentUser):
 async def get_cost_breakdown(
     time_range: str = Query("last_12_months"),
     group_by: str = Query("category"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Get cost breakdown by category."""
     costs = analytics_service.calculate_cost_of_non_compliance(time_range)
@@ -491,7 +491,7 @@ async def update_investment_actuals(
 @router.get("/reports/executive-summary")
 async def get_executive_summary(
     time_range: str = Query("last_month"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Generate executive summary data."""
     return analytics_service.generate_executive_summary(time_range)
@@ -502,7 +502,7 @@ async def generate_report(
     report_type: str,
     format: str = Query("pdf"),
     time_range: str = Query("last_month"),
-    current_user: Optional[CurrentUser] = None,
+    current_user: CurrentUser,
 ):
     """Generate and queue a report for download."""
     return {
