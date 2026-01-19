@@ -252,53 +252,23 @@ jobs:
           echo "- **Name**: ${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: https://${{ env.APP_NAME }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
 
-      - name: Create Service Principal for Production
+      - name: Configure Existing Service Principal
         id: sp
         run: |
-          SUBSCRIPTION_ID="${{ steps.sub.outputs.subscription_id }}"
-          SP_NAME="sp-github-qgp-prod"
           ACR_NAME="${{ steps.acr.outputs.acr_name }}"
           
-          echo "Creating Service Principal: $SP_NAME"
+          echo "## Service Principal Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Since production resources are in the same resource group as staging," >> $GITHUB_STEP_SUMMARY
+          echo "you can reuse the existing \`AZURE_CREDENTIALS\` secret." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For production deployment workflow, set:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`AZURE_PROD_CREDENTIALS\` = same as \`AZURE_CREDENTIALS\`" >> $GITHUB_STEP_SUMMARY
           
-          # Check if SP exists
-          EXISTING_SP=$(az ad sp list --display-name $SP_NAME --query "[0].appId" -o tsv 2>/dev/null || echo "")
-          
-          if [ -n "$EXISTING_SP" ]; then
-            echo "Service Principal exists, resetting credentials..."
-            SP_JSON=$(az ad sp credential reset --id $EXISTING_SP --query "{clientId:appId, clientSecret:password, tenantId:tenant, subscriptionId:'$SUBSCRIPTION_ID'}" -o json)
-            SP_APP_ID=$EXISTING_SP
-          else
-            echo "Creating new Service Principal..."
-            SP_JSON=$(az ad sp create-for-rbac \
-              --name $SP_NAME \
-              --role Contributor \
-              --scopes /subscriptions/$SUBSCRIPTION_ID/resourceGroups/${{ env.RG_NAME }} \
-              --sdk-auth)
-            SP_APP_ID=$(echo $SP_JSON | jq -r '.clientId')
-          fi
-          
-          # Grant ACR push permission
-          az role assignment create \
-            --assignee $SP_APP_ID \
-            --role AcrPush \
-            --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/${{ env.RG_NAME }}/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME \
-            2>/dev/null || echo "ACR role may already exist"
-          
-          # Grant Key Vault access
-          az keyvault set-policy \
-            --name ${{ env.KV_NAME }} \
-            --spn $SP_APP_ID \
-            --secret-permissions get list
-          
-          # Store credentials as output (will be masked in logs)
-          echo "credentials<<EOF" >> $GITHUB_OUTPUT
-          echo "$SP_JSON" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-          echo "## Service Principal" >> $GITHUB_STEP_SUMMARY
-          echo "- **Name**: $SP_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "- **Permissions**: Contributor on ${{ env.RG_NAME }}, AcrPush, Key Vault secrets" >> $GITHUB_STEP_SUMMARY
+          # Grant Key Vault access to the existing SP (from AZURE_CREDENTIALS)
+          # We'll use the webapp's managed identity instead for key vault access
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Web App managed identity has Key Vault access (configured in previous step)" >> $GITHUB_STEP_SUMMARY
 
       - name: Output GitHub Secrets
         run: |
@@ -316,7 +286,7 @@ jobs:
           echo "   ${{ env.APP_NAME }}"
           echo ""
           echo "3. AZURE_PROD_CREDENTIALS:"
-          echo "   (See workflow artifacts or Step Summary)"
+          echo "   (Copy the value from AZURE_CREDENTIALS - same service principal)"
           echo ""
           echo "=============================================="
           
@@ -328,13 +298,13 @@ jobs:
           echo "|-------------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| \`PROD_ACR_NAME\` | \`${{ steps.acr.outputs.acr_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`PROD_AZURE_WEBAPP_NAME\` | \`${{ env.APP_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`AZURE_PROD_CREDENTIALS\` | See artifact download |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`AZURE_PROD_CREDENTIALS\` | Copy from \`AZURE_CREDENTIALS\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Save Credentials Artifact
         run: |
           mkdir -p production-secrets
           
-          cat > production-secrets/github-secrets.txt << 'EOF'
+          cat > production-secrets/github-secrets.txt << EOF
           ==========================================
           GITHUB SECRETS FOR PRODUCTION DEPLOYMENT
           ==========================================
@@ -348,7 +318,9 @@ jobs:
           ${{ env.APP_NAME }}
           
           3. AZURE_PROD_CREDENTIALS
-          ${{ steps.sp.outputs.credentials }}
+          Copy the value from your existing AZURE_CREDENTIALS secret.
+          Since production is in the same resource group (rg-qgp-staging),
+          the existing service principal has the necessary permissions.
           
           ==========================================
           NEXT STEPS
