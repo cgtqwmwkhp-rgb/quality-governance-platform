@@ -340,7 +340,7 @@ async def list_templates(
         filtered = [
             t
             for t in filtered
-            if search_lower in t["name"].lower() or search_lower in (t.get("description") or "").lower()
+            if search_lower in str(t["name"]).lower() or search_lower in str(t.get("description") or "").lower()
         ]
     if category and category != "all":
         filtered = [t for t in filtered if t["category"] == category]
@@ -352,13 +352,13 @@ async def list_templates(
     # Sort
     reverse = sort_order == "desc"
     if sort_by == "name":
-        filtered.sort(key=lambda x: x["name"], reverse=reverse)
+        filtered.sort(key=lambda x: str(x["name"]), reverse=reverse)
     elif sort_by == "usage":
-        filtered.sort(key=lambda x: x.get("usage_count", 0), reverse=reverse)
+        filtered.sort(key=lambda x: int(x.get("usage_count") or 0), reverse=reverse)
     elif sort_by == "score":
-        filtered.sort(key=lambda x: x.get("avg_score") or 0, reverse=reverse)
+        filtered.sort(key=lambda x: float(x.get("avg_score") or 0), reverse=reverse)
     else:
-        filtered.sort(key=lambda x: x["updated_at"], reverse=reverse)
+        filtered.sort(key=lambda x: str(x["updated_at"]), reverse=reverse)
 
     # Paginate
     total = len(filtered)
@@ -367,7 +367,7 @@ async def list_templates(
     items = filtered[start:end]
 
     return PaginatedTemplateResponse(
-        items=[TemplateListSchema(**t) for t in items],
+        items=[TemplateListSchema(**t) for t in items],  # type: ignore[arg-type]
         total=total,
         page=page,
         page_size=page_size,

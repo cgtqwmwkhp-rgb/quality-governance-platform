@@ -109,15 +109,15 @@ class AuditTemplate(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     version = Column(String(20), nullable=False, default="1.0.0")
-    status = Column(SQLEnum(TemplateStatus), nullable=False, default=TemplateStatus.DRAFT)
-    category = Column(SQLEnum(TemplateCategory), nullable=False, default=TemplateCategory.QUALITY)
+    status: TemplateStatus = Column(SQLEnum(TemplateStatus), nullable=False, default=TemplateStatus.DRAFT)  # type: ignore[assignment]
+    category: TemplateCategory = Column(SQLEnum(TemplateCategory), nullable=False, default=TemplateCategory.QUALITY)  # type: ignore[assignment]
     subcategory = Column(String(100), nullable=True)
 
     # ISO Standards (stored as JSON array)
     iso_standards = Column(JSON, nullable=True, default=list)
 
     # Scoring Configuration
-    scoring_method = Column(SQLEnum(ScoringMethod), nullable=False, default=ScoringMethod.WEIGHTED)
+    scoring_method: ScoringMethod = Column(SQLEnum(ScoringMethod), nullable=False, default=ScoringMethod.WEIGHTED)  # type: ignore[assignment]
     pass_threshold = Column(Float, nullable=False, default=80.0)
 
     # Metadata
@@ -208,12 +208,12 @@ class AuditTemplateQuestion(Base):
     guidance = Column(Text, nullable=True)  # Auditor guidance
 
     # Question Type & Settings
-    question_type = Column(SQLEnum(QuestionType), nullable=False, default=QuestionType.YES_NO)
+    question_type: QuestionType = Column(SQLEnum(QuestionType), nullable=False, default=QuestionType.YES_NO)  # type: ignore[assignment]
     required = Column(Boolean, default=True)
 
     # Scoring
     weight = Column(Float, nullable=False, default=1.0)
-    risk_level = Column(SQLEnum(RiskLevel), nullable=True)
+    risk_level: Optional[RiskLevel] = Column(SQLEnum(RiskLevel), nullable=True)  # type: ignore[assignment]
     failure_triggers_action = Column(Boolean, default=False)
 
     # Evidence Requirements
