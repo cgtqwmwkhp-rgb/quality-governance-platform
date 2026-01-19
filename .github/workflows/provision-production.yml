@@ -25,15 +25,16 @@ on:
         type: boolean
         default: true
       app_service_sku:
-        description: 'App Service Plan SKU (B1=Basic, S1=Standard, P1V2=Premium)'
+        description: 'App Service Plan SKU (F1=Free, B1=Basic, S1=Standard, P1V2=Premium)'
         required: true
         type: choice
         options:
+          - F1
           - B1
           - B2
           - S1
           - P1V2
-        default: 'B1'
+        default: 'F1'
 
 env:
   LOCATION: westeurope
