@@ -1,7 +1,16 @@
 name: Deploy to Azure Production
 
-# Production deployment with manual approval gate
+# Auto-deploy to production after staging succeeds
 on:
+  # Auto-trigger after staging deployment
+  workflow_run:
+    workflows: ["Deploy to Azure Staging"]
+    types:
+      - completed
+    branches:
+      - main
+  
+  # Also allow manual trigger with verification
   workflow_dispatch:
     inputs:
       staging_verified:
@@ -13,6 +22,8 @@ on:
         description: 'Reason for production deployment'
         required: true
         type: string
+  
+  # Also trigger on release
   release:
     types: [published]
 
@@ -22,10 +33,15 @@ env:
   IMAGE_NAME: quality-governance-platform
 
 jobs:
-  # Gate: Verify staging was tested
+  # Gate: Verify staging succeeded (for auto-trigger) or manual approval
   pre-deployment-checks:
     name: Pre-Deployment Checks
     runs-on: ubuntu-latest
+    # Only run if staging succeeded OR manual trigger OR release
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'release'
     outputs:
       approved: ${{ steps.check.outputs.approved }}
     
@@ -33,7 +49,11 @@ jobs:
       - name: Validate deployment request
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "✅ Auto-deployment triggered by successful staging"
+            echo "Staging workflow: ${{ github.event.workflow_run.html_url }}"
+            echo "approved=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
             echo "✅ Release-triggered deployment"
             echo "approved=true" >> $GITHUB_OUTPUT
           elif [[ "${{ github.event.inputs.staging_verified }}" == "true" ]]; then
@@ -42,7 +62,6 @@ jobs:
             echo "approved=true" >> $GITHUB_OUTPUT
           else
             echo "❌ Staging verification required!"
-            echo "Please verify staging before production deployment."
             echo "approved=false" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -57,7 +76,10 @@ jobs:
           echo "| **Actor** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Ref** | ${{ github.ref }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **SHA** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Reason** | ${{ github.event.inputs.reason || 'Release publication' }} |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "| **Staging Run** | [View](${{ github.event.workflow_run.html_url }}) |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| **Reason** | ${{ github.event.inputs.reason || 'Auto-deploy after staging' }} |" >> $GITHUB_STEP_SUMMARY
 
   build-and-deploy:
     name: Build and Deploy to Production
@@ -216,7 +238,7 @@ jobs:
           echo "| **Image** | ${{ env.IMAGE_TAG }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **URL** | https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deployed By** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Reason** | ${{ github.event.inputs.reason || 'Release publication' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Status** | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
 
   # Notify on completion
@@ -232,6 +254,7 @@ jobs:
         run: |
           echo "🎉 Production deployment successful!"
           echo "Deployed by: ${{ github.actor }}"
+          echo "Trigger: ${{ github.event_name }}"
           echo "Commit: ${{ github.sha }}"
           # Add Slack/Teams notification here if configured
       
