@@ -1,9 +1,8 @@
 # Core Framework
-fastapi>=0.128.0
-starlette>=0.50.0
-uvicorn[standard]==0.27.0
-pydantic>=2.12.5
-pydantic-settings==2.1.0
+fastapi>=0.109.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
 
 # Database
 sqlalchemy==2.0.25
@@ -20,32 +19,35 @@ python-multipart==0.0.18
 
 # Email Processing
 aiosmtplib==3.0.1
-email-validator==2.1.0
+email-validator>=2.1.1,<3.0.0
 
 # Azure Integration
 azure-storage-blob==12.19.0
 azure-identity==1.17.0
 
 # Utilities
-python-dotenv==1.0.0
-httpx==0.26.0
-tenacity==8.2.3
+python-dotenv>=1.0.0,<2.0.0
+httpx>=0.26.0,<1.0.0
+tenacity>=8.2.0,<9.0.0
 
 # Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
-pytest-cov==4.1.0
-httpx==0.26.0
-factory-boy==3.3.0
+pytest>=7.4.0,<9.0.0
+pytest-asyncio>=0.23.0,<1.0.0
+pytest-cov>=4.1.0,<6.0.0
+factory-boy>=3.3.0,<4.0.0
 
 # Code Quality
-black==24.3.0
-isort==5.13.2
-flake8==7.0.0
-mypy==1.8.0
+black>=24.1.0,<25.0.0
+isort>=5.13.0,<6.0.0
+flake8>=7.0.0,<8.0.0
+mypy>=1.8.0,<2.0.0
+
+# Security Scanning
+bandit>=1.7.0,<2.0.0
+safety>=2.3.0,<3.0.0
 
 # Documentation
-mkdocs==1.5.3
-mkdocs-material==9.5.3
-python-json-logger==4.0.0
-starlette-context==0.4.0
+mkdocs>=1.5.0,<2.0.0
+mkdocs-material>=9.5.0,<10.0.0
+python-json-logger>=2.0.0,<3.0.0
+starlette-context>=0.3.0,<1.0.0
