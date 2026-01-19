@@ -4,11 +4,21 @@ name: Provision Production Azure Resources
 on:
   workflow_dispatch:
     inputs:
+      resource_group:
+        description: 'Resource group to use (must exist - SP may not have RG create permissions)'
+        required: true
+        type: string
+        default: 'rg-qgp-staging'
       use_existing_acr:
-        description: 'Use existing staging ACR (enter name, or leave empty to create new)'
+        description: 'Use existing ACR (enter name, or leave empty to create new)'
         required: false
         type: string
         default: ''
+      app_suffix:
+        description: 'Suffix for app name (e.g., "prod" creates app-qgp-prod)'
+        required: true
+        type: string
+        default: 'prod'
       db_url_placeholder:
         description: 'Use placeholder DATABASE_URL (update in Key Vault later)'
         required: true
@@ -17,10 +27,10 @@ on:
 
 env:
   LOCATION: westeurope
-  RG_NAME: rg-qgp-prod
-  KV_NAME: kv-qgp-prod
-  APP_PLAN_NAME: plan-qgp-prod
-  APP_NAME: app-qgp-prod
+  RG_NAME: ${{ github.event.inputs.resource_group }}
+  KV_NAME: kv-qgp-${{ github.event.inputs.app_suffix }}
+  APP_PLAN_NAME: plan-qgp-${{ github.event.inputs.app_suffix }}
+  APP_NAME: app-qgp-${{ github.event.inputs.app_suffix }}
 
 jobs:
   provision:
@@ -51,22 +61,21 @@ jobs:
           echo "- **Name**: $SUBSCRIPTION_NAME" >> $GITHUB_STEP_SUMMARY
           echo "- **ID**: $SUBSCRIPTION_ID" >> $GITHUB_STEP_SUMMARY
 
-      - name: Create Resource Group
+      - name: Verify Resource Group
         run: |
-          echo "Creating resource group: ${{ env.RG_NAME }}"
+          echo "Verifying resource group: ${{ env.RG_NAME }}"
           
           if az group show --name ${{ env.RG_NAME }} &> /dev/null; then
-            echo "Resource group already exists"
+            echo "✅ Resource group exists"
+            RG_LOCATION=$(az group show --name ${{ env.RG_NAME }} --query location -o tsv)
+            echo "## Resource Group" >> $GITHUB_STEP_SUMMARY
+            echo "- **Name**: ${{ env.RG_NAME }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Location**: $RG_LOCATION" >> $GITHUB_STEP_SUMMARY
           else
-            az group create \
-              --name ${{ env.RG_NAME }} \
-              --location ${{ env.LOCATION }} \
-              --tags Environment=Production Application=QGP
+            echo "❌ Resource group does not exist: ${{ env.RG_NAME }}"
+            echo "Please create it in Azure Portal or use an existing resource group."
+            exit 1
           fi
-          
-          echo "## Resource Group" >> $GITHUB_STEP_SUMMARY
-          echo "- **Name**: ${{ env.RG_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Location**: ${{ env.LOCATION }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Configure Container Registry
         id: acr
