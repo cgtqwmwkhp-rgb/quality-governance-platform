@@ -44,7 +44,9 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     # Collision identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    severity: Mapped[RTASeverity] = mapped_column(SQLEnum(RTASeverity, native_enum=False), default=RTASeverity.DAMAGE_ONLY)
+    severity: Mapped[RTASeverity] = mapped_column(
+        SQLEnum(RTASeverity, native_enum=False), default=RTASeverity.DAMAGE_ONLY
+    )
     status: Mapped[RTAStatus] = mapped_column(SQLEnum(RTAStatus, native_enum=False), default=RTAStatus.REPORTED)
 
     # When and where

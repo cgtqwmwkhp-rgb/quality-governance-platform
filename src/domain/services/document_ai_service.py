@@ -73,15 +73,11 @@ When analyzing documents:
 Always respond with valid JSON matching the requested schema."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(
-            settings, "ANTHROPIC_API_KEY", None
-        )
+        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(settings, "ANTHROPIC_API_KEY", None)
         self.model = "claude-sonnet-4-20250514"
         self.base_url = "https://api.anthropic.com/v1"
 
-    async def analyze_document(
-        self, content: str, file_name: str, file_type: str
-    ) -> DocumentAnalysis:
+    async def analyze_document(self, content: str, file_name: str, file_type: str) -> DocumentAnalysis:
         """Analyze document content and extract metadata."""
 
         if not self.api_key:
@@ -342,9 +338,7 @@ class EmbeddingService:
     """Service for generating document embeddings."""
 
     def __init__(self):
-        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(
-            settings, "VOYAGE_API_KEY", None
-        )
+        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(settings, "VOYAGE_API_KEY", None)
         self.model = "voyage-large-2"
         self.base_url = "https://api.voyageai.com/v1"
 
@@ -408,16 +402,12 @@ class VectorSearchService:
     """Service for semantic search using Pinecone."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(
-            settings, "PINECONE_API_KEY", None
-        )
+        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(settings, "PINECONE_API_KEY", None)
         self.index_name = getattr(settings, "pinecone_index", "qgp-documents")
         self.environment = getattr(settings, "pinecone_environment", "gcp-starter")
         self.embedding_service = EmbeddingService()
 
-    async def upsert_chunks(
-        self, document_id: int, chunks: list[DocumentChunk], embeddings: list[list[float]]
-    ) -> bool:
+    async def upsert_chunks(self, document_id: int, chunks: list[DocumentChunk], embeddings: list[list[float]]) -> bool:
         """Upsert document chunks to Pinecone."""
 
         if not self.api_key or not embeddings:
@@ -457,9 +447,7 @@ class VectorSearchService:
             logger.error(f"Vector upsert failed: {e}")
             return False
 
-    async def search(
-        self, query: str, top_k: int = 10, filter_dict: Optional[dict] = None
-    ) -> list[dict]:
+    async def search(self, query: str, top_k: int = 10, filter_dict: Optional[dict] = None) -> list[dict]:
         """Semantic search for documents."""
 
         if not self.api_key:

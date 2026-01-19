@@ -3,12 +3,6 @@
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
-from src.domain.models.incident import Incident, IncidentAction
-from src.domain.models.policy import Policy, PolicyVersion
-from src.domain.models.risk import Risk, RiskAssessment, RiskControl
-from src.domain.models.rta import RoadTrafficCollision, RTAAction
-from src.domain.models.standard import Clause, Control, Standard
-from src.domain.models.user import Role, User, UserRole
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -17,6 +11,12 @@ from src.domain.models.document import (
     DocumentVersion,
     IndexJob,
 )
+from src.domain.models.incident import Incident, IncidentAction
+from src.domain.models.policy import Policy, PolicyVersion
+from src.domain.models.risk import Risk, RiskAssessment, RiskControl
+from src.domain.models.rta import RoadTrafficCollision, RTAAction
+from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.user import Role, User, UserRole
 
 __all__ = [
     # Base mixins
