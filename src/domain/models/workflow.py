@@ -17,13 +17,12 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     String,
     Text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.database import Base
 
