@@ -60,9 +60,15 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Complaint identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    complaint_type: Mapped[ComplaintType] = mapped_column(SQLEnum(ComplaintType, native_enum=False), default=ComplaintType.OTHER)
-    priority: Mapped[ComplaintPriority] = mapped_column(SQLEnum(ComplaintPriority, native_enum=False), default=ComplaintPriority.MEDIUM)
-    status: Mapped[ComplaintStatus] = mapped_column(SQLEnum(ComplaintStatus, native_enum=False), default=ComplaintStatus.RECEIVED)
+    complaint_type: Mapped[ComplaintType] = mapped_column(
+        SQLEnum(ComplaintType, native_enum=False), default=ComplaintType.OTHER
+    )
+    priority: Mapped[ComplaintPriority] = mapped_column(
+        SQLEnum(ComplaintPriority, native_enum=False), default=ComplaintPriority.MEDIUM
+    )
+    status: Mapped[ComplaintStatus] = mapped_column(
+        SQLEnum(ComplaintStatus, native_enum=False), default=ComplaintStatus.RECEIVED
+    )
 
     # Dates
     received_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

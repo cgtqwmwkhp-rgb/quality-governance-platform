@@ -49,8 +49,12 @@ class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Document identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    document_type: Mapped[DocumentType] = mapped_column(SQLEnum(DocumentType, native_enum=False), default=DocumentType.POLICY)
-    status: Mapped[DocumentStatus] = mapped_column(SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.DRAFT)
+    document_type: Mapped[DocumentType] = mapped_column(
+        SQLEnum(DocumentType, native_enum=False), default=DocumentType.POLICY
+    )
+    status: Mapped[DocumentStatus] = mapped_column(
+        SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.DRAFT
+    )
 
     # Classification
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -115,7 +119,9 @@ class PolicyVersion(Base, TimestampMixin, AuditTrailMixin):
     file_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # MIME type
 
     # Approval workflow
-    status: Mapped[DocumentStatus] = mapped_column(SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.DRAFT)
+    status: Mapped[DocumentStatus] = mapped_column(
+        SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.DRAFT
+    )
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     submitted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

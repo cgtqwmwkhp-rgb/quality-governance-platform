@@ -12,8 +12,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 
@@ -73,15 +72,11 @@ When analyzing documents:
 Always respond with valid JSON matching the requested schema."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(
-            settings, "ANTHROPIC_API_KEY", None
-        )
+        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(settings, "ANTHROPIC_API_KEY", None)
         self.model = "claude-sonnet-4-20250514"
         self.base_url = "https://api.anthropic.com/v1"
 
-    async def analyze_document(
-        self, content: str, file_name: str, file_type: str
-    ) -> DocumentAnalysis:
+    async def analyze_document(self, content: str, file_name: str, file_type: str) -> DocumentAnalysis:
         """Analyze document content and extract metadata."""
 
         if not self.api_key:
@@ -172,7 +167,7 @@ Respond with JSON matching this schema:
 
         # Extract keywords using simple frequency analysis
         words = re.findall(r"\b[a-zA-Z]{4,}\b", content.lower())
-        word_freq = {}
+        word_freq: dict[str, int] = {}
         for word in words:
             if word not in {
                 "that",
@@ -230,7 +225,7 @@ Respond with JSON matching this schema:
     ) -> list[DocumentChunk]:
         """Split document into semantic chunks for vector embedding."""
 
-        chunks = []
+        chunks: list[DocumentChunk] = []
 
         # Try to split by sections/headings first
         sections = self._split_by_sections(content)
@@ -290,16 +285,16 @@ Respond with JSON matching this schema:
 
         return chunks
 
-    def _split_by_sections(self, content: str) -> list[tuple[str, str]]:
+    def _split_by_sections(self, content: str) -> list[tuple[Optional[str], str]]:
         """Split content by markdown/document headings."""
 
         # Match markdown headings or uppercase lines
         heading_pattern = r"^(#{1,3}\s+.+|[A-Z][A-Z\s]{5,}[A-Z])$"
 
         lines = content.split("\n")
-        sections = []
-        current_heading = None
-        current_content = []
+        sections: list[tuple[Optional[str], str]] = []
+        current_heading: Optional[str] = None
+        current_content: list[str] = []
 
         for line in lines:
             if re.match(heading_pattern, line.strip()):
@@ -342,9 +337,7 @@ class EmbeddingService:
     """Service for generating document embeddings."""
 
     def __init__(self):
-        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(
-            settings, "VOYAGE_API_KEY", None
-        )
+        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(settings, "VOYAGE_API_KEY", None)
         self.model = "voyage-large-2"
         self.base_url = "https://api.voyageai.com/v1"
 
@@ -396,7 +389,8 @@ class EmbeddingService:
 
                 data = response.json()
                 if data.get("data"):
-                    return data["data"][0]["embedding"]
+                    embedding: list[float] = data["data"][0]["embedding"]
+                    return embedding
 
         except Exception as e:
             logger.error(f"Query embedding failed: {e}")
@@ -408,16 +402,12 @@ class VectorSearchService:
     """Service for semantic search using Pinecone."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(
-            settings, "PINECONE_API_KEY", None
-        )
+        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(settings, "PINECONE_API_KEY", None)
         self.index_name = getattr(settings, "pinecone_index", "qgp-documents")
         self.environment = getattr(settings, "pinecone_environment", "gcp-starter")
         self.embedding_service = EmbeddingService()
 
-    async def upsert_chunks(
-        self, document_id: int, chunks: list[DocumentChunk], embeddings: list[list[float]]
-    ) -> bool:
+    async def upsert_chunks(self, document_id: int, chunks: list[DocumentChunk], embeddings: list[list[float]]) -> bool:
         """Upsert document chunks to Pinecone."""
 
         if not self.api_key or not embeddings:
@@ -457,9 +447,7 @@ class VectorSearchService:
             logger.error(f"Vector upsert failed: {e}")
             return False
 
-    async def search(
-        self, query: str, top_k: int = 10, filter_dict: Optional[dict] = None
-    ) -> list[dict]:
+    async def search(self, query: str, top_k: int = 10, filter_dict: Optional[dict] = None) -> list[dict]:
         """Semantic search for documents."""
 
         if not self.api_key:
@@ -492,7 +480,8 @@ class VectorSearchService:
                 response.raise_for_status()
 
                 data = response.json()
-                return data.get("matches", [])
+                matches: list[dict] = data.get("matches", [])  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-003 JSON response typing
+                return matches
 
         except Exception as e:
             logger.error(f"Vector search failed: {e}")

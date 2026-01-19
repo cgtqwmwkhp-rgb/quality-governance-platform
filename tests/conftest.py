@@ -73,7 +73,8 @@ async def client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None
     app.dependency_overrides[get_db] = override_get_db
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    # Enable follow_redirects to handle FastAPI's redirect_slashes=True (307 redirects)
+    async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=True) as client:
         yield client
 
     app.dependency_overrides.clear()

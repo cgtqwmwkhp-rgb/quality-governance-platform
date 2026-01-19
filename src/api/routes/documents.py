@@ -8,14 +8,13 @@ Enterprise document management with:
 - Access control
 """
 
-import io
 import uuid
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_
+from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.document import (
@@ -25,17 +24,10 @@ from src.domain.models.document import (
     DocumentSearchLog,
     DocumentStatus,
     DocumentType,
-    DocumentVersion,
     FileType,
-    IndexJob,
-    IndexJobStatus,
     SensitivityLevel,
 )
-from src.domain.services.document_ai_service import (
-    DocumentAIService,
-    EmbeddingService,
-    VectorSearchService,
-)
+from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 
 router = APIRouter()
 
@@ -155,6 +147,8 @@ class AnnotationResponse(BaseModel):
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    db: DbSession,
+    current_user: CurrentUser,
     file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(None),
@@ -162,8 +156,6 @@ async def upload_document(
     category: str = Form(None),
     department: str = Form(None),
     sensitivity: str = Form("internal"),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
 ):
     """Upload and process a new document."""
 
@@ -194,9 +186,7 @@ async def upload_document(
         file_path=file_path,
         mime_type=file.content_type,
         document_type=(
-            DocumentType(document_type)
-            if document_type in [d.value for d in DocumentType]
-            else DocumentType.OTHER
+            DocumentType(document_type) if document_type in [d.value for d in DocumentType] else DocumentType.OTHER
         ),
         category=category,
         department=department,
@@ -237,7 +227,8 @@ async def upload_document(
 
         if text_content and not text_content.startswith("["):
             # Analyze with AI
-            analysis = await ai_service.analyze_document(text_content, file.filename, file_ext)
+            filename = file.filename or "document"
+            analysis = await ai_service.analyze_document(text_content, filename, file_ext)
 
             doc.ai_summary = analysis.summary
             doc.ai_tags = analysis.tags
@@ -396,11 +387,11 @@ async def get_document(
 
 @router.get("/search/semantic", response_model=SearchResponse)
 async def semantic_search(
+    db: DbSession,
+    current_user: CurrentUser,
     q: str = Query(..., min_length=3),
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
 ):
     """Semantic search across documents using AI embeddings."""
 
@@ -548,25 +539,17 @@ async def get_document_stats(
     total = total_result.scalar() or 0
 
     # By status
-    status_result = await db.execute(
-        select(Document.status, func.count(Document.id)).group_by(Document.status)
-    )
-    by_status = {
-        row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in status_result.all()
-    }
+    status_result = await db.execute(select(Document.status, func.count(Document.id)).group_by(Document.status))
+    by_status = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in status_result.all()}
 
     # By type
     type_result = await db.execute(
         select(Document.document_type, func.count(Document.id)).group_by(Document.document_type)
     )
-    by_type = {
-        row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in type_result.all()
-    }
+    by_type = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in type_result.all()}
 
     # Indexed count
-    indexed_result = await db.execute(
-        select(func.count(Document.id)).where(Document.indexed_at.isnot(None))
-    )
+    indexed_result = await db.execute(select(func.count(Document.id)).where(Document.indexed_at.isnot(None)))
     indexed = indexed_result.scalar() or 0
 
     # Total chunks
