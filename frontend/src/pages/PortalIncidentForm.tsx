@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
+import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector';
 
 // Determine report type from URL path
 const getReportTypeFromPath = (pathname: string) => {
@@ -82,16 +83,7 @@ const ROLE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ];
 
-// Body parts for injury selection
-const BODY_PARTS = [
-  { value: 'head', label: 'Head', icon: '🧠' },
-  { value: 'neck', label: 'Neck', icon: '🦴' },
-  { value: 'torso', label: 'Torso', icon: '🫁' },
-  { value: 'arms', label: 'Arms', icon: '💪' },
-  { value: 'hands', label: 'Hands', icon: '🤚' },
-  { value: 'legs', label: 'Legs', icon: '🦵' },
-  { value: 'feet', label: 'Feet', icon: '🦶' },
-];
+// Body parts removed - now using BodyInjurySelector component
 
 // Medical assistance options
 const MEDICAL_OPTIONS = [
@@ -119,7 +111,7 @@ interface FormData {
   hasWitnesses: boolean | null;
   witnessNames: string;
   hasInjuries: boolean | null;
-  injuredBodyParts: string[];
+  injuries: InjurySelection[];
   medicalAssistance: string;
   // Complaint specific
   complainantName: string;
@@ -156,7 +148,7 @@ export default function PortalIncidentForm() {
     hasWitnesses: null,
     witnessNames: '',
     hasInjuries: null,
-    injuredBodyParts: [],
+    injuries: [],
     medicalAssistance: '',
     complainantName: '',
     complainantRole: '',
@@ -614,38 +606,15 @@ export default function PortalIncidentForm() {
 
             {formData.hasInjuries && (
               <>
-                {/* Body Parts */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Which body parts? (tap all that apply)</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {BODY_PARTS.map((part) => (
-                      <button
-                        key={part.value}
-                        type="button"
-                        onClick={() => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            injuredBodyParts: prev.injuredBodyParts.includes(part.value)
-                              ? prev.injuredBodyParts.filter((p) => p !== part.value)
-                              : [...prev.injuredBodyParts, part.value],
-                          }));
-                        }}
-                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
-                          formData.injuredBodyParts.includes(part.value)
-                            ? 'bg-red-500/20 border-red-500'
-                            : 'bg-white/5 border-white/20'
-                        }`}
-                      >
-                        <span className="text-xl">{part.icon}</span>
-                        <span className="text-xs text-white">{part.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Interactive Body Diagram */}
+                <BodyInjurySelector
+                  injuries={formData.injuries}
+                  onChange={(injuries) => setFormData((prev) => ({ ...prev, injuries }))}
+                />
 
                 {/* Medical Assistance */}
                 <FuzzySearchDropdown
-                  label="Medical assistance?"
+                  label="Medical assistance required?"
                   options={MEDICAL_OPTIONS}
                   value={formData.medicalAssistance}
                   onChange={(val) => setFormData((prev) => ({ ...prev, medicalAssistance: val }))}
