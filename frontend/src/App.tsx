@@ -17,6 +17,8 @@ import PortalReport from './pages/PortalReport'
 import PortalTrack from './pages/PortalTrack'
 import PortalSOS from './pages/PortalSOS'
 import PortalHelp from './pages/PortalHelp'
+import PortalIncidentForm from './pages/PortalIncidentForm'
+import PortalRTAForm from './pages/PortalRTAForm'
 // Enterprise Enhancement Pages
 import Analytics from './pages/Analytics'
 import GlobalSearch from './pages/GlobalSearch'
@@ -70,6 +72,8 @@ function App() {
         <Route path="/portal/track/:referenceNumber" element={<PortalTrack />} />
         <Route path="/portal/sos" element={<PortalSOS />} />
         <Route path="/portal/help" element={<PortalHelp />} />
+        <Route path="/portal/incident" element={<PortalIncidentForm />} />
+        <Route path="/portal/rta" element={<PortalRTAForm />} />
         
         {/* Auth Routes */}
         <Route
