@@ -223,7 +223,7 @@ async def submit_quick_report(
             description=report.description,
             complaint_type=ComplaintType.OTHER,
             priority=complaint_priority,
-            status=ComplaintStatus.OPEN,
+            status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
             complainant_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             complainant_email=report.reporter_email if not report.is_anonymous else None,
@@ -259,7 +259,7 @@ async def submit_quick_report(
 async def track_report(
     reference_number: str,
     tracking_code: Optional[str] = Query(None, description="Required for anonymous reports"),
-    db: DbSession = None,
+    db: DbSession,
 ):
     """
     Track a report's status by reference number.
@@ -268,11 +268,11 @@ async def track_report(
     """
     # Determine report type from reference number prefix
     if reference_number.startswith("INC-"):
-        query = select(Incident).where(Incident.reference_number == reference_number)
-        result = await db.execute(query)
-        report = result.scalar_one_or_none()
+        inc_query = select(Incident).where(Incident.reference_number == reference_number)
+        inc_result = await db.execute(inc_query)
+        incident = inc_result.scalar_one_or_none()
 
-        if not report:
+        if not incident:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Report not found. Please check your reference number.",
@@ -281,40 +281,40 @@ async def track_report(
         # Build timeline
         timeline = [
             {
-                "date": report.created_at.isoformat(),
+                "date": incident.created_at.isoformat(),
                 "event": "Report Submitted",
                 "icon": "📋",
             },
         ]
 
-        if report.status != IncidentStatus.REPORTED:
+        if incident.status != IncidentStatus.REPORTED:
             timeline.append(
                 {
-                    "date": report.updated_at.isoformat(),
-                    "event": f"Status changed to {get_status_label(report.status.value)}",
+                    "date": incident.updated_at.isoformat(),
+                    "event": f"Status changed to {get_status_label(incident.status.value)}",
                     "icon": "🔄",
                 }
             )
 
         return ReportStatusResponse(
-            reference_number=report.reference_number,
+            reference_number=incident.reference_number,
             report_type="Incident",
-            title=report.title,
-            status=report.status.value,
-            status_label=get_status_label(report.status.value),
-            submitted_at=report.created_at,
-            updated_at=report.updated_at,
-            priority=get_priority_label(report.severity.value),
+            title=incident.title,
+            status=incident.status.value,
+            status_label=get_status_label(incident.status.value),
+            submitted_at=incident.created_at,
+            updated_at=incident.updated_at,
+            priority=get_priority_label(incident.severity.value),
             timeline=timeline,
             next_steps="Our team is reviewing your report.",
         )
 
     elif reference_number.startswith("COMP-"):
-        query = select(Complaint).where(Complaint.reference_number == reference_number)
-        result = await db.execute(query)
-        report = result.scalar_one_or_none()
+        comp_query = select(Complaint).where(Complaint.reference_number == reference_number)
+        comp_result = await db.execute(comp_query)
+        complaint = comp_result.scalar_one_or_none()
 
-        if not report:
+        if not complaint:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Report not found. Please check your reference number.",
@@ -322,33 +322,33 @@ async def track_report(
 
         timeline = [
             {
-                "date": report.created_at.isoformat(),
+                "date": complaint.created_at.isoformat(),
                 "event": "Complaint Submitted",
                 "icon": "📋",
             },
         ]
 
-        if report.status != ComplaintStatus.OPEN:
+        if complaint.status != ComplaintStatus.RECEIVED:
             timeline.append(
                 {
-                    "date": report.updated_at.isoformat(),
-                    "event": f"Status changed to {get_status_label(report.status.value)}",
+                    "date": complaint.updated_at.isoformat(),
+                    "event": f"Status changed to {get_status_label(complaint.status.value)}",
                     "icon": "🔄",
                 }
             )
 
         return ReportStatusResponse(
-            reference_number=report.reference_number,
+            reference_number=complaint.reference_number,
             report_type="Complaint",
-            title=report.title,
-            status=report.status.value,
-            status_label=get_status_label(report.status.value),
-            submitted_at=report.created_at,
-            updated_at=report.updated_at,
-            priority=get_priority_label(report.priority.value),
+            title=complaint.title,
+            status=complaint.status.value,
+            status_label=get_status_label(complaint.status.value),
+            submitted_at=complaint.created_at,
+            updated_at=complaint.updated_at,
+            priority=get_priority_label(complaint.priority.value),
             timeline=timeline,
             next_steps="A case manager will contact you soon.",
-            resolution=report.resolution_summary,
+            resolution=complaint.resolution_summary,
         )
 
     else:

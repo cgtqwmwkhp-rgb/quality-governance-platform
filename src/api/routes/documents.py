@@ -154,8 +154,8 @@ async def upload_document(
     category: str = Form(None),
     department: str = Form(None),
     sensitivity: str = Form("internal"),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Upload and process a new document."""
 
@@ -389,8 +389,8 @@ async def semantic_search(
     q: str = Query(..., min_length=3),
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Semantic search across documents using AI embeddings."""
 
