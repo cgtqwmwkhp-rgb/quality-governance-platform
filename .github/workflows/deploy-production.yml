@@ -128,7 +128,7 @@ jobs:
           # Create migration container
           az container create \
             --name qgp-migration-prod-${{ github.run_number }} \
-            --resource-group rg-qgp-prod \
+            --resource-group rg-qgp-staging \
             --location westeurope \
             --os-type Linux \
             --image ${{ env.IMAGE_TAG }} \
@@ -149,7 +149,7 @@ jobs:
           MAX_WAIT=300
           WAITED=0
           while [ $WAITED -lt $MAX_WAIT ]; do
-            STATE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-prod --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
+            STATE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
             if [ "$STATE" = "Terminated" ]; then
               echo "Migration container terminated after ${WAITED}s"
               break
@@ -159,11 +159,11 @@ jobs:
             WAITED=$((WAITED + 10))
           done
           
-          EXIT_CODE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-prod --query "containers[0].instanceView.currentState.exitCode" -o tsv)
+          EXIT_CODE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.exitCode" -o tsv)
           
           echo "Migration exit code: $EXIT_CODE"
           echo "Migration logs:"
-          az container logs --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-prod
+          az container logs --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging
           
           if [ "$EXIT_CODE" != "0" ]; then
             echo "Migration failed!"
@@ -171,7 +171,7 @@ jobs:
           fi
           
           echo "Cleaning up migration container..."
-          az container delete --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-prod --yes
+          az container delete --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging --yes
 
       - name: Verify deployment
         run: |
