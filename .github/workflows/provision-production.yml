@@ -1,0 +1,336 @@
+name: Provision Production Azure Resources
+
+# One-time workflow to create production Azure infrastructure
+on:
+  workflow_dispatch:
+    inputs:
+      use_existing_acr:
+        description: 'Use existing staging ACR (enter name, or leave empty to create new)'
+        required: false
+        type: string
+        default: ''
+      db_url_placeholder:
+        description: 'Use placeholder DATABASE_URL (update in Key Vault later)'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  LOCATION: westeurope
+  RG_NAME: rg-qgp-prod
+  KV_NAME: kv-qgp-prod
+  APP_PLAN_NAME: plan-qgp-prod
+  APP_NAME: app-qgp-prod
+
+jobs:
+  provision:
+    name: Provision Production Resources
+    runs-on: ubuntu-latest
+    
+    outputs:
+      acr_name: ${{ steps.acr.outputs.acr_name }}
+      app_name: ${{ steps.webapp.outputs.app_name }}
+      sp_credentials: ${{ steps.sp.outputs.credentials }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get Subscription Info
+        id: sub
+        run: |
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+          SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
+          echo "subscription_id=$SUBSCRIPTION_ID" >> $GITHUB_OUTPUT
+          echo "## Azure Subscription" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: $SUBSCRIPTION_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **ID**: $SUBSCRIPTION_ID" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Resource Group
+        run: |
+          echo "Creating resource group: ${{ env.RG_NAME }}"
+          
+          if az group show --name ${{ env.RG_NAME }} &> /dev/null; then
+            echo "Resource group already exists"
+          else
+            az group create \
+              --name ${{ env.RG_NAME }} \
+              --location ${{ env.LOCATION }} \
+              --tags Environment=Production Application=QGP
+          fi
+          
+          echo "## Resource Group" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: ${{ env.RG_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Location**: ${{ env.LOCATION }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Configure Container Registry
+        id: acr
+        run: |
+          if [ -n "${{ github.event.inputs.use_existing_acr }}" ]; then
+            ACR_NAME="${{ github.event.inputs.use_existing_acr }}"
+            echo "Using existing ACR: $ACR_NAME"
+          else
+            # Generate unique ACR name
+            RANDOM_SUFFIX=$(openssl rand -hex 4)
+            ACR_NAME="acrqgpprod${RANDOM_SUFFIX}"
+            
+            echo "Creating new ACR: $ACR_NAME"
+            az acr create \
+              --resource-group ${{ env.RG_NAME }} \
+              --name $ACR_NAME \
+              --sku Standard \
+              --admin-enabled true
+          fi
+          
+          echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
+          
+          echo "## Container Registry" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: $ACR_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Login Server**: ${ACR_NAME}.azurecr.io" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Key Vault
+        run: |
+          echo "Creating Key Vault: ${{ env.KV_NAME }}"
+          
+          if az keyvault show --name ${{ env.KV_NAME }} &> /dev/null; then
+            echo "Key Vault already exists"
+          else
+            az keyvault create \
+              --resource-group ${{ env.RG_NAME }} \
+              --name ${{ env.KV_NAME }} \
+              --location ${{ env.LOCATION }} \
+              --enable-rbac-authorization false
+          fi
+          
+          echo "## Key Vault" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: ${{ env.KV_NAME }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Add Secrets to Key Vault
+        run: |
+          echo "Adding secrets to Key Vault..."
+          
+          # Generate secure secrets
+          SECRET_KEY=$(openssl rand -base64 32)
+          JWT_SECRET=$(openssl rand -base64 32)
+          
+          # Database URL
+          if [ "${{ github.event.inputs.db_url_placeholder }}" = "true" ]; then
+            DB_URL="postgresql+asyncpg://placeholder:placeholder@localhost:5432/quality_governance"
+            echo "⚠️ Using placeholder DATABASE_URL - update in Key Vault before deployment!"
+          else
+            DB_URL="postgresql+asyncpg://user:password@prod-db:5432/quality_governance"
+          fi
+          
+          # Set secrets (update if exists)
+          az keyvault secret set --vault-name ${{ env.KV_NAME }} --name "DATABASE-URL" --value "$DB_URL" > /dev/null
+          az keyvault secret set --vault-name ${{ env.KV_NAME }} --name "SECRET-KEY" --value "$SECRET_KEY" > /dev/null
+          az keyvault secret set --vault-name ${{ env.KV_NAME }} --name "JWT-SECRET-KEY" --value "$JWT_SECRET" > /dev/null
+          
+          echo "✅ Secrets added to Key Vault"
+          
+          echo "## Secrets" >> $GITHUB_STEP_SUMMARY
+          echo "- DATABASE-URL: ✅ Set (placeholder: ${{ github.event.inputs.db_url_placeholder }})" >> $GITHUB_STEP_SUMMARY
+          echo "- SECRET-KEY: ✅ Generated" >> $GITHUB_STEP_SUMMARY
+          echo "- JWT-SECRET-KEY: ✅ Generated" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create App Service Plan
+        run: |
+          echo "Creating App Service Plan: ${{ env.APP_PLAN_NAME }}"
+          
+          if az appservice plan show --name ${{ env.APP_PLAN_NAME }} --resource-group ${{ env.RG_NAME }} &> /dev/null; then
+            echo "App Service Plan already exists"
+          else
+            az appservice plan create \
+              --resource-group ${{ env.RG_NAME }} \
+              --name ${{ env.APP_PLAN_NAME }} \
+              --sku P1V2 \
+              --is-linux
+          fi
+          
+          echo "## App Service Plan" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: ${{ env.APP_PLAN_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **SKU**: P1V2" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Web App
+        id: webapp
+        run: |
+          ACR_NAME="${{ steps.acr.outputs.acr_name }}"
+          
+          echo "Creating Web App: ${{ env.APP_NAME }}"
+          
+          if az webapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RG_NAME }} &> /dev/null; then
+            echo "Web App already exists"
+          else
+            az webapp create \
+              --resource-group ${{ env.RG_NAME }} \
+              --plan ${{ env.APP_PLAN_NAME }} \
+              --name ${{ env.APP_NAME }} \
+              --deployment-container-image-name mcr.microsoft.com/appsvc/staticsite:latest
+          fi
+          
+          # Configure for ACR
+          ACR_USERNAME=$(az acr credential show --name $ACR_NAME --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --query "passwords[0].value" -o tsv)
+          
+          az webapp config container set \
+            --resource-group ${{ env.RG_NAME }} \
+            --name ${{ env.APP_NAME }} \
+            --docker-custom-image-name "${ACR_NAME}.azurecr.io/quality-governance-platform:latest" \
+            --docker-registry-server-url "https://${ACR_NAME}.azurecr.io" \
+            --docker-registry-server-user "$ACR_USERNAME" \
+            --docker-registry-server-password "$ACR_PASSWORD"
+          
+          # Enable managed identity
+          az webapp identity assign \
+            --resource-group ${{ env.RG_NAME }} \
+            --name ${{ env.APP_NAME }}
+          
+          IDENTITY_ID=$(az webapp identity show --resource-group ${{ env.RG_NAME }} --name ${{ env.APP_NAME }} --query principalId -o tsv)
+          
+          # Grant Key Vault access
+          az keyvault set-policy \
+            --name ${{ env.KV_NAME }} \
+            --object-id $IDENTITY_ID \
+            --secret-permissions get list
+          
+          echo "app_name=${{ env.APP_NAME }}" >> $GITHUB_OUTPUT
+          
+          echo "## Web App" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: ${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://${{ env.APP_NAME }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Service Principal for Production
+        id: sp
+        run: |
+          SUBSCRIPTION_ID="${{ steps.sub.outputs.subscription_id }}"
+          SP_NAME="sp-github-qgp-prod"
+          ACR_NAME="${{ steps.acr.outputs.acr_name }}"
+          
+          echo "Creating Service Principal: $SP_NAME"
+          
+          # Check if SP exists
+          EXISTING_SP=$(az ad sp list --display-name $SP_NAME --query "[0].appId" -o tsv 2>/dev/null || echo "")
+          
+          if [ -n "$EXISTING_SP" ]; then
+            echo "Service Principal exists, resetting credentials..."
+            SP_JSON=$(az ad sp credential reset --id $EXISTING_SP --query "{clientId:appId, clientSecret:password, tenantId:tenant, subscriptionId:'$SUBSCRIPTION_ID'}" -o json)
+            SP_APP_ID=$EXISTING_SP
+          else
+            echo "Creating new Service Principal..."
+            SP_JSON=$(az ad sp create-for-rbac \
+              --name $SP_NAME \
+              --role Contributor \
+              --scopes /subscriptions/$SUBSCRIPTION_ID/resourceGroups/${{ env.RG_NAME }} \
+              --sdk-auth)
+            SP_APP_ID=$(echo $SP_JSON | jq -r '.clientId')
+          fi
+          
+          # Grant ACR push permission
+          az role assignment create \
+            --assignee $SP_APP_ID \
+            --role AcrPush \
+            --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/${{ env.RG_NAME }}/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME \
+            2>/dev/null || echo "ACR role may already exist"
+          
+          # Grant Key Vault access
+          az keyvault set-policy \
+            --name ${{ env.KV_NAME }} \
+            --spn $SP_APP_ID \
+            --secret-permissions get list
+          
+          # Store credentials as output (will be masked in logs)
+          echo "credentials<<EOF" >> $GITHUB_OUTPUT
+          echo "$SP_JSON" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "## Service Principal" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: $SP_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Permissions**: Contributor on ${{ env.RG_NAME }}, AcrPush, Key Vault secrets" >> $GITHUB_STEP_SUMMARY
+
+      - name: Output GitHub Secrets
+        run: |
+          echo ""
+          echo "=============================================="
+          echo "  GITHUB SECRETS TO CONFIGURE"
+          echo "=============================================="
+          echo ""
+          echo "Add these secrets to your GitHub repository:"
+          echo ""
+          echo "1. PROD_ACR_NAME:"
+          echo "   ${{ steps.acr.outputs.acr_name }}"
+          echo ""
+          echo "2. PROD_AZURE_WEBAPP_NAME:"
+          echo "   ${{ env.APP_NAME }}"
+          echo ""
+          echo "3. AZURE_PROD_CREDENTIALS:"
+          echo "   (See workflow artifacts or Step Summary)"
+          echo ""
+          echo "=============================================="
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔐 GitHub Secrets to Configure" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Name | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`PROD_ACR_NAME\` | \`${{ steps.acr.outputs.acr_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`PROD_AZURE_WEBAPP_NAME\` | \`${{ env.APP_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`AZURE_PROD_CREDENTIALS\` | See artifact download |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save Credentials Artifact
+        run: |
+          mkdir -p production-secrets
+          
+          cat > production-secrets/github-secrets.txt << 'EOF'
+          ==========================================
+          GITHUB SECRETS FOR PRODUCTION DEPLOYMENT
+          ==========================================
+          
+          Add these to: https://github.com/${{ github.repository }}/settings/secrets/actions
+          
+          1. PROD_ACR_NAME
+          ${{ steps.acr.outputs.acr_name }}
+          
+          2. PROD_AZURE_WEBAPP_NAME
+          ${{ env.APP_NAME }}
+          
+          3. AZURE_PROD_CREDENTIALS
+          ${{ steps.sp.outputs.credentials }}
+          
+          ==========================================
+          NEXT STEPS
+          ==========================================
+          1. Add the secrets above to GitHub
+          2. Create 'production' environment with required reviewers
+          3. Trigger deploy-production.yml workflow
+          
+          EOF
+          
+          echo "Credentials saved to artifact"
+
+      - name: Upload Secrets Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-secrets
+          path: production-secrets/
+          retention-days: 1
+
+      - name: Final Summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Provisioning Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Production URL**: https://${{ env.APP_NAME }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the \`production-secrets\` artifact" >> $GITHUB_STEP_SUMMARY
+          echo "2. Add the secrets to GitHub repository settings" >> $GITHUB_STEP_SUMMARY
+          echo "3. Create \`production\` environment with required reviewers" >> $GITHUB_STEP_SUMMARY
+          echo "4. Update DATABASE-URL in Key Vault with real connection string" >> $GITHUB_STEP_SUMMARY
+          echo "5. Trigger \`deploy-production.yml\` workflow" >> $GITHUB_STEP_SUMMARY
