@@ -480,7 +480,7 @@ class VectorSearchService:
                 response.raise_for_status()
 
                 data = response.json()
-                matches: list[dict] = data.get("matches", [])  # type: ignore[assignment]
+                matches: list[dict] = data.get("matches", [])  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-003 JSON response typing
                 return matches
 
         except Exception as e:
