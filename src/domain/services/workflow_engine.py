@@ -450,19 +450,20 @@ class WorkflowEngine:
         escalations = []
         now = datetime.utcnow()
 
-        # Mock escalation data
+        # Mock escalation data - workflow with SLA breach 2 hours ago
+        mock_sla_due = now - timedelta(hours=2)
         mock_workflows = [
             {
                 "id": "WF-20260118001",
                 "template": "CAPA",
-                "sla_due_at": now - timedelta(hours=2),
+                "sla_due_at": mock_sla_due,
                 "current_step": "Action Plan Review",
                 "priority": "normal",
             }
         ]
 
         for wf in mock_workflows:
-            sla_due: datetime = wf["sla_due_at"]  # type: ignore[assignment]
+            sla_due = mock_sla_due  # Use the known datetime value
             if sla_due < now:
                 escalations.append(
                     {
