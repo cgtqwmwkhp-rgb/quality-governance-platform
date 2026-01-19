@@ -770,7 +770,7 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
             except json.JSONDecodeError:
                 return self.auto_tag_content(content)
 
-        except Exception as e:
+        except Exception:
             # Fallback to keyword matching
             return self.auto_tag_content(content)
 

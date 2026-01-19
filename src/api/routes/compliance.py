@@ -11,7 +11,7 @@ Provides endpoints for:
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
