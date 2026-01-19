@@ -34,6 +34,9 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: https://app-qgp-prod.azurewebsites.net
+          VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
+          VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
         run: |
           npm run build
       
