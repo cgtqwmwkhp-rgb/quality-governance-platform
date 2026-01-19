@@ -17,7 +17,6 @@ import {
   Plus,
   Minus,
   X,
-  AlertTriangle,
   CloudRain,
   Sun,
   Cloud,
