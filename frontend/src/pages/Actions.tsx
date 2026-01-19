@@ -82,7 +82,7 @@ const MOCK_ACTIONS: Action[] = [
 ]
 
 export default function Actions() {
-  const [actions, setActions] = useState<Action[]>(MOCK_ACTIONS)
+  const [actions] = useState<Action[]>(MOCK_ACTIONS)
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')

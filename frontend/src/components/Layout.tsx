@@ -77,8 +77,7 @@ const navSections = [
 
 export default function Layout({ onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showSearch, setShowSearch] = useState(false)
-  const [unreadNotifications, setUnreadNotifications] = useState(3)
+  const [unreadNotifications] = useState(3)
   const navigate = useNavigate()
 
   // Keyboard shortcut for global search (Cmd+K or Ctrl+K)

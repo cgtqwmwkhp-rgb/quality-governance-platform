@@ -6,14 +6,11 @@ import {
   Plus,
   Clock,
   MapPin,
-  Users,
   AlertTriangle,
-  CheckCircle2,
   Filter,
   List,
   Grid3X3,
-  Bell,
-  FileText
+  Bell
 } from 'lucide-react';
 
 interface CalendarEvent {
@@ -35,7 +32,7 @@ interface CalendarEvent {
 export default function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19)); // Jan 19, 2024
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'list'>('month');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [, setSelectedDate] = useState<Date | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 

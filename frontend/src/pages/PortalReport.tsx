@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -8,7 +8,6 @@ import {
   Shield,
   Eye,
   EyeOff,
-  Camera,
   MapPin,
   User,
   Mail,
@@ -16,10 +15,8 @@ import {
   Building,
   CheckCircle,
   Copy,
-  QrCode,
   Loader2,
   Info,
-  Sparkles,
 } from 'lucide-react';
 
 // Animated background
@@ -33,7 +30,6 @@ const AnimatedBackground = () => (
 
 // Severity option component
 const SeverityOption = ({ 
-  id, 
   label, 
   description, 
   color, 

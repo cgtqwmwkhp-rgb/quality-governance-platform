@@ -9,12 +9,9 @@ import {
   Filter,
   Clock,
   CheckCircle2,
-  AlertCircle,
   RefreshCw,
   Trash2,
-  ChevronDown,
   Play,
-  Pause,
   Settings,
   History,
   Zap

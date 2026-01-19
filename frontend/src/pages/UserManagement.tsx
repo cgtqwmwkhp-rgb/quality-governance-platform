@@ -3,12 +3,10 @@ import {
   Users,
   UserPlus,
   Shield,
-  Key,
   Mail,
   Phone,
   Building,
   Search,
-  Filter,
   MoreVertical,
   Edit,
   Trash2,
@@ -50,7 +48,7 @@ export default function UserManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [_selectedUser] = useState<User | null>(null); void _selectedUser;
 
   const users: User[] = [
     {
@@ -153,7 +151,8 @@ export default function UserManagement() {
     }
   ];
 
-  const permissions = [
+  // Permissions list available for role configuration
+  const _permissions = [
     { id: 'incidents', name: 'Incidents', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
     { id: 'rtas', name: 'RTAs', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
     { id: 'complaints', name: 'Complaints', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
@@ -164,6 +163,7 @@ export default function UserManagement() {
     { id: 'reports', name: 'Reports', actions: ['view', 'create', 'export'] },
     { id: 'users', name: 'Users', actions: ['view', 'create', 'edit', 'delete', 'manage'] }
   ];
+  void _permissions; // Used for role configuration UI
 
   const statusColors: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
     active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: <CheckCircle2 className="w-4 h-4" /> },

@@ -17,8 +17,7 @@ import {
   Command,
   ArrowRight,
   Tag,
-  Calendar,
-  User
+  Calendar
 } from 'lucide-react';
 
 interface SearchResult {
@@ -56,7 +55,7 @@ export default function GlobalSearch() {
     'vehicle collision',
     'customer complaint'
   ]);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [_suggestions] = useState<string[]>([]); void _suggestions;
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Mock search results

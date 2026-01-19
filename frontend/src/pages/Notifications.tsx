@@ -11,13 +11,10 @@ import {
   CheckCircle2,
   Clock,
   X,
-  Filter,
-  ChevronDown,
   Mail,
   MessageSquare,
   Smartphone,
-  Volume2,
-  VolumeX
+  Volume2
 } from 'lucide-react';
 
 interface Notification {

@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { 
   Plus, X, Search, Upload, FileText, FileSpreadsheet, Image, File, 
-  Eye, Download, Tag, Calendar, Clock, Sparkles, BarChart3, 
-  CheckCircle2, Loader2, AlertCircle, Filter, Grid3X3, List, 
+  Eye, Download, Tag, Calendar, Sparkles, 
+  CheckCircle2, Loader2, Grid3X3, List, 
   ChevronRight, ExternalLink, Brain, Zap
 } from 'lucide-react'
 import api from '../api/client'
@@ -467,7 +467,7 @@ export default function Documents() {
                         {doc.view_count}
                       </span>
                       {doc.indexed_at && (
-                        <Sparkles className="w-3 h-3 text-sky-400" title="AI Indexed" />
+                        <span title="AI Indexed"><Sparkles className="w-3 h-3 text-sky-400" /></span>
                       )}
                     </div>
                   </div>

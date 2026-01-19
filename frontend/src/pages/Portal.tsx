@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -13,14 +13,10 @@ import {
   Eye,
   QrCode,
   Sparkles,
-  ChevronRight,
   Star,
   Zap,
-  Users,
-  TrendingUp,
   HelpCircle,
   Phone,
-  Siren,
 } from 'lucide-react';
 
 // Animated background gradient component
@@ -60,7 +56,7 @@ const FeatureCard = ({ icon: Icon, title, description }: { icon: any; title: str
 
 export default function Portal() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
+  const [stats] = useState({
     totalToday: 12,
     avgResolution: '2.4',
     resolvedWeek: 47,

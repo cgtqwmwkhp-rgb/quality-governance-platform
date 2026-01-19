@@ -12,7 +12,6 @@ import {
   Shield,
   Clock,
   AlertTriangle,
-  CheckCircle,
   ArrowLeft,
   ExternalLink,
   BookOpen,

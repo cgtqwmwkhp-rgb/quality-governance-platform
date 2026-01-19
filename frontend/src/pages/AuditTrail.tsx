@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import {
   History,
-  Filter,
   Search,
   Download,
   ChevronDown,
-  User,
   FileText,
   Edit,
   Trash2,
@@ -13,12 +11,10 @@ import {
   Eye,
   LogIn,
   LogOut,
-  Shield,
   AlertTriangle,
   CheckCircle2,
   Clock,
   ArrowRight,
-  Calendar,
   RefreshCw
 } from 'lucide-react';
 

@@ -1,24 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   BarChart3,
   TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle2,
   Clock,
   FileText,
   Shield,
-  Car,
-  MessageSquare,
   Activity,
   PieChart,
-  Calendar,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
   RefreshCw,
   Download,
-  Filter,
   Sparkles
 } from 'lucide-react';
 
@@ -281,7 +276,7 @@ export default function Analytics() {
           
           {/* Simple Bar Chart */}
           <div className="h-64 flex items-end justify-between gap-2">
-            {monthlyTrends.map((month, i) => (
+            {monthlyTrends.map((month) => (
               <div key={month.month} className="flex-1 flex flex-col items-center gap-1">
                 <div className="w-full flex flex-col items-center gap-0.5">
                   <div
@@ -363,7 +358,7 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody>
-              {moduleStats.map((stat, i) => (
+              {moduleStats.map((stat) => (
                 <tr
                   key={stat.module}
                   className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors ${
