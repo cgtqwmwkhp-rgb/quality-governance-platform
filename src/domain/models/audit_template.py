@@ -18,7 +18,6 @@ from src.infrastructure.database import Base
 # Using SQLAlchemy 2.0 style Mapped/mapped_column for type checking
 
 
-
 # ============================================================================
 # ENUMS
 # ============================================================================
