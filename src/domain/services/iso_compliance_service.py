@@ -605,7 +605,7 @@ ALL_CLAUSES = ISO_9001_CLAUSES + ISO_14001_CLAUSES + ISO_45001_CLAUSES
 class ISOComplianceService:
     """Service for ISO compliance evidence management and auto-tagging."""
 
-    def __init__(self, ai_client=None):  # type: ignore[no-untyped-def]
+    def __init__(self, ai_client: Optional[Any] = None) -> None:
         self.ai_client = ai_client
         self.clauses: Dict[str, ISOClause] = {clause.id: clause for clause in ALL_CLAUSES}
 

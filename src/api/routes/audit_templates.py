@@ -367,7 +367,7 @@ async def list_templates(
     items = filtered[start:end]
 
     return PaginatedTemplateResponse(
-        items=[TemplateListSchema(**t) for t in items],  # type: ignore[arg-type]
+        items=[TemplateListSchema(**dict(t)) for t in items],
         total=total,
         page=page,
         page_size=page_size,
