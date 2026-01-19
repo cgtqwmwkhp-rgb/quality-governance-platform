@@ -11,14 +11,11 @@ Features:
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser
 from src.domain.models.notification import NotificationPriority, NotificationType
-from src.domain.services.notification_service import notification_service
-from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -111,17 +108,8 @@ async def list_notifications(
 
     Supports filtering by read status and notification type.
     """
-    # Parse notification type filter
-    type_filter = None
-    if notification_type:
-        try:
-            type_filter = [NotificationType(notification_type)]
-        except ValueError:
-            pass
-
-    # Create service with mock data for now
-    # In production, pass actual database session
-    notifications = []
+    # Parse notification type filter (placeholder for production implementation)
+    _ = notification_type  # Used in production for filtering
 
     # Mock notifications for demonstration
     mock_notifications = [

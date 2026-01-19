@@ -11,7 +11,7 @@ Features:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.infrastructure.websocket.connection_manager import connection_manager
