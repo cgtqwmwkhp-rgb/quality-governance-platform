@@ -339,12 +339,14 @@ class ConnectionManager:
                 if channel:
                     await self.subscribe_to_channel(connection, channel)
                     return {"type": "subscribed", "channel": channel}
+                return None
 
             elif msg_type == "unsubscribe":
                 channel = data.get("channel")
                 if channel:
                     await self.unsubscribe_from_channel(connection, channel)
                     return {"type": "unsubscribed", "channel": channel}
+                return None
 
             elif msg_type == "presence":
                 status = data.get("status", "online")
