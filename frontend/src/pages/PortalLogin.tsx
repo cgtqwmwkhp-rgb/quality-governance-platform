@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, LogIn, Loader2, AlertCircle } from 'lucide-react';
+import { Shield, Loader2, AlertCircle } from 'lucide-react';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 
 export default function PortalLogin() {
