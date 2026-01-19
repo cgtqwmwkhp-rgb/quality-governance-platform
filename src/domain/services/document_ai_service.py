@@ -285,16 +285,16 @@ Respond with JSON matching this schema:
 
         return chunks
 
-    def _split_by_sections(self, content: str) -> list[tuple[str, str]]:
+    def _split_by_sections(self, content: str) -> list[tuple[Optional[str], str]]:
         """Split content by markdown/document headings."""
 
         # Match markdown headings or uppercase lines
         heading_pattern = r"^(#{1,3}\s+.+|[A-Z][A-Z\s]{5,}[A-Z])$"
 
         lines = content.split("\n")
-        sections = []
-        current_heading = None
-        current_content = []
+        sections: list[tuple[Optional[str], str]] = []
+        current_heading: Optional[str] = None
+        current_content: list[str] = []
 
         for line in lines:
             if re.match(heading_pattern, line.strip()):
@@ -389,7 +389,8 @@ class EmbeddingService:
 
                 data = response.json()
                 if data.get("data"):
-                    return data["data"][0]["embedding"]
+                    embedding: list[float] = data["data"][0]["embedding"]
+                    return embedding
 
         except Exception as e:
             logger.error(f"Query embedding failed: {e}")
@@ -479,7 +480,8 @@ class VectorSearchService:
                 response.raise_for_status()
 
                 data = response.json()
-                return data.get("matches", [])
+                matches: list[dict] = data.get("matches", [])  # type: ignore[assignment]
+                return matches
 
         except Exception as e:
             logger.error(f"Vector search failed: {e}")

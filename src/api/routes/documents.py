@@ -227,7 +227,8 @@ async def upload_document(
 
         if text_content and not text_content.startswith("["):
             # Analyze with AI
-            analysis = await ai_service.analyze_document(text_content, file.filename, file_ext)
+            filename = file.filename or "document"
+            analysis = await ai_service.analyze_document(text_content, filename, file_ext)
 
             doc.ai_summary = analysis.summary
             doc.ai_tags = analysis.tags
