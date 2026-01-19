@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,21 +14,15 @@ import {
   User,
   Building,
   Phone,
-  Mail,
   FileText,
-  Upload,
   Check,
   ChevronRight,
   ChevronLeft,
   Loader2,
   Shield,
-  Car,
   Truck,
-  Eye,
   Users,
-  Stethoscope,
   X,
-  Sparkles,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 
