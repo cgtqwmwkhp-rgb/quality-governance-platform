@@ -35,6 +35,11 @@ on:
           - S1
           - P1V2
         default: 'F1'
+      use_existing_plan:
+        description: 'Use existing App Service Plan name (leave empty to create new)'
+        required: false
+        type: string
+        default: ''
 
 env:
   LOCATION: westeurope
@@ -158,37 +163,60 @@ jobs:
           echo "- SECRET-KEY: ✅ Generated" >> $GITHUB_STEP_SUMMARY
           echo "- JWT-SECRET-KEY: ✅ Generated" >> $GITHUB_STEP_SUMMARY
 
-      - name: Create App Service Plan
+      - name: Configure App Service Plan
+        id: plan
         run: |
-          echo "Creating App Service Plan: ${{ env.APP_PLAN_NAME }}"
-          
-          if az appservice plan show --name ${{ env.APP_PLAN_NAME }} --resource-group ${{ env.RG_NAME }} &> /dev/null; then
-            echo "App Service Plan already exists"
+          # Check if using an existing plan
+          if [ -n "${{ github.event.inputs.use_existing_plan }}" ]; then
+            PLAN_NAME="${{ github.event.inputs.use_existing_plan }}"
+            echo "Using existing App Service Plan: $PLAN_NAME"
+            
+            # Verify it exists
+            if ! az appservice plan show --name $PLAN_NAME --resource-group ${{ env.RG_NAME }} &> /dev/null; then
+              echo "❌ App Service Plan '$PLAN_NAME' not found in ${{ env.RG_NAME }}"
+              echo "Available plans:"
+              az appservice plan list --resource-group ${{ env.RG_NAME }} --query "[].name" -o tsv
+              exit 1
+            fi
+            
+            echo "plan_name=$PLAN_NAME" >> $GITHUB_OUTPUT
+            echo "## App Service Plan" >> $GITHUB_STEP_SUMMARY
+            echo "- **Name**: $PLAN_NAME (existing)" >> $GITHUB_STEP_SUMMARY
           else
-            az appservice plan create \
-              --resource-group ${{ env.RG_NAME }} \
-              --name ${{ env.APP_PLAN_NAME }} \
-              --sku ${{ github.event.inputs.app_service_sku }} \
-              --is-linux
+            PLAN_NAME="${{ env.APP_PLAN_NAME }}"
+            echo "Creating App Service Plan: $PLAN_NAME"
+            
+            if az appservice plan show --name $PLAN_NAME --resource-group ${{ env.RG_NAME }} &> /dev/null; then
+              echo "App Service Plan already exists"
+            else
+              az appservice plan create \
+                --resource-group ${{ env.RG_NAME }} \
+                --name $PLAN_NAME \
+                --sku ${{ github.event.inputs.app_service_sku }} \
+                --is-linux
+            fi
+            
+            echo "plan_name=$PLAN_NAME" >> $GITHUB_OUTPUT
+            echo "## App Service Plan" >> $GITHUB_STEP_SUMMARY
+            echo "- **Name**: $PLAN_NAME" >> $GITHUB_STEP_SUMMARY
+            echo "- **SKU**: ${{ github.event.inputs.app_service_sku }}" >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo "## App Service Plan" >> $GITHUB_STEP_SUMMARY
-          echo "- **Name**: ${{ env.APP_PLAN_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **SKU**: ${{ github.event.inputs.app_service_sku }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Web App
         id: webapp
         run: |
           ACR_NAME="${{ steps.acr.outputs.acr_name }}"
+          PLAN_NAME="${{ steps.plan.outputs.plan_name }}"
           
           echo "Creating Web App: ${{ env.APP_NAME }}"
+          echo "Using App Service Plan: $PLAN_NAME"
           
           if az webapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RG_NAME }} &> /dev/null; then
             echo "Web App already exists"
           else
             az webapp create \
               --resource-group ${{ env.RG_NAME }} \
-              --plan ${{ env.APP_PLAN_NAME }} \
+              --plan $PLAN_NAME \
               --name ${{ env.APP_NAME }} \
               --deployment-container-image-name mcr.microsoft.com/appsvc/staticsite:latest
           fi
