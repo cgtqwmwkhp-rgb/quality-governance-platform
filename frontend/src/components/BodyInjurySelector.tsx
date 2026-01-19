@@ -1,16 +1,28 @@
 import { useState } from 'react';
-import { RotateCcw, X } from 'lucide-react';
+import { 
+  RotateCcw, 
+  X,
+  Droplets,
+  Circle,
+  Flame,
+  Bone,
+  Activity,
+  AlertTriangle,
+  Target,
+  HelpCircle,
+  type LucideIcon,
+} from 'lucide-react';
 
-// Injury types with colors
-const INJURY_TYPES = [
-  { id: 'cut', label: 'Cut / Laceration', color: '#ef4444', icon: '🩸' },
-  { id: 'bruise', label: 'Bruise / Contusion', color: '#8b5cf6', icon: '💜' },
-  { id: 'burn', label: 'Burn', color: '#f97316', icon: '🔥' },
-  { id: 'fracture', label: 'Fracture / Break', color: '#eab308', icon: '🦴' },
-  { id: 'sprain', label: 'Sprain / Strain', color: '#22c55e', icon: '💪' },
-  { id: 'crush', label: 'Crush Injury', color: '#ec4899', icon: '⚠️' },
-  { id: 'puncture', label: 'Puncture Wound', color: '#06b6d4', icon: '📌' },
-  { id: 'other', label: 'Other', color: '#6b7280', icon: '❓' },
+// Injury types with colors and proper icons
+const INJURY_TYPES: { id: string; label: string; color: string; Icon: LucideIcon }[] = [
+  { id: 'cut', label: 'Cut / Laceration', color: '#ef4444', Icon: Droplets },
+  { id: 'bruise', label: 'Bruise / Contusion', color: '#8b5cf6', Icon: Circle },
+  { id: 'burn', label: 'Burn', color: '#f97316', Icon: Flame },
+  { id: 'fracture', label: 'Fracture / Break', color: '#eab308', Icon: Bone },
+  { id: 'sprain', label: 'Sprain / Strain', color: '#22c55e', Icon: Activity },
+  { id: 'crush', label: 'Crush Injury', color: '#ec4899', Icon: AlertTriangle },
+  { id: 'puncture', label: 'Puncture Wound', color: '#06b6d4', Icon: Target },
+  { id: 'other', label: 'Other', color: '#6b7280', Icon: HelpCircle },
 ];
 
 // Body regions for front and back
@@ -201,17 +213,18 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
                     strokeOpacity={0.5}
                     className="transition-all duration-200 hover:fill-opacity-40 hover:stroke-opacity-100"
                   />
-                  {injury && (
-                    <text
-                      x={region.cx}
-                      y={region.cy}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize="16"
+                  {injury && injuryType && (
+                    <foreignObject
+                      x={region.cx - 10}
+                      y={region.cy - 10}
+                      width="20"
+                      height="20"
                       className="pointer-events-none"
                     >
-                      {injuryType?.icon}
-                    </text>
+                      <div className="w-full h-full flex items-center justify-center">
+                        <injuryType.Icon className="w-4 h-4" style={{ color: injuryType.color }} />
+                      </div>
+                    </foreignObject>
                   )}
                 </g>
               );
@@ -260,11 +273,16 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
                   key={type.id}
                   type="button"
                   onClick={() => handleInjuryTypeSelect(type.id)}
-                  className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-left"
-                  style={{ borderColor: `${type.color}33` }}
+                  className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-left group"
+                  style={{ borderColor: `${type.color}40` }}
                 >
-                  <span className="text-xl">{type.icon}</span>
-                  <span className="text-sm text-white font-medium">{type.label}</span>
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `${type.color}20` }}
+                  >
+                    <type.Icon className="w-5 h-5" style={{ color: type.color }} />
+                  </div>
+                  <span className="text-sm text-white font-medium group-hover:text-gray-200">{type.label}</span>
                 </button>
               ))}
             </div>
@@ -301,7 +319,12 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
                   style={{ borderLeftColor: type?.color, borderLeftWidth: '3px' }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-lg">{type?.icon}</span>
+                    <div 
+                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: `${type?.color}20` }}
+                    >
+                      {type && <type.Icon className="w-4 h-4" style={{ color: type.color }} />}
+                    </div>
                     <div>
                       <p className="text-sm font-medium text-white">{injury.regionLabel}</p>
                       <p className="text-xs text-gray-400">{injury.injuryLabel}</p>
