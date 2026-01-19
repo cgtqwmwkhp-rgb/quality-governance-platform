@@ -17,6 +17,14 @@ import PortalReport from './pages/PortalReport'
 import PortalTrack from './pages/PortalTrack'
 import PortalSOS from './pages/PortalSOS'
 import PortalHelp from './pages/PortalHelp'
+// Enterprise Enhancement Pages
+import Analytics from './pages/Analytics'
+import GlobalSearch from './pages/GlobalSearch'
+import UserManagement from './pages/UserManagement'
+import AuditTrail from './pages/AuditTrail'
+import CalendarView from './pages/CalendarView'
+import Notifications from './pages/Notifications'
+import ExportCenter from './pages/ExportCenter'
 import Layout from './components/Layout'
 
 function App() {
@@ -98,6 +106,14 @@ function App() {
           <Route path="standards" element={<Standards />} />
           <Route path="actions" element={<Actions />} />
           <Route path="documents" element={<Documents />} />
+          {/* Enterprise Enhancement Routes */}
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="search" element={<GlobalSearch />} />
+          <Route path="users" element={<UserManagement />} />
+          <Route path="audit-trail" element={<AuditTrail />} />
+          <Route path="calendar" element={<CalendarView />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="exports" element={<ExportCenter />} />
         </Route>
       </Routes>
     </BrowserRouter>

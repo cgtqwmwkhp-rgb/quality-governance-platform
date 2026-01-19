@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { 
   LayoutDashboard, 
   AlertTriangle, 
@@ -14,9 +14,18 @@ import {
   Menu,
   X,
   Sparkles,
-  FolderOpen
+  FolderOpen,
+  BarChart3,
+  Search,
+  Users,
+  History,
+  Calendar,
+  Bell,
+  Download,
+  Settings,
+  Command
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface LayoutProps {
   onLogout: () => void
@@ -48,14 +57,82 @@ const navSections = [
       { path: '/policies', icon: FileText, label: 'Policies', color: 'text-blue-400' },
       { path: '/risks', icon: Shield, label: 'Risks', color: 'text-rose-400' },
     ]
+  },
+  {
+    title: 'Analytics',
+    items: [
+      { path: '/analytics', icon: BarChart3, label: 'Dashboard', color: 'text-violet-400' },
+      { path: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-rose-400' },
+      { path: '/exports', icon: Download, label: 'Export Center', color: 'text-teal-400' },
+    ]
+  },
+  {
+    title: 'Admin',
+    items: [
+      { path: '/users', icon: Users, label: 'User Management', color: 'text-indigo-400' },
+      { path: '/audit-trail', icon: History, label: 'Audit Trail', color: 'text-cyan-400' },
+    ]
   }
 ]
 
 export default function Layout({ onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(3)
+  const navigate = useNavigate()
+
+  // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        navigate('/search')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [navigate])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Top Bar */}
+      <div className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 z-30 flex items-center justify-between px-6">
+        {/* Search Bar */}
+        <button
+          onClick={() => navigate('/search')}
+          className="flex items-center gap-3 px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-600 transition-all w-full max-w-md"
+        >
+          <Search className="w-4 h-4" />
+          <span className="text-sm">Search...</span>
+          <div className="ml-auto flex items-center gap-1 text-xs text-slate-500">
+            <Command className="w-3 h-3" />
+            <span>K</span>
+          </div>
+        </button>
+        
+        {/* Right Actions */}
+        <div className="flex items-center gap-3">
+          <NavLink
+            to="/notifications"
+            className="relative p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadNotifications > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {unreadNotifications}
+              </span>
+            )}
+          </NavLink>
+          
+          <NavLink
+            to="/users"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all"
+          >
+            <Settings className="w-5 h-5" />
+          </NavLink>
+        </div>
+      </div>
+
       {/* Mobile menu button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -145,7 +222,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="lg:pl-72">
+      <main className="lg:pl-72 pt-16">
         <div className="p-6 lg:p-8 min-h-screen">
           <Outlet />
         </div>
