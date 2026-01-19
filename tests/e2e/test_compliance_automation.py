@@ -10,10 +10,7 @@ Tests cover:
 - RIDDOR automation
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Dict
-
-import pytest
+from typing import Any
 
 
 class TestRegulatoryMonitoring:

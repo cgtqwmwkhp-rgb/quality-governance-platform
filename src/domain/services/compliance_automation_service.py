@@ -280,8 +280,6 @@ class ComplianceAutomationService:
 
     def get_expiring_certificates_summary(self) -> Dict[str, Any]:
         """Get summary of expiring certificates."""
-        now = datetime.utcnow()
-
         return {
             "expired": 2,
             "expiring_7_days": 1,
