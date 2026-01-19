@@ -96,8 +96,8 @@ class SMSService:
             return SMSResult(success=False, status=SMSStatus.FAILED, error_message="SMS service not configured")
 
         # Validate phone number format
-        to = self._normalize_phone_number(to)
-        if not to:
+        normalized = self._normalize_phone_number(to)
+        if not normalized:
             return SMSResult(success=False, status=SMSStatus.FAILED, error_message="Invalid phone number format")
 
         # Truncate message if too long
@@ -105,9 +105,9 @@ class SMSService:
             message = message[:1597] + "..."
 
         try:
-            sms = self.client.messages.create(body=message, from_=from_number or self.from_number, to=to)
+            sms = self.client.messages.create(body=message, from_=from_number or self.from_number, to=normalized)
 
-            logger.info(f"SMS sent to {to}: SID={sms.sid}")
+            logger.info(f"SMS sent to {normalized}: SID={sms.sid}")
 
             return SMSResult(
                 success=True,

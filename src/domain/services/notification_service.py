@@ -45,8 +45,8 @@ class NotificationService:
 
     def __init__(self, db: Optional[AsyncSession] = None):
         self.db = db
-        self.sms_service = None  # Lazy load
-        self.email_service = None  # Lazy load
+        self.sms_service: Any = None  # Lazy load
+        self.email_service: Any = None  # Lazy load
 
     async def create_notification(
         self,
@@ -116,7 +116,8 @@ class NotificationService:
                 elif channel == NotificationChannel.PUSH:
                     await self._deliver_push(notification)
 
-                notification.delivered_channels.append(channel.value)
+                if notification.delivered_channels is not None:
+                    notification.delivered_channels.append(channel.value)
             except Exception as e:
                 logger.error(f"Failed to deliver via {channel}: {e}")
 

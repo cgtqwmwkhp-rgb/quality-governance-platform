@@ -236,7 +236,6 @@ async def update_notification_preferences(preferences: NotificationPreferencesUp
 async def search_users_for_mention(
     q: str = Query(..., min_length=1, max_length=50),
     limit: int = Query(10, ge=1, le=50),
-    current_user: CurrentUser = None,
 ):
     """
     Search users for @mention autocomplete.

@@ -285,7 +285,7 @@ class ConnectionManager:
         presence = self.presence.get(user_id)
         return presence is not None and presence.status == "online"
 
-    async def handle_heartbeat(self, connection: UserConnection):
+    async def handle_heartbeat(self, connection: UserConnection) -> None:
         """Handle heartbeat/ping from client"""
         connection.last_ping = datetime.utcnow()
         self._update_presence(connection.user_id, "online")
