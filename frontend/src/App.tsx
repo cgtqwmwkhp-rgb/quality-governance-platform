@@ -34,6 +34,10 @@ import CalendarView from './pages/CalendarView'
 import Notifications from './pages/Notifications'
 import ExportCenter from './pages/ExportCenter'
 import ComplianceEvidence from './pages/ComplianceEvidence'
+// Phase 2: Advanced Analytics & Reporting
+import AdvancedAnalytics from './pages/AdvancedAnalytics'
+import DashboardBuilder from './pages/DashboardBuilder'
+import ReportGenerator from './pages/ReportGenerator'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -154,6 +158,9 @@ function App() {
           <Route path="documents" element={<Documents />} />
           {/* Enterprise Enhancement Routes */}
           <Route path="analytics" element={<Analytics />} />
+          <Route path="analytics/advanced" element={<AdvancedAnalytics />} />
+          <Route path="analytics/dashboards" element={<DashboardBuilder />} />
+          <Route path="analytics/reports" element={<ReportGenerator />} />
           <Route path="search" element={<GlobalSearch />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="audit-trail" element={<AuditTrail />} />

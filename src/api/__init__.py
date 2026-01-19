@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from src.api.routes import (
+    analytics,
     audit_templates,
     audits,
     auth,
@@ -42,5 +43,6 @@ router.include_router(employee_portal.router, prefix="/portal", tags=["Employee 
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
+router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
 
 __all__ = ["router"]

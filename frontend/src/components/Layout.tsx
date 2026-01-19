@@ -63,7 +63,10 @@ const navSections = [
   {
     title: 'Analytics',
     items: [
-      { path: '/analytics', icon: BarChart3, label: 'Dashboard', color: 'text-violet-400' },
+      { path: '/analytics', icon: BarChart3, label: 'Overview', color: 'text-violet-400' },
+      { path: '/analytics/advanced', icon: BarChart3, label: 'Advanced Analytics', color: 'text-emerald-400' },
+      { path: '/analytics/dashboards', icon: LayoutDashboard, label: 'Dashboard Builder', color: 'text-blue-400' },
+      { path: '/analytics/reports', icon: FileText, label: 'Report Generator', color: 'text-amber-400' },
       { path: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-rose-400' },
       { path: '/exports', icon: Download, label: 'Export Center', color: 'text-teal-400' },
     ]

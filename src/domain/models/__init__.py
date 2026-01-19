@@ -1,5 +1,13 @@
 """Domain models package."""
 
+from src.domain.models.analytics import (
+    BenchmarkData,
+    CostRecord,
+    Dashboard,
+    DashboardWidget,
+    ROIInvestment,
+    SavedReport,
+)
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
@@ -60,4 +68,11 @@ __all__ = [
     "DocumentVersion",
     "DocumentSearchLog",
     "IndexJob",
+    # Analytics models
+    "Dashboard",
+    "DashboardWidget",
+    "SavedReport",
+    "BenchmarkData",
+    "CostRecord",
+    "ROIInvestment",
 ]
