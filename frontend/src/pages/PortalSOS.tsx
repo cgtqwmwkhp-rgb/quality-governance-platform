@@ -190,26 +190,23 @@ export default function PortalSOS() {
       <EmergencyBackground />
 
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-red-900/50 backdrop-blur-xl border-b border-red-500/30">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <button
-              onClick={() => navigate('/portal')}
-              className="flex items-center gap-2 text-red-200 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Cancel</span>
-            </button>
-            <div className="flex items-center gap-2 text-red-400">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-sm font-medium">EMERGENCY MODE</span>
-            </div>
+      <header className="sticky top-0 z-50 bg-red-900/50 backdrop-blur-xl border-b border-red-500/30">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+          <button
+            onClick={() => navigate('/portal')}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <div className="flex items-center gap-2 text-red-400">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-sm font-medium">EMERGENCY</span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
+      <main className="max-w-lg mx-auto px-4 py-6 pb-12">
         {/* Emergency Icon */}
         <div className="text-center mb-8">
           <div className="inline-flex w-24 h-24 bg-red-500 rounded-full items-center justify-center mb-4 animate-pulse shadow-lg shadow-red-500/50">

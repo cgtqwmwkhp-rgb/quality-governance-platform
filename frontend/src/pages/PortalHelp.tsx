@@ -221,22 +221,23 @@ export default function PortalHelp() {
       <AnimatedBackground />
 
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-black/20 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            <button
-              onClick={() => navigate('/portal')}
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Portal</span>
-            </button>
+      <header className="sticky top-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/10">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-4">
+          <button
+            onClick={() => navigate('/portal')}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <div className="flex items-center gap-2">
+            <HelpCircle className="w-5 h-5 text-indigo-400" />
+            <span className="font-semibold text-white">Help & Support</span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
+      <main className="max-w-lg mx-auto px-4 py-6 pb-12">
         {/* Hero */}
         <div className="text-center mb-10">
           <div className="inline-flex w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl items-center justify-center mb-4">
@@ -358,11 +359,11 @@ export default function PortalHelp() {
         {/* Quick Actions */}
         <div className="mt-8 flex flex-col sm:flex-row gap-4">
           <button
-            onClick={() => navigate('/portal/report?type=incident')}
+            onClick={() => navigate('/portal/report')}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-500/20 border border-red-500/30 text-red-400 font-medium rounded-xl hover:bg-red-500/30 transition-colors"
           >
             <AlertTriangle className="w-5 h-5" />
-            Report an Incident
+            Submit a Report
           </button>
           <button
             onClick={() => navigate('/portal/track')}
