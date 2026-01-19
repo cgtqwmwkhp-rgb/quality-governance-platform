@@ -271,18 +271,14 @@ class WorkflowService:
         )
         self._definitions[doc_workflow.id] = doc_workflow
 
-    async def get_workflow_definitions(
-        self, module: Optional[str] = None
-    ) -> List[WorkflowDefinition]:
+    async def get_workflow_definitions(self, module: Optional[str] = None) -> List[WorkflowDefinition]:
         """Get all workflow definitions, optionally filtered by module."""
         definitions = list(self._definitions.values())
         if module:
             definitions = [d for d in definitions if d.module == module]
         return definitions
 
-    async def get_workflow_definition(
-        self, definition_id: str
-    ) -> Optional[WorkflowDefinition]:
+    async def get_workflow_definition(self, definition_id: str) -> Optional[WorkflowDefinition]:
         """Get a specific workflow definition."""
         return self._definitions.get(definition_id)
 
@@ -337,9 +333,7 @@ class WorkflowService:
         )
 
         self._instances[instance_id] = instance
-        logger.info(
-            f"Started workflow instance {instance_id} for {entity_type}/{entity_id}"
-        )
+        logger.info(f"Started workflow instance {instance_id} for {entity_type}/{entity_id}")
 
         # Process first step
         await self._process_current_step(instance)
@@ -357,9 +351,7 @@ class WorkflowService:
         step = definition.steps[instance.current_step_index]
 
         # Check conditions
-        if step.conditions and not self._evaluate_conditions(
-            step.conditions, instance.data
-        ):
+        if step.conditions and not self._evaluate_conditions(step.conditions, instance.data):
             # Skip this step
             instance.history.append(
                 {
@@ -395,9 +387,7 @@ class WorkflowService:
         elif step.step_type == StepType.PARALLEL:
             await self._process_parallel_steps(instance, step)
 
-    def _evaluate_conditions(
-        self, conditions: Dict[str, Any], data: Dict[str, Any]
-    ) -> bool:
+    def _evaluate_conditions(self, conditions: Dict[str, Any], data: Dict[str, Any]) -> bool:
         """Evaluate step conditions against workflow data."""
         for key, expected_values in conditions.items():
             actual_value = data.get(key)
@@ -408,9 +398,7 @@ class WorkflowService:
                 return False
         return True
 
-    async def _create_approval_request(
-        self, instance: WorkflowInstance, step: WorkflowStep
-    ) -> ApprovalRequest:
+    async def _create_approval_request(self, instance: WorkflowInstance, step: WorkflowStep) -> ApprovalRequest:
         """Create an approval request for a workflow step."""
         request_id = f"APR-{uuid4().hex[:8].upper()}"
 
@@ -441,9 +429,7 @@ class WorkflowService:
         logger.info(f"Created approval request {request_id} for step {step.name}")
         return request
 
-    async def approve_step(
-        self, request_id: str, approver_id: str, comments: Optional[str] = None
-    ) -> WorkflowInstance:
+    async def approve_step(self, request_id: str, approver_id: str, comments: Optional[str] = None) -> WorkflowInstance:
         """Approve a workflow step."""
         request = self._approvals.get(request_id)
         if not request:
@@ -474,9 +460,7 @@ class WorkflowService:
 
         return instance
 
-    async def reject_step(
-        self, request_id: str, rejector_id: str, reason: str
-    ) -> WorkflowInstance:
+    async def reject_step(self, request_id: str, rejector_id: str, reason: str) -> WorkflowInstance:
         """Reject a workflow step."""
         request = self._approvals.get(request_id)
         if not request:
@@ -501,9 +485,7 @@ class WorkflowService:
         logger.info(f"Workflow {instance.id} rejected at step {request.step_id}")
         return instance
 
-    async def _send_notifications(
-        self, instance: WorkflowInstance, step: WorkflowStep
-    ) -> None:
+    async def _send_notifications(self, instance: WorkflowInstance, step: WorkflowStep) -> None:
         """Send notifications for a workflow step."""
         if not step.actions:
             return
@@ -511,13 +493,9 @@ class WorkflowService:
         for action in step.actions:
             action_type = action.get("type")
             if action_type == "email":
-                logger.info(
-                    f"Sending email notification for workflow {instance.id}: {action.get('template')}"
-                )
+                logger.info(f"Sending email notification for workflow {instance.id}: {action.get('template')}")
             elif action_type == "push":
-                logger.info(
-                    f"Sending push notification for workflow {instance.id}: {action.get('message')}"
-                )
+                logger.info(f"Sending push notification for workflow {instance.id}: {action.get('message')}")
 
         instance.history.append(
             {
@@ -528,18 +506,14 @@ class WorkflowService:
             }
         )
 
-    async def _execute_automatic_actions(
-        self, instance: WorkflowInstance, step: WorkflowStep
-    ) -> None:
+    async def _execute_automatic_actions(self, instance: WorkflowInstance, step: WorkflowStep) -> None:
         """Execute automatic actions for a workflow step."""
         if not step.actions:
             return
 
         for action in step.actions:
             action_type = action.get("type")
-            logger.info(
-                f"Executing automatic action '{action_type}' for workflow {instance.id}"
-            )
+            logger.info(f"Executing automatic action '{action_type}' for workflow {instance.id}")
             # In production, dispatch to action handlers
 
         instance.history.append(
@@ -551,9 +525,7 @@ class WorkflowService:
             }
         )
 
-    async def _process_parallel_steps(
-        self, instance: WorkflowInstance, step: WorkflowStep
-    ) -> None:
+    async def _process_parallel_steps(self, instance: WorkflowInstance, step: WorkflowStep) -> None:
         """Process parallel workflow steps."""
         if not step.parallel_steps:
             return
@@ -583,9 +555,7 @@ class WorkflowService:
         )
         logger.info(f"Workflow {instance.id} completed successfully")
 
-    async def get_workflow_instance(
-        self, instance_id: str
-    ) -> Optional[WorkflowInstance]:
+    async def get_workflow_instance(self, instance_id: str) -> Optional[WorkflowInstance]:
         """Get a workflow instance by ID."""
         return self._instances.get(instance_id)
 
@@ -594,8 +564,7 @@ class WorkflowService:
         return [
             a
             for a in self._approvals.values()
-            if a.status == "pending"
-            and (a.approver_id == user_id or a.approver_id.endswith(user_id))
+            if a.status == "pending" and (a.approver_id == user_id or a.approver_id.endswith(user_id))
         ]
 
     async def get_workflow_stats(self) -> Dict[str, Any]:
@@ -604,14 +573,10 @@ class WorkflowService:
         return {
             "total_workflows": len(instances),
             "active": len([i for i in instances if i.status == WorkflowStatus.IN_PROGRESS]),
-            "awaiting_approval": len(
-                [i for i in instances if i.status == WorkflowStatus.AWAITING_APPROVAL]
-            ),
+            "awaiting_approval": len([i for i in instances if i.status == WorkflowStatus.AWAITING_APPROVAL]),
             "completed": len([i for i in instances if i.status == WorkflowStatus.COMPLETED]),
             "rejected": len([i for i in instances if i.status == WorkflowStatus.REJECTED]),
-            "pending_approvals": len(
-                [a for a in self._approvals.values() if a.status == "pending"]
-            ),
+            "pending_approvals": len([a for a in self._approvals.values() if a.status == "pending"]),
         }
 
 

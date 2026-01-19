@@ -11,7 +11,7 @@ from sqlalchemy import or_, and_
 import uuid
 
 from src.infrastructure.database import get_db
-from src.api.routes.users import get_current_user
+# Note: Authentication handled by route-specific dependencies
 
 router = APIRouter()
 
