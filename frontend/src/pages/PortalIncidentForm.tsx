@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector';
+import { usePortalAuth } from '../contexts/PortalAuthContext';
 
 // Determine report type from URL path
 const getReportTypeFromPath = (pathname: string) => {
@@ -124,6 +125,7 @@ interface FormData {
 export default function PortalIncidentForm() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = usePortalAuth();
   const reportType = getReportTypeFromPath(location.pathname);
   const config = REPORT_CONFIGS[reportType];
   
@@ -155,6 +157,18 @@ export default function PortalIncidentForm() {
     complainantContact: '',
     photos: [],
   });
+
+  // Pre-fill user details from SSO
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        personName: user.name || '',
+        personRole: user.jobTitle || '',
+        personContact: user.email || '',
+      }));
+    }
+  }, [user]);
 
   // Total steps depends on report type
   const totalSteps = reportType === 'complaint' ? 3 : 4;

@@ -7,31 +7,64 @@ import {
   Shield,
   ChevronRight,
   Smartphone,
+  LogOut,
+  User,
 } from 'lucide-react';
+import { usePortalAuth } from '../contexts/PortalAuthContext';
 
 export default function Portal() {
   const navigate = useNavigate();
+  const { user, logout } = usePortalAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/portal/login');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
-      {/* Simple Header */}
+      {/* Header with User Info */}
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-xl flex items-center justify-center">
-            <Shield className="w-6 h-6 text-white" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-white font-bold text-lg">Plantexpand</h1>
-            <p className="text-gray-400 text-xs">Employee Portal</p>
+        <div className="max-w-lg mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-xl flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-white font-bold text-lg">Plantexpand</h1>
+                <p className="text-gray-400 text-xs">Employee Portal</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-5 h-5 text-gray-400" />
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-8">
+        {/* User Welcome */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500/30 to-cyan-500/30 rounded-full flex items-center justify-center">
+              <User className="w-6 h-6 text-purple-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-semibold">{user?.name || 'Employee'}</p>
+              <p className="text-gray-400 text-sm">{user?.email}</p>
+            </div>
+          </div>
+        </div>
+
         {/* Welcome Message */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-white mb-2">Welcome</h2>
-          <p className="text-gray-400">What would you like to do?</p>
+          <h2 className="text-2xl font-bold text-white mb-2">What would you like to do?</h2>
+          <p className="text-gray-400">Select an option below</p>
         </div>
 
         {/* Main Actions - Clear hierarchy */}

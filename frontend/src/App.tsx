@@ -13,6 +13,7 @@ import Standards from './pages/Standards'
 import Actions from './pages/Actions'
 import Documents from './pages/Documents'
 import Portal from './pages/Portal'
+import PortalLogin from './pages/PortalLogin'
 import PortalReport from './pages/PortalReport'
 import PortalTrack from './pages/PortalTrack'
 import PortalSOS from './pages/PortalSOS'
@@ -28,6 +29,8 @@ import CalendarView from './pages/CalendarView'
 import Notifications from './pages/Notifications'
 import ExportCenter from './pages/ExportCenter'
 import Layout from './components/Layout'
+import PortalLayout from './components/PortalLayout'
+import { PortalAuthProvider } from './contexts/PortalAuthContext'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -65,24 +68,43 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Employee Portal Routes - No Auth Required */}
-        {/* Level 1: Portal Home */}
-        <Route path="/portal" element={<Portal />} />
+        {/* Portal Login - Public */}
+        <Route 
+          path="/portal/login" 
+          element={
+            <PortalAuthProvider>
+              <PortalLogin />
+            </PortalAuthProvider>
+          } 
+        />
         
-        {/* Level 2: Report Type Selection */}
-        <Route path="/portal/report" element={<PortalReport />} />
-        
-        {/* Level 3: Report Forms */}
-        <Route path="/portal/report/incident" element={<PortalIncidentForm />} />
-        <Route path="/portal/report/near-miss" element={<PortalIncidentForm />} />
-        <Route path="/portal/report/complaint" element={<PortalIncidentForm />} />
-        <Route path="/portal/report/rta" element={<PortalRTAForm />} />
-        
-        {/* Other Portal Pages */}
-        <Route path="/portal/track" element={<PortalTrack />} />
-        <Route path="/portal/track/:referenceNumber" element={<PortalTrack />} />
-        <Route path="/portal/sos" element={<PortalSOS />} />
-        <Route path="/portal/help" element={<PortalHelp />} />
+        {/* Protected Employee Portal Routes - Requires SSO */}
+        <Route 
+          path="/portal"
+          element={
+            <PortalAuthProvider>
+              <PortalLayout />
+            </PortalAuthProvider>
+          }
+        >
+          {/* Level 1: Portal Home */}
+          <Route index element={<Portal />} />
+          
+          {/* Level 2: Report Type Selection */}
+          <Route path="report" element={<PortalReport />} />
+          
+          {/* Level 3: Report Forms */}
+          <Route path="report/incident" element={<PortalIncidentForm />} />
+          <Route path="report/near-miss" element={<PortalIncidentForm />} />
+          <Route path="report/complaint" element={<PortalIncidentForm />} />
+          <Route path="report/rta" element={<PortalRTAForm />} />
+          
+          {/* Other Portal Pages */}
+          <Route path="track" element={<PortalTrack />} />
+          <Route path="track/:referenceNumber" element={<PortalTrack />} />
+          <Route path="sos" element={<PortalSOS />} />
+          <Route path="help" element={<PortalHelp />} />
+        </Route>
         
         {/* Auth Routes */}
         <Route

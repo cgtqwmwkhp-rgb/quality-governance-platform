@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePortalAuth } from '../contexts/PortalAuthContext';
 import {
   ArrowLeft,
   Car,
@@ -124,6 +125,7 @@ type Step = 1 | 2 | 3 | 4 | 5;
 
 export default function PortalRTAForm() {
   const navigate = useNavigate();
+  const { user } = usePortalAuth();
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -170,6 +172,16 @@ export default function PortalRTAForm() {
   });
 
   const totalSteps = 5;
+
+  // Pre-fill user details from SSO
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        employeeName: user.name || '',
+      }));
+    }
+  }, [user]);
 
   // Update vehicle count
   const setVehicleCount = (count: number) => {
