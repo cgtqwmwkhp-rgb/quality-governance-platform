@@ -462,12 +462,13 @@ class WorkflowEngine:
         ]
 
         for wf in mock_workflows:
-            if wf["sla_due_at"] < now:
+            sla_due: datetime = wf["sla_due_at"]  # type: ignore[assignment]
+            if sla_due < now:
                 escalations.append(
                     {
                         "workflow_id": wf["id"],
                         "reason": "SLA breach",
-                        "hours_overdue": int((now - wf["sla_due_at"]).total_seconds() / 3600),
+                        "hours_overdue": int((now - sla_due).total_seconds() / 3600),
                         "current_step": wf["current_step"],
                         "recommended_action": "Escalate to Operations Director",
                     }
