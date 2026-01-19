@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RotateCcw, Check, X } from 'lucide-react';
+import { RotateCcw, X } from 'lucide-react';
 
 // Injury types with colors
 const INJURY_TYPES = [
