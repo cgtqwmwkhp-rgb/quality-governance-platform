@@ -24,12 +24,17 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Install and Build
+      - name: Clean Install Dependencies
+        working-directory: frontend
+        run: |
+          rm -rf node_modules
+          npm ci
+      
+      - name: Build Frontend
         working-directory: frontend
         env:
-          VITE_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
+          VITE_API_URL: https://app-qgp-prod.azurewebsites.net
         run: |
-          npm install
           npm run build
       
       - name: Deploy
