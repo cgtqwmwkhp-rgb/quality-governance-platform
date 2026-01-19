@@ -12,6 +12,10 @@ import Investigations from './pages/Investigations'
 import Standards from './pages/Standards'
 import Actions from './pages/Actions'
 import Documents from './pages/Documents'
+// Audit Tool Builder
+import AuditTemplateLibrary from './pages/AuditTemplateLibrary'
+import AuditTemplateBuilder from './pages/AuditTemplateBuilder'
+import AuditExecution from './pages/AuditExecution'
 import Portal from './pages/Portal'
 import PortalLogin from './pages/PortalLogin'
 import PortalReport from './pages/PortalReport'
@@ -137,6 +141,10 @@ function App() {
           <Route path="policies" element={<Policies />} />
           <Route path="risks" element={<Risks />} />
           <Route path="audits" element={<Audits />} />
+          <Route path="audit-templates" element={<AuditTemplateLibrary />} />
+          <Route path="audit-templates/new" element={<AuditTemplateBuilder />} />
+          <Route path="audit-templates/:templateId/edit" element={<AuditTemplateBuilder />} />
+          <Route path="audits/:auditId/execute" element={<AuditExecution />} />
           <Route path="investigations" element={<Investigations />} />
           <Route path="standards" element={<Standards />} />
           <Route path="actions" element={<Actions />} />
