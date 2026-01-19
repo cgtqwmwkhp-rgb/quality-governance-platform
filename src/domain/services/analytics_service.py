@@ -448,9 +448,10 @@ class AnalyticsService:
                 return {"investment": investment}
             return {"error": "Investment not found"}
 
-        total_investment = sum(i["investment"] for i in investments)
-        total_savings = sum(i["annual_savings"] for i in investments)
-        total_prevented = sum(i["incidents_prevented"] for i in investments)
+        total_investment: float = sum(float(i["investment"]) for i in investments)
+        total_savings: float = sum(float(i["annual_savings"]) for i in investments)
+        total_prevented: int = sum(int(i["incidents_prevented"]) for i in investments)
+        total_payback: int = sum(int(i["payback_months"]) for i in investments)
 
         return {
             "investments": investments,
@@ -459,7 +460,7 @@ class AnalyticsService:
                 "total_annual_savings": total_savings,
                 "total_incidents_prevented": total_prevented,
                 "overall_roi": (total_savings / total_investment) * 100 if total_investment > 0 else 0,
-                "average_payback_months": sum(i["payback_months"] for i in investments) / len(investments),
+                "average_payback_months": total_payback / len(investments),
                 "cost_per_incident_prevented": total_investment / max(total_prevented, 1),
             },
             "by_category": {
