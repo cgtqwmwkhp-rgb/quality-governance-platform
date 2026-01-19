@@ -39,7 +39,7 @@ class EvidenceLink:
     clause_id: str
     linked_by: str  # 'manual' or 'auto'
     confidence: Optional[float] = None
-    created_at: datetime = None
+    created_at: Optional[datetime] = None
     created_by: Optional[str] = None
 
 
@@ -605,9 +605,9 @@ ALL_CLAUSES = ISO_9001_CLAUSES + ISO_14001_CLAUSES + ISO_45001_CLAUSES
 class ISOComplianceService:
     """Service for ISO compliance evidence management and auto-tagging."""
 
-    def __init__(self, ai_client=None):
+    def __init__(self, ai_client=None):  # type: ignore[no-untyped-def]
         self.ai_client = ai_client
-        self.clauses = {clause.id: clause for clause in ALL_CLAUSES}
+        self.clauses: Dict[str, ISOClause] = {clause.id: clause for clause in ALL_CLAUSES}
 
     def get_all_clauses(self, standard: Optional[ISOStandard] = None) -> List[ISOClause]:
         """Get all ISO clauses, optionally filtered by standard."""
