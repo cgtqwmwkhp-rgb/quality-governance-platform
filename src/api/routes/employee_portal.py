@@ -258,8 +258,8 @@ async def submit_quick_report(
 )
 async def track_report(
     reference_number: str,
-    tracking_code: Optional[str] = Query(None, description="Required for anonymous reports"),
     db: DbSession,
+    tracking_code: Optional[str] = Query(None, description="Required for anonymous reports"),
 ):
     """
     Track a report's status by reference number.

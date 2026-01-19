@@ -147,6 +147,8 @@ class AnnotationResponse(BaseModel):
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    db: DbSession,
+    current_user: CurrentUser,
     file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(None),
@@ -154,8 +156,6 @@ async def upload_document(
     category: str = Form(None),
     department: str = Form(None),
     sensitivity: str = Form("internal"),
-    db: DbSession,
-    current_user: CurrentUser,
 ):
     """Upload and process a new document."""
 
@@ -387,11 +387,11 @@ async def get_document(
 
 @router.get("/search/semantic", response_model=SearchResponse)
 async def semantic_search(
+    db: DbSession,
+    current_user: CurrentUser,
     q: str = Query(..., min_length=3),
     top_k: int = Query(10, ge=1, le=50),
     document_type: Optional[str] = None,
-    db: DbSession,
-    current_user: CurrentUser,
 ):
     """Semantic search across documents using AI embeddings."""
 
