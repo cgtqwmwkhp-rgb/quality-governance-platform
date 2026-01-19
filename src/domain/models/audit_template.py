@@ -3,14 +3,17 @@ Audit Template Models - Enterprise-grade audit tool builder
 Supports templates, sections, questions, conditional logic, and scoring
 """
 
+import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
-from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, ForeignKey, Enum as SQLEnum, JSON
-from sqlalchemy.orm import relationship
-from src.infrastructure.database import Base
-import uuid
+from typing import List, Optional
 
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
+from src.infrastructure.database import Base
 
 # ============================================================================
 # ENUMS

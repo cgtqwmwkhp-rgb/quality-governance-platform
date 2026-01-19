@@ -8,12 +8,13 @@ Provides endpoints for:
 - Gap analysis
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 
-from src.domain.services.iso_compliance_service import iso_compliance_service, ISOStandard, EvidenceLink
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 
 router = APIRouter()
 

@@ -5,12 +5,12 @@ Provides auto-tagging, evidence mapping, and compliance gap analysis
 for ISO 9001, 14001, 45001 and other standards.
 """
 
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass
-from enum import Enum
-import re
-from datetime import datetime
 import json
+import re
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class ISOStandard(str, Enum):

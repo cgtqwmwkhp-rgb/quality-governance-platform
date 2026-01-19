@@ -3,8 +3,8 @@
 from fastapi import APIRouter
 
 from src.api.routes import (
-    audits,
     audit_templates,
+    audits,
     auth,
     complaints,
     compliance,

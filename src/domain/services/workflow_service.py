@@ -6,10 +6,10 @@ and automated actions for the Quality Governance Platform.
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Callable
-from enum import Enum
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)

@@ -3,13 +3,14 @@ Audit Template API Routes - Enterprise-grade audit tool builder
 Full CRUD for templates, sections, questions, and audit execution
 """
 
+import uuid
 from datetime import datetime
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
-import uuid
 
 from src.infrastructure.database import get_db
 
