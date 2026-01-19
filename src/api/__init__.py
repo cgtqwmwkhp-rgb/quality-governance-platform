@@ -13,7 +13,9 @@ from src.api.routes import (
     incidents,
     investigation_templates,
     investigations,
+    notifications,
     policies,
+    realtime,
     risks,
     rtas,
     standards,
@@ -38,5 +40,7 @@ router.include_router(policies.router, prefix="/policies", tags=["Policy Library
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
+router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
+router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 
 __all__ = ["router"]
