@@ -92,7 +92,7 @@ class NotificationService:
             entity_id=entity_id,
             action_url=action_url,
             sender_id=sender_id,
-            metadata=metadata or {},
+            extra_data=metadata or {},
             delivered_channels=[],
         )
 
