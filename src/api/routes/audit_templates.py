@@ -2,15 +2,18 @@
 Audit Template API Routes - Enterprise-grade audit tool builder
 Full CRUD for templates, sections, questions, and audit execution
 """
+
+# sqlalchemy operators imported if needed for filtering
+import uuid
 from datetime import datetime
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-# sqlalchemy operators imported if needed for filtering
-import uuid
 
 from src.infrastructure.database import get_db
+
 # Note: Authentication handled by route-specific dependencies
 
 router = APIRouter()
@@ -19,6 +22,7 @@ router = APIRouter()
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
+
 
 class QuestionOptionSchema(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -210,6 +214,7 @@ class AuditCompleteSchema(BaseModel):
 # TEMPLATE ENDPOINTS
 # ============================================================================
 
+
 @router.get("/", response_model=PaginatedTemplateResponse)
 async def list_templates(
     page: int = Query(1, ge=1),
@@ -224,7 +229,7 @@ async def list_templates(
 ):
     """List all audit templates with filtering and pagination"""
     from typing import Any, Dict
-    
+
     # Mock data for demonstration (in production, query from database)
     mock_templates: List[Dict[str, Any]] = [
         {
@@ -328,19 +333,23 @@ async def list_templates(
             "avg_score": 79.8,
         },
     ]
-    
+
     # Apply filters
     filtered = mock_templates
     if search:
         search_lower = search.lower()
-        filtered = [t for t in filtered if search_lower in str(t["name"]).lower() or search_lower in str(t.get("description") or "").lower()]
+        filtered = [
+            t
+            for t in filtered
+            if search_lower in str(t["name"]).lower() or search_lower in str(t.get("description") or "").lower()
+        ]
     if category and category != "all":
         filtered = [t for t in filtered if t["category"] == category]
     if status and status != "all":
         filtered = [t for t in filtered if t["status"] == status]
     if iso_standard:
         filtered = [t for t in filtered if iso_standard in list(t.get("iso_standards") or [])]
-    
+
     # Sort
     reverse = sort_order == "desc"
     if sort_by == "name":
@@ -351,13 +360,13 @@ async def list_templates(
         filtered.sort(key=lambda x: float(x.get("avg_score") or 0), reverse=reverse)
     else:
         filtered.sort(key=lambda x: str(x["updated_at"]), reverse=reverse)
-    
+
     # Paginate
     total = len(filtered)
     start = (page - 1) * page_size
     end = start + page_size
     items = filtered[start:end]
-    
+
     return PaginatedTemplateResponse(
         items=[TemplateListSchema(**dict(t)) for t in items],
         total=total,
@@ -373,12 +382,12 @@ async def create_template(
     db: Session = Depends(get_db),
 ):
     """Create a new audit template"""
-    
+
     # In production, create in database
     # For now, return mock response
     template_id = str(uuid.uuid4())
     now = datetime.utcnow()
-    
+
     sections = []
     if template.sections:
         for i, section in enumerate(template.sections):
@@ -386,42 +395,46 @@ async def create_template(
             questions = []
             if section.questions:
                 for j, question in enumerate(section.questions):
-                    questions.append(QuestionResponseSchema(
-                        id=str(uuid.uuid4()),
-                        section_id=section_id,
-                        text=question.text,
-                        description=question.description,
-                        guidance=question.guidance,
-                        question_type=question.question_type,
-                        required=question.required,
-                        weight=question.weight,
-                        risk_level=question.risk_level,
-                        failure_triggers_action=question.failure_triggers_action,
-                        evidence_required=question.evidence_required,
-                        evidence_type=question.evidence_type,
-                        iso_clause=question.iso_clause,
-                        options=question.options,
-                        conditional_logic=question.conditional_logic,
-                        tags=question.tags,
-                        order=j,
-                        created_at=now,
-                        updated_at=now,
-                    ))
-            
-            sections.append(SectionResponseSchema(
-                id=section_id,
-                template_id=template_id,
-                title=section.title,
-                description=section.description,
-                icon=section.icon,
-                color=section.color,
-                weight=section.weight,
-                order=i,
-                questions=questions,
-                created_at=now,
-                updated_at=now,
-            ))
-    
+                    questions.append(
+                        QuestionResponseSchema(
+                            id=str(uuid.uuid4()),
+                            section_id=section_id,
+                            text=question.text,
+                            description=question.description,
+                            guidance=question.guidance,
+                            question_type=question.question_type,
+                            required=question.required,
+                            weight=question.weight,
+                            risk_level=question.risk_level,
+                            failure_triggers_action=question.failure_triggers_action,
+                            evidence_required=question.evidence_required,
+                            evidence_type=question.evidence_type,
+                            iso_clause=question.iso_clause,
+                            options=question.options,
+                            conditional_logic=question.conditional_logic,
+                            tags=question.tags,
+                            order=j,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+
+            sections.append(
+                SectionResponseSchema(
+                    id=section_id,
+                    template_id=template_id,
+                    title=section.title,
+                    description=section.description,
+                    icon=section.icon,
+                    color=section.color,
+                    weight=section.weight,
+                    order=i,
+                    questions=questions,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
     return TemplateResponseSchema(
         id=template_id,
         name=template.name,
@@ -451,10 +464,10 @@ async def get_template(
     db: Session = Depends(get_db),
 ):
     """Get a specific audit template by ID"""
-    
+
     # Mock response for demonstration
     now = datetime.utcnow()
-    
+
     # Vehicle Pre-Departure Inspection template
     sections = [
         SectionResponseSchema(
@@ -531,7 +544,7 @@ async def get_template(
             updated_at=now,
         ),
     ]
-    
+
     return TemplateResponseSchema(
         id=template_id,
         name="Vehicle Pre-Departure Inspection",
@@ -561,17 +574,17 @@ async def update_template(
     db: Session = Depends(get_db),
 ):
     """Update an existing audit template"""
-    
+
     # Get existing template and apply updates
     existing = await get_template(template_id, db)
-    
+
     # Apply updates
     update_data = updates.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(existing, field, value)
-    
+
     existing.updated_at = datetime.utcnow()
-    
+
     return existing
 
 
@@ -581,7 +594,7 @@ async def delete_template(
     db: Session = Depends(get_db),
 ):
     """Delete an audit template"""
-    
+
     # In production, delete from database
     return None
 
@@ -592,9 +605,9 @@ async def duplicate_template(
     db: Session = Depends(get_db),
 ):
     """Duplicate an existing template"""
-    
+
     existing = await get_template(template_id, db)
-    
+
     # Create copy with new ID
     new_template = TemplateResponseSchema(
         id=str(uuid.uuid4()),
@@ -617,7 +630,7 @@ async def duplicate_template(
         section_count=existing.section_count,
         sections=existing.sections,
     )
-    
+
     return new_template
 
 
@@ -627,12 +640,12 @@ async def publish_template(
     db: Session = Depends(get_db),
 ):
     """Publish a template (change status from draft to published)"""
-    
+
     existing = await get_template(template_id, db)
     existing.status = "published"
     existing.published_at = datetime.utcnow()
     existing.updated_at = datetime.utcnow()
-    
+
     return existing
 
 
@@ -642,17 +655,18 @@ async def archive_template(
     db: Session = Depends(get_db),
 ):
     """Archive a template"""
-    
+
     existing = await get_template(template_id, db)
     existing.status = "archived"
     existing.updated_at = datetime.utcnow()
-    
+
     return existing
 
 
 # ============================================================================
 # SECTION ENDPOINTS
 # ============================================================================
+
 
 @router.post("/{template_id}/sections", response_model=SectionResponseSchema, status_code=status.HTTP_201_CREATED)
 async def add_section(
@@ -661,26 +675,28 @@ async def add_section(
     db: Session = Depends(get_db),
 ):
     """Add a new section to a template"""
-    
+
     section_id = str(uuid.uuid4())
     now = datetime.utcnow()
-    
+
     questions = []
     if section.questions:
         for i, q in enumerate(section.questions):
-            questions.append(QuestionResponseSchema(
-                id=str(uuid.uuid4()),
-                section_id=section_id,
-                text=q.text,
-                description=q.description,
-                question_type=q.question_type,
-                required=q.required,
-                weight=q.weight,
-                order=i,
-                created_at=now,
-                updated_at=now,
-            ))
-    
+            questions.append(
+                QuestionResponseSchema(
+                    id=str(uuid.uuid4()),
+                    section_id=section_id,
+                    text=q.text,
+                    description=q.description,
+                    question_type=q.question_type,
+                    required=q.required,
+                    weight=q.weight,
+                    order=i,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
     return SectionResponseSchema(
         id=section_id,
         template_id=template_id,
@@ -704,9 +720,9 @@ async def update_section(
     db: Session = Depends(get_db),
 ):
     """Update a section"""
-    
+
     now = datetime.utcnow()
-    
+
     return SectionResponseSchema(
         id=section_id,
         template_id=template_id,
@@ -736,7 +752,12 @@ async def delete_section(
 # QUESTION ENDPOINTS
 # ============================================================================
 
-@router.post("/{template_id}/sections/{section_id}/questions", response_model=QuestionResponseSchema, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/{template_id}/sections/{section_id}/questions",
+    response_model=QuestionResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_question(
     template_id: str,
     section_id: str,
@@ -744,9 +765,9 @@ async def add_question(
     db: Session = Depends(get_db),
 ):
     """Add a new question to a section"""
-    
+
     now = datetime.utcnow()
-    
+
     return QuestionResponseSchema(
         id=str(uuid.uuid4()),
         section_id=section_id,
@@ -785,6 +806,7 @@ async def delete_question(
 # AUDIT EXECUTION ENDPOINTS
 # ============================================================================
 
+
 @router.post("/{template_id}/start")
 async def start_audit(
     template_id: str,
@@ -792,10 +814,10 @@ async def start_audit(
     db: Session = Depends(get_db),
 ):
     """Start a new audit run from a template"""
-    
+
     audit_id = str(uuid.uuid4())
     ref_number = f"AUD-{datetime.utcnow().strftime('%Y%m%d')}-{audit_id[:4].upper()}"
-    
+
     return {
         "id": audit_id,
         "reference_number": ref_number,
@@ -816,7 +838,7 @@ async def submit_response(
     db: Session = Depends(get_db),
 ):
     """Submit a response to a question during audit execution"""
-    
+
     return {
         "id": str(uuid.uuid4()),
         "audit_run_id": audit_id,
@@ -837,7 +859,7 @@ async def complete_audit(
     db: Session = Depends(get_db),
 ):
     """Complete an audit run and calculate final score"""
-    
+
     return {
         "id": audit_id,
         "status": "completed",
@@ -855,10 +877,11 @@ async def complete_audit(
 # PRE-BUILT TEMPLATES
 # ============================================================================
 
+
 @router.get("/prebuilt/list")
 async def list_prebuilt_templates():
     """List available pre-built enterprise templates"""
-    
+
     return {
         "templates": [
             {
@@ -931,10 +954,10 @@ async def install_prebuilt_template(
     db: Session = Depends(get_db),
 ):
     """Install a pre-built template to user's library"""
-    
+
     # In production, copy the pre-built template to user's templates
     now = datetime.utcnow()
-    
+
     return TemplateResponseSchema(
         id=str(uuid.uuid4()),
         name="Vehicle Pre-Departure Inspection",
