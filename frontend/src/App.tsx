@@ -53,6 +53,12 @@ import UVDBAudits from './pages/UVDBAudits'
 import PlanetMark from './pages/PlanetMark'
 // Tier 2: Digital Signatures
 import DigitalSignatures from './pages/DigitalSignatures'
+// Admin Configuration Pages
+import AdminDashboard from './pages/admin/AdminDashboard'
+import FormsList from './pages/admin/FormsList'
+import FormBuilder from './pages/admin/FormBuilder'
+import ContractsManagement from './pages/admin/ContractsManagement'
+import SystemSettings from './pages/admin/SystemSettings'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -198,6 +204,14 @@ function App() {
           <Route path="planet-mark" element={<PlanetMark />} />
           {/* Tier 2: Digital Signatures */}
           <Route path="signatures" element={<DigitalSignatures />} />
+          
+          {/* Admin Configuration Routes */}
+          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin/forms" element={<FormsList />} />
+          <Route path="admin/forms/new" element={<FormBuilder />} />
+          <Route path="admin/forms/:templateId" element={<FormBuilder />} />
+          <Route path="admin/contracts" element={<ContractsManagement />} />
+          <Route path="admin/settings" element={<SystemSettings />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,0 +1,414 @@
+import { useState } from 'react';
+import {
+  Plus,
+  Search,
+  Building,
+  Edit,
+  Trash2,
+  Check,
+  X,
+  GripVertical,
+  Mail,
+  Phone,
+  Loader2,
+} from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Textarea } from '../../components/ui/Textarea';
+import { cn } from '../../helpers/utils';
+
+interface Contract {
+  id: number;
+  name: string;
+  code: string;
+  description?: string;
+  client_name?: string;
+  client_contact?: string;
+  client_email?: string;
+  is_active: boolean;
+  start_date?: string;
+  end_date?: string;
+  display_order: number;
+}
+
+// Mock data
+const INITIAL_CONTRACTS: Contract[] = [
+  { id: 1, name: 'UKPN', code: 'ukpn', client_name: 'UK Power Networks', is_active: true, display_order: 1 },
+  { id: 2, name: 'Openreach', code: 'openreach', client_name: 'BT Group', is_active: true, display_order: 2 },
+  { id: 3, name: 'Thames Water', code: 'thames-water', client_name: 'Thames Water Utilities', is_active: true, display_order: 3 },
+  { id: 4, name: 'Plantexpand Ltd', code: 'plantexpand', client_name: 'Internal', is_active: true, display_order: 4 },
+  { id: 5, name: 'Cadent', code: 'cadent', client_name: 'Cadent Gas', is_active: true, display_order: 5 },
+  { id: 6, name: 'SGN', code: 'sgn', client_name: 'Southern Gas Networks', is_active: true, display_order: 6 },
+  { id: 7, name: 'Southern Water', code: 'southern-water', client_name: 'Southern Water Services', is_active: true, display_order: 7 },
+  { id: 8, name: 'Zenith', code: 'zenith', client_name: 'Zenith Vehicle Solutions', is_active: true, display_order: 8 },
+  { id: 9, name: 'Novuna', code: 'novuna', client_name: 'Scottish Power', is_active: true, display_order: 9 },
+  { id: 10, name: 'Enterprise', code: 'enterprise', client_name: 'Enterprise Fleet Management', is_active: true, display_order: 10 },
+];
+
+export default function ContractsManagement() {
+  const [contracts, setContracts] = useState<Contract[]>(INITIAL_CONTRACTS);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [formData, setFormData] = useState<Partial<Contract>>({
+    name: '',
+    code: '',
+    description: '',
+    client_name: '',
+    client_contact: '',
+    client_email: '',
+    is_active: true,
+  });
+
+  const filteredContracts = contracts
+    .filter((c) => {
+      const matchesSearch =
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.client_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesActive = showInactive || c.is_active;
+      return matchesSearch && matchesActive;
+    })
+    .sort((a, b) => a.display_order - b.display_order);
+
+  const handleEdit = (contract: Contract) => {
+    setEditingContract(contract);
+    setFormData(contract);
+    setIsAdding(false);
+  };
+
+  const handleAdd = () => {
+    setIsAdding(true);
+    setEditingContract(null);
+    setFormData({
+      name: '',
+      code: '',
+      description: '',
+      client_name: '',
+      client_contact: '',
+      client_email: '',
+      is_active: true,
+    });
+  };
+
+  const handleCancel = () => {
+    setEditingContract(null);
+    setIsAdding(false);
+    setFormData({});
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      if (isAdding) {
+        const newContract: Contract = {
+          id: Date.now(),
+          name: formData.name || '',
+          code: formData.code || '',
+          description: formData.description,
+          client_name: formData.client_name,
+          client_contact: formData.client_contact,
+          client_email: formData.client_email,
+          is_active: formData.is_active ?? true,
+          display_order: contracts.length + 1,
+        };
+        setContracts((prev) => [...prev, newContract]);
+      } else if (editingContract) {
+        setContracts((prev) =>
+          prev.map((c) =>
+            c.id === editingContract.id ? { ...c, ...formData } : c
+          )
+        );
+      }
+
+      handleCancel();
+    } catch {
+      console.error('Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    if (confirm('Are you sure you want to delete this contract?')) {
+      setContracts((prev) => prev.filter((c) => c.id !== id));
+    }
+  };
+
+  const toggleActive = (id: number) => {
+    setContracts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c))
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-surface">
+      {/* Header */}
+      <header className="bg-card border-b border-border">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage contracts available in forms and reports
+              </p>
+            </div>
+            <Button onClick={handleAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Contract
+            </Button>
+          </div>
+
+          {/* Filters */}
+          <div className="mt-6 flex items-center gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search contracts..."
+                className="pl-10"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="rounded border-border"
+              />
+              Show inactive
+            </label>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Contracts List */}
+          <div className="lg:col-span-2 space-y-3">
+            {filteredContracts.length === 0 ? (
+              <Card className="p-12 text-center">
+                <Building className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  No contracts found
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Add your first contract to get started
+                </p>
+                <Button onClick={handleAdd}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Contract
+                </Button>
+              </Card>
+            ) : (
+              filteredContracts.map((contract) => (
+                <Card
+                  key={contract.id}
+                  className={cn(
+                    'p-4 flex items-center gap-4 group',
+                    !contract.is_active && 'opacity-60',
+                    editingContract?.id === contract.id && 'ring-2 ring-primary'
+                  )}
+                >
+                  <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-foreground">{contract.name}</h3>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                        {contract.code}
+                      </span>
+                      {!contract.is_active && (
+                        <span className="text-xs text-destructive bg-destructive/10 px-2 py-0.5 rounded">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    {contract.client_name && (
+                      <p className="text-sm text-muted-foreground">{contract.client_name}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleEdit(contract)}
+                      className="p-2 hover:bg-muted rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => toggleActive(contract.id)}
+                      className="p-2 hover:bg-muted rounded-lg transition-colors"
+                      title={contract.is_active ? 'Deactivate' : 'Activate'}
+                    >
+                      {contract.is_active ? (
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <Check className="w-4 h-4 text-primary" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(contract.id)}
+                      className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </button>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+
+          {/* Edit/Add Panel */}
+          <div>
+            <Card className="p-6 sticky top-6">
+              <h3 className="font-semibold text-foreground mb-4">
+                {isAdding ? 'Add Contract' : editingContract ? 'Edit Contract' : 'Contract Details'}
+              </h3>
+
+              {(isAdding || editingContract) ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Name *
+                    </label>
+                    <Input
+                      value={formData.name || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, name: e.target.value }))
+                      }
+                      placeholder="e.g. UKPN"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Code *
+                    </label>
+                    <Input
+                      value={formData.code || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          code: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                        }))
+                      }
+                      placeholder="e.g. ukpn"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Lowercase, no spaces. Used for data storage.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Client Name
+                    </label>
+                    <Input
+                      value={formData.client_name || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, client_name: e.target.value }))
+                      }
+                      placeholder="e.g. UK Power Networks"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Description
+                    </label>
+                    <Textarea
+                      value={formData.description || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                      }
+                      placeholder="Optional description..."
+                      rows={2}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Contact Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        value={formData.client_email || ''}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, client_email: e.target.value }))
+                        }
+                        placeholder="contact@example.com"
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Contact Phone
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="tel"
+                        value={formData.client_contact || ''}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, client_contact: e.target.value }))
+                        }
+                        placeholder="+44 1234 567890"
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center justify-between">
+                    <span className="text-sm text-foreground">Active</span>
+                    <input
+                      type="checkbox"
+                      checked={formData.is_active ?? true}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, is_active: e.target.checked }))
+                      }
+                      className="rounded border-border"
+                    />
+                  </label>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button variant="outline" onClick={handleCancel} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSave} disabled={isSaving} className="flex-1">
+                      {isSaving ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4 mr-2" />
+                      )}
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>Select a contract to edit</p>
+                  <p className="text-sm">or add a new one</p>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

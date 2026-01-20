@@ -16,6 +16,7 @@ from src.api.routes import (
     document_control,
     documents,
     employee_portal,
+    form_config,
     incidents,
     investigation_templates,
     investigations,
@@ -76,5 +77,7 @@ router.include_router(signatures.router, prefix="/signatures", tags=["Digital Si
 router.include_router(tenants.router, prefix="/tenants", tags=["Multi-Tenancy"])
 # Immutable Audit Trail (Tier 1)
 router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Trail"])
+# Admin Form Builder & Configuration
+router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
 
 __all__ = ["router"]

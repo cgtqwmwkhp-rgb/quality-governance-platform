@@ -109,6 +109,15 @@ from src.domain.models.digital_signature import (
     SignatureTemplate,
     SignatureAuditLog,
 )
+# Form Configuration (Admin Form Builder)
+from src.domain.models.form_config import (
+    FormTemplate,
+    FormStep,
+    FormField,
+    Contract,
+    SystemSetting,
+    LookupOption,
+)
 
 __all__ = [
     # Base mixins
@@ -227,4 +236,11 @@ __all__ = [
     "Signature",
     "SignatureTemplate",
     "SignatureAuditLog",
+    # Form Configuration (Admin Form Builder)
+    "FormTemplate",
+    "FormStep",
+    "FormField",
+    "Contract",
+    "SystemSetting",
+    "LookupOption",
 ]
