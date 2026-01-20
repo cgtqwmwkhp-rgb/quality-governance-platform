@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/Dialog'
-import { cn } from '../lib/utils'
+import { cn } from "../helpers/utils"
 
 const STATUS_STEPS = [
   { id: 'draft', label: 'Draft', icon: FileQuestion },

@@ -4,7 +4,7 @@ import { standardsApi, Standard, Clause } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
-import { cn } from '../lib/utils'
+import { cn } from "../helpers/utils"
 
 interface ExpandedState {
   [key: number]: boolean

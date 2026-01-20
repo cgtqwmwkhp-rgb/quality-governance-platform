@@ -14,7 +14,7 @@ import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 
 export default function Portal() {
   const navigate = useNavigate();

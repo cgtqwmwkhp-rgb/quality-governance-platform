@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
-import { cn } from '../lib/utils'
+import { cn } from "../helpers/utils"
 
 interface Action {
   id: number

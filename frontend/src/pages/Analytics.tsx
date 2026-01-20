@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 
 interface KPICard {
   id: string;

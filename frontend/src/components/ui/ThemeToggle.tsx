@@ -1,6 +1,6 @@
 import { Moon, Sun, Monitor } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
-import { cn } from '../../lib/utils'
+import { cn } from "../../helpers/utils"
 
 interface ThemeToggleProps {
   variant?: 'icon' | 'full'

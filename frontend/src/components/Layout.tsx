@@ -37,7 +37,7 @@ import { useState, useEffect } from 'react'
 import AICopilot from './copilot/AICopilot'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
-import { cn } from '../lib/utils'
+import { cn } from "../helpers/utils"
 
 interface LayoutProps {
   onLogout: () => void

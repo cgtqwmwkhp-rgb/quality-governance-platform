@@ -27,7 +27,7 @@ import {
   UserPlus,
   BarChart3,
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';

@@ -16,7 +16,7 @@ import {
   History,
   Zap
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';

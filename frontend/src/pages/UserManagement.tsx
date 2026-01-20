@@ -18,7 +18,7 @@ import {
   Save,
   AlertTriangle
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';

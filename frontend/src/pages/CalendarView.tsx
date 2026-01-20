@@ -15,7 +15,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 
 interface CalendarEvent {
   id: string;

@@ -25,7 +25,7 @@ import { incidentsApi, Incident } from '../api/client'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
-import { cn } from '../lib/utils'
+import { cn } from "../helpers/utils"
 
 // ============================================================================
 // Types

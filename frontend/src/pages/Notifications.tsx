@@ -20,7 +20,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Switch } from '../components/ui/Switch';
-import { cn } from '../lib/utils';
+import { cn } from "../helpers/utils";
 
 interface Notification {
   id: string;
