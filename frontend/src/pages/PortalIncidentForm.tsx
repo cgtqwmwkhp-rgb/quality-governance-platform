@@ -21,10 +21,13 @@ import {
   Truck,
   Users,
   X,
+  AlertCircle as AlertIcon,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { useGeolocation } from '../hooks/useGeolocation';
+import { useVoiceToText } from '../hooks/useVoiceToText';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -138,9 +141,21 @@ export default function PortalIncidentForm() {
   
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [geolocating, setGeolocating] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Geolocation hook
+  const { isLoading: geolocating, error: geoError, getLocationString } = useGeolocation();
+
+  // Voice-to-text hook
+  const { isListening: isRecording, isSupported: voiceSupported, toggleListening, error: voiceError } = useVoiceToText({
+    onResult: (transcript) => {
+      setFormData((prev) => ({
+        ...prev,
+        description: prev.description + (prev.description ? ' ' : '') + transcript,
+      }));
+    },
+  });
 
   const [formData, setFormData] = useState<FormData>({
     contract: '',
@@ -179,28 +194,21 @@ export default function PortalIncidentForm() {
 
   const totalSteps = reportType === 'complaint' ? 3 : 4;
 
-  // GPS location detection
-  const detectLocation = () => {
-    setGeolocating(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const coords = `GPS: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-          setFormData((prev) => ({ ...prev, location: coords }));
-          setGeolocating(false);
-        },
-        () => {
-          setGeolocating(false);
-          alert('Could not detect location');
-        }
-      );
+  // GPS location detection using hook
+  const detectLocation = async () => {
+    setLocationError(null);
+    const locationString = await getLocationString();
+    if (locationString) {
+      setFormData((prev) => ({ ...prev, location: locationString }));
+    } else if (geoError) {
+      setLocationError(geoError);
     }
   };
 
-  // Voice recording
+  // Voice recording using Web Speech API hook
   const toggleVoiceRecording = () => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      setIsRecording(!isRecording);
+    if (voiceSupported) {
+      toggleListening();
     }
   };
 
@@ -461,7 +469,10 @@ export default function PortalIncidentForm() {
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   value={formData.location}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, location: e.target.value }));
+                    setLocationError(null);
+                  }}
                   placeholder="Where did this occur?"
                   className="pl-10 pr-16"
                 />
@@ -469,11 +480,20 @@ export default function PortalIncidentForm() {
                   type="button"
                   onClick={detectLocation}
                   disabled={geolocating}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-50"
                 >
                   {geolocating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'GPS'}
                 </button>
               </div>
+              {(locationError || geoError) && (
+                <div className="mt-2 flex items-start gap-2 text-sm text-destructive">
+                  <AlertIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{locationError || geoError}</span>
+                </div>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Tap GPS to auto-detect, or type manually
+              </p>
             </div>
 
             {/* Date & Time */}
@@ -524,17 +544,35 @@ export default function PortalIncidentForm() {
                   placeholder="What happened? Be specific..."
                   rows={5}
                 />
-                <button
-                  type="button"
-                  onClick={toggleVoiceRecording}
-                  className={cn(
-                    'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
-                    isRecording ? 'bg-destructive text-destructive-foreground animate-pulse' : 'bg-primary/10 text-primary hover:bg-primary/20'
-                  )}
-                >
-                  {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </button>
+                {voiceSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoiceRecording}
+                    title={isRecording ? 'Stop recording' : 'Start voice input'}
+                    className={cn(
+                      'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
+                      isRecording ? 'bg-destructive text-destructive-foreground animate-pulse' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                    )}
+                  >
+                    {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                )}
               </div>
+              {isRecording && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-primary animate-pulse">
+                  <div className="w-2 h-2 bg-destructive rounded-full" />
+                  <span>Listening... speak now</span>
+                </div>
+              )}
+              {voiceError && (
+                <div className="mt-2 flex items-start gap-2 text-sm text-destructive">
+                  <AlertIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{voiceError}</span>
+                </div>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {voiceSupported ? 'Type or tap the microphone to dictate' : 'Type your description'}
+              </p>
             </div>
 
             {/* Asset Number */}

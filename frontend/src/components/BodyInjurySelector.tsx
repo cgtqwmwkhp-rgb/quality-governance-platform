@@ -12,17 +12,20 @@ import {
   HelpCircle,
   type LucideIcon,
 } from 'lucide-react';
+import { cn } from '../helpers/utils';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
 
 // Injury types with colors and proper icons
-const INJURY_TYPES: { id: string; label: string; color: string; Icon: LucideIcon }[] = [
-  { id: 'cut', label: 'Cut / Laceration', color: '#ef4444', Icon: Droplets },
-  { id: 'bruise', label: 'Bruise / Contusion', color: '#8b5cf6', Icon: Circle },
-  { id: 'burn', label: 'Burn', color: '#f97316', Icon: Flame },
-  { id: 'fracture', label: 'Fracture / Break', color: '#eab308', Icon: Bone },
-  { id: 'sprain', label: 'Sprain / Strain', color: '#22c55e', Icon: Activity },
-  { id: 'crush', label: 'Crush Injury', color: '#ec4899', Icon: AlertTriangle },
-  { id: 'puncture', label: 'Puncture Wound', color: '#06b6d4', Icon: Target },
-  { id: 'other', label: 'Other', color: '#6b7280', Icon: HelpCircle },
+const INJURY_TYPES: { id: string; label: string; color: string; bgLight: string; Icon: LucideIcon }[] = [
+  { id: 'cut', label: 'Cut / Laceration', color: '#dc2626', bgLight: 'bg-red-100 dark:bg-red-900/30', Icon: Droplets },
+  { id: 'bruise', label: 'Bruise / Contusion', color: '#7c3aed', bgLight: 'bg-purple-100 dark:bg-purple-900/30', Icon: Circle },
+  { id: 'burn', label: 'Burn', color: '#ea580c', bgLight: 'bg-orange-100 dark:bg-orange-900/30', Icon: Flame },
+  { id: 'fracture', label: 'Fracture / Break', color: '#ca8a04', bgLight: 'bg-yellow-100 dark:bg-yellow-900/30', Icon: Bone },
+  { id: 'sprain', label: 'Sprain / Strain', color: '#16a34a', bgLight: 'bg-green-100 dark:bg-green-900/30', Icon: Activity },
+  { id: 'crush', label: 'Crush Injury', color: '#db2777', bgLight: 'bg-pink-100 dark:bg-pink-900/30', Icon: AlertTriangle },
+  { id: 'puncture', label: 'Puncture Wound', color: '#0891b2', bgLight: 'bg-cyan-100 dark:bg-cyan-900/30', Icon: Target },
+  { id: 'other', label: 'Other', color: '#6b7280', bgLight: 'bg-gray-100 dark:bg-gray-800', Icon: HelpCircle },
 ];
 
 // Body regions for front and back
@@ -138,7 +141,7 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
     const injury = injuries.find(i => i.regionId === regionId);
     if (injury) {
       const type = INJURY_TYPES.find(t => t.id === injury.injuryType);
-      return type?.color || '#ef4444';
+      return type?.color || '#dc2626';
     }
     return 'transparent';
   };
@@ -150,68 +153,70 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
   return (
     <div className="space-y-4">
       {/* View Toggle */}
-      <div className="flex items-center justify-center gap-2 bg-white/5 rounded-xl p-1">
+      <div className="flex items-center justify-center gap-1 bg-muted rounded-xl p-1">
         <button
           type="button"
           onClick={() => setView('front')}
-          className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+          className={cn(
+            "flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm",
             view === 'front'
-              ? 'bg-purple-500 text-white'
-              : 'text-gray-400 hover:text-white'
-          }`}
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
         >
           Front View
         </button>
         <button
           type="button"
           onClick={() => setView('back')}
-          className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+          className={cn(
+            "flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm",
             view === 'back'
-              ? 'bg-purple-500 text-white'
-              : 'text-gray-400 hover:text-white'
-          }`}
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
         >
           Back View
         </button>
       </div>
 
       {/* Body Diagram */}
-      <div className="relative bg-gradient-to-b from-slate-800/50 to-slate-900/50 rounded-2xl p-4 border border-white/10">
+      <Card className="p-4 relative">
         <div className="flex justify-center">
           <svg 
             viewBox="0 0 300 700" 
             className="w-full max-w-[200px] h-auto"
             style={{ maxHeight: '400px' }}
           >
-            {/* Body outline */}
+            {/* Body outline - improved contrast */}
             <defs>
-              <linearGradient id="bodyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.1" />
+              <linearGradient id="bodyGradientLight" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.15" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.05" />
               </linearGradient>
             </defs>
 
-            {/* Human silhouette base */}
-            <ellipse cx="150" cy="72" rx="50" ry="55" fill="url(#bodyGradient)" stroke="#6366f1" strokeWidth="1" opacity="0.5" />
-            <rect x="135" y="125" width="30" height="25" rx="5" fill="url(#bodyGradient)" stroke="#6366f1" strokeWidth="1" opacity="0.5" />
+            {/* Human silhouette base - better contrast */}
+            <ellipse cx="150" cy="72" rx="50" ry="55" fill="url(#bodyGradientLight)" stroke="hsl(var(--border-strong))" strokeWidth="2" />
+            <rect x="135" y="125" width="30" height="25" rx="5" fill="url(#bodyGradientLight)" stroke="hsl(var(--border-strong))" strokeWidth="2" />
             <path d="M60,150 L100,150 L100,150 L210,250 L200,340 L190,380 L110,380 L100,340 L90,250 L100,150 L60,170 L40,280 L40,385 L20,410 L65,410 L75,280 L75,180 L100,150 L200,150 L225,180 L225,280 L235,410 L280,410 L260,280 L240,170 L200,150 L210,250 L200,340 L190,380 L150,380 L150,360 L145,470 L145,510 L135,620 L145,670 L85,670 L100,620 L105,510 L105,470 L110,380 L150,380 L155,470 L155,510 L165,620 L155,670 L215,670 L200,620 L195,510 L195,470 L190,380 Z" 
-              fill="url(#bodyGradient)" stroke="#6366f1" strokeWidth="1" opacity="0.3" />
+              fill="url(#bodyGradientLight)" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
 
             {/* Interactive regions */}
             {currentRegions.map((region) => {
               const injury = injuries.find(i => i.regionId === region.id);
               const injuryType = injury ? INJURY_TYPES.find(t => t.id === injury.injuryType) : null;
+              const hasInjury = isRegionSelected(region.id);
               
               return (
                 <g key={region.id} onClick={() => handleRegionClick(region.id)} style={{ cursor: 'pointer' }}>
                   <path
                     d={region.path}
                     fill={getRegionColor(region.id)}
-                    fillOpacity={isRegionSelected(region.id) ? 0.6 : 0.1}
-                    stroke={isRegionSelected(region.id) ? (injuryType?.color || '#a855f7') : '#6366f1'}
-                    strokeWidth={isRegionSelected(region.id) ? 2 : 1}
-                    strokeOpacity={0.5}
-                    className="transition-all duration-200 hover:fill-opacity-40 hover:stroke-opacity-100"
+                    fillOpacity={hasInjury ? 0.5 : 0.05}
+                    stroke={hasInjury ? (injuryType?.color || 'hsl(var(--primary))') : 'hsl(var(--border))'}
+                    strokeWidth={hasInjury ? 2.5 : 1.5}
+                    className="transition-all duration-200 hover:fill-opacity-30 hover:stroke-2"
                   />
                   {injury && injuryType && (
                     <foreignObject
@@ -233,25 +238,25 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
         </div>
 
         {/* View indicator */}
-        <div className="absolute bottom-2 left-2 flex items-center gap-1 text-xs text-gray-500">
+        <div className="absolute bottom-3 left-3 flex items-center gap-1 text-xs text-muted-foreground">
           <RotateCcw className="w-3 h-3" />
           {view === 'front' ? 'Front' : 'Back'}
         </div>
 
         {/* Tap instruction */}
-        <p className="text-center text-xs text-gray-500 mt-2">
+        <p className="text-center text-xs text-muted-foreground mt-3">
           Tap a body part to add an injury
         </p>
-      </div>
+      </Card>
 
       {/* Injury Type Selection Modal */}
       {showInjuryTypes && selectedRegion && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 border border-white/20 rounded-t-3xl w-full max-w-lg p-6 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-lg p-6 rounded-t-3xl animate-slide-up">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-bold text-white">Select Injury Type</h3>
-                <p className="text-sm text-gray-400">
+                <h3 className="text-lg font-bold text-foreground">Select Injury Type</h3>
+                <p className="text-sm text-muted-foreground">
                   {currentRegions.find(r => r.id === selectedRegion)?.label}
                 </p>
               </div>
@@ -261,9 +266,9 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
                   setShowInjuryTypes(false);
                   setSelectedRegion(null);
                 }}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                className="p-2 hover:bg-muted rounded-full transition-colors"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
 
@@ -273,71 +278,70 @@ export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySel
                   key={type.id}
                   type="button"
                   onClick={() => handleInjuryTypeSelect(type.id)}
-                  className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-left group"
-                  style={{ borderColor: `${type.color}40` }}
+                  className={cn(
+                    "flex items-center gap-3 p-3 bg-surface hover:bg-muted border border-border rounded-xl transition-all text-left group",
+                  )}
                 >
                   <div 
-                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: `${type.color}20` }}
+                    className={cn("w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0", type.bgLight)}
                   >
                     <type.Icon className="w-5 h-5" style={{ color: type.color }} />
                   </div>
-                  <span className="text-sm text-white font-medium group-hover:text-gray-200">{type.label}</span>
+                  <span className="text-sm text-foreground font-medium">{type.label}</span>
                 </button>
               ))}
             </div>
 
             {/* Remove injury option if already exists */}
             {injuries.some(i => i.regionId === selectedRegion) && (
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={() => {
                   removeInjury(selectedRegion);
                   setShowInjuryTypes(false);
                   setSelectedRegion(null);
                 }}
-                className="w-full mt-3 p-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 font-medium transition-all"
+                className="w-full mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
               >
                 Remove Injury
-              </button>
+              </Button>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Selected Injuries Summary */}
       {injuries.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-gray-300">Injuries Selected ({injuries.length})</h4>
+          <h4 className="text-sm font-medium text-foreground">Injuries Selected ({injuries.length})</h4>
           <div className="space-y-2">
             {injuries.map((injury) => {
               const type = INJURY_TYPES.find(t => t.id === injury.injuryType);
               return (
-                <div
+                <Card
                   key={injury.regionId}
-                  className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl"
+                  className="flex items-center justify-between p-3"
                   style={{ borderLeftColor: type?.color, borderLeftWidth: '3px' }}
                 >
                   <div className="flex items-center gap-3">
                     <div 
-                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${type?.color}20` }}
+                      className={cn("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0", type?.bgLight)}
                     >
                       {type && <type.Icon className="w-4 h-4" style={{ color: type.color }} />}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">{injury.regionLabel}</p>
-                      <p className="text-xs text-gray-400">{injury.injuryLabel}</p>
+                      <p className="text-sm font-medium text-foreground">{injury.regionLabel}</p>
+                      <p className="text-xs text-muted-foreground">{injury.injuryLabel}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeInjury(injury.regionId)}
-                    className="p-1.5 hover:bg-red-500/20 rounded-full transition-colors"
+                    className="p-1.5 hover:bg-destructive/10 rounded-full transition-colors"
                   >
-                    <X className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                    <X className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                   </button>
-                </div>
+                </Card>
               );
             })}
           </div>
