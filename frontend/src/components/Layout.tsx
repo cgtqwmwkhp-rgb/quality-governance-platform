@@ -24,7 +24,10 @@ import {
   Download,
   Settings,
   Command,
-  GitBranch
+  GitBranch,
+  Brain,
+  GitMerge,
+  Target
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -59,6 +62,14 @@ const navSections = [
       { path: '/documents', icon: FolderOpen, label: 'Documents', color: 'text-sky-400' },
       { path: '/policies', icon: FileText, label: 'Policies', color: 'text-blue-400' },
       { path: '/risks', icon: Shield, label: 'Risks', color: 'text-rose-400' },
+    ]
+  },
+  {
+    title: 'Enterprise',
+    items: [
+      { path: '/risk-register', icon: Target, label: 'Risk Register', color: 'text-red-400' },
+      { path: '/ims', icon: GitMerge, label: 'IMS Dashboard', color: 'text-emerald-400' },
+      { path: '/ai-intelligence', icon: Brain, label: 'AI Intelligence', color: 'text-purple-400' },
     ]
   },
   {

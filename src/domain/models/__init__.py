@@ -25,6 +25,40 @@ from src.domain.models.risk import Risk, RiskAssessment, RiskControl
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
+# Enterprise Risk Register (Tier 1)
+from src.domain.models.risk_register import (
+    Risk as EnterpriseRisk,
+    RiskControl as EnterpriseRiskControl,
+    RiskControlMapping,
+    BowTieElement,
+    KeyRiskIndicator,
+    RiskAssessmentHistory,
+    RiskAppetiteStatement,
+)
+# IMS Unification (Tier 1)
+from src.domain.models.ims_unification import (
+    IMSRequirement,
+    CrossStandardMapping,
+    IMSControl,
+    IMSControlRequirementMapping,
+    UnifiedAuditPlan,
+    ManagementReview,
+    ManagementReviewInput,
+    IMSProcessMap,
+    IMSObjective,
+)
+# Document Control (Tier 1)
+from src.domain.models.document_control import (
+    ControlledDocument,
+    DocumentVersion as ControlledDocumentVersion,
+    DocumentApprovalWorkflow,
+    DocumentApprovalInstance,
+    DocumentApprovalAction,
+    DocumentDistribution,
+    DocumentTrainingLink,
+    DocumentAccessLog,
+    ObsoleteDocumentRecord,
+)
 
 __all__ = [
     # Base mixins
@@ -75,4 +109,32 @@ __all__ = [
     "BenchmarkData",
     "CostRecord",
     "ROIInvestment",
+    # Enterprise Risk Register (Tier 1)
+    "EnterpriseRisk",
+    "EnterpriseRiskControl",
+    "RiskControlMapping",
+    "BowTieElement",
+    "KeyRiskIndicator",
+    "RiskAssessmentHistory",
+    "RiskAppetiteStatement",
+    # IMS Unification (Tier 1)
+    "IMSRequirement",
+    "CrossStandardMapping",
+    "IMSControl",
+    "IMSControlRequirementMapping",
+    "UnifiedAuditPlan",
+    "ManagementReview",
+    "ManagementReviewInput",
+    "IMSProcessMap",
+    "IMSObjective",
+    # Document Control (Tier 1)
+    "ControlledDocument",
+    "ControlledDocumentVersion",
+    "DocumentApprovalWorkflow",
+    "DocumentApprovalInstance",
+    "DocumentApprovalAction",
+    "DocumentDistribution",
+    "DocumentTrainingLink",
+    "DocumentAccessLog",
+    "ObsoleteDocumentRecord",
 ]

@@ -42,6 +42,11 @@ import ReportGenerator from './pages/ReportGenerator'
 import WorkflowCenter from './pages/WorkflowCenter'
 // Phase 4: Compliance Automation
 import ComplianceAutomation from './pages/ComplianceAutomation'
+// Tier 1: Enterprise Risk Register & IMS Unification
+import RiskRegister from './pages/RiskRegister'
+import IMSDashboard from './pages/IMSDashboard'
+// Tier 2: AI Intelligence
+import AIIntelligence from './pages/AIIntelligence'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -176,6 +181,11 @@ function App() {
           <Route path="workflows" element={<WorkflowCenter />} />
           {/* Phase 4: Compliance Automation */}
           <Route path="compliance-automation" element={<ComplianceAutomation />} />
+          {/* Tier 1: Enterprise Risk Register & IMS Unification */}
+          <Route path="risk-register" element={<RiskRegister />} />
+          <Route path="ims" element={<IMSDashboard />} />
+          {/* Tier 2: AI Intelligence */}
+          <Route path="ai-intelligence" element={<AIIntelligence />} />
         </Route>
       </Routes>
     </BrowserRouter>

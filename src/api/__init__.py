@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from src.api.routes import (
+    ai_intelligence,
     analytics,
     audit_templates,
     audits,
@@ -10,6 +11,7 @@ from src.api.routes import (
     complaints,
     compliance,
     compliance_automation,
+    document_control,
     documents,
     employee_portal,
     incidents,
@@ -18,6 +20,7 @@ from src.api.routes import (
     notifications,
     policies,
     realtime,
+    risk_register,
     risks,
     rtas,
     standards,
@@ -48,5 +51,9 @@ router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & We
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
 router.include_router(workflows.router, prefix="/workflows", tags=["Workflow Automation"])
 router.include_router(compliance_automation.router, prefix="/compliance-automation", tags=["Compliance Automation"])
+# Enterprise Risk Register & AI Intelligence (Tier 1 & 2)
+router.include_router(risk_register.router, prefix="/risk-register", tags=["Enterprise Risk Register"])
+router.include_router(ai_intelligence.router, prefix="/ai", tags=["AI Intelligence"])
+router.include_router(document_control.router, prefix="/document-control", tags=["Document Control System"])
 
 __all__ = ["router"]
