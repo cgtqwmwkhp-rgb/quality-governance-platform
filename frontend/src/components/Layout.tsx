@@ -26,12 +26,15 @@ import {
   Command,
   GitBranch,
   Brain,
-GitMerge,
-    Target,
-    Award,
-    Leaf
-  } from 'lucide-react'
+  GitMerge,
+  Target,
+  Award,
+  Leaf,
+  FileSignature,
+  Bot,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
+import AICopilot from './copilot/AICopilot'
 
 interface LayoutProps {
   onLogout: () => void
@@ -92,6 +95,7 @@ const navSections = [
     items: [
       { path: '/workflows', icon: GitBranch, label: 'Workflow Center', color: 'text-purple-400' },
       { path: '/compliance-automation', icon: Shield, label: 'Compliance Automation', color: 'text-emerald-400' },
+      { path: '/signatures', icon: FileSignature, label: 'Digital Signatures', color: 'text-indigo-400' },
     ]
   },
   {
@@ -106,6 +110,7 @@ const navSections = [
 export default function Layout({ onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications] = useState(3)
+  const [copilotOpen, setCopilotOpen] = useState(false)
   const navigate = useNavigate()
 
   // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
@@ -157,6 +162,20 @@ export default function Layout({ onLogout }: LayoutProps) {
           >
             <Settings className="w-5 h-5" />
           </NavLink>
+          
+          {/* AI Copilot Toggle */}
+          <button
+            onClick={() => setCopilotOpen(!copilotOpen)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+              copilotOpen 
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+            title="AI Copilot"
+          >
+            <Bot className="w-5 h-5" />
+            <span className="text-sm font-medium hidden sm:inline">Copilot</span>
+          </button>
         </div>
       </div>
 
@@ -262,6 +281,13 @@ export default function Layout({ onLogout }: LayoutProps) {
           onClick={() => setSidebarOpen(false)}
         />
       )}
+      
+      {/* AI Copilot */}
+      <AICopilot 
+        isOpen={copilotOpen} 
+        onClose={() => setCopilotOpen(false)}
+        currentPage={window.location.pathname}
+      />
     </div>
   )
 }

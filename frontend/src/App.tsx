@@ -51,6 +51,8 @@ import AIIntelligence from './pages/AIIntelligence'
 import UVDBAudits from './pages/UVDBAudits'
 // Planet Mark Carbon Management
 import PlanetMark from './pages/PlanetMark'
+// Tier 2: Digital Signatures
+import DigitalSignatures from './pages/DigitalSignatures'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -194,6 +196,8 @@ function App() {
           <Route path="uvdb" element={<UVDBAudits />} />
           {/* Planet Mark Carbon Management */}
           <Route path="planet-mark" element={<PlanetMark />} />
+          {/* Tier 2: Digital Signatures */}
+          <Route path="signatures" element={<DigitalSignatures />} />
         </Route>
       </Routes>
     </BrowserRouter>

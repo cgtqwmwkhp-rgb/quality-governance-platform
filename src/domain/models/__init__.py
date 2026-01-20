@@ -93,6 +93,22 @@ from src.domain.models.planet_mark import (
     SupplierEmissionData,
     ISO14001CrossMapping,
 )
+# AI Copilot (Tier 2)
+from src.domain.models.ai_copilot import (
+    CopilotSession,
+    CopilotMessage,
+    CopilotAction,
+    CopilotKnowledge,
+    CopilotFeedback,
+)
+# Digital Signatures (Tier 2)
+from src.domain.models.digital_signature import (
+    SignatureRequest,
+    SignatureRequestSigner,
+    Signature,
+    SignatureTemplate,
+    SignatureAuditLog,
+)
 
 __all__ = [
     # Base mixins
@@ -199,4 +215,16 @@ __all__ = [
     "UtilityMeterReading",
     "SupplierEmissionData",
     "ISO14001CrossMapping",
+    # AI Copilot (Tier 2)
+    "CopilotSession",
+    "CopilotMessage",
+    "CopilotAction",
+    "CopilotKnowledge",
+    "CopilotFeedback",
+    # Digital Signatures (Tier 2)
+    "SignatureRequest",
+    "SignatureRequestSigner",
+    "Signature",
+    "SignatureTemplate",
+    "SignatureAuditLog",
 ]

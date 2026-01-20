@@ -11,6 +11,7 @@ from src.api.routes import (
     complaints,
     compliance,
     compliance_automation,
+    copilot,
     document_control,
     documents,
     employee_portal,
@@ -19,15 +20,16 @@ from src.api.routes import (
     investigations,
     iso27001,
     notifications,
+    planet_mark,
     policies,
     realtime,
     risk_register,
     risks,
     rtas,
+    signatures,
     standards,
     users,
     uvdb,
-    planet_mark,
     workflows,
 )
 
@@ -64,5 +66,9 @@ router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS
 router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
+# AI Copilot (Tier 2)
+router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
+# Digital Signatures (Tier 2)
+router.include_router(signatures.router, prefix="/signatures", tags=["Digital Signatures"])
 
 __all__ = ["router"]
