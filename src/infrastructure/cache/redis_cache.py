@@ -168,7 +168,7 @@ class RedisCache:
             data = await redis.get(self._make_key(key))
             if data is None:
                 return None
-            return pickle.loads(data)
+            return pickle.loads(data)  # nosec B301 - internal cache data only
         except Exception as e:
             print(f"[Cache] Redis get error: {e}")
             return await self._fallback.get(key)
@@ -284,7 +284,7 @@ def make_cache_key(*args, **kwargs) -> str:
     key_parts = [str(arg) for arg in args]
     key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
     key_string = ":".join(key_parts)
-    return hashlib.md5(key_string.encode()).hexdigest()
+    return hashlib.md5(key_string.encode(), usedforsecurity=False).hexdigest()  # nosec B324
 
 
 def cached(

@@ -190,7 +190,7 @@ def get_endpoint_key(request: Request) -> str:
     path = request.url.path
     method = request.method
     # Normalize path parameters
-    normalized = hashlib.md5(f"{method}:{path}".encode()).hexdigest()[:8]
+    normalized = hashlib.md5(f"{method}:{path}".encode(), usedforsecurity=False).hexdigest()[:8]  # nosec B324
     return normalized
 
 
