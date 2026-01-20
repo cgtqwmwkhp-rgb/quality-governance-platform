@@ -16,7 +16,6 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  X,
   AlertCircle,
   Users,
   FileText,
@@ -35,6 +34,13 @@ import {
   MapPin,
   Smartphone,
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
 
 interface SignatureRequest {
   id: number;
@@ -173,34 +179,31 @@ const DigitalSignatures: React.FC = () => {
     { id: 5, action: 'reminded', actor: 'System', time: new Date('2026-01-20T11:00:00'), details: 'Reminder sent to Sarah Johnson' },
   ];
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      draft: 'bg-gray-500',
-      pending: 'bg-yellow-500',
-      in_progress: 'bg-blue-500',
-      completed: 'bg-green-500',
-      declined: 'bg-red-500',
-      expired: 'bg-gray-400',
-      viewed: 'bg-blue-400',
-      signed: 'bg-green-500',
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-500';
+  const statusVariants: Record<string, 'default' | 'submitted' | 'in-progress' | 'resolved' | 'destructive'> = {
+    draft: 'default',
+    pending: 'submitted',
+    in_progress: 'in-progress',
+    completed: 'resolved',
+    declined: 'destructive',
+    expired: 'default',
+    viewed: 'in-progress',
+    signed: 'resolved',
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
       case 'signed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-success" />;
       case 'declined':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return <XCircle className="w-4 h-4 text-destructive" />;
       case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-500" />;
+        return <Clock className="w-4 h-4 text-warning" />;
       case 'in_progress':
       case 'viewed':
-        return <AlertCircle className="w-4 h-4 text-blue-500" />;
+        return <AlertCircle className="w-4 h-4 text-info" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-500" />;
+        return <Clock className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
@@ -211,77 +214,84 @@ const DigitalSignatures: React.FC = () => {
   });
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <FileSignature className="w-8 h-8 text-indigo-400" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-primary to-primary-hover rounded-xl">
+              <FileSignature className="w-8 h-8 text-primary-foreground" />
+            </div>
             Digital Signatures
           </h1>
-          <p className="text-gray-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Secure electronic signatures with legal compliance
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
-        >
+        <Button onClick={() => setShowCreateModal(true)}>
           <Plus className="w-5 h-5" />
           New Request
-        </button>
+        </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-500/20 rounded-lg">
-              <Clock className="w-6 h-6 text-yellow-400" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-warning/20 rounded-lg">
+                <Clock className="w-6 h-6 text-warning" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold text-foreground">5</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-400">Pending</p>
-              <p className="text-2xl font-bold text-white">5</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-info/20 rounded-lg">
+                <Send className="w-6 h-6 text-info" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">In Progress</p>
+                <p className="text-2xl font-bold text-foreground">3</p>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-500/20 rounded-lg">
-              <Send className="w-6 h-6 text-blue-400" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-success/20 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-success" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold text-foreground">47</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-400">In Progress</p>
-              <p className="text-2xl font-bold text-white">3</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-primary/20 rounded-lg">
+                <FileText className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Signatures</p>
+                <p className="text-2xl font-bold text-foreground">156</p>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-500/20 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Completed</p>
-              <p className="text-2xl font-bold text-white">47</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-500/20 rounded-lg">
-              <FileText className="w-6 h-6 text-indigo-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Total Signatures</p>
-              <p className="text-2xl font-bold text-white">156</p>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-700 pb-2">
+      <div className="flex gap-2 border-b border-border pb-2">
         {[
           { id: 'requests', label: 'Requests', icon: FileText },
           { id: 'pending', label: 'Awaiting My Signature', icon: PenTool },
@@ -290,12 +300,13 @@ const DigitalSignatures: React.FC = () => {
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
               activeTab === tab.id
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            }`}
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            )}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -309,134 +320,128 @@ const DigitalSignatures: React.FC = () => {
           {/* Filters */}
           <div className="flex items-center gap-4 mb-6">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Input
                 type="text"
                 placeholder="Search requests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-gray-800 text-white pl-10 pr-4 py-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 focus:outline-none"
+                className="pl-10"
               />
             </div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 focus:outline-none"
-            >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="declined">Declined</option>
-              <option value="expired">Expired</option>
-            </select>
-            <button className="p-2.5 bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-gray-700 transition-colors">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="declined">Declined</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="secondary" size="sm">
               <RefreshCw className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
           {/* Requests List */}
           <div className="space-y-4">
             {filteredRequests.map(request => (
-              <div
-                key={request.id}
-                className="bg-gray-800 rounded-xl border border-gray-700 p-5 hover:border-indigo-500/50 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium text-white ${getStatusColor(request.status)}`}>
-                        {request.status.replace('_', ' ').toUpperCase()}
-                      </span>
-                      <span className="text-sm text-gray-400">{request.referenceNumber}</span>
-                      <span className="text-sm text-gray-500">•</span>
-                      <span className="text-sm text-gray-400">
-                        {request.workflowType === 'sequential' ? 'Sequential' : 'Parallel'} signing
-                      </span>
+              <Card key={request.id} className="hover:border-primary/50 transition-colors">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Badge variant={statusVariants[request.status]}>
+                          {request.status.replace('_', ' ').toUpperCase()}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">{request.referenceNumber}</span>
+                        <span className="text-sm text-muted-foreground">•</span>
+                        <span className="text-sm text-muted-foreground">
+                          {request.workflowType === 'sequential' ? 'Sequential' : 'Parallel'} signing
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-medium text-foreground mb-1">{request.title}</h3>
+                      {request.description && (
+                        <p className="text-sm text-muted-foreground mb-3">{request.description}</p>
+                      )}
+                      
+                      {/* Signers */}
+                      <div className="flex items-center gap-4 mt-4">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Users className="w-4 h-4" />
+                          <span>{request.signers.length} signers</span>
+                        </div>
+                        <div className="flex -space-x-2">
+                          {request.signers.map(signer => (
+                            <div
+                              key={signer.id}
+                              className={cn(
+                                "w-8 h-8 rounded-full border-2 border-card flex items-center justify-center text-xs font-medium text-white",
+                                signer.status === 'signed' ? 'bg-success' :
+                                signer.status === 'declined' ? 'bg-destructive' :
+                                signer.status === 'viewed' ? 'bg-info' : 'bg-muted-foreground'
+                              )}
+                              title={`${signer.name} - ${signer.status}`}
+                            >
+                              {signer.name.charAt(0)}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Calendar className="w-4 h-4" />
+                          <span>Expires {request.expiresAt.toLocaleDateString()}</span>
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="text-lg font-medium text-white mb-1">{request.title}</h3>
-                    {request.description && (
-                      <p className="text-sm text-gray-400 mb-3">{request.description}</p>
-                    )}
                     
-                    {/* Signers */}
-                    <div className="flex items-center gap-4 mt-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Users className="w-4 h-4" />
-                        <span>{request.signers.length} signers</span>
-                      </div>
-                      <div className="flex -space-x-2">
-                        {request.signers.map(signer => (
-                          <div
-                            key={signer.id}
-                            className={`w-8 h-8 rounded-full border-2 border-gray-800 flex items-center justify-center text-xs font-medium ${
-                              signer.status === 'signed' 
-                                ? 'bg-green-600 text-white' 
-                                : signer.status === 'declined'
-                                ? 'bg-red-600 text-white'
-                                : signer.status === 'viewed'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-600 text-white'
-                            }`}
-                            title={`${signer.name} - ${signer.status}`}
-                          >
-                            {signer.name.charAt(0)}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Calendar className="w-4 h-4" />
-                        <span>Expires {request.expiresAt.toLocaleDateString()}</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedRequest(request)}>
+                        <Eye className="w-5 h-5" />
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <Download className="w-5 h-5" />
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <MoreVertical className="w-5 h-5" />
+                      </Button>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedRequest(request)}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <Eye className="w-5 h-5" />
-                    </button>
-                    <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
-                      <Download className="w-5 h-5" />
-                    </button>
-                    <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
 
-                {/* Signer Progress */}
-                <div className="mt-4 pt-4 border-t border-gray-700">
-                  <div className="space-y-2">
-                    {request.signers.map((signer, index) => (
-                      <div key={signer.id} className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-700 text-xs text-gray-300">
-                          {request.workflowType === 'sequential' ? index + 1 : '•'}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-white">{signer.name}</span>
-                            <span className="text-xs text-gray-500">({signer.role})</span>
+                  {/* Signer Progress */}
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="space-y-2">
+                      {request.signers.map((signer, index) => (
+                        <div key={signer.id} className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-xs text-muted-foreground">
+                            {request.workflowType === 'sequential' ? index + 1 : '•'}
                           </div>
-                          <span className="text-xs text-gray-400">{signer.email}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-foreground">{signer.name}</span>
+                              <span className="text-xs text-muted-foreground">({signer.role})</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{signer.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(signer.status)}
+                            <span className="text-sm text-muted-foreground capitalize">{signer.status}</span>
+                            {signer.signedAt && (
+                              <span className="text-xs text-muted-foreground">
+                                {signer.signedAt.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(signer.status)}
-                          <span className="text-sm text-gray-400 capitalize">{signer.status}</span>
-                          {signer.signedAt && (
-                            <span className="text-xs text-gray-500">
-                              {signer.signedAt.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -445,14 +450,14 @@ const DigitalSignatures: React.FC = () => {
       {/* Pending Signatures Tab */}
       {activeTab === 'pending' && (
         <div className="space-y-4">
-          <div className="bg-gradient-to-r from-indigo-900/50 to-purple-900/50 rounded-xl border border-indigo-500/30 p-6">
+          <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl border border-primary/30 p-6">
             <div className="flex items-center gap-4">
-              <div className="p-4 bg-indigo-500/20 rounded-xl">
-                <PenTool className="w-8 h-8 text-indigo-400" />
+              <div className="p-4 bg-primary/20 rounded-xl">
+                <PenTool className="w-8 h-8 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">2 Documents Awaiting Your Signature</h2>
-                <p className="text-gray-400">Review and sign these documents to complete the approval process.</p>
+                <h2 className="text-xl font-semibold text-foreground">2 Documents Awaiting Your Signature</h2>
+                <p className="text-muted-foreground">Review and sign these documents to complete the approval process.</p>
               </div>
             </div>
           </div>
@@ -460,46 +465,44 @@ const DigitalSignatures: React.FC = () => {
           {signatureRequests
             .filter(r => r.status === 'pending' || r.status === 'in_progress')
             .map(request => (
-              <div
-                key={request.id}
-                className="bg-gray-800 rounded-xl border border-gray-700 p-6"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-medium text-white mb-1">{request.title}</h3>
-                    <p className="text-sm text-gray-400">{request.description}</p>
+              <Card key={request.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-foreground mb-1">{request.title}</h3>
+                      <p className="text-sm text-muted-foreground">{request.description}</p>
+                    </div>
+                    <span className="text-sm text-muted-foreground">{request.referenceNumber}</span>
                   </div>
-                  <span className="text-sm text-gray-400">{request.referenceNumber}</span>
-                </div>
 
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <User className="w-4 h-4" />
-                    <span>From: Admin User</span>
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <User className="w-4 h-4" />
+                      <span>From: Admin User</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="w-4 h-4" />
+                      <span>Due: {request.expiresAt.toLocaleDateString()}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Calendar className="w-4 h-4" />
-                    <span>Due: {request.expiresAt.toLocaleDateString()}</span>
-                  </div>
-                </div>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(request);
-                      setShowSigningModal(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
-                  >
-                    <PenTool className="w-4 h-4" />
-                    Review & Sign
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors">
-                    <Eye className="w-4 h-4" />
-                    View Document
-                  </button>
-                </div>
-              </div>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => {
+                        setSelectedRequest(request);
+                        setShowSigningModal(true);
+                      }}
+                    >
+                      <PenTool className="w-4 h-4" />
+                      Review & Sign
+                    </Button>
+                    <Button variant="secondary">
+                      <Eye className="w-4 h-4" />
+                      View Document
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
         </div>
       )}
@@ -508,137 +511,123 @@ const DigitalSignatures: React.FC = () => {
       {activeTab === 'templates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {templates.map(template => (
-            <div
-              key={template.id}
-              className="bg-gray-800 rounded-xl border border-gray-700 p-6 hover:border-indigo-500/50 transition-colors"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-indigo-500/20 rounded-lg">
-                  <FileSignature className="w-6 h-6 text-indigo-400" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-white">{template.name}</h3>
-                  <p className="text-sm text-gray-400">{template.workflowType} workflow</p>
-                </div>
-              </div>
-
-              {template.description && (
-                <p className="text-sm text-gray-400 mb-4">{template.description}</p>
-              )}
-
-              <div className="space-y-2 mb-4">
-                <p className="text-xs text-gray-500 uppercase">Signing Order</p>
-                {template.signerRoles.map((role, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-300">
-                      {template.workflowType === 'sequential' ? i + 1 : '•'}
-                    </span>
-                    <span className="text-sm text-gray-300">{role.role}</span>
+            <Card key={template.id} className="hover:border-primary/50 transition-colors">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-primary/20 rounded-lg">
+                    <FileSignature className="w-6 h-6 text-primary" />
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <h3 className="font-medium text-foreground">{template.name}</h3>
+                    <p className="text-sm text-muted-foreground">{template.workflowType} workflow</p>
+                  </div>
+                </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-                <span className="text-sm text-gray-400">
-                  Expires in {template.expiryDays} days
-                </span>
-                <button className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 text-sm transition-colors">
-                  Use Template
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                {template.description && (
+                  <p className="text-sm text-muted-foreground mb-4">{template.description}</p>
+                )}
+
+                <div className="space-y-2 mb-4">
+                  <p className="text-xs text-muted-foreground uppercase">Signing Order</p>
+                  {template.signerRoles.map((role, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                        {template.workflowType === 'sequential' ? i + 1 : '•'}
+                      </span>
+                      <span className="text-sm text-foreground">{role.role}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-border">
+                  <span className="text-sm text-muted-foreground">
+                    Expires in {template.expiryDays} days
+                  </span>
+                  <button className="flex items-center gap-1 text-primary hover:text-primary-hover text-sm transition-colors">
+                    Use Template
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
 
           {/* Add Template Card */}
-          <div
-            className="bg-gray-800/50 rounded-xl border border-dashed border-gray-600 p-6 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500/50 transition-colors"
-          >
-            <div className="p-4 bg-gray-700/50 rounded-full mb-4">
-              <Plus className="w-8 h-8 text-gray-400" />
+          <button className="bg-card/30 rounded-xl border border-dashed border-border p-6 flex flex-col items-center justify-center hover:border-primary/50 transition-colors min-h-[200px]">
+            <div className="p-4 bg-muted rounded-full mb-4">
+              <Plus className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-gray-400">Create New Template</p>
-          </div>
+            <p className="text-muted-foreground">Create New Template</p>
+          </button>
         </div>
       )}
 
       {/* Audit Trail Tab */}
       {activeTab === 'audit' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700">
-          <div className="p-4 border-b border-gray-700">
-            <h3 className="text-lg font-medium text-white">Recent Activity</h3>
-          </div>
-          <div className="divide-y divide-gray-700">
+        <Card>
+          <CardHeader>
+            <h3 className="text-lg font-medium text-foreground">Recent Activity</h3>
+          </CardHeader>
+          <div className="divide-y divide-border">
             {auditLog.map(log => (
-              <div key={log.id} className="p-4 hover:bg-gray-750 transition-colors">
+              <div key={log.id} className="p-4 hover:bg-muted/30 transition-colors">
                 <div className="flex items-start gap-4">
-                  <div className={`p-2 rounded-lg ${
-                    log.action === 'signed' ? 'bg-green-500/20' :
-                    log.action === 'viewed' ? 'bg-blue-500/20' :
-                    log.action === 'created' ? 'bg-indigo-500/20' :
-                    'bg-gray-700'
-                  }`}>
-                    {log.action === 'signed' && <CheckCircle className="w-5 h-5 text-green-400" />}
-                    {log.action === 'viewed' && <Eye className="w-5 h-5 text-blue-400" />}
-                    {log.action === 'created' && <Plus className="w-5 h-5 text-indigo-400" />}
-                    {log.action === 'sent' && <Send className="w-5 h-5 text-gray-400" />}
-                    {log.action === 'reminded' && <Mail className="w-5 h-5 text-yellow-400" />}
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    log.action === 'signed' ? 'bg-success/20' :
+                    log.action === 'viewed' ? 'bg-info/20' :
+                    log.action === 'created' ? 'bg-primary/20' : 'bg-muted'
+                  )}>
+                    {log.action === 'signed' && <CheckCircle className="w-5 h-5 text-success" />}
+                    {log.action === 'viewed' && <Eye className="w-5 h-5 text-info" />}
+                    {log.action === 'created' && <Plus className="w-5 h-5 text-primary" />}
+                    {log.action === 'sent' && <Send className="w-5 h-5 text-muted-foreground" />}
+                    {log.action === 'reminded' && <Mail className="w-5 h-5 text-warning" />}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-white">{log.actor}</span>
-                      <span className="text-gray-400">{log.action}</span>
+                      <span className="font-medium text-foreground">{log.actor}</span>
+                      <span className="text-muted-foreground">{log.action}</span>
                     </div>
-                    <p className="text-sm text-gray-400">{log.details}</p>
+                    <p className="text-sm text-muted-foreground">{log.details}</p>
                     {log.ip && (
-                      <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                         <MapPin className="w-3 h-3" />
                         <span>IP: {log.ip}</span>
                       </div>
                     )}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-muted-foreground">
                     {log.time.toLocaleString()}
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Create Request Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-lg mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-white">Create Signature Request</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-gray-400 mb-4">Create a new document for signature collection.</p>
-            <div className="text-center py-8 text-gray-500">
-              <FileSignature className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-              <p>Coming soon: Full document upload and signer configuration</p>
-            </div>
-            <div className="flex justify-end gap-3 mt-4">
-              <button 
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
-              >
-                Create
-              </button>
-            </div>
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Signature Request</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground mb-4">Create a new document for signature collection.</p>
+          <div className="text-center py-8">
+            <FileSignature className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-muted-foreground">Coming soon: Full document upload and signer configuration</p>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => setShowCreateModal(false)}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Signing Modal */}
       {showSigningModal && selectedRequest && (
@@ -687,7 +676,7 @@ const SigningModal: React.FC<{
     if (ctx) {
       const rect = canvas.getBoundingClientRect();
       ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-      ctx.strokeStyle = '#4f46e5';
+      ctx.strokeStyle = 'hsl(var(--primary))';
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       ctx.stroke();
@@ -708,42 +697,38 @@ const SigningModal: React.FC<{
   };
 
   const handleSign = () => {
-    // Submit signature
     console.log('Signing document...');
     onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-border">
         {/* Header */}
-        <div className="p-6 border-b border-gray-700">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">Sign Document</h2>
-              <p className="text-sm text-gray-400">{request.title}</p>
+              <h2 className="text-xl font-semibold text-foreground">Sign Document</h2>
+              <p className="text-sm text-muted-foreground">{request.title}</p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-            >
+            <Button variant="ghost" size="sm" onClick={onClose}>
               <XCircle className="w-6 h-6" />
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Content */}
         <div className="p-6">
           {/* Document Preview */}
-          <div className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+          <div className="bg-muted rounded-lg p-4 mb-6 border border-border">
             <div className="flex items-center gap-3 mb-3">
-              <FileText className="w-5 h-5 text-gray-400" />
-              <span className="text-white font-medium">Document Preview</span>
+              <FileText className="w-5 h-5 text-muted-foreground" />
+              <span className="text-foreground font-medium">Document Preview</span>
             </div>
-            <div className="bg-white rounded-lg p-6 min-h-[200px] text-gray-800">
-              <h3 className="font-bold mb-4">{request.title}</h3>
-              <p className="text-sm text-gray-600 mb-4">{request.description}</p>
-              <p className="text-sm text-gray-600">
+            <div className="bg-white dark:bg-background rounded-lg p-6 min-h-[200px]">
+              <h3 className="font-bold text-foreground mb-4">{request.title}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{request.description}</p>
+              <p className="text-sm text-muted-foreground">
                 This document requires your electronic signature to indicate your acknowledgment and agreement 
                 to the terms outlined above. By signing, you confirm that you have read and understood the contents.
               </p>
@@ -752,7 +737,7 @@ const SigningModal: React.FC<{
 
           {/* Signature Type Selection */}
           <div className="mb-6">
-            <p className="text-sm text-gray-400 mb-3">Choose how to sign:</p>
+            <p className="text-sm text-muted-foreground mb-3">Choose how to sign:</p>
             <div className="flex gap-3">
               {[
                 { id: 'draw', label: 'Draw', icon: PenTool },
@@ -761,12 +746,13 @@ const SigningModal: React.FC<{
               ].map(option => (
                 <button
                   key={option.id}
-                  onClick={() => setSignatureType(option.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                  onClick={() => setSignatureType(option.id as typeof signatureType)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors",
                     signatureType === option.id
-                      ? 'border-indigo-500 bg-indigo-500/20 text-indigo-400'
-                      : 'border-gray-600 text-gray-400 hover:border-gray-500'
-                  }`}
+                      ? 'border-primary bg-primary/20 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50'
+                  )}
                 >
                   <option.icon className="w-4 h-4" />
                   {option.label}
@@ -780,11 +766,8 @@ const SigningModal: React.FC<{
             {signatureType === 'draw' && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-gray-400">Draw your signature below:</p>
-                  <button
-                    onClick={clearCanvas}
-                    className="text-sm text-indigo-400 hover:text-indigo-300"
-                  >
+                  <p className="text-sm text-muted-foreground">Draw your signature below:</p>
+                  <button onClick={clearCanvas} className="text-sm text-primary hover:text-primary-hover">
                     Clear
                   </button>
                 </div>
@@ -792,7 +775,7 @@ const SigningModal: React.FC<{
                   ref={canvasRef}
                   width={540}
                   height={150}
-                  className="w-full bg-white rounded-lg cursor-crosshair border-2 border-dashed border-gray-300"
+                  className="w-full bg-white dark:bg-background rounded-lg cursor-crosshair border-2 border-dashed border-border"
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
@@ -803,36 +786,35 @@ const SigningModal: React.FC<{
             
             {signatureType === 'type' && (
               <div>
-                <p className="text-sm text-gray-400 mb-2">Type your name:</p>
-                <input
+                <p className="text-sm text-muted-foreground mb-2">Type your name:</p>
+                <Input
                   type="text"
                   value={typedName}
                   onChange={(e) => setTypedName(e.target.value)}
                   placeholder="Enter your full name"
-                  className="w-full bg-gray-900 text-white px-4 py-3 rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
                 />
                 {typedName && (
-                  <div className="mt-4 p-4 bg-white rounded-lg">
-                    <p className="text-2xl text-indigo-600 font-script">{typedName}</p>
+                  <div className="mt-4 p-4 bg-white dark:bg-background rounded-lg">
+                    <p className="text-2xl text-primary font-script">{typedName}</p>
                   </div>
                 )}
               </div>
             )}
 
             {signatureType === 'upload' && (
-              <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center">
-                <FileSignature className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-400 mb-2">Drag and drop your signature image</p>
-                <p className="text-sm text-gray-500">or</p>
-                <button className="mt-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                <FileSignature className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-2">Drag and drop your signature image</p>
+                <p className="text-sm text-muted-foreground">or</p>
+                <Button variant="secondary" className="mt-2">
                   Browse Files
-                </button>
+                </Button>
               </div>
             )}
           </div>
 
           {/* Legal Agreement */}
-          <div className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+          <div className="bg-muted rounded-lg p-4 mb-6 border border-border">
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
@@ -841,7 +823,7 @@ const SigningModal: React.FC<{
                 onChange={(e) => setAgreedToTerms(e.target.checked)}
                 className="mt-1"
               />
-              <label htmlFor="agree" className="text-sm text-gray-300">
+              <label htmlFor="agree" className="text-sm text-foreground">
                 By signing this document electronically, I agree that my electronic signature is the legal 
                 equivalent of my manual signature. I consent to the use of electronic signatures, and I 
                 understand that I am legally bound by this agreement.
@@ -850,9 +832,9 @@ const SigningModal: React.FC<{
           </div>
 
           {/* Verification Info */}
-          <div className="flex items-center gap-4 text-sm text-gray-400 mb-6">
+          <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-green-400" />
+              <Shield className="w-4 h-4 text-success" />
               <span>256-bit encryption</span>
             </div>
             <div className="flex items-center gap-2">
@@ -867,20 +849,13 @@ const SigningModal: React.FC<{
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
+            <Button variant="secondary" onClick={onClose} className="flex-1">
               Cancel
-            </button>
-            <button
-              onClick={handleSign}
-              disabled={!agreedToTerms}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
+            </Button>
+            <Button onClick={handleSign} disabled={!agreedToTerms} className="flex-1">
               <CheckCircle className="w-5 h-5" />
               Sign Document
-            </button>
+            </Button>
           </div>
         </div>
       </div>

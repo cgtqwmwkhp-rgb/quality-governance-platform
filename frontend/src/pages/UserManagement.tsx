@@ -15,11 +15,16 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  ChevronDown,
-  X,
   Save,
   AlertTriangle
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
 
 interface User {
   id: string;
@@ -115,7 +120,7 @@ export default function UserManagement() {
       description: 'Full system access with user management capabilities',
       permissions: ['all'],
       userCount: 2,
-      color: 'from-red-500 to-rose-500'
+      color: 'from-destructive to-destructive/80'
     },
     {
       id: 'ROLE002',
@@ -123,7 +128,7 @@ export default function UserManagement() {
       description: 'Department-level access with reporting capabilities',
       permissions: ['incidents.manage', 'audits.manage', 'reports.view', 'risks.manage'],
       userCount: 8,
-      color: 'from-violet-500 to-purple-500'
+      color: 'from-primary to-primary-hover'
     },
     {
       id: 'ROLE003',
@@ -131,7 +136,7 @@ export default function UserManagement() {
       description: 'Team-level access with limited management rights',
       permissions: ['incidents.view', 'rtas.manage', 'actions.manage'],
       userCount: 15,
-      color: 'from-blue-500 to-cyan-500'
+      color: 'from-info to-info/80'
     },
     {
       id: 'ROLE004',
@@ -139,7 +144,7 @@ export default function UserManagement() {
       description: 'Basic access for viewing and creating records',
       permissions: ['*.view', '*.create'],
       userCount: 45,
-      color: 'from-emerald-500 to-green-500'
+      color: 'from-success to-success/80'
     },
     {
       id: 'ROLE005',
@@ -147,7 +152,7 @@ export default function UserManagement() {
       description: 'Read-only access to all modules for audit purposes',
       permissions: ['*.view', 'reports.view', 'audit-trail.view'],
       userCount: 5,
-      color: 'from-amber-500 to-orange-500'
+      color: 'from-warning to-warning/80'
     }
   ];
 
@@ -165,10 +170,10 @@ export default function UserManagement() {
   ];
   void _permissions; // Used for role configuration UI
 
-  const statusColors: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-    active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: <CheckCircle2 className="w-4 h-4" /> },
-    inactive: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: <XCircle className="w-4 h-4" /> },
-    pending: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: <Clock className="w-4 h-4" /> }
+  const statusConfig: Record<string, { variant: 'resolved' | 'submitted' | 'destructive'; icon: React.ReactNode }> = {
+    active: { variant: 'resolved', icon: <CheckCircle2 className="w-4 h-4" /> },
+    inactive: { variant: 'destructive', icon: <XCircle className="w-4 h-4" /> },
+    pending: { variant: 'submitted', icon: <Clock className="w-4 h-4" /> }
   };
 
   const filteredUsers = users.filter(user => {
@@ -183,33 +188,31 @@ export default function UserManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
-              <Users className="w-8 h-8" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-primary to-primary-hover rounded-xl">
+              <Users className="w-8 h-8 text-primary-foreground" />
             </div>
             User Management
           </h1>
-          <p className="text-slate-400 mt-1">Manage users, roles, and permissions</p>
+          <p className="text-muted-foreground mt-1">Manage users, roles, and permissions</p>
         </div>
         
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium rounded-xl hover:from-violet-500 hover:to-purple-500 transition-all flex items-center gap-2"
-        >
+        <Button onClick={() => setShowAddModal(true)}>
           <UserPlus className="w-5 h-5" />
           Add User
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-700/50">
+      <div className="flex gap-2 border-b border-border">
         <button
           onClick={() => setActiveTab('users')}
-          className={`px-6 py-3 font-medium transition-all border-b-2 ${
+          className={cn(
+            "px-6 py-3 font-medium transition-all border-b-2",
             activeTab === 'users'
-              ? 'text-violet-400 border-violet-400'
-              : 'text-slate-400 border-transparent hover:text-white'
-          }`}
+              ? 'text-primary border-primary'
+              : 'text-muted-foreground border-transparent hover:text-foreground'
+          )}
         >
           <span className="flex items-center gap-2">
             <Users className="w-5 h-5" />
@@ -218,11 +221,12 @@ export default function UserManagement() {
         </button>
         <button
           onClick={() => setActiveTab('roles')}
-          className={`px-6 py-3 font-medium transition-all border-b-2 ${
+          className={cn(
+            "px-6 py-3 font-medium transition-all border-b-2",
             activeTab === 'roles'
-              ? 'text-violet-400 border-violet-400'
-              : 'text-slate-400 border-transparent hover:text-white'
-          }`}
+              ? 'text-primary border-primary'
+              : 'text-muted-foreground border-transparent hover:text-foreground'
+          )}
         >
           <span className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
@@ -237,102 +241,95 @@ export default function UserManagement() {
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search users..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="pl-10"
               />
             </div>
             
-            <div className="relative">
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-              >
-                <option value="all">All Roles</option>
+            <Select value={selectedRole} onValueChange={setSelectedRole}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
                 {roles.map((role) => (
-                  <option key={role.id} value={role.name}>{role.name}</option>
+                  <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
                 ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-            </div>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Users Table */}
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden">
+          <Card>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-900/50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-4 text-sm font-medium text-slate-400">User</th>
-                    <th className="text-left p-4 text-sm font-medium text-slate-400">Department</th>
-                    <th className="text-left p-4 text-sm font-medium text-slate-400">Role</th>
-                    <th className="text-left p-4 text-sm font-medium text-slate-400">Status</th>
-                    <th className="text-left p-4 text-sm font-medium text-slate-400">Last Login</th>
-                    <th className="text-center p-4 text-sm font-medium text-slate-400">Actions</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">User</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Department</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Role</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Last Login</th>
+                    <th className="text-center p-4 text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((user) => (
                     <tr
                       key={user.id}
-                      className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors"
+                      className="border-b border-border hover:bg-muted/30 transition-colors"
                     >
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-primary-foreground font-semibold">
                             {user.name.split(' ').map(n => n[0]).join('')}
                           </div>
                           <div>
-                            <p className="font-medium text-white">{user.name}</p>
-                            <p className="text-sm text-slate-400">{user.email}</p>
+                            <p className="font-medium text-foreground">{user.name}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
                           </div>
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="flex items-center gap-2 text-slate-300">
-                          <Building className="w-4 h-4 text-slate-500" />
+                        <span className="flex items-center gap-2 text-foreground">
+                          <Building className="w-4 h-4 text-muted-foreground" />
                           {user.department}
                         </span>
                       </td>
                       <td className="p-4">
-                        <span className="px-3 py-1 bg-violet-500/20 text-violet-400 rounded-full text-sm font-medium">
+                        <Badge variant="default">
                           {user.role}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="p-4">
-                        <span className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${statusColors[user.status].bg} ${statusColors[user.status].text}`}>
-                          {statusColors[user.status].icon}
+                        <Badge variant={statusConfig[user.status].variant} className="flex items-center gap-1 w-fit">
+                          {statusConfig[user.status].icon}
                           {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                        </span>
+                        </Badge>
                       </td>
-                      <td className="p-4 text-slate-400 text-sm">
+                      <td className="p-4 text-muted-foreground text-sm">
                         {user.lastLogin || 'Never'}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
-                          <button
-                            className="p-2 text-slate-400 hover:text-violet-400 transition-colors"
-                            title="Edit User"
-                          >
+                          <Button variant="ghost" size="sm" title="Edit User">
                             <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            className="p-2 text-slate-400 hover:text-amber-400 transition-colors"
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
                             title={user.status === 'active' ? 'Deactivate' : 'Activate'}
                           >
                             {user.status === 'active' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                          </button>
-                          <button
-                            className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                            title="Delete User"
-                          >
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title="Delete User">
                             <Trash2 className="w-4 h-4" />
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -340,7 +337,7 @@ export default function UserManagement() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         </>
       )}
 
@@ -348,162 +345,155 @@ export default function UserManagement() {
       {activeTab === 'roles' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {roles.map((role) => (
-            <div
+            <Card
               key={role.id}
-              className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6 hover:border-violet-500/50 transition-all"
+              className="hover:border-primary/50 transition-all"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-xl bg-gradient-to-br ${role.color}`}>
-                  <Shield className="w-6 h-6 text-white" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={cn("p-3 rounded-xl bg-gradient-to-br", role.color)}>
+                    <Shield className="w-6 h-6 text-white" />
+                  </div>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="w-5 h-5" />
+                  </Button>
                 </div>
-                <button className="p-2 text-slate-400 hover:text-white transition-colors">
-                  <MoreVertical className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <h3 className="text-xl font-semibold text-white mb-2">{role.name}</h3>
-              <p className="text-sm text-slate-400 mb-4">{role.description}</p>
-              
-              <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
-                <span className="text-sm text-slate-400">
-                  <span className="text-white font-medium">{role.userCount}</span> users
-                </span>
-                <span className="text-sm text-slate-400">
-                  <span className="text-white font-medium">{role.permissions.length}</span> permissions
-                </span>
-              </div>
-              
-              <div className="mt-4 flex flex-wrap gap-2">
-                {role.permissions.slice(0, 3).map((perm, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-1 bg-slate-700/50 text-slate-300 rounded text-xs"
-                  >
-                    {perm}
+                
+                <h3 className="text-xl font-semibold text-foreground mb-2">{role.name}</h3>
+                <p className="text-sm text-muted-foreground mb-4">{role.description}</p>
+                
+                <div className="flex items-center justify-between pt-4 border-t border-border">
+                  <span className="text-sm text-muted-foreground">
+                    <span className="text-foreground font-medium">{role.userCount}</span> users
                   </span>
-                ))}
-                {role.permissions.length > 3 && (
-                  <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs">
-                    +{role.permissions.length - 3} more
+                  <span className="text-sm text-muted-foreground">
+                    <span className="text-foreground font-medium">{role.permissions.length}</span> permissions
                   </span>
-                )}
-              </div>
-            </div>
+                </div>
+                
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {role.permissions.slice(0, 3).map((perm, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-1 bg-muted text-muted-foreground rounded text-xs"
+                    >
+                      {perm}
+                    </span>
+                  ))}
+                  {role.permissions.length > 3 && (
+                    <Badge variant="default" className="text-xs">
+                      +{role.permissions.length - 3} more
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           ))}
           
           {/* Add New Role Card */}
-          <button className="bg-slate-800/30 backdrop-blur-sm rounded-xl border border-dashed border-slate-700 p-6 flex flex-col items-center justify-center gap-3 hover:border-violet-500/50 hover:bg-slate-800/50 transition-all min-h-[200px]">
-            <div className="p-3 rounded-xl bg-slate-700/50">
-              <Shield className="w-6 h-6 text-slate-400" />
+          <button className="bg-card/30 rounded-xl border border-dashed border-border p-6 flex flex-col items-center justify-center gap-3 hover:border-primary/50 hover:bg-card/50 transition-all min-h-[200px]">
+            <div className="p-3 rounded-xl bg-muted">
+              <Shield className="w-6 h-6 text-muted-foreground" />
             </div>
-            <span className="text-slate-400 font-medium">Create New Role</span>
+            <span className="text-muted-foreground font-medium">Create New Role</span>
           </button>
         </div>
       )}
 
       {/* Add User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-700 flex items-center justify-between sticky top-0 bg-slate-800">
-              <h2 className="text-xl font-semibold text-white">Add New User</h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="p-2 text-slate-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">First Name</label>
+                <Input type="text" placeholder="John" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
+                <Input type="text" placeholder="Smith" />
+              </div>
             </div>
             
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">First Name</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    placeholder="John"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">Last Name</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    placeholder="Smith"
-                  />
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="email"
+                  className="pl-10"
+                  placeholder="john.smith@company.com"
+                />
               </div>
-              
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Phone (Optional)</label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="tel"
+                  className="pl-10"
+                  placeholder="+44 7700 900000"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                  <input
-                    type="email"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    placeholder="john.smith@company.com"
-                  />
-                </div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Department</label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="operations">Operations</SelectItem>
+                    <SelectItem value="quality">Quality</SelectItem>
+                    <SelectItem value="fleet">Fleet</SelectItem>
+                    <SelectItem value="safety">Safety</SelectItem>
+                    <SelectItem value="customer-service">Customer Service</SelectItem>
+                    <SelectItem value="hr">HR</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Phone (Optional)</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                  <input
-                    type="tel"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    placeholder="+44 7700 900000"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">Department</label>
-                  <select className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    <option>Operations</option>
-                    <option>Quality</option>
-                    <option>Fleet</option>
-                    <option>Safety</option>
-                    <option>Customer Service</option>
-                    <option>HR</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">Role</label>
-                  <select className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Role</label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
                     {roles.map((role) => (
-                      <option key={role.id}>{role.name}</option>
+                      <SelectItem key={role.id} value={role.name.toLowerCase()}>{role.name}</SelectItem>
                     ))}
-                  </select>
-                </div>
-              </div>
-              
-              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-amber-200">
-                  An email will be sent to the user with instructions to set their password and complete account setup.
-                </p>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             
-            <div className="p-6 border-t border-slate-700 flex justify-end gap-3 sticky bottom-0 bg-slate-800">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium rounded-xl hover:from-violet-500 hover:to-purple-500 transition-all flex items-center gap-2">
-                <Save className="w-5 h-5" />
-                Create User
-              </button>
+            <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-warning">
+                An email will be sent to the user with instructions to set their password and complete account setup.
+              </p>
             </div>
           </div>
-        </div>
-      )}
+          
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowAddModal(false)}>
+              Cancel
+            </Button>
+            <Button>
+              <Save className="w-5 h-5" />
+              Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
