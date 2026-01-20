@@ -20,15 +20,10 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
-
-// Animated background
-const AnimatedBackground = () => (
-  <div className="fixed inset-0 -z-10 overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900" />
-    <div className="absolute top-0 -left-4 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-    <div className="absolute bottom-0 -right-4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-  </div>
-);
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
+import { cn } from '../helpers/utils';
 
 // FAQ Item component
 const FAQItem = ({
@@ -42,24 +37,24 @@ const FAQItem = ({
   isOpen: boolean;
   onClick: () => void;
 }) => (
-  <div className="border border-white/10 rounded-xl overflow-hidden">
+  <Card className="overflow-hidden">
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 transition-colors text-left"
+      className="w-full flex items-center justify-between p-4 hover:bg-surface transition-colors text-left"
     >
-      <span className="font-medium text-white">{question}</span>
+      <span className="font-medium text-foreground">{question}</span>
       {isOpen ? (
-        <ChevronDown className="w-5 h-5 text-indigo-400" />
+        <ChevronDown className="w-5 h-5 text-primary" />
       ) : (
-        <ChevronRight className="w-5 h-5 text-gray-400" />
+        <ChevronRight className="w-5 h-5 text-muted-foreground" />
       )}
     </button>
     {isOpen && (
-      <div className="p-4 bg-white/5 border-t border-white/10">
-        <p className="text-gray-300 text-sm leading-relaxed">{answer}</p>
+      <div className="p-4 bg-surface border-t border-border">
+        <p className="text-muted-foreground text-sm leading-relaxed">{answer}</p>
       </div>
     )}
-  </div>
+  </Card>
 );
 
 // Category card
@@ -68,27 +63,28 @@ const CategoryCard = ({
   title,
   description,
   count,
-  color,
+  colorClass,
   onClick,
 }: {
   icon: any;
   title: string;
   description: string;
   count: number;
-  color: string;
+  colorClass: string;
   onClick: () => void;
 }) => (
-  <button
+  <Card
+    hoverable
+    className="p-4 cursor-pointer group"
     onClick={onClick}
-    className="p-5 bg-white/5 border border-white/10 rounded-2xl text-left hover:bg-white/10 transition-all group"
   >
-    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${color}`}>
-      <Icon className="w-6 h-6 text-white" />
+    <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center mb-3', colorClass)}>
+      <Icon className="w-6 h-6 text-current" />
     </div>
-    <h3 className="font-bold text-white group-hover:text-indigo-400 transition-colors">{title}</h3>
-    <p className="text-xs text-gray-400 mt-1">{description}</p>
-    <p className="text-xs text-indigo-400 mt-2">{count} articles</p>
-  </button>
+    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{title}</h3>
+    <p className="text-xs text-muted-foreground mt-1">{description}</p>
+    <p className="text-xs text-primary mt-2 font-medium">{count} articles</p>
+  </Card>
 );
 
 // Quick link
@@ -103,11 +99,11 @@ const QuickLink = ({
 }) => (
   <a
     href={href}
-    className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+    className="flex items-center gap-3 p-3 bg-surface border border-border rounded-xl hover:border-primary/30 transition-colors"
   >
-    <Icon className="w-5 h-5 text-indigo-400" />
-    <span className="text-white text-sm">{title}</span>
-    <ExternalLink className="w-4 h-4 text-gray-500 ml-auto" />
+    <Icon className="w-5 h-5 text-primary" />
+    <span className="text-foreground text-sm">{title}</span>
+    <ExternalLink className="w-4 h-4 text-muted-foreground ml-auto" />
   </a>
 );
 
@@ -125,7 +121,7 @@ export default function PortalHelp() {
       title: 'Reporting Issues',
       description: 'How to submit reports',
       count: 8,
-      color: 'bg-blue-500',
+      colorClass: 'bg-info/10 text-info',
     },
     {
       id: 'anonymous',
@@ -133,7 +129,7 @@ export default function PortalHelp() {
       title: 'Anonymous Reports',
       description: 'Privacy & confidentiality',
       count: 5,
-      color: 'bg-purple-500',
+      colorClass: 'bg-purple-100 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
     },
     {
       id: 'tracking',
@@ -141,7 +137,7 @@ export default function PortalHelp() {
       title: 'Tracking Status',
       description: 'Follow up on reports',
       count: 6,
-      color: 'bg-green-500',
+      colorClass: 'bg-success/10 text-success',
     },
     {
       id: 'emergency',
@@ -149,7 +145,7 @@ export default function PortalHelp() {
       title: 'Emergencies',
       description: 'Urgent situations',
       count: 4,
-      color: 'bg-red-500',
+      colorClass: 'bg-destructive/10 text-destructive',
     },
   ];
 
@@ -158,7 +154,7 @@ export default function PortalHelp() {
       category: 'reporting',
       question: 'How do I submit a report?',
       answer:
-        'From the Portal home page, select either "Safety Incident" or "Complaint". Fill in the required fields (title and description), optionally add your location and contact details, then click Submit. You\'ll receive a reference number immediately.',
+        'From the Portal home page, select "Submit a Report" and choose the type. Fill in the required fields (title and description), optionally add your location and contact details, then click Submit. You\'ll receive a reference number immediately.',
     },
     {
       category: 'reporting',
@@ -200,7 +196,7 @@ export default function PortalHelp() {
       category: 'emergency',
       question: 'Should I call 999 or use the portal for emergencies?',
       answer:
-        'For life-threatening emergencies, ALWAYS call 999 first. Use the portal\'s SOS feature to alert internal response teams simultaneously, but never delay calling emergency services.',
+        'For life-threatening emergencies, ALWAYS call 999 first. Use the portal to document the incident after the immediate danger has been addressed.',
     },
   ];
 
@@ -217,53 +213,51 @@ export default function PortalHelp() {
   };
 
   return (
-    <div className="min-h-screen relative">
-      <AnimatedBackground />
-
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-4">
+      <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
+        <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => navigate('/portal')}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-white" />
+            <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <div className="flex items-center gap-2">
-            <HelpCircle className="w-5 h-5 text-indigo-400" />
-            <span className="font-semibold text-white">Help & Support</span>
+            <HelpCircle className="w-5 h-5 text-primary" />
+            <span className="font-semibold text-foreground">Help & Support</span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-lg mx-auto px-4 py-6 pb-12">
+      <main className="max-w-lg mx-auto px-4 sm:px-6 py-6 pb-12">
         {/* Hero */}
-        <div className="text-center mb-10">
-          <div className="inline-flex w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl items-center justify-center mb-4">
-            <HelpCircle className="w-8 h-8 text-white" />
+        <div className="text-center mb-8">
+          <div className="inline-flex w-16 h-16 rounded-2xl gradient-brand items-center justify-center mb-4 shadow-glow">
+            <HelpCircle className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">How can we help?</h1>
-          <p className="text-gray-400">Search our knowledge base or browse by category</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">How can we help?</h1>
+          <p className="text-muted-foreground">Search our knowledge base or browse by category</p>
         </div>
 
         {/* Search */}
         <div className="relative mb-8">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
             type="text"
             placeholder="Search for answers..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg"
+            className="pl-10"
           />
         </div>
 
         {/* Categories */}
         {!searchQuery && !selectedCategory && (
-          <div className="mb-10">
-            <h2 className="text-lg font-semibold text-white mb-4">Browse by Category</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="mb-8">
+            <h2 className="text-base font-semibold text-foreground mb-4">Browse by Category</h2>
+            <div className="grid grid-cols-2 gap-3">
               {categories.map((cat) => (
                 <CategoryCard
                   key={cat.id}
@@ -280,21 +274,21 @@ export default function PortalHelp() {
           <div className="flex items-center gap-3 mb-6">
             <button
               onClick={() => setSelectedCategory(null)}
-              className="text-indigo-400 hover:text-indigo-300 transition-colors"
+              className="text-primary hover:underline transition-colors text-sm"
             >
               All Categories
             </button>
-            <ChevronRight className="w-4 h-4 text-gray-500" />
-            <span className="text-white font-medium">
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-foreground font-medium text-sm">
               {categories.find((c) => c.id === selectedCategory)?.title}
             </span>
           </div>
         )}
 
         {/* FAQs */}
-        <div className="mb-10">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-yellow-400" />
+        <div className="mb-8">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Lightbulb className="w-5 h-5 text-warning" />
             {searchQuery ? 'Search Results' : 'Frequently Asked Questions'}
           </h2>
           <div className="space-y-3">
@@ -309,24 +303,26 @@ export default function PortalHelp() {
                   />
                   {openFAQ === index && (
                     <div className="flex items-center justify-end gap-2 mt-2 px-4">
-                      <span className="text-xs text-gray-500">Was this helpful?</span>
+                      <span className="text-xs text-muted-foreground">Was this helpful?</span>
                       <button
                         onClick={() => giveFeedback(index, 'up')}
-                        className={`p-1.5 rounded-lg transition-colors ${
+                        className={cn(
+                          'p-1.5 rounded-lg transition-colors',
                           feedbackGiven[index] === 'up'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                        }`}
+                            ? 'bg-success/20 text-success'
+                            : 'bg-muted text-muted-foreground hover:bg-surface'
+                        )}
                       >
                         <ThumbsUp className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => giveFeedback(index, 'down')}
-                        className={`p-1.5 rounded-lg transition-colors ${
+                        className={cn(
+                          'p-1.5 rounded-lg transition-colors',
                           feedbackGiven[index] === 'down'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                        }`}
+                            ? 'bg-destructive/20 text-destructive'
+                            : 'bg-muted text-muted-foreground hover:bg-surface'
+                        )}
                       >
                         <ThumbsDown className="w-4 h-4" />
                       </button>
@@ -336,42 +332,44 @@ export default function PortalHelp() {
               ))
             ) : (
               <div className="text-center py-8">
-                <BookOpen className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400">No articles found. Try a different search term.</p>
+                <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No articles found. Try a different search term.</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Contact Options */}
-        <div className="bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-400" />
+        <Card className="p-6 border-primary/20 bg-primary/5">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
             Still need help?
           </h2>
-          <div className="grid sm:grid-cols-3 gap-4">
+          <div className="grid gap-3">
             <QuickLink icon={MessageCircle} title="Live Chat" href="#chat" />
-            <QuickLink icon={Mail} title="Email Support" href="mailto:safety@company.com" />
+            <QuickLink icon={Mail} title="Email Support" href="mailto:safety@plantexpand.com" />
             <QuickLink icon={Phone} title="Call Helpline" href="tel:08001234567" />
           </div>
-        </div>
+        </Card>
 
         {/* Quick Actions */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-4">
-          <button
+        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          <Button
+            variant="outline"
             onClick={() => navigate('/portal/report')}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-500/20 border border-red-500/30 text-red-400 font-medium rounded-xl hover:bg-red-500/30 transition-colors"
+            className="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
           >
-            <AlertTriangle className="w-5 h-5" />
+            <AlertTriangle className="w-4 h-4" />
             Submit a Report
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => navigate('/portal/track')}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-medium rounded-xl hover:bg-indigo-500/30 transition-colors"
+            className="flex-1"
           >
-            <Clock className="w-5 h-5" />
+            <Clock className="w-4 h-4" />
             Track My Report
-          </button>
+          </Button>
         </div>
       </main>
     </div>

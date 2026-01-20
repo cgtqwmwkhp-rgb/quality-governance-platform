@@ -2,16 +2,9 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Loader2, AlertCircle, CheckCircle, User } from 'lucide-react';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
-
-// Animated background with purple gradient
-const AnimatedBackground = () => (
-  <div className="fixed inset-0 -z-10 overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900/50 to-slate-900" />
-    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-    <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-  </div>
-);
 
 export default function PortalLogin() {
   const navigate = useNavigate();
@@ -41,53 +34,58 @@ export default function PortalLogin() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen relative flex items-center justify-center">
-        <AnimatedBackground />
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Checking authentication...</p>
+          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4">
-      <AnimatedBackground />
-
+    <div className="min-h-screen bg-surface flex items-center justify-center p-4 relative">
       {/* Theme Toggle */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
+      {/* Subtle gradient glow */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+      </div>
+
       <div className="max-w-md w-full relative animate-fade-in">
         {/* Logo & Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-            <Shield className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 rounded-2xl gradient-brand flex items-center justify-center mx-auto mb-6 shadow-glow">
+            <Shield className="w-10 h-10 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Employee Portal</h1>
-          <p className="text-gray-400">Sign in with your Plantexpand account</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Employee Portal</h1>
+          <p className="text-muted-foreground">Sign in with your Plantexpand account</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
+        <Card className="p-8">
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm text-red-400 font-medium">Sign in issue</p>
-                <p className="text-xs text-red-400/70 mt-1">{error}</p>
+                <p className="text-sm text-destructive font-medium">Sign in issue</p>
+                <p className="text-xs text-destructive/70 mt-1">{error}</p>
               </div>
             </div>
           )}
 
           {/* Microsoft SSO Button */}
-          <button
+          <Button
             onClick={handleMicrosoftLogin}
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/30 rounded-xl font-medium text-white transition-all"
+            variant="outline"
+            size="xl"
+            className="w-full"
           >
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -103,74 +101,77 @@ export default function PortalLogin() {
                 Sign in with Microsoft
               </>
             )}
-          </button>
+          </Button>
 
           {isAzureADAvailable && (
             <div className="mt-4 text-center">
-              <p className="text-xs text-gray-500">
-                Use your <span className="text-purple-400 font-medium">@plantexpand.com</span> email
+              <p className="text-xs text-muted-foreground">
+                Use your <span className="text-primary font-medium">@plantexpand.com</span> email
               </p>
             </div>
           )}
 
           {/* Divider */}
           <div className="my-6 flex items-center gap-4">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-gray-500">OR</span>
-            <div className="flex-1 h-px bg-white/10" />
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
 
           {/* Demo Login Button */}
-          <button
+          <Button
             onClick={handleDemoLogin}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl font-medium text-purple-400 transition-all"
+            variant="secondary"
+            size="lg"
+            className="w-full"
           >
             <User className="w-4 h-4" />
             Continue as Demo User
-          </button>
+          </Button>
 
-          <p className="text-xs text-gray-500 text-center mt-3">
+          <p className="text-xs text-muted-foreground text-center mt-3">
             Demo mode allows you to explore all features
           </p>
 
           {/* Divider */}
           <div className="my-6 flex items-center gap-4">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-gray-500">SECURE SIGN-IN</span>
-            <div className="flex-1 h-px bg-white/10" />
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">SECURE SIGN-IN</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
 
           {/* Info */}
-          <div className="space-y-3 text-sm text-gray-400">
+          <div className="space-y-3 text-sm text-muted-foreground">
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+              <div className="w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-success" />
               </div>
               <p>Your identity will be recorded with each report for accountability</p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+              <div className="w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-success" />
               </div>
               <p>Your name and details will be auto-filled from your profile</p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+              <div className="w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-success" />
               </div>
               <p>Track all your submitted reports in one place</p>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Admin Link */}
         <div className="mt-8 text-center">
-          <button
+          <Button
+            variant="link"
             onClick={() => navigate('/login')}
-            className="text-gray-400 hover:text-white text-sm transition-colors"
+            className="text-muted-foreground hover:text-primary"
           >
             Admin Login →
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -30,6 +30,11 @@ import {
   Navigation,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Textarea } from '../components/ui/Textarea';
+import { cn } from '../helpers/utils';
 
 // PE Vehicle options
 const PE_VEHICLES = [
@@ -262,56 +267,57 @@ export default function PortalRTAForm() {
   // Success screen
   if (submittedRef) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-green-900/20 to-slate-900 flex items-center justify-center p-4">
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 max-w-md w-full text-center">
-          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check className="w-10 h-10 text-green-400" />
+      <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Check className="w-10 h-10 text-success" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">RTA Report Submitted</h1>
-          <p className="text-gray-400 mb-6">Your reference number is:</p>
-          <div className="bg-white/5 border border-white/20 rounded-xl px-6 py-4 mb-6">
-            <span className="text-2xl font-mono font-bold text-orange-400">{submittedRef}</span>
+          <h1 className="text-2xl font-bold text-foreground mb-2">RTA Report Submitted</h1>
+          <p className="text-muted-foreground mb-6">Your reference number is:</p>
+          <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
+            <span className="text-2xl font-mono font-bold text-orange-600 dark:text-orange-400">{submittedRef}</span>
           </div>
           <div className="flex gap-3">
-            <button
+            <Button
               onClick={() => navigate('/portal/track/' + submittedRef)}
-              className="flex-1 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-colors"
+              className="flex-1 bg-orange-600 hover:bg-orange-700"
             >
               Track Status
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => navigate('/portal')}
-              className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+              className="flex-1"
             >
               Done
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-900/10 to-slate-900">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-4">
+      <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
+        <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-white" />
+            <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <Car className="w-5 h-5 text-orange-400" />
-              <span className="font-semibold text-white">RTA Report</span>
+              <Car className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              <span className="font-semibold text-foreground">RTA Report</span>
             </div>
-            <div className="text-xs text-gray-500">Step {step} of {totalSteps}</div>
+            <div className="text-xs text-muted-foreground">Step {step} of {totalSteps}</div>
           </div>
         </div>
         
-        <div className="h-1 bg-white/10">
+        <div className="h-1 bg-border">
           <div
             className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-300"
             style={{ width: `${(step / totalSteps) * 100}%` }}
@@ -319,25 +325,24 @@ export default function PortalRTAForm() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 pb-28">
+      <main className="max-w-lg mx-auto px-4 sm:px-6 py-6 pb-28">
         {/* Step 1: Your Details */}
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-white mb-1">Your Details</h1>
-              <p className="text-gray-400 text-sm">Driver and vehicle information</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">Your Details</h1>
+              <p className="text-muted-foreground text-sm">Driver and vehicle information</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Your Name *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
                   value={formData.employeeName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, employeeName: e.target.value }))}
                   placeholder="Full name..."
-                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  className="pl-10"
                 />
               </div>
             </div>
@@ -352,28 +357,28 @@ export default function PortalRTAForm() {
             />
 
             {formData.peVehicle === 'other' && (
-              <input
-                type="text"
+              <Input
                 value={formData.peVehicleOther}
                 onChange={(e) => setFormData((prev) => ({ ...prev, peVehicleOther: e.target.value.toUpperCase() }))}
                 placeholder="Enter registration..."
-                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 uppercase"
+                className="uppercase"
               />
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Any passengers? *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Any passengers? *</label>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
                     key={String(val)}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, hasPassengers: val }))}
-                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                    className={cn(
+                      'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.hasPassengers === val
-                        ? 'bg-orange-500/20 border-orange-500 text-white'
-                        : 'bg-white/5 border-white/20 text-gray-300'
-                    }`}
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
+                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                    )}
                   >
                     {val ? 'Yes' : 'No'}
                   </button>
@@ -383,13 +388,11 @@ export default function PortalRTAForm() {
 
             {formData.hasPassengers && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Passenger Details</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-foreground mb-2">Passenger Details</label>
+                <Input
                   value={formData.passengerDetails}
                   onChange={(e) => setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))}
                   placeholder="Name and reason in vehicle..."
-                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                 />
               </div>
             )}
@@ -400,26 +403,25 @@ export default function PortalRTAForm() {
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-white mb-1">Accident Details</h1>
-              <p className="text-gray-400 text-sm">When and where did it happen?</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">Accident Details</h1>
+              <p className="text-muted-foreground text-sm">When and where did it happen?</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Location *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Location *</label>
               <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder="Road name, junction..."
-                  className="w-full pl-12 pr-20 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  className="pl-10 pr-16"
                 />
                 <button
                   type="button"
                   onClick={detectLocation}
                   disabled={geolocating}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg"
                 >
                   {geolocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
                 </button>
@@ -428,76 +430,79 @@ export default function PortalRTAForm() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Date</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Date</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
                     type="date"
                     value={formData.accidentDate}
                     onChange={(e) => setFormData((prev) => ({ ...prev, accidentDate: e.target.value }))}
-                    className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                    className="pl-10"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Time</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Time</label>
                 <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
                     type="time"
                     value={formData.accidentTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, accidentTime: e.target.value }))}
-                    className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                    className="pl-10"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Type of Accident *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Type of Accident *</label>
               <div className="grid grid-cols-3 gap-2">
                 {ACCIDENT_TYPES.map((type) => (
                   <button
                     key={type.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, accidentType: type.value }))}
-                    className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                    className={cn(
+                      'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all',
                       formData.accidentType === type.value
-                        ? 'bg-orange-500/20 border-orange-500'
-                        : 'bg-white/5 border-white/20'
-                    }`}
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500'
+                        : 'bg-card border-border hover:border-border-strong'
+                    )}
                   >
                     <span className="text-xl">{type.icon}</span>
-                    <span className="text-xs text-white">{type.label}</span>
+                    <span className="text-xs text-foreground">{type.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Other vehicles involved?</label>
-              <div className="flex items-center justify-center gap-6 bg-white/5 rounded-xl p-4">
-                <button
-                  type="button"
-                  onClick={() => setVehicleCount(formData.vehicleCount - 1)}
-                  disabled={formData.vehicleCount === 0}
-                  className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl"
-                >
-                  <Minus className="w-5 h-5 text-white" />
-                </button>
-                <div className="text-center">
-                  <span className="text-3xl font-bold text-white">{formData.vehicleCount}</span>
-                  <p className="text-gray-400 text-xs">vehicles</p>
+              <label className="block text-sm font-medium text-foreground mb-2">Other vehicles involved?</label>
+              <Card className="p-4">
+                <div className="flex items-center justify-center gap-6">
+                  <button
+                    type="button"
+                    onClick={() => setVehicleCount(formData.vehicleCount - 1)}
+                    disabled={formData.vehicleCount === 0}
+                    className="w-10 h-10 flex items-center justify-center bg-surface hover:bg-muted disabled:opacity-30 rounded-xl"
+                  >
+                    <Minus className="w-5 h-5 text-foreground" />
+                  </button>
+                  <div className="text-center">
+                    <span className="text-3xl font-bold text-foreground">{formData.vehicleCount}</span>
+                    <p className="text-muted-foreground text-xs">vehicles</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setVehicleCount(formData.vehicleCount + 1)}
+                    disabled={formData.vehicleCount >= 3}
+                    className="w-10 h-10 flex items-center justify-center bg-surface hover:bg-muted disabled:opacity-30 rounded-xl"
+                  >
+                    <Plus className="w-5 h-5 text-foreground" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setVehicleCount(formData.vehicleCount + 1)}
-                  disabled={formData.vehicleCount >= 3}
-                  className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl"
-                >
-                  <Plus className="w-5 h-5 text-white" />
-                </button>
-              </div>
+              </Card>
             </div>
           </div>
         )}
@@ -506,75 +511,72 @@ export default function PortalRTAForm() {
         {step === 3 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-white mb-1">
+              <h1 className="text-xl font-bold text-foreground mb-1">
                 {formData.vehicleCount === 0 ? 'Witnesses' : 'Third Party Details'}
               </h1>
-              <p className="text-gray-400 text-sm">
+              <p className="text-muted-foreground text-sm">
                 {formData.vehicleCount === 0 ? 'Any witnesses to the accident?' : 'Details of other vehicles involved'}
               </p>
             </div>
 
             {formData.thirdParties.map((party, index) => (
-              <div key={index} className="bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <Car className="w-4 h-4 text-orange-400" />
+              <Card key={index} className="p-4 space-y-3">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Car className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                   Vehicle {index + 1}
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
+                  <Input
                     value={party.registration}
                     onChange={(e) => updateThirdParty(index, 'registration', e.target.value.toUpperCase())}
                     placeholder="Reg..."
-                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm uppercase"
+                    className="uppercase text-sm"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={party.driverName}
                     onChange={(e) => updateThirdParty(index, 'driverName', e.target.value)}
                     placeholder="Driver name..."
-                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                    className="text-sm"
                   />
                 </div>
-                <input
+                <Input
                   type="tel"
                   value={party.driverPhone}
                   onChange={(e) => updateThirdParty(index, 'driverPhone', e.target.value)}
                   placeholder="Driver phone..."
-                  className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                  className="text-sm"
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
+                  <Input
                     value={party.insuranceCompany}
                     onChange={(e) => updateThirdParty(index, 'insuranceCompany', e.target.value)}
                     placeholder="Insurance..."
-                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                    className="text-sm"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={party.policyNumber}
                     onChange={(e) => updateThirdParty(index, 'policyNumber', e.target.value)}
                     placeholder="Policy #..."
-                    className="px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                    className="text-sm"
                   />
                 </div>
-              </div>
+              </Card>
             ))}
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Any witnesses?</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Any witnesses?</label>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
                     key={String(val)}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, hasWitnesses: val }))}
-                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                    className={cn(
+                      'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.hasWitnesses === val
-                        ? 'bg-orange-500/20 border-orange-500 text-white'
-                        : 'bg-white/5 border-white/20 text-gray-300'
-                    }`}
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
+                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                    )}
                   >
                     {val ? 'Yes' : 'No'}
                   </button>
@@ -583,12 +585,10 @@ export default function PortalRTAForm() {
             </div>
 
             {formData.hasWitnesses && (
-              <input
-                type="text"
+              <Input
                 value={formData.witnessDetails}
                 onChange={(e) => setFormData((prev) => ({ ...prev, witnessDetails: e.target.value }))}
                 placeholder="Witness name and contact..."
-                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500"
               />
             )}
           </div>
@@ -598,23 +598,24 @@ export default function PortalRTAForm() {
         {step === 4 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-white mb-1">Damage & Conditions</h1>
-              <p className="text-gray-400 text-sm">Impact and road conditions</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">Damage & Conditions</h1>
+              <p className="text-muted-foreground text-sm">Impact and road conditions</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Point of Impact</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Point of Impact</label>
               <div className="grid grid-cols-4 gap-2">
                 {IMPACT_POINTS.map((point) => (
                   <button
                     key={point.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, impactPoint: point.value }))}
-                    className={`px-2 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                    className={cn(
+                      'px-2 py-2 rounded-lg border-2 text-xs font-medium transition-all',
                       formData.impactPoint === point.value
-                        ? 'bg-orange-500/20 border-orange-500 text-orange-400'
-                        : 'bg-white/5 border-white/20 text-gray-300'
-                    }`}
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
+                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                    )}
                   >
                     {point.label}
                   </button>
@@ -623,29 +624,29 @@ export default function PortalRTAForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Damage Description *</label>
-              <textarea
+              <label className="block text-sm font-medium text-foreground mb-2">Damage Description *</label>
+              <Textarea
                 value={formData.damageDescription}
                 onChange={(e) => setFormData((prev) => ({ ...prev, damageDescription: e.target.value }))}
                 placeholder="Describe all damage..."
                 rows={3}
-                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 resize-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Vehicle drivable?</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Vehicle drivable?</label>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
                     key={String(val)}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, isDrivable: val }))}
-                    className={`px-4 py-3 rounded-xl border-2 font-medium transition-all ${
+                    className={cn(
+                      'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.isDrivable === val
-                        ? val ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-red-500/20 border-red-500 text-red-400'
-                        : 'bg-white/5 border-white/20 text-gray-300'
-                    }`}
+                        ? val ? 'bg-success/10 border-success text-success' : 'bg-destructive/10 border-destructive text-destructive'
+                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                    )}
                   >
                     {val ? 'Yes' : 'No'}
                   </button>
@@ -654,38 +655,40 @@ export default function PortalRTAForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Weather</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Weather</label>
               <div className="grid grid-cols-6 gap-2">
                 {WEATHER_OPTIONS.map((w) => (
                   <button
                     key={w.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, weather: w.value }))}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                    className={cn(
+                      'flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all',
                       formData.weather === w.value
-                        ? 'bg-orange-500/20 border-orange-500'
-                        : 'bg-white/5 border-white/20'
-                    }`}
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500'
+                        : 'bg-card border-border hover:border-border-strong'
+                    )}
                   >
-                    <w.icon className={`w-5 h-5 ${formData.weather === w.value ? 'text-orange-400' : 'text-gray-400'}`} />
+                    <w.icon className={cn('w-5 h-5', formData.weather === w.value ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground')} />
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Road Condition</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Road Condition</label>
               <div className="flex flex-wrap gap-2">
                 {ROAD_CONDITIONS.map((cond) => (
                   <button
                     key={cond.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, roadCondition: cond.value }))}
-                    className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition-all ${
+                    className={cn(
+                      'px-4 py-2 rounded-full border-2 text-sm font-medium transition-all',
                       formData.roadCondition === cond.value
-                        ? 'bg-orange-500/20 border-orange-500 text-orange-400'
-                        : 'bg-white/5 border-white/20 text-gray-300'
-                    }`}
+                        ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
+                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                    )}
                   >
                     {cond.label}
                   </button>
@@ -695,7 +698,7 @@ export default function PortalRTAForm() {
 
             {/* Photos */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Photos</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Photos</label>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -703,15 +706,15 @@ export default function PortalRTAForm() {
                     <button
                       type="button"
                       onClick={() => removePhoto(index)}
-                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                <label className="aspect-square flex flex-col items-center justify-center bg-white/5 border-2 border-dashed border-white/20 rounded-xl cursor-pointer hover:bg-white/10">
-                  <Camera className="w-6 h-6 text-gray-400" />
-                  <span className="text-xs text-gray-400 mt-1">Add</span>
+                <label className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
+                  <Camera className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground mt-1">Add</span>
                   <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" multiple />
                 </label>
               </div>
@@ -723,49 +726,49 @@ export default function PortalRTAForm() {
         {step === 5 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-white mb-1">What Happened?</h1>
-              <p className="text-gray-400 text-sm">Describe the accident in full</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">What Happened?</h1>
+              <p className="text-muted-foreground text-sm">Describe the accident in full</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Full Description *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Full Description *</label>
               <div className="relative">
-                <textarea
+                <Textarea
                   value={formData.fullDescription}
                   onChange={(e) => setFormData((prev) => ({ ...prev, fullDescription: e.target.value }))}
                   placeholder="Describe exactly what happened..."
                   rows={6}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 resize-none"
                 />
                 <button
                   type="button"
                   onClick={toggleVoiceRecording}
-                  className={`absolute right-3 bottom-3 p-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-orange-500/20 text-orange-400'}`}
+                  className={cn(
+                    'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
+                    isRecording ? 'bg-destructive text-destructive-foreground animate-pulse' : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/30'
+                  )}
                 >
-                  {isRecording ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5" />}
+                  {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Purpose of Journey</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-foreground mb-2">Purpose of Journey</label>
+                <Input
                   value={formData.purposeOfJourney}
                   onChange={(e) => setFormData((prev) => ({ ...prev, purposeOfJourney: e.target.value }))}
                   placeholder="e.g. Work site visit"
-                  className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                  className="text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Speed at Impact</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-foreground mb-2">Speed at Impact</label>
+                <Input
                   value={formData.speed}
                   onChange={(e) => setFormData((prev) => ({ ...prev, speed: e.target.value }))}
                   placeholder="e.g. 20 mph"
-                  className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-500 text-sm"
+                  className="text-sm"
                 />
               </div>
             </div>
@@ -774,35 +777,36 @@ export default function PortalRTAForm() {
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, hasDashcam: !prev.hasDashcam }))}
-                className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                  formData.hasDashcam ? 'bg-green-500/20 border-green-500' : 'bg-white/5 border-white/20'
-                }`}
+                className={cn(
+                  'flex items-center gap-2 p-3 rounded-xl border-2 transition-all',
+                  formData.hasDashcam ? 'bg-success/10 border-success' : 'bg-card border-border hover:border-border-strong'
+                )}
               >
-                <Video className={`w-5 h-5 ${formData.hasDashcam ? 'text-green-400' : 'text-gray-400'}`} />
-                <span className="text-sm text-white">Dashcam</span>
+                <Video className={cn('w-5 h-5', formData.hasDashcam ? 'text-success' : 'text-muted-foreground')} />
+                <span className="text-sm text-foreground">Dashcam</span>
               </button>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, hasCCTV: !prev.hasCCTV }))}
-                className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                  formData.hasCCTV ? 'bg-green-500/20 border-green-500' : 'bg-white/5 border-white/20'
-                }`}
+                className={cn(
+                  'flex items-center gap-2 p-3 rounded-xl border-2 transition-all',
+                  formData.hasCCTV ? 'bg-success/10 border-success' : 'bg-card border-border hover:border-border-strong'
+                )}
               >
-                <Eye className={`w-5 h-5 ${formData.hasCCTV ? 'text-green-400' : 'text-gray-400'}`} />
-                <span className="text-sm text-white">CCTV Nearby</span>
+                <Eye className={cn('w-5 h-5', formData.hasCCTV ? 'text-success' : 'text-muted-foreground')} />
+                <span className="text-sm text-foreground">CCTV Nearby</span>
               </button>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Emergency Services?</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Emergency Services?</label>
               <div className="relative">
-                <Siren className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
+                <Siren className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
                   value={formData.emergencyServices}
                   onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.value }))}
                   placeholder="No / Police / Ambulance..."
-                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500"
+                  className="pl-10"
                 />
               </div>
             </div>
@@ -811,35 +815,32 @@ export default function PortalRTAForm() {
       </main>
 
       {/* Fixed Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/50 backdrop-blur-xl border-t border-white/10 p-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border p-4">
         <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => setStep((s) => (s - 1) as Step)}
-              className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
             >
               <ChevronLeft className="w-5 h-5" />
               Back
-            </button>
+            </Button>
           )}
           
           {step < totalSteps ? (
-            <button
-              type="button"
+            <Button
               onClick={() => setStep((s) => (s + 1) as Step)}
               disabled={!canProceed()}
-              className="flex-1 px-5 py-3 bg-gradient-to-r from-orange-500 to-red-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              className="flex-1 bg-orange-600 hover:bg-orange-700"
             >
               Continue
               <ChevronRight className="w-5 h-5" />
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="flex-1 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-500 disabled:opacity-50 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              className="flex-1 bg-success hover:bg-success/90"
             >
               {isSubmitting ? (
                 <>
@@ -852,7 +853,7 @@ export default function PortalRTAForm() {
                   Submit
                 </>
               )}
-            </button>
+            </Button>
           )}
         </div>
       </div>

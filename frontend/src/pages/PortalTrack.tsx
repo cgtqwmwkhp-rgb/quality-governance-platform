@@ -15,15 +15,10 @@ import {
   HelpCircle,
   Sparkles,
 } from 'lucide-react';
-
-// Animated background
-const AnimatedBackground = () => (
-  <div className="fixed inset-0 -z-10 overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" />
-    <div className="absolute top-0 -left-4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-    <div className="absolute bottom-0 -right-4 w-96 h-96 bg-cyan-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-  </div>
-);
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { cn } from '../helpers/utils';
 
 // Status badge component
 const StatusBadge = ({ status, label }: { status: string; label: string }) => {
@@ -31,24 +26,24 @@ const StatusBadge = ({ status, label }: { status: string; label: string }) => {
     switch (status) {
       case 'REPORTED':
       case 'OPEN':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+        return 'bg-info/10 text-info border-info/20';
       case 'UNDER_INVESTIGATION':
       case 'IN_PROGRESS':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+        return 'bg-warning/10 text-warning border-warning/20';
       case 'PENDING_REVIEW':
-        return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+        return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800';
       case 'RESOLVED':
       case 'CLOSED':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
+        return 'bg-success/10 text-success border-success/20';
       case 'REJECTED':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
+        return 'bg-destructive/10 text-destructive border-destructive/20';
       default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
   return (
-    <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold ${getStatusStyles()}`}>
+    <span className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold', getStatusStyles())}>
       {label}
     </span>
   );
@@ -64,14 +59,14 @@ const TimelineEvent = ({
 }) => (
   <div className="flex gap-4">
     <div className="flex flex-col items-center">
-      <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-lg">
+      <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-lg">
         {event.icon}
       </div>
-      {!isLast && <div className="w-0.5 h-full bg-white/10 mt-2" />}
+      {!isLast && <div className="w-0.5 h-full bg-border mt-2" />}
     </div>
     <div className="pb-6">
-      <p className="text-white font-medium">{event.event}</p>
-      <p className="text-sm text-gray-400">
+      <p className="text-foreground font-medium">{event.event}</p>
+      <p className="text-sm text-muted-foreground">
         {new Date(event.date).toLocaleDateString('en-GB', {
           day: 'numeric',
           month: 'short',
@@ -101,27 +96,24 @@ const ProgressIndicator = ({ status }: { status: string }) => {
   );
 
   return (
-    <div className="flex items-center justify-between mb-8">
+    <div className="flex items-center justify-between mb-6">
       {stages.map((stage, index) => (
         <div key={stage.key} className="flex items-center">
-          <div className={`flex flex-col items-center ${
-            index <= currentIndex ? 'text-white' : 'text-gray-500'
-          }`}>
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl mb-2 ${
+          <div className={cn('flex flex-col items-center', index <= currentIndex ? 'text-foreground' : 'text-muted-foreground')}>
+            <div className={cn(
+              'w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl mb-2',
               index < currentIndex 
-                ? 'bg-green-500' 
+                ? 'bg-success text-success-foreground' 
                 : index === currentIndex 
-                  ? 'bg-gradient-to-br from-purple-500 to-cyan-500 animate-pulse'
-                  : 'bg-white/10'
-            }`}>
+                  ? 'gradient-brand text-primary-foreground'
+                  : 'bg-muted'
+            )}>
               {index < currentIndex ? '✓' : stage.icon}
             </div>
             <span className="text-xs font-medium hidden sm:block">{stage.label}</span>
           </div>
           {index < stages.length - 1 && (
-            <div className={`w-8 sm:w-16 h-1 mx-2 rounded ${
-              index < currentIndex ? 'bg-green-500' : 'bg-white/10'
-            }`} />
+            <div className={cn('w-6 sm:w-12 h-1 mx-1 sm:mx-2 rounded', index < currentIndex ? 'bg-success' : 'bg-border')} />
           )}
         </div>
       ))}
@@ -160,7 +152,7 @@ export default function PortalTrack() {
       } else {
         setError('Unable to fetch report. Please try again.');
       }
-    } catch (err) {
+    } catch {
       // Demo data for testing
       const isIncident = ref.startsWith('INC-');
       setReport({
@@ -199,88 +191,85 @@ export default function PortalTrack() {
   };
 
   return (
-    <div className="min-h-screen relative">
-      <AnimatedBackground />
-
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-4">
+      <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
+        <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => navigate('/portal')}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-white" />
+            <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <div className="flex items-center gap-2">
-            <Search className="w-5 h-5 text-cyan-400" />
-            <span className="font-semibold text-white">Track Report</span>
+            <Search className="w-5 h-5 text-info" />
+            <span className="font-semibold text-foreground">Track Report</span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-lg mx-auto px-4 py-6 pb-12">
+      <main className="max-w-lg mx-auto px-4 sm:px-6 py-6 pb-12">
         {/* Search Section */}
         <div className="text-center mb-8">
-          <div className="inline-flex w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl items-center justify-center mb-4">
-            <Search className="w-8 h-8 text-white" />
+          <div className="inline-flex w-16 h-16 rounded-2xl gradient-brand items-center justify-center mb-4 shadow-glow">
+            <Search className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Track Your Report</h1>
-          <p className="text-gray-400">Enter your reference number to check the status</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Track Your Report</h1>
+          <p className="text-muted-foreground">Enter your reference number to check the status</p>
         </div>
 
         {/* Search Form */}
         <form onSubmit={handleSearch} className="mb-8">
           <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <input
+            <div className="flex-1">
+              <Input
                 type="text"
                 placeholder="Enter reference number (e.g., INC-2026-0001)"
                 value={searchRef}
                 onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
-                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-mono"
+                className="font-mono text-base"
               />
             </div>
-            <button
+            <Button
               type="submit"
               disabled={isSearching || !searchRef.trim()}
-              className="px-6 py-4 bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-semibold rounded-2xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSearching ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Search className="w-6 h-6" />
+                <Search className="w-5 h-5" />
               )}
-            </button>
+            </Button>
           </div>
         </form>
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center">
-            <XCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-            <h3 className="text-xl font-bold text-white mb-2">Not Found</h3>
-            <p className="text-gray-400">{error}</p>
-          </div>
+          <Card className="p-6 text-center border-destructive/20">
+            <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-foreground mb-2">Not Found</h3>
+            <p className="text-muted-foreground">{error}</p>
+          </Card>
         )}
 
         {/* Report Details */}
         {report && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Header Card */}
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-6">
+            <Card className="p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     {report.report_type === 'Incident' ? (
-                      <AlertTriangle className="w-5 h-5 text-red-400" />
+                      <AlertTriangle className="w-5 h-5 text-destructive" />
                     ) : (
-                      <MessageSquare className="w-5 h-5 text-amber-400" />
+                      <MessageSquare className="w-5 h-5 text-warning" />
                     )}
-                    <span className="text-sm text-gray-400">{report.report_type}</span>
+                    <span className="text-sm text-muted-foreground">{report.report_type}</span>
                   </div>
-                  <h2 className="text-xl font-bold text-white">{report.title}</h2>
-                  <p className="text-sm font-mono text-gray-400 mt-1">{report.reference_number}</p>
+                  <h2 className="text-lg font-bold text-foreground">{report.title}</h2>
+                  <p className="text-sm font-mono text-muted-foreground mt-1">{report.reference_number}</p>
                 </div>
                 <StatusBadge status={report.status} label={report.status_label} />
               </div>
@@ -289,48 +278,48 @@ export default function PortalTrack() {
               <ProgressIndicator status={report.status} />
 
               {/* Quick Stats */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-white/5 rounded-xl">
-                  <Calendar className="w-5 h-5 text-purple-400 mx-auto mb-1" />
-                  <p className="text-xs text-gray-400">Submitted</p>
-                  <p className="text-sm text-white font-medium">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center p-3 bg-surface rounded-xl">
+                  <Calendar className="w-5 h-5 text-primary mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">Submitted</p>
+                  <p className="text-sm text-foreground font-medium">
                     {new Date(report.submitted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-white/5 rounded-xl">
-                  <Clock className="w-5 h-5 text-cyan-400 mx-auto mb-1" />
-                  <p className="text-xs text-gray-400">Last Update</p>
-                  <p className="text-sm text-white font-medium">
+                <div className="text-center p-3 bg-surface rounded-xl">
+                  <Clock className="w-5 h-5 text-info mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">Last Update</p>
+                  <p className="text-sm text-foreground font-medium">
                     {new Date(report.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-white/5 rounded-xl">
-                  <User className="w-5 h-5 text-green-400 mx-auto mb-1" />
-                  <p className="text-xs text-gray-400">Assigned To</p>
-                  <p className="text-sm text-white font-medium">{report.assigned_to || 'Pending'}</p>
+                <div className="text-center p-3 bg-surface rounded-xl">
+                  <User className="w-5 h-5 text-success mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">Assigned To</p>
+                  <p className="text-sm text-foreground font-medium">{report.assigned_to || 'Pending'}</p>
                 </div>
               </div>
-            </div>
+            </Card>
 
             {/* Next Steps */}
             {report.next_steps && (
-              <div className="bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30 rounded-2xl p-6">
+              <Card className="p-5 border-primary/20 bg-primary/5">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-purple-500/20 rounded-lg">
-                    <Sparkles className="w-5 h-5 text-purple-400" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Sparkles className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white mb-1">What's Next?</h3>
-                    <p className="text-gray-300 text-sm">{report.next_steps}</p>
+                    <h3 className="font-semibold text-foreground mb-1">What's Next?</h3>
+                    <p className="text-muted-foreground text-sm">{report.next_steps}</p>
                   </div>
                 </div>
-              </div>
+              </Card>
             )}
 
             {/* Timeline */}
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-cyan-400" />
+            <Card className="p-6">
+              <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-info" />
                 Activity Timeline
               </h3>
               <div className="pl-2">
@@ -342,24 +331,26 @@ export default function PortalTrack() {
                   />
                 ))}
               </div>
-            </div>
+            </Card>
 
             {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-3">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => searchReport(report.reference_number)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-colors"
+                className="flex-1"
               >
-                <RefreshCw className="w-5 h-5" />
+                <RefreshCw className="w-4 h-4" />
                 Refresh Status
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 onClick={copyLink}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-colors"
+                className="flex-1"
               >
-                <Share2 className="w-5 h-5" />
+                <Share2 className="w-4 h-4" />
                 Share Link
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -367,22 +358,22 @@ export default function PortalTrack() {
         {/* Empty State */}
         {!report && !error && !isSearching && !urlRef && (
           <div className="text-center py-12">
-            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-              <HelpCircle className="w-10 h-10 text-gray-500" />
+            <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <HelpCircle className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-xl font-semibold text-white mb-2">Enter Your Reference Number</h3>
-            <p className="text-gray-400 mb-6">
+            <h3 className="text-lg font-semibold text-foreground mb-2">Enter Your Reference Number</h3>
+            <p className="text-muted-foreground mb-6">
               You received a reference number when you submitted your report.
               <br />
               Enter it above to check the status.
             </p>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 max-w-sm mx-auto">
-              <p className="text-xs text-gray-400 mb-2">Example formats:</p>
+            <Card className="p-4 max-w-sm mx-auto">
+              <p className="text-xs text-muted-foreground mb-2">Example formats:</p>
               <div className="flex flex-wrap gap-2 justify-center">
-                <span className="px-3 py-1 bg-white/10 rounded-lg text-sm font-mono text-white">INC-2026-0001</span>
-                <span className="px-3 py-1 bg-white/10 rounded-lg text-sm font-mono text-white">COMP-2026-0001</span>
+                <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">INC-2026-0001</span>
+                <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">COMP-2026-0001</span>
               </div>
-            </div>
+            </Card>
           </div>
         )}
       </main>
