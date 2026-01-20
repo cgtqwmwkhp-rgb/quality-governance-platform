@@ -6,6 +6,7 @@ from src.api.routes import (
     ai_intelligence,
     analytics,
     audit_templates,
+    audit_trail,
     audits,
     auth,
     complaints,
@@ -28,6 +29,7 @@ from src.api.routes import (
     rtas,
     signatures,
     standards,
+    tenants,
     users,
     uvdb,
     workflows,
@@ -70,5 +72,9 @@ router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet M
 router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
 # Digital Signatures (Tier 2)
 router.include_router(signatures.router, prefix="/signatures", tags=["Digital Signatures"])
+# Multi-tenancy (Tier 1)
+router.include_router(tenants.router, prefix="/tenants", tags=["Multi-Tenancy"])
+# Immutable Audit Trail (Tier 1)
+router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Trail"])
 
 __all__ = ["router"]
