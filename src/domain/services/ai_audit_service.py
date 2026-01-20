@@ -161,6 +161,205 @@ class AuditQuestionGenerator:
         ],
     }
 
+    # ISO 27001:2022 Information Security Management System Questions
+    ISO_27001_QUESTIONS = {
+        "4.1": [
+            "How are external and internal issues relevant to information security identified?",
+            "What process exists to monitor and review these issues?",
+            "How do you consider legal, regulatory, and contractual requirements?",
+        ],
+        "4.2": [
+            "Who are the interested parties relevant to the ISMS?",
+            "What are their requirements for information security?",
+            "How are these requirements addressed in the ISMS?",
+        ],
+        "4.3": [
+            "How is the scope of the ISMS determined and documented?",
+            "What boundaries and applicability have been considered?",
+            "How are interfaces and dependencies managed?",
+        ],
+        "5.1": [
+            "How does top management demonstrate leadership and commitment to the ISMS?",
+            "How are information security policy and objectives established?",
+            "How are ISMS requirements integrated into business processes?",
+        ],
+        "5.2": [
+            "Is the information security policy documented and communicated?",
+            "Does the policy include commitment to continual improvement?",
+            "How is the policy reviewed and maintained?",
+        ],
+        "5.3": [
+            "How are roles, responsibilities, and authorities for information security assigned?",
+            "How are these communicated within the organization?",
+            "Is there an Information Security Manager or CISO appointed?",
+        ],
+        "6.1": [
+            "How does the organization assess information security risks?",
+            "What risk assessment methodology is used?",
+            "How are risk criteria defined (acceptance, likelihood, impact)?",
+            "How are risks documented and prioritized?",
+        ],
+        "6.1.3": [
+            "How is the risk treatment plan developed?",
+            "What criteria are used to select treatment options?",
+            "How is the Statement of Applicability maintained?",
+        ],
+        "6.2": [
+            "What are the information security objectives?",
+            "Are objectives measurable and consistent with the policy?",
+            "How is progress toward objectives monitored?",
+        ],
+        "7.1": [
+            "What resources are provided for the ISMS?",
+            "How are resource requirements identified?",
+        ],
+        "7.2": [
+            "How is competence determined for roles affecting information security?",
+            "What security awareness training is provided?",
+            "How are training records maintained?",
+        ],
+        "7.3": [
+            "How is security awareness maintained across the organization?",
+            "What programs exist to promote security culture?",
+        ],
+        "7.4": [
+            "How are internal and external communications on security managed?",
+            "What is communicated, when, and to whom?",
+        ],
+        "7.5": [
+            "How is documented information controlled?",
+            "How is information classified and protected?",
+            "What is the document retention policy?",
+        ],
+        "8.1": [
+            "How are information security processes planned and controlled?",
+            "How are changes to processes managed?",
+            "How are outsourced processes controlled?",
+        ],
+        "8.2": [
+            "How often are information security risk assessments performed?",
+            "What triggers a new risk assessment?",
+            "How are risk assessment results documented?",
+        ],
+        "8.3": [
+            "How is the risk treatment plan implemented?",
+            "How is effectiveness of treatments evaluated?",
+            "How are residual risks documented and accepted?",
+        ],
+        "9.1": [
+            "What security metrics and KPIs are monitored?",
+            "How is the effectiveness of the ISMS measured?",
+            "How is compliance with security requirements evaluated?",
+        ],
+        "9.2": [
+            "Is there an internal audit program for the ISMS?",
+            "How are auditor independence and objectivity ensured?",
+            "How are audit findings addressed?",
+        ],
+        "9.3": [
+            "How often is management review conducted?",
+            "What inputs are considered in management review?",
+            "How are decisions and actions from reviews documented?",
+        ],
+        "10.1": [
+            "How does the organization drive continual improvement of the ISMS?",
+            "What improvement initiatives are in place?",
+        ],
+        "10.2": [
+            "How are nonconformities identified and addressed?",
+            "What is the corrective action process?",
+            "How is effectiveness of corrective actions verified?",
+        ],
+        # Annex A Controls - Key Questions
+        "A.5.1": [
+            "Are information security policies defined and approved by management?",
+            "How often are policies reviewed?",
+            "How are policies communicated to relevant parties?",
+        ],
+        "A.5.9": [
+            "Is there an inventory of information and associated assets?",
+            "How is asset ownership defined?",
+            "How are assets classified?",
+        ],
+        "A.5.10": [
+            "What are the acceptable use policies for information assets?",
+            "How is acceptable use monitored?",
+        ],
+        "A.5.15": [
+            "What is the access control policy?",
+            "How is access granted and reviewed?",
+            "How is privileged access managed?",
+        ],
+        "A.5.24": [
+            "How are security incidents detected and reported?",
+            "What is the incident response process?",
+            "How are lessons learned from incidents?",
+        ],
+        "A.5.29": [
+            "How is information security maintained during disruption?",
+            "How are business continuity plans tested?",
+        ],
+        "A.5.31": [
+            "How are legal, statutory, and contractual requirements identified?",
+            "How is compliance verified?",
+        ],
+        "A.6.1": [
+            "What screening is performed before employment?",
+            "Are confidentiality agreements used?",
+        ],
+        "A.6.3": [
+            "What security awareness and training is provided?",
+            "How often is training conducted?",
+            "How is training effectiveness measured?",
+        ],
+        "A.7.1": [
+            "What physical security perimeters are defined?",
+            "How is access to secure areas controlled?",
+        ],
+        "A.7.4": [
+            "How is physical security monitored?",
+            "What surveillance systems are in place?",
+        ],
+        "A.8.1": [
+            "How are user endpoints secured?",
+            "What endpoint protection is deployed?",
+        ],
+        "A.8.7": [
+            "What malware protection is implemented?",
+            "How is malware protection monitored and updated?",
+        ],
+        "A.8.8": [
+            "How are technical vulnerabilities managed?",
+            "What is the vulnerability management process?",
+            "How quickly are vulnerabilities remediated?",
+        ],
+        "A.8.9": [
+            "How is system configuration managed?",
+            "Are configuration standards documented?",
+        ],
+        "A.8.15": [
+            "How are system activities logged?",
+            "How are logs protected from tampering?",
+            "How long are logs retained?",
+        ],
+        "A.8.16": [
+            "How are logs monitored for security events?",
+            "What SIEM or monitoring tools are used?",
+        ],
+        "A.8.24": [
+            "What cryptographic controls are implemented?",
+            "How are cryptographic keys managed?",
+        ],
+        "A.8.25": [
+            "How is secure development lifecycle implemented?",
+            "What security testing is performed on applications?",
+        ],
+        "A.8.32": [
+            "How is change management performed?",
+            "What controls exist for system changes?",
+        ],
+    }
+
     def __init__(self, db: Session):
         self.db = db
         self.claude_client = None
@@ -187,6 +386,17 @@ class AuditQuestionGenerator:
                 )
         elif standard.upper() == "ISO 9001" and clause in self.ISO_9001_QUESTIONS:
             for q in self.ISO_9001_QUESTIONS[clause]:
+                questions.append(
+                    {
+                        "question": q,
+                        "clause": clause,
+                        "standard": standard,
+                        "type": "compliance",
+                        "evidence_required": self._suggest_evidence(q),
+                    }
+                )
+        elif standard.upper() == "ISO 27001" and clause in self.ISO_27001_QUESTIONS:
+            for q in self.ISO_27001_QUESTIONS[clause]:
                 questions.append(
                     {
                         "question": q,
@@ -296,6 +506,8 @@ Format as JSON array with objects containing: question, type (compliance/effecti
             question_bank = self.ISO_9001_QUESTIONS
         elif standard.upper() == "ISO 14001":
             question_bank = self.ISO_14001_QUESTIONS
+        elif standard.upper() == "ISO 27001":
+            question_bank = self.ISO_27001_QUESTIONS
         else:
             return []
 

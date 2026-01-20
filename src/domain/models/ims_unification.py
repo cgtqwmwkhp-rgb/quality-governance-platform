@@ -19,12 +19,13 @@ from src.infrastructure.database import Base
 
 
 class ManagementStandard(str, Enum):
-    """Supported management system standards"""
+    """Supported management system standards - Core IMS Standards"""
 
-    ISO_9001 = "ISO 9001:2015"  # Quality
-    ISO_14001 = "ISO 14001:2015"  # Environmental
-    ISO_45001 = "ISO 45001:2018"  # OH&S
-    ISO_27001 = "ISO 27001:2022"  # Information Security
+    ISO_9001 = "ISO 9001:2015"  # Quality Management System
+    ISO_14001 = "ISO 14001:2015"  # Environmental Management System
+    ISO_45001 = "ISO 45001:2018"  # OH&S Management System
+    ISO_27001 = "ISO 27001:2022"  # Information Security Management System (FULLY INTEGRATED)
+    # Additional standards for future expansion
     ISO_22301 = "ISO 22301:2019"  # Business Continuity
     ISO_50001 = "ISO 50001:2018"  # Energy
     ISO_37001 = "ISO 37001:2016"  # Anti-Bribery

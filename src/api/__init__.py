@@ -17,6 +17,7 @@ from src.api.routes import (
     incidents,
     investigation_templates,
     investigations,
+    iso27001,
     notifications,
     policies,
     realtime,
@@ -55,5 +56,7 @@ router.include_router(compliance_automation.router, prefix="/compliance-automati
 router.include_router(risk_register.router, prefix="/risk-register", tags=["Enterprise Risk Register"])
 router.include_router(ai_intelligence.router, prefix="/ai", tags=["AI Intelligence"])
 router.include_router(document_control.router, prefix="/document-control", tags=["Document Control System"])
+# ISO 27001 Information Security Management System
+router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS"])
 
 __all__ = ["router"]

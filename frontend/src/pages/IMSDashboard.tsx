@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Shield,
   Leaf,
@@ -17,6 +17,17 @@ import {
   GitMerge,
   FileText,
   ClipboardList,
+  Lock,
+  Server,
+  ShieldCheck,
+  Bug,
+  Building2,
+  Laptop,
+  Database,
+  Globe,
+  UserCheck,
+  Key,
+  AlertOctagon,
 } from 'lucide-react'
 
 interface Standard {
@@ -39,9 +50,38 @@ interface CrossMapping {
   evidence: number
 }
 
+interface ISMSDashboardData {
+  assets: { total: number; critical: number }
+  controls: { total: number; applicable: number; implemented: number; implementation_percentage: number }
+  risks: { open: number; high_critical: number }
+  incidents: { open: number; last_30_days: number }
+  suppliers: { high_risk: number }
+  compliance_score: number
+}
+
 export default function IMSDashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'mapping' | 'audit' | 'review'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'mapping' | 'audit' | 'review' | 'isms'>('overview')
   const [selectedStandard, setSelectedStandard] = useState<string | null>(null)
+  const [ismsData, setIsmsData] = useState<ISMSDashboardData | null>(null)
+  const [ismsLoading, setIsmsLoading] = useState(false)
+
+  useEffect(() => {
+    if (activeTab === 'isms') {
+      setIsmsLoading(true)
+      // Simulated data - replace with actual API call
+      setTimeout(() => {
+        setIsmsData({
+          assets: { total: 156, critical: 23 },
+          controls: { total: 93, applicable: 87, implemented: 72, implementation_percentage: 82.8 },
+          risks: { open: 18, high_critical: 4 },
+          incidents: { open: 3, last_30_days: 7 },
+          suppliers: { high_risk: 2 },
+          compliance_score: 82.8,
+        })
+        setIsmsLoading(false)
+      }, 500)
+    }
+  }, [activeTab])
 
   const standards: Standard[] = [
     {
@@ -80,6 +120,18 @@ export default function IMSDashboard() {
       nextAudit: '2026-03-15',
       certificateExpiry: '2027-09-14',
     },
+    {
+      id: 'iso27001',
+      name: 'ISO 27001:2022',
+      version: 'Information Security',
+      icon: Lock,
+      color: 'bg-purple-500',
+      compliance: 89,
+      findings: { major: 0, minor: 4, observations: 5 },
+      lastAudit: '2025-10-20',
+      nextAudit: '2026-04-20',
+      certificateExpiry: '2027-10-19',
+    },
   ]
 
   const crossMappings: CrossMapping[] = [
@@ -89,9 +141,10 @@ export default function IMSDashboard() {
         { standard: 'ISO 9001', clause: '4.1', title: 'Understanding the organization' },
         { standard: 'ISO 14001', clause: '4.1', title: 'Understanding the organization' },
         { standard: 'ISO 45001', clause: '4.1', title: 'Understanding the organization' },
+        { standard: 'ISO 27001', clause: '4.1', title: 'Understanding the organization' },
       ],
       control: 'CTRL-001: Context Analysis Procedure',
-      evidence: 3,
+      evidence: 4,
     },
     {
       clause: '5.1 Leadership',
@@ -99,9 +152,10 @@ export default function IMSDashboard() {
         { standard: 'ISO 9001', clause: '5.1', title: 'Leadership and commitment' },
         { standard: 'ISO 14001', clause: '5.1', title: 'Leadership and commitment' },
         { standard: 'ISO 45001', clause: '5.1', title: 'Leadership and commitment' },
+        { standard: 'ISO 27001', clause: '5.1', title: 'Leadership and commitment' },
       ],
       control: 'CTRL-005: Management Commitment Statement',
-      evidence: 5,
+      evidence: 6,
     },
     {
       clause: '6.1 Risks & Opportunities',
@@ -109,8 +163,20 @@ export default function IMSDashboard() {
         { standard: 'ISO 9001', clause: '6.1', title: 'Actions to address risks' },
         { standard: 'ISO 14001', clause: '6.1', title: 'Actions to address risks' },
         { standard: 'ISO 45001', clause: '6.1', title: 'Actions to address risks' },
+        { standard: 'ISO 27001', clause: '6.1', title: 'Information security risk assessment' },
       ],
       control: 'CTRL-010: Risk Assessment Procedure',
+      evidence: 10,
+    },
+    {
+      clause: '7.2 Competence',
+      standards: [
+        { standard: 'ISO 9001', clause: '7.2', title: 'Competence' },
+        { standard: 'ISO 14001', clause: '7.2', title: 'Competence' },
+        { standard: 'ISO 45001', clause: '7.2', title: 'Competence' },
+        { standard: 'ISO 27001', clause: '7.2', title: 'Competence' },
+      ],
+      control: 'CTRL-015: Training & Competency Procedure',
       evidence: 8,
     },
     {
@@ -119,19 +185,21 @@ export default function IMSDashboard() {
         { standard: 'ISO 9001', clause: '9.2', title: 'Internal audit' },
         { standard: 'ISO 14001', clause: '9.2', title: 'Internal audit' },
         { standard: 'ISO 45001', clause: '9.2', title: 'Internal audit' },
+        { standard: 'ISO 27001', clause: '9.2', title: 'Internal audit' },
       ],
       control: 'CTRL-020: Internal Audit Procedure',
-      evidence: 12,
+      evidence: 16,
     },
     {
-      clause: '10.2 Nonconformity',
+      clause: '10.2 Nonconformity & Corrective Action',
       standards: [
         { standard: 'ISO 9001', clause: '10.2', title: 'Nonconformity and corrective action' },
         { standard: 'ISO 14001', clause: '10.2', title: 'Nonconformity and corrective action' },
         { standard: 'ISO 45001', clause: '10.2', title: 'Incident investigation' },
+        { standard: 'ISO 27001', clause: '10.2', title: 'Nonconformity and corrective action' },
       ],
       control: 'CTRL-025: CAPA Procedure',
-      evidence: 15,
+      evidence: 18,
     },
   ]
 
@@ -166,7 +234,7 @@ export default function IMSDashboard() {
             <GitMerge className="w-8 h-8 text-emerald-400" />
             Integrated Management System
           </h1>
-          <p className="text-gray-400">Unified ISO 9001, 14001 & 45001 Dashboard</p>
+          <p className="text-gray-400">Unified ISO 9001, 14001, 45001 & 27001 Dashboard</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
           <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
@@ -198,7 +266,7 @@ export default function IMSDashboard() {
       </div>
 
       {/* Standards Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {standards.map((standard) => {
           const Icon = standard.icon
           return (
@@ -269,6 +337,7 @@ export default function IMSDashboard() {
           { id: 'mapping', label: 'Cross-Standard Mapping', icon: Link2 },
           { id: 'audit', label: 'Unified Audit Plan', icon: ClipboardList },
           { id: 'review', label: 'Management Review', icon: Users },
+          { id: 'isms', label: 'ISO 27001 ISMS', icon: Lock },
         ].map((tab) => {
           const Icon = tab.icon
           return (
@@ -356,7 +425,7 @@ export default function IMSDashboard() {
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
           <div className="p-4 bg-slate-700 border-b border-slate-600">
             <h3 className="font-bold text-white">Annex SL Cross-Standard Mapping</h3>
-            <p className="text-sm text-gray-400">Common requirements across ISO 9001, 14001 & 45001</p>
+            <p className="text-sm text-gray-400">Common requirements across ISO 9001, 14001, 45001 & 27001</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -366,6 +435,7 @@ export default function IMSDashboard() {
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 9001</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 14001</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 45001</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 27001</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Unified Control</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Evidence</th>
                 </tr>
@@ -552,6 +622,259 @@ export default function IMSDashboard() {
               Schedule Review Meeting
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ISO 27001 ISMS Tab */}
+      {activeTab === 'isms' && (
+        <div className="space-y-6">
+          {ismsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+            </div>
+          ) : ismsData ? (
+            <>
+              {/* ISMS Compliance Score */}
+              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">ISO 27001:2022 ISMS Compliance</h2>
+                    <p className="text-purple-100">Information Security Management System</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-5xl font-bold text-white">{ismsData.compliance_score}%</div>
+                    <div className="flex items-center gap-1 text-purple-100 mt-1">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Annex A Controls Implemented</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ISMS Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg">
+                      <Server className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <span className="text-gray-400 text-sm">Information Assets</span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">{ismsData.assets.total}</div>
+                  <div className="text-sm text-yellow-400 mt-1">{ismsData.assets.critical} Critical</div>
+                </div>
+
+                <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-emerald-500/20 rounded-lg">
+                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <span className="text-gray-400 text-sm">Annex A Controls</span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">{ismsData.controls.implemented}/{ismsData.controls.applicable}</div>
+                  <div className="text-sm text-emerald-400 mt-1">{ismsData.controls.implementation_percentage}% Implemented</div>
+                </div>
+
+                <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-orange-500/20 rounded-lg">
+                      <AlertOctagon className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <span className="text-gray-400 text-sm">Security Risks</span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">{ismsData.risks.open}</div>
+                  <div className="text-sm text-red-400 mt-1">{ismsData.risks.high_critical} High/Critical</div>
+                </div>
+
+                <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-red-500/20 rounded-lg">
+                      <Bug className="w-5 h-5 text-red-400" />
+                    </div>
+                    <span className="text-gray-400 text-sm">Security Incidents</span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">{ismsData.incidents.open}</div>
+                  <div className="text-sm text-gray-400 mt-1">{ismsData.incidents.last_30_days} in last 30 days</div>
+                </div>
+
+                <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-purple-500/20 rounded-lg">
+                      <Building2 className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <span className="text-gray-400 text-sm">Supplier Risk</span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">{ismsData.suppliers.high_risk}</div>
+                  <div className="text-sm text-yellow-400 mt-1">High Risk Suppliers</div>
+                </div>
+              </div>
+
+              {/* Annex A Control Domains */}
+              <div className="bg-slate-800 rounded-xl border border-slate-700">
+                <div className="p-4 bg-slate-700 border-b border-slate-600">
+                  <h3 className="font-bold text-white">Annex A Control Domains (ISO 27001:2022)</h3>
+                  <p className="text-sm text-gray-400">93 controls across 4 themes</p>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { domain: 'Organizational', count: 37, implemented: 31, icon: Building2, color: 'bg-blue-500' },
+                    { domain: 'People', count: 8, implemented: 7, icon: UserCheck, color: 'bg-green-500' },
+                    { domain: 'Physical', count: 14, implemented: 11, icon: Key, color: 'bg-orange-500' },
+                    { domain: 'Technological', count: 34, implemented: 23, icon: Laptop, color: 'bg-purple-500' },
+                  ].map((domain, i) => {
+                    const Icon = domain.icon
+                    const percentage = Math.round((domain.implemented / domain.count) * 100)
+                    return (
+                      <div key={i} className="bg-slate-700/50 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className={`p-2 rounded-lg ${domain.color}`}>
+                            <Icon className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-white">{domain.domain}</div>
+                            <div className="text-xs text-gray-400">{domain.count} controls</div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="text-gray-400">Implemented</span>
+                          <span className="text-white font-medium">{domain.implemented}/{domain.count}</span>
+                        </div>
+                        <div className="w-full bg-slate-600 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${domain.color}`}
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-right text-xs text-gray-400 mt-1">{percentage}%</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Information Asset Categories & Security Incidents */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Asset Categories */}
+                <div className="bg-slate-800 rounded-xl border border-slate-700">
+                  <div className="p-4 bg-slate-700 border-b border-slate-600">
+                    <h3 className="font-bold text-white">Information Asset Categories</h3>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {[
+                      { category: 'Hardware', count: 45, icon: Server, critical: 8 },
+                      { category: 'Software', count: 32, icon: Laptop, critical: 5 },
+                      { category: 'Data', count: 38, icon: Database, critical: 7 },
+                      { category: 'Services', count: 21, icon: Globe, critical: 2 },
+                      { category: 'People', count: 15, icon: Users, critical: 1 },
+                      { category: 'Physical', count: 5, icon: Key, critical: 0 },
+                    ].map((cat, i) => {
+                      const Icon = cat.icon
+                      return (
+                        <div key={i} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-slate-600 rounded-lg">
+                              <Icon className="w-4 h-4 text-gray-300" />
+                            </div>
+                            <span className="text-white font-medium">{cat.category}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-gray-400">{cat.count} assets</span>
+                            {cat.critical > 0 && (
+                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
+                                {cat.critical} critical
+                              </span>
+                            )}
+                            <ChevronRight className="w-4 h-4 text-gray-500" />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Recent Security Incidents */}
+                <div className="bg-slate-800 rounded-xl border border-slate-700">
+                  <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-white">Recent Security Incidents</h3>
+                      <p className="text-sm text-gray-400">Last 30 days</p>
+                    </div>
+                    <button className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors">
+                      Report Incident
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {[
+                      { id: 'SEC-00042', title: 'Phishing Attempt Detected', type: 'phishing', severity: 'medium', status: 'investigating', date: '2026-01-18' },
+                      { id: 'SEC-00041', title: 'Unauthorized Access Attempt', type: 'unauthorized_access', severity: 'high', status: 'contained', date: '2026-01-15' },
+                      { id: 'SEC-00040', title: 'Data Loss Prevention Alert', type: 'data_leak', severity: 'low', status: 'closed', date: '2026-01-12' },
+                      { id: 'SEC-00039', title: 'Malware Detection on Endpoint', type: 'malware', severity: 'medium', status: 'closed', date: '2026-01-10' },
+                    ].map((incident, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Bug className={`w-5 h-5 ${
+                            incident.severity === 'high' ? 'text-red-400' :
+                            incident.severity === 'medium' ? 'text-yellow-400' : 'text-blue-400'
+                          }`} />
+                          <div>
+                            <div className="font-medium text-white text-sm">{incident.title}</div>
+                            <div className="text-xs text-gray-400">{incident.id} • {incident.date}</div>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          incident.status === 'investigating' ? 'bg-yellow-500/20 text-yellow-400' :
+                          incident.status === 'contained' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-emerald-500/20 text-emerald-400'
+                        }`}>
+                          {incident.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Statement of Applicability Summary */}
+              <div className="bg-slate-800 rounded-xl border border-slate-700">
+                <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-white">Statement of Applicability (SoA)</h3>
+                    <p className="text-sm text-gray-400">Version 2.1 - Last Updated: January 2026</p>
+                  </div>
+                  <button className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Export SoA
+                  </button>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="text-center p-4 bg-slate-700/50 rounded-lg">
+                      <div className="text-3xl font-bold text-white">{ismsData.controls.total}</div>
+                      <div className="text-sm text-gray-400">Total Controls</div>
+                    </div>
+                    <div className="text-center p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+                      <div className="text-3xl font-bold text-emerald-400">{ismsData.controls.applicable}</div>
+                      <div className="text-sm text-gray-400">Applicable</div>
+                    </div>
+                    <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                      <div className="text-3xl font-bold text-blue-400">{ismsData.controls.implemented}</div>
+                      <div className="text-sm text-gray-400">Implemented</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-500/10 rounded-lg border border-gray-500/30">
+                      <div className="text-3xl font-bold text-gray-400">{ismsData.controls.total - ismsData.controls.applicable}</div>
+                      <div className="text-sm text-gray-400">Excluded</div>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-400 text-sm">
+                      The Statement of Applicability documents all 93 Annex A controls from ISO 27001:2022,
+                      their applicability status, implementation status, and justification for exclusions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
       )}
     </div>

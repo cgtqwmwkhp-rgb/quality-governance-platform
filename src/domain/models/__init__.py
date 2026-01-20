@@ -59,6 +59,18 @@ from src.domain.models.document_control import (
     DocumentAccessLog,
     ObsoleteDocumentRecord,
 )
+# ISO 27001 Information Security (Tier 1)
+from src.domain.models.iso27001 import (
+    InformationAsset,
+    ISO27001Control,
+    StatementOfApplicability,
+    SoAControlEntry,
+    InformationSecurityRisk,
+    SecurityIncident,
+    AccessControlRecord,
+    BusinessContinuityPlan,
+    SupplierSecurityAssessment,
+)
 
 __all__ = [
     # Base mixins
@@ -137,4 +149,14 @@ __all__ = [
     "DocumentTrainingLink",
     "DocumentAccessLog",
     "ObsoleteDocumentRecord",
+    # ISO 27001 Information Security (Tier 1)
+    "InformationAsset",
+    "ISO27001Control",
+    "StatementOfApplicability",
+    "SoAControlEntry",
+    "InformationSecurityRisk",
+    "SecurityIncident",
+    "AccessControlRecord",
+    "BusinessContinuityPlan",
+    "SupplierSecurityAssessment",
 ]
