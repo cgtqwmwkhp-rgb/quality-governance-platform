@@ -12,6 +12,10 @@ import {
   Grid3X3,
   Bell
 } from 'lucide-react';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { cn } from '../lib/utils';
 
 interface CalendarEvent {
   id: string;
@@ -30,8 +34,8 @@ interface CalendarEvent {
 }
 
 export default function CalendarView() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19)); // Jan 19, 2024
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'list'>('month');
+  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19));
+  const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
   const [, setSelectedDate] = useState<Date | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -116,19 +120,12 @@ export default function CalendarView() {
     }
   ];
 
-  const eventTypeColors: Record<string, { bg: string; text: string; border: string }> = {
-    audit: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500' },
-    review: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
-    deadline: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500' },
-    meeting: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500' },
-    training: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500' }
-  };
-
-  const statusColors: Record<string, { bg: string; text: string }> = {
-    upcoming: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-    today: { bg: 'bg-violet-500/20', text: 'text-violet-400' },
-    overdue: { bg: 'bg-red-500/20', text: 'text-red-400' },
-    completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' }
+  const eventTypeStyles: Record<string, { variant: string }> = {
+    audit: { variant: 'info' },
+    review: { variant: 'info' },
+    deadline: { variant: 'destructive' },
+    meeting: { variant: 'success' },
+    training: { variant: 'warning' }
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -140,17 +137,12 @@ export default function CalendarView() {
     const startingDay = firstDay.getDay();
     
     const days: (number | null)[] = [];
-    
-    // Add empty days for the start of the month
     for (let i = 0; i < startingDay; i++) {
       days.push(null);
     }
-    
-    // Add all days in the month
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i);
     }
-    
     return days;
   };
 
@@ -176,7 +168,7 @@ export default function CalendarView() {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const isToday = (day: number) => {
-    const today = new Date(2024, 0, 19); // Jan 19, 2024
+    const today = new Date(2024, 0, 19);
     return day === today.getDate() && 
            currentDate.getMonth() === today.getMonth() && 
            currentDate.getFullYear() === today.getFullYear();
@@ -188,105 +180,96 @@ export default function CalendarView() {
     .slice(0, 5);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl">
-              <Calendar className="w-8 h-8" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Calendar className="w-8 h-8 text-primary" />
             </div>
             Calendar
           </h1>
-          <p className="text-slate-400 mt-1">Audits, reviews, deadlines and events</p>
+          <p className="text-muted-foreground mt-1">Audits, reviews, deadlines and events</p>
         </div>
         
         <div className="flex items-center gap-3">
-          {/* View Mode Toggle */}
-          <div className="flex bg-slate-800/50 rounded-lg p-1">
+          <div className="flex bg-surface rounded-lg p-1 border border-border">
             <button
               onClick={() => setViewMode('month')}
-              className={`p-2 rounded-md transition-all ${
-                viewMode === 'month' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={cn(
+                "p-2 rounded-md transition-all",
+                viewMode === 'month' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
               title="Month View"
             >
               <Grid3X3 className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-all ${
-                viewMode === 'list' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={cn(
+                "p-2 rounded-md transition-all",
+                viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
               title="List View"
             >
               <List className="w-5 h-5" />
             </button>
           </div>
           
-          <button
+          <Button
+            variant={showFilters ? 'default' : 'outline'}
+            size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-lg transition-all ${
-              showFilters ? 'bg-violet-500 text-white' : 'bg-slate-800/50 text-slate-400 hover:text-white'
-            }`}
           >
             <Filter className="w-5 h-5" />
-          </button>
+          </Button>
           
-          <button className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium rounded-xl hover:from-violet-500 hover:to-purple-500 transition-all flex items-center gap-2">
+          <Button>
             <Plus className="w-5 h-5" />
             Add Event
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4">
+        <Card className="p-4">
           <div className="flex flex-wrap gap-2">
-            {Object.entries(eventTypeColors).map(([type, colors]) => (
-              <button
+            {Object.entries(eventTypeStyles).map(([type]) => (
+              <Button
                 key={type}
+                variant={selectedTypes.includes(type) || selectedTypes.length === 0 ? 'default' : 'outline'}
+                size="sm"
                 onClick={() => {
                   setSelectedTypes(prev => 
                     prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
                   );
                 }}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  selectedTypes.includes(type) || selectedTypes.length === 0
-                    ? `${colors.bg} ${colors.text} border ${colors.border}`
-                    : 'bg-slate-700/50 text-slate-400'
-                }`}
               >
                 {type.charAt(0).toUpperCase() + type.slice(1)}
-              </button>
+              </Button>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Calendar Grid */}
-        <div className="lg:col-span-3 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
+        <Card className="lg:col-span-3 p-6">
           {/* Month Navigation */}
           <div className="flex items-center justify-between mb-6">
-            <button
-              onClick={() => navigateMonth('prev')}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-all"
-            >
+            <Button variant="ghost" size="sm" onClick={() => navigateMonth('prev')}>
               <ChevronLeft className="w-5 h-5" />
-            </button>
+            </Button>
             
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-foreground">
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h2>
             
-            <button
-              onClick={() => navigateMonth('next')}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-all"
-            >
+            <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
               <ChevronRight className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
           {viewMode === 'month' && (
@@ -294,7 +277,7 @@ export default function CalendarView() {
               {/* Day Names */}
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {dayNames.map((day) => (
-                  <div key={day} className="text-center text-sm font-medium text-slate-500 py-2">
+                  <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
                     {day}
                   </div>
                 ))}
@@ -309,29 +292,35 @@ export default function CalendarView() {
                   return (
                     <div
                       key={index}
-                      className={`min-h-[100px] p-2 rounded-lg transition-all ${
-                        day ? 'bg-slate-900/30 hover:bg-slate-700/30 cursor-pointer' : ''
-                      } ${today ? 'ring-2 ring-violet-500' : ''}`}
+                      className={cn(
+                        "min-h-[100px] p-2 rounded-lg transition-all",
+                        day && "bg-surface hover:bg-surface-hover cursor-pointer",
+                        today && "ring-2 ring-primary"
+                      )}
                       onClick={() => day && setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
                     >
                       {day && (
                         <>
-                          <span className={`text-sm font-medium ${today ? 'text-violet-400' : 'text-slate-400'}`}>
+                          <span className={cn(
+                            "text-sm font-medium",
+                            today ? 'text-primary' : 'text-muted-foreground'
+                          )}>
                             {day}
                           </span>
                           <div className="mt-1 space-y-1">
                             {dayEvents.slice(0, 3).map((event) => (
-                              <div
+                              <Badge
                                 key={event.id}
-                                className={`text-xs px-1.5 py-0.5 rounded truncate ${eventTypeColors[event.type].bg} ${eventTypeColors[event.type].text}`}
+                                variant={eventTypeStyles[event.type].variant as any}
+                                className="text-[10px] truncate w-full justify-start"
                               >
                                 {event.title}
-                              </div>
+                              </Badge>
                             ))}
                             {dayEvents.length > 3 && (
-                              <div className="text-xs text-slate-500 pl-1">
+                              <span className="text-xs text-muted-foreground pl-1">
                                 +{dayEvents.length - 3} more
-                              </div>
+                              </span>
                             )}
                           </div>
                         </>
@@ -346,27 +335,38 @@ export default function CalendarView() {
           {viewMode === 'list' && (
             <div className="space-y-4">
               {events.map((event) => (
-                <div
+                <Card
                   key={event.id}
-                  className={`p-4 rounded-xl border-l-4 ${eventTypeColors[event.type].border} bg-slate-900/30 hover:bg-slate-700/30 transition-all cursor-pointer`}
+                  hoverable
+                  className={cn(
+                    "p-4 border-l-4",
+                    event.type === 'audit' && "border-l-info",
+                    event.type === 'review' && "border-l-info",
+                    event.type === 'deadline' && "border-l-destructive",
+                    event.type === 'meeting' && "border-l-success",
+                    event.type === 'training' && "border-l-warning",
+                  )}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${eventTypeColors[event.type].bg} ${eventTypeColors[event.type].text}`}>
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <Badge variant={eventTypeStyles[event.type].variant as any}>
                           {event.type}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[event.status].bg} ${statusColors[event.status].text}`}>
+                        </Badge>
+                        <Badge variant={
+                          event.status === 'overdue' ? 'destructive' :
+                          event.status === 'today' ? 'info' : 'secondary'
+                        }>
                           {event.status}
-                        </span>
+                        </Badge>
                         {event.priority === 'high' && (
-                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          <AlertTriangle className="w-4 h-4 text-warning" />
                         )}
                       </div>
                       
-                      <h3 className="font-semibold text-white mb-1">{event.title}</h3>
+                      <h3 className="font-semibold text-foreground mb-1">{event.title}</h3>
                       
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           {event.date}
@@ -386,16 +386,16 @@ export default function CalendarView() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Sidebar - Upcoming Events */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-violet-400" />
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Bell className="w-5 h-5 text-primary" />
             Upcoming
           </h3>
           
@@ -403,17 +403,18 @@ export default function CalendarView() {
             {upcomingEvents.map((event) => (
               <div
                 key={event.id}
-                className="p-3 bg-slate-900/30 rounded-lg hover:bg-slate-700/30 transition-all cursor-pointer"
+                className="p-3 bg-surface rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <div className="flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${
-                    event.status === 'overdue' ? 'bg-red-500' :
-                    event.status === 'today' ? 'bg-violet-500 animate-pulse' :
-                    'bg-blue-500'
-                  }`} />
+                  <div className={cn(
+                    "w-2 h-2 rounded-full mt-2",
+                    event.status === 'overdue' && 'bg-destructive',
+                    event.status === 'today' && 'bg-primary animate-pulse',
+                    event.status === 'upcoming' && 'bg-info'
+                  )} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{event.title}</p>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+                    <p className="text-sm font-medium text-foreground truncate">{event.title}</p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                       <Calendar className="w-3 h-3" />
                       <span>{event.date}</span>
                       {event.time && (
@@ -423,9 +424,9 @@ export default function CalendarView() {
                         </>
                       )}
                     </div>
-                    <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${eventTypeColors[event.type].bg} ${eventTypeColors[event.type].text}`}>
+                    <Badge variant={eventTypeStyles[event.type].variant as any} className="mt-2 text-[10px]">
                       {event.type}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
               </div>
@@ -433,18 +434,18 @@ export default function CalendarView() {
           </div>
 
           {/* Legend */}
-          <div className="mt-6 pt-4 border-t border-slate-700/50">
-            <h4 className="text-sm font-medium text-slate-400 mb-3">Event Types</h4>
+          <div className="mt-6 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Event Types</h4>
             <div className="space-y-2">
-              {Object.entries(eventTypeColors).map(([type, colors]) => (
+              {Object.entries(eventTypeStyles).map(([type, styles]) => (
                 <div key={type} className="flex items-center gap-2 text-sm">
-                  <span className={`w-3 h-3 rounded-full ${colors.bg} ${colors.border} border`} />
-                  <span className="text-slate-300 capitalize">{type}</span>
+                  <Badge variant={styles.variant as any} className="w-3 h-3 p-0 rounded-full" />
+                  <span className="text-foreground capitalize">{type}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

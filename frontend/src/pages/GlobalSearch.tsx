@@ -19,6 +19,11 @@ import {
   Tag,
   Calendar
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 
 interface SearchResult {
   id: string;
@@ -55,10 +60,8 @@ export default function GlobalSearch() {
     'vehicle collision',
     'customer complaint'
   ]);
-  const [_suggestions] = useState<string[]>([]); void _suggestions;
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Mock search results
   const mockResults: SearchResult[] = [
     {
       id: 'INC-2024-0847',
@@ -139,23 +142,23 @@ export default function GlobalSearch() {
   };
 
   const moduleColors: Record<string, string> = {
-    'Incidents': 'text-red-400 bg-red-500/20',
-    'RTAs': 'text-amber-400 bg-amber-500/20',
-    'Complaints': 'text-purple-400 bg-purple-500/20',
-    'Risks': 'text-rose-400 bg-rose-500/20',
-    'Audits': 'text-emerald-400 bg-emerald-500/20',
-    'Actions': 'text-blue-400 bg-blue-500/20',
-    'Documents': 'text-sky-400 bg-sky-500/20'
+    'Incidents': 'text-destructive bg-destructive/20',
+    'RTAs': 'text-warning bg-warning/20',
+    'Complaints': 'text-primary bg-primary/20',
+    'Risks': 'text-destructive bg-destructive/20',
+    'Audits': 'text-success bg-success/20',
+    'Actions': 'text-info bg-info/20',
+    'Documents': 'text-info bg-info/20'
   };
 
-  const statusColors: Record<string, string> = {
-    'Open': 'text-amber-400 bg-amber-500/20',
-    'In Progress': 'text-blue-400 bg-blue-500/20',
-    'Under Investigation': 'text-purple-400 bg-purple-500/20',
-    'Monitoring': 'text-cyan-400 bg-cyan-500/20',
-    'Scheduled': 'text-indigo-400 bg-indigo-500/20',
-    'Overdue': 'text-red-400 bg-red-500/20',
-    'Closed': 'text-emerald-400 bg-emerald-500/20'
+  const statusVariants: Record<string, 'warning' | 'info' | 'acknowledged' | 'default' | 'destructive' | 'resolved'> = {
+    'Open': 'warning',
+    'In Progress': 'info',
+    'Under Investigation': 'acknowledged',
+    'Monitoring': 'info',
+    'Scheduled': 'default',
+    'Overdue': 'destructive',
+    'Closed': 'resolved'
   };
 
   const handleSearch = () => {
@@ -163,12 +166,10 @@ export default function GlobalSearch() {
     
     setIsSearching(true);
     
-    // Add to history
     if (!searchHistory.includes(query)) {
       setSearchHistory([query, ...searchHistory.slice(0, 4)]);
     }
     
-    // Simulate search delay
     setTimeout(() => {
       setResults(mockResults.filter(r => 
         r.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -204,7 +205,6 @@ export default function GlobalSearch() {
     });
   };
 
-  // Auto-focus on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -213,12 +213,12 @@ export default function GlobalSearch() {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-white mb-3 flex items-center justify-center gap-3">
-          <Search className="w-10 h-10 text-violet-400" />
+        <h1 className="text-4xl font-bold text-foreground mb-3 flex items-center justify-center gap-3">
+          <Search className="w-10 h-10 text-primary" />
           Global Search
         </h1>
-        <p className="text-slate-400 text-lg">Search across all modules instantly</p>
-        <p className="text-sm text-slate-500 mt-2 flex items-center justify-center gap-2">
+        <p className="text-muted-foreground text-lg">Search across all modules instantly</p>
+        <p className="text-sm text-muted-foreground mt-2 flex items-center justify-center gap-2">
           <Command className="w-4 h-4" /> + K to open from anywhere
         </p>
       </div>
@@ -228,134 +228,132 @@ export default function GlobalSearch() {
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
             {isSearching ? (
-              <div className="animate-spin w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full" />
+              <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
             ) : (
-              <Search className="w-6 h-6 text-slate-400" />
+              <Search className="w-6 h-6 text-muted-foreground" />
             )}
           </div>
           
-          <input
+          <Input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search incidents, RTAs, complaints, risks, audits, actions, documents..."
-            className="w-full pl-14 pr-32 py-5 bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-2xl text-white text-lg placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+            className="w-full pl-14 pr-32 py-5 text-lg rounded-2xl"
           />
           
           <div className="absolute inset-y-0 right-0 flex items-center gap-2 pr-4">
             {query && (
-              <button
-                onClick={clearSearch}
-                className="p-2 text-slate-400 hover:text-white transition-colors"
-              >
+              <Button variant="ghost" size="sm" onClick={clearSearch}>
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             )}
             
-            <button
+            <Button
+              variant={showFilters ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => setShowFilters(!showFilters)}
-              className={`p-2 rounded-lg transition-all ${
-                showFilters ? 'bg-violet-500 text-white' : 'text-slate-400 hover:text-white'
-              }`}
             >
               <Filter className="w-5 h-5" />
-            </button>
+            </Button>
             
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium rounded-xl hover:from-violet-500 hover:to-purple-500 transition-all flex items-center gap-2"
-            >
+            <Button onClick={handleSearch}>
               Search
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Filters */}
         {showFilters && (
-          <div className="mt-4 p-4 bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-xl animate-in slide-in-from-top duration-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Module Filters */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">
-                  <Tag className="w-4 h-4" /> Modules
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {Object.keys(moduleIcons).map((module) => (
-                    <button
-                      key={module}
-                      onClick={() => applyFilter('modules', module)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        filters.modules.includes(module)
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-slate-700/50 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {module}
-                    </button>
-                  ))}
+          <Card className="mt-4 animate-in slide-in-from-top duration-200">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Module Filters */}
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Tag className="w-4 h-4" /> Modules
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.keys(moduleIcons).map((module) => (
+                      <button
+                        key={module}
+                        onClick={() => applyFilter('modules', module)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          filters.modules.includes(module)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {module}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Status Filters */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">
-                  <Clock className="w-4 h-4" /> Status
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {['Open', 'In Progress', 'Closed', 'Overdue'].map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => applyFilter('status', status)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        filters.status.includes(status)
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-slate-700/50 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
+                {/* Status Filters */}
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Status
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {['Open', 'In Progress', 'Closed', 'Overdue'].map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => applyFilter('status', status)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          filters.status.includes(status)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Date Range */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" /> Date Range
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'All Time', value: 'all' },
-                    { label: 'Today', value: 'today' },
-                    { label: 'This Week', value: 'week' },
-                    { label: 'This Month', value: 'month' }
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => applyFilter('dateRange', option.value)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        filters.dateRange === option.value
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-slate-700/50 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                {/* Date Range */}
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Calendar className="w-4 h-4" /> Date Range
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'All Time', value: 'all' },
+                      { label: 'Today', value: 'today' },
+                      { label: 'This Week', value: 'week' },
+                      { label: 'This Month', value: 'month' }
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => applyFilter('dateRange', option.value)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          filters.dateRange === option.value
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </div>
 
       {/* Search History / Suggestions */}
       {!results.length && !query && (
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-2 text-slate-400 mb-4">
+          <div className="flex items-center gap-2 text-muted-foreground mb-4">
             <History className="w-5 h-5" />
             <span className="font-medium">Recent Searches</span>
           </div>
@@ -367,19 +365,19 @@ export default function GlobalSearch() {
                   setQuery(term);
                   handleSearch();
                 }}
-                className="px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-card border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-all flex items-center gap-2"
               >
-                <Clock className="w-4 h-4 text-slate-500" />
+                <Clock className="w-4 h-4 text-muted-foreground" />
                 {term}
               </button>
             ))}
           </div>
           
           {/* AI Suggestions */}
-          <div className="mt-8 p-6 bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/30 rounded-xl">
+          <div className="mt-8 p-6 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
-              <Sparkles className="w-6 h-6 text-violet-400" />
-              <span className="font-semibold text-white">AI-Powered Suggestions</span>
+              <Sparkles className="w-6 h-6 text-primary" />
+              <span className="font-semibold text-foreground">AI-Powered Suggestions</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
@@ -391,7 +389,7 @@ export default function GlobalSearch() {
                 <button
                   key={i}
                   onClick={() => setQuery(suggestion)}
-                  className="p-3 bg-slate-800/50 rounded-lg text-left text-slate-300 hover:bg-violet-500/20 hover:text-white transition-all flex items-center justify-between group"
+                  className="p-3 bg-card rounded-lg text-left text-foreground hover:bg-primary/20 transition-all flex items-center justify-between group"
                 >
                   <span>{suggestion}</span>
                   <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -406,63 +404,65 @@ export default function GlobalSearch() {
       {results.length > 0 && (
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-slate-400">
-              Found <span className="text-white font-medium">{results.length}</span> results for "{query}"
+            <p className="text-muted-foreground">
+              Found <span className="text-foreground font-medium">{results.length}</span> results for "{query}"
             </p>
           </div>
           
           <div className="space-y-4">
             {results.map((result) => (
-              <div
+              <Card
                 key={result.id}
-                className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-5 hover:border-violet-500/50 transition-all group cursor-pointer"
+                className="hover:border-primary/50 transition-all group cursor-pointer"
               >
-                <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-xl ${moduleColors[result.module]}`}>
-                    {moduleIcons[result.module]}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-semibold text-white group-hover:text-violet-400 transition-colors">
-                          {result.title}
-                        </h3>
-                        <p className="text-sm text-slate-500 mt-0.5">{result.id}</p>
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className={cn("p-3 rounded-xl", moduleColors[result.module])}>
+                      {moduleIcons[result.module]}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                            {result.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground mt-0.5">{result.id}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Badge variant={statusVariants[result.status] || 'default'}>
+                            {result.status}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{result.date}</span>
+                        </div>
                       </div>
                       
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[result.status]}`}>
-                          {result.status}
-                        </span>
-                        <span className="text-xs text-slate-500">{result.date}</span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-slate-400 mt-2 text-sm line-clamp-2">
-                      {result.description}
-                    </p>
-                    
-                    <div className="flex items-center gap-4 mt-3">
-                      <span className="text-xs text-slate-500">{result.module}</span>
-                      <div className="flex items-center gap-1">
-                        {result.highlights.map((tag, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-0.5 bg-violet-500/20 text-violet-400 rounded text-xs"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="ml-auto flex items-center gap-1 text-xs text-slate-500">
-                        <Sparkles className="w-3 h-3 text-violet-400" />
-                        {result.relevance}% match
+                      <p className="text-muted-foreground mt-2 text-sm line-clamp-2">
+                        {result.description}
+                      </p>
+                      
+                      <div className="flex items-center gap-4 mt-3">
+                        <span className="text-xs text-muted-foreground">{result.module}</span>
+                        <div className="flex items-center gap-1">
+                          {result.highlights.map((tag, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 bg-primary/20 text-primary rounded text-xs"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                          <Sparkles className="w-3 h-3 text-primary" />
+                          {result.relevance}% match
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -471,11 +471,11 @@ export default function GlobalSearch() {
       {/* No Results */}
       {query && !isSearching && results.length === 0 && (
         <div className="max-w-4xl mx-auto text-center py-12">
-          <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search className="w-10 h-10 text-slate-600" />
+          <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-10 h-10 text-muted-foreground" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">No results found</h3>
-          <p className="text-slate-400">
+          <h3 className="text-xl font-semibold text-foreground mb-2">No results found</h3>
+          <p className="text-muted-foreground">
             Try different keywords or adjust your filters
           </p>
         </div>

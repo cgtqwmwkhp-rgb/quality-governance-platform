@@ -1,6 +1,26 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, Shield, Search } from 'lucide-react'
+import { Plus, Shield, Search, Loader2 } from 'lucide-react'
 import { risksApi, Risk, RiskCreate } from '../api/client'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/Dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
+import { cn } from '../lib/utils'
 
 export default function Risks() {
   const [risks, setRisks] = useState<Risk[]>([])
@@ -54,21 +74,21 @@ export default function Risks() {
     }
   }
 
-  const getRiskLevelColor = (level: string, score: number) => {
-    if (score >= 20 || level === 'critical') return 'bg-red-500/20 text-red-400 border-red-500/50'
-    if (score >= 12 || level === 'high') return 'bg-orange-500/20 text-orange-400 border-orange-500/50'
-    if (score >= 6 || level === 'medium') return 'bg-amber-500/20 text-amber-400 border-amber-500/50'
-    return 'bg-green-500/20 text-green-400 border-green-500/50'
+  const getRiskLevelVariant = (level: string, score: number) => {
+    if (score >= 20 || level === 'critical') return 'critical'
+    if (score >= 12 || level === 'high') return 'high'
+    if (score >= 6 || level === 'medium') return 'medium'
+    return 'low'
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'closed': return 'bg-emerald-500/20 text-emerald-400'
-      case 'identified': return 'bg-blue-500/20 text-blue-400'
-      case 'assessing': return 'bg-purple-500/20 text-purple-400'
-      case 'treating': return 'bg-amber-500/20 text-amber-400'
-      case 'monitoring': return 'bg-cyan-500/20 text-cyan-400'
-      default: return 'bg-slate-500/20 text-slate-400'
+      case 'closed': return 'resolved'
+      case 'identified': return 'submitted'
+      case 'assessing': return 'acknowledged'
+      case 'treating': return 'in-progress'
+      case 'monitoring': return 'info'
+      default: return 'secondary'
     }
   }
 
@@ -92,10 +112,17 @@ export default function Risks() {
          r.category.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const riskStats = {
+    critical: risks.filter(r => r.risk_score >= 20).length,
+    high: risks.filter(r => r.risk_score >= 12 && r.risk_score < 20).length,
+    medium: risks.filter(r => r.risk_score >= 6 && r.risk_score < 12).length,
+    low: risks.filter(r => r.risk_score < 6).length,
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-rose-500"></div>
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     )
   }
@@ -105,112 +132,107 @@ export default function Risks() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Risk Register</h1>
-          <p className="text-slate-400 mt-1">Identify, assess, and manage organizational risks</p>
+          <h1 className="text-2xl font-bold text-foreground">Risk Register</h1>
+          <p className="text-muted-foreground mt-1">Identify, assess, and manage organizational risks</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-500
-            text-white font-semibold rounded-xl hover:from-rose-600 hover:to-pink-600
-            transition-all duration-200 shadow-lg shadow-rose-500/25"
-        >
+        <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
           New Risk
-        </button>
+        </Button>
       </div>
 
       {/* Search */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search risks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl
-              text-white placeholder-slate-500 focus:outline-none focus:border-rose-500
-              focus:ring-2 focus:ring-rose-500/20 transition-all duration-200"
-          />
-        </div>
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search risks..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
       {/* Risk Heat Map Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Critical', color: 'from-red-500 to-red-600', count: risks.filter(r => r.risk_score >= 20).length },
-          { label: 'High', color: 'from-orange-500 to-orange-600', count: risks.filter(r => r.risk_score >= 12 && r.risk_score < 20).length },
-          { label: 'Medium', color: 'from-amber-500 to-amber-600', count: risks.filter(r => r.risk_score >= 6 && r.risk_score < 12).length },
-          { label: 'Low', color: 'from-green-500 to-green-600', count: risks.filter(r => r.risk_score < 6).length },
+          { label: 'Critical', count: riskStats.critical, variant: 'destructive' as const },
+          { label: 'High', count: riskStats.high, variant: 'warning' as const },
+          { label: 'Medium', count: riskStats.medium, variant: 'warning' as const },
+          { label: 'Low', count: riskStats.low, variant: 'success' as const },
         ].map((stat) => (
-          <div key={stat.label} className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-xl p-4">
-            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${stat.color} flex items-center justify-center mb-3`}>
-              <span className="text-white font-bold">{stat.count}</span>
+          <Card key={stat.label} className="p-4">
+            <div className={cn(
+              "w-10 h-10 rounded-lg flex items-center justify-center mb-3",
+              stat.variant === 'destructive' && "bg-destructive/10 text-destructive",
+              stat.variant === 'warning' && "bg-warning/10 text-warning",
+              stat.variant === 'success' && "bg-success/10 text-success",
+            )}>
+              <span className="font-bold">{stat.count}</span>
             </div>
-            <p className="text-sm font-medium text-slate-400">{stat.label} Risks</p>
-          </div>
+            <p className="text-sm font-medium text-muted-foreground">{stat.label} Risks</p>
+          </Card>
         ))}
       </div>
 
       {/* Risks Table */}
-      <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-800">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Reference</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Risk</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Score</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Treatment</th>
+              <tr className="border-b border-border">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Risk</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Treatment</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-border">
               {filteredRisks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                    <Shield className="w-12 h-12 mx-auto mb-4 text-slate-600" />
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                    <Shield className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                     <p>No risks found</p>
                     <p className="text-sm mt-1">Add a risk to your register to get started</p>
                   </td>
                 </tr>
               ) : (
-                filteredRisks.map((risk, index) => (
+                filteredRisks.map((risk) => (
                   <tr
                     key={risk.id}
-                    className="hover:bg-slate-800/30 transition-colors animate-slide-in cursor-pointer"
-                    style={{ animationDelay: `${index * 30}ms` }}
+                    className="hover:bg-surface transition-colors cursor-pointer"
                   >
                     <td className="px-6 py-4">
-                      <span className="font-mono text-sm text-rose-400">{risk.reference_number}</span>
+                      <span className="font-mono text-sm text-primary">{risk.reference_number}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm font-medium text-white truncate max-w-xs">{risk.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate max-w-xs">{risk.title}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-sm text-slate-300">
+                      <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                         <span>{getCategoryIcon(risk.category)}</span>
                         {risk.category.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1.5 text-sm font-bold rounded-lg border ${getRiskLevelColor(risk.risk_level, risk.risk_score)}`}>
+                        <Badge variant={getRiskLevelVariant(risk.risk_level, risk.risk_score) as any}>
                           {risk.risk_score}
-                        </span>
-                        <span className="text-xs text-slate-500">
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
                           ({risk.likelihood}×{risk.impact})
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${getStatusColor(risk.status)}`}>
+                      <Badge variant={getStatusVariant(risk.status) as any}>
                         {risk.status.replace('_', ' ')}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-slate-400 capitalize">
+                      <span className="text-sm text-muted-foreground capitalize">
                         {risk.treatment_strategy}
                       </span>
                     </td>
@@ -220,161 +242,146 @@ export default function Risks() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* Create Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-slate-800 sticky top-0 bg-slate-900">
-              <h2 className="text-lg font-semibold text-white">New Risk</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Risk</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input
+                type="text"
+                required
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Brief risk title..."
+              />
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-5">
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea
+                required
+                rows={3}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Detailed description of the risk..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData({ ...formData, category: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="strategic">Strategic</SelectItem>
+                    <SelectItem value="operational">Operational</SelectItem>
+                    <SelectItem value="financial">Financial</SelectItem>
+                    <SelectItem value="compliance">Compliance</SelectItem>
+                    <SelectItem value="reputational">Reputational</SelectItem>
+                    <SelectItem value="technology">Technology</SelectItem>
+                    <SelectItem value="environmental">Environmental</SelectItem>
+                    <SelectItem value="health_safety">Health & Safety</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Treatment</label>
+                <Select
+                  value={formData.treatment_strategy}
+                  onValueChange={(value) => setFormData({ ...formData, treatment_strategy: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select treatment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="accept">Accept</SelectItem>
+                    <SelectItem value="mitigate">Mitigate</SelectItem>
+                    <SelectItem value="transfer">Transfer</SelectItem>
+                    <SelectItem value="avoid">Avoid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Likelihood (1-5)
+                </label>
                 <input
-                  type="text"
-                  required
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white placeholder-slate-500 focus:outline-none focus:border-rose-500
-                    focus:ring-2 focus:ring-rose-500/20 transition-all duration-200"
-                  placeholder="Brief risk title..."
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={formData.likelihood}
+                  onChange={(e) => setFormData({ ...formData, likelihood: parseInt(e.target.value) })}
+                  className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
                 />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Rare</span>
+                  <span className="text-primary font-medium">{formData.likelihood}</span>
+                  <span>Almost Certain</span>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white placeholder-slate-500 focus:outline-none focus:border-rose-500
-                    focus:ring-2 focus:ring-rose-500/20 transition-all duration-200 resize-none"
-                  placeholder="Detailed description of the risk..."
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Impact (1-5)
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={formData.impact}
+                  onChange={(e) => setFormData({ ...formData, impact: parseInt(e.target.value) })}
+                  className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white focus:outline-none focus:border-rose-500
-                      focus:ring-2 focus:ring-rose-500/20 transition-all duration-200"
-                  >
-                    <option value="strategic">Strategic</option>
-                    <option value="operational">Operational</option>
-                    <option value="financial">Financial</option>
-                    <option value="compliance">Compliance</option>
-                    <option value="reputational">Reputational</option>
-                    <option value="technology">Technology</option>
-                    <option value="environmental">Environmental</option>
-                    <option value="health_safety">Health & Safety</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Treatment</label>
-                  <select
-                    value={formData.treatment_strategy}
-                    onChange={(e) => setFormData({ ...formData, treatment_strategy: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white focus:outline-none focus:border-rose-500
-                      focus:ring-2 focus:ring-rose-500/20 transition-all duration-200"
-                  >
-                    <option value="accept">Accept</option>
-                    <option value="mitigate">Mitigate</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="avoid">Avoid</option>
-                  </select>
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Negligible</span>
+                  <span className="text-primary font-medium">{formData.impact}</span>
+                  <span>Catastrophic</span>
                 </div>
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Likelihood (1-5)
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="5"
-                    value={formData.likelihood}
-                    onChange={(e) => setFormData({ ...formData, likelihood: parseInt(e.target.value) })}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>Rare</span>
-                    <span className="text-rose-400 font-medium">{formData.likelihood}</span>
-                    <span>Almost Certain</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Impact (1-5)
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="5"
-                    value={formData.impact}
-                    onChange={(e) => setFormData({ ...formData, impact: parseInt(e.target.value) })}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>Negligible</span>
-                    <span className="text-rose-400 font-medium">{formData.impact}</span>
-                    <span>Catastrophic</span>
-                  </div>
-                </div>
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Calculated Risk Score:</span>
+                <Badge variant={getRiskLevelVariant('', formData.likelihood * formData.impact) as any} className="text-lg px-4 py-2">
+                  {formData.likelihood * formData.impact}
+                </Badge>
               </div>
+            </Card>
 
-              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Calculated Risk Score:</span>
-                  <span className={`px-4 py-2 text-lg font-bold rounded-lg border ${getRiskLevelColor('', formData.likelihood * formData.impact)}`}>
-                    {formData.likelihood * formData.impact}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-800 text-slate-300 font-medium rounded-xl
-                    hover:bg-slate-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-rose-500 to-pink-500
-                    text-white font-semibold rounded-xl hover:from-rose-600 hover:to-pink-600
-                    disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  {creating ? 'Creating...' : 'Create Risk'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <DialogFooter className="gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Risk'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -16,6 +16,10 @@ import {
   History,
   Zap
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from '../components/ui/Button';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 
 interface ExportJob {
   id: string;
@@ -129,17 +133,17 @@ export default function ExportCenter() {
   ];
 
   const formatIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-    pdf: { icon: <FileText className="w-5 h-5" />, color: 'text-red-400', bg: 'bg-red-500/20' },
-    excel: { icon: <FileSpreadsheet className="w-5 h-5" />, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-    csv: { icon: <File className="w-5 h-5" />, color: 'text-blue-400', bg: 'bg-blue-500/20' },
-    json: { icon: <FileJson className="w-5 h-5" />, color: 'text-amber-400', bg: 'bg-amber-500/20' }
+    pdf: { icon: <FileText className="w-5 h-5" />, color: 'text-destructive', bg: 'bg-destructive/20' },
+    excel: { icon: <FileSpreadsheet className="w-5 h-5" />, color: 'text-success', bg: 'bg-success/20' },
+    csv: { icon: <File className="w-5 h-5" />, color: 'text-info', bg: 'bg-info/20' },
+    json: { icon: <FileJson className="w-5 h-5" />, color: 'text-warning', bg: 'bg-warning/20' }
   };
 
-  const statusColors: Record<string, { bg: string; text: string }> = {
-    pending: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-    processing: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-    completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-    failed: { bg: 'bg-red-500/20', text: 'text-red-400' }
+  const statusVariants: Record<string, 'default' | 'in-progress' | 'resolved' | 'destructive'> = {
+    pending: 'default',
+    processing: 'in-progress',
+    completed: 'resolved',
+    failed: 'destructive'
   };
 
   const toggleModule = (moduleId: string) => {
@@ -164,25 +168,26 @@ export default function ExportCenter() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl">
-              <Download className="w-8 h-8" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-primary to-primary-hover rounded-xl">
+              <Download className="w-8 h-8 text-primary-foreground" />
             </div>
             Export Center
           </h1>
-          <p className="text-slate-400 mt-1">Generate reports and export data</p>
+          <p className="text-muted-foreground mt-1">Generate reports and export data</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-700/50">
+      <div className="flex gap-2 border-b border-border">
         <button
           onClick={() => setActiveTab('new')}
-          className={`px-6 py-3 font-medium transition-all border-b-2 ${
+          className={cn(
+            "px-6 py-3 font-medium transition-all border-b-2",
             activeTab === 'new'
-              ? 'text-violet-400 border-violet-400'
-              : 'text-slate-400 border-transparent hover:text-white'
-          }`}
+              ? 'text-primary border-primary'
+              : 'text-muted-foreground border-transparent hover:text-foreground'
+          )}
         >
           <span className="flex items-center gap-2">
             <Zap className="w-5 h-5" />
@@ -191,11 +196,12 @@ export default function ExportCenter() {
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-6 py-3 font-medium transition-all border-b-2 ${
+          className={cn(
+            "px-6 py-3 font-medium transition-all border-b-2",
             activeTab === 'history'
-              ? 'text-violet-400 border-violet-400'
-              : 'text-slate-400 border-transparent hover:text-white'
-          }`}
+              ? 'text-primary border-primary'
+              : 'text-muted-foreground border-transparent hover:text-foreground'
+          )}
         >
           <span className="flex items-center gap-2">
             <History className="w-5 h-5" />
@@ -204,11 +210,12 @@ export default function ExportCenter() {
         </button>
         <button
           onClick={() => setActiveTab('templates')}
-          className={`px-6 py-3 font-medium transition-all border-b-2 ${
+          className={cn(
+            "px-6 py-3 font-medium transition-all border-b-2",
             activeTab === 'templates'
-              ? 'text-violet-400 border-violet-400'
-              : 'text-slate-400 border-transparent hover:text-white'
-          }`}
+              ? 'text-primary border-primary'
+              : 'text-muted-foreground border-transparent hover:text-foreground'
+          )}
         >
           <span className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
@@ -222,203 +229,210 @@ export default function ExportCenter() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Module Selection */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
-              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Filter className="w-5 h-5 text-violet-400" />
-                Select Modules
-              </h2>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {modules.map((module) => (
-                  <button
-                    key={module.id}
-                    onClick={() => toggleModule(module.id)}
-                    className={`p-4 rounded-xl border transition-all ${
-                      selectedModules.includes(module.id)
-                        ? 'bg-violet-500/20 border-violet-500 text-white'
-                        : 'bg-slate-900/30 border-slate-700 text-slate-400 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">{module.name}</span>
-                      {selectedModules.includes(module.id) && (
-                        <CheckCircle2 className="w-5 h-5 text-violet-400" />
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Filter className="w-5 h-5 text-primary" />
+                  Select Modules
+                </h2>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {modules.map((module) => (
+                    <button
+                      key={module.id}
+                      onClick={() => toggleModule(module.id)}
+                      className={cn(
+                        "p-4 rounded-xl border transition-all",
+                        selectedModules.includes(module.id)
+                          ? 'bg-primary/20 border-primary text-foreground'
+                          : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/50'
                       )}
-                    </div>
-                    <span className="text-sm text-slate-500">{module.count} records</span>
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">{module.name}</span>
+                        {selectedModules.includes(module.id) && (
+                          <CheckCircle2 className="w-5 h-5 text-primary" />
+                        )}
+                      </div>
+                      <span className="text-sm text-muted-foreground">{module.count} records</span>
+                    </button>
+                  ))}
+                </div>
+                
+                <div className="flex items-center gap-4 mt-4">
+                  <button
+                    onClick={() => setSelectedModules(modules.map(m => m.id))}
+                    className="text-sm text-primary hover:text-primary-hover"
+                  >
+                    Select All
                   </button>
-                ))}
-              </div>
-              
-              <div className="flex items-center gap-4 mt-4">
-                <button
-                  onClick={() => setSelectedModules(modules.map(m => m.id))}
-                  className="text-sm text-violet-400 hover:text-violet-300"
-                >
-                  Select All
-                </button>
-                <button
-                  onClick={() => setSelectedModules([])}
-                  className="text-sm text-slate-400 hover:text-white"
-                >
-                  Clear Selection
-                </button>
-              </div>
-            </div>
+                  <button
+                    onClick={() => setSelectedModules([])}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Date Range */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
-              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-violet-400" />
-                Date Range
-              </h2>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { value: 'today', label: 'Today' },
-                  { value: 'week', label: 'This Week' },
-                  { value: 'month', label: 'This Month' },
-                  { value: 'quarter', label: 'This Quarter' },
-                  { value: 'year', label: 'This Year' },
-                  { value: 'all', label: 'All Time' }
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setDateRange(option.value)}
-                    className={`p-3 rounded-xl border transition-all ${
-                      dateRange === option.value
-                        ? 'bg-violet-500/20 border-violet-500 text-white'
-                        : 'bg-slate-900/30 border-slate-700 text-slate-400 hover:border-slate-600'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-primary" />
+                  Date Range
+                </h2>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { value: 'today', label: 'Today' },
+                    { value: 'week', label: 'This Week' },
+                    { value: 'month', label: 'This Month' },
+                    { value: 'quarter', label: 'This Quarter' },
+                    { value: 'year', label: 'This Year' },
+                    { value: 'all', label: 'All Time' }
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setDateRange(option.value)}
+                      className={cn(
+                        "p-3 rounded-xl border transition-all",
+                        dateRange === option.value
+                          ? 'bg-primary/20 border-primary text-foreground'
+                          : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/50'
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Export Options Sidebar */}
           <div className="space-y-6">
             {/* Format Selection */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Export Format</h2>
-              
-              <div className="space-y-2">
-                {Object.entries(formatIcons).map(([format, { icon, color, bg }]) => (
-                  <button
-                    key={format}
-                    onClick={() => setSelectedFormat(format as any)}
-                    className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-all ${
-                      selectedFormat === format
-                        ? 'bg-violet-500/20 border-violet-500'
-                        : 'bg-slate-900/30 border-slate-700 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className={`p-2 rounded-lg ${bg}`}>
-                      <div className={color}>{icon}</div>
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium text-white uppercase">{format}</p>
-                      <p className="text-xs text-slate-500">
-                        {format === 'pdf' && 'Formatted report'}
-                        {format === 'excel' && 'Spreadsheet with charts'}
-                        {format === 'csv' && 'Raw data export'}
-                        {format === 'json' && 'API-ready format'}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold text-foreground mb-4">Export Format</h2>
+                
+                <div className="space-y-2">
+                  {Object.entries(formatIcons).map(([format, { icon, color, bg }]) => (
+                    <button
+                      key={format}
+                      onClick={() => setSelectedFormat(format as 'pdf' | 'excel' | 'csv' | 'json')}
+                      className={cn(
+                        "w-full p-3 rounded-xl border flex items-center gap-3 transition-all",
+                        selectedFormat === format
+                          ? 'bg-primary/20 border-primary'
+                          : 'bg-muted/30 border-border hover:border-primary/50'
+                      )}
+                    >
+                      <div className={cn("p-2 rounded-lg", bg)}>
+                        <div className={color}>{icon}</div>
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-foreground uppercase">{format}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format === 'pdf' && 'Formatted report'}
+                          {format === 'excel' && 'Spreadsheet with charts'}
+                          {format === 'csv' && 'Raw data export'}
+                          {format === 'json' && 'API-ready format'}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Export Summary */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Summary</h2>
-              
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Modules</span>
-                  <span className="text-white font-medium">{selectedModules.length} selected</span>
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold text-foreground mb-4">Summary</h2>
+                
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Modules</span>
+                    <span className="text-foreground font-medium">{selectedModules.length} selected</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date Range</span>
+                    <span className="text-foreground font-medium capitalize">{dateRange}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Format</span>
+                    <span className="text-foreground font-medium uppercase">{selectedFormat}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Est. Records</span>
+                    <span className="text-foreground font-medium">
+                      {selectedModules.reduce((acc, id) => {
+                        const mod = modules.find(m => m.id === id);
+                        return acc + (mod?.count || 0);
+                      }, 0).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Date Range</span>
-                  <span className="text-white font-medium capitalize">{dateRange}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Format</span>
-                  <span className="text-white font-medium uppercase">{selectedFormat}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Est. Records</span>
-                  <span className="text-white font-medium">
-                    {selectedModules.reduce((acc, id) => {
-                      const mod = modules.find(m => m.id === id);
-                      return acc + (mod?.count || 0);
-                    }, 0).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              
-              <button
-                onClick={handleExport}
-                disabled={selectedModules.length === 0 || isExporting}
-                className={`w-full mt-6 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
-                  selectedModules.length === 0
-                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500'
-                }`}
-              >
-                {isExporting ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-5 h-5" />
-                    Start Export
-                  </>
-                )}
-              </button>
-            </div>
+                
+                <Button
+                  onClick={handleExport}
+                  disabled={selectedModules.length === 0 || isExporting}
+                  className="w-full mt-6"
+                >
+                  {isExporting ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      Start Export
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
 
       {/* History Tab */}
       {activeTab === 'history' && (
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden">
+        <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-900/50">
+              <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-4 text-sm font-medium text-slate-400">Export</th>
-                  <th className="text-left p-4 text-sm font-medium text-slate-400">Format</th>
-                  <th className="text-left p-4 text-sm font-medium text-slate-400">Modules</th>
-                  <th className="text-left p-4 text-sm font-medium text-slate-400">Status</th>
-                  <th className="text-left p-4 text-sm font-medium text-slate-400">Created</th>
-                  <th className="text-center p-4 text-sm font-medium text-slate-400">Actions</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Export</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Format</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Modules</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Created</th>
+                  <th className="text-center p-4 text-sm font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {exportJobs.map((job) => (
                   <tr
                     key={job.id}
-                    className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors"
+                    className="border-b border-border hover:bg-muted/30 transition-colors"
                   >
                     <td className="p-4">
-                      <p className="font-medium text-white">{job.name}</p>
-                      <p className="text-xs text-slate-500">{job.id}</p>
+                      <p className="font-medium text-foreground">{job.name}</p>
+                      <p className="text-xs text-muted-foreground">{job.id}</p>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-lg ${formatIcons[job.format].bg}`}>
+                        <div className={cn("p-1.5 rounded-lg", formatIcons[job.format].bg)}>
                           <div className={formatIcons[job.format].color}>
                             {formatIcons[job.format].icon}
                           </div>
                         </div>
-                        <span className="uppercase text-sm text-slate-300">{job.format}</span>
+                        <span className="uppercase text-sm text-foreground">{job.format}</span>
                       </div>
                     </td>
                     <td className="p-4">
@@ -426,7 +440,7 @@ export default function ExportCenter() {
                         {job.modules.map((mod, i) => (
                           <span
                             key={i}
-                            className="px-2 py-0.5 bg-slate-700/50 text-slate-300 rounded text-xs"
+                            className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs"
                           >
                             {mod}
                           </span>
@@ -435,45 +449,40 @@ export default function ExportCenter() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[job.status].bg} ${statusColors[job.status].text}`}>
+                        <Badge variant={statusVariants[job.status]}>
                           {job.status}
-                        </span>
+                        </Badge>
                         {job.status === 'processing' && job.progress && (
-                          <span className="text-xs text-slate-400">{job.progress}%</span>
+                          <span className="text-xs text-muted-foreground">{job.progress}%</span>
                         )}
                       </div>
                       {job.status === 'processing' && job.progress && (
-                        <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full transition-all"
+                            className="h-full bg-gradient-to-r from-primary to-primary-hover rounded-full transition-all"
                             style={{ width: `${job.progress}%` }}
                           />
                         </div>
                       )}
                     </td>
                     <td className="p-4">
-                      <p className="text-sm text-slate-300">{job.createdAt}</p>
+                      <p className="text-sm text-foreground">{job.createdAt}</p>
                       {job.fileSize && (
-                        <p className="text-xs text-slate-500">{job.fileSize}</p>
+                        <p className="text-xs text-muted-foreground">{job.fileSize}</p>
                       )}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-2">
                         {job.status === 'completed' && job.downloadUrl && (
-                          <a
-                            href={job.downloadUrl}
-                            className="p-2 text-emerald-400 hover:bg-emerald-500/20 rounded-lg transition-colors"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
+                          <Button variant="ghost" size="sm" className="text-success hover:text-success" asChild>
+                            <a href={job.downloadUrl} title="Download">
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </Button>
                         )}
-                        <button
-                          className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                          title="Delete"
-                        >
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title="Delete">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -481,70 +490,72 @@ export default function ExportCenter() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Templates Tab */}
       {activeTab === 'templates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {templates.map((template) => (
-            <div
+            <Card
               key={template.id}
-              className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6 hover:border-violet-500/50 transition-all"
+              className="hover:border-primary/50 transition-all"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-xl ${formatIcons[template.format].bg}`}>
-                  <div className={formatIcons[template.format].color}>
-                    {formatIcons[template.format].icon}
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={cn("p-3 rounded-xl", formatIcons[template.format].bg)}>
+                    <div className={formatIcons[template.format].color}>
+                      {formatIcons[template.format].icon}
+                    </div>
                   </div>
+                  <Button variant="ghost" size="sm">
+                    <Settings className="w-5 h-5" />
+                  </Button>
                 </div>
-                <button className="p-2 text-slate-400 hover:text-white transition-colors">
-                  <Settings className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <h3 className="text-lg font-semibold text-white mb-1">{template.name}</h3>
-              <p className="text-sm text-slate-400 mb-4">{template.description}</p>
-              
-              <div className="flex flex-wrap gap-1 mb-4">
-                {template.modules.map((mod, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 bg-slate-700/50 text-slate-300 rounded text-xs"
-                  >
-                    {mod}
-                  </span>
-                ))}
-              </div>
-              
-              <div className="pt-4 border-t border-slate-700/50 space-y-2 text-sm">
-                {template.schedule && (
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Clock className="w-4 h-4" />
-                    {template.schedule}
-                  </div>
-                )}
-                {template.lastRun && (
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <History className="w-4 h-4" />
-                    Last run: {template.lastRun}
-                  </div>
-                )}
-              </div>
-              
-              <button className="w-full mt-4 py-2 bg-violet-500/20 text-violet-400 rounded-lg font-medium hover:bg-violet-500/30 transition-all flex items-center justify-center gap-2">
-                <Play className="w-4 h-4" />
-                Run Now
-              </button>
-            </div>
+                
+                <h3 className="text-lg font-semibold text-foreground mb-1">{template.name}</h3>
+                <p className="text-sm text-muted-foreground mb-4">{template.description}</p>
+                
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {template.modules.map((mod, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs"
+                    >
+                      {mod}
+                    </span>
+                  ))}
+                </div>
+                
+                <div className="pt-4 border-t border-border space-y-2 text-sm">
+                  {template.schedule && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="w-4 h-4" />
+                      {template.schedule}
+                    </div>
+                  )}
+                  {template.lastRun && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <History className="w-4 h-4" />
+                      Last run: {template.lastRun}
+                    </div>
+                  )}
+                </div>
+                
+                <Button variant="outline" className="w-full mt-4">
+                  <Play className="w-4 h-4" />
+                  Run Now
+                </Button>
+              </CardContent>
+            </Card>
           ))}
           
           {/* Add Template Card */}
-          <button className="bg-slate-800/30 backdrop-blur-sm rounded-xl border border-dashed border-slate-700 p-6 flex flex-col items-center justify-center gap-3 hover:border-violet-500/50 hover:bg-slate-800/50 transition-all min-h-[280px]">
-            <div className="p-3 rounded-xl bg-slate-700/50">
-              <Settings className="w-6 h-6 text-slate-400" />
+          <button className="bg-card/30 rounded-xl border border-dashed border-border p-6 flex flex-col items-center justify-center gap-3 hover:border-primary/50 hover:bg-card/50 transition-all min-h-[280px]">
+            <div className="p-3 rounded-xl bg-muted">
+              <Settings className="w-6 h-6 text-muted-foreground" />
             </div>
-            <span className="text-slate-400 font-medium">Create Template</span>
+            <span className="text-muted-foreground font-medium">Create Template</span>
           </button>
         </div>
       )}

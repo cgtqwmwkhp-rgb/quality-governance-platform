@@ -20,10 +20,12 @@ import {
   ThumbsUp,
   ThumbsDown,
   Sparkles,
-  Loader,
+  Loader2,
   ChevronRight,
   History,
 } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { cn } from '../../lib/utils';
 
 interface Message {
   id: number;
@@ -80,7 +82,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       const welcomeMessage: Message = {
         id: Date.now(),
         role: 'assistant',
-        content: `👋 Hello! I'm your AI assistant for the Quality Governance Platform.\n\nI can help you with:\n• 📝 Creating and managing incidents\n• 📋 Scheduling audits\n• ⚠️ Risk assessment\n• ✅ Compliance queries\n• 📊 Generating reports\n\nHow can I assist you today?`,
+        content: `Hello! I'm your AI assistant for the Quality Governance Platform.\n\nI can help you with:\n• Creating and managing incidents\n• Scheduling audits\n• Risk assessment\n• Compliance queries\n• Generating reports\n\nHow can I assist you today?`,
         contentType: 'text',
         createdAt: new Date(),
       };
@@ -186,7 +188,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
     
     if (inputLower.includes('create') && inputLower.includes('incident')) {
       return {
-        content: `I'll help you create an incident report.\n\n📝 **New Incident**\n• Title: ${input.replace(/create (an? )?incident (for )?/i, '')}\n• Severity: Medium\n\nShall I proceed with creating this incident?`,
+        content: `I'll help you create an incident report.\n\n**New Incident**\n• Title: ${input.replace(/create (an? )?incident (for )?/i, '')}\n• Severity: Medium\n\nShall I proceed with creating this incident?`,
         actionType: 'create_incident',
         actionData: { title: input.replace(/create (an? )?incident (for )?/i, ''), severity: 'medium' },
       };
@@ -199,7 +201,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       else if (inputLower.includes('27001')) standard = 'ISO 27001';
       
       return {
-        content: `📊 **${standard} Compliance Status**\n\n✅ Overall Compliance: **92%**\n\n| Category | Status | Score |\n|----------|--------|-------|\n| Leadership | ✅ Compliant | 95% |\n| Planning | ✅ Compliant | 90% |\n| Support | ⚠️ Minor Gap | 85% |\n| Operation | ✅ Compliant | 94% |\n| Evaluation | ✅ Compliant | 93% |\n| Improvement | ⚠️ Minor Gap | 88% |\n\n**3 minor gaps** identified. Would you like me to show details or create actions to address them?`,
+        content: `**${standard} Compliance Status**\n\nOverall Compliance: **92%**\n\n| Category | Status | Score |\n|----------|--------|-------|\n| Leadership | Compliant | 95% |\n| Planning | Compliant | 90% |\n| Support | Minor Gap | 85% |\n| Operation | Compliant | 94% |\n| Evaluation | Compliant | 93% |\n| Improvement | Minor Gap | 88% |\n\n**3 minor gaps** identified. Would you like me to show details or create actions to address them?`,
         actionType: 'get_compliance_status',
         actionData: { standard },
       };
@@ -207,7 +209,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
     
     if (inputLower.includes('risk')) {
       return {
-        content: `⚠️ **Risk Summary**\n\n| Level | Count | Trend |\n|-------|-------|-------|\n| 🔴 Critical | 2 | ↓ |\n| 🟠 High | 8 | → |\n| 🟡 Medium | 15 | ↑ |\n| 🟢 Low | 23 | → |\n\n**Top Risk:** Supply Chain Disruption (Score: 20)\n**New This Week:** Cybersecurity Threat\n\nWould you like to see the risk heat map or create a treatment plan?`,
+        content: `**Risk Summary**\n\n| Level | Count | Trend |\n|-------|-------|-------|\n| Critical | 2 | Down |\n| High | 8 | Stable |\n| Medium | 15 | Up |\n| Low | 23 | Stable |\n\n**Top Risk:** Supply Chain Disruption (Score: 20)\n**New This Week:** Cybersecurity Threat\n\nWould you like to see the risk heat map or create a treatment plan?`,
       };
     }
     
@@ -215,17 +217,17 @@ const AICopilot: React.FC<AICopilotProps> = ({
       const topic = input.replace(/what is|explain/gi, '').trim();
       
       const explanations: Record<string, string> = {
-        'capa': `📚 **CAPA (Corrective and Preventive Action)**\n\nA systematic approach to:\n1. **Corrective Action** - Fix immediate problems and root causes\n2. **Preventive Action** - Prevent similar issues from occurring\n\n✅ Required by ISO 9001 (Clause 10.2)\n✅ Essential for continuous improvement\n✅ Must be documented and verified`,
-        'riddor': `📚 **RIDDOR**\n\n**Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013**\n\nUK employers must report:\n• Deaths and specified injuries\n• Over-7-day incapacitation\n• Occupational diseases\n• Dangerous occurrences\n\n⏰ Report within 10-15 days to HSE`,
+        'capa': `**CAPA (Corrective and Preventive Action)**\n\nA systematic approach to:\n1. **Corrective Action** - Fix immediate problems and root causes\n2. **Preventive Action** - Prevent similar issues from occurring\n\nRequired by ISO 9001 (Clause 10.2)\nEssential for continuous improvement\nMust be documented and verified`,
+        'riddor': `**RIDDOR**\n\n**Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013**\n\nUK employers must report:\n• Deaths and specified injuries\n• Over-7-day incapacitation\n• Occupational diseases\n• Dangerous occurrences\n\nReport within 10-15 days to HSE`,
       };
       
       return {
-        content: explanations[topic.toLowerCase()] || `📚 **${topic}**\n\nI'd be happy to explain this. Could you provide more context about what aspect you'd like to understand?`,
+        content: explanations[topic.toLowerCase()] || `**${topic}**\n\nI'd be happy to explain this. Could you provide more context about what aspect you'd like to understand?`,
       };
     }
     
     return {
-      content: `I understand you're asking about: "${input}"\n\nI can help you with:\n• 📝 Creating incidents or actions\n• 📋 Checking compliance status\n• ⚠️ Viewing risk summaries\n• 📚 Explaining QHSE concepts\n• 🔍 Searching records\n\nCould you be more specific about what you'd like to do?`,
+      content: `I understand you're asking about: "${input}"\n\nI can help you with:\n• Creating incidents or actions\n• Checking compliance status\n• Viewing risk summaries\n• Explaining QHSE concepts\n• Searching records\n\nCould you be more specific about what you'd like to do?`,
     };
   };
   
@@ -301,53 +303,53 @@ const AICopilot: React.FC<AICopilotProps> = ({
   if (isMinimized) {
     return (
       <div className="fixed bottom-4 right-4 z-50">
-        <button
+        <Button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-3 rounded-full shadow-lg hover:shadow-xl transition-all"
+          className="rounded-full gap-2 shadow-glow"
         >
           <Bot className="w-5 h-5" />
           <span className="font-medium">AI Copilot</span>
           {messages.length > 1 && (
-            <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
+            <span className="bg-primary-foreground/20 px-2 py-0.5 rounded-full text-xs">
               {messages.length - 1}
             </span>
           )}
-        </button>
+        </Button>
       </div>
     );
   }
   
   return (
-    <div className="fixed bottom-4 right-4 w-[420px] h-[600px] bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 flex flex-col z-50 overflow-hidden">
+    <div className="fixed bottom-4 right-4 w-[420px] h-[600px] bg-card rounded-2xl shadow-lg border border-border flex flex-col z-50 overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center justify-between">
+      <div className="gradient-brand px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
+          <div className="w-10 h-10 rounded-full bg-primary-foreground/20 flex items-center justify-center">
+            <Bot className="w-6 h-6 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="font-semibold text-white">AI Copilot</h3>
-            <p className="text-xs text-blue-100">Your QHSE Assistant</p>
+            <h3 className="font-semibold text-primary-foreground">AI Copilot</h3>
+            <p className="text-xs text-primary-foreground/70">Your QHSE Assistant</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white"
+            className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
             title="History"
           >
             <History className="w-4 h-4" />
           </button>
           <button
             onClick={() => setIsMinimized(true)}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white"
+            className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
             title="Minimize"
           >
             <Minimize2 className="w-4 h-4" />
           </button>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white"
+            className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
             title="Close"
           >
             <X className="w-4 h-4" />
@@ -360,16 +362,17 @@ const AICopilot: React.FC<AICopilotProps> = ({
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={cn("flex", message.role === 'user' ? 'justify-end' : 'justify-start')}
           >
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+              className={cn(
+                "max-w-[85%] rounded-2xl px-4 py-3",
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : message.contentType === 'error'
-                  ? 'bg-red-900/50 text-red-200 border border-red-700'
-                  : 'bg-gray-800 text-gray-100 border border-gray-700'
-              }`}
+                  ? 'bg-destructive/10 text-destructive border border-destructive/20'
+                  : 'bg-surface text-foreground border border-border'
+              )}
             >
               {/* Message content */}
               <div className="text-sm whitespace-pre-wrap leading-relaxed">
@@ -378,23 +381,23 @@ const AICopilot: React.FC<AICopilotProps> = ({
               
               {/* Action indicator */}
               {message.actionType && (
-                <div className="mt-2 pt-2 border-t border-gray-600 flex items-center gap-2 text-xs">
+                <div className="mt-2 pt-2 border-t border-border flex items-center gap-2 text-xs">
                   {message.actionStatus === 'pending' && (
                     <>
-                      <Loader className="w-3 h-3 animate-spin" />
+                      <Loader2 className="w-3 h-3 animate-spin" />
                       <span>Processing...</span>
                     </>
                   )}
                   {message.actionStatus === 'completed' && (
                     <>
-                      <Sparkles className="w-3 h-3 text-green-400" />
-                      <span className="text-green-400">Action completed</span>
+                      <Sparkles className="w-3 h-3 text-success" />
+                      <span className="text-success">Action completed</span>
                     </>
                   )}
                   {message.actionStatus === 'failed' && (
                     <>
-                      <X className="w-3 h-3 text-red-400" />
-                      <span className="text-red-400">Action failed</span>
+                      <X className="w-3 h-3 text-destructive" />
+                      <span className="text-destructive">Action failed</span>
                     </>
                   )}
                 </div>
@@ -402,21 +405,23 @@ const AICopilot: React.FC<AICopilotProps> = ({
               
               {/* Feedback buttons for assistant messages */}
               {message.role === 'assistant' && message.contentType !== 'error' && (
-                <div className="mt-2 pt-2 border-t border-gray-600 flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Was this helpful?</span>
+                <div className="mt-2 pt-2 border-t border-border flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Was this helpful?</span>
                   <button
                     onClick={() => submitFeedback(message.id, 5)}
-                    className={`p-1 rounded hover:bg-gray-700 transition-colors ${
-                      message.feedbackRating === 5 ? 'text-green-400' : 'text-gray-400 hover:text-green-400'
-                    }`}
+                    className={cn(
+                      "p-1 rounded hover:bg-surface transition-colors",
+                      message.feedbackRating === 5 ? 'text-success' : 'text-muted-foreground hover:text-success'
+                    )}
                   >
                     <ThumbsUp className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => submitFeedback(message.id, 1)}
-                    className={`p-1 rounded hover:bg-gray-700 transition-colors ${
-                      message.feedbackRating === 1 ? 'text-red-400' : 'text-gray-400 hover:text-red-400'
-                    }`}
+                    className={cn(
+                      "p-1 rounded hover:bg-surface transition-colors",
+                      message.feedbackRating === 1 ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'
+                    )}
                   >
                     <ThumbsDown className="w-4 h-4" />
                   </button>
@@ -428,14 +433,14 @@ const AICopilot: React.FC<AICopilotProps> = ({
         
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-800 rounded-2xl px-4 py-3 border border-gray-700">
+            <div className="bg-surface rounded-2xl px-4 py-3 border border-border">
               <div className="flex items-center gap-2">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
-                <span className="text-sm text-gray-400">Thinking...</span>
+                <span className="text-sm text-muted-foreground">Thinking...</span>
               </div>
             </div>
           </div>
@@ -447,7 +452,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       {/* Suggestions */}
       {suggestions.length > 0 && messages.length <= 2 && (
         <div className="px-4 pb-2">
-          <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <Sparkles className="w-3 h-3" />
             <span>Suggested</span>
           </div>
@@ -456,7 +461,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
               <button
                 key={i}
                 onClick={() => handleSuggestionClick(suggestion)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-full text-xs text-gray-300 border border-gray-600 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 bg-surface hover:bg-surface/80 rounded-full text-xs text-foreground border border-border transition-colors"
               >
                 {suggestion.displayName}
                 <ChevronRight className="w-3 h-3" />
@@ -467,7 +472,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       )}
       
       {/* Input */}
-      <div className="p-4 border-t border-gray-700">
+      <div className="p-4 border-t border-border">
         <div className="flex items-end gap-2">
           <div className="flex-1 relative">
             <textarea
@@ -477,30 +482,35 @@ const AICopilot: React.FC<AICopilotProps> = ({
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything..."
               rows={1}
-              className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 placeholder-gray-400"
+              className={cn(
+                "w-full bg-surface text-foreground rounded-xl px-4 py-3 pr-10 resize-none",
+                "focus:outline-none focus:ring-2 focus:ring-primary/50 border border-border",
+                "placeholder:text-muted-foreground"
+              )}
               style={{ maxHeight: '100px' }}
             />
             <button
               onClick={toggleVoiceInput}
-              className={`absolute right-2 bottom-2.5 p-1.5 rounded-lg transition-colors ${
+              className={cn(
+                "absolute right-2 bottom-2.5 p-1.5 rounded-lg transition-colors",
                 isListening 
-                  ? 'bg-red-500 text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
+                  ? 'bg-destructive text-destructive-foreground' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-surface'
+              )}
             >
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
           </div>
-          <button
+          <Button
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
-            className="p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl text-white transition-colors"
+            size="icon"
           >
             <Send className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
-        <p className="text-xs text-gray-500 mt-2 text-center">
-          Press Enter to send • Shift+Enter for new line
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          Press Enter to send | Shift+Enter for new line
         </p>
       </div>
     </div>
