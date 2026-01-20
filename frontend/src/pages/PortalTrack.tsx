@@ -23,6 +23,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { cn } from '../helpers/utils';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import ReportChat from '../components/ReportChat';
 
 // Types
 interface ReportSummary {
@@ -471,6 +472,15 @@ export default function PortalTrack() {
               ))}
             </div>
           </Card>
+
+          {/* Two-way Chat with Investigator */}
+          <ReportChat
+            referenceNumber={selectedReport.reference_number}
+            reporterName={user?.name || 'Reporter'}
+            officerName={selectedReport.assigned_to || 'Safety Team'}
+            isReporter={true}
+            isClosed={selectedReport.status === 'RESOLVED' || selectedReport.status === 'CLOSED'}
+          />
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3">
