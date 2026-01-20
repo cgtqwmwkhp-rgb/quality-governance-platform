@@ -56,11 +56,11 @@ class Permission(Base):
 
 class Role(Base):
     """
-    Role definition with permission collections.
+    Role definition with permission collections (ABAC).
     
     Roles group permissions for easier assignment.
     """
-    __tablename__ = "roles"
+    __tablename__ = "abac_roles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     
@@ -73,7 +73,7 @@ class Role(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Hierarchy
-    parent_role_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("roles.id"), nullable=True)
+    parent_role_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=True)
     hierarchy_level: Mapped[int] = mapped_column(Integer, default=0)  # 0 = lowest, higher = more privileged
     
     # Status
@@ -97,13 +97,13 @@ class Role(Base):
 
 class RolePermission(Base):
     """
-    Association between roles and permissions.
+    Association between roles and permissions (ABAC).
     """
-    __tablename__ = "role_permissions"
+    __tablename__ = "abac_role_permissions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id"), nullable=False)
+    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=False)
     permission_id: Mapped[int] = mapped_column(Integer, ForeignKey("permissions.id"), nullable=False)
     
     # Override conditions (ABAC)
@@ -117,14 +117,14 @@ class RolePermission(Base):
 
 class UserRole(Base):
     """
-    Assignment of roles to users within a tenant context.
+    Assignment of roles to users within a tenant context (ABAC).
     """
-    __tablename__ = "user_roles"
+    __tablename__ = "abac_user_roles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id"), nullable=False)
+    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=False)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     
     # Optional scope restrictions

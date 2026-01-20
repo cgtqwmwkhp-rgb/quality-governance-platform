@@ -122,7 +122,7 @@ def upgrade() -> None:
     op.create_index('ix_permissions_code', 'permissions', ['code'])
     
     op.create_table(
-        'roles',
+        'abac_roles',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('tenant_id', sa.Integer(), nullable=True),
         sa.Column('code', sa.String(100), nullable=False),
@@ -139,23 +139,23 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id']),
-        sa.ForeignKeyConstraint(['parent_role_id'], ['roles.id']),
+        sa.ForeignKeyConstraint(['parent_role_id'], ['abac_roles.id']),
     )
     
     op.create_table(
-        'role_permissions',
+        'abac_role_permissions',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('role_id', sa.Integer(), nullable=False),
         sa.Column('permission_id', sa.Integer(), nullable=False),
         sa.Column('conditions', sa.JSON(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-        sa.ForeignKeyConstraint(['role_id'], ['roles.id']),
+        sa.ForeignKeyConstraint(['role_id'], ['abac_roles.id']),
         sa.ForeignKeyConstraint(['permission_id'], ['permissions.id']),
     )
     
     op.create_table(
-        'user_roles',
+        'abac_user_roles',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('role_id', sa.Integer(), nullable=False),
@@ -172,8 +172,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id']),
         sa.ForeignKeyConstraint(['granted_by_id'], ['users.id']),
     )
-    op.create_index('ix_user_roles_user', 'user_roles', ['user_id'])
-    op.create_index('ix_user_roles_tenant', 'user_roles', ['tenant_id'])
+    op.create_index('ix_abac_user_roles_user', 'abac_user_roles', ['user_id'])
+    op.create_index('ix_abac_user_roles_tenant', 'abac_user_roles', ['tenant_id'])
     
     op.create_table(
         'abac_policies',
@@ -463,9 +463,9 @@ def downgrade() -> None:
     op.drop_table('permission_audits')
     op.drop_table('field_level_permissions')
     op.drop_table('abac_policies')
-    op.drop_table('user_roles')
-    op.drop_table('role_permissions')
-    op.drop_table('roles')
+    op.drop_table('abac_user_roles')
+    op.drop_table('abac_role_permissions')
+    op.drop_table('abac_roles')
     op.drop_table('permissions')
     op.drop_table('tenant_invitations')
     op.drop_table('tenant_users')

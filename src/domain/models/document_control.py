@@ -141,9 +141,9 @@ class ControlledDocument(Base):
 
 
 class DocumentVersion(Base):
-    """Version history for documents"""
+    """Version history for controlled documents"""
 
-    __tablename__ = "document_versions"
+    __tablename__ = "controlled_document_versions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

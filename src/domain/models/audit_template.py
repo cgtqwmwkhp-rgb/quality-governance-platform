@@ -100,11 +100,11 @@ def generate_uuid():
 
 class AuditTemplate(Base):
     """
-    Master template for audits.
+    Master template for audits (Audit Builder).
     Contains metadata, settings, and references to sections.
     """
 
-    __tablename__ = "audit_templates"
+    __tablename__ = "audit_builder_templates"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
@@ -282,14 +282,14 @@ class AuditTemplateVersion(Base):
 
 class AuditRun(Base):
     """
-    An instance of an audit being executed.
+    An instance of an audit being executed (Audit Builder).
     Links to a template and stores responses.
     """
 
-    __tablename__ = "audit_runs"
+    __tablename__ = "audit_builder_runs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    template_id = Column(String(36), ForeignKey("audit_templates.id"), nullable=False)
+    template_id = Column(String(36), ForeignKey("audit_builder_templates.id"), nullable=False)
 
     # Reference
     reference_number = Column(String(50), unique=True, nullable=False)
@@ -337,13 +337,13 @@ class AuditRun(Base):
 
 class AuditResponse(Base):
     """
-    Response to an individual question during an audit.
+    Response to an individual question during an audit (Audit Builder).
     """
 
-    __tablename__ = "audit_responses"
+    __tablename__ = "audit_builder_responses"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    audit_run_id = Column(String(36), ForeignKey("audit_runs.id"), nullable=False)
+    audit_run_id = Column(String(36), ForeignKey("audit_builder_runs.id"), nullable=False)
     question_id = Column(String(36), ForeignKey("audit_template_questions.id"), nullable=False)
 
     # Response
@@ -376,13 +376,13 @@ class AuditResponse(Base):
 
 class AuditFinding(Base):
     """
-    A finding (non-conformance, observation, etc.) from an audit.
+    A finding (non-conformance, observation, etc.) from an audit (Audit Builder).
     """
 
-    __tablename__ = "audit_findings"
+    __tablename__ = "audit_builder_findings"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    audit_run_id = Column(String(36), ForeignKey("audit_runs.id"), nullable=False)
+    audit_run_id = Column(String(36), ForeignKey("audit_builder_runs.id"), nullable=False)
     question_id = Column(String(36), ForeignKey("audit_template_questions.id"), nullable=True)
 
     # Reference

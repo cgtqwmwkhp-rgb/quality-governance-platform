@@ -173,9 +173,9 @@ class Risk(Base):
 
 
 class RiskControl(Base):
-    """Controls linked to risks"""
+    """Controls linked to risks (Enterprise Risk Register)"""
 
-    __tablename__ = "risk_controls"
+    __tablename__ = "enterprise_risk_controls"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
