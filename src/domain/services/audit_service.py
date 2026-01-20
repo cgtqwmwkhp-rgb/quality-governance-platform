@@ -1,4 +1,12 @@
-"""Service for recording audit events."""
+"""Service for recording audit events.
+
+This module provides a lightweight audit event recording mechanism.
+Events are logged for observability but not persisted to the database
+until proper schema migration is implemented.
+
+For full immutable audit trail with blockchain-style hashing, 
+see AuditLogEntry in src/domain/models/audit_log.py.
+"""
 
 from typing import Any, Optional
 
@@ -25,8 +33,11 @@ async def record_audit_event(
     """
     Record a system-wide audit event with canonical schema.
 
+    Note: Currently logs the event for observability but does not persist
+    to the database. Full persistence requires schema migration.
+
     Args:
-        db: Database session
+        db: Database session (currently unused, kept for API compatibility)
         event_type: Type of event (e.g., "policy.created")
         entity_type: Type of entity (e.g., "policy")
         entity_id: ID of the entity
@@ -40,14 +51,12 @@ async def record_audit_event(
         resource_id: Legacy resource ID (deprecated, use entity_id)
 
     Returns:
-        The created AuditEvent
+        The created AuditEvent (in-memory only, not persisted)
     """
-    # request_id should be passed explicitly from route handlers
-    # If not provided, it will be None (which is acceptable for some operations)
-
     # Use actor_user_id if provided, otherwise fall back to user_id
     final_actor_user_id = actor_user_id if actor_user_id is not None else user_id
 
+    # Create the event (logs automatically in AuditEvent.__init__)
     event = AuditEvent(
         event_type=event_type,
         entity_type=entity_type,
@@ -62,6 +71,9 @@ async def record_audit_event(
         resource_id=resource_id or str(entity_id),
         user_id=final_actor_user_id,
     )
-    db.add(event)
-    # We don't commit here to allow the event to be part of the caller's transaction
+    
+    # Note: Not adding to db.session since AuditEvent is not a SQLAlchemy model.
+    # Events are logged for observability. Full persistence requires migration.
+    # See: TODO in AuditEvent class docstring.
+    
     return event

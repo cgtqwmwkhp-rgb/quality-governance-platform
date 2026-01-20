@@ -10,6 +10,7 @@ Provides blockchain-style immutable audit logging with:
 
 import hashlib
 import json
+import logging
 from datetime import datetime
 from typing import Any, Optional
 
@@ -17,6 +18,61 @@ from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, Integ
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base
+
+logger = logging.getLogger(__name__)
+
+
+class AuditEvent:
+    """
+    Simple audit event for recording system-wide audit trail.
+    
+    This is a lightweight event class used by audit_service.py for recording
+    audit events. It is intentionally NOT a SQLAlchemy model to avoid requiring
+    database schema changes.
+    
+    Events are logged but not persisted to the database. For full immutable
+    audit trail with blockchain-style hashing, use AuditLogEntry instead.
+    
+    TODO: Implement proper persistence via AuditLogEntry or dedicated table.
+    """
+    
+    def __init__(
+        self,
+        event_type: str,
+        entity_type: str,
+        entity_id: str,
+        action: str,
+        description: Optional[str] = None,
+        payload: Optional[dict] = None,
+        actor_user_id: Optional[int] = None,
+        request_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        **kwargs: Any,
+    ):
+        self.event_type = event_type
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.action = action
+        self.description = description
+        self.payload = payload
+        self.actor_user_id = actor_user_id
+        self.request_id = request_id
+        self.resource_type = resource_type
+        self.resource_id = resource_id
+        self.user_id = user_id
+        self.timestamp = datetime.utcnow()
+        self.id = None  # Will be set if/when persisted
+        
+        # Log the event for observability (no secrets in payload)
+        logger.info(
+            f"AuditEvent: {event_type} | {entity_type}:{entity_id} | action={action} | "
+            f"user={actor_user_id or user_id} | request={request_id}"
+        )
+    
+    def __repr__(self) -> str:
+        return f"<AuditEvent {self.event_type} {self.entity_type}:{self.entity_id}>"
 
 
 class AuditLogEntry(Base):
