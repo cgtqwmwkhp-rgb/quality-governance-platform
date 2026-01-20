@@ -1,8 +1,8 @@
 {
   "environment": "production",
-  "timestamp": "2026-01-20T22:47:25.244859",
-  "passed": 26,
-  "failed": 5,
+  "timestamp": "2026-01-20T23:03:14.557641",
+  "passed": 28,
+  "failed": 3,
   "results": [
     {
       "name": "Homepage",
@@ -128,19 +128,19 @@
       "name": "List Contracts (public)",
       "status": "fail",
       "expected": 200,
-      "actual": 404
+      "actual": 500
     },
     {
       "name": "List Roles Lookup",
       "status": "fail",
       "expected": 200,
-      "actual": 404
+      "actual": 500
     },
     {
       "name": "List Medical Assistance Lookup",
       "status": "fail",
       "expected": 200,
-      "actual": 404
+      "actual": 500
     },
     {
       "name": "Login (no creds)",
@@ -154,15 +154,13 @@
     },
     {
       "name": "List Templates (protected)",
-      "status": "fail",
-      "expected": 401,
-      "actual": 404
+      "status": "pass",
+      "code": 401
     },
     {
       "name": "List Settings (protected)",
-      "status": "fail",
-      "expected": 401,
-      "actual": 404
+      "status": "pass",
+      "code": 401
     }
   ]
 }
