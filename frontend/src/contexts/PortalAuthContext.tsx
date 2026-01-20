@@ -1,10 +1,20 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
 // Microsoft Entra ID (Azure AD) configuration
 const MSAL_CONFIG = {
-  clientId: import.meta.env.VITE_AZURE_CLIENT_ID || 'your-client-id',
-  authority: import.meta.env.VITE_AZURE_AUTHORITY || 'https://login.microsoftonline.com/your-tenant-id',
+  clientId: import.meta.env.VITE_AZURE_CLIENT_ID || '',
+  authority: import.meta.env.VITE_AZURE_AUTHORITY || '',
   redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin + '/portal',
+};
+
+// Check if Azure AD is properly configured
+const isAzureConfigured = () => {
+  return (
+    MSAL_CONFIG.clientId &&
+    MSAL_CONFIG.clientId !== 'your-client-id' &&
+    MSAL_CONFIG.authority &&
+    MSAL_CONFIG.authority !== 'https://login.microsoftonline.com/your-tenant-id'
+  );
 };
 
 export interface PortalUser {
@@ -16,6 +26,7 @@ export interface PortalUser {
   jobTitle?: string;
   department?: string;
   photo?: string;
+  isDemoUser?: boolean;
 }
 
 interface PortalAuthContextType {
@@ -23,8 +34,10 @@ interface PortalAuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: () => Promise<void>;
+  loginWithDemo: () => void;
   logout: () => void;
   error: string | null;
+  isAzureADAvailable: boolean;
 }
 
 const PortalAuthContext = createContext<PortalAuthContextType | undefined>(undefined);
@@ -46,136 +59,187 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check for existing session on mount
-  useEffect(() => {
-    checkExistingSession();
-  }, []);
-
-  const checkExistingSession = async () => {
-    setIsLoading(true);
+  // Parse JWT token
+  const parseJwt = (token: string) => {
     try {
-      // Check localStorage for existing portal session
-      const savedUser = localStorage.getItem('portal_user');
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        // Validate session isn't expired (24 hours)
-        const sessionTime = localStorage.getItem('portal_session_time');
-        if (sessionTime) {
-          const elapsed = Date.now() - parseInt(sessionTime);
-          if (elapsed < 24 * 60 * 60 * 1000) {
-            setUser(parsedUser);
-          } else {
-            // Session expired
-            localStorage.removeItem('portal_user');
-            localStorage.removeItem('portal_session_time');
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Session check failed:', err);
-    } finally {
-      setIsLoading(false);
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error('Failed to parse JWT:', e);
+      return null;
     }
   };
 
-  const login = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // In production, this would use MSAL.js to authenticate with Azure AD
-      // For now, we'll simulate the SSO flow with a popup
+  // Handle OAuth callback (check URL for tokens)
+  const handleOAuthCallback = useCallback(() => {
+    // Check for id_token in URL hash (fragment response mode)
+    const hash = window.location.hash;
+    if (hash && hash.includes('id_token')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get('id_token');
+      const errorParam = params.get('error');
+      const errorDesc = params.get('error_description');
+
+      if (errorParam) {
+        console.error('OAuth error:', errorParam, errorDesc);
+        setError(errorDesc || 'Authentication failed');
+        // Clear the hash
+        window.history.replaceState(null, '', window.location.pathname);
+        return false;
+      }
+
+      if (idToken) {
+        const payload = parseJwt(idToken);
+        if (payload) {
+          const newUser: PortalUser = {
+            id: payload.oid || payload.sub || 'unknown',
+            email: payload.email || payload.preferred_username || payload.upn || '',
+            name: payload.name || 'User',
+            firstName: payload.given_name || payload.name?.split(' ')[0] || 'User',
+            lastName: payload.family_name || payload.name?.split(' ').slice(1).join(' ') || '',
+            jobTitle: payload.jobTitle || '',
+            department: payload.department || '',
+          };
+
+          setUser(newUser);
+          localStorage.setItem('portal_user', JSON.stringify(newUser));
+          localStorage.setItem('portal_session_time', Date.now().toString());
+          localStorage.setItem('portal_id_token', idToken);
+
+          // Clear the hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+          return true;
+        }
+      }
+    }
+    return false;
+  }, []);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      setIsLoading(true);
       
-      // Check if MSAL is configured
-      if (MSAL_CONFIG.clientId === 'your-client-id') {
-        // Development mode - simulate SSO
-        const mockUser: PortalUser = {
-          id: 'dev-user-001',
-          email: 'employee@plantexpand.com',
-          name: 'Development User',
-          firstName: 'Development',
-          lastName: 'User',
-          jobTitle: 'Mobile Engineer',
-          department: 'Operations',
-        };
-        
-        setUser(mockUser);
-        localStorage.setItem('portal_user', JSON.stringify(mockUser));
-        localStorage.setItem('portal_session_time', Date.now().toString());
+      // First check for OAuth callback
+      if (handleOAuthCallback()) {
         setIsLoading(false);
         return;
       }
 
-      // Production MSAL flow
-      const popup = window.open(
-        `${MSAL_CONFIG.authority}/oauth2/v2.0/authorize?` +
-        `client_id=${MSAL_CONFIG.clientId}` +
-        `&response_type=id_token` +
-        `&redirect_uri=${encodeURIComponent(MSAL_CONFIG.redirectUri)}` +
-        `&scope=openid profile email User.Read` +
-        `&response_mode=fragment` +
-        `&nonce=${Math.random().toString(36).substring(7)}`,
-        'Microsoft SSO',
-        'width=500,height=600,scrollbars=yes'
-      );
-
-      // Listen for the popup to complete
-      const checkPopup = setInterval(() => {
-        try {
-          if (popup?.closed) {
-            clearInterval(checkPopup);
-            checkExistingSession();
-          }
-          
-          // Check if we got a response
-          if (popup?.location?.hash) {
-            const hash = popup.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const idToken = params.get('id_token');
-            
-            if (idToken) {
-              // Parse the JWT token
-              const payload = JSON.parse(atob(idToken.split('.')[1]));
-              
-              const newUser: PortalUser = {
-                id: payload.oid || payload.sub,
-                email: payload.email || payload.preferred_username,
-                name: payload.name,
-                firstName: payload.given_name || payload.name?.split(' ')[0],
-                lastName: payload.family_name || payload.name?.split(' ').slice(1).join(' '),
-                jobTitle: payload.jobTitle,
-                department: payload.department,
-              };
-              
-              setUser(newUser);
-              localStorage.setItem('portal_user', JSON.stringify(newUser));
-              localStorage.setItem('portal_session_time', Date.now().toString());
-              
-              popup.close();
-              clearInterval(checkPopup);
+      try {
+        // Check localStorage for existing portal session
+        const savedUser = localStorage.getItem('portal_user');
+        if (savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          // Validate session isn't expired (24 hours)
+          const sessionTime = localStorage.getItem('portal_session_time');
+          if (sessionTime) {
+            const elapsed = Date.now() - parseInt(sessionTime);
+            if (elapsed < 24 * 60 * 60 * 1000) {
+              setUser(parsedUser);
+            } else {
+              // Session expired
+              localStorage.removeItem('portal_user');
+              localStorage.removeItem('portal_session_time');
+              localStorage.removeItem('portal_id_token');
             }
           }
-        } catch (e) {
-          // Cross-origin errors are expected until redirect completes
         }
-      }, 500);
+      } catch (err) {
+        console.error('Session check failed:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
+    checkSession();
+  }, [handleOAuthCallback]);
+
+  // Login with Microsoft (redirect flow - more reliable than popup)
+  const login = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (!isAzureConfigured()) {
+        // Azure AD not configured - show helpful error
+        setError(
+          'Microsoft login is not configured. Please use Demo Login or contact your administrator.'
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // Generate state and nonce for security
+      const state = Math.random().toString(36).substring(7);
+      const nonce = Math.random().toString(36).substring(7);
+      
+      // Store state for validation on return
+      sessionStorage.setItem('oauth_state', state);
+      sessionStorage.setItem('oauth_nonce', nonce);
+
+      // Build authorization URL
+      const authUrl = new URL(`${MSAL_CONFIG.authority}/oauth2/v2.0/authorize`);
+      authUrl.searchParams.set('client_id', MSAL_CONFIG.clientId);
+      authUrl.searchParams.set('response_type', 'id_token');
+      authUrl.searchParams.set('redirect_uri', MSAL_CONFIG.redirectUri);
+      authUrl.searchParams.set('scope', 'openid profile email');
+      authUrl.searchParams.set('response_mode', 'fragment');
+      authUrl.searchParams.set('state', state);
+      authUrl.searchParams.set('nonce', nonce);
+      authUrl.searchParams.set('prompt', 'select_account');
+
+      // Redirect to Microsoft login
+      window.location.href = authUrl.toString();
     } catch (err) {
       console.error('Login failed:', err);
-      setError('Failed to sign in. Please try again.');
-    } finally {
+      setError('Failed to initiate sign in. Please try again.');
       setIsLoading(false);
     }
   };
 
+  // Demo login for testing/development
+  const loginWithDemo = () => {
+    const demoUser: PortalUser = {
+      id: 'demo-user-001',
+      email: 'demo.employee@plantexpand.com',
+      name: 'Demo Employee',
+      firstName: 'Demo',
+      lastName: 'Employee',
+      jobTitle: 'Field Engineer',
+      department: 'Operations',
+      isDemoUser: true,
+    };
+
+    setUser(demoUser);
+    localStorage.setItem('portal_user', JSON.stringify(demoUser));
+    localStorage.setItem('portal_session_time', Date.now().toString());
+    setError(null);
+  };
+
+  // Logout
   const logout = () => {
+    const wasAzureUser = user && !user.isDemoUser && isAzureConfigured();
+    
     setUser(null);
     localStorage.removeItem('portal_user');
     localStorage.removeItem('portal_session_time');
-    
-    // In production, also sign out from Azure AD
-    if (MSAL_CONFIG.clientId !== 'your-client-id') {
-      window.location.href = `${MSAL_CONFIG.authority}/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/portal')}`;
+    localStorage.removeItem('portal_id_token');
+    sessionStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('oauth_nonce');
+
+    // If was Azure AD user, redirect to Microsoft logout
+    if (wasAzureUser) {
+      const logoutUrl = new URL(`${MSAL_CONFIG.authority}/oauth2/v2.0/logout`);
+      logoutUrl.searchParams.set('post_logout_redirect_uri', window.location.origin + '/portal/login');
+      window.location.href = logoutUrl.toString();
     }
   };
 
@@ -186,8 +250,10 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
         isAuthenticated: !!user,
         isLoading,
         login,
+        loginWithDemo,
         logout,
         error,
+        isAzureADAvailable: isAzureConfigured(),
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Shield, Loader2, AlertCircle, CheckCircle, User } from 'lucide-react';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -8,7 +8,14 @@ import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 export default function PortalLogin() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading, login, error } = usePortalAuth();
+  const { 
+    isAuthenticated, 
+    isLoading, 
+    login, 
+    loginWithDemo, 
+    error, 
+    isAzureADAvailable 
+  } = usePortalAuth();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -17,8 +24,12 @@ export default function PortalLogin() {
     }
   }, [isAuthenticated, isLoading, navigate]);
 
-  const handleLogin = async () => {
+  const handleMicrosoftLogin = async () => {
     await login();
+  };
+
+  const handleDemoLogin = () => {
+    loginWithDemo();
   };
 
   if (isLoading) {
@@ -62,15 +73,15 @@ export default function PortalLogin() {
             <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm text-destructive font-medium">Sign in failed</p>
+                <p className="text-sm text-destructive font-medium">Sign in issue</p>
                 <p className="text-xs text-destructive/70 mt-1">{error}</p>
               </div>
             </div>
           )}
 
-          {/* SSO Button */}
+          {/* Microsoft SSO Button */}
           <Button
-            onClick={handleLogin}
+            onClick={handleMicrosoftLogin}
             disabled={isLoading}
             variant="outline"
             size="xl"
@@ -92,11 +103,35 @@ export default function PortalLogin() {
             )}
           </Button>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-muted-foreground">
-              Use your <span className="text-primary font-medium">@plantexpand.com</span> email
-            </p>
+          {isAzureADAvailable && (
+            <div className="mt-4 text-center">
+              <p className="text-xs text-muted-foreground">
+                Use your <span className="text-primary font-medium">@plantexpand.com</span> email
+              </p>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="my-6 flex items-center gap-4">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
+
+          {/* Demo Login Button */}
+          <Button
+            onClick={handleDemoLogin}
+            variant="secondary"
+            size="lg"
+            className="w-full"
+          >
+            <User className="w-4 h-4 mr-2" />
+            Continue as Demo User
+          </Button>
+
+          <p className="text-xs text-muted-foreground text-center mt-3">
+            Demo mode allows you to explore all features
+          </p>
 
           {/* Divider */}
           <div className="my-6 flex items-center gap-4">
