@@ -1,7 +1,7 @@
 """Tier 2: AI Copilot and Digital Signatures
 
 Revision ID: 20260120_tier2
-Revises: 20260120_tier1
+Revises: tier1_enterprise_v1
 Create Date: 2026-01-20
 """
 
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision = "20260120_tier2"
-down_revision = "20260120_tier1"
+down_revision = "tier1_enterprise_v1"
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """Add Planet Mark Carbon Management tables
 
 Revision ID: pm_carbon_001
-Revises: uvdb_achilles_001
+Revises: add_uvdb_achilles
 Create Date: 2026-01-20 16:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'pm_carbon_001'
-down_revision: Union[str, None] = 'uvdb_achilles_001'
+down_revision: Union[str, None] = 'add_uvdb_achilles'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

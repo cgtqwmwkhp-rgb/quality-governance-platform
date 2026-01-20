@@ -1,7 +1,7 @@
 """Add ISO 27001 ISMS tables
 
 Revision ID: add_iso27001_isms
-Revises: add_document_control_system
+Revises: 20260119200000
 Create Date: 2026-01-20 10:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_iso27001_isms'
-down_revision = 'add_document_control_system'
+down_revision = '20260119200000'
 branch_labels = None
 depends_on = None
 
