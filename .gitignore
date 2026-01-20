@@ -88,3 +88,9 @@ alembic/versions/*.pyc
 tmp/
 temp/
 *.tmp
+
+# Node modules
+node_modules/
+
+# Frontend build
+frontend/dist/

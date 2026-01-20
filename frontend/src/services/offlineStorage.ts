@@ -118,13 +118,14 @@ class OfflineStorage {
         }
 
         // Entity stores
-        const entities = ['incidents', 'audits', 'risks', 'documents'] as const;
-        for (const entity of entities) {
-          if (!db.objectStoreNames.contains(entity)) {
-            const store = db.createObjectStore(entity, { keyPath: 'id' });
+        const entityNames = ['incidents', 'audits', 'risks', 'documents'] as const;
+        for (const entityName of entityNames) {
+          if (!db.objectStoreNames.contains(entityName)) {
+            const store = db.createObjectStore(entityName, { keyPath: 'id' });
             store.createIndex('by-updated', 'updated_at');
-            if (entity !== 'documents' && entity !== 'risks') {
-              store.createIndex('by-status', 'status');
+            // Only incidents and audits have status index
+            if (entityName === 'incidents' || entityName === 'audits') {
+              (store as any).createIndex('by-status', 'status');
             }
           }
         }
@@ -231,15 +232,17 @@ class OfflineStorage {
 
   async saveEntity(entityType: keyof OfflineDBSchema, entity: any): Promise<void> {
     await this.init();
-    if (['incidents', 'audits', 'risks', 'documents'].includes(entityType)) {
-      await this.db!.put(entityType as any, entity);
+    const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
+    if (entityTypes.includes(entityType as typeof entityTypes[number])) {
+      await this.db!.put(entityType as 'incidents', entity);
     }
   }
 
   async saveEntities(entityType: keyof OfflineDBSchema, entities: any[]): Promise<void> {
     await this.init();
-    if (['incidents', 'audits', 'risks', 'documents'].includes(entityType)) {
-      const tx = this.db!.transaction(entityType as any, 'readwrite');
+    const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
+    if (entityTypes.includes(entityType as typeof entityTypes[number])) {
+      const tx = this.db!.transaction(entityType as 'incidents', 'readwrite');
       await Promise.all([
         ...entities.map(e => tx.store.put(e)),
         tx.done,
@@ -249,24 +252,27 @@ class OfflineStorage {
 
   async getEntity<T = any>(entityType: keyof OfflineDBSchema, id: string): Promise<T | null> {
     await this.init();
-    if (['incidents', 'audits', 'risks', 'documents'].includes(entityType)) {
-      return this.db!.get(entityType as any, id) as Promise<T | null>;
+    const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
+    if (entityTypes.includes(entityType as typeof entityTypes[number])) {
+      return this.db!.get(entityType as 'incidents', id) as Promise<T | null>;
     }
     return null;
   }
 
   async getAllEntities<T = any>(entityType: keyof OfflineDBSchema): Promise<T[]> {
     await this.init();
-    if (['incidents', 'audits', 'risks', 'documents'].includes(entityType)) {
-      return this.db!.getAll(entityType as any) as Promise<T[]>;
+    const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
+    if (entityTypes.includes(entityType as typeof entityTypes[number])) {
+      return this.db!.getAll(entityType as 'incidents') as Promise<T[]>;
     }
     return [];
   }
 
   async deleteEntity(entityType: keyof OfflineDBSchema, id: string): Promise<void> {
     await this.init();
-    if (['incidents', 'audits', 'risks', 'documents'].includes(entityType)) {
-      await this.db!.delete(entityType as any, id);
+    const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
+    if (entityTypes.includes(entityType as typeof entityTypes[number])) {
+      await this.db!.delete(entityType as 'incidents', id);
     }
   }
 

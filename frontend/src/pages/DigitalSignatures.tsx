@@ -71,7 +71,7 @@ interface SignatureTemplate {
 
 const DigitalSignatures: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'templates' | 'audit'>('requests');
-  const [_showCreateModal, _setShowCreateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSigningModal, setShowSigningModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<SignatureRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
