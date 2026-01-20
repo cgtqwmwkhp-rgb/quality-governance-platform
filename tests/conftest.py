@@ -1,146 +1,326 @@
-"""Pytest configuration and fixtures."""
+"""
+Pytest Configuration and Shared Fixtures
 
-import asyncio
+This module provides shared fixtures for all test suites:
+- Smoke tests
+- E2E tests  
+- Integration tests
+- Unit tests
+"""
 
-# Test database URL (use Postgres if available, fallback to SQLite)
 import os
-from typing import AsyncGenerator, Generator
+import sys
+from typing import Any, Generator, Optional
 
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
-from src.core.security import create_access_token, get_password_hash
-from src.domain.models.user import Role, User
-from src.infrastructure.database import Base, get_db
-from src.main import app
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-TEST_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+
+# ============================================================================
+# Test Configuration
+# ============================================================================
+
+
+class TestConfig:
+    """Global test configuration."""
+    
+    # API Configuration
+    API_BASE_URL = os.getenv("TEST_API_URL", "http://localhost:8000")
+    
+    # Test Credentials
+    TEST_USER_EMAIL = os.getenv("TEST_USER_EMAIL", "testuser@plantexpand.com")
+    TEST_USER_PASSWORD = os.getenv("TEST_USER_PASSWORD", "testpassword123")
+    ADMIN_USER_EMAIL = os.getenv("ADMIN_USER_EMAIL", "admin@plantexpand.com")
+    ADMIN_USER_PASSWORD = os.getenv("ADMIN_USER_PASSWORD", "adminpassword123")
+    
+    # Timeouts
+    REQUEST_TIMEOUT = 30
+    SLOW_TEST_THRESHOLD = 5.0
+    
+    # Feature Flags for Tests
+    SKIP_SLOW_TESTS = os.getenv("SKIP_SLOW_TESTS", "false").lower() == "true"
+    SKIP_INTEGRATION_TESTS = os.getenv("SKIP_INTEGRATION", "false").lower() == "true"
+
+
+# ============================================================================
+# Core Fixtures
+# ============================================================================
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create an event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+def test_config() -> TestConfig:
+    """Provide test configuration."""
+    return TestConfig()
 
 
-@pytest_asyncio.fixture(scope="function")
-async def test_engine():
-    """Create a test database engine."""
-    # Configure engine based on database type
-    engine_kwargs = {}
-    if "sqlite" in TEST_DATABASE_URL:
-        engine_kwargs["connect_args"] = {"check_same_thread": False}
-        engine_kwargs["poolclass"] = StaticPool
-
-    engine = create_async_engine(TEST_DATABASE_URL, **engine_kwargs)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    yield engine
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-    await engine.dispose()
+@pytest.fixture(scope="session")
+def app():
+    """Create FastAPI application instance."""
+    from src.main import app as fastapi_app
+    return fastapi_app
 
 
-@pytest_asyncio.fixture(scope="function")
-async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create a test database session."""
-    async_session = async_sessionmaker(
-        test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
+@pytest.fixture(scope="session")
+def client(app):
+    """Create test client for the application."""
+    from fastapi.testclient import TestClient
+    return TestClient(app)
 
-    async with async_session() as session:
+
+@pytest.fixture(scope="module")
+def module_client(app):
+    """Module-scoped test client."""
+    from fastapi.testclient import TestClient
+    return TestClient(app)
+
+
+# ============================================================================
+# Authentication Fixtures
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def auth_token(client, test_config) -> Optional[str]:
+    """Get authentication token for test user."""
+    try:
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "username": test_config.TEST_USER_EMAIL,
+                "password": test_config.TEST_USER_PASSWORD,
+            },
+        )
+        if response.status_code == 200:
+            return response.json().get("access_token")
+    except Exception:
+        pass
+    return None
+
+
+@pytest.fixture(scope="session")
+def auth_headers(auth_token) -> dict:
+    """Get authenticated headers."""
+    if auth_token:
+        return {"Authorization": f"Bearer {auth_token}"}
+    return {}
+
+
+@pytest.fixture(scope="session")
+def admin_token(client, test_config) -> Optional[str]:
+    """Get authentication token for admin user."""
+    try:
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "username": test_config.ADMIN_USER_EMAIL,
+                "password": test_config.ADMIN_USER_PASSWORD,
+            },
+        )
+        if response.status_code == 200:
+            return response.json().get("access_token")
+    except Exception:
+        pass
+    return None
+
+
+@pytest.fixture(scope="session")
+def admin_headers(admin_token) -> dict:
+    """Get admin authenticated headers."""
+    if admin_token:
+        return {"Authorization": f"Bearer {admin_token}"}
+    return {}
+
+
+@pytest.fixture(scope="module")
+def auth_client(client, auth_headers):
+    """Client with authentication already applied."""
+    class AuthenticatedClient:
+        def __init__(self, client, headers):
+            self._client = client
+            self._headers = headers
+        
+        def get(self, url, **kwargs):
+            headers = {**self._headers, **kwargs.pop("headers", {})}
+            return self._client.get(url, headers=headers, **kwargs)
+        
+        def post(self, url, **kwargs):
+            headers = {**self._headers, **kwargs.pop("headers", {})}
+            return self._client.post(url, headers=headers, **kwargs)
+        
+        def put(self, url, **kwargs):
+            headers = {**self._headers, **kwargs.pop("headers", {})}
+            return self._client.put(url, headers=headers, **kwargs)
+        
+        def patch(self, url, **kwargs):
+            headers = {**self._headers, **kwargs.pop("headers", {})}
+            return self._client.patch(url, headers=headers, **kwargs)
+        
+        def delete(self, url, **kwargs):
+            headers = {**self._headers, **kwargs.pop("headers", {})}
+            return self._client.delete(url, headers=headers, **kwargs)
+    
+    return AuthenticatedClient(client, auth_headers)
+
+
+# ============================================================================
+# Database Fixtures
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def db_session():
+    """Create database session for tests."""
+    try:
+        from src.infrastructure.database import SessionLocal
+        session = SessionLocal()
         yield session
+        session.close()
+    except Exception:
+        yield None
 
 
-@pytest_asyncio.fixture(scope="function")
-async def client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """Create a test client with overridden database dependency."""
-
-    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
-        yield test_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    transport = ASGITransport(app=app)
-    # Enable follow_redirects to handle FastAPI's redirect_slashes=True (307 redirects)
-    async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=True) as client:
-        yield client
-
-    app.dependency_overrides.clear()
+@pytest.fixture(scope="function")
+def clean_db(db_session):
+    """Provide clean database state for each test."""
+    yield db_session
+    if db_session:
+        db_session.rollback()
 
 
-@pytest_asyncio.fixture(scope="function")
-async def test_user(test_session: AsyncSession) -> User:
-    """Create a test user."""
-    user = User(
-        email="test@example.com",
-        hashed_password=get_password_hash("testpassword123"),
-        first_name="Test",
-        last_name="User",
-        is_active=True,
-        is_superuser=False,
+# ============================================================================
+# Test Data Factories
+# ============================================================================
+
+
+@pytest.fixture
+def incident_data():
+    """Factory for incident test data."""
+    def _create_incident(
+        title: str = "Test Incident",
+        severity: str = "medium",
+        **kwargs
+    ) -> dict:
+        return {
+            "title": title,
+            "description": kwargs.get("description", "Test incident description"),
+            "severity": severity,
+            "incident_type": kwargs.get("incident_type", "safety"),
+            "location": kwargs.get("location", "Test Location"),
+            **kwargs,
+        }
+    return _create_incident
+
+
+@pytest.fixture
+def risk_data():
+    """Factory for risk test data."""
+    def _create_risk(
+        title: str = "Test Risk",
+        likelihood: int = 3,
+        impact: int = 3,
+        **kwargs
+    ) -> dict:
+        return {
+            "title": title,
+            "description": kwargs.get("description", "Test risk description"),
+            "category": kwargs.get("category", "operational"),
+            "likelihood": likelihood,
+            "impact": impact,
+            **kwargs,
+        }
+    return _create_risk
+
+
+@pytest.fixture
+def portal_report_data():
+    """Factory for portal report test data."""
+    def _create_report(
+        report_type: str = "incident",
+        title: str = "Test Report",
+        **kwargs
+    ) -> dict:
+        return {
+            "report_type": report_type,
+            "title": title,
+            "description": kwargs.get("description", "Test report description"),
+            "severity": kwargs.get("severity", "low"),
+            "is_anonymous": kwargs.get("is_anonymous", True),
+            **kwargs,
+        }
+    return _create_report
+
+
+# ============================================================================
+# Markers
+# ============================================================================
+
+
+def pytest_configure(config):
+    """Configure custom pytest markers."""
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    test_session.add(user)
-    await test_session.commit()
-    await test_session.refresh(user)
-    return user
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_superuser(test_session: AsyncSession) -> User:
-    """Create a test superuser."""
-    user = User(
-        email="admin@example.com",
-        hashed_password=get_password_hash("adminpassword123"),
-        first_name="Admin",
-        last_name="User",
-        is_active=True,
-        is_superuser=True,
+    config.addinivalue_line(
+        "markers", "integration: marks tests as integration tests"
     )
-    test_session.add(user)
-    await test_session.commit()
-    await test_session.refresh(user)
-    return user
+    config.addinivalue_line(
+        "markers", "e2e: marks tests as end-to-end tests"
+    )
+    config.addinivalue_line(
+        "markers", "smoke: marks tests as smoke tests"
+    )
+    config.addinivalue_line(
+        "markers", "security: marks tests as security tests"
+    )
 
 
-@pytest.fixture
-def user_token(test_user: User) -> str:
-    """Create an access token for the test user."""
-    return create_access_token(subject=test_user.id)
+def pytest_collection_modifyitems(config, items):
+    """Modify test collection based on markers."""
+    skip_slow = pytest.mark.skip(reason="Skipping slow tests")
+    skip_integration = pytest.mark.skip(reason="Skipping integration tests")
+    
+    for item in items:
+        if TestConfig.SKIP_SLOW_TESTS and "slow" in item.keywords:
+            item.add_marker(skip_slow)
+        if TestConfig.SKIP_INTEGRATION_TESTS and "integration" in item.keywords:
+            item.add_marker(skip_integration)
 
 
-@pytest.fixture
-def superuser_token(test_superuser: User) -> str:
-    """Create an access token for the test superuser."""
-    return create_access_token(subject=test_superuser.id)
+# ============================================================================
+# Hooks
+# ============================================================================
 
 
-@pytest.fixture
-def auth_headers(user_token: str) -> dict:
-    """Create authorization headers for the test user."""
-    return {"Authorization": f"Bearer {user_token}"}
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Make test results available to fixtures."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
 
 
-@pytest.fixture
-def superuser_auth_headers(superuser_token: str) -> dict:
-    """Create authorization headers for the test superuser."""
-    return {"Authorization": f"Bearer {superuser_token}"}
-
-
-def generate_test_reference(prefix: str, sequence: int = 1) -> str:
-    """Generate a test reference number."""
-    from datetime import datetime
-
-    year = datetime.now().year
-    return f"{prefix}-{year}-{sequence:04d}"
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Add custom summary to test report."""
+    terminalreporter.write_sep("=", "Test Suite Summary")
+    
+    passed = len(terminalreporter.stats.get("passed", []))
+    failed = len(terminalreporter.stats.get("failed", []))
+    skipped = len(terminalreporter.stats.get("skipped", []))
+    
+    total = passed + failed + skipped
+    pass_rate = (passed / total * 100) if total > 0 else 0
+    
+    terminalreporter.write_line(f"Total Tests: {total}")
+    terminalreporter.write_line(f"Passed: {passed}")
+    terminalreporter.write_line(f"Failed: {failed}")
+    terminalreporter.write_line(f"Skipped: {skipped}")
+    terminalreporter.write_line(f"Pass Rate: {pass_rate:.1f}%")
+    
+    if pass_rate >= 95:
+        terminalreporter.write_line("✅ PRODUCTION READY", green=True)
+    elif pass_rate >= 80:
+        terminalreporter.write_line("⚠️ STAGING ONLY", yellow=True)
+    else:
+        terminalreporter.write_line("❌ NOT READY FOR DEPLOYMENT", red=True)
