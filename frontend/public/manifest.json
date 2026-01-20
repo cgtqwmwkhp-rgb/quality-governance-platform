@@ -1,12 +1,13 @@
 {
   "name": "Quality Governance Platform",
   "short_name": "QGP",
-  "description": "Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management",
-  "start_url": "/",
+  "description": "Enterprise Quality, Health & Safety, and Environmental Management System",
+  "start_url": "/portal",
   "display": "standalone",
-  "background_color": "#0F172A",
-  "theme_color": "#7C3AED",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
   "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
@@ -57,32 +58,46 @@
       "purpose": "maskable any"
     }
   ],
+  "categories": ["business", "productivity", "utilities"],
   "shortcuts": [
     {
-      "name": "New Incident",
-      "short_name": "Incident",
-      "description": "Report a new incident",
-      "url": "/incidents?action=new",
-      "icons": [{ "src": "/icons/shortcut-incident.png", "sizes": "96x96" }]
+      "name": "Submit Report",
+      "short_name": "Report",
+      "description": "Submit an incident, near miss, or complaint",
+      "url": "/portal/report",
+      "icons": [{ "src": "/icons/shortcut-report.png", "sizes": "96x96" }]
     },
     {
-      "name": "Employee Portal",
-      "short_name": "Portal",
-      "description": "Access employee self-service portal",
-      "url": "/portal",
-      "icons": [{ "src": "/icons/shortcut-portal.png", "sizes": "96x96" }]
+      "name": "Emergency SOS",
+      "short_name": "SOS",
+      "description": "Emergency assistance",
+      "url": "/portal/sos",
+      "icons": [{ "src": "/icons/shortcut-sos.png", "sizes": "96x96" }]
     },
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "View main dashboard",
-      "url": "/dashboard",
-      "icons": [{ "src": "/icons/shortcut-dashboard.png", "sizes": "96x96" }]
+      "name": "Track Report",
+      "short_name": "Track",
+      "description": "Track your submitted reports",
+      "url": "/portal/track",
+      "icons": [{ "src": "/icons/shortcut-track.png", "sizes": "96x96" }]
     }
   ],
-  "categories": ["business", "productivity"],
-  "lang": "en-GB",
-  "dir": "ltr",
-  "scope": "/",
+  "screenshots": [
+    {
+      "src": "/screenshots/portal-home.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Employee Portal Home"
+    },
+    {
+      "src": "/screenshots/report-form.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Report Submission Form"
+    }
+  ],
+  "related_applications": [],
   "prefer_related_applications": false
 }

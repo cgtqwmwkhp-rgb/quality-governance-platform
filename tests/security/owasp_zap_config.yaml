@@ -1,0 +1,142 @@
+# OWASP ZAP Automation Framework Configuration
+# Run with: zap.sh -cmd -autorun tests/security/owasp_zap_config.yaml
+
+env:
+  contexts:
+    - name: "QGP-Context"
+      urls:
+        - "http://localhost:8000"
+        - "http://localhost:5173"
+      includePaths:
+        - "http://localhost:8000/api/.*"
+        - "http://localhost:5173/.*"
+      excludePaths:
+        - "http://localhost:8000/health"
+        - "http://localhost:8000/docs"
+        - "http://localhost:8000/openapi.json"
+      authentication:
+        method: "json"
+        parameters:
+          loginPageUrl: "http://localhost:8000/api/auth/login"
+          loginRequestUrl: "http://localhost:8000/api/auth/login"
+          loginRequestBody: '{"username":"{%username%}","password":"{%password%}"}'
+          usernameParameter: "username"
+          passwordParameter: "password"
+        verification:
+          method: "response"
+          pollFrequency: 60
+          pollUnits: "requests"
+      sessionManagement:
+        method: "headers"
+        parameters:
+          headerConfigs:
+            - header: "Authorization"
+              value: "Bearer {%token%}"
+      users:
+        - name: "test-user"
+          credentials:
+            username: "testuser@plantexpand.com"
+            password: "testpassword123"
+        - name: "admin-user"
+          credentials:
+            username: "admin@plantexpand.com"
+            password: "adminpassword123"
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # Spider the application
+  - type: spider
+    parameters:
+      context: "QGP-Context"
+      user: "test-user"
+      maxDuration: 10
+      maxDepth: 10
+      maxChildren: 20
+
+  # AJAX Spider for SPA content
+  - type: spiderAjax
+    parameters:
+      context: "QGP-Context"
+      user: "test-user"
+      maxDuration: 10
+      maxCrawlDepth: 10
+      numberOfBrowsers: 4
+
+  # Passive scan (runs automatically)
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+
+  # Active scan with OWASP Top 10 focus
+  - type: activeScan
+    parameters:
+      context: "QGP-Context"
+      user: "test-user"
+      maxRuleDurationInMins: 5
+      maxScanDurationInMins: 60
+      policy: "API-Scan"
+    policyDefinition:
+      defaultStrength: "medium"
+      defaultThreshold: "medium"
+      rules:
+        # SQL Injection
+        - id: 40018
+          strength: "high"
+          threshold: "low"
+        # Cross Site Scripting (XSS)
+        - id: 40012
+          strength: "high"
+          threshold: "low"
+        - id: 40014
+          strength: "high"
+          threshold: "low"
+        # Path Traversal
+        - id: 6
+          strength: "high"
+          threshold: "low"
+        # Remote File Inclusion
+        - id: 7
+          strength: "high"
+          threshold: "low"
+        # Server Side Include
+        - id: 40009
+          strength: "medium"
+          threshold: "medium"
+        # LDAP Injection
+        - id: 40015
+          strength: "medium"
+          threshold: "medium"
+        # Command Injection
+        - id: 90020
+          strength: "high"
+          threshold: "low"
+        # CSRF
+        - id: 20012
+          strength: "medium"
+          threshold: "medium"
+        # Insecure HTTP Methods
+        - id: 90028
+          strength: "low"
+          threshold: "medium"
+
+  # Report generation
+  - type: report
+    parameters:
+      template: "traditional-html"
+      reportDir: "tests/security/reports"
+      reportFile: "zap-security-report"
+    risks:
+      - high
+      - medium
+      - low
+      - informational
+
+  - type: report
+    parameters:
+      template: "sarif-json"
+      reportDir: "tests/security/reports"
+      reportFile: "zap-security-report"
