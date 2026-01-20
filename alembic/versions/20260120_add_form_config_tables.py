@@ -1,7 +1,7 @@
 """Add form configuration tables for admin form builder.
 
 Revision ID: 20260120_form_config
-Revises: 20260120_tier2_ai_copilot_signatures
+Revises: 20260120_tier2
 Create Date: 2026-01-20
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260120_form_config'
-down_revision = '20260120_tier2_ai_copilot_signatures'
+down_revision = '20260120_tier2'
 branch_labels = None
 depends_on = None
 
