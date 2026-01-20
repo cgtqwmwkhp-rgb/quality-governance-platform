@@ -5497,6 +5497,1736 @@
         "title": "QuestionOptionBase",
         "type": "object"
       },
+      "RTAActionCreate": {
+        "description": "Schema for creating an RTA Action.",
+        "properties": {
+          "action_type": {
+            "default": "corrective",
+            "maxLength": 50,
+            "title": "Action Type",
+            "type": "string"
+          },
+          "description": {
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "priority": {
+            "default": "medium",
+            "maxLength": 20,
+            "title": "Priority",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description"
+        ],
+        "title": "RTAActionCreate",
+        "type": "object"
+      },
+      "RTAActionListResponse": {
+        "description": "Schema for paginated RTA Action list response.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RTAActionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "RTAActionListResponse",
+        "type": "object"
+      },
+      "RTAActionResponse": {
+        "description": "Schema for RTA Action response.",
+        "properties": {
+          "action_type": {
+            "default": "corrective",
+            "maxLength": 50,
+            "title": "Action Type",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completion_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Notes"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "description": {
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "priority": {
+            "default": "medium",
+            "maxLength": 20,
+            "title": "Priority",
+            "type": "string"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "rta_id": {
+            "title": "Rta Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Id"
+          },
+          "verification_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Notes"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "verified_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By Id"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "id",
+          "rta_id",
+          "reference_number",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RTAActionResponse",
+        "type": "object"
+      },
+      "RTAActionUpdate": {
+        "description": "Schema for updating an RTA Action.",
+        "properties": {
+          "action_type": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Type"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completion_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Notes"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "verification_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Notes"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "verified_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By Id"
+          }
+        },
+        "title": "RTAActionUpdate",
+        "type": "object"
+      },
+      "RTACreate": {
+        "description": "Schema for creating an RTA.",
+        "properties": {
+          "closure_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closure Notes"
+          },
+          "collision_date": {
+            "format": "date-time",
+            "title": "Collision Date",
+            "type": "string"
+          },
+          "collision_time": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collision Time"
+          },
+          "company_vehicle_damage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Damage"
+          },
+          "company_vehicle_make_model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Make Model"
+          },
+          "company_vehicle_registration": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Registration"
+          },
+          "description": {
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "driver_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Id"
+          },
+          "driver_injured": {
+            "default": false,
+            "title": "Driver Injured",
+            "type": "boolean"
+          },
+          "driver_injury_details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Injury Details"
+          },
+          "driver_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Name"
+          },
+          "driver_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Statement"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "fault_determination": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Determination"
+          },
+          "insurance_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Notes"
+          },
+          "insurance_notified": {
+            "default": false,
+            "title": "Insurance Notified",
+            "type": "boolean"
+          },
+          "insurance_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Reference"
+          },
+          "investigation_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigation Notes"
+          },
+          "investigator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigator Id"
+          },
+          "lighting_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lighting Conditions"
+          },
+          "linked_risk_ids": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Risk Ids"
+          },
+          "location": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Location",
+            "type": "string"
+          },
+          "police_attended": {
+            "default": false,
+            "title": "Police Attended",
+            "type": "boolean"
+          },
+          "police_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Reference"
+          },
+          "police_station": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Station"
+          },
+          "postcode": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postcode"
+          },
+          "reported_date": {
+            "format": "date-time",
+            "title": "Reported Date",
+            "type": "string"
+          },
+          "reporter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Id"
+          },
+          "road_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Road Conditions"
+          },
+          "road_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Road Name"
+          },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Cause"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/RTASeverity",
+            "default": "damage_only"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RTAStatus",
+            "default": "reported"
+          },
+          "third_parties": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Parties"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "weather_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Conditions"
+          },
+          "witnesses": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Witnesses"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "collision_date",
+          "reported_date",
+          "location"
+        ],
+        "title": "RTACreate",
+        "type": "object"
+      },
+      "RTAListResponse": {
+        "description": "Schema for paginated RTA list response.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RTAResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "RTAListResponse",
+        "type": "object"
+      },
+      "RTAResponse": {
+        "description": "Schema for RTA response.",
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By Id"
+          },
+          "closure_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closure Notes"
+          },
+          "collision_date": {
+            "format": "date-time",
+            "title": "Collision Date",
+            "type": "string"
+          },
+          "collision_time": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collision Time"
+          },
+          "company_vehicle_damage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Damage"
+          },
+          "company_vehicle_make_model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Make Model"
+          },
+          "company_vehicle_registration": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Registration"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "description": {
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "driver_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Id"
+          },
+          "driver_injured": {
+            "default": false,
+            "title": "Driver Injured",
+            "type": "boolean"
+          },
+          "driver_injury_details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Injury Details"
+          },
+          "driver_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Name"
+          },
+          "driver_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Statement"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "fault_determination": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Determination"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "insurance_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Notes"
+          },
+          "insurance_notified": {
+            "default": false,
+            "title": "Insurance Notified",
+            "type": "boolean"
+          },
+          "insurance_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Reference"
+          },
+          "investigation_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigation Notes"
+          },
+          "investigator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigator Id"
+          },
+          "lighting_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lighting Conditions"
+          },
+          "linked_risk_ids": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Risk Ids"
+          },
+          "location": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Location",
+            "type": "string"
+          },
+          "police_attended": {
+            "default": false,
+            "title": "Police Attended",
+            "type": "boolean"
+          },
+          "police_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Reference"
+          },
+          "police_station": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Station"
+          },
+          "postcode": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postcode"
+          },
+          "reference_number": {
+            "title": "Reference Number",
+            "type": "string"
+          },
+          "reported_date": {
+            "format": "date-time",
+            "title": "Reported Date",
+            "type": "string"
+          },
+          "reporter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Id"
+          },
+          "road_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Road Conditions"
+          },
+          "road_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Road Name"
+          },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Cause"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/RTASeverity",
+            "default": "damage_only"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RTAStatus",
+            "default": "reported"
+          },
+          "third_parties": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Parties"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Id"
+          },
+          "weather_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Conditions"
+          },
+          "witnesses": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Witnesses"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "collision_date",
+          "reported_date",
+          "location",
+          "id",
+          "reference_number",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RTAResponse",
+        "type": "object"
+      },
+      "RTASeverity": {
+        "description": "Severity of RTA.",
+        "enum": [
+          "fatal",
+          "serious_injury",
+          "minor_injury",
+          "damage_only",
+          "near_miss"
+        ],
+        "title": "RTASeverity",
+        "type": "string"
+      },
+      "RTAStatus": {
+        "description": "Status of RTA.",
+        "enum": [
+          "reported",
+          "under_investigation",
+          "pending_insurance",
+          "pending_actions",
+          "closed"
+        ],
+        "title": "RTAStatus",
+        "type": "string"
+      },
+      "RTAUpdate": {
+        "description": "Schema for updating an RTA.",
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By Id"
+          },
+          "closure_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closure Notes"
+          },
+          "collision_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collision Date"
+          },
+          "collision_time": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collision Time"
+          },
+          "company_vehicle_damage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Damage"
+          },
+          "company_vehicle_make_model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Make Model"
+          },
+          "company_vehicle_registration": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Vehicle Registration"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "driver_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Id"
+          },
+          "driver_injured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Injured"
+          },
+          "driver_injury_details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Injury Details"
+          },
+          "driver_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Name"
+          },
+          "driver_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Statement"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "fault_determination": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Determination"
+          },
+          "insurance_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Notes"
+          },
+          "insurance_notified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Notified"
+          },
+          "insurance_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Reference"
+          },
+          "investigation_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigation Notes"
+          },
+          "investigator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigator Id"
+          },
+          "lighting_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lighting Conditions"
+          },
+          "linked_risk_ids": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Risk Ids"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "police_attended": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Attended"
+          },
+          "police_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Reference"
+          },
+          "police_station": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Station"
+          },
+          "postcode": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postcode"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "reporter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Id"
+          },
+          "road_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Road Conditions"
+          },
+          "road_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Road Name"
+          },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Cause"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RTASeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RTAStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "third_parties": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Parties"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "weather_conditions": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Conditions"
+          },
+          "witnesses": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Witnesses"
+          }
+        },
+        "title": "RTAUpdate",
+        "type": "object"
+      },
       "RefreshTokenRequest": {
         "description": "Schema for refresh token request.",
         "properties": {
@@ -10205,6 +11935,84 @@
         ]
       }
     },
+    "/api/v1/complaints/{complaint_id}/investigations": {
+      "get": {
+        "description": "List investigations for a specific complaint (paginated).\n\nRequires authentication.\nReturns investigations assigned to this complaint with pagination.\nDeterministic ordering: created_at DESC, id ASC.",
+        "operationId": "list_complaint_investigations_api_v1_complaints__complaint_id__investigations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "complaint_id",
+            "required": true,
+            "schema": {
+              "title": "Complaint Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page (1-100)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page (1-100)",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Complaint Investigations Api V1 Complaints  Complaint Id  Investigations Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Complaint Investigations",
+        "tags": [
+          "Complaints",
+          "Complaints"
+        ]
+      }
+    },
     "/api/v1/incidents": {
       "get": {
         "description": "List all incidents with deterministic ordering.\n\nIncidents are ordered by:\n1. reported_date DESC (newest first)\n2. id ASC (stable secondary sort)\n\nRequires authentication.",
@@ -10461,7 +12269,7 @@
     },
     "/api/v1/incidents/{incident_id}/investigations": {
       "get": {
-        "description": "List investigations for a specific incident.\n\nRequires authentication.\nReturns investigations assigned to this incident.",
+        "description": "List investigations for a specific incident (paginated).\n\nRequires authentication.\nReturns investigations assigned to this incident with pagination.\nDeterministic ordering: created_at DESC, id ASC.",
         "operationId": "list_incident_investigations_api_v1_incidents__incident_id__investigations_get",
         "parameters": [
           {
@@ -10472,13 +12280,44 @@
               "title": "Incident Id",
               "type": "integer"
             }
+          },
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page (1-100)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page (1-100)",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Incident Investigations Api V1 Incidents  Incident Id  Investigations Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -11997,22 +13836,87 @@
         ]
       }
     },
-    "/api/v1/rta": {
+    "/api/v1/rtas/": {
       "get": {
-        "description": "List all road traffic collisions.",
-        "operationId": "list_rta_api_v1_rta_get",
+        "description": "List RTAs with deterministic ordering and pagination.",
+        "operationId": "list_rtas_api_v1_rtas__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Rta Api V1 Rta Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RTAListResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -12020,28 +13924,263 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Rta",
+        "summary": "List Rtas",
         "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      },
+      "post": {
+        "description": "Create a new Road Traffic Collision (RTA).",
+        "operationId": "create_rta_api_v1_rtas__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RTACreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RTAResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Rta",
+        "tags": [
+          "Road Traffic Collisions",
           "Road Traffic Collisions"
         ]
       }
     },
-    "/api/v1/rta/actions": {
+    "/api/v1/rtas/{rta_id}": {
+      "delete": {
+        "description": "Delete an RTA.",
+        "operationId": "delete_rta_api_v1_rtas__rta_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Rta",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      },
       "get": {
-        "description": "List all RTA actions.",
-        "operationId": "list_rta_actions_api_v1_rta_actions_get",
+        "description": "Get an RTA by ID.",
+        "operationId": "get_rta_api_v1_rtas__rta_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Rta Actions Api V1 Rta Actions Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RTAResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Rta",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      },
+      "patch": {
+        "description": "Partially update an RTA.",
+        "operationId": "update_rta_api_v1_rtas__rta_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RTAUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RTAResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Rta",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      }
+    },
+    "/api/v1/rtas/{rta_id}/actions": {
+      "get": {
+        "description": "List actions for an RTA with deterministic ordering and pagination.",
+        "operationId": "list_rta_actions_api_v1_rtas__rta_id__actions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RTAActionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -12051,6 +14190,259 @@
         ],
         "summary": "List Rta Actions",
         "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      },
+      "post": {
+        "description": "Create a new action for an RTA.",
+        "operationId": "create_rta_action_api_v1_rtas__rta_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RTAActionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RTAActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Rta Action",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      }
+    },
+    "/api/v1/rtas/{rta_id}/actions/{action_id}": {
+      "delete": {
+        "description": "Delete an RTA action.",
+        "operationId": "delete_rta_action_api_v1_rtas__rta_id__actions__action_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Rta Action",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      },
+      "patch": {
+        "description": "Update an RTA action.",
+        "operationId": "update_rta_action_api_v1_rtas__rta_id__actions__action_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RTAActionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RTAActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Rta Action",
+        "tags": [
+          "Road Traffic Collisions",
+          "Road Traffic Collisions"
+        ]
+      }
+    },
+    "/api/v1/rtas/{rta_id}/investigations": {
+      "get": {
+        "description": "List investigations for a specific RTA (paginated).\n\nRequires authentication.\nReturns investigations assigned to this RTA with pagination.\nDeterministic ordering: created_at DESC, id ASC.",
+        "operationId": "list_rta_investigations_api_v1_rtas__rta_id__investigations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rta_id",
+            "required": true,
+            "schema": {
+              "title": "Rta Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page (1-100)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page (1-100)",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Rta Investigations Api V1 Rtas  Rta Id  Investigations Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Rta Investigations",
+        "tags": [
+          "Road Traffic Collisions",
           "Road Traffic Collisions"
         ]
       }
