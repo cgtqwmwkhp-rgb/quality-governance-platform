@@ -35,6 +35,8 @@ import {
   Zap,
   BookOpen,
 } from 'lucide-react';
+import { cn } from '../helpers/utils';
+import { Button } from '../components/ui/Button';
 
 interface RegulatoryUpdate {
   id: number;
@@ -235,16 +237,16 @@ export default function ComplianceAutomation() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Compliance Automation</h1>
-          <p className="text-gray-400 mt-1">Monitor regulations, track certificates, and automate compliance</p>
+          <h1 className="text-2xl font-bold text-foreground">Compliance Automation</h1>
+          <p className="text-muted-foreground mt-1">Monitor regulations, track certificates, and automate compliance</p>
         </div>
-        <button
+        <Button
           onClick={loadData}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+          variant="outline"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Score Overview */}
@@ -296,23 +298,25 @@ export default function ComplianceAutomation() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-800/50 p-1 rounded-xl overflow-x-auto">
+      <div className="flex gap-1 bg-card/50 p-1 rounded-xl overflow-x-auto border border-border">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
               activeTab === tab.id
-                ? 'bg-emerald-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
-            }`}
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
+              <span className={cn(
+                "px-2 py-0.5 rounded-full text-xs",
                 activeTab === tab.id ? 'bg-white/20' : 'bg-red-500/20 text-red-400'
-              }`}>
+              )}>
                 {tab.count}
               </span>
             )}

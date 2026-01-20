@@ -19,6 +19,8 @@ import {
   MessageSquare,
   Eye,
 } from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
 
 interface Prediction {
   factor_type: string
@@ -120,34 +122,34 @@ export default function AIIntelligence() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <Brain className="w-8 h-8 text-purple-400" />
+          <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+            <Brain className="w-8 h-8 text-purple-500" />
             AI Intelligence Hub
           </h1>
-          <p className="text-gray-400">Predictive Analytics & Smart Recommendations</p>
+          <p className="text-muted-foreground">Predictive Analytics & Smart Recommendations</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button
+          <Button
             onClick={handleAnalyze}
             disabled={analyzing}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50"
+            className="bg-purple-600 hover:bg-purple-700"
           >
             {analyzing ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                 Analyzing...
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-4 h-4 mr-2" />
                 Run Analysis
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -187,7 +189,7 @@ export default function AIIntelligence() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-slate-700 pb-2 overflow-x-auto">
+      <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
           { id: 'predictions', label: 'Risk Predictions', icon: TrendingUp },
           { id: 'anomalies', label: 'Anomaly Detection', icon: AlertTriangle },
@@ -199,11 +201,12 @@ export default function AIIntelligence() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap",
                 activeTab === tab.id
                   ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:bg-slate-700 hover:text-white'
-              }`}
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
             >
               <Icon className="w-4 h-4" />
               {tab.label}

@@ -34,6 +34,8 @@ import {
   Eye,
   X,
 } from 'lucide-react';
+import { cn } from '../helpers/utils';
+import { Button } from '../components/ui/Button';
 
 interface KPIData {
   incidents: { total: number; open: number; closed: number; trend: number; avg_resolution_days: number };
@@ -340,16 +342,17 @@ export default function AdvancedAnalytics() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-800/50 p-1 rounded-xl">
+      <div className="flex gap-1 bg-card/50 p-1 rounded-xl border border-border">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
               activeTab === tab.id
-                ? 'bg-emerald-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
-            }`}
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}

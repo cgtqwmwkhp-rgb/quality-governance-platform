@@ -30,6 +30,8 @@ import {
   AlertOctagon,
   Award,
 } from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
 
 interface Standard {
   id: string
@@ -257,25 +259,25 @@ export default function IMSDashboard() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <GitMerge className="w-8 h-8 text-emerald-400" />
+          <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+            <GitMerge className="w-8 h-8 text-primary" />
             Integrated Management System
           </h1>
-          <p className="text-gray-400">Unified ISO 9001, 14001, 45001 & 27001 Dashboard</p>
+          <p className="text-muted-foreground">Unified ISO 9001, 14001, 45001 & 27001 Dashboard</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
-            <RefreshCw className="w-4 h-4" />
+          <Button variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
             Sync
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">
-            <FileText className="w-4 h-4" />
+          </Button>
+          <Button>
+            <FileText className="w-4 h-4 mr-2" />
             Generate Report
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -362,7 +364,7 @@ export default function IMSDashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-slate-700 pb-2">
+      <div className="flex gap-2 mb-6 border-b border-border pb-2">
         {[
           { id: 'overview', label: 'Overview', icon: BarChart3 },
           { id: 'mapping', label: 'Cross-Standard Mapping', icon: Link2 },
@@ -375,11 +377,12 @@ export default function IMSDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
                 activeTab === tab.id
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-gray-400 hover:bg-slate-700 hover:text-white'
-              }`}
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
             >
               <Icon className="w-4 h-4" />
               {tab.label}
