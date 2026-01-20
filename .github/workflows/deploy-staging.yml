@@ -107,29 +107,41 @@ jobs:
               --resource-group rg-qgp-staging \
               --query principalId -o tsv)
             
-            # Grant Key Vault access to the new identity
-            echo "   🔑 Granting Key Vault access..."
-            az keyvault set-policy \
-              --name kv-qgp-staging \
-              --object-id $IDENTITY_ID \
-              --secret-permissions get list \
-              --output none
-            
             # Wait for identity propagation
             sleep 30
           fi
           echo "   ✅ Managed identity: $IDENTITY_ID"
           
-          # Configure app settings with Key Vault references
+          # Always ensure Key Vault access is configured
+          echo "   🔑 Ensuring Key Vault access..."
+          az keyvault set-policy \
+            --name kv-qgp-staging \
+            --object-id $IDENTITY_ID \
+            --secret-permissions get list \
+            --output none 2>/dev/null || echo "   ⚠️ Key Vault policy already set or cannot be updated"
+          
+          # Fetch secrets from Key Vault
+          echo "   🔐 Fetching secrets from Key Vault..."
+          DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
+          SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
+          JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
+          
+          if [ -z "$DB_URL" ]; then
+            echo "   ❌ Failed to retrieve DATABASE_URL from Key Vault"
+            exit 1
+          fi
+          echo "   ✅ Secrets retrieved successfully"
+          
+          # Configure app settings with direct values
           echo "   📝 Setting application configuration..."
           az webapp config appsettings set \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
             --resource-group rg-qgp-staging \
             --settings \
               APP_ENV="staging" \
-              DATABASE_URL="@Microsoft.KeyVault(SecretUri=https://kv-qgp-staging.vault.azure.net/secrets/DATABASE-URL/)" \
-              SECRET_KEY="@Microsoft.KeyVault(SecretUri=https://kv-qgp-staging.vault.azure.net/secrets/SECRET-KEY/)" \
-              JWT_SECRET_KEY="@Microsoft.KeyVault(SecretUri=https://kv-qgp-staging.vault.azure.net/secrets/JWT-SECRET-KEY/)" \
+              DATABASE_URL="$DB_URL" \
+              SECRET_KEY="$SECRET_KEY_VAL" \
+              JWT_SECRET_KEY="$JWT_SECRET_VAL" \
               JWT_ALGORITHM="HS256" \
               JWT_ACCESS_TOKEN_EXPIRE_MINUTES="30" \
               JWT_REFRESH_TOKEN_EXPIRE_DAYS="7" \
