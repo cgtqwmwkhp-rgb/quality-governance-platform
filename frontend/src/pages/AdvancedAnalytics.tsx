@@ -328,16 +328,17 @@ export default function AdvancedAnalytics() {
               <option key={range.value} value={range.value}>{range.label}</option>
             ))}
           </select>
-          <button 
+          <Button 
             onClick={loadData}
-            className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+            variant="outline"
+            size="icon"
           >
             <RefreshCw className="w-5 h-5" />
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors">
-            <Download className="w-4 h-4" />
+          </Button>
+          <Button>
+            <Download className="w-4 h-4 mr-2" />
             Export
-          </button>
+          </Button>
         </div>
       </div>
 
