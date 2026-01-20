@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award } from 'lucide-react'
+import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2 } from 'lucide-react'
 import { standardsApi, Standard, Clause } from '../api/client'
+import { Input } from '../components/ui/Input'
+import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { cn } from '../lib/utils'
 
 interface ExpandedState {
   [key: number]: boolean
@@ -57,19 +61,6 @@ export default function Standards() {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  const getComplianceColor = (percentage: number) => {
-    if (percentage >= 90) return 'from-emerald-500 to-green-500'
-    if (percentage >= 70) return 'from-amber-500 to-yellow-500'
-    if (percentage >= 50) return 'from-orange-500 to-red-500'
-    return 'from-red-500 to-pink-500'
-  }
-
-  const getComplianceTextColor = (percentage: number) => {
-    if (percentage >= 90) return 'text-emerald-400'
-    if (percentage >= 70) return 'text-amber-400'
-    return 'text-red-400'
-  }
-
   // Mock compliance data for demo
   const mockCompliance: Record<string, number> = {
     'ISO9001': 87,
@@ -89,10 +80,7 @@ export default function Standards() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-cyan-500/20 border-t-cyan-500"></div>
-          <BookOpen className="absolute inset-0 m-auto w-6 h-6 text-cyan-400" />
-        </div>
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     )
   }
@@ -102,10 +90,8 @@ export default function Standards() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 bg-clip-text text-transparent">
-            Standards & Compliance
-          </h1>
-          <p className="text-slate-400 mt-1">ISO standards library, clauses & implementation tracking</p>
+          <h1 className="text-3xl font-bold text-foreground">Standards & Compliance</h1>
+          <p className="text-muted-foreground mt-1">ISO standards library, clauses & implementation tracking</p>
         </div>
       </div>
 
@@ -114,76 +100,80 @@ export default function Standards() {
         <div className="xl:col-span-1 space-y-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-            <input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Input
               type="text"
               placeholder="Search standards..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl
-                text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500
-                focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
+              className="pl-10"
             />
           </div>
 
           {/* Standards Cards */}
           <div className="space-y-3">
             {filteredStandards.length === 0 ? (
-              <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 text-center">
-                <BookOpen className="w-12 h-12 mx-auto mb-4 text-slate-600" />
-                <p className="text-slate-400">No standards found</p>
-              </div>
+              <Card className="p-8 text-center">
+                <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                <p className="text-muted-foreground">No standards found</p>
+              </Card>
             ) : (
-              filteredStandards.map((standard, index) => {
+              filteredStandards.map((standard) => {
                 const compliance = mockCompliance[standard.code] || 0
                 const isSelected = selectedStandard?.id === standard.id
                 
                 return (
-                  <div
+                  <Card
                     key={standard.id}
+                    hoverable
                     onClick={() => loadClauses(standard)}
-                    className={`bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-5 cursor-pointer
-                      transition-all duration-300 animate-slide-in group
-                      ${isSelected 
-                        ? 'border-cyan-500 shadow-lg shadow-cyan-500/20' 
-                        : 'border-slate-800 hover:border-slate-700'
-                      }`}
-                    style={{ animationDelay: `${index * 50}ms` }}
+                    className={cn(
+                      "p-5 cursor-pointer",
+                      isSelected && "border-primary shadow-lg"
+                    )}
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 
-                        flex items-center justify-center text-2xl flex-shrink-0
-                        group-hover:from-cyan-500/30 group-hover:to-blue-500/30 transition-colors">
+                      <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl flex-shrink-0">
                         {ISO_ICONS[standard.code] || '📋'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-sm text-cyan-400">{standard.code}</span>
+                          <span className="font-mono text-sm text-primary">{standard.code}</span>
                           {standard.is_active && (
-                            <span className="px-1.5 py-0.5 text-xs bg-emerald-500/20 text-emerald-400 rounded">
+                            <Badge variant="success" className="text-[10px]">
                               Active
-                            </span>
+                            </Badge>
                           )}
                         </div>
-                        <h3 className="font-semibold text-white truncate">{standard.name}</h3>
-                        <p className="text-xs text-slate-500 mt-1">Version {standard.version}</p>
+                        <h3 className="font-semibold text-foreground truncate">{standard.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1">Version {standard.version}</p>
                       </div>
                     </div>
 
                     {/* Compliance Bar */}
                     <div className="mt-4">
                       <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="text-slate-400">Compliance</span>
-                        <span className={`font-bold ${getComplianceTextColor(compliance)}`}>{compliance}%</span>
+                        <span className="text-muted-foreground">Compliance</span>
+                        <span className={cn(
+                          "font-bold",
+                          compliance >= 90 ? "text-success" :
+                          compliance >= 70 ? "text-warning" : "text-destructive"
+                        )}>
+                          {compliance}%
+                        </span>
                       </div>
-                      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-2 bg-surface rounded-full overflow-hidden">
                         <div 
-                          className={`h-full bg-gradient-to-r ${getComplianceColor(compliance)} transition-all duration-500`}
+                          className={cn(
+                            "h-full transition-all duration-500 rounded-full",
+                            compliance >= 90 ? "bg-success" :
+                            compliance >= 70 ? "bg-warning" : "bg-destructive"
+                          )}
                           style={{ width: `${compliance}%` }}
                         />
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 )
               })
             )}
@@ -193,32 +183,30 @@ export default function Standards() {
         {/* Clauses Panel */}
         <div className="xl:col-span-2">
           {!selectedStandard ? (
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-12 text-center h-full flex flex-col items-center justify-center">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 
-                flex items-center justify-center mb-6">
-                <Award className="w-10 h-10 text-cyan-400" />
+            <Card className="p-12 text-center h-full flex flex-col items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                <Award className="w-10 h-10 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">Select a Standard</h3>
-              <p className="text-slate-400 max-w-md">
+              <h3 className="text-xl font-semibold text-foreground mb-2">Select a Standard</h3>
+              <p className="text-muted-foreground max-w-md">
                 Choose a standard from the list to view its clauses, controls, and implementation status.
               </p>
-            </div>
+            </Card>
           ) : loadingClauses ? (
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-12 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-cyan-500/20 border-t-cyan-500 mx-auto"></div>
-            </div>
+            <Card className="p-12 text-center">
+              <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
+            </Card>
           ) : (
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl overflow-hidden">
+            <Card className="overflow-hidden">
               {/* Header */}
-              <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
+              <div className="p-6 border-b border-border bg-primary/5">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 
-                    flex items-center justify-center text-xl shadow-lg shadow-cyan-500/25">
+                  <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-xl">
                     {ISO_ICONS[selectedStandard.code] || '📋'}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-white">{selectedStandard.name}</h2>
-                    <p className="text-sm text-slate-400">{selectedStandard.full_name}</p>
+                    <h2 className="text-xl font-bold text-foreground">{selectedStandard.name}</h2>
+                    <p className="text-sm text-muted-foreground">{selectedStandard.full_name}</p>
                   </div>
                 </div>
               </div>
@@ -226,8 +214,8 @@ export default function Standards() {
               {/* Clauses Tree */}
               <div className="p-4 max-h-[600px] overflow-y-auto">
                 {topLevelClauses.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <BookOpen className="w-10 h-10 mx-auto mb-3 text-slate-600" />
+                  <div className="text-center py-8 text-muted-foreground">
+                    <BookOpen className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
                     <p>No clauses defined for this standard</p>
                   </div>
                 ) : (
@@ -241,69 +229,68 @@ export default function Standards() {
                       const mockStatus = ['implemented', 'partial', 'planned', 'not_implemented'][index % 4]
                       
                       return (
-                        <div 
-                          key={clause.id}
-                          className="animate-slide-in"
-                          style={{ animationDelay: `${index * 30}ms` }}
-                        >
+                        <div key={clause.id}>
                           <div 
                             onClick={() => hasChildren && toggleExpanded(clause.id)}
-                            className={`flex items-center gap-3 p-4 rounded-xl transition-all duration-200 
-                              ${hasChildren ? 'cursor-pointer hover:bg-slate-800/50' : ''}`}
+                            className={cn(
+                              "flex items-center gap-3 p-4 rounded-xl transition-all duration-200",
+                              hasChildren && "cursor-pointer hover:bg-surface"
+                            )}
                           >
                             {hasChildren ? (
                               isExpanded ? (
-                                <ChevronDown className="w-5 h-5 text-cyan-400" />
+                                <ChevronDown className="w-5 h-5 text-primary" />
                               ) : (
-                                <ChevronRight className="w-5 h-5 text-slate-500" />
+                                <ChevronRight className="w-5 h-5 text-muted-foreground" />
                               )
                             ) : (
                               <div className="w-5" />
                             )}
                             
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              mockStatus === 'implemented' ? 'bg-emerald-500/20' :
-                              mockStatus === 'partial' ? 'bg-amber-500/20' :
-                              mockStatus === 'planned' ? 'bg-blue-500/20' : 'bg-red-500/20'
-                            }`}>
+                            <div className={cn(
+                              "w-8 h-8 rounded-lg flex items-center justify-center",
+                              mockStatus === 'implemented' ? 'bg-success/10' :
+                              mockStatus === 'partial' ? 'bg-warning/10' :
+                              mockStatus === 'planned' ? 'bg-info/10' : 'bg-destructive/10'
+                            )}>
                               {mockStatus === 'implemented' ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <CheckCircle2 className="w-4 h-4 text-success" />
                               ) : mockStatus === 'partial' ? (
-                                <Circle className="w-4 h-4 text-amber-400" />
+                                <Circle className="w-4 h-4 text-warning" />
                               ) : mockStatus === 'planned' ? (
-                                <Circle className="w-4 h-4 text-blue-400" />
+                                <Circle className="w-4 h-4 text-info" />
                               ) : (
-                                <AlertCircle className="w-4 h-4 text-red-400" />
+                                <AlertCircle className="w-4 h-4 text-destructive" />
                               )}
                             </div>
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm text-cyan-400">{clause.clause_number}</span>
-                                <h4 className="font-medium text-white truncate">{clause.title}</h4>
+                                <span className="font-mono text-sm text-primary">{clause.clause_number}</span>
+                                <h4 className="font-medium text-foreground truncate">{clause.title}</h4>
                               </div>
                             </div>
 
-                            <span className={`px-2 py-1 text-xs font-medium rounded capitalize ${
-                              mockStatus === 'implemented' ? 'bg-emerald-500/20 text-emerald-400' :
-                              mockStatus === 'partial' ? 'bg-amber-500/20 text-amber-400' :
-                              mockStatus === 'planned' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'
-                            }`}>
+                            <Badge variant={
+                              mockStatus === 'implemented' ? 'resolved' :
+                              mockStatus === 'partial' ? 'in-progress' :
+                              mockStatus === 'planned' ? 'submitted' : 'destructive'
+                            }>
                               {mockStatus.replace('_', ' ')}
-                            </span>
+                            </Badge>
                           </div>
 
                           {/* Sub-clauses */}
                           {isExpanded && hasChildren && (
-                            <div className="ml-8 pl-4 border-l-2 border-slate-800 space-y-1 mt-2">
+                            <div className="ml-8 pl-4 border-l-2 border-border space-y-1 mt-2">
                               {subClauses.slice(0, 5).map((subClause) => (
                                 <div 
                                   key={subClause.id}
-                                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800/30 transition-colors"
+                                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
                                 >
-                                  <Shield className="w-4 h-4 text-slate-500" />
-                                  <span className="font-mono text-xs text-cyan-400">{subClause.clause_number}</span>
-                                  <span className="text-sm text-slate-300 truncate">{subClause.title}</span>
+                                  <Shield className="w-4 h-4 text-muted-foreground" />
+                                  <span className="font-mono text-xs text-primary">{subClause.clause_number}</span>
+                                  <span className="text-sm text-foreground truncate">{subClause.title}</span>
                                 </div>
                               ))}
                             </div>
@@ -314,7 +301,7 @@ export default function Standards() {
                   </div>
                 )}
               </div>
-            </div>
+            </Card>
           )}
         </div>
       </div>

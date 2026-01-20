@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Loader2, AlertCircle } from 'lucide-react';
+import { Shield, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 export default function PortalLogin() {
   const navigate = useNavigate();
@@ -20,45 +23,58 @@ export default function PortalLogin() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Checking authentication...</p>
+          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
+      {/* Theme Toggle */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="max-w-md w-full relative animate-fade-in">
         {/* Logo & Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-purple-500/30">
-            <Shield className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 gradient-brand rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-glow">
+            <Shield className="w-10 h-10 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Employee Portal</h1>
-          <p className="text-gray-400">Sign in with your Plantexpand account</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Employee Portal</h1>
+          <p className="text-muted-foreground">Sign in with your Plantexpand account</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8">
+        <Card className="p-8">
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm text-red-400 font-medium">Sign in failed</p>
-                <p className="text-xs text-red-400/70 mt-1">{error}</p>
+                <p className="text-sm text-destructive font-medium">Sign in failed</p>
+                <p className="text-xs text-destructive/70 mt-1">{error}</p>
               </div>
             </div>
           )}
 
           {/* SSO Button */}
-          <button
+          <Button
             onClick={handleLogin}
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white hover:bg-gray-100 text-gray-900 font-semibold rounded-xl transition-all disabled:opacity-50 shadow-lg"
+            variant="outline"
+            size="xl"
+            className="w-full bg-card hover:bg-surface"
           >
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -74,52 +90,53 @@ export default function PortalLogin() {
                 Sign in with Microsoft
               </>
             )}
-          </button>
+          </Button>
 
           <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              Use your <span className="text-purple-400">@plantexpand.com</span> email
+            <p className="text-xs text-muted-foreground">
+              Use your <span className="text-primary font-medium">@plantexpand.com</span> email
             </p>
           </div>
 
           {/* Divider */}
           <div className="my-6 flex items-center gap-4">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-gray-500">SECURE SIGN-IN</span>
-            <div className="flex-1 h-px bg-white/10" />
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">SECURE SIGN-IN</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
 
           {/* Info */}
-          <div className="space-y-3 text-sm text-gray-400">
+          <div className="space-y-3 text-sm text-muted-foreground">
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-green-400 text-xs">✓</span>
+              <div className="w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-success" />
               </div>
               <p>Your identity will be recorded with each report for accountability</p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-green-400 text-xs">✓</span>
+              <div className="w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-success" />
               </div>
               <p>Your name and details will be auto-filled from your profile</p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-green-400 text-xs">✓</span>
+              <div className="w-6 h-6 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-success" />
               </div>
               <p>Track all your submitted reports in one place</p>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Admin Link */}
         <div className="mt-8 text-center">
-          <button
+          <Button
+            variant="link"
             onClick={() => navigate('/login')}
-            className="text-sm text-gray-600 hover:text-gray-400 transition-colors"
+            className="text-muted-foreground hover:text-foreground"
           >
             Admin Login →
-          </button>
+          </Button>
         </div>
       </div>
     </div>

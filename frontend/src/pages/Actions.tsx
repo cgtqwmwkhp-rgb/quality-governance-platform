@@ -1,7 +1,26 @@
 import { useEffect, useState } from 'react'
-import { Search, ListTodo, Plus, X, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter } from 'lucide-react'
+import { Search, ListTodo, Plus, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter, Loader2 } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { Card, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/Dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
+import { cn } from '../lib/utils'
 
-// Mock data for actions - will be replaced with API calls
 interface Action {
   id: number
   reference_number: string
@@ -90,38 +109,27 @@ export default function Actions() {
   const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
-    // Load actions from API when available
     setLoading(false)
   }, [])
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityVariant = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'from-red-500 to-pink-500'
-      case 'high': return 'from-orange-500 to-red-500'
-      case 'medium': return 'from-amber-500 to-orange-500'
-      case 'low': return 'from-green-500 to-emerald-500'
-      default: return 'from-slate-500 to-slate-600'
+      case 'critical': return 'critical'
+      case 'high': return 'high'
+      case 'medium': return 'medium'
+      case 'low': return 'low'
+      default: return 'secondary'
     }
   }
 
-  const getPriorityBadgeColor = (priority: string) => {
-    switch (priority) {
-      case 'critical': return 'bg-red-500/20 text-red-400 border-red-500/30'
-      case 'high': return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-      case 'medium': return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-      case 'low': return 'bg-green-500/20 text-green-400 border-green-500/30'
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-    }
-  }
-
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-emerald-500/20 text-emerald-400'
-      case 'open': return 'bg-blue-500/20 text-blue-400'
-      case 'in_progress': return 'bg-amber-500/20 text-amber-400'
-      case 'pending_verification': return 'bg-purple-500/20 text-purple-400'
-      case 'cancelled': return 'bg-slate-500/20 text-slate-400'
-      default: return 'bg-slate-500/20 text-slate-400'
+      case 'completed': return 'resolved'
+      case 'open': return 'submitted'
+      case 'in_progress': return 'in-progress'
+      case 'pending_verification': return 'acknowledged'
+      case 'cancelled': return 'closed'
+      default: return 'secondary'
     }
   }
 
@@ -142,16 +150,13 @@ export default function Actions() {
   }
 
   const filteredActions = actions.filter(action => {
-    // Search filter
     if (searchTerm && !action.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
         !action.reference_number.toLowerCase().includes(searchTerm.toLowerCase())) {
       return false
     }
-    // Status filter
     if (filterStatus !== 'all' && action.status !== filterStatus) {
       return false
     }
-    // View mode filter
     if (viewMode === 'overdue' && !isOverdue(action.due_date, action.status)) {
       return false
     }
@@ -169,10 +174,7 @@ export default function Actions() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-teal-500/20 border-t-teal-500"></div>
-          <ListTodo className="absolute inset-0 m-auto w-6 h-6 text-teal-400" />
-        </div>
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     )
   }
@@ -182,267 +184,235 @@ export default function Actions() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-teal-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-            Action Center
-          </h1>
-          <p className="text-slate-400 mt-1">Cross-module corrective & preventive actions</p>
+          <h1 className="text-3xl font-bold text-foreground">Action Center</h1>
+          <p className="text-muted-foreground mt-1">Cross-module corrective & preventive actions</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-500 via-cyan-500 to-blue-500
-            text-white font-semibold rounded-xl hover:opacity-90 transition-all duration-200 
-            shadow-lg shadow-teal-500/25 hover:shadow-xl hover:shadow-teal-500/30 hover:-translate-y-0.5"
-        >
+        <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
           New Action
-        </button>
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Actions', value: stats.total, icon: ListTodo, color: 'from-teal-500 to-cyan-500' },
-          { label: 'Open', value: stats.open, icon: AlertCircle, color: 'from-blue-500 to-indigo-500' },
-          { label: 'In Progress', value: stats.inProgress, icon: Clock, color: 'from-amber-500 to-orange-500' },
-          { label: 'Overdue', value: stats.overdue, icon: Flag, color: 'from-red-500 to-pink-500' },
-          { label: 'Completed', value: stats.completed, icon: CheckCircle2, color: 'from-emerald-500 to-green-500' },
-        ].map((stat, index) => (
-          <div 
+          { label: 'Total Actions', value: stats.total, icon: ListTodo, variant: 'primary' as const },
+          { label: 'Open', value: stats.open, icon: AlertCircle, variant: 'info' as const },
+          { label: 'In Progress', value: stats.inProgress, icon: Clock, variant: 'warning' as const },
+          { label: 'Overdue', value: stats.overdue, icon: Flag, variant: 'destructive' as const },
+          { label: 'Completed', value: stats.completed, icon: CheckCircle2, variant: 'success' as const },
+        ].map((stat) => (
+          <Card 
             key={stat.label}
-            className={`relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 
-              hover:border-slate-700 transition-all duration-300 cursor-pointer group animate-slide-in
-              ${stat.label === 'Overdue' && stats.overdue > 0 ? 'border-red-500/30' : ''}`}
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-            <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity`} />
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-3`}>
-              <stat.icon className="w-5 h-5 text-white" />
-            </div>
-            <p className="text-2xl font-bold text-white">{stat.value}</p>
-            <p className="text-sm text-slate-400">{stat.label}</p>
-            {stat.label === 'Overdue' && stats.overdue > 0 && (
-              <div className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+            hoverable
+            className={cn(
+              "p-5",
+              stat.label === 'Overdue' && stats.overdue > 0 && "border-destructive/30"
             )}
-          </div>
+          >
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
+              stat.variant === 'primary' && "bg-primary/10 text-primary",
+              stat.variant === 'info' && "bg-info/10 text-info",
+              stat.variant === 'warning' && "bg-warning/10 text-warning",
+              stat.variant === 'destructive' && "bg-destructive/10 text-destructive",
+              stat.variant === 'success' && "bg-success/10 text-success",
+            )}>
+              <stat.icon className="w-5 h-5" />
+            </div>
+            <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+            <p className="text-sm text-muted-foreground">{stat.label}</p>
+            {stat.label === 'Overdue' && stats.overdue > 0 && (
+              <div className="absolute top-3 right-3 w-3 h-3 bg-destructive rounded-full animate-pulse" />
+            )}
+          </Card>
         ))}
       </div>
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Search */}
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-          <input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
             type="text"
             placeholder="Search actions..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl
-              text-white placeholder-slate-500 focus:outline-none focus:border-teal-500
-              focus:ring-2 focus:ring-teal-500/20 transition-all duration-200"
+            className="pl-10"
           />
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex bg-slate-800/50 rounded-xl p-1">
+        <div className="flex bg-surface rounded-xl p-1 border border-border">
           {(['all', 'my', 'overdue'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                 viewMode === mode 
-                  ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/25' 
-                  : 'text-slate-400 hover:text-white'
-              }`}
+                  ? 'bg-primary text-primary-foreground shadow-sm' 
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
             >
               {mode === 'my' ? 'My Actions' : mode.charAt(0).toUpperCase() + mode.slice(1)}
             </button>
           ))}
         </div>
 
-        {/* Status Filter */}
-        <div className="relative">
-          <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-            className="pl-10 pr-8 py-3 bg-slate-900/50 border border-slate-800 rounded-xl
-              text-white focus:outline-none focus:border-teal-500 appearance-none cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="pending_verification">Pending Verification</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
+        <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as FilterStatus)}>
+          <SelectTrigger className="w-[180px]">
+            <Filter className="w-4 h-4 mr-2" />
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="open">Open</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="pending_verification">Pending Verification</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Actions List */}
       <div className="space-y-4">
         {filteredActions.length === 0 ? (
-          <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-12 text-center">
-            <ListTodo className="w-16 h-16 mx-auto mb-4 text-slate-600" />
-            <h3 className="text-lg font-semibold text-white mb-2">No Actions Found</h3>
-            <p className="text-slate-400">
+          <Card className="p-12 text-center">
+            <ListTodo className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No Actions Found</h3>
+            <p className="text-muted-foreground">
               {filterStatus !== 'all' || viewMode !== 'all' 
                 ? 'Try adjusting your filters' 
                 : 'Actions from incidents, audits, and investigations will appear here'}
             </p>
-          </div>
+          </Card>
         ) : (
-          filteredActions.map((action, index) => {
+          filteredActions.map((action) => {
             const overdue = isOverdue(action.due_date, action.status)
             
             return (
-              <div
+              <Card
                 key={action.id}
-                className={`bg-slate-900/50 backdrop-blur-xl border rounded-2xl overflow-hidden
-                  hover:shadow-lg transition-all duration-300 cursor-pointer group animate-slide-in
-                  ${overdue ? 'border-red-500/30 hover:border-red-500/50' : 'border-slate-800 hover:border-slate-700'}`}
-                style={{ animationDelay: `${index * 50}ms` }}
+                hoverable
+                className={cn(
+                  "overflow-hidden",
+                  overdue && "border-destructive/30"
+                )}
               >
                 <div className="flex items-stretch">
-                  {/* Priority Bar */}
-                  <div className={`w-1.5 bg-gradient-to-b ${getPriorityColor(action.priority)}`} />
+                  <div className={cn(
+                    "w-1.5",
+                    action.priority === 'critical' && "bg-destructive",
+                    action.priority === 'high' && "bg-warning",
+                    action.priority === 'medium' && "bg-warning/70",
+                    action.priority === 'low' && "bg-success",
+                  )} />
                   
-                  <div className="flex-1 p-5">
+                  <CardContent className="flex-1 p-5">
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                      {/* Main Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="font-mono text-sm text-teal-400">{action.reference_number}</span>
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded border ${getPriorityBadgeColor(action.priority)}`}>
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <span className="font-mono text-sm text-primary">{action.reference_number}</span>
+                          <Badge variant={getPriorityVariant(action.priority) as any}>
                             {action.priority}
-                          </span>
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(action.status)}`}>
+                          </Badge>
+                          <Badge variant={getStatusVariant(action.status) as any}>
                             {action.status.replace('_', ' ')}
-                          </span>
+                          </Badge>
                           {overdue && (
-                            <span className="px-2 py-0.5 text-xs font-medium rounded bg-red-500/20 text-red-400 animate-pulse">
+                            <Badge variant="destructive" className="animate-pulse">
                               OVERDUE
-                            </span>
+                            </Badge>
                           )}
                         </div>
-                        <h3 className="text-lg font-semibold text-white group-hover:text-teal-300 transition-colors mb-1">
+                        <h3 className="text-lg font-semibold text-foreground mb-1">
                           {action.title}
                         </h3>
-                        <p className="text-sm text-slate-400 line-clamp-1">{action.description}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-1">{action.description}</p>
                       </div>
 
-                      {/* Meta Info */}
                       <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2 lg:gap-1 lg:w-48 flex-shrink-0">
-                        {/* Source */}
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg">
                           <span className="text-lg">{getSourceIcon(action.source_type)}</span>
-                          <span className="text-xs font-mono text-slate-400">{action.source_ref}</span>
-                          <ArrowUpRight className="w-3 h-3 text-slate-500" />
+                          <span className="text-xs font-mono text-muted-foreground">{action.source_ref}</span>
+                          <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
                         </div>
 
-                        {/* Due Date */}
                         {action.due_date && (
-                          <div className={`flex items-center gap-2 text-sm ${overdue ? 'text-red-400' : 'text-slate-400'}`}>
+                          <div className={cn(
+                            "flex items-center gap-2 text-sm",
+                            overdue ? 'text-destructive' : 'text-muted-foreground'
+                          )}>
                             <Calendar className="w-4 h-4" />
                             <span>Due {new Date(action.due_date).toLocaleDateString()}</span>
                           </div>
                         )}
 
-                        {/* Owner */}
                         {action.owner && (
-                          <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <User className="w-4 h-4" />
                             <span>{action.owner}</span>
                           </div>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </CardContent>
                 </div>
-              </div>
+              </Card>
             )
           })
         )}
       </div>
 
       {/* Create Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-xl animate-fade-in">
-            <div className="flex items-center justify-between p-6 border-b border-slate-800">
-              <h2 className="text-lg font-semibold text-white">Create New Action</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Action</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input placeholder="Action title..." />
             </div>
-            <form className="p-6 space-y-5">
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea rows={3} placeholder="Describe the action required..." />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
-                <input
-                  type="text"
-                  placeholder="Action title..."
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white placeholder-slate-500 focus:outline-none focus:border-teal-500
-                    focus:ring-2 focus:ring-teal-500/20 transition-all duration-200"
-                />
+                <label className="block text-sm font-medium text-foreground mb-2">Priority</label>
+                <Select defaultValue="medium">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe the action required..."
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white placeholder-slate-500 focus:outline-none focus:border-teal-500
-                    focus:ring-2 focus:ring-teal-500/20 transition-all duration-200 resize-none"
-                />
+                <label className="block text-sm font-medium text-foreground mb-2">Due Date</label>
+                <Input type="date" />
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Priority</label>
-                  <select className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white focus:outline-none focus:border-teal-500">
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Due Date</label>
-                  <input
-                    type="date"
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white focus:outline-none focus:border-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-800 text-slate-300 font-medium rounded-xl
-                    hover:bg-slate-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-cyan-500
-                    text-white font-semibold rounded-xl hover:opacity-90 transition-all duration-200"
-                >
-                  Create Action
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <DialogFooter className="gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create Action
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

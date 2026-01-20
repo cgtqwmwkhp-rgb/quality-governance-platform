@@ -1,6 +1,25 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, FileText, Search } from 'lucide-react'
+import { Plus, FileText, Search, Loader2 } from 'lucide-react'
 import { policiesApi, Policy, PolicyCreate } from '../api/client'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/Dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
 
 export default function Policies() {
   const [policies, setPolicies] = useState<Policy[]>([])
@@ -69,15 +88,15 @@ export default function Policies() {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'published': return 'bg-emerald-500/20 text-emerald-400'
-      case 'approved': return 'bg-green-500/20 text-green-400'
-      case 'under_review': return 'bg-amber-500/20 text-amber-400'
-      case 'draft': return 'bg-blue-500/20 text-blue-400'
-      case 'superseded': return 'bg-slate-500/20 text-slate-400'
-      case 'retired': return 'bg-red-500/20 text-red-400'
-      default: return 'bg-slate-500/20 text-slate-400'
+      case 'published': return 'resolved'
+      case 'approved': return 'success'
+      case 'under_review': return 'in-progress'
+      case 'draft': return 'submitted'
+      case 'superseded': return 'closed'
+      case 'retired': return 'destructive'
+      default: return 'secondary'
     }
   }
 
@@ -90,7 +109,7 @@ export default function Policies() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     )
   }
@@ -100,32 +119,25 @@ export default function Policies() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Policies & Documents</h1>
-          <p className="text-slate-400 mt-1">Manage policies, procedures, and documents</p>
+          <h1 className="text-2xl font-bold text-foreground">Policies & Documents</h1>
+          <p className="text-muted-foreground mt-1">Manage policies, procedures, and documents</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500
-            text-white font-semibold rounded-xl hover:from-cyan-600 hover:to-blue-600
-            transition-all duration-200 shadow-lg shadow-cyan-500/25"
-        >
+        <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
           New Document
-        </button>
+        </Button>
       </div>
 
       {/* Search */}
       <div className="flex gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-          <input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
             type="text"
             placeholder="Search documents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl
-              text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500
-              focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
+            className="pl-10"
           />
         </div>
       </div>
@@ -133,184 +145,163 @@ export default function Policies() {
       {/* Policies Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPolicies.length === 0 ? (
-          <div className="col-span-full bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-12 text-center">
-            <FileText className="w-12 h-12 mx-auto mb-4 text-slate-600" />
-            <p className="text-slate-400">No documents found</p>
-            <p className="text-sm text-slate-500 mt-1">Create your first document to get started</p>
+          <div className="col-span-full">
+            <Card className="p-12 text-center">
+              <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+              <p className="text-muted-foreground">No documents found</p>
+              <p className="text-sm text-muted-foreground mt-1">Create your first document to get started</p>
+            </Card>
           </div>
         ) : (
-          filteredPolicies.map((policy, index) => (
-            <div
+          filteredPolicies.map((policy) => (
+            <Card
               key={policy.id}
-              className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-5
-                hover:border-cyan-500/50 transition-all duration-200 cursor-pointer animate-slide-in"
-              style={{ animationDelay: `${index * 50}ms` }}
+              hoverable
+              className="p-5 cursor-pointer"
             >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 
-                  flex items-center justify-center text-2xl">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl">
                   {getTypeIcon(policy.document_type)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-mono text-xs text-cyan-400 mb-1">{policy.reference_number}</p>
-                  <h3 className="font-semibold text-white truncate">{policy.title}</h3>
+                  <p className="font-mono text-xs text-primary mb-1">{policy.reference_number}</p>
+                  <h3 className="font-semibold text-foreground truncate">{policy.title}</h3>
                   {policy.description && (
-                    <p className="text-sm text-slate-400 mt-1 line-clamp-2">{policy.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{policy.description}</p>
                   )}
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between">
-                <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${getStatusColor(policy.status)}`}>
+                <Badge variant={getStatusVariant(policy.status) as any}>
                   {policy.status.replace('_', ' ')}
-                </span>
-                <span className="text-xs text-slate-500">
+                </Badge>
+                <span className="text-xs text-muted-foreground">
                   {policy.document_type.replace('_', ' ')}
                 </span>
               </div>
               {policy.next_review_date && (
-                <div className="mt-3 pt-3 border-t border-slate-800">
-                  <p className="text-xs text-slate-500">
+                <div className="mt-3 pt-3 border-t border-border">
+                  <p className="text-xs text-muted-foreground">
                     Review due: {new Date(policy.next_review_date).toLocaleDateString()}
                   </p>
                 </div>
               )}
-            </div>
+            </Card>
           ))
         )}
       </div>
 
       {/* Create Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-xl animate-fade-in">
-            <div className="flex items-center justify-between p-6 border-b border-slate-800">
-              <h2 className="text-lg font-semibold text-white">New Document</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Document</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input
+                type="text"
+                required
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Document title..."
+              />
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-5">
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea
+                rows={3}
+                value={formData.description || ''}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Brief description of the document..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
-                <input
+                <label className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <Select
+                  value={formData.document_type}
+                  onValueChange={(value) => setFormData({ ...formData, document_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="policy">Policy</SelectItem>
+                    <SelectItem value="procedure">Procedure</SelectItem>
+                    <SelectItem value="work_instruction">Work Instruction</SelectItem>
+                    <SelectItem value="sop">SOP</SelectItem>
+                    <SelectItem value="form">Form</SelectItem>
+                    <SelectItem value="template">Template</SelectItem>
+                    <SelectItem value="guideline">Guideline</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="record">Record</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Review Frequency</label>
+                <Select
+                  value={String(formData.review_frequency_months)}
+                  onValueChange={(value) => setFormData({ ...formData, review_frequency_months: parseInt(value) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6">6 months</SelectItem>
+                    <SelectItem value="12">12 months</SelectItem>
+                    <SelectItem value="24">24 months</SelectItem>
+                    <SelectItem value="36">36 months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <Input
                   type="text"
-                  required
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500
-                    focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-                  placeholder="Document title..."
+                  value={formData.category || ''}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="e.g., Health & Safety"
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                <textarea
-                  rows={3}
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                    text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500
-                    focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200 resize-none"
-                  placeholder="Brief description of the document..."
+                <label className="block text-sm font-medium text-foreground mb-2">Department</label>
+                <Input
+                  type="text"
+                  value={formData.department || ''}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  placeholder="e.g., Operations"
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Type</label>
-                  <select
-                    value={formData.document_type}
-                    onChange={(e) => setFormData({ ...formData, document_type: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white focus:outline-none focus:border-cyan-500
-                      focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-                  >
-                    <option value="policy">Policy</option>
-                    <option value="procedure">Procedure</option>
-                    <option value="work_instruction">Work Instruction</option>
-                    <option value="sop">SOP</option>
-                    <option value="form">Form</option>
-                    <option value="template">Template</option>
-                    <option value="guideline">Guideline</option>
-                    <option value="manual">Manual</option>
-                    <option value="record">Record</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Review Frequency</label>
-                  <select
-                    value={formData.review_frequency_months}
-                    onChange={(e) => setFormData({ ...formData, review_frequency_months: parseInt(e.target.value) })}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white focus:outline-none focus:border-cyan-500
-                      focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-                  >
-                    <option value={6}>6 months</option>
-                    <option value={12}>12 months</option>
-                    <option value={24}>24 months</option>
-                    <option value={36}>36 months</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
-                  <input
-                    type="text"
-                    value={formData.category || ''}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500
-                      focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-                    placeholder="e.g., Health & Safety"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Department</label>
-                  <input
-                    type="text"
-                    value={formData.department || ''}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl
-                      text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500
-                      focus:ring-2 focus:ring-cyan-500/20 transition-all duration-200"
-                    placeholder="e.g., Operations"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-800 text-slate-300 font-medium rounded-xl
-                    hover:bg-slate-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-500
-                    text-white font-semibold rounded-xl hover:from-cyan-600 hover:to-blue-600
-                    disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  {creating ? 'Creating...' : 'Create Document'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <DialogFooter className="gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Document'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

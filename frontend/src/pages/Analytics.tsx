@@ -14,8 +14,11 @@ import {
   Minus,
   RefreshCw,
   Download,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { cn } from '../lib/utils';
 
 interface KPICard {
   id: string;
@@ -24,7 +27,7 @@ interface KPICard {
   change: number;
   changeType: 'increase' | 'decrease' | 'neutral';
   icon: React.ReactNode;
-  color: string;
+  variant: 'primary' | 'info' | 'warning' | 'success' | 'destructive';
   sparkline?: number[];
 }
 
@@ -42,7 +45,6 @@ export default function Analytics() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
 
-  // Simulated KPI data
   const kpis: KPICard[] = [
     {
       id: 'total-records',
@@ -51,7 +53,7 @@ export default function Analytics() {
       change: 12.5,
       changeType: 'increase',
       icon: <FileText className="w-6 h-6" />,
-      color: 'from-blue-500 to-cyan-500',
+      variant: 'info',
       sparkline: [20, 25, 30, 28, 35, 40, 38, 45, 50, 48, 55, 60]
     },
     {
@@ -61,7 +63,7 @@ export default function Analytics() {
       change: -8.3,
       changeType: 'decrease',
       icon: <Clock className="w-6 h-6" />,
-      color: 'from-amber-500 to-orange-500',
+      variant: 'warning',
       sparkline: [45, 42, 40, 38, 35, 33, 30, 28, 26, 25, 23, 20]
     },
     {
@@ -71,7 +73,7 @@ export default function Analytics() {
       change: 3.2,
       changeType: 'increase',
       icon: <CheckCircle2 className="w-6 h-6" />,
-      color: 'from-emerald-500 to-green-500',
+      variant: 'success',
       sparkline: [85, 87, 88, 89, 90, 91, 92, 93, 93, 94, 94, 95]
     },
     {
@@ -81,7 +83,7 @@ export default function Analytics() {
       change: -15.8,
       changeType: 'decrease',
       icon: <Activity className="w-6 h-6" />,
-      color: 'from-purple-500 to-violet-500',
+      variant: 'primary',
       sparkline: [8, 7.5, 7, 6.5, 6, 5.5, 5, 4.8, 4.6, 4.4, 4.3, 4.2]
     },
     {
@@ -91,7 +93,7 @@ export default function Analytics() {
       change: 1.5,
       changeType: 'increase',
       icon: <Shield className="w-6 h-6" />,
-      color: 'from-indigo-500 to-blue-500',
+      variant: 'info',
       sparkline: [95, 95.5, 96, 96.5, 97, 97, 97.5, 97.8, 98, 98, 98.1, 98.2]
     },
     {
@@ -101,7 +103,7 @@ export default function Analytics() {
       change: 0,
       changeType: 'neutral',
       icon: <AlertTriangle className="w-6 h-6" />,
-      color: 'from-red-500 to-rose-500',
+      variant: 'destructive',
       sparkline: [25, 24, 23, 24, 23, 22, 23, 24, 23, 23, 23, 23]
     }
   ];
@@ -138,7 +140,7 @@ export default function Analytics() {
   const TrendIndicator = ({ change, type }: { change: number; type: 'increase' | 'decrease' | 'neutral' }) => {
     if (type === 'neutral') {
       return (
-        <span className="flex items-center gap-1 text-slate-400 text-sm">
+        <span className="flex items-center gap-1 text-muted-foreground text-sm">
           <Minus className="w-4 h-4" />
           No change
         </span>
@@ -149,16 +151,17 @@ export default function Analytics() {
     const Icon = change > 0 ? ArrowUpRight : ArrowDownRight;
     
     return (
-      <span className={`flex items-center gap-1 text-sm ${
-        isPositive ? 'text-emerald-400' : 'text-red-400'
-      }`}>
+      <span className={cn(
+        "flex items-center gap-1 text-sm",
+        isPositive ? 'text-success' : 'text-destructive'
+      )}>
         <Icon className="w-4 h-4" />
         {Math.abs(change)}%
       </span>
     );
   };
 
-  const MiniSparkline = ({ data, color }: { data: number[]; color: string }) => {
+  const MiniSparkline = ({ data, variant }: { data: number[]; variant: string }) => {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const range = max - min || 1;
@@ -168,7 +171,14 @@ export default function Analytics() {
         {data.map((value, i) => (
           <div
             key={i}
-            className={`w-1.5 rounded-full bg-gradient-to-t ${color} opacity-60`}
+            className={cn(
+              "w-1.5 rounded-full opacity-60",
+              variant === 'primary' && "bg-primary",
+              variant === 'info' && "bg-info",
+              variant === 'warning' && "bg-warning",
+              variant === 'success' && "bg-success",
+              variant === 'destructive' && "bg-destructive",
+            )}
             style={{ height: `${((value - min) / range) * 100}%`, minHeight: '4px' }}
           />
         ))}
@@ -177,155 +187,158 @@ export default function Analytics() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-              <BarChart3 className="w-8 h-8" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <BarChart3 className="w-8 h-8 text-primary" />
             </div>
             Analytics Dashboard
           </h1>
-          <p className="text-slate-400 mt-1">Cross-module insights and performance metrics</p>
+          <p className="text-muted-foreground mt-1">Cross-module insights and performance metrics</p>
         </div>
         
         <div className="flex items-center gap-3">
-          {/* Time Range Selector */}
-          <div className="flex bg-slate-800/50 rounded-lg p-1">
+          <div className="flex bg-surface rounded-lg p-1 border border-border">
             {(['7d', '30d', '90d', '1y'] as const).map((range) => (
               <button
                 key={range}
                 onClick={() => setTimeRange(range)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-md transition-all",
                   timeRange === range
-                    ? 'bg-violet-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
               >
                 {range}
               </button>
             ))}
           </div>
           
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRefresh}
-            className={`p-2 bg-slate-800/50 rounded-lg text-slate-400 hover:text-white transition-all ${
-              isLoading ? 'animate-spin' : ''
-            }`}
+            className={isLoading ? 'animate-spin' : ''}
           >
-            <RefreshCw className="w-5 h-5" />
-          </button>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
           
-          <button className="p-2 bg-slate-800/50 rounded-lg text-slate-400 hover:text-white transition-all">
-            <Download className="w-5 h-5" />
-          </button>
+          <Button variant="outline" size="sm">
+            <Download className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {kpis.map((kpi) => (
-          <div
-            key={kpi.id}
-            className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4 hover:border-violet-500/50 transition-all group"
-          >
+          <Card key={kpi.id} hoverable className="p-4">
             <div className="flex items-start justify-between mb-3">
-              <div className={`p-2 rounded-lg bg-gradient-to-br ${kpi.color} text-white`}>
+              <div className={cn(
+                "p-2 rounded-lg",
+                kpi.variant === 'primary' && "bg-primary/10 text-primary",
+                kpi.variant === 'info' && "bg-info/10 text-info",
+                kpi.variant === 'warning' && "bg-warning/10 text-warning",
+                kpi.variant === 'success' && "bg-success/10 text-success",
+                kpi.variant === 'destructive' && "bg-destructive/10 text-destructive",
+              )}>
                 {kpi.icon}
               </div>
               <TrendIndicator change={kpi.change} type={kpi.changeType} />
             </div>
             
             <div className="mb-3">
-              <p className="text-2xl font-bold text-white">{kpi.value}</p>
-              <p className="text-sm text-slate-400">{kpi.title}</p>
+              <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
+              <p className="text-sm text-muted-foreground">{kpi.title}</p>
             </div>
             
             {kpi.sparkline && (
-              <MiniSparkline data={kpi.sparkline} color={kpi.color} />
+              <MiniSparkline data={kpi.sparkline} variant={kpi.variant} />
             )}
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Trend Chart */}
-        <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
+        <Card className="lg:col-span-2 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-violet-400" />
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
               Monthly Trends
             </h2>
             <div className="flex items-center gap-4 text-sm">
               <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="w-3 h-3 rounded-full bg-info" />
                 Incidents
               </span>
               <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-500" />
+                <span className="w-3 h-3 rounded-full bg-warning" />
                 RTAs
               </span>
               <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-purple-500" />
+                <span className="w-3 h-3 rounded-full bg-primary" />
                 Complaints
               </span>
             </div>
           </div>
           
-          {/* Simple Bar Chart */}
           <div className="h-64 flex items-end justify-between gap-2">
             {monthlyTrends.map((month) => (
               <div key={month.month} className="flex-1 flex flex-col items-center gap-1">
                 <div className="w-full flex flex-col items-center gap-0.5">
                   <div
-                    className="w-full max-w-[20px] bg-gradient-to-t from-blue-600 to-blue-400 rounded-t"
+                    className="w-full max-w-[20px] bg-info rounded-t"
                     style={{ height: `${month.incidents * 2}px` }}
                   />
                   <div
-                    className="w-full max-w-[20px] bg-gradient-to-t from-amber-600 to-amber-400 rounded-t"
+                    className="w-full max-w-[20px] bg-warning rounded-t"
                     style={{ height: `${month.rtas * 3}px` }}
                   />
                   <div
-                    className="w-full max-w-[20px] bg-gradient-to-t from-purple-600 to-purple-400 rounded-t"
+                    className="w-full max-w-[20px] bg-primary rounded-t"
                     style={{ height: `${month.complaints * 2.5}px` }}
                   />
                 </div>
-                <span className="text-xs text-slate-500 mt-2">{month.month}</span>
+                <span className="text-xs text-muted-foreground mt-2">{month.month}</span>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
         {/* Module Distribution */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-6">
-            <PieChart className="w-5 h-5 text-violet-400" />
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-6">
+            <PieChart className="w-5 h-5 text-primary" />
             Module Distribution
           </h2>
           
           <div className="space-y-4">
             {moduleStats.map((stat) => {
               const percentage = (stat.total / moduleStats.reduce((a, b) => a + b.total, 0)) * 100;
-              const colors: Record<string, string> = {
-                'Incidents': 'from-blue-500 to-cyan-500',
-                'RTAs': 'from-amber-500 to-orange-500',
-                'Complaints': 'from-purple-500 to-violet-500',
-                'Risks': 'from-red-500 to-rose-500',
-                'Audits': 'from-emerald-500 to-green-500',
-                'Actions': 'from-indigo-500 to-blue-500'
+              const variants: Record<string, string> = {
+                'Incidents': 'bg-info',
+                'RTAs': 'bg-warning',
+                'Complaints': 'bg-primary',
+                'Risks': 'bg-destructive',
+                'Audits': 'bg-success',
+                'Actions': 'bg-info'
               };
               
               return (
                 <div key={stat.module} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-300">{stat.module}</span>
-                    <span className="text-white font-medium">{stat.total}</span>
+                    <span className="text-foreground">{stat.module}</span>
+                    <span className="text-foreground font-medium">{stat.total}</span>
                   </div>
-                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-2 bg-surface rounded-full overflow-hidden">
                     <div
-                      className={`h-full bg-gradient-to-r ${colors[stat.module]} rounded-full transition-all`}
+                      className={cn("h-full rounded-full transition-all", variants[stat.module])}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -333,54 +346,55 @@ export default function Analytics() {
               );
             })}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Module Performance Table */}
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden">
-        <div className="p-6 border-b border-slate-700/50">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Activity className="w-5 h-5 text-violet-400" />
+      <Card className="overflow-hidden">
+        <div className="p-6 border-b border-border">
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
             Module Performance
           </h2>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-900/50">
+            <thead className="bg-surface">
               <tr>
-                <th className="text-left p-4 text-sm font-medium text-slate-400">Module</th>
-                <th className="text-center p-4 text-sm font-medium text-slate-400">Total</th>
-                <th className="text-center p-4 text-sm font-medium text-slate-400">Open</th>
-                <th className="text-center p-4 text-sm font-medium text-slate-400">Closed</th>
-                <th className="text-center p-4 text-sm font-medium text-slate-400">Avg Resolution</th>
-                <th className="text-center p-4 text-sm font-medium text-slate-400">Trend</th>
+                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Module</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Total</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Open</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Closed</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Avg Resolution</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Trend</th>
               </tr>
             </thead>
             <tbody>
               {moduleStats.map((stat) => (
                 <tr
                   key={stat.module}
-                  className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors ${
-                    selectedModule === stat.module ? 'bg-violet-500/10' : ''
-                  }`}
+                  className={cn(
+                    "border-b border-border hover:bg-surface transition-colors cursor-pointer",
+                    selectedModule === stat.module && 'bg-primary/5'
+                  )}
                   onClick={() => setSelectedModule(stat.module === selectedModule ? null : stat.module)}
                 >
                   <td className="p-4">
-                    <span className="font-medium text-white">{stat.module}</span>
+                    <span className="font-medium text-foreground">{stat.module}</span>
                   </td>
-                  <td className="p-4 text-center text-slate-300">{stat.total}</td>
+                  <td className="p-4 text-center text-foreground">{stat.total}</td>
                   <td className="p-4 text-center">
-                    <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded-full text-sm">
+                    <span className="px-2 py-1 bg-warning/20 text-warning rounded-full text-sm">
                       {stat.open}
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm">
+                    <span className="px-2 py-1 bg-success/20 text-success rounded-full text-sm">
                       {stat.closed}
                     </span>
                   </td>
-                  <td className="p-4 text-center text-slate-300">{stat.avgResolutionDays} days</td>
+                  <td className="p-4 text-center text-foreground">{stat.avgResolutionDays} days</td>
                   <td className="p-4 text-center">
                     <TrendIndicator
                       change={stat.trend}
@@ -392,25 +406,25 @@ export default function Analytics() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* AI Insights */}
-      <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/30 rounded-xl p-6">
+      <Card className="p-6 border-primary/20 bg-primary/5">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-violet-500/20 rounded-xl">
-            <Sparkles className="w-6 h-6 text-violet-400" />
+          <div className="p-3 bg-primary/20 rounded-xl">
+            <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white mb-2">AI-Powered Insights</h3>
-            <div className="space-y-2 text-slate-300">
-              <p>• <strong>Incident resolution</strong> has improved by 15.8% this quarter, reducing average time from 5 days to 4.2 days.</p>
-              <p>• <strong>RTA frequency</strong> shows a downward trend (-12.3%), likely due to recent safety training initiatives.</p>
-              <p>• <strong>Complaint volumes</strong> peaked in July (+55 cases) - consider reviewing Q3 service delivery processes.</p>
-              <p>• <strong>Risk register</strong> has 28 open items requiring attention, 8 are overdue for review.</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">AI-Powered Insights</h3>
+            <div className="space-y-2 text-muted-foreground">
+              <p>• <strong className="text-foreground">Incident resolution</strong> has improved by 15.8% this quarter, reducing average time from 5 days to 4.2 days.</p>
+              <p>• <strong className="text-foreground">RTA frequency</strong> shows a downward trend (-12.3%), likely due to recent safety training initiatives.</p>
+              <p>• <strong className="text-foreground">Complaint volumes</strong> peaked in July (+55 cases) - consider reviewing Q3 service delivery processes.</p>
+              <p>• <strong className="text-foreground">Risk register</strong> has 28 open items requiring attention, 8 are overdue for review.</p>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
