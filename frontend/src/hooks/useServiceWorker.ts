@@ -204,7 +204,6 @@ export function useServiceWorker(): UseServiceWorkerReturn {
     if (!state.registration) return;
 
     try {
-      // @ts-expect-error - sync is not in the types
       if ('sync' in state.registration) {
         // @ts-expect-error - sync is not in the types
         await state.registration.sync.register('sync-reports');
@@ -234,14 +233,15 @@ export function useServiceWorker(): UseServiceWorkerReturn {
 }
 
 // Helper: Convert base64 to Uint8Array for VAPID key
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/-/g, '+')
     .replace(/_/g, '/');
 
   const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
+  const buffer = new ArrayBuffer(rawData.length);
+  const outputArray = new Uint8Array(buffer);
 
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);

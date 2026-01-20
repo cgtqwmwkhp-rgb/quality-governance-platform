@@ -26,7 +26,6 @@ import {
   Download,
   MoreVertical,
   Search,
-  Filter,
   RefreshCw,
   History,
   PenTool,
@@ -72,7 +71,7 @@ interface SignatureTemplate {
 
 const DigitalSignatures: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'templates' | 'audit'>('requests');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [_showCreateModal, _setShowCreateModal] = useState(false);
   const [showSigningModal, setShowSigningModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<SignatureRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');

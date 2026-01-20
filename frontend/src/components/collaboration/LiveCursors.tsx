@@ -22,7 +22,7 @@ interface LiveCursorsProps {
   containerRef: React.RefObject<HTMLElement>;
 }
 
-export function LiveCursors({ documentId, containerRef }: LiveCursorsProps) {
+export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCursorsProps) {
   const [cursors, setCursors] = useState<CursorPosition[]>([]);
 
   useEffect(() => {

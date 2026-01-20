@@ -9,23 +9,19 @@
  * - Feedback mechanism
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Bot,
   Send,
   X,
   Minimize2,
-  Maximize2,
   Mic,
   MicOff,
   ThumbsUp,
   ThumbsDown,
   Sparkles,
   Loader,
-  MessageSquare,
   ChevronRight,
-  RefreshCw,
-  Settings,
   History,
 } from 'lucide-react';
 
@@ -63,15 +59,15 @@ const AICopilot: React.FC<AICopilotProps> = ({
   onClose,
   currentPage,
   contextType,
-  contextId,
-  contextData,
+  contextId: _contextId,
+  contextData: _contextData,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [_sessionId, _setSessionId] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedAction[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   
@@ -233,7 +229,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
     };
   };
   
-  const executeAction = async (messageId: number, actionType: string, actionData?: Record<string, unknown>) => {
+  const executeAction = async (messageId: number, _actionType: string, _actionData?: Record<string, unknown>) => {
     // Simulate action execution
     await new Promise(resolve => setTimeout(resolve, 500));
     

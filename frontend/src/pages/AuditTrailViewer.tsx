@@ -18,7 +18,6 @@ import {
   AlertTriangle,
   Clock,
   User,
-  FileText,
   Activity,
   Eye,
   Edit,
@@ -92,7 +91,7 @@ export default function AuditTrailViewer() {
   const [loading, setLoading] = useState(true);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<AuditEntry | null>(null);
+  const [_selectedEntry, _setSelectedEntry] = useState<AuditEntry | null>(null);
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
   
   // Filters

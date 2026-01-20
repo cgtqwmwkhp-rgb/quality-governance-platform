@@ -4,9 +4,6 @@ import {
   Leaf,
   HardHat,
   Lock,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
   ChevronRight,
   FileText,
   Users,
@@ -14,7 +11,6 @@ import {
   Truck,
   Wrench,
   BarChart3,
-  Target,
   RefreshCw,
   Plus,
   Search,
@@ -26,7 +22,6 @@ import {
   ClipboardList,
   ExternalLink,
   Link2,
-  Zap,
 } from 'lucide-react'
 
 interface UVDBSection {

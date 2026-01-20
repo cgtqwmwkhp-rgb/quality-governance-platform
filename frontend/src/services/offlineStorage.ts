@@ -103,7 +103,7 @@ class OfflineStorage {
     if (this.db) return;
 
     this.db = await openDB<OfflineDBSchema>(this.dbName, this.dbVersion, {
-      upgrade(db) {
+      upgrade(db: IDBPDatabase<OfflineDBSchema>) {
         // Sync Queue
         if (!db.objectStoreNames.contains('syncQueue')) {
           const syncStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
