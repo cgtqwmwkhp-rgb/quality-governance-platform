@@ -25,6 +25,7 @@ import PortalTrack from './pages/PortalTrack'
 import PortalHelp from './pages/PortalHelp'
 import PortalIncidentForm from './pages/PortalIncidentForm'
 import PortalRTAForm from './pages/PortalRTAForm'
+import PortalDynamicForm from './pages/PortalDynamicForm'
 // Enterprise Enhancement Pages
 import Analytics from './pages/Analytics'
 import GlobalSearch from './pages/GlobalSearch'
@@ -124,11 +125,14 @@ function App() {
           {/* Level 2: Report Type Selection */}
           <Route path="report" element={<PortalReport />} />
           
-          {/* Level 3: Report Forms */}
-          <Route path="report/incident" element={<PortalIncidentForm />} />
-          <Route path="report/near-miss" element={<PortalIncidentForm />} />
-          <Route path="report/complaint" element={<PortalIncidentForm />} />
+          {/* Level 3: Report Forms - Dynamic versions */}
+          <Route path="report/incident" element={<PortalDynamicForm />} />
+          <Route path="report/near-miss" element={<PortalDynamicForm />} />
+          <Route path="report/complaint" element={<PortalDynamicForm />} />
           <Route path="report/rta" element={<PortalRTAForm />} />
+          
+          {/* Legacy static forms (fallback) */}
+          <Route path="report/incident-legacy" element={<PortalIncidentForm />} />
           
           {/* Other Portal Pages */}
           <Route path="track" element={<PortalTrack />} />
