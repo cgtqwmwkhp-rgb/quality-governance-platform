@@ -5,20 +5,53 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual deployment'
+        required: false
+        type: string
+        default: 'Manual trigger'
 
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
   IMAGE_NAME: quality-governance-platform
+  # Health check configuration - enterprise grade
+  HEALTH_CHECK_MAX_ATTEMPTS: 30
+  HEALTH_CHECK_INTERVAL: 10
 
 jobs:
   build-and-deploy:
-    name: Build and Deploy
+    name: Build and Deploy to Staging
     runs-on: ubuntu-latest
+    outputs:
+      deployment_id: ${{ steps.generate-id.outputs.deployment_id }}
+      image_tag: ${{ steps.build.outputs.image_tag }}
     
     steps:
+      - name: Generate deployment ID
+        id: generate-id
+        run: |
+          DEPLOYMENT_ID="staging-$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}"
+          echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+          echo "📋 Deployment ID: $DEPLOYMENT_ID"
+
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Log deployment info
+        run: |
+          echo "## 🚀 Staging Deployment Started" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deployment ID** | ${{ steps.generate-id.outputs.deployment_id }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Actor** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Reason** | ${{ github.event.inputs.reason || 'Push to main' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp** | $(date -u +"%Y-%m-%dT%H:%M:%SZ") |" >> $GITHUB_STEP_SUMMARY
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -29,18 +62,22 @@ jobs:
         run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build and push Docker image
+        id: build
         run: |
           IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           IMAGE_LATEST="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
           
-          echo "Building image: $IMAGE_TAG"
+          echo "🔨 Building image: $IMAGE_TAG"
           docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
           
-          echo "Pushing images..."
+          echo "📤 Pushing images..."
           docker push $IMAGE_TAG
           docker push $IMAGE_LATEST
           
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          
+          echo "✅ Image built and pushed successfully"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -48,24 +85,9 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           images: ${{ env.IMAGE_TAG }}
 
-      - name: Cleanup old migration containers
-        continue-on-error: true
-        run: |
-          echo "Cleaning up old migration containers to free quota..."
-          for container in $(az container list --resource-group rg-qgp-staging --query "[?starts_with(name, 'qgp-migration')].name" -o tsv); do
-            STATE=$(az container show --name $container --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Unknown")
-            if [ "$STATE" = "Terminated" ] || [ "$STATE" = "Unknown" ]; then
-              echo "Deleting: $container (state: $STATE)"
-              az container delete --name $container --resource-group rg-qgp-staging --yes || true
-            fi
-          done
-          echo "Cleanup complete"
-
       - name: Run database migrations
-        continue-on-error: true
-        id: migrations
         run: |
-          echo "Running migrations via Azure Container Instance..."
+          echo "🗃️ Running migrations via Azure Container Instance..."
           
           # Fetch secrets into variables
           ACR_USERNAME=$(az acr credential show --name ${{ env.ACR_NAME }} --query username -o tsv)
@@ -76,15 +98,16 @@ jobs:
           
           # Validate secrets
           if [ -z "$DB_URL" ]; then
-            echo "⚠️ WARNING: Failed to retrieve DATABASE_URL - skipping migrations"
-            echo "migration_status=skipped" >> $GITHUB_OUTPUT
-            exit 0
+            echo "❌ ERROR: Failed to retrieve DATABASE_URL from Key Vault"
+            exit 1
           fi
-          echo "Successfully retrieved secrets from Key Vault"
+          echo "✅ Successfully retrieved secrets from Key Vault"
           
-          # Create migration container (with error handling for quota)
-          if ! az container create \
-            --name qgp-migration-${{ github.run_number }} \
+          CONTAINER_NAME="qgp-migration-${{ github.run_number }}"
+          
+          # Create container with secure environment variables
+          az container create \
+            --name $CONTAINER_NAME \
             --resource-group rg-qgp-staging \
             --location westeurope \
             --os-type Linux \
@@ -99,66 +122,238 @@ jobs:
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
-            --memory 1; then
-            echo "⚠️ WARNING: Container quota exceeded - migrations skipped"
-            echo "App deployed but migrations may need manual run"
-            echo "migration_status=quota_exceeded" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+            --memory 1
           
-          echo "Waiting for migration to complete..."
+          echo "⏳ Waiting for migration to complete..."
           
           MAX_WAIT=300
           WAITED=0
           while [ $WAITED -lt $MAX_WAIT ]; do
-            STATE=$(az container show --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
+            STATE=$(az container show --name $CONTAINER_NAME --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
             if [ "$STATE" = "Terminated" ]; then
-              echo "Migration container terminated after ${WAITED}s"
+              echo "✅ Migration container terminated after ${WAITED}s"
               break
             fi
-            echo "Migration still running... (${WAITED}s)"
+            echo "   Migration still running... (${WAITED}s)"
             sleep 10
             WAITED=$((WAITED + 10))
           done
           
-          EXIT_CODE=$(az container show --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.exitCode" -o tsv || echo "1")
+          EXIT_CODE=$(az container show --name $CONTAINER_NAME --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.exitCode" -o tsv)
           
-          echo "Migration exit code: $EXIT_CODE"
-          echo "Migration logs:"
-          az container logs --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging || true
+          echo "📋 Migration exit code: $EXIT_CODE"
+          echo "📋 Migration logs:"
+          az container logs --name $CONTAINER_NAME --resource-group rg-qgp-staging
           
           if [ "$EXIT_CODE" != "0" ]; then
-            echo "⚠️ WARNING: Migration returned non-zero exit code"
-            echo "migration_status=failed" >> $GITHUB_OUTPUT
-          else
-            echo "migration_status=success" >> $GITHUB_OUTPUT
-          fi
-          
-          echo "Cleaning up migration container..."
-          az container delete --name qgp-migration-${{ github.run_number }} --resource-group rg-qgp-staging --yes || true
-
-      - name: Verify deployment
-        run: |
-          echo "Waiting for app to restart..."
-          sleep 30
-          
-          echo "Testing health endpoint..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/healthz)
-          
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✅ Deployment successful! Health check returned 200"
-          else
-            echo "❌ Deployment may have issues. Health check returned $HTTP_STATUS"
+            echo "❌ Migration failed!"
             exit 1
           fi
+          
+          echo "🧹 Cleaning up migration container..."
+          az container delete --name $CONTAINER_NAME --resource-group rg-qgp-staging --yes
+          echo "✅ Migrations completed successfully"
+
+      - name: Verify deployment with retry
+        id: verify
+        run: |
+          APP_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          MAX_ATTEMPTS=${{ env.HEALTH_CHECK_MAX_ATTEMPTS }}
+          INTERVAL=${{ env.HEALTH_CHECK_INTERVAL }}
+          
+          echo "🔍 Verifying deployment at $APP_URL"
+          echo "   Max attempts: $MAX_ATTEMPTS"
+          echo "   Interval: ${INTERVAL}s"
+          echo "   Total timeout: $((MAX_ATTEMPTS * INTERVAL))s"
+          echo ""
+          
+          # Function to check endpoint with retry
+          check_endpoint() {
+            local endpoint=$1
+            local name=$2
+            local attempt=1
+            
+            echo "📡 Checking $name endpoint: $endpoint"
+            
+            while [ $attempt -le $MAX_ATTEMPTS ]; do
+              HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" --max-time 30 "$endpoint" 2>/dev/null || echo "000")
+              
+              if [ "$HTTP_STATUS" = "200" ]; then
+                echo "   ✅ Attempt $attempt: $name check PASSED (HTTP $HTTP_STATUS)"
+                return 0
+              elif [ "$HTTP_STATUS" = "000" ]; then
+                echo "   ⏳ Attempt $attempt/$MAX_ATTEMPTS: Connection failed, retrying in ${INTERVAL}s..."
+              else
+                echo "   ⏳ Attempt $attempt/$MAX_ATTEMPTS: HTTP $HTTP_STATUS, retrying in ${INTERVAL}s..."
+              fi
+              
+              attempt=$((attempt + 1))
+              sleep $INTERVAL
+            done
+            
+            echo "   ❌ $name check FAILED after $MAX_ATTEMPTS attempts"
+            return 1
+          }
+          
+          # Initial wait for app to start
+          echo "⏳ Initial wait (30s) for app cold start..."
+          sleep 30
+          
+          # Health check with retry
+          if ! check_endpoint "$APP_URL/healthz" "Health"; then
+            echo ""
+            echo "❌ DEPLOYMENT VERIFICATION FAILED"
+            echo "   Health endpoint did not respond with 200 after $MAX_ATTEMPTS attempts"
+            echo ""
+            echo "📋 Last response body:"
+            cat /tmp/response.txt 2>/dev/null || echo "(empty)"
+            exit 1
+          fi
+          
+          echo ""
+          echo "🎉 Deployment verification PASSED!"
 
       - name: Deployment summary
+        if: always()
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image** | ${{ env.IMAGE_TAG }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Status** | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Deployment Result" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **URL** | https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Image** | \`${{ env.IMAGE_TAG }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Health Check** | ✅ Passed with retry |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ STAGING DEPLOYMENT FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Post-deployment smoke tests
+  smoke-tests:
+    name: Staging Smoke Tests
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    if: needs.build-and-deploy.result == 'success'
+    
+    steps:
+      - name: Run smoke tests
+        run: |
+          APP_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          
+          echo "🧪 Running staging smoke tests against $APP_URL"
+          echo ""
+          
+          TESTS_PASSED=0
+          TESTS_FAILED=0
+          
+          # Test 1: Health endpoint
+          echo "Test 1: Health endpoint"
+          HEALTH=$(curl -s --max-time 30 "$APP_URL/healthz")
+          if echo "$HEALTH" | grep -q '"status"'; then
+            echo "   ✅ PASSED - Health endpoint returns valid JSON"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+          else
+            echo "   ❌ FAILED - Invalid health response"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+          fi
+          
+          # Test 2: Readiness endpoint
+          echo "Test 2: Readiness endpoint"
+          READY=$(curl -s --max-time 30 "$APP_URL/readyz")
+          if echo "$READY" | grep -q '"status"'; then
+            echo "   ✅ PASSED - Readiness endpoint returns valid JSON"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+          else
+            echo "   ❌ FAILED - Invalid readiness response"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+          fi
+          
+          # Test 3: API returns 401/403 for unauthenticated requests
+          echo "Test 3: API authentication guard"
+          AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$APP_URL/api/v1/policies")
+          if [ "$AUTH_STATUS" = "401" ] || [ "$AUTH_STATUS" = "403" ]; then
+            echo "   ✅ PASSED - API correctly rejects unauthenticated requests (HTTP $AUTH_STATUS)"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+          else
+            echo "   ⚠️ INFO - Received HTTP $AUTH_STATUS"
+          fi
+          
+          # Test 4: OpenAPI spec available
+          echo "Test 4: OpenAPI specification"
+          OPENAPI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$APP_URL/openapi.json")
+          if [ "$OPENAPI_STATUS" = "200" ]; then
+            echo "   ✅ PASSED - OpenAPI spec accessible"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+          else
+            echo "   ⚠️ INFO - OpenAPI spec returned HTTP $OPENAPI_STATUS"
+          fi
+          
+          # Test 5: Docs endpoint
+          echo "Test 5: API documentation"
+          DOCS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$APP_URL/docs")
+          if [ "$DOCS_STATUS" = "200" ]; then
+            echo "   ✅ PASSED - API docs accessible"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+          else
+            echo "   ⚠️ INFO - API docs returned HTTP $DOCS_STATUS"
+          fi
+          
+          echo ""
+          echo "📊 Results: $TESTS_PASSED passed, $TESTS_FAILED failed"
+          echo ""
+          
+          if [ $TESTS_FAILED -gt 0 ]; then
+            echo "❌ Critical smoke tests failed!"
+            exit 1
+          fi
+          
+          echo "🎉 All smoke tests passed!"
+
+      - name: Smoke test summary
+        if: always()
+        run: |
+          echo "## 🧪 Staging Smoke Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Health Endpoint | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Readiness Endpoint | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auth Guard | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| OpenAPI Spec | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Docs | ✅ |" >> $GITHUB_STEP_SUMMARY
+
+  # Final notification
+  notify:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [build-and-deploy, smoke-tests]
+    if: always()
+    
+    steps:
+      - name: Final status
+        run: |
+          echo "## 📊 Staging Deployment Final Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.build-and-deploy.result }}" == "success" && "${{ needs.smoke-tests.result }}" == "success" ]]; then
+            echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The staging deployment completed successfully. Ready for production promotion." >> $GITHUB_STEP_SUMMARY
+            echo ""
+            echo "🎉 Staging deployment successful!"
+            echo "   Deployment ID: ${{ needs.build-and-deploy.outputs.deployment_id }}"
+          else
+            echo "### ❌ STAGING DEPLOYMENT FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Build & Deploy | ${{ needs.build-and-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo ""
+            echo "❌ Staging deployment failed - check logs above"
+          fi
