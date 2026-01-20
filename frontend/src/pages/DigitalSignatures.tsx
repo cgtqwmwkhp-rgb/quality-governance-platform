@@ -16,6 +16,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  X,
   AlertCircle,
   Users,
   FileText,
@@ -602,6 +603,39 @@ const DigitalSignatures: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Create Request Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-lg mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-white">Create Signature Request</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-gray-400 mb-4">Create a new document for signature collection.</p>
+            <div className="text-center py-8 text-gray-500">
+              <FileSignature className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+              <p>Coming soon: Full document upload and signer configuration</p>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+              >
+                Create
+              </button>
+            </div>
           </div>
         </div>
       )}
