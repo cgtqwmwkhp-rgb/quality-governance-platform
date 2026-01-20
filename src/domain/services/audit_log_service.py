@@ -122,7 +122,7 @@ class AuditLogService:
             user_agent=user_agent,
             request_id=request_id,
             session_id=session_id,
-            metadata=metadata or {},
+            entry_metadata=metadata or {},
             timestamp=timestamp,
             is_sensitive=is_sensitive,
         )

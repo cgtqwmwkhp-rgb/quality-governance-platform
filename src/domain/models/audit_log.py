@@ -81,7 +81,7 @@ class AuditLogEntry(Base):
     geo_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
     # Additional metadata
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    entry_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     
     # Timestamp (UTC)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

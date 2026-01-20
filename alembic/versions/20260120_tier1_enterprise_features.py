@@ -269,7 +269,7 @@ def upgrade() -> None:
         sa.Column('session_id', sa.String(100), nullable=True),
         sa.Column('geo_country', sa.String(100), nullable=True),
         sa.Column('geo_city', sa.String(100), nullable=True),
-        sa.Column('metadata', sa.JSON(), default=dict),
+        sa.Column('entry_metadata', sa.JSON(), default=dict),
         sa.Column('timestamp', sa.DateTime(), nullable=False),
         sa.Column('is_sensitive', sa.Boolean(), default=False),
         sa.Column('retention_days', sa.Integer(), default=2555),
