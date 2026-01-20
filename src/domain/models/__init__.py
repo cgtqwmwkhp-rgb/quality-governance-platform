@@ -71,6 +71,15 @@ from src.domain.models.iso27001 import (
     BusinessContinuityPlan,
     SupplierSecurityAssessment,
 )
+# UVDB Achilles Verify B2 Audit Protocol
+from src.domain.models.uvdb_achilles import (
+    UVDBSection,
+    UVDBQuestion,
+    UVDBAudit,
+    UVDBAuditResponse,
+    UVDBKPIRecord,
+    UVDBISOCrossMapping,
+)
 
 __all__ = [
     # Base mixins
@@ -159,4 +168,11 @@ __all__ = [
     "AccessControlRecord",
     "BusinessContinuityPlan",
     "SupplierSecurityAssessment",
+    # UVDB Achilles Verify B2 Audit Protocol
+    "UVDBSection",
+    "UVDBQuestion",
+    "UVDBAudit",
+    "UVDBAuditResponse",
+    "UVDBKPIRecord",
+    "UVDBISOCrossMapping",
 ]

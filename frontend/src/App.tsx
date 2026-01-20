@@ -47,6 +47,8 @@ import RiskRegister from './pages/RiskRegister'
 import IMSDashboard from './pages/IMSDashboard'
 // Tier 2: AI Intelligence
 import AIIntelligence from './pages/AIIntelligence'
+// UVDB Achilles Verify
+import UVDBAudits from './pages/UVDBAudits'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -186,6 +188,8 @@ function App() {
           <Route path="ims" element={<IMSDashboard />} />
           {/* Tier 2: AI Intelligence */}
           <Route path="ai-intelligence" element={<AIIntelligence />} />
+          {/* UVDB Achilles Verify */}
+          <Route path="uvdb" element={<UVDBAudits />} />
         </Route>
       </Routes>
     </BrowserRouter>

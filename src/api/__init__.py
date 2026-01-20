@@ -26,6 +26,7 @@ from src.api.routes import (
     rtas,
     standards,
     users,
+    uvdb,
     workflows,
 )
 
@@ -58,5 +59,7 @@ router.include_router(ai_intelligence.router, prefix="/ai", tags=["AI Intelligen
 router.include_router(document_control.router, prefix="/document-control", tags=["Document Control System"])
 # ISO 27001 Information Security Management System
 router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS"])
+# UVDB Achilles Verify B2 Audit Protocol
+router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
 
 __all__ = ["router"]
