@@ -87,7 +87,7 @@ class SignatureService:
             initiated_by_id=initiated_by_id,
             expires_at=datetime.utcnow() + timedelta(days=expires_in_days),
             reminder_frequency=reminder_frequency,
-            metadata=metadata or {},
+            request_metadata=metadata or {},
         )
         
         self.db.add(request)

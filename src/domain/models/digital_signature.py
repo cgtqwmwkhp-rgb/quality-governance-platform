@@ -78,7 +78,7 @@ class SignatureRequest(Base):
     certificate_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
     # Metadata
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    request_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

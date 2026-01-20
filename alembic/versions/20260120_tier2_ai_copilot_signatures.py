@@ -153,7 +153,7 @@ def upgrade() -> None:
         sa.Column("signed_document", sa.LargeBinary(), nullable=True),
         sa.Column("signed_document_hash", sa.String(64), nullable=True),
         sa.Column("certificate_id", sa.String(100), nullable=True),
-        sa.Column("metadata", sa.JSON(), nullable=True, default={}),
+        sa.Column("request_metadata", sa.JSON(), nullable=True, default={}),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
