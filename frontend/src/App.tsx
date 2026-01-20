@@ -21,7 +21,7 @@ import Portal from './pages/Portal'
 import PortalLogin from './pages/PortalLogin'
 import PortalReport from './pages/PortalReport'
 import PortalTrack from './pages/PortalTrack'
-import PortalSOS from './pages/PortalSOS'
+// PortalSOS removed - emergency situations should use phone calls
 import PortalHelp from './pages/PortalHelp'
 import PortalIncidentForm from './pages/PortalIncidentForm'
 import PortalRTAForm from './pages/PortalRTAForm'
@@ -127,7 +127,7 @@ function App() {
           {/* Other Portal Pages */}
           <Route path="track" element={<PortalTrack />} />
           <Route path="track/:referenceNumber" element={<PortalTrack />} />
-          <Route path="sos" element={<PortalSOS />} />
+          {/* Emergency SOS removed - use phone calls for emergencies */}
           <Route path="help" element={<PortalHelp />} />
         </Route>
         
