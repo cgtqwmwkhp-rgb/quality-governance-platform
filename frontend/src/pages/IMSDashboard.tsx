@@ -28,6 +28,7 @@ import {
   UserCheck,
   Key,
   AlertOctagon,
+  Award,
 } from 'lucide-react'
 
 interface Standard {
@@ -132,6 +133,30 @@ export default function IMSDashboard() {
       nextAudit: '2026-04-20',
       certificateExpiry: '2027-10-19',
     },
+    {
+      id: 'planetmark',
+      name: 'Planet Mark',
+      version: 'Carbon Certification',
+      icon: Leaf,
+      color: 'bg-teal-500',
+      compliance: 87,
+      findings: { major: 0, minor: 2, observations: 1 },
+      lastAudit: '2024-09-30',
+      nextAudit: '2026-06-30',
+      certificateExpiry: '2026-09-30',
+    },
+    {
+      id: 'uvdb',
+      name: 'UVDB Achilles',
+      version: 'Verify B2 Audit',
+      icon: Award,
+      color: 'bg-yellow-500',
+      compliance: 94,
+      findings: { major: 0, minor: 1, observations: 2 },
+      lastAudit: '2025-09-15',
+      nextAudit: '2026-03-15',
+      certificateExpiry: '2026-09-14',
+    },
   ]
 
   const crossMappings: CrossMapping[] = [
@@ -208,6 +233,9 @@ export default function IMSDashboard() {
     { id: 2, type: 'Surveillance', scope: '9001, 14001, 45001', date: '2026-03-15', lead: 'External CB', status: 'Confirmed' },
     { id: 3, type: 'Internal', scope: 'Environmental Aspects', date: '2026-04-20', lead: 'Sarah Johnson', status: 'Draft' },
     { id: 4, type: 'Internal', scope: 'OH&S Hazards', date: '2026-05-10', lead: 'Mike Davis', status: 'Draft' },
+    { id: 5, type: 'External', scope: 'UVDB B2 Verify', date: '2026-03-15', lead: 'Achilles', status: 'Confirmed' },
+    { id: 6, type: 'Surveillance', scope: 'ISO 27001 ISMS', date: '2026-04-20', lead: 'External CB', status: 'Planned' },
+    { id: 7, type: 'Certification', scope: 'Planet Mark Year 2', date: '2026-06-30', lead: 'Planet Mark', status: 'Planned' },
   ]
 
   const managementReviewInputs = [
@@ -216,6 +244,9 @@ export default function IMSDashboard() {
     { category: 'Process Performance', status: 'In Progress', source: 'All Standards', trend: 'improving' },
     { category: 'Environmental Performance', status: 'Complete', source: 'ISO 14001', trend: 'improving' },
     { category: 'OH&S Performance', status: 'Complete', source: 'ISO 45001', trend: 'stable' },
+    { category: 'Information Security', status: 'Complete', source: 'ISO 27001', trend: 'improving' },
+    { category: 'Carbon Footprint', status: 'Complete', source: 'Planet Mark', trend: 'improving' },
+    { category: 'UVDB Qualification', status: 'Complete', source: 'UVDB Achilles', trend: 'stable' },
     { category: 'Objectives Achievement', status: 'Pending', source: 'All Standards', trend: 'stable' },
     { category: 'Risks & Opportunities', status: 'In Progress', source: 'All Standards', trend: 'stable' },
     { category: 'Resource Adequacy', status: 'Pending', source: 'All Standards', trend: 'stable' },

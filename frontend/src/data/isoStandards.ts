@@ -198,6 +198,128 @@ const ISO_45001_CLAUSES: ISOClause[] = [
 ];
 
 // ============================================================================
+// ISO 27001:2022 - Information Security Management System
+// ============================================================================
+
+const ISO_27001_CLAUSES: ISOClause[] = [
+  // Clause 4 - Context
+  { id: '27001-4', standard: 'iso27001', clauseNumber: '4', title: 'Context of the organization', description: 'Understanding the organization and its context for information security', keywords: ['context', 'information security', 'stakeholders', 'scope'], level: 1 },
+  { id: '27001-4.1', standard: 'iso27001', clauseNumber: '4.1', title: 'Understanding the organization and its context', description: 'Determine external and internal issues relevant to information security', keywords: ['context', 'internal issues', 'external issues', 'information security'], parentClause: '27001-4', level: 2 },
+  { id: '27001-4.2', standard: 'iso27001', clauseNumber: '4.2', title: 'Understanding the needs and expectations of interested parties', description: 'Determine interested parties and their information security requirements', keywords: ['interested parties', 'stakeholders', 'requirements', 'information security'], parentClause: '27001-4', level: 2 },
+  { id: '27001-4.3', standard: 'iso27001', clauseNumber: '4.3', title: 'Determining the scope of the ISMS', description: 'Determine boundaries and applicability of the ISMS', keywords: ['scope', 'boundaries', 'ISMS', 'information security'], parentClause: '27001-4', level: 2 },
+  { id: '27001-4.4', standard: 'iso27001', clauseNumber: '4.4', title: 'Information security management system', description: 'Establish, implement, maintain and continually improve the ISMS', keywords: ['ISMS', 'information security management system', 'establish', 'implement'], parentClause: '27001-4', level: 2 },
+
+  // Clause 5 - Leadership
+  { id: '27001-5', standard: 'iso27001', clauseNumber: '5', title: 'Leadership', description: 'Leadership and commitment for information security', keywords: ['leadership', 'commitment', 'policy', 'top management'], level: 1 },
+  { id: '27001-5.1', standard: 'iso27001', clauseNumber: '5.1', title: 'Leadership and commitment', description: 'Top management shall demonstrate leadership and commitment to the ISMS', keywords: ['top management', 'leadership', 'commitment', 'accountability', 'resources'], parentClause: '27001-5', level: 2 },
+  { id: '27001-5.2', standard: 'iso27001', clauseNumber: '5.2', title: 'Policy', description: 'Establish information security policy', keywords: ['information security policy', 'policy', 'objectives', 'commitment'], parentClause: '27001-5', level: 2 },
+  { id: '27001-5.3', standard: 'iso27001', clauseNumber: '5.3', title: 'Organizational roles, responsibilities and authorities', description: 'Assign and communicate roles and responsibilities for information security', keywords: ['roles', 'responsibilities', 'authorities', 'CISO', 'information security manager'], parentClause: '27001-5', level: 2 },
+
+  // Clause 6 - Planning
+  { id: '27001-6', standard: 'iso27001', clauseNumber: '6', title: 'Planning', description: 'Planning for the ISMS', keywords: ['planning', 'risk assessment', 'risk treatment', 'objectives'], level: 1 },
+  { id: '27001-6.1', standard: 'iso27001', clauseNumber: '6.1', title: 'Actions to address risks and opportunities', description: 'Determine risks and opportunities and plan actions', keywords: ['risk assessment', 'risk treatment', 'opportunities', 'information security risk'], parentClause: '27001-6', level: 2 },
+  { id: '27001-6.1.1', standard: 'iso27001', clauseNumber: '6.1.1', title: 'General', description: 'Consider issues and requirements when planning the ISMS', keywords: ['planning', 'issues', 'requirements'], parentClause: '27001-6.1', level: 3 },
+  { id: '27001-6.1.2', standard: 'iso27001', clauseNumber: '6.1.2', title: 'Information security risk assessment', description: 'Define and apply information security risk assessment process', keywords: ['risk assessment', 'risk criteria', 'risk analysis', 'risk evaluation', 'CIA', 'confidentiality', 'integrity', 'availability'], parentClause: '27001-6.1', level: 3 },
+  { id: '27001-6.1.3', standard: 'iso27001', clauseNumber: '6.1.3', title: 'Information security risk treatment', description: 'Define and apply risk treatment process', keywords: ['risk treatment', 'risk treatment plan', 'statement of applicability', 'SoA', 'controls', 'Annex A'], parentClause: '27001-6.1', level: 3 },
+  { id: '27001-6.2', standard: 'iso27001', clauseNumber: '6.2', title: 'Information security objectives and planning to achieve them', description: 'Establish information security objectives', keywords: ['information security objectives', 'objectives', 'targets', 'KPIs', 'measurable'], parentClause: '27001-6', level: 2 },
+  { id: '27001-6.3', standard: 'iso27001', clauseNumber: '6.3', title: 'Planning of changes', description: 'Changes to ISMS shall be carried out in a planned manner', keywords: ['change management', 'planning changes', 'ISMS changes'], parentClause: '27001-6', level: 2 },
+
+  // Clause 7 - Support
+  { id: '27001-7', standard: 'iso27001', clauseNumber: '7', title: 'Support', description: 'Resources, competence, awareness, communication, documented information', keywords: ['support', 'resources', 'competence', 'awareness', 'training'], level: 1 },
+  { id: '27001-7.1', standard: 'iso27001', clauseNumber: '7.1', title: 'Resources', description: 'Determine and provide resources for ISMS', keywords: ['resources', 'budget', 'personnel', 'infrastructure'], parentClause: '27001-7', level: 2 },
+  { id: '27001-7.2', standard: 'iso27001', clauseNumber: '7.2', title: 'Competence', description: 'Determine competence of persons affecting information security', keywords: ['competence', 'training', 'security training', 'qualifications', 'skills'], parentClause: '27001-7', level: 2 },
+  { id: '27001-7.3', standard: 'iso27001', clauseNumber: '7.3', title: 'Awareness', description: 'Persons shall be aware of information security policy', keywords: ['awareness', 'security awareness', 'policy awareness', 'phishing awareness'], parentClause: '27001-7', level: 2 },
+  { id: '27001-7.4', standard: 'iso27001', clauseNumber: '7.4', title: 'Communication', description: 'Determine internal and external communications for ISMS', keywords: ['communication', 'internal communication', 'external communication', 'security communication'], parentClause: '27001-7', level: 2 },
+  { id: '27001-7.5', standard: 'iso27001', clauseNumber: '7.5', title: 'Documented information', description: 'ISMS shall include required documented information', keywords: ['documented information', 'documents', 'records', 'document control', 'information classification'], parentClause: '27001-7', level: 2 },
+
+  // Clause 8 - Operation
+  { id: '27001-8', standard: 'iso27001', clauseNumber: '8', title: 'Operation', description: 'Operational planning and control', keywords: ['operation', 'operational', 'risk assessment', 'risk treatment'], level: 1 },
+  { id: '27001-8.1', standard: 'iso27001', clauseNumber: '8.1', title: 'Operational planning and control', description: 'Plan, implement and control processes for ISMS', keywords: ['operational planning', 'process control', 'outsourced processes'], parentClause: '27001-8', level: 2 },
+  { id: '27001-8.2', standard: 'iso27001', clauseNumber: '8.2', title: 'Information security risk assessment', description: 'Perform risk assessments at planned intervals', keywords: ['risk assessment', 'periodic assessment', 'risk reassessment'], parentClause: '27001-8', level: 2 },
+  { id: '27001-8.3', standard: 'iso27001', clauseNumber: '8.3', title: 'Information security risk treatment', description: 'Implement risk treatment plan', keywords: ['risk treatment', 'risk treatment implementation', 'controls implementation'], parentClause: '27001-8', level: 2 },
+
+  // Clause 9 - Performance evaluation
+  { id: '27001-9', standard: 'iso27001', clauseNumber: '9', title: 'Performance evaluation', description: 'Monitoring, measurement, analysis and evaluation', keywords: ['performance', 'monitoring', 'measurement', 'audit', 'review'], level: 1 },
+  { id: '27001-9.1', standard: 'iso27001', clauseNumber: '9.1', title: 'Monitoring, measurement, analysis and evaluation', description: 'Determine what needs to be monitored and measured', keywords: ['monitoring', 'measurement', 'security metrics', 'KPIs', 'effectiveness'], parentClause: '27001-9', level: 2 },
+  { id: '27001-9.2', standard: 'iso27001', clauseNumber: '9.2', title: 'Internal audit', description: 'Conduct internal audits at planned intervals', keywords: ['internal audit', 'ISMS audit', 'audit program', 'audit findings', 'security audit'], parentClause: '27001-9', level: 2 },
+  { id: '27001-9.3', standard: 'iso27001', clauseNumber: '9.3', title: 'Management review', description: 'Top management shall review the ISMS', keywords: ['management review', 'review', 'top management', 'ISMS review'], parentClause: '27001-9', level: 2 },
+
+  // Clause 10 - Improvement
+  { id: '27001-10', standard: 'iso27001', clauseNumber: '10', title: 'Improvement', description: 'Nonconformity, corrective action, continual improvement', keywords: ['improvement', 'corrective action', 'continual improvement', 'nonconformity'], level: 1 },
+  { id: '27001-10.1', standard: 'iso27001', clauseNumber: '10.1', title: 'Continual improvement', description: 'Continually improve the ISMS', keywords: ['continual improvement', 'improvement', 'ISMS effectiveness'], parentClause: '27001-10', level: 2 },
+  { id: '27001-10.2', standard: 'iso27001', clauseNumber: '10.2', title: 'Nonconformity and corrective action', description: 'React to nonconformities and take corrective action', keywords: ['nonconformity', 'corrective action', 'root cause', 'security incident', 'breach'], parentClause: '27001-10', level: 2 },
+
+  // Annex A Controls (2022 version - 4 themes, 93 controls)
+  // A.5 Organizational controls
+  { id: '27001-A.5', standard: 'iso27001', clauseNumber: 'A.5', title: 'Organizational controls', description: 'Annex A - Organizational controls (37 controls)', keywords: ['organizational controls', 'Annex A', 'policies', 'roles', 'responsibilities'], level: 1 },
+  { id: '27001-A.5.1', standard: 'iso27001', clauseNumber: 'A.5.1', title: 'Policies for information security', description: 'Information security policy and topic-specific policies', keywords: ['information security policy', 'policies', 'policy framework'], parentClause: '27001-A.5', level: 2 },
+  { id: '27001-A.5.2', standard: 'iso27001', clauseNumber: 'A.5.2', title: 'Information security roles and responsibilities', description: 'Define and allocate information security responsibilities', keywords: ['roles', 'responsibilities', 'CISO', 'security roles'], parentClause: '27001-A.5', level: 2 },
+  { id: '27001-A.5.7', standard: 'iso27001', clauseNumber: 'A.5.7', title: 'Threat intelligence', description: 'Information about threats shall be collected and analyzed', keywords: ['threat intelligence', 'threat analysis', 'cyber threats', 'vulnerability intelligence'], parentClause: '27001-A.5', level: 2 },
+  { id: '27001-A.5.23', standard: 'iso27001', clauseNumber: 'A.5.23', title: 'Information security for use of cloud services', description: 'Processes for cloud service acquisition, use and management', keywords: ['cloud security', 'cloud services', 'SaaS', 'IaaS', 'PaaS'], parentClause: '27001-A.5', level: 2 },
+  { id: '27001-A.5.24', standard: 'iso27001', clauseNumber: 'A.5.24', title: 'Information security incident management planning', description: 'Plan and prepare for information security incidents', keywords: ['incident management', 'incident response', 'incident planning', 'security incident'], parentClause: '27001-A.5', level: 2 },
+
+  // A.6 People controls
+  { id: '27001-A.6', standard: 'iso27001', clauseNumber: 'A.6', title: 'People controls', description: 'Annex A - People controls (8 controls)', keywords: ['people controls', 'Annex A', 'HR security', 'screening', 'awareness'], level: 1 },
+  { id: '27001-A.6.1', standard: 'iso27001', clauseNumber: 'A.6.1', title: 'Screening', description: 'Background verification checks on candidates', keywords: ['screening', 'background check', 'vetting', 'pre-employment'], parentClause: '27001-A.6', level: 2 },
+  { id: '27001-A.6.3', standard: 'iso27001', clauseNumber: 'A.6.3', title: 'Information security awareness, education and training', description: 'Awareness program and relevant training', keywords: ['awareness training', 'security training', 'education', 'phishing training'], parentClause: '27001-A.6', level: 2 },
+
+  // A.7 Physical controls
+  { id: '27001-A.7', standard: 'iso27001', clauseNumber: 'A.7', title: 'Physical controls', description: 'Annex A - Physical controls (14 controls)', keywords: ['physical controls', 'Annex A', 'physical security', 'access control', 'environmental'], level: 1 },
+  { id: '27001-A.7.1', standard: 'iso27001', clauseNumber: 'A.7.1', title: 'Physical security perimeters', description: 'Security perimeters to protect areas with information', keywords: ['physical perimeter', 'secure areas', 'data center', 'server room'], parentClause: '27001-A.7', level: 2 },
+  { id: '27001-A.7.4', standard: 'iso27001', clauseNumber: 'A.7.4', title: 'Physical security monitoring', description: 'Premises shall be continuously monitored for unauthorized access', keywords: ['CCTV', 'monitoring', 'surveillance', 'intrusion detection'], parentClause: '27001-A.7', level: 2 },
+
+  // A.8 Technological controls
+  { id: '27001-A.8', standard: 'iso27001', clauseNumber: 'A.8', title: 'Technological controls', description: 'Annex A - Technological controls (34 controls)', keywords: ['technological controls', 'Annex A', 'technical controls', 'encryption', 'access control'], level: 1 },
+  { id: '27001-A.8.1', standard: 'iso27001', clauseNumber: 'A.8.1', title: 'User endpoint devices', description: 'Information on endpoint devices shall be protected', keywords: ['endpoint security', 'laptops', 'mobile devices', 'BYOD', 'MDM'], parentClause: '27001-A.8', level: 2 },
+  { id: '27001-A.8.5', standard: 'iso27001', clauseNumber: 'A.8.5', title: 'Secure authentication', description: 'Secure authentication technologies and procedures', keywords: ['authentication', 'MFA', 'multi-factor', 'passwords', 'SSO'], parentClause: '27001-A.8', level: 2 },
+  { id: '27001-A.8.7', standard: 'iso27001', clauseNumber: 'A.8.7', title: 'Protection against malware', description: 'Protection against malware shall be implemented', keywords: ['malware', 'antivirus', 'anti-malware', 'ransomware', 'virus'], parentClause: '27001-A.8', level: 2 },
+  { id: '27001-A.8.12', standard: 'iso27001', clauseNumber: 'A.8.12', title: 'Data leakage prevention', description: 'Data leakage prevention measures shall be applied', keywords: ['DLP', 'data leakage', 'data loss prevention', 'exfiltration'], parentClause: '27001-A.8', level: 2 },
+  { id: '27001-A.8.15', standard: 'iso27001', clauseNumber: 'A.8.15', title: 'Logging', description: 'Logs recording activities, exceptions, faults shall be produced', keywords: ['logging', 'audit logs', 'security logs', 'SIEM'], parentClause: '27001-A.8', level: 2 },
+  { id: '27001-A.8.24', standard: 'iso27001', clauseNumber: 'A.8.24', title: 'Use of cryptography', description: 'Rules for effective use of cryptography shall be defined', keywords: ['cryptography', 'encryption', 'key management', 'TLS', 'PKI'], parentClause: '27001-A.8', level: 2 },
+  { id: '27001-A.8.28', standard: 'iso27001', clauseNumber: 'A.8.28', title: 'Secure coding', description: 'Secure coding principles shall be applied', keywords: ['secure coding', 'OWASP', 'code review', 'SAST', 'DAST', 'secure development'], parentClause: '27001-A.8', level: 2 },
+];
+
+// ============================================================================
+// Planet Mark Carbon Certification - Sustainability Standard
+// ============================================================================
+
+const PLANET_MARK_REQUIREMENTS: ISOClause[] = [
+  { id: 'pm-1', standard: 'planetmark', clauseNumber: 'PM.1', title: 'Carbon Footprint Measurement', description: 'Measure organizational carbon footprint using GHG Protocol', keywords: ['carbon footprint', 'emissions', 'GHG protocol', 'scope 1', 'scope 2', 'scope 3', 'tCO2e'], level: 1 },
+  { id: 'pm-1.1', standard: 'planetmark', clauseNumber: 'PM.1.1', title: 'Scope 1 Emissions', description: 'Direct emissions from owned or controlled sources', keywords: ['scope 1', 'direct emissions', 'fleet', 'natural gas', 'combustion'], parentClause: 'pm-1', level: 2 },
+  { id: 'pm-1.2', standard: 'planetmark', clauseNumber: 'PM.1.2', title: 'Scope 2 Emissions', description: 'Indirect emissions from purchased electricity, heat, steam', keywords: ['scope 2', 'electricity', 'purchased energy', 'location-based', 'market-based'], parentClause: 'pm-1', level: 2 },
+  { id: 'pm-1.3', standard: 'planetmark', clauseNumber: 'PM.1.3', title: 'Scope 3 Emissions', description: 'Value chain emissions (15 categories)', keywords: ['scope 3', 'value chain', 'supply chain', 'business travel', 'commuting', 'waste'], parentClause: 'pm-1', level: 2 },
+  { id: 'pm-2', standard: 'planetmark', clauseNumber: 'PM.2', title: 'Data Quality', description: 'Ensure data quality score meets certification requirements', keywords: ['data quality', 'metered data', 'verified data', 'estimates', 'accuracy'], level: 1 },
+  { id: 'pm-2.1', standard: 'planetmark', clauseNumber: 'PM.2.1', title: 'Scope 1 & 2 Data Quality', description: 'Achieve data quality score ≥12/16 for Scope 1 & 2', keywords: ['data quality', 'actual readings', 'calibration', 'completeness'], parentClause: 'pm-2', level: 2 },
+  { id: 'pm-2.2', standard: 'planetmark', clauseNumber: 'PM.2.2', title: 'Scope 3 Data Quality', description: 'Achieve data quality score ≥11/16 for Scope 3', keywords: ['data quality', 'supplier data', 'spend-based', 'activity-based'], parentClause: 'pm-2', level: 2 },
+  { id: 'pm-3', standard: 'planetmark', clauseNumber: 'PM.3', title: 'Improvement Plan', description: 'Implement SMART improvement actions for carbon reduction', keywords: ['improvement plan', 'SMART', 'targets', 'reduction', 'actions'], level: 1 },
+  { id: 'pm-3.1', standard: 'planetmark', clauseNumber: 'PM.3.1', title: 'Annual Reduction Target', description: 'Achieve minimum 5% reduction in emissions per employee', keywords: ['reduction target', '5%', 'per FTE', 'year-on-year'], parentClause: 'pm-3', level: 2 },
+  { id: 'pm-3.2', standard: 'planetmark', clauseNumber: 'PM.3.2', title: 'SMART Actions', description: 'Document Specific, Measurable, Achievable, Relevant, Time-bound actions', keywords: ['SMART', 'actions', 'owners', 'deadlines', 'measurable'], parentClause: 'pm-3', level: 2 },
+  { id: 'pm-4', standard: 'planetmark', clauseNumber: 'PM.4', title: 'Continual Improvement', description: 'Demonstrate year-on-year environmental improvement', keywords: ['continual improvement', 'annual certification', 'trajectory', 'net-zero'], level: 1 },
+];
+
+// ============================================================================
+// UVDB Achilles Verify B2 Audit Protocol
+// ============================================================================
+
+const UVDB_SECTIONS: ISOClause[] = [
+  { id: 'uvdb-1', standard: 'uvdb', clauseNumber: 'UVDB.1', title: 'System Assurance and Compliance', description: 'Management system certification and compliance arrangements', keywords: ['management system', 'ISO certification', 'compliance', 'governance'], level: 1 },
+  { id: 'uvdb-2', standard: 'uvdb', clauseNumber: 'UVDB.2', title: 'Quality Control and Assurance', description: 'Quality management and assurance processes', keywords: ['quality control', 'quality assurance', 'QC', 'QA', 'inspection'], level: 1 },
+  { id: 'uvdb-3', standard: 'uvdb', clauseNumber: 'UVDB.3', title: 'Health and Safety Leadership', description: 'Leadership commitment to health and safety', keywords: ['H&S leadership', 'safety leadership', 'visible commitment', 'accountability'], level: 1 },
+  { id: 'uvdb-4', standard: 'uvdb', clauseNumber: 'UVDB.4', title: 'Health and Safety Management', description: 'H&S management system and arrangements', keywords: ['H&S management', 'OHSMS', 'risk assessment', 'safe systems of work'], level: 1 },
+  { id: 'uvdb-5', standard: 'uvdb', clauseNumber: 'UVDB.5', title: 'Health and Safety Arrangements', description: 'Operational H&S arrangements and controls', keywords: ['H&S arrangements', 'permits', 'isolations', 'working at height', 'confined space'], level: 1 },
+  { id: 'uvdb-6', standard: 'uvdb', clauseNumber: 'UVDB.6', title: 'Occupational Health', description: 'Occupational health management', keywords: ['occupational health', 'health surveillance', 'fitness for work', 'HAVS', 'noise'], level: 1 },
+  { id: 'uvdb-7', standard: 'uvdb', clauseNumber: 'UVDB.7', title: 'Safety Critical Personnel', description: 'Competence of safety critical workers', keywords: ['competence', 'training', 'certification', 'CSCS', 'ECS'], level: 1 },
+  { id: 'uvdb-8', standard: 'uvdb', clauseNumber: 'UVDB.8', title: 'Environmental Leadership', description: 'Leadership commitment to environmental management', keywords: ['environmental leadership', 'environmental commitment', 'sustainability'], level: 1 },
+  { id: 'uvdb-9', standard: 'uvdb', clauseNumber: 'UVDB.9', title: 'Environmental Management', description: 'Environmental management system and arrangements', keywords: ['EMS', 'environmental aspects', 'impacts', 'legal compliance'], level: 1 },
+  { id: 'uvdb-10', standard: 'uvdb', clauseNumber: 'UVDB.10', title: 'Environmental Arrangements', description: 'Operational environmental controls', keywords: ['environmental controls', 'pollution prevention', 'spill response'], level: 1 },
+  { id: 'uvdb-11', standard: 'uvdb', clauseNumber: 'UVDB.11', title: 'Waste Management', description: 'Waste management arrangements', keywords: ['waste management', 'duty of care', 'waste hierarchy', 'recycling'], level: 1 },
+  { id: 'uvdb-12', standard: 'uvdb', clauseNumber: 'UVDB.12', title: 'Sub-contractor Management', description: 'Selection and management of sub-contractors', keywords: ['subcontractor', 'supply chain', 'contractor management', 'approval'], level: 1 },
+  { id: 'uvdb-13', standard: 'uvdb', clauseNumber: 'UVDB.13', title: 'Sourcing of Goods', description: 'Sourcing and procurement of goods', keywords: ['sourcing', 'procurement', 'supply chain', 'ethical sourcing'], level: 1 },
+  { id: 'uvdb-14', standard: 'uvdb', clauseNumber: 'UVDB.14', title: 'Work Equipment', description: 'Use of work equipment, vehicles and machines', keywords: ['work equipment', 'PUWER', 'LOLER', 'vehicles', 'plant'], level: 1 },
+  { id: 'uvdb-15', standard: 'uvdb', clauseNumber: 'UVDB.15', title: 'Key Performance Indicators', description: 'KPI tracking and performance monitoring', keywords: ['KPIs', 'TRIR', 'LTIR', 'RIDDOR', 'performance'], level: 1 },
+];
+
+// ============================================================================
 // STANDARDS EXPORT
 // ============================================================================
 
@@ -231,6 +353,36 @@ export const ISO_STANDARDS: ISOStandard[] = [
     icon: 'HardHat',
     color: 'orange',
     clauses: ISO_45001_CLAUSES,
+  },
+  {
+    id: 'iso27001',
+    code: 'ISO 27001:2022',
+    name: 'Information Security Management System',
+    version: '2022',
+    description: 'Requirements for establishing, implementing, maintaining and continually improving an information security management system.',
+    icon: 'Lock',
+    color: 'purple',
+    clauses: ISO_27001_CLAUSES,
+  },
+  {
+    id: 'planetmark',
+    code: 'Planet Mark',
+    name: 'Carbon Certification',
+    version: '2024',
+    description: 'Business certification for carbon footprint measurement and year-on-year reduction aligned with GHG Protocol and Net-Zero pathway.',
+    icon: 'Leaf',
+    color: 'green',
+    clauses: PLANET_MARK_REQUIREMENTS,
+  },
+  {
+    id: 'uvdb',
+    code: 'UVDB Achilles',
+    name: 'Verify B2 Audit Protocol',
+    version: 'V11.2',
+    description: 'UK utilities sector supplier qualification audit covering quality, health & safety, and environmental management.',
+    icon: 'Award',
+    color: 'yellow',
+    clauses: UVDB_SECTIONS,
   },
 ];
 

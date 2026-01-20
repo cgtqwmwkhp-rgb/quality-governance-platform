@@ -360,6 +360,129 @@ class AuditQuestionGenerator:
         ],
     }
 
+    # Planet Mark Carbon Certification Questions
+    PLANET_MARK_QUESTIONS = {
+        "PM.1": [
+            "How is the organizational carbon footprint calculated?",
+            "What methodology is used for emissions measurement (GHG Protocol)?",
+            "What is the organizational boundary for carbon reporting?",
+        ],
+        "PM.1.1": [
+            "How are Scope 1 direct emissions measured?",
+            "What sources of direct emissions are included (fleet, heating)?",
+            "What data sources are used for fuel consumption?",
+        ],
+        "PM.1.2": [
+            "How are Scope 2 electricity emissions calculated?",
+            "Is location-based or market-based accounting used?",
+            "What renewable energy is purchased (REGOs)?",
+        ],
+        "PM.1.3": [
+            "Which Scope 3 categories are measured?",
+            "How is business travel data captured?",
+            "How are employee commuting emissions estimated?",
+        ],
+        "PM.2": [
+            "What is the overall data quality score?",
+            "How is data quality assessed (completeness, accuracy)?",
+            "What percentage of data is from actual meter readings?",
+        ],
+        "PM.3": [
+            "What is the annual emission reduction target?",
+            "How are improvement actions tracked?",
+            "Who is responsible for each improvement action?",
+        ],
+        "PM.3.1": [
+            "What is the reduction target vs baseline?",
+            "How is progress toward the target monitored?",
+            "What corrective actions are taken if behind target?",
+        ],
+        "PM.4": [
+            "How is year-on-year improvement demonstrated?",
+            "What is the trajectory toward Net Zero?",
+            "How are lessons learned captured and applied?",
+        ],
+    }
+
+    # UVDB Achilles Verify B2 Audit Questions
+    UVDB_QUESTIONS = {
+        "UVDB.1": [
+            "What management system certifications does the organization hold?",
+            "How is management system compliance maintained?",
+            "What governance arrangements are in place?",
+        ],
+        "UVDB.2": [
+            "What quality control processes are in place?",
+            "How is quality assurance performed?",
+            "How are non-conformances handled?",
+        ],
+        "UVDB.3": [
+            "How does senior leadership demonstrate H&S commitment?",
+            "What is the H&S policy and how is it communicated?",
+            "How is H&S leadership visible to the workforce?",
+        ],
+        "UVDB.4": [
+            "What H&S management system is in place?",
+            "How are H&S risks assessed and controlled?",
+            "How are safe systems of work developed?",
+        ],
+        "UVDB.5": [
+            "What permit to work systems are in place?",
+            "How are high-risk activities controlled (confined space, height)?",
+            "What emergency arrangements exist?",
+        ],
+        "UVDB.6": [
+            "What occupational health surveillance is conducted?",
+            "How is fitness for work assessed?",
+            "What health hazards are monitored (HAVS, noise)?",
+        ],
+        "UVDB.7": [
+            "How is competence of safety critical personnel ensured?",
+            "What certification schemes are used (CSCS, ECS)?",
+            "How are training records maintained?",
+        ],
+        "UVDB.8": [
+            "How does leadership demonstrate environmental commitment?",
+            "What is the environmental policy?",
+            "How are environmental objectives set?",
+        ],
+        "UVDB.9": [
+            "What environmental management system is in place?",
+            "How are environmental aspects identified?",
+            "How is legal compliance ensured?",
+        ],
+        "UVDB.10": [
+            "What pollution prevention controls are in place?",
+            "How are spills and releases managed?",
+            "What environmental monitoring is conducted?",
+        ],
+        "UVDB.11": [
+            "What waste management arrangements exist?",
+            "How is duty of care ensured for waste?",
+            "What recycling and waste reduction initiatives exist?",
+        ],
+        "UVDB.12": [
+            "How are subcontractors selected and approved?",
+            "What ongoing management of subcontractors is performed?",
+            "How are subcontractor H&S records monitored?",
+        ],
+        "UVDB.13": [
+            "How are goods and products sourced responsibly?",
+            "What supply chain due diligence is performed?",
+            "How is ethical sourcing ensured?",
+        ],
+        "UVDB.14": [
+            "How is work equipment maintained and inspected?",
+            "What PUWER/LOLER compliance arrangements exist?",
+            "How are vehicles and plant managed?",
+        ],
+        "UVDB.15": [
+            "What H&S KPIs are monitored?",
+            "What are the TRIR and LTIR statistics?",
+            "How is KPI performance reviewed and improved?",
+        ],
+    }
+
     def __init__(self, db: Session):
         self.db = db
         self.claude_client = None
@@ -414,6 +537,28 @@ class AuditQuestionGenerator:
                         "clause": clause,
                         "standard": standard,
                         "type": "compliance",
+                        "evidence_required": self._suggest_evidence(q),
+                    }
+                )
+        elif standard.upper() == "PLANET MARK" and clause in self.PLANET_MARK_QUESTIONS:
+            for q in self.PLANET_MARK_QUESTIONS[clause]:
+                questions.append(
+                    {
+                        "question": q,
+                        "clause": clause,
+                        "standard": standard,
+                        "type": "carbon_compliance",
+                        "evidence_required": self._suggest_evidence(q),
+                    }
+                )
+        elif standard.upper() == "UVDB" and clause in self.UVDB_QUESTIONS:
+            for q in self.UVDB_QUESTIONS[clause]:
+                questions.append(
+                    {
+                        "question": q,
+                        "clause": clause,
+                        "standard": standard,
+                        "type": "supplier_qualification",
                         "evidence_required": self._suggest_evidence(q),
                     }
                 )

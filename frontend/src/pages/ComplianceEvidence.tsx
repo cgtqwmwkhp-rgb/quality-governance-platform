@@ -58,6 +58,21 @@ const mockEvidence: EvidenceItem[] = [
   { id: 'e13', type: 'document', title: 'Management Review Minutes - Dec 2025', description: 'Minutes from quarterly management review meeting', date: '2025-12-18', status: 'active', linkedClauses: ['9001-9.3', '14001-9.3', '45001-9.3'], autoTagged: false, link: '/documents/6' },
   { id: 'e14', type: 'document', title: 'Emergency Response Plan', description: 'Procedures for emergency situations', date: '2025-07-14', status: 'active', linkedClauses: ['45001-8.2', '14001-8.2'], autoTagged: true, confidence: 96, link: '/documents/7' },
   { id: 'e15', type: 'document', title: 'Supplier Evaluation Procedure', description: 'Process for evaluating and approving suppliers', date: '2025-06-20', status: 'active', linkedClauses: ['9001-8.4'], autoTagged: true, confidence: 89, link: '/documents/8' },
+  // ISO 27001 Evidence
+  { id: 'e16', type: 'policy', title: 'Information Security Policy', description: 'Corporate information security policy aligned with ISO 27001', date: '2025-11-01', status: 'active', linkedClauses: ['27001-5.2', '27001-A.5.1'], autoTagged: false, link: '/documents/9' },
+  { id: 'e17', type: 'document', title: 'Statement of Applicability', description: 'SoA documenting Annex A control selection and justification', date: '2025-10-15', status: 'active', linkedClauses: ['27001-6.1.3', '27001-A.5'], autoTagged: false, link: '/documents/10' },
+  { id: 'e18', type: 'audit', title: 'ISMS Internal Audit Report', description: 'Internal audit of information security controls', date: '2025-12-01', status: 'active', linkedClauses: ['27001-9.2', '27001-A.8.15'], autoTagged: true, confidence: 91, link: '/audits/3' },
+  { id: 'e19', type: 'training', title: 'Security Awareness Training Records', description: 'Phishing awareness and security training completion', date: '2025-12-10', status: 'active', linkedClauses: ['27001-7.3', '27001-A.6.3'], autoTagged: true, confidence: 94, link: '/training/2' },
+  { id: 'e20', type: 'incident', title: 'Security Incident Report - Phishing Attempt', description: 'Detected and blocked phishing attack on finance team', date: '2025-12-05', status: 'active', linkedClauses: ['27001-A.5.24', '27001-10.2'], autoTagged: true, confidence: 88, link: '/incidents/3' },
+  // Planet Mark Evidence
+  { id: 'e21', type: 'document', title: 'Carbon Footprint Report YE2024', description: 'Annual carbon footprint measurement per GHG Protocol', date: '2024-09-30', status: 'active', linkedClauses: ['pm-1', 'pm-1.1', 'pm-1.2', 'pm-1.3'], autoTagged: true, confidence: 96, link: '/planet-mark' },
+  { id: 'e22', type: 'document', title: 'Year 2 Improvement Plan', description: 'SMART actions for 5% emissions reduction target', date: '2025-07-01', status: 'active', linkedClauses: ['pm-3', 'pm-3.1', 'pm-3.2'], autoTagged: true, confidence: 92, link: '/planet-mark' },
+  { id: 'e23', type: 'document', title: 'Fleet Fuel Card Audit', description: '100% fleet transactions via fuel card for data quality', date: '2025-08-31', status: 'active', linkedClauses: ['pm-2.1', 'pm-1.1'], autoTagged: true, confidence: 89, link: '/planet-mark' },
+  { id: 'e24', type: 'document', title: 'Planet Mark Certificate YE2024', description: 'Planet Mark Business Certification - Year 1', date: '2024-10-15', status: 'active', linkedClauses: ['pm-4'], autoTagged: false, link: '/documents/11' },
+  // UVDB Achilles Evidence
+  { id: 'e25', type: 'audit', title: 'UVDB B2 Audit Report 2025', description: 'UVDB Achilles Verify B2 audit completed with 94% score', date: '2025-09-15', status: 'active', linkedClauses: ['uvdb-1', 'uvdb-2', 'uvdb-3', 'uvdb-4'], autoTagged: false, link: '/uvdb' },
+  { id: 'e26', type: 'document', title: 'Subcontractor Management Procedure', description: 'Process for selecting and managing subcontractors', date: '2025-05-20', status: 'active', linkedClauses: ['uvdb-12', '9001-8.4', '45001-8.1.4'], autoTagged: true, confidence: 87, link: '/documents/12' },
+  { id: 'e27', type: 'document', title: 'RIDDOR Statistics Report', description: 'Annual RIDDOR reportable incident statistics', date: '2025-12-01', status: 'active', linkedClauses: ['uvdb-15', '45001-9.1'], autoTagged: true, confidence: 91, link: '/analytics' },
 ];
 
 const evidenceTypeConfig: Record<EvidenceType, { icon: React.ElementType; label: string; color: string }> = {
@@ -74,12 +89,18 @@ const standardIcons: Record<string, React.ElementType> = {
   iso9001: Award,
   iso14001: Leaf,
   iso45001: HardHat,
+  iso27001: Shield,
+  planetmark: Leaf,
+  uvdb: Award,
 };
 
 const standardColors: Record<string, string> = {
   iso9001: 'blue',
   iso14001: 'green',
   iso45001: 'orange',
+  iso27001: 'purple',
+  planetmark: 'teal',
+  uvdb: 'yellow',
 };
 
 export default function ComplianceEvidence() {
