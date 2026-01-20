@@ -49,6 +49,8 @@ import IMSDashboard from './pages/IMSDashboard'
 import AIIntelligence from './pages/AIIntelligence'
 // UVDB Achilles Verify
 import UVDBAudits from './pages/UVDBAudits'
+// Planet Mark Carbon Management
+import PlanetMark from './pages/PlanetMark'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
@@ -190,6 +192,8 @@ function App() {
           <Route path="ai-intelligence" element={<AIIntelligence />} />
           {/* UVDB Achilles Verify */}
           <Route path="uvdb" element={<UVDBAudits />} />
+          {/* Planet Mark Carbon Management */}
+          <Route path="planet-mark" element={<PlanetMark />} />
         </Route>
       </Routes>
     </BrowserRouter>

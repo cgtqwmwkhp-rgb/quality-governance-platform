@@ -80,6 +80,19 @@ from src.domain.models.uvdb_achilles import (
     UVDBKPIRecord,
     UVDBISOCrossMapping,
 )
+# Planet Mark Carbon Management
+from src.domain.models.planet_mark import (
+    CarbonReportingYear,
+    EmissionSource,
+    Scope3CategoryData,
+    ImprovementAction,
+    DataQualityAssessment,
+    CarbonEvidence,
+    FleetEmissionRecord,
+    UtilityMeterReading,
+    SupplierEmissionData,
+    ISO14001CrossMapping,
+)
 
 __all__ = [
     # Base mixins
@@ -175,4 +188,15 @@ __all__ = [
     "UVDBAuditResponse",
     "UVDBKPIRecord",
     "UVDBISOCrossMapping",
+    # Planet Mark Carbon Management
+    "CarbonReportingYear",
+    "EmissionSource",
+    "Scope3CategoryData",
+    "ImprovementAction",
+    "DataQualityAssessment",
+    "CarbonEvidence",
+    "FleetEmissionRecord",
+    "UtilityMeterReading",
+    "SupplierEmissionData",
+    "ISO14001CrossMapping",
 ]

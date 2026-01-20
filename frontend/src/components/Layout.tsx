@@ -26,10 +26,11 @@ import {
   Command,
   GitBranch,
   Brain,
-  GitMerge,
-  Target,
-  Award
-} from 'lucide-react'
+GitMerge,
+    Target,
+    Award,
+    Leaf
+  } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 interface LayoutProps {
@@ -53,6 +54,7 @@ const navSections = [
       { path: '/audit-templates', icon: Sparkles, label: 'Audit Builder', color: 'text-pink-400' },
       { path: '/compliance', icon: Shield, label: 'ISO Compliance', color: 'text-emerald-400' },
       { path: '/uvdb', icon: Award, label: 'UVDB Achilles', color: 'text-yellow-400' },
+      { path: '/planet-mark', icon: Leaf, label: 'Planet Mark', color: 'text-green-400' },
       { path: '/investigations', icon: FlaskConical, label: 'Investigations', color: 'text-violet-400' },
       { path: '/standards', icon: BookOpen, label: 'Standards', color: 'text-cyan-400' },
       { path: '/actions', icon: ListTodo, label: 'Actions', color: 'text-teal-400' },
