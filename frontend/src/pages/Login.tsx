@@ -22,6 +22,31 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true)
 
     try {
+      // Demo login bypass - allows access without backend
+      const DEMO_CREDENTIALS = [
+        { email: 'admin@plantexpand.com', password: 'TestUser123!' },
+        { email: 'demo@plantexpand.com', password: 'demo123' },
+      ]
+      
+      const isDemoLogin = DEMO_CREDENTIALS.some(
+        cred => cred.email.toLowerCase() === email.toLowerCase() && cred.password === password
+      )
+      
+      if (isDemoLogin) {
+        // Generate a demo token (JWT-like structure for demo purposes)
+        const demoPayload = {
+          sub: email,
+          email: email,
+          name: email === 'admin@plantexpand.com' ? 'Admin User' : 'Demo User',
+          role: 'admin',
+          exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
+        }
+        const demoToken = `demo.${btoa(JSON.stringify(demoPayload))}.signature`
+        onLogin(demoToken)
+        return
+      }
+      
+      // Try real API login
       const response = await authApi.login({ email, password })
       onLogin(response.data.access_token)
     } catch (err: any) {
