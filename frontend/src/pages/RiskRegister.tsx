@@ -17,6 +17,9 @@ import {
   Clock,
   User,
 } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Card, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
 
 interface Risk {
   id: number
@@ -61,13 +64,13 @@ interface HeatMapData {
 }
 
 const CATEGORIES = [
-  { id: 'strategic', label: 'Strategic', color: 'bg-purple-500' },
-  { id: 'operational', label: 'Operational', color: 'bg-blue-500' },
-  { id: 'financial', label: 'Financial', color: 'bg-green-500' },
-  { id: 'compliance', label: 'Compliance', color: 'bg-yellow-500' },
-  { id: 'reputational', label: 'Reputational', color: 'bg-pink-500' },
-  { id: 'health_safety', label: 'Health & Safety', color: 'bg-red-500' },
-  { id: 'environmental', label: 'Environmental', color: 'bg-emerald-500' },
+  { id: 'strategic', label: 'Strategic', color: 'bg-primary' },
+  { id: 'operational', label: 'Operational', color: 'bg-info' },
+  { id: 'financial', label: 'Financial', color: 'bg-success' },
+  { id: 'compliance', label: 'Compliance', color: 'bg-warning' },
+  { id: 'reputational', label: 'Reputational', color: 'bg-destructive' },
+  { id: 'health_safety', label: 'Health & Safety', color: 'bg-destructive' },
+  { id: 'environmental', label: 'Environmental', color: 'bg-success' },
 ]
 
 const TREATMENT_STRATEGIES = [
@@ -83,11 +86,6 @@ export default function RiskRegister() {
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
   const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null)
   const [loading, setLoading] = useState(true)
-  const [_filters] = useState({
-    category: '',
-    department: '',
-    status: '',
-  })
   const [showFilters, setShowFilters] = useState(false)
   const [summary, setSummary] = useState({
     total_risks: 0,
@@ -98,9 +96,7 @@ export default function RiskRegister() {
   })
 
   useEffect(() => {
-    // Simulate data loading
     setTimeout(() => {
-      // Mock data
       const mockRisks: Risk[] = [
         {
           id: 1,
@@ -111,7 +107,7 @@ export default function RiskRegister() {
           inherent_score: 20,
           residual_score: 12,
           risk_level: 'high',
-          risk_color: '#f97316',
+          risk_color: 'hsl(var(--warning))',
           treatment_strategy: 'treat',
           status: 'monitoring',
           is_within_appetite: true,
@@ -127,7 +123,7 @@ export default function RiskRegister() {
           inherent_score: 25,
           residual_score: 15,
           risk_level: 'high',
-          risk_color: '#f97316',
+          risk_color: 'hsl(var(--warning))',
           treatment_strategy: 'treat',
           status: 'treating',
           is_within_appetite: false,
@@ -143,7 +139,7 @@ export default function RiskRegister() {
           inherent_score: 16,
           residual_score: 8,
           risk_level: 'medium',
-          risk_color: '#eab308',
+          risk_color: 'hsl(var(--info))',
           treatment_strategy: 'treat',
           status: 'monitoring',
           is_within_appetite: true,
@@ -159,7 +155,7 @@ export default function RiskRegister() {
           inherent_score: 25,
           residual_score: 9,
           risk_level: 'medium',
-          risk_color: '#eab308',
+          risk_color: 'hsl(var(--info))',
           treatment_strategy: 'treat',
           status: 'monitoring',
           is_within_appetite: true,
@@ -175,7 +171,7 @@ export default function RiskRegister() {
           inherent_score: 20,
           residual_score: 6,
           risk_level: 'medium',
-          risk_color: '#eab308',
+          risk_color: 'hsl(var(--info))',
           treatment_strategy: 'treat',
           status: 'monitoring',
           is_within_appetite: true,
@@ -193,7 +189,6 @@ export default function RiskRegister() {
         escalated: 0,
       })
 
-      // Mock heat map
       const mockHeatMap: HeatMapData = {
         matrix: [],
         summary: {
@@ -220,22 +215,21 @@ export default function RiskRegister() {
         },
       }
 
-      // Generate matrix
       for (let likelihood = 5; likelihood >= 1; likelihood--) {
         const row: MatrixCell[] = []
         for (let impact = 1; impact <= 5; impact++) {
           const score = likelihood * impact
           let level = 'low'
-          let color = '#22c55e'
+          let color = 'hsl(var(--success))'
           if (score > 16) {
             level = 'critical'
-            color = '#ef4444'
+            color = 'hsl(var(--destructive))'
           } else if (score > 9) {
             level = 'high'
-            color = '#f97316'
+            color = 'hsl(var(--warning))'
           } else if (score > 4) {
             level = 'medium'
-            color = '#eab308'
+            color = 'hsl(var(--info))'
           }
 
           const cellRisks = mockRisks.filter(
@@ -263,21 +257,24 @@ export default function RiskRegister() {
     }, 500)
   }, [])
 
-  const getRiskLevelBadge = (level: string, color: string) => {
+  const getRiskLevelBadge = (level: string) => {
+    const variants: Record<string, 'destructive' | 'warning' | 'info' | 'resolved'> = {
+      critical: 'destructive',
+      high: 'warning',
+      medium: 'info',
+      low: 'resolved',
+    }
     return (
-      <span
-        className="px-2 py-1 rounded-full text-xs font-bold uppercase"
-        style={{ backgroundColor: color, color: 'white' }}
-      >
+      <Badge variant={variants[level] || 'default'} className="uppercase">
         {level}
-      </span>
+      </Badge>
     )
   }
 
   const getTreatmentBadge = (strategy: string) => {
     const s = TREATMENT_STRATEGIES.find((t) => t.id === strategy)
     return (
-      <span className="px-2 py-1 bg-slate-700 rounded-full text-xs">
+      <span className="px-2 py-1 bg-muted rounded-full text-xs">
         {s?.icon} {s?.label}
       </span>
     )
@@ -285,231 +282,221 @@ export default function RiskRegister() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Enterprise Risk Register</h1>
-          <p className="text-gray-400">ISO 31000 Compliant Risk Management</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Enterprise Risk Register</h1>
+          <p className="text-muted-foreground">ISO 31000 Compliant Risk Management</p>
         </div>
-        <div className="flex gap-3 mt-4 md:mt-0">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-          >
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
             <Filter className="w-4 h-4" />
             Filters
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+          </Button>
+          <Button variant="secondary">
             <Download className="w-4 h-4" />
             Export
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">
+          </Button>
+          <Button>
             <Plus className="w-4 h-4" />
             Add Risk
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-blue-500/20 rounded-lg">
-              <Layers className="w-5 h-5 text-blue-400" />
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-info/20 rounded-lg">
+                <Layers className="w-5 h-5 text-info" />
+              </div>
+              <span className="text-2xl font-bold text-foreground">{summary.total_risks}</span>
             </div>
-            <span className="text-2xl font-bold">{summary.total_risks}</span>
-          </div>
-          <p className="text-sm text-gray-400">Total Risks</p>
-        </div>
+            <p className="text-sm text-muted-foreground">Total Risks</p>
+          </CardContent>
+        </Card>
 
-        <div className="bg-slate-800 rounded-xl p-4 border border-red-500/30">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-red-500/20 rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
+        <Card className="border-destructive/30">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-destructive/20 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+              </div>
+              <span className="text-2xl font-bold text-destructive">{summary.by_level.critical}</span>
             </div>
-            <span className="text-2xl font-bold text-red-400">{summary.by_level.critical}</span>
-          </div>
-          <p className="text-sm text-gray-400">Critical</p>
-        </div>
+            <p className="text-sm text-muted-foreground">Critical</p>
+          </CardContent>
+        </Card>
 
-        <div className="bg-slate-800 rounded-xl p-4 border border-orange-500/30">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-orange-500/20 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-orange-400" />
+        <Card className="border-warning/30">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-warning/20 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-warning" />
+              </div>
+              <span className="text-2xl font-bold text-warning">{summary.by_level.high}</span>
             </div>
-            <span className="text-2xl font-bold text-orange-400">{summary.by_level.high}</span>
-          </div>
-          <p className="text-sm text-gray-400">High</p>
-        </div>
+            <p className="text-sm text-muted-foreground">High</p>
+          </CardContent>
+        </Card>
 
-        <div className="bg-slate-800 rounded-xl p-4 border border-yellow-500/30">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-yellow-500/20 rounded-lg">
-              <Activity className="w-5 h-5 text-yellow-400" />
+        <Card className="border-info/30">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-info/20 rounded-lg">
+                <Activity className="w-5 h-5 text-info" />
+              </div>
+              <span className="text-2xl font-bold text-info">{summary.by_level.medium}</span>
             </div>
-            <span className="text-2xl font-bold text-yellow-400">{summary.by_level.medium}</span>
-          </div>
-          <p className="text-sm text-gray-400">Medium</p>
-        </div>
+            <p className="text-sm text-muted-foreground">Medium</p>
+          </CardContent>
+        </Card>
 
-        <div className="bg-slate-800 rounded-xl p-4 border border-purple-500/30">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-purple-500/20 rounded-lg">
-              <Target className="w-5 h-5 text-purple-400" />
+        <Card className="border-primary/30">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-primary/20 rounded-lg">
+                <Target className="w-5 h-5 text-primary" />
+              </div>
+              <span className="text-2xl font-bold text-primary">{summary.outside_appetite}</span>
             </div>
-            <span className="text-2xl font-bold text-purple-400">{summary.outside_appetite}</span>
-          </div>
-          <p className="text-sm text-gray-400">Outside Appetite</p>
-        </div>
+            <p className="text-sm text-muted-foreground">Outside Appetite</p>
+          </CardContent>
+        </Card>
 
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-slate-600 rounded-lg">
-              <Clock className="w-5 h-5 text-gray-400" />
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-muted rounded-lg">
+                <Clock className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <span className="text-2xl font-bold text-foreground">{summary.overdue_review}</span>
             </div>
-            <span className="text-2xl font-bold">{summary.overdue_review}</span>
-          </div>
-          <p className="text-sm text-gray-400">Overdue Review</p>
-        </div>
+            <p className="text-sm text-muted-foreground">Overdue Review</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* View Toggle */}
-      <div className="flex gap-2 mb-6">
-        <button
+      <div className="flex gap-2">
+        <Button
+          variant={view === 'register' ? 'default' : 'secondary'}
           onClick={() => setView('register')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            view === 'register'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-          }`}
         >
-          <Layers className="w-4 h-4 inline-block mr-2" />
+          <Layers className="w-4 h-4" />
           Risk Register
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={view === 'heatmap' ? 'default' : 'secondary'}
           onClick={() => setView('heatmap')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            view === 'heatmap'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-          }`}
         >
-          <BarChart3 className="w-4 h-4 inline-block mr-2" />
+          <BarChart3 className="w-4 h-4" />
           Heat Map
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={view === 'bowtie' ? 'default' : 'secondary'}
           onClick={() => setView('bowtie')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            view === 'bowtie'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-          }`}
         >
-          <GitBranch className="w-4 h-4 inline-block mr-2" />
+          <GitBranch className="w-4 h-4" />
           Bow-Tie Analysis
-        </button>
+        </Button>
       </div>
 
       {/* Register View */}
       {view === 'register' && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-700">
+              <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                     Reference
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                     Risk Title
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                     Category
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                     Inherent
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                     Residual
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                     Level
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                     Treatment
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                     Owner
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700">
+              <tbody className="divide-y divide-border">
                 {risks.map((risk) => (
                   <tr
                     key={risk.id}
-                    className="hover:bg-slate-700/50 transition-colors cursor-pointer"
+                    className="hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setSelectedRisk(risk)}
                   >
                     <td className="px-4 py-4">
-                      <span className="font-mono text-emerald-400">{risk.reference}</span>
+                      <span className="font-mono text-primary">{risk.reference}</span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {!risk.is_within_appetite && (
-                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Outside Risk Appetite"></span>
+                          <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" title="Outside Risk Appetite"></span>
                         )}
-                        <span className="text-white">{risk.title}</span>
+                        <span className="text-foreground">{risk.title}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          CATEGORIES.find((c) => c.id === risk.category)?.color || 'bg-gray-500'
-                        }`}
-                      >
+                      <Badge variant="default">
                         {CATEGORIES.find((c) => c.id === risk.category)?.label || risk.category}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="text-xl font-bold text-gray-400">{risk.inherent_score}</span>
+                      <span className="text-xl font-bold text-muted-foreground">{risk.inherent_score}</span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span
-                        className="text-xl font-bold"
-                        style={{ color: risk.risk_color }}
-                      >
+                      <span className="text-xl font-bold text-primary">
                         {risk.residual_score}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      {getRiskLevelBadge(risk.risk_level, risk.risk_color)}
+                      {getRiskLevelBadge(risk.risk_level)}
                     </td>
                     <td className="px-4 py-4">{getTreatmentBadge(risk.treatment_strategy)}</td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-300">{risk.risk_owner_name}</span>
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground">{risk.risk_owner_name}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <button className="p-2 hover:bg-slate-600 rounded-lg transition-colors">
-                          <Eye className="w-4 h-4 text-gray-400" />
-                        </button>
-                        <button className="p-2 hover:bg-slate-600 rounded-lg transition-colors">
-                          <Edit2 className="w-4 h-4 text-gray-400" />
-                        </button>
+                        <Button variant="ghost" size="sm">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -517,271 +504,274 @@ export default function RiskRegister() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Heat Map View */}
       {view === 'heatmap' && heatMapData && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h2 className="text-xl font-bold mb-6 text-white">5×5 Risk Heat Map (Residual Risk)</h2>
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-xl font-bold mb-6 text-foreground">5×5 Risk Heat Map (Residual Risk)</h2>
 
-          <div className="flex gap-8">
-            {/* Matrix */}
-            <div className="flex-grow">
-              <div className="flex">
-                {/* Y-axis label */}
-                <div className="flex flex-col items-center justify-center pr-4">
-                  <span
-                    className="text-gray-400 text-sm font-medium"
-                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-                  >
-                    LIKELIHOOD →
-                  </span>
-                </div>
-
-                <div>
-                  {/* Y-axis labels */}
-                  <div className="flex">
-                    <div className="w-24"></div>
-                    {[1, 2, 3, 4, 5].map((impact) => (
-                      <div
-                        key={impact}
-                        className="w-20 text-center text-xs text-gray-400 mb-2"
-                      >
-                        {heatMapData.impact_labels[impact]}
-                      </div>
-                    ))}
+            <div className="flex gap-8">
+              {/* Matrix */}
+              <div className="flex-grow">
+                <div className="flex">
+                  {/* Y-axis label */}
+                  <div className="flex flex-col items-center justify-center pr-4">
+                    <span
+                      className="text-muted-foreground text-sm font-medium"
+                      style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                    >
+                      LIKELIHOOD →
+                    </span>
                   </div>
 
-                  {/* Matrix Grid */}
-                  {heatMapData.matrix.map((row, rowIndex) => (
-                    <div key={rowIndex} className="flex items-center">
-                      {/* Row label */}
-                      <div className="w-24 text-right pr-4 text-xs text-gray-400">
-                        {heatMapData.likelihood_labels[5 - rowIndex]}
-                      </div>
-
-                      {/* Cells */}
-                      {row.map((cell, cellIndex) => (
+                  <div>
+                    {/* Y-axis labels */}
+                    <div className="flex">
+                      <div className="w-24"></div>
+                      {[1, 2, 3, 4, 5].map((impact) => (
                         <div
-                          key={cellIndex}
-                          className="w-20 h-16 m-0.5 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-white/50 transition-all"
-                          style={{ backgroundColor: cell.color }}
+                          key={impact}
+                          className="w-20 text-center text-xs text-muted-foreground mb-2"
                         >
-                          <span className="text-white font-bold text-lg">{cell.score}</span>
-                          {cell.risk_count > 0 && (
-                            <span className="text-white/80 text-xs">
-                              ({cell.risk_count} risk{cell.risk_count > 1 ? 's' : ''})
-                            </span>
-                          )}
+                          {heatMapData.impact_labels[impact]}
                         </div>
                       ))}
                     </div>
-                  ))}
 
-                  {/* X-axis label */}
-                  <div className="text-center mt-4 text-gray-400 text-sm font-medium">
-                    IMPACT →
+                    {/* Matrix Grid */}
+                    {heatMapData.matrix.map((row, rowIndex) => (
+                      <div key={rowIndex} className="flex items-center">
+                        {/* Row label */}
+                        <div className="w-24 text-right pr-4 text-xs text-muted-foreground">
+                          {heatMapData.likelihood_labels[5 - rowIndex]}
+                        </div>
+
+                        {/* Cells */}
+                        {row.map((cell, cellIndex) => (
+                          <div
+                            key={cellIndex}
+                            className="w-20 h-16 m-0.5 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-ring transition-all"
+                            style={{ backgroundColor: cell.color }}
+                          >
+                            <span className="text-white font-bold text-lg">{cell.score}</span>
+                            {cell.risk_count > 0 && (
+                              <span className="text-white/80 text-xs">
+                                ({cell.risk_count} risk{cell.risk_count > 1 ? 's' : ''})
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+
+                    {/* X-axis label */}
+                    <div className="text-center mt-4 text-muted-foreground text-sm font-medium">
+                      IMPACT →
+                    </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Legend & Stats */}
+              <div className="w-64 space-y-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-foreground mb-3">Risk Levels</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-destructive"></div>
+                        <span className="text-sm text-foreground">Critical (17-25)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-warning"></div>
+                        <span className="text-sm text-foreground">High (10-16)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-info"></div>
+                        <span className="text-sm text-foreground">Medium (5-9)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-success"></div>
+                        <span className="text-sm text-foreground">Low (1-4)</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-foreground mb-3">Summary</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total Risks</span>
+                        <span className="font-bold text-foreground">{heatMapData.summary.total_risks}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Avg Inherent</span>
+                        <span className="font-bold text-muted-foreground">
+                          {heatMapData.summary.average_inherent_score.toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Avg Residual</span>
+                        <span className="font-bold text-success">
+                          {heatMapData.summary.average_residual_score.toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Risk Reduction</span>
+                        <span className="font-bold text-success">
+                          {(
+                            ((heatMapData.summary.average_inherent_score -
+                              heatMapData.summary.average_residual_score) /
+                              heatMapData.summary.average_inherent_score) *
+                            100
+                          ).toFixed(0)}
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
-
-            {/* Legend & Stats */}
-            <div className="w-64">
-              <div className="bg-slate-700 rounded-lg p-4 mb-4">
-                <h3 className="font-semibold text-white mb-3">Risk Levels</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-red-500"></div>
-                    <span className="text-sm text-gray-300">Critical (17-25)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-orange-500"></div>
-                    <span className="text-sm text-gray-300">High (10-16)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-yellow-500"></div>
-                    <span className="text-sm text-gray-300">Medium (5-9)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-green-500"></div>
-                    <span className="text-sm text-gray-300">Low (1-4)</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-700 rounded-lg p-4">
-                <h3 className="font-semibold text-white mb-3">Summary</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Total Risks</span>
-                    <span className="font-bold text-white">{heatMapData.summary.total_risks}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Avg Inherent</span>
-                    <span className="font-bold text-gray-300">
-                      {heatMapData.summary.average_inherent_score.toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Avg Residual</span>
-                    <span className="font-bold text-emerald-400">
-                      {heatMapData.summary.average_residual_score.toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Risk Reduction</span>
-                    <span className="font-bold text-emerald-400">
-                      {(
-                        ((heatMapData.summary.average_inherent_score -
-                          heatMapData.summary.average_residual_score) /
-                          heatMapData.summary.average_inherent_score) *
-                        100
-                      ).toFixed(0)}
-                      %
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Bow-Tie View */}
       {view === 'bowtie' && (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h2 className="text-xl font-bold mb-6 text-white">Bow-Tie Analysis</h2>
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-xl font-bold mb-6 text-foreground">Bow-Tie Analysis</h2>
 
-          {selectedRisk ? (
-            <div className="relative">
-              {/* Bow-Tie Diagram */}
-              <div className="flex items-center justify-center gap-4">
-                {/* Causes (Left Side) */}
-                <div className="w-1/4">
-                  <h3 className="text-center font-semibold text-red-400 mb-4">CAUSES</h3>
-                  <div className="space-y-2">
-                    {['Equipment failure', 'Human error', 'Process breakdown'].map((cause, i) => (
-                      <div
-                        key={i}
-                        className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-center text-sm text-red-300"
-                      >
-                        {cause}
+            {selectedRisk ? (
+              <div className="relative">
+                {/* Bow-Tie Diagram */}
+                <div className="flex items-center justify-center gap-4">
+                  {/* Causes (Left Side) */}
+                  <div className="w-1/4">
+                    <h3 className="text-center font-semibold text-destructive mb-4">CAUSES</h3>
+                    <div className="space-y-2">
+                      {['Equipment failure', 'Human error', 'Process breakdown'].map((cause, i) => (
+                        <div
+                          key={i}
+                          className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 text-center text-sm text-destructive"
+                        >
+                          {cause}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Prevention Barriers */}
+                  <div className="w-16 flex flex-col items-center justify-center">
+                    <div className="h-full w-1 bg-gradient-to-b from-destructive to-warning"></div>
+                    <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
+                      Prevention
+                    </div>
+                  </div>
+
+                  {/* Central Risk Event */}
+                  <div className="w-1/5">
+                    <div className="rounded-full p-8 text-center border-4 border-warning bg-warning/20">
+                      <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning" />
+                      <span className="font-bold text-foreground text-sm">{selectedRisk.title.substring(0, 50)}...</span>
+                      <div className="mt-2">
+                        <Badge variant="warning">
+                          Score: {selectedRisk.residual_score}
+                        </Badge>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Prevention Barriers */}
-                <div className="w-16 flex flex-col items-center justify-center">
-                  <div className="h-full w-1 bg-gradient-to-b from-red-500 to-yellow-500"></div>
-                  <div className="my-2 text-xs text-gray-400 text-center" style={{ writingMode: 'vertical-rl' }}>
-                    Prevention
+                  {/* Mitigation Barriers */}
+                  <div className="w-16 flex flex-col items-center justify-center">
+                    <div className="h-full w-1 bg-gradient-to-b from-warning to-info"></div>
+                    <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
+                      Mitigation
+                    </div>
                   </div>
-                </div>
 
-                {/* Central Risk Event */}
-                <div className="w-1/5">
-                  <div
-                    className="rounded-full p-8 text-center border-4"
-                    style={{ borderColor: selectedRisk.risk_color, backgroundColor: `${selectedRisk.risk_color}20` }}
-                  >
-                    <AlertTriangle className="w-8 h-8 mx-auto mb-2" style={{ color: selectedRisk.risk_color }} />
-                    <span className="font-bold text-white text-sm">{selectedRisk.title.substring(0, 50)}...</span>
-                    <div className="mt-2">
-                      <span
-                        className="px-2 py-1 rounded-full text-xs font-bold"
-                        style={{ backgroundColor: selectedRisk.risk_color }}
-                      >
-                        Score: {selectedRisk.residual_score}
-                      </span>
+                  {/* Consequences (Right Side) */}
+                  <div className="w-1/4">
+                    <h3 className="text-center font-semibold text-info mb-4">CONSEQUENCES</h3>
+                    <div className="space-y-2">
+                      {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map((consequence, i) => (
+                        <div
+                          key={i}
+                          className="bg-info/20 border border-info/50 rounded-lg p-3 text-center text-sm text-info"
+                        >
+                          {consequence}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
 
-                {/* Mitigation Barriers */}
-                <div className="w-16 flex flex-col items-center justify-center">
-                  <div className="h-full w-1 bg-gradient-to-b from-yellow-500 to-blue-500"></div>
-                  <div className="my-2 text-xs text-gray-400 text-center" style={{ writingMode: 'vertical-rl' }}>
-                    Mitigation
-                  </div>
-                </div>
-
-                {/* Consequences (Right Side) */}
-                <div className="w-1/4">
-                  <h3 className="text-center font-semibold text-blue-400 mb-4">CONSEQUENCES</h3>
-                  <div className="space-y-2">
-                    {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map((consequence, i) => (
-                      <div
-                        key={i}
-                        className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 text-center text-sm text-blue-300"
-                      >
-                        {consequence}
+                {/* Controls/Barriers */}
+                <div className="mt-8 grid grid-cols-2 gap-6">
+                  <Card>
+                    <CardContent className="p-4">
+                      <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
+                        <Shield className="w-4 h-4" />
+                        Prevention Controls
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <div className="w-2 h-2 bg-success rounded-full"></div>
+                          <span className="text-sm text-foreground">Preventive maintenance program</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <div className="w-2 h-2 bg-success rounded-full"></div>
+                          <span className="text-sm text-foreground">Training and competency assessments</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <div className="w-2 h-2 bg-warning rounded-full"></div>
+                          <span className="text-sm text-foreground">Procedure documentation</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-4">
+                      <h4 className="font-semibold text-info mb-3 flex items-center gap-2">
+                        <Zap className="w-4 h-4" />
+                        Mitigation Controls
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <div className="w-2 h-2 bg-success rounded-full"></div>
+                          <span className="text-sm text-foreground">Emergency response plan</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <div className="w-2 h-2 bg-success rounded-full"></div>
+                          <span className="text-sm text-foreground">Insurance coverage</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <div className="w-2 h-2 bg-warning rounded-full"></div>
+                          <span className="text-sm text-foreground">Communication protocols</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-
-              {/* Controls/Barriers */}
-              <div className="mt-8 grid grid-cols-2 gap-6">
-                <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="font-semibold text-emerald-400 mb-3 flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    Prevention Controls
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 p-2 bg-slate-600 rounded">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                      <span className="text-sm text-gray-300">Preventive maintenance program</span>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 bg-slate-600 rounded">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                      <span className="text-sm text-gray-300">Training and competency assessments</span>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 bg-slate-600 rounded">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <span className="text-sm text-gray-300">Procedure documentation</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    Mitigation Controls
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 p-2 bg-slate-600 rounded">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                      <span className="text-sm text-gray-300">Emergency response plan</span>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 bg-slate-600 rounded">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                      <span className="text-sm text-gray-300">Insurance coverage</span>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 bg-slate-600 rounded">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <span className="text-sm text-gray-300">Communication protocols</span>
-                    </div>
-                  </div>
-                </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p>Select a risk from the register to view its Bow-Tie analysis</p>
+                <Button onClick={() => setView('register')} className="mt-4">
+                  Go to Risk Register
+                </Button>
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>Select a risk from the register to view its Bow-Tie analysis</p>
-              <button
-                onClick={() => setView('register')}
-                className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white transition-colors"
-              >
-                Go to Risk Register
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   )

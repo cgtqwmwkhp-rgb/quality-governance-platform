@@ -28,6 +28,13 @@ import {
   Presentation,
   Filter,
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
 
 interface ScheduledReport {
   id: number;
@@ -155,7 +162,6 @@ export default function ReportGenerator() {
     setGenerating(true);
     await new Promise(resolve => setTimeout(resolve, 2000));
     setGenerating(false);
-    // Trigger download
     alert('Report generated! Download starting...');
   };
 
@@ -176,29 +182,27 @@ export default function ReportGenerator() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Report Generator</h1>
-          <p className="text-gray-400 mt-1">Create and schedule automated reports</p>
+          <h1 className="text-2xl font-bold text-foreground">Report Generator</h1>
+          <p className="text-muted-foreground mt-1">Create and schedule automated reports</p>
         </div>
-        <button
-          onClick={() => setShowScheduleModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
-        >
+        <Button onClick={() => setShowScheduleModal(true)}>
           <Plus className="w-4 h-4" />
           Schedule New Report
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-800/50 p-1 rounded-xl">
+      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl">
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
               activeTab === tab.id
-                ? 'bg-emerald-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
-            }`}
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            )}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -211,241 +215,244 @@ export default function ReportGenerator() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Template Selection */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-lg font-semibold text-white">Select Report Template</h2>
+            <h2 className="text-lg font-semibold text-foreground">Select Report Template</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {reportTemplates.map(template => (
-                <div
+                <Card
                   key={template.id}
                   onClick={() => setSelectedTemplate(template.id)}
-                  className={`p-4 bg-slate-800/50 border rounded-xl cursor-pointer transition-all ${
+                  className={cn(
+                    "cursor-pointer transition-all",
                     selectedTemplate === template.id
-                      ? 'border-emerald-500 ring-2 ring-emerald-500/30'
-                      : 'border-slate-700 hover:border-slate-600'
-                  }`}
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'hover:border-primary/50'
+                  )}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2.5 rounded-lg ${
-                      selectedTemplate === template.id ? 'bg-emerald-500/20' : 'bg-slate-700'
-                    }`}>
-                      <template.icon className={`w-5 h-5 ${
-                        selectedTemplate === template.id ? 'text-emerald-400' : 'text-gray-400'
-                      }`} />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium text-white">{template.name}</h3>
-                      <p className="text-sm text-gray-400 mt-1">{template.description}</p>
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {template.sections.map(section => (
-                          <span key={section} className="px-2 py-0.5 bg-slate-700 rounded text-xs text-gray-300">
-                            {section}
-                          </span>
-                        ))}
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "p-2.5 rounded-lg",
+                        selectedTemplate === template.id ? 'bg-primary/20' : 'bg-muted'
+                      )}>
+                        <template.icon className={cn(
+                          "w-5 h-5",
+                          selectedTemplate === template.id ? 'text-primary' : 'text-muted-foreground'
+                        )} />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-foreground">{template.name}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">{template.description}</p>
+                        <div className="flex flex-wrap gap-1 mt-3">
+                          {template.sections.map(section => (
+                            <span key={section} className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground">
+                              {section}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           </div>
 
           {/* Report Configuration */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-white">Report Options</h2>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
-              {/* Time Range */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Time Range</label>
-                <select
-                  value={reportConfig.timeRange}
-                  onChange={(e) => setReportConfig(prev => ({ ...prev, timeRange: e.target.value }))}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+            <h2 className="text-lg font-semibold text-foreground">Report Options</h2>
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                {/* Time Range */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Time Range</label>
+                  <Select
+                    value={reportConfig.timeRange}
+                    onValueChange={(value) => setReportConfig(prev => ({ ...prev, timeRange: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="last_week">Last Week</SelectItem>
+                      <SelectItem value="last_month">Last Month</SelectItem>
+                      <SelectItem value="last_quarter">Last Quarter</SelectItem>
+                      <SelectItem value="last_year">Last Year</SelectItem>
+                      <SelectItem value="year_to_date">Year to Date</SelectItem>
+                      <SelectItem value="custom">Custom Range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Format */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Export Format</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'pdf', label: 'PDF', icon: FileText },
+                      { value: 'excel', label: 'Excel', icon: FileSpreadsheet },
+                      { value: 'pptx', label: 'PowerPoint', icon: Presentation },
+                    ].map(format => (
+                      <button
+                        key={format.value}
+                        onClick={() => setReportConfig(prev => ({ ...prev, format: format.value }))}
+                        className={cn(
+                          "flex flex-col items-center p-3 rounded-lg border transition-all",
+                          reportConfig.format === format.value
+                            ? 'bg-primary/20 border-primary text-primary'
+                            : 'bg-muted/50 border-border text-muted-foreground hover:border-primary/50'
+                        )}
+                      >
+                        <format.icon className="w-5 h-5 mb-1" />
+                        <span className="text-xs">{format.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Include Options */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Include</label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reportConfig.includeCharts}
+                        onChange={(e) => setReportConfig(prev => ({ ...prev, includeCharts: e.target.checked }))}
+                        className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm text-foreground">Charts & Visualizations</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reportConfig.includeData}
+                        onChange={(e) => setReportConfig(prev => ({ ...prev, includeData: e.target.checked }))}
+                        className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm text-foreground">Raw Data Tables</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Email Option */}
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={reportConfig.sendEmail}
+                      onChange={(e) => setReportConfig(prev => ({ ...prev, sendEmail: e.target.checked }))}
+                      className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm text-foreground">Send via Email</span>
+                  </label>
+                  {reportConfig.sendEmail && (
+                    <Input
+                      type="email"
+                      placeholder="Enter email addresses"
+                      value={reportConfig.recipients}
+                      onChange={(e) => setReportConfig(prev => ({ ...prev, recipients: e.target.value }))}
+                      className="mt-2"
+                    />
+                  )}
+                </div>
+
+                {/* Generate Button */}
+                <Button
+                  onClick={handleGenerateReport}
+                  disabled={!selectedTemplate || generating}
+                  className="w-full"
                 >
-                  <option value="last_week">Last Week</option>
-                  <option value="last_month">Last Month</option>
-                  <option value="last_quarter">Last Quarter</option>
-                  <option value="last_year">Last Year</option>
-                  <option value="year_to_date">Year to Date</option>
-                  <option value="custom">Custom Range</option>
-                </select>
-              </div>
-
-              {/* Format */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Export Format</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'pdf', label: 'PDF', icon: FileText },
-                    { value: 'excel', label: 'Excel', icon: FileSpreadsheet },
-                    { value: 'pptx', label: 'PowerPoint', icon: Presentation },
-                  ].map(format => (
-                    <button
-                      key={format.value}
-                      onClick={() => setReportConfig(prev => ({ ...prev, format: format.value }))}
-                      className={`flex flex-col items-center p-3 rounded-lg border transition-all ${
-                        reportConfig.format === format.value
-                          ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400'
-                          : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
-                      }`}
-                    >
-                      <format.icon className="w-5 h-5 mb-1" />
-                      <span className="text-xs">{format.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Include Options */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Include</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={reportConfig.includeCharts}
-                      onChange={(e) => setReportConfig(prev => ({ ...prev, includeCharts: e.target.checked }))}
-                      className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
-                    />
-                    <span className="text-sm text-gray-300">Charts & Visualizations</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={reportConfig.includeData}
-                      onChange={(e) => setReportConfig(prev => ({ ...prev, includeData: e.target.checked }))}
-                      className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
-                    />
-                    <span className="text-sm text-gray-300">Raw Data Tables</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Email Option */}
-              <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={reportConfig.sendEmail}
-                    onChange={(e) => setReportConfig(prev => ({ ...prev, sendEmail: e.target.checked }))}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
-                  />
-                  <span className="text-sm text-gray-300">Send via Email</span>
-                </label>
-                {reportConfig.sendEmail && (
-                  <input
-                    type="email"
-                    placeholder="Enter email addresses"
-                    value={reportConfig.recipients}
-                    onChange={(e) => setReportConfig(prev => ({ ...prev, recipients: e.target.value }))}
-                    className="w-full mt-2 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
-                  />
-                )}
-              </div>
-
-              {/* Generate Button */}
-              <button
-                onClick={handleGenerateReport}
-                disabled={!selectedTemplate || generating}
-                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors ${
-                  selectedTemplate && !generating
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                    : 'bg-slate-700 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {generating ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Generate Report
-                  </>
-                )}
-              </button>
-            </div>
+                  {generating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Generate Report
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
 
       {/* Scheduled Reports Tab */}
       {activeTab === 'scheduled' && (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-700/50">
-              <tr>
-                <th className="text-left p-4 text-sm font-medium text-gray-400">Report</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-400">Schedule</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-400">Next Run</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-400">Recipients</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-400">Status</th>
-                <th className="text-right p-4 text-sm font-medium text-gray-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reports.map(report => (
-                <tr key={report.id} className="border-t border-slate-700">
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-emerald-400" />
-                      <div>
-                        <div className="font-medium text-white">{report.name}</div>
-                        <div className="text-sm text-gray-400">{report.format.toUpperCase()}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-4 text-gray-300">{report.schedule}</td>
-                  <td className="p-4 text-gray-300">{report.nextRun}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-1">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-300">{report.recipients.length}</span>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                      report.status === 'active'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {report.status === 'active' ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                      {report.status}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => toggleReportStatus(report.id)}
-                        className="p-2 text-gray-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                      >
-                        {report.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-white hover:bg-slate-700 rounded transition-colors">
-                        <Settings className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-red-400 hover:bg-slate-700 rounded transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Report</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Schedule</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Next Run</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Recipients</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {reports.map(report => (
+                  <tr key={report.id} className="border-t border-border">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-primary" />
+                        <div>
+                          <div className="font-medium text-foreground">{report.name}</div>
+                          <div className="text-sm text-muted-foreground">{report.format.toUpperCase()}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-foreground">{report.schedule}</td>
+                    <td className="p-4 text-foreground">{report.nextRun}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-foreground">{report.recipients.length}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <Badge variant={report.status === 'active' ? 'resolved' : 'submitted'}>
+                        {report.status === 'active' ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                        {report.status}
+                      </Badge>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => toggleReportStatus(report.id)}>
+                          {report.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <Settings className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* History Tab */}
       {activeTab === 'history' && (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-            <h3 className="font-medium text-white">Recent Reports</h3>
-            <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <h3 className="font-medium text-foreground">Recent Reports</h3>
+            <Button variant="ghost" size="sm">
               <Filter className="w-4 h-4" />
               Filter
-            </button>
-          </div>
-          <div className="divide-y divide-slate-700">
+            </Button>
+          </CardHeader>
+          <div className="divide-y divide-border">
             {[
               { name: 'Monthly Executive Summary', date: '2026-01-01 09:00', status: 'success', size: '2.4 MB' },
               { name: 'Weekly Safety Report', date: '2026-01-13 08:00', status: 'success', size: '1.8 MB' },
@@ -453,58 +460,49 @@ export default function ReportGenerator() {
               { name: 'Quarterly Compliance', date: '2025-10-01 09:00', status: 'success', size: '3.2 MB' },
               { name: 'Monthly Executive Summary', date: '2025-12-01 09:00', status: 'failed', size: '-' },
             ].map((report, i) => (
-              <div key={i} className="p-4 flex items-center justify-between hover:bg-slate-700/30">
+              <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/30">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${
-                    report.status === 'success' ? 'bg-emerald-500/20' : 'bg-red-500/20'
-                  }`}>
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    report.status === 'success' ? 'bg-success/20' : 'bg-destructive/20'
+                  )}>
                     {report.status === 'success' 
-                      ? <CheckCircle className="w-5 h-5 text-emerald-400" />
-                      : <AlertCircle className="w-5 h-5 text-red-400" />
+                      ? <CheckCircle className="w-5 h-5 text-success" />
+                      : <AlertCircle className="w-5 h-5 text-destructive" />
                     }
                   </div>
                   <div>
-                    <div className="font-medium text-white">{report.name}</div>
-                    <div className="text-sm text-gray-400">{report.date}</div>
+                    <div className="font-medium text-foreground">{report.name}</div>
+                    <div className="text-sm text-muted-foreground">{report.date}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-400">{report.size}</span>
+                  <span className="text-sm text-muted-foreground">{report.size}</span>
                   {report.status === 'success' && (
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors">
+                    <Button variant="secondary" size="sm">
                       <Download className="w-4 h-4" />
                       Download
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Schedule Modal */}
-      {showScheduleModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-slate-700">
-              <h3 className="text-lg font-semibold text-white">Schedule New Report</h3>
-              <button onClick={() => setShowScheduleModal(false)} className="text-gray-400 hover:text-white">
-                ×
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <p className="text-gray-400">Report scheduling coming soon...</p>
-              <button
-                onClick={() => setShowScheduleModal(false)}
-                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showScheduleModal} onOpenChange={setShowScheduleModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule New Report</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground">Report scheduling coming soon...</p>
+          <Button variant="secondary" onClick={() => setShowScheduleModal(false)} className="w-full">
+            Close
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
