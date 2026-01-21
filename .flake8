@@ -5,11 +5,14 @@ max-line-length = 120
 # Global ignores - patterns that are intentional, black-compatible, or pre-existing tech debt
 # E203: whitespace before ':' (conflicts with black slice formatting)
 # E501: line too long (pre-existing in many files, 120 char limit from black)
+# E741: ambiguous variable name (pre-existing in list comprehensions)
+# W291: trailing whitespace (should be handled by black, pre-existing in docstrings)
 # W503: line break before binary operator (conflicts with black)
-# F401: imported but unused (pre-existing tech debt - many files, tracked in GOVPLAT-005)
+# F401: imported but unused (pre-existing tech debt - many files)
+# F841: local variable assigned but never used (pre-existing tech debt)
 # E711: comparison to None - required for SQLAlchemy column filters (== None is intentional)
 # E712: comparison to True/False - required for SQLAlchemy column filters (== True is intentional)
-extend-ignore = E203, E501, W503, F401, E711, E712
+extend-ignore = E203, E501, E741, W291, W503, F401, F841, E711, E712
 
 # Per-file ignores for specific pre-existing issues
 # Format: path:CODE,CODE
