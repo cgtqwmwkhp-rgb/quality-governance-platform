@@ -384,89 +384,92 @@ export const authApi = {
     api.post<LoginResponse>('/api/v1/auth/login', data),
 }
 
+// NOTE: All list endpoints use trailing slash (e.g., /incidents/) because
+// FastAPI routes are defined with trailing slashes and redirect_slashes is disabled
+
 export const incidentsApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Incident>>(`/api/v1/incidents?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?page=${page}&size=${size}`),
   create: (data: IncidentCreate) => 
-    api.post<Incident>('/api/v1/incidents', data),
+    api.post<Incident>('/api/v1/incidents/', data),
   get: (id: number) => 
     api.get<Incident>(`/api/v1/incidents/${id}`),
 }
 
 export const rtasApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&size=${size}`),
   create: (data: RTACreate) => 
-    api.post<RTA>('/api/v1/rtas', data),
+    api.post<RTA>('/api/v1/rtas/', data),
   get: (id: number) => 
     api.get<RTA>(`/api/v1/rtas/${id}`),
 }
 
 export const complaintsApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Complaint>>(`/api/v1/complaints?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<Complaint>>(`/api/v1/complaints/?page=${page}&size=${size}`),
   create: (data: ComplaintCreate) => 
-    api.post<Complaint>('/api/v1/complaints', data),
+    api.post<Complaint>('/api/v1/complaints/', data),
   get: (id: number) => 
     api.get<Complaint>(`/api/v1/complaints/${id}`),
 }
 
 export const policiesApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Policy>>(`/api/v1/policies?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<Policy>>(`/api/v1/policies/?page=${page}&size=${size}`),
   create: (data: PolicyCreate) => 
-    api.post<Policy>('/api/v1/policies', data),
+    api.post<Policy>('/api/v1/policies/', data),
   get: (id: number) => 
     api.get<Policy>(`/api/v1/policies/${id}`),
 }
 
 export const risksApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Risk>>(`/api/v1/risks?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<Risk>>(`/api/v1/risks/?page=${page}&size=${size}`),
   create: (data: RiskCreate) => 
-    api.post<Risk>('/api/v1/risks', data),
+    api.post<Risk>('/api/v1/risks/', data),
   get: (id: number) => 
     api.get<Risk>(`/api/v1/risks/${id}`),
 }
 
 export const auditsApi = {
   listRuns: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs/?page=${page}&size=${size}`),
   listTemplates: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?page=${page}&size=${size}`),
   listFindings: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<AuditFinding>>(`/api/v1/audits/findings?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<AuditFinding>>(`/api/v1/audits/findings/?page=${page}&size=${size}`),
   createRun: (data: AuditRunCreate) => 
-    api.post<AuditRun>('/api/v1/audits/runs', data),
+    api.post<AuditRun>('/api/v1/audits/runs/', data),
   getRun: (id: number) => 
     api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
 }
 
 export const investigationsApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?page=${page}&size=${size}`),
   create: (data: InvestigationCreate) => 
-    api.post<Investigation>('/api/v1/investigations', data),
+    api.post<Investigation>('/api/v1/investigations/', data),
   get: (id: number) => 
     api.get<Investigation>(`/api/v1/investigations/${id}`),
 }
 
 export const standardsApi = {
   list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Standard>>(`/api/v1/standards?page=${page}&page_size=${size}`),
+    api.get<PaginatedResponse<Standard>>(`/api/v1/standards/?page=${page}&page_size=${size}`),
   get: (id: number) => 
     api.get<Standard & { clauses: Clause[] }>(`/api/v1/standards/${id}`),
   getClauses: (standardId: number) => 
-    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses`),
+    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses/`),
   getControls: (clauseId: number) => 
-    api.get<Control[]>(`/api/v1/clauses/${clauseId}/controls`),
+    api.get<Control[]>(`/api/v1/clauses/${clauseId}/controls/`),
 }
 
 export const actionsApi = {
   list: (page = 1, size = 10, status?: string) => 
-    api.get<PaginatedResponse<Action>>(`/api/v1/actions?page=${page}&size=${size}${status ? `&status=${status}` : ''}`),
+    api.get<PaginatedResponse<Action>>(`/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ''}`),
   create: (data: ActionCreate) => 
-    api.post<Action>('/api/v1/actions', data),
+    api.post<Action>('/api/v1/actions/', data),
   get: (id: number) => 
     api.get<Action>(`/api/v1/actions/${id}`),
   update: (id: number, data: Partial<Action>) => 

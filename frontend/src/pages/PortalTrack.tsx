@@ -278,10 +278,11 @@ export default function PortalTrack() {
       let authError = false;
       
       // Fetch incidents - filter by reporter_email if user is authenticated
+      // NOTE: Trailing slash required - FastAPI routes use trailing slashes
       try {
         const incidentsUrl = user?.email 
-          ? `${apiBase}/api/v1/incidents?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
-          : `${apiBase}/api/v1/incidents?page=1&size=20`;
+          ? `${apiBase}/api/v1/incidents/?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
+          : `${apiBase}/api/v1/incidents/?page=1&size=20`;
         const incidentsRes = await fetch(incidentsUrl, { headers });
         if (incidentsRes.ok) {
           hasSuccessfulFetch = true;
@@ -330,8 +331,8 @@ export default function PortalTrack() {
       // Fetch complaints - filter by complainant_email
       try {
         const complaintsUrl = user?.email 
-          ? `${apiBase}/api/v1/complaints?page=1&size=20&complainant_email=${encodeURIComponent(user.email)}`
-          : `${apiBase}/api/v1/complaints?page=1&size=20`;
+          ? `${apiBase}/api/v1/complaints/?page=1&size=20&complainant_email=${encodeURIComponent(user.email)}`
+          : `${apiBase}/api/v1/complaints/?page=1&size=20`;
         const complaintsRes = await fetch(complaintsUrl, { headers });
         if (complaintsRes.ok) {
           hasSuccessfulFetch = true;
