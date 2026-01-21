@@ -8,8 +8,21 @@ const api = axios.create({
   },
 })
 
-// Add auth token to requests
+// CRITICAL: Enforce HTTPS on all requests (failsafe for cached old bundles)
 api.interceptors.request.use((config) => {
+  // Enforce HTTPS on baseURL
+  if (config.baseURL?.startsWith('http:')) {
+    config.baseURL = config.baseURL.replace('http:', 'https:');
+    console.warn('[Axios] Forced HTTPS on baseURL');
+  }
+  
+  // Enforce HTTPS on full URL if present
+  if (config.url?.startsWith('http:')) {
+    config.url = config.url.replace('http:', 'https:');
+    console.warn('[Axios] Forced HTTPS on URL');
+  }
+  
+  // Add auth token
   const token = localStorage.getItem('access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

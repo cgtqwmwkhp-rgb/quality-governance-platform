@@ -255,7 +255,14 @@ export default function PortalTrack() {
     
     try {
       // Use centralized API base URL (HTTPS enforced)
-      const { API_BASE_URL: apiBase } = await import('../config/apiBase');
+      let { API_BASE_URL: apiBase } = await import('../config/apiBase');
+      
+      // CRITICAL: Runtime HTTPS enforcement (failsafe for any cached issues)
+      if (apiBase.startsWith('http:')) {
+        apiBase = apiBase.replace('http:', 'https:');
+        console.warn('[PortalTrack] Forced HTTPS on API base');
+      }
+      
       const allReports: ReportSummary[] = [];
       
       // Get auth token - try portal token first, then admin token
