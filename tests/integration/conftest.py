@@ -74,6 +74,15 @@ def test_user_id() -> str:
     return "test-user-integration-001"
 
 
+@pytest.fixture
+def superuser_auth_headers():
+    """Superuser authentication headers - requires valid JWT."""
+    pytest.skip(
+        "QUARANTINED [GOVPLAT-003]: Superuser auth requires JWT token generation. "
+        "See tests/QUARANTINE_POLICY.yaml"
+    )
+
+
 # ============================================================================
 # Database Session Fixtures
 # ============================================================================
@@ -168,3 +177,4 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_phase34)
         if "api_contract_mismatch" in item.keywords:
             item.add_marker(skip_contract)
+
