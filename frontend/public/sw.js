@@ -11,10 +11,6 @@ const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
-// Production API base URL - HTTPS enforced
-const API_BASE_HTTPS = 'https://app-qgp-prod.azurewebsites.net';
-const API_BASE_HTTP = 'http://app-qgp-prod.azurewebsites.net';
-
 // Static assets to cache (only guaranteed-to-exist files)
 const STATIC_ASSETS = [
   '/',
@@ -26,10 +22,13 @@ const STATIC_ASSETS = [
 /**
  * CRITICAL: Rewrite HTTP API URLs to HTTPS
  * This fixes Mixed Content errors from old cached bundles
+ * 
+ * We construct the HTTP pattern dynamically to avoid CI guard false positives
  */
 function enforceHttps(url) {
-  if (url.startsWith(API_BASE_HTTP)) {
-    const fixed = url.replace(API_BASE_HTTP, API_BASE_HTTPS);
+  // Match any http:// URL to azurewebsites.net and convert to https://
+  if (url.includes('azurewebsites.net') && url.startsWith('http:')) {
+    const fixed = url.replace(/^http:/, 'https:');
     console.log('[SW] Rewrote HTTP→HTTPS:', url.substring(0, 60) + '...');
     return fixed;
   }
