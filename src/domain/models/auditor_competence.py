@@ -44,6 +44,7 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
     """Auditor profile with competence tracking."""
 
     __tablename__ = "auditor_profiles"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -109,6 +110,7 @@ class AuditorCertification(Base, TimestampMixin):
     """Auditor certification/qualification record."""
 
     __tablename__ = "auditor_certifications"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
@@ -176,6 +178,7 @@ class AuditorTraining(Base, TimestampMixin):
     """Training record for an auditor."""
 
     __tablename__ = "auditor_training"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
@@ -225,6 +228,7 @@ class CompetencyArea(Base, TimestampMixin):
     """Definition of a competency area that can be assessed."""
 
     __tablename__ = "competency_areas"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -264,6 +268,7 @@ class AuditorCompetency(Base, TimestampMixin):
     """Individual auditor's competency in a specific area."""
 
     __tablename__ = "auditor_competencies"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
@@ -305,6 +310,7 @@ class AuditAssignmentCriteria(Base, TimestampMixin):
     """Criteria for assigning auditors to specific audit types."""
 
     __tablename__ = "audit_assignment_criteria"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 

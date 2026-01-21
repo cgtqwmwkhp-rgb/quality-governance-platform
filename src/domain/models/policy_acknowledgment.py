@@ -39,6 +39,7 @@ class PolicyAcknowledgmentRequirement(Base, TimestampMixin):
     """Defines acknowledgment requirements for a policy."""
 
     __tablename__ = "policy_acknowledgment_requirements"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -86,6 +87,7 @@ class PolicyAcknowledgment(Base, TimestampMixin):
     """Individual user's acknowledgment of a policy."""
 
     __tablename__ = "policy_acknowledgments"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -148,6 +150,7 @@ class DocumentReadLog(Base, TimestampMixin):
     """Track when users read/view documents for compliance."""
 
     __tablename__ = "document_read_logs"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 

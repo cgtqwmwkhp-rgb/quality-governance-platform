@@ -78,6 +78,7 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     """Workflow rule definition for automation."""
 
     __tablename__ = "workflow_rules"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -139,6 +140,7 @@ class RuleExecution(Base, TimestampMixin):
     """Log of rule executions for audit and debugging."""
 
     __tablename__ = "rule_executions"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rule_id: Mapped[int] = mapped_column(
@@ -170,6 +172,7 @@ class SLAConfiguration(Base, TimestampMixin, AuditTrailMixin):
     """SLA configuration for different entity types and priorities."""
 
     __tablename__ = "sla_configurations"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -212,6 +215,7 @@ class SLATracking(Base, TimestampMixin):
     """Track SLA status for individual entities."""
 
     __tablename__ = "sla_tracking"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -256,6 +260,7 @@ class EscalationLevel(Base, TimestampMixin):
     """Define escalation levels and paths."""
 
     __tablename__ = "escalation_levels"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 

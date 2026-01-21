@@ -47,6 +47,7 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
     """
 
     __tablename__ = "five_whys_analyses"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -124,6 +125,7 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
     """
 
     __tablename__ = "fishbone_diagrams"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -226,6 +228,7 @@ class BarrierAnalysis(Base, TimestampMixin, AuditTrailMixin):
     """
 
     __tablename__ = "barrier_analyses"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -304,6 +307,7 @@ class CAPAItem(Base, TimestampMixin, AuditTrailMixin):
     """
 
     __tablename__ = "capa_items"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
