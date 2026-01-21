@@ -366,21 +366,19 @@ export default function AuditTemplateLibrary() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-rose-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-primary">
             Audit Template Library
           </h1>
-          <p className="text-slate-400 mt-1">Create, manage, and deploy audit templates</p>
+          <p className="text-muted-foreground mt-1">Create, manage, and deploy audit templates</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground rounded-lg border border-border hover:bg-surface hover:border-border-strong transition-colors">
             <Upload className="w-4 h-4" />
             Import
           </button>
           <button
             onClick={() => navigate('/audit-templates/new')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500
-              text-white font-semibold rounded-xl hover:opacity-90 transition-all duration-200 
-              shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5"
+            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary-hover transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
           >
             <Plus className="w-5 h-5" />
             New Template
@@ -391,23 +389,21 @@ export default function AuditTemplateLibrary() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Templates', value: stats.total, icon: Layers, color: 'from-purple-500 to-pink-500' },
-          { label: 'Published', value: stats.published, icon: CheckCircle2, color: 'from-green-500 to-emerald-500' },
-          { label: 'Drafts', value: stats.draft, icon: Edit, color: 'from-amber-500 to-orange-500' },
-          { label: 'Total Audits Run', value: stats.totalUsage.toLocaleString(), icon: Play, color: 'from-blue-500 to-cyan-500' },
+          { label: 'Total Templates', value: stats.total, icon: Layers, iconBg: 'bg-purple-500/10', iconColor: 'text-purple-500' },
+          { label: 'Published', value: stats.published, icon: CheckCircle2, iconBg: 'bg-success/10', iconColor: 'text-success' },
+          { label: 'Drafts', value: stats.draft, icon: Edit, iconBg: 'bg-warning/10', iconColor: 'text-warning' },
+          { label: 'Total Audits Run', value: stats.totalUsage.toLocaleString(), icon: Play, iconBg: 'bg-info/10', iconColor: 'text-info' },
         ].map((stat, index) => (
           <div
             key={stat.label}
-            className="relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-5
-              hover:border-slate-700 transition-all duration-300 group animate-slide-in"
+            className="bg-card border border-border rounded-xl p-5 hover:border-border-strong hover:shadow-md transition-all duration-200 group animate-fade-in"
             style={{ animationDelay: `${index * 50}ms` }}
           >
-            <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity`} />
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-3`}>
-              <stat.icon className="w-5 h-5 text-white" />
+            <div className={`w-10 h-10 rounded-lg ${stat.iconBg} flex items-center justify-center mb-3`}>
+              <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
             </div>
-            <p className="text-2xl font-bold text-white">{stat.value}</p>
-            <p className="text-sm text-slate-400">{stat.label}</p>
+            <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+            <p className="text-sm text-muted-foreground">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -416,15 +412,15 @@ export default function AuditTemplateLibrary() {
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search templates by name, description, or tags..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl
-              text-white placeholder-slate-500 focus:outline-none focus:border-purple-500
-              focus:ring-2 focus:ring-purple-500/20 transition-all duration-200"
+            className="w-full pl-12 pr-4 py-3 bg-background border border-border rounded-lg
+              text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary
+              focus:ring-2 focus:ring-primary/20 transition-all duration-200"
           />
         </div>
 
@@ -434,10 +430,10 @@ export default function AuditTemplateLibrary() {
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
                 selectedCategory === category.id
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-secondary-foreground hover:bg-surface border border-border'
               }`}
             >
               <category.icon className="w-4 h-4" />
@@ -448,16 +444,16 @@ export default function AuditTemplateLibrary() {
 
         {/* View Toggle */}
         <div className="flex items-center gap-2">
-          <div className="flex bg-slate-800 rounded-lg p-1">
+          <div className="flex bg-secondary rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <Grid3X3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`p-2 rounded ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <List className="w-4 h-4" />
             </button>
@@ -467,15 +463,15 @@ export default function AuditTemplateLibrary() {
           <div className="relative">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+              className="flex items-center gap-2 px-3 py-2 bg-secondary border border-border rounded-lg text-muted-foreground hover:text-foreground"
             >
               <Filter className="w-4 h-4" />
               <ChevronDown className="w-4 h-4" />
             </button>
             {showFilters && (
-              <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden">
                 <div className="p-2">
-                  <p className="text-xs text-slate-500 px-2 mb-2">Sort by</p>
+                  <p className="text-xs text-muted-foreground px-2 mb-2">Sort by</p>
                   {[
                     { id: 'updated', label: 'Last Updated' },
                     { id: 'name', label: 'Name' },
@@ -490,8 +486,8 @@ export default function AuditTemplateLibrary() {
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                         sortBy === option.id
-                          ? 'bg-purple-500/20 text-purple-400'
-                          : 'text-slate-300 hover:bg-slate-700'
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-foreground hover:bg-surface'
                       }`}
                     >
                       {option.label}
@@ -509,8 +505,8 @@ export default function AuditTemplateLibrary() {
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors capitalize ${
                         selectedStatus === status
-                          ? 'bg-purple-500/20 text-purple-400'
-                          : 'text-slate-300 hover:bg-slate-700'
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-foreground hover:bg-surface'
                       }`}
                     >
                       {status === 'all' ? 'All Statuses' : status}
@@ -524,7 +520,7 @@ export default function AuditTemplateLibrary() {
       </div>
 
       {/* Results Count */}
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-muted-foreground">
         Showing {sortedTemplates.length} of {templates.length} templates
       </p>
 
@@ -536,8 +532,8 @@ export default function AuditTemplateLibrary() {
             return (
               <div
                 key={template.id}
-                className="group relative bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl overflow-hidden
-                  hover:border-slate-700 transition-all duration-300 animate-fade-in"
+                className="group relative bg-card border border-border rounded-xl overflow-hidden
+                  hover:border-border-strong hover:shadow-md transition-all duration-300 animate-fade-in"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 {/* Header Gradient */}
@@ -548,14 +544,14 @@ export default function AuditTemplateLibrary() {
                   {/* Top Row */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getCategoryColor(template.category)} flex items-center justify-center`}>
+                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getCategoryColor(template.category)} flex items-center justify-center`}>
                         <CategoryIcon className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <span className={`px-2 py-0.5 text-xs rounded ${
-                          template.status === 'published' ? 'bg-green-500/20 text-green-400' :
-                          template.status === 'archived' ? 'bg-gray-500/20 text-gray-400' :
-                          'bg-amber-500/20 text-amber-400'
+                        <span className={`px-2 py-0.5 text-xs rounded-full border ${
+                          template.status === 'published' ? 'bg-success/10 text-success border-success/20' :
+                          template.status === 'archived' ? 'bg-secondary text-muted-foreground border-border' :
+                          'bg-warning/10 text-warning border-warning/20'
                         }`}>
                           {template.status}
                         </span>
@@ -565,7 +561,7 @@ export default function AuditTemplateLibrary() {
                       <button
                         onClick={() => toggleFavorite(template.id)}
                         className={`p-1.5 rounded-lg transition-colors ${
-                          template.isFavorite ? 'text-yellow-400' : 'text-slate-500 hover:text-yellow-400'
+                          template.isFavorite ? 'text-warning' : 'text-muted-foreground hover:text-warning'
                         }`}
                       >
                         {template.isFavorite ? <Star className="w-4 h-4 fill-current" /> : <StarOff className="w-4 h-4" />}
@@ -573,18 +569,18 @@ export default function AuditTemplateLibrary() {
                       <div className="relative">
                         <button
                           onClick={() => setActiveMenu(activeMenu === template.id ? null : template.id)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface"
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
                         {activeMenu === template.id && (
-                          <div className="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden">
+                          <div className="absolute right-0 mt-1 w-44 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden">
                             <button
                               onClick={() => {
                                 navigate(`/audit-templates/${template.id}/edit`);
                                 setActiveMenu(null);
                               }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface"
                             >
                               <Edit className="w-4 h-4" /> Edit Template
                             </button>
@@ -593,23 +589,23 @@ export default function AuditTemplateLibrary() {
                                 duplicateTemplate(template);
                                 setActiveMenu(null);
                               }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface"
                             >
                               <Copy className="w-4 h-4" /> Duplicate
                             </button>
-                            <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700">
+                            <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface">
                               <Download className="w-4 h-4" /> Export
                             </button>
-                            <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700">
+                            <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface">
                               <Archive className="w-4 h-4" /> Archive
                             </button>
-                            <div className="border-t border-slate-700" />
+                            <div className="border-t border-border" />
                             <button
                               onClick={() => {
                                 deleteTemplate(template.id);
                                 setActiveMenu(null);
                               }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="w-4 h-4" /> Delete
                             </button>
@@ -620,27 +616,27 @@ export default function AuditTemplateLibrary() {
                   </div>
 
                   {/* Title & Description */}
-                  <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2 group-hover:text-purple-300 transition-colors">
+                  <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
                     {template.name}
                   </h3>
-                  <p className="text-sm text-slate-400 line-clamp-2 mb-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
                     {template.description}
                   </p>
 
                   {/* Tags */}
                   <div className="flex flex-wrap gap-1 mb-4">
                     {template.isoStandards.map(iso => (
-                      <span key={iso} className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded">
+                      <span key={iso} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full border border-primary/20">
                         {iso.toUpperCase()}
                       </span>
                     ))}
                     {template.isGlobal && (
-                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-info/10 text-info text-xs rounded-full border border-info/20 flex items-center gap-1">
                         <Globe className="w-3 h-3" /> Global
                       </span>
                     )}
                     {template.isLocked && (
-                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-warning/10 text-warning text-xs rounded-full border border-warning/20 flex items-center gap-1">
                         <Lock className="w-3 h-3" /> Locked
                       </span>
                     )}
@@ -648,33 +644,33 @@ export default function AuditTemplateLibrary() {
 
                   {/* Stats */}
                   <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-lg font-bold text-white">{template.questionCount}</p>
-                      <p className="text-xs text-slate-500">Questions</p>
+                    <div className="bg-surface rounded-lg p-2">
+                      <p className="text-lg font-bold text-foreground">{template.questionCount}</p>
+                      <p className="text-xs text-muted-foreground">Questions</p>
                     </div>
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-lg font-bold text-white">{template.estimatedDuration}m</p>
-                      <p className="text-xs text-slate-500">Duration</p>
+                    <div className="bg-surface rounded-lg p-2">
+                      <p className="text-lg font-bold text-foreground">{template.estimatedDuration}m</p>
+                      <p className="text-xs text-muted-foreground">Duration</p>
                     </div>
-                    <div className="bg-slate-800/50 rounded-lg p-2">
+                    <div className="bg-surface rounded-lg p-2">
                       <p className={`text-lg font-bold ${
-                        (template.avgScore || 0) >= 85 ? 'text-green-400' :
-                        (template.avgScore || 0) >= 70 ? 'text-amber-400' :
-                        'text-slate-400'
+                        (template.avgScore || 0) >= 85 ? 'text-success' :
+                        (template.avgScore || 0) >= 70 ? 'text-warning' :
+                        'text-muted-foreground'
                       }`}>
                         {template.avgScore ? `${template.avgScore.toFixed(0)}%` : '-'}
                       </p>
-                      <p className="text-xs text-slate-500">Avg Score</p>
+                      <p className="text-xs text-muted-foreground">Avg Score</p>
                     </div>
                   </div>
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-800">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Clock className="w-3 h-3" />
                       <span>Updated {new Date(template.updatedAt).toLocaleDateString()}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Play className="w-3 h-3" />
                       <span>{template.usageCount.toLocaleString()} runs</span>
                     </div>
@@ -682,10 +678,10 @@ export default function AuditTemplateLibrary() {
                 </div>
 
                 {/* Hover Action */}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-6">
+                <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-6">
                   <button
                     onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
-                    className="px-6 py-2 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors"
+                    className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary-hover transition-colors"
                   >
                     Open Template
                   </button>
@@ -696,28 +692,28 @@ export default function AuditTemplateLibrary() {
         </div>
       ) : (
         /* List View */
-        <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-800">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Template</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Questions</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Usage</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Avg Score</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Updated</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider"></th>
+              <tr className="border-b border-border">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Template</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Questions</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Usage</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Score</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Updated</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-border">
               {sortedTemplates.map((template, index) => {
                 const CategoryIcon = getCategoryIcon(template.category);
                 return (
                   <tr
                     key={template.id}
                     onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
-                    className="hover:bg-slate-800/30 transition-colors cursor-pointer animate-slide-in"
+                    className="hover:bg-surface transition-colors cursor-pointer animate-slide-in"
                     style={{ animationDelay: `${index * 30}ms` }}
                   >
                     <td className="px-6 py-4">
@@ -727,47 +723,47 @@ export default function AuditTemplateLibrary() {
                             e.stopPropagation();
                             toggleFavorite(template.id);
                           }}
-                          className={`${template.isFavorite ? 'text-yellow-400' : 'text-slate-600 hover:text-yellow-400'}`}
+                          className={`${template.isFavorite ? 'text-warning' : 'text-muted-foreground hover:text-warning'}`}
                         >
                           {template.isFavorite ? <Star className="w-4 h-4 fill-current" /> : <StarOff className="w-4 h-4" />}
                         </button>
                         <div>
-                          <p className="text-sm font-medium text-white">{template.name}</p>
-                          <p className="text-xs text-slate-500 truncate max-w-md">{template.description}</p>
+                          <p className="text-sm font-medium text-foreground">{template.name}</p>
+                          <p className="text-xs text-muted-foreground truncate max-w-md">{template.description}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <CategoryIcon className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300 capitalize">{template.category}</span>
+                        <CategoryIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground capitalize">{template.category}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        template.status === 'published' ? 'bg-green-500/20 text-green-400' :
-                        template.status === 'archived' ? 'bg-gray-500/20 text-gray-400' :
-                        'bg-amber-500/20 text-amber-400'
+                      <span className={`px-2 py-1 text-xs rounded-full border ${
+                        template.status === 'published' ? 'bg-success/10 text-success border-success/20' :
+                        template.status === 'archived' ? 'bg-secondary text-muted-foreground border-border' :
+                        'bg-warning/10 text-warning border-warning/20'
                       }`}>
                         {template.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-300">{template.questionCount}</td>
-                    <td className="px-6 py-4 text-sm text-slate-300">{template.usageCount.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-foreground">{template.questionCount}</td>
+                    <td className="px-6 py-4 text-sm text-foreground">{template.usageCount.toLocaleString()}</td>
                     <td className="px-6 py-4">
                       {template.avgScore ? (
                         <span className={`text-sm font-medium ${
-                          template.avgScore >= 85 ? 'text-green-400' :
-                          template.avgScore >= 70 ? 'text-amber-400' :
-                          'text-red-400'
+                          template.avgScore >= 85 ? 'text-success' :
+                          template.avgScore >= 70 ? 'text-warning' :
+                          'text-destructive'
                         }`}>
                           {template.avgScore.toFixed(0)}%
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-500">-</span>
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
                       {new Date(template.updatedAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
@@ -776,7 +772,7 @@ export default function AuditTemplateLibrary() {
                           e.stopPropagation();
                           setActiveMenu(activeMenu === template.id ? null : template.id);
                         }}
-                        className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700"
+                        className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
@@ -792,16 +788,18 @@ export default function AuditTemplateLibrary() {
       {/* Empty State */}
       {sortedTemplates.length === 0 && (
         <div className="text-center py-16">
-          <FolderOpen className="w-16 h-16 mx-auto text-slate-600 mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">No templates found</h3>
-          <p className="text-slate-400 mb-6">Try adjusting your search or filters</p>
+          <div className="w-16 h-16 rounded-2xl bg-surface flex items-center justify-center mx-auto mb-4">
+            <FolderOpen className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">No templates found</h3>
+          <p className="text-muted-foreground mb-6">Try adjusting your search or filters</p>
           <button
             onClick={() => {
               setSearchTerm('');
               setSelectedCategory('all');
               setSelectedStatus('all');
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground border border-border rounded-lg hover:bg-surface"
           >
             <RotateCcw className="w-4 h-4" />
             Clear Filters
@@ -811,8 +809,8 @@ export default function AuditTemplateLibrary() {
 
       {/* Quick Start Templates */}
       <div className="mt-12">
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-purple-400" />
+        <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-primary" />
           Quick Start Templates
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -824,16 +822,16 @@ export default function AuditTemplateLibrary() {
             <button
               key={idx}
               onClick={() => navigate('/audit-templates/new')}
-              className="flex items-center gap-4 p-4 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-purple-500 hover:bg-slate-800 transition-all group"
+              className="flex items-center gap-4 p-4 bg-card border border-border rounded-xl hover:border-primary hover:shadow-md transition-all group"
             >
-              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
-                <quick.icon className="w-6 h-6 text-purple-400" />
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <quick.icon className="w-6 h-6 text-primary" />
               </div>
               <div className="text-left">
-                <p className="font-medium text-white">{quick.title}</p>
-                <p className="text-xs text-slate-400">{quick.questions} questions • ~{quick.duration} min</p>
+                <p className="font-medium text-foreground">{quick.title}</p>
+                <p className="text-xs text-muted-foreground">{quick.questions} questions • ~{quick.duration} min</p>
               </div>
-              <Plus className="w-5 h-5 text-slate-500 ml-auto group-hover:text-purple-400 transition-colors" />
+              <Plus className="w-5 h-5 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
             </button>
           ))}
         </div>

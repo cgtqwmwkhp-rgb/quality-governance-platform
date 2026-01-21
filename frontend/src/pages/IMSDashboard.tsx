@@ -282,15 +282,15 @@ export default function IMSDashboard() {
       </div>
 
       {/* Overall Compliance Indicator */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-6 mb-8">
+      <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1">Overall IMS Compliance</h2>
-            <p className="text-emerald-100">Across all management system standards</p>
+            <h2 className="text-2xl font-bold text-primary-foreground mb-1">Overall IMS Compliance</h2>
+            <p className="text-primary-foreground/80">Across all management system standards</p>
           </div>
           <div className="text-right">
-            <div className="text-5xl font-bold text-white">{overallCompliance}%</div>
-            <div className="flex items-center gap-1 text-emerald-100 mt-1">
+            <div className="text-5xl font-bold text-primary-foreground">{overallCompliance}%</div>
+            <div className="flex items-center gap-1 text-primary-foreground/80 mt-1">
               <TrendingUp className="w-4 h-4" />
               <span>+2% from last quarter</span>
             </div>
@@ -305,8 +305,8 @@ export default function IMSDashboard() {
           return (
             <div
               key={standard.id}
-              className={`bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer ${
-                selectedStandard === standard.id ? 'ring-2 ring-emerald-500' : ''
+              className={`bg-card rounded-xl p-6 border border-border hover:border-border-strong transition-colors cursor-pointer ${
+                selectedStandard === standard.id ? 'ring-2 ring-primary' : ''
               }`}
               onClick={() => setSelectedStandard(standard.id)}
             >
@@ -315,16 +315,16 @@ export default function IMSDashboard() {
                   <Icon className="w-6 h-6 text-white" />
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-white">{standard.compliance}%</div>
-                  <div className="text-xs text-gray-400">Compliance</div>
+                  <div className="text-3xl font-bold text-foreground">{standard.compliance}%</div>
+                  <div className="text-xs text-muted-foreground">Compliance</div>
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-white mb-1">{standard.name}</h3>
-              <p className="text-sm text-gray-400 mb-4">{standard.version}</p>
+              <h3 className="text-lg font-bold text-foreground mb-1">{standard.name}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{standard.version}</p>
 
               {/* Progress Bar */}
-              <div className="w-full bg-slate-700 rounded-full h-2 mb-4">
+              <div className="w-full bg-surface rounded-full h-2 mb-4">
                 <div
                   className={`h-2 rounded-full ${standard.color}`}
                   style={{ width: `${standard.compliance}%` }}
@@ -334,28 +334,28 @@ export default function IMSDashboard() {
               {/* Findings Summary */}
               <div className="flex justify-between text-sm">
                 <div className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                  <span className="text-gray-400">Major: {standard.findings.major}</span>
+                  <span className="w-2 h-2 bg-destructive rounded-full"></span>
+                  <span className="text-muted-foreground">Major: {standard.findings.major}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                  <span className="text-gray-400">Minor: {standard.findings.minor}</span>
+                  <span className="w-2 h-2 bg-warning rounded-full"></span>
+                  <span className="text-muted-foreground">Minor: {standard.findings.minor}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  <span className="text-gray-400">Obs: {standard.findings.observations}</span>
+                  <span className="w-2 h-2 bg-info rounded-full"></span>
+                  <span className="text-muted-foreground">Obs: {standard.findings.observations}</span>
                 </div>
               </div>
 
               {/* Dates */}
-              <div className="mt-4 pt-4 border-t border-slate-700 grid grid-cols-2 gap-2 text-xs">
+              <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-gray-500">Next Audit</span>
-                  <div className="text-gray-300">{standard.nextAudit}</div>
+                  <span className="text-muted-foreground">Next Audit</span>
+                  <div className="text-foreground">{standard.nextAudit}</div>
                 </div>
                 <div>
-                  <span className="text-gray-500">Cert Expiry</span>
-                  <div className="text-gray-300">{standard.certificateExpiry}</div>
+                  <span className="text-muted-foreground">Cert Expiry</span>
+                  <div className="text-foreground">{standard.certificateExpiry}</div>
                 </div>
               </div>
             </div>
@@ -395,8 +395,8 @@ export default function IMSDashboard() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Key Metrics */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h3 className="text-lg font-bold text-white mb-4">Key Performance Metrics</h3>
+          <div className="bg-card rounded-xl p-6 border border-border">
+            <h3 className="text-lg font-bold text-foreground mb-4">Key Performance Metrics</h3>
             <div className="space-y-4">
               {[
                 { label: 'Open Actions', value: 12, target: 0, unit: '', status: 'warning' },
@@ -406,21 +406,21 @@ export default function IMSDashboard() {
                 { label: 'Audit Completion', value: 75, target: 100, unit: '%', status: 'warning' },
               ].map((metric, i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <span className="text-gray-300">{metric.label}</span>
+                  <span className="text-foreground">{metric.label}</span>
                   <div className="flex items-center gap-2">
                     <span
                       className={`font-bold ${
                         metric.status === 'good'
-                          ? 'text-emerald-400'
+                          ? 'text-success'
                           : metric.status === 'warning'
-                          ? 'text-yellow-400'
-                          : 'text-red-400'
+                          ? 'text-warning'
+                          : 'text-destructive'
                       }`}
                     >
                       {metric.value}
                       {metric.unit}
                     </span>
-                    <span className="text-gray-500 text-sm">/ {metric.target}{metric.unit}</span>
+                    <span className="text-muted-foreground text-sm">/ {metric.target}{metric.unit}</span>
                   </div>
                 </div>
               ))}
@@ -428,25 +428,25 @@ export default function IMSDashboard() {
           </div>
 
           {/* Recent Activity */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <h3 className="text-lg font-bold text-white mb-4">Recent Activity</h3>
+          <div className="bg-card rounded-xl p-6 border border-border">
+            <h3 className="text-lg font-bold text-foreground mb-4">Recent Activity</h3>
             <div className="space-y-3">
               {[
-                { action: 'Audit Finding Closed', detail: 'Minor NC #2024-015', time: '2 hours ago', icon: CheckCircle2, color: 'text-emerald-400' },
-                { action: 'Document Updated', detail: 'Environmental Aspects Register', time: '4 hours ago', icon: FileText, color: 'text-blue-400' },
-                { action: 'Risk Assessment Completed', detail: 'New Contractor Activity', time: '1 day ago', icon: Shield, color: 'text-purple-400' },
-                { action: 'Training Completed', detail: 'ISO 45001 Awareness - 15 staff', time: '2 days ago', icon: Users, color: 'text-orange-400' },
-                { action: 'Objective Updated', detail: 'Q4 Recycling Target Achieved', time: '3 days ago', icon: Target, color: 'text-emerald-400' },
+                { action: 'Audit Finding Closed', detail: 'Minor NC #2024-015', time: '2 hours ago', icon: CheckCircle2, color: 'text-success' },
+                { action: 'Document Updated', detail: 'Environmental Aspects Register', time: '4 hours ago', icon: FileText, color: 'text-info' },
+                { action: 'Risk Assessment Completed', detail: 'New Contractor Activity', time: '1 day ago', icon: Shield, color: 'text-purple-500' },
+                { action: 'Training Completed', detail: 'ISO 45001 Awareness - 15 staff', time: '2 days ago', icon: Users, color: 'text-warning' },
+                { action: 'Objective Updated', detail: 'Q4 Recycling Target Achieved', time: '3 days ago', icon: Target, color: 'text-success' },
               ].map((activity, i) => {
                 const Icon = activity.icon
                 return (
-                  <div key={i} className="flex items-start gap-3 p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                  <div key={i} className="flex items-start gap-3 p-2 hover:bg-surface rounded-lg transition-colors">
                     <Icon className={`w-5 h-5 mt-0.5 ${activity.color}`} />
                     <div className="flex-grow">
-                      <div className="text-white text-sm">{activity.action}</div>
-                      <div className="text-gray-400 text-xs">{activity.detail}</div>
+                      <div className="text-foreground text-sm">{activity.action}</div>
+                      <div className="text-muted-foreground text-xs">{activity.detail}</div>
                     </div>
-                    <span className="text-gray-500 text-xs">{activity.time}</span>
+                    <span className="text-muted-foreground text-xs">{activity.time}</span>
                   </div>
                 )
               })}
