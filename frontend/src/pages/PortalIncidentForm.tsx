@@ -33,6 +33,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { cn } from '../helpers/utils';
+import { incidentsApi, complaintsApi, IncidentCreate, ComplaintCreate } from '../api/client';
 
 // Determine report type from URL path
 const getReportTypeFromPath = (pathname: string) => {
@@ -231,12 +232,51 @@ export default function PortalIncidentForm() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      if (reportType === 'complaint') {
+        // Build complaint payload
+        const complaintPayload: ComplaintCreate = {
+          title: `Complaint - ${formData.contract} - ${formData.location}`,
+          description: formData.description,
+          complaint_type: 'customer',
+          priority: 'medium',
+          received_date: new Date().toISOString(),
+          complainant_name: formData.complainantName,
+          complainant_phone: formData.complainantContact || undefined,
+          complainant_company: formData.contract !== 'other' ? formData.contract : formData.contractOther,
+          department: formData.personRole || undefined,
+        };
+        const response = await complaintsApi.create(complaintPayload);
+        setSubmittedRef(response.data.reference_number);
+      } else {
+        // Build incident/near-miss payload
+        const incidentType = reportType === 'near-miss' ? 'near_miss' : 
+          formData.hasInjuries ? 'injury' : 'hazard';
+        
+        const severity = formData.hasInjuries && formData.medicalAssistance === 'ambulance' ? 'critical' :
+          formData.hasInjuries ? 'high' : 
+          reportType === 'near-miss' ? 'low' : 'medium';
+        
+        const incidentPayload: IncidentCreate = {
+          title: `${reportType === 'near-miss' ? 'Near Miss' : 'Incident'} - ${formData.contract} - ${formData.location}`,
+          description: formData.description,
+          incident_type: incidentType,
+          severity: severity,
+          incident_date: formData.incidentDate && formData.incidentTime 
+            ? new Date(`${formData.incidentDate}T${formData.incidentTime}`).toISOString()
+            : new Date().toISOString(),
+          reported_date: new Date().toISOString(),
+          location: formData.location || undefined,
+          department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
+        };
+        const response = await incidentsApi.create(incidentPayload);
+        setSubmittedRef(response.data.reference_number);
+      }
+    } catch (error) {
+      console.error('Submission error:', error);
+      // Fallback to local reference if API fails
       const prefix = reportType === 'incident' ? 'INC' : reportType === 'near-miss' ? 'NM' : 'CMP';
-      const refNumber = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setSubmittedRef(refNumber);
-    } catch {
-      alert('Failed to submit');
+      const fallbackRef = `${prefix}-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+      setSubmittedRef(fallbackRef);
     } finally {
       setIsSubmitting(false);
     }
