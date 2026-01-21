@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -22,6 +23,7 @@ import {
 } from '../components/ui/Select'
 
 export default function Incidents() {
+  const navigate = useNavigate()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -180,6 +182,7 @@ export default function Incidents() {
                       key={incident.id}
                       className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
+                      onClick={() => navigate(`/incidents/${incident.id}`)}
                     >
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm text-primary">{incident.reference_number}</span>

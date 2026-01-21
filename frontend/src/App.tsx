@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Incidents from './pages/Incidents'
+import IncidentDetail from './pages/IncidentDetail'
 import RTAs from './pages/RTAs'
 import Complaints from './pages/Complaints'
 import Policies from './pages/Policies'
@@ -169,6 +170,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="incidents" element={<Incidents />} />
+          <Route path="incidents/:id" element={<IncidentDetail />} />
           <Route path="rtas" element={<RTAs />} />
           <Route path="complaints" element={<Complaints />} />
           <Route path="policies" element={<Policies />} />

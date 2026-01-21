@@ -252,50 +252,88 @@ export default function PortalTrack() {
   const loadMyReports = async () => {
     setIsLoadingMyReports(true);
     try {
-      // In production, this would call the API
-      // const response = await fetch('/api/v1/portal/my-reports', {
-      //   headers: { Authorization: `Bearer ${token}` }
-      // });
+      const apiBase = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+      const allReports: ReportSummary[] = [];
       
-      // Demo data - simulating reports for the logged-in user
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Fetch incidents
+      try {
+        const incidentsRes = await fetch(`${apiBase}/api/v1/incidents?page=1&size=20`);
+        if (incidentsRes.ok) {
+          const data = await incidentsRes.json();
+          (data.items || []).forEach((inc: any) => {
+            allReports.push({
+              reference_number: inc.reference_number,
+              report_type: 'incident',
+              title: inc.title,
+              status: inc.status?.toUpperCase() || 'OPEN',
+              status_label: getStatusLabel(inc.status),
+              submitted_at: inc.reported_date || inc.created_at,
+              updated_at: inc.created_at,
+            });
+          });
+        }
+      } catch (e) { console.error('Failed to fetch incidents:', e); }
       
-      const demoReports: ReportSummary[] = [
-        {
-          reference_number: 'INC-2026-0042',
-          report_type: 'incident',
-          title: 'Equipment malfunction in warehouse',
-          status: 'UNDER_INVESTIGATION',
-          status_label: '🔍 Under Investigation',
-          submitted_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          reference_number: 'NM-2026-0015',
-          report_type: 'near_miss',
-          title: 'Near miss - forklift in pedestrian area',
-          status: 'RESOLVED',
-          status_label: '✅ Resolved',
-          submitted_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          reference_number: 'COMP-2026-0008',
-          report_type: 'complaint',
-          title: 'Customer complaint - delayed delivery',
-          status: 'IN_PROGRESS',
-          status_label: '⚙️ In Progress',
-          submitted_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
+      // Fetch RTAs
+      try {
+        const rtasRes = await fetch(`${apiBase}/api/v1/rtas?page=1&size=20`);
+        if (rtasRes.ok) {
+          const data = await rtasRes.json();
+          (data.items || []).forEach((rta: any) => {
+            allReports.push({
+              reference_number: rta.reference_number,
+              report_type: 'rta',
+              title: rta.description?.substring(0, 100) || 'Road Traffic Collision',
+              status: rta.status?.toUpperCase() || 'REPORTED',
+              status_label: getStatusLabel(rta.status),
+              submitted_at: rta.incident_date || rta.created_at,
+              updated_at: rta.created_at,
+            });
+          });
+        }
+      } catch (e) { console.error('Failed to fetch RTAs:', e); }
       
-      setMyReports(demoReports);
+      // Fetch complaints
+      try {
+        const complaintsRes = await fetch(`${apiBase}/api/v1/complaints?page=1&size=20`);
+        if (complaintsRes.ok) {
+          const data = await complaintsRes.json();
+          (data.items || []).forEach((comp: any) => {
+            allReports.push({
+              reference_number: comp.reference_number,
+              report_type: 'complaint',
+              title: comp.title,
+              status: comp.status?.toUpperCase() || 'OPEN',
+              status_label: getStatusLabel(comp.status),
+              submitted_at: comp.received_date || comp.created_at,
+              updated_at: comp.created_at,
+            });
+          });
+        }
+      } catch (e) { console.error('Failed to fetch complaints:', e); }
+      
+      // Sort by most recent
+      allReports.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+      
+      setMyReports(allReports);
     } catch (err) {
       console.error('Failed to load reports:', err);
     } finally {
       setIsLoadingMyReports(false);
     }
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      'open': '📋 Open',
+      'reported': '📋 Reported',
+      'under_investigation': '🔍 Under Investigation',
+      'in_progress': '⚙️ In Progress',
+      'pending_review': '⏳ Pending Review',
+      'resolved': '✅ Resolved',
+      'closed': '✅ Closed',
+    };
+    return labels[status?.toLowerCase()] || status || 'Unknown';
   };
 
   const searchReport = async (ref: string) => {
