@@ -6,7 +6,8 @@ max-line-length = 120
 # F401: imported but unused (pre-existing in many files, cleanup tracked as tech debt)
 # E501: line too long (handled by black)
 # W503: line break before binary operator (conflicts with black)
-extend-ignore = E501, W503, F401
+# E712: comparison to True/False - required for SQLAlchemy column filters (== is intentional)
+extend-ignore = E501, W503, F401, E712
 
 # Exclude directories
 exclude =
