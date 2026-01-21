@@ -1,20 +1,21 @@
 /**
  * Quality Governance Platform - Service Worker
- * Enables offline functionality for Employee Portal
  * 
- * IMPORTANT: Increment CACHE_VERSION on every deploy to ensure users get new assets.
- * This version should be updated by CI/CD or build process.
+ * CRITICAL: This SW enforces HTTPS for all API requests to prevent Mixed Content errors.
+ * Old cached bundles may contain HTTP URLs - the SW rewrites them to HTTPS.
  */
 
-// Cache version - MUST be updated on each deploy to bust old caches
-// Format: qgp-v{major}.{minor}.{patch}-{timestamp}
-const CACHE_VERSION = 'qgp-v2.0.0-20260121';
+// Cache version - CI injects git SHA + timestamp
+const CACHE_VERSION = 'qgp-v3.0.0-20260121';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
-// Static assets to cache immediately
-// IMPORTANT: Only include assets that DEFINITELY exist to prevent install failures
+// Production API base URL - HTTPS enforced
+const API_BASE_HTTPS = 'https://app-qgp-prod.azurewebsites.net';
+const API_BASE_HTTP = 'http://app-qgp-prod.azurewebsites.net';
+
+// Static assets to cache (only guaranteed-to-exist files)
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -22,129 +23,219 @@ const STATIC_ASSETS = [
   '/offline.html',
 ];
 
-// Optional assets to cache (failures won't block install)
-const OPTIONAL_ASSETS = [
-  '/portal',
-  '/portal/login',
-  '/portal/report',
-  '/portal/track',
-  '/portal/help',
-];
-
-// API routes to cache for offline
-const CACHEABLE_API_ROUTES = [
-  '/api/portal/stats',
-  '/api/standards',
-  '/api/users/me',
-];
-
 /**
- * Safely cache a single asset - returns true on success, false on failure
+ * CRITICAL: Rewrite HTTP API URLs to HTTPS
+ * This fixes Mixed Content errors from old cached bundles
  */
-async function cacheAsset(cache, url) {
-  try {
-    const response = await fetch(url, { cache: 'no-cache' });
-    if (response.ok) {
-      await cache.put(url, response);
-      return true;
-    }
-    console.warn(`[SW] Skipping ${url} - status ${response.status}`);
-    return false;
-  } catch (err) {
-    console.warn(`[SW] Failed to cache ${url}:`, err.message);
-    return false;
+function enforceHttps(url) {
+  if (url.startsWith(API_BASE_HTTP)) {
+    const fixed = url.replace(API_BASE_HTTP, API_BASE_HTTPS);
+    console.log('[SW] Rewrote HTTP→HTTPS:', url.substring(0, 60) + '...');
+    return fixed;
   }
+  return url;
 }
 
-// Install event - cache static assets with defensive handling
+/**
+ * Create a new request with HTTPS URL if needed
+ */
+function createSecureRequest(request) {
+  const originalUrl = request.url;
+  const secureUrl = enforceHttps(originalUrl);
+  
+  if (secureUrl !== originalUrl) {
+    // Create new request with HTTPS URL, preserving all other properties
+    return new Request(secureUrl, {
+      method: request.method,
+      headers: request.headers,
+      mode: 'cors',
+      credentials: request.credentials,
+      cache: request.cache,
+      redirect: request.redirect,
+      referrer: request.referrer,
+      integrity: request.integrity,
+    });
+  }
+  return request;
+}
+
+// Install event
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
+  console.log('[SW] Installing...');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(async (cache) => {
-        console.log('[SW] Caching critical assets');
-        
-        // Cache critical assets - these must succeed
-        try {
-          await cache.addAll(STATIC_ASSETS);
-        } catch (err) {
-          console.error('[SW] Failed to cache critical assets:', err);
-          // Don't throw - continue installation
+        console.log('[SW] Caching static assets');
+        // Cache what we can, don't fail install if some are missing
+        for (const url of STATIC_ASSETS) {
+          try {
+            await cache.add(url);
+          } catch (err) {
+            console.warn('[SW] Could not cache:', url);
+          }
         }
-        
-        // Cache optional assets - failures are OK
-        console.log('[SW] Caching optional assets');
-        await Promise.allSettled(
-          OPTIONAL_ASSETS.map(url => cacheAsset(cache, url))
-        );
-        
-        console.log('[SW] Install complete');
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log('[SW] Install complete, activating immediately');
+        return self.skipWaiting();
+      })
   );
 });
 
-// Activate event - clean old caches
+// Activate event - AGGRESSIVELY clear old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
+  console.log('[SW] Activating...');
   event.waitUntil(
     caches.keys()
       .then((keys) => {
-        return Promise.all(
-          keys
-            .filter((key) => key !== STATIC_CACHE && key !== DYNAMIC_CACHE && key !== API_CACHE)
-            .map((key) => {
-              console.log('[SW] Removing old cache:', key);
-              return caches.delete(key);
-            })
-        );
+        // Delete ALL caches that don't match current version
+        const deletions = keys
+          .filter((key) => !key.startsWith(CACHE_VERSION))
+          .map((key) => {
+            console.log('[SW] Deleting old cache:', key);
+            return caches.delete(key);
+          });
+        return Promise.all(deletions);
       })
-      .then(() => self.clients.claim())
+      .then(() => {
+        console.log('[SW] Taking control of all clients');
+        return self.clients.claim();
+      })
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - ENFORCE HTTPS for all API requests
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
+  const request = event.request;
+  
   // Skip non-GET requests
   if (request.method !== 'GET') {
     return;
   }
 
-  // Skip chrome-extension and other non-http requests
+  const url = new URL(request.url);
+  
+  // Skip non-http(s) requests
   if (!url.protocol.startsWith('http')) {
     return;
   }
 
-  // API requests - Network first, cache fallback
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirstWithCache(request, API_CACHE));
+  // CRITICAL: Check if this is an API request that needs HTTPS enforcement
+  const isApiRequest = url.hostname.includes('azurewebsites.net') && 
+                       url.pathname.startsWith('/api/');
+  
+  if (isApiRequest) {
+    // Always enforce HTTPS for API requests
+    const secureRequest = createSecureRequest(request);
+    event.respondWith(networkFirstApi(secureRequest));
     return;
   }
 
-  // Static assets - Cache first, network fallback
+  // Static assets - cache first
   if (isStaticAsset(url.pathname)) {
-    event.respondWith(cacheFirstWithNetwork(request, STATIC_CACHE));
+    event.respondWith(cacheFirst(request));
     return;
   }
 
-  // HTML pages - Network first, cache fallback, offline fallback
+  // HTML pages - network first with offline fallback
   if (request.headers.get('Accept')?.includes('text/html')) {
-    event.respondWith(networkFirstWithOffline(request));
+    event.respondWith(networkFirstHtml(request));
     return;
   }
 
-  // Everything else - Stale while revalidate
-  event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE));
+  // Everything else - network with cache fallback
+  event.respondWith(networkFirst(request));
 });
 
-// Push notification event
-self.addEventListener('push', (event) => {
-  console.log('[SW] Push received:', event);
+// ============================================================================
+// Caching Strategies
+// ============================================================================
+
+async function networkFirstApi(request) {
+  try {
+    const response = await fetch(request);
+    // Only cache successful responses
+    if (response.ok) {
+      const cache = await caches.open(API_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    console.log('[SW] API fetch failed, trying cache');
+    const cached = await caches.match(request);
+    if (cached) {
+      return cached;
+    }
+    return new Response(JSON.stringify({ error: 'Offline', message: 'Network unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) {
+    return cached;
+  }
   
-  let data = { title: 'Notification', body: 'You have a new notification', icon: '/icons/icon-192x192.png' };
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(STATIC_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    return new Response('Offline', { status: 503 });
+  }
+}
+
+async function networkFirstHtml(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) {
+      return cached;
+    }
+    return caches.match('/offline.html');
+  }
+}
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    return cached || new Response('Offline', { status: 503 });
+  }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function isStaticAsset(pathname) {
+  return /\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/i.test(pathname);
+}
+
+// ============================================================================
+// Push Notifications
+// ============================================================================
+
+self.addEventListener('push', (event) => {
+  let data = { title: 'Notification', body: 'You have a new notification' };
   
   if (event.data) {
     try {
@@ -154,183 +245,55 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const options = {
-    body: data.body,
-    icon: data.icon || '/icons/icon-192x192.png',
-    badge: '/icons/badge-72x72.png',
-    vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: data.id || 1,
-      url: data.url || '/portal',
-    },
-    actions: data.actions || [
-      { action: 'view', title: 'View' },
-      { action: 'dismiss', title: 'Dismiss' },
-    ],
-    tag: data.tag || 'qgp-notification',
-    renotify: true,
-  };
-
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-72x72.png',
+      tag: 'qgp-notification',
+    })
   );
 });
 
-// Notification click event
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification clicked:', event);
   event.notification.close();
-
-  const url = event.notification.data?.url || '/portal';
-
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // If a window is already open, focus it
-        for (const client of clientList) {
-          if (client.url.includes(url) && 'focus' in client) {
-            return client.focus();
-          }
-        }
-        // Otherwise, open a new window
-        if (clients.openWindow) {
-          return clients.openWindow(url);
-        }
-      })
+    clients.openWindow(event.notification.data?.url || '/portal')
   );
 });
 
-// Background sync event (for offline form submissions)
+// ============================================================================
+// Background Sync
+// ============================================================================
+
 self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync:', event.tag);
-  
   if (event.tag === 'sync-reports') {
     event.waitUntil(syncPendingReports());
   }
 });
 
-// ============================================================================
-// Caching Strategies
-// ============================================================================
-
-async function cacheFirstWithNetwork(request, cacheName) {
-  const cached = await caches.match(request);
-  if (cached) {
-    return cached;
-  }
-  
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (error) {
-    console.log('[SW] Cache first failed:', error);
-    return new Response('Offline', { status: 503 });
-  }
-}
-
-async function networkFirstWithCache(request, cacheName) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (error) {
-    console.log('[SW] Network first - falling back to cache');
-    const cached = await caches.match(request);
-    if (cached) {
-      return cached;
-    }
-    return new Response(JSON.stringify({ error: 'Offline' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
-
-async function networkFirstWithOffline(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (error) {
-    console.log('[SW] Network first HTML - falling back to cache or offline');
-    const cached = await caches.match(request);
-    if (cached) {
-      return cached;
-    }
-    // Return offline page
-    return caches.match('/offline.html');
-  }
-}
-
-async function staleWhileRevalidate(request, cacheName) {
-  const cached = await caches.match(request);
-  
-  const fetchPromise = fetch(request)
-    .then((response) => {
-      if (response.ok) {
-        const cache = caches.open(cacheName);
-        cache.then((c) => c.put(request, response.clone()));
-      }
-      return response;
-    })
-    .catch(() => cached);
-
-  return cached || fetchPromise;
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function isStaticAsset(pathname) {
-  return (
-    pathname.endsWith('.js') ||
-    pathname.endsWith('.css') ||
-    pathname.endsWith('.png') ||
-    pathname.endsWith('.jpg') ||
-    pathname.endsWith('.jpeg') ||
-    pathname.endsWith('.svg') ||
-    pathname.endsWith('.ico') ||
-    pathname.endsWith('.woff') ||
-    pathname.endsWith('.woff2')
-  );
-}
-
 async function syncPendingReports() {
-  // Get pending reports from IndexedDB
-  const db = await openDatabase();
-  const pendingReports = await getPendingReports(db);
-  
-  for (const report of pendingReports) {
-    try {
-      const response = await fetch('/api/portal/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(report.data),
-      });
-      
-      if (response.ok) {
-        await deletePendingReport(db, report.id);
-        // Notify user of successful sync
-        self.registration.showNotification('Report Synced', {
-          body: `Your ${report.data.report_type} report has been submitted.`,
-          icon: '/icons/icon-192x192.png',
+  try {
+    const db = await openDatabase();
+    const reports = await getPendingReports(db);
+    
+    for (const report of reports) {
+      try {
+        const response = await fetch('/api/portal/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(report.data),
         });
+        
+        if (response.ok) {
+          await deletePendingReport(db, report.id);
+        }
+      } catch (err) {
+        console.log('[SW] Sync failed for report:', report.id);
       }
-    } catch (error) {
-      console.log('[SW] Failed to sync report:', error);
     }
+  } catch (err) {
+    console.log('[SW] Sync error:', err);
   }
 }
 
@@ -339,8 +302,8 @@ function openDatabase() {
     const request = indexedDB.open('QGP_Offline', 1);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
       if (!db.objectStoreNames.contains('pendingReports')) {
         db.createObjectStore('pendingReports', { keyPath: 'id', autoIncrement: true });
       }
@@ -350,8 +313,8 @@ function openDatabase() {
 
 function getPendingReports(db) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction('pendingReports', 'readonly');
-    const store = transaction.objectStore('pendingReports');
+    const tx = db.transaction('pendingReports', 'readonly');
+    const store = tx.objectStore('pendingReports');
     const request = store.getAll();
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
@@ -360,12 +323,12 @@ function getPendingReports(db) {
 
 function deletePendingReport(db, id) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction('pendingReports', 'readwrite');
-    const store = transaction.objectStore('pendingReports');
+    const tx = db.transaction('pendingReports', 'readwrite');
+    const store = tx.objectStore('pendingReports');
     const request = store.delete(id);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });
 }
 
-console.log('[SW] Service Worker loaded');
+console.log('[SW] Service Worker loaded - HTTPS enforcement enabled');
