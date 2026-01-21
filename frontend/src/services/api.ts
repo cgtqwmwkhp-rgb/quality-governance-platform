@@ -3,7 +3,10 @@
  * Provides typed API calls with error handling and caching
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://qgp-backend-staging.azurewebsites.net/api/v1';
+import { API_BASE_URL } from '../config/apiBase';
+
+// Use centralized API base URL
+const API_BASE = API_BASE_URL;
 
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';

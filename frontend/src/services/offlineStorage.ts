@@ -10,6 +10,7 @@
  */
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { API_BASE_URL } from '../config/apiBase';
 
 // ============================================================================
 // Types
@@ -361,7 +362,7 @@ class OfflineStorage {
   }
 
   private async processSyncItem(item: SyncItem): Promise<void> {
-    const baseUrl = import.meta.env.VITE_API_URL || '/api';
+    const baseUrl = API_BASE_URL;
     const endpoint = `${baseUrl}/${item.entityType}`;
 
     let url = endpoint;
@@ -500,7 +501,7 @@ export function useOfflineEntity<T>(entityType: string, id: string): {
       // Try network if online
       if (navigator.onLine) {
         try {
-          const baseUrl = import.meta.env.VITE_API_URL || '/api';
+          const baseUrl = API_BASE_URL;
           const response = await fetch(`${baseUrl}/${entityType}/${id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('token')}`,

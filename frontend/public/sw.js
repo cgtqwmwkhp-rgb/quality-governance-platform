@@ -1,10 +1,14 @@
 /**
  * Quality Governance Platform - Service Worker
  * Enables offline functionality for Employee Portal
- * Version: 1.0.0
+ * 
+ * IMPORTANT: Increment CACHE_VERSION on every deploy to ensure users get new assets.
+ * This version should be updated by CI/CD or build process.
  */
 
-const CACHE_VERSION = 'qgp-v1.0.0';
+// Cache version - MUST be updated on each deploy to bust old caches
+// Format: qgp-v{major}.{minor}.{patch}-{timestamp}
+const CACHE_VERSION = 'qgp-v2.0.0-20260121';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
