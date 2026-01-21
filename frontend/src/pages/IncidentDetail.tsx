@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   AlertTriangle,
-  Clock,
   User,
   MapPin,
   Calendar,
@@ -12,9 +11,7 @@ import {
   FlaskConical,
   CheckCircle,
   Loader2,
-  MessageSquare,
   ClipboardList,
-  Edit,
   History,
 } from 'lucide-react'
 import { incidentsApi, Incident, investigationsApi, actionsApi, Action } from '../api/client'
@@ -101,12 +98,11 @@ export default function IncidentDetail() {
     setCreating(true)
     try {
       await investigationsApi.create({
+        template_id: 1, // Default template
+        assigned_entity_type: 'reporting_incident',
+        assigned_entity_id: incident.id,
         title: investigationForm.title || `Investigation - ${incident.reference_number}`,
-        description: investigationForm.description,
-        entity_type: 'reporting_incident',
-        entity_id: incident.id,
-        investigation_type: investigationForm.investigation_type,
-        lead_investigator: investigationForm.lead_investigator || undefined,
+        description: `${investigationForm.description || ''}\n\nInvestigation Type: ${investigationForm.investigation_type}\nLead Investigator: ${investigationForm.lead_investigator || 'TBD'}`,
       })
       setShowInvestigationModal(false)
       setInvestigationForm({
@@ -305,7 +301,7 @@ export default function IncidentDetail() {
                         <div className={cn(
                           "w-8 h-8 rounded-lg flex items-center justify-center",
                           action.status === 'completed' ? 'bg-success/10 text-success' :
-                          action.status === 'overdue' ? 'bg-destructive/10 text-destructive' :
+                          action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
                           'bg-warning/10 text-warning'
                         )}>
                           <CheckCircle className="w-4 h-4" />
