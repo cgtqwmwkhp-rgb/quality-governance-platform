@@ -16,7 +16,6 @@ Reason: Async fixture architecture not aligned with test requirements.
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ============================================================================
 # Pytest Hooks - Skip async tests that require AsyncClient
 # ============================================================================
