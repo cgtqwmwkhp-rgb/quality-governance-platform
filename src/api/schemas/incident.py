@@ -29,6 +29,16 @@ class IncidentCreate(IncidentBase):
         max_length=50,
         description="Optional explicit reference number (requires permission)",
     )
+    reporter_email: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Email of the person reporting (for portal submissions)",
+    )
+    reporter_name: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Name of the person reporting (for portal submissions)",
+    )
 
     @field_validator("title")
     @classmethod
@@ -69,6 +79,8 @@ class IncidentResponse(IncidentBase):
     created_at: datetime
     updated_at: datetime
     reporter_id: Optional[int] = None
+    reporter_email: Optional[str] = None
+    reporter_name: Optional[str] = None
     investigator_id: Optional[int] = None
     closed_at: Optional[datetime] = None
 

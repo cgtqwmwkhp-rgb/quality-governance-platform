@@ -73,6 +73,7 @@ async def list_near_misses(
     status_filter: Optional[str] = Query(None, alias="status"),
     priority: Optional[str] = Query(None),
     contract: Optional[str] = Query(None),
+    reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ) -> NearMissListResponse:
     """
     List near misses with pagination and filtering.
@@ -84,6 +85,8 @@ async def list_near_misses(
     query = select(NearMiss)
 
     # Apply filters
+    if reporter_email:
+        query = query.where(NearMiss.reporter_email == reporter_email)
     if status_filter:
         query = query.where(NearMiss.status == status_filter)
     if priority:

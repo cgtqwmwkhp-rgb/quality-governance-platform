@@ -74,6 +74,7 @@ async def list_rtas(
     page_size: int = Query(10, ge=1, le=100),
     severity: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ):
     """List RTAs with deterministic ordering and pagination."""
     query = select(RoadTrafficCollision)
@@ -83,6 +84,8 @@ async def list_rtas(
         query = query.where(RoadTrafficCollision.severity == severity)
     if status:
         query = query.where(RoadTrafficCollision.status == status)
+    if reporter_email:
+        query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
 
     # Deterministic ordering: created_at DESC, id ASC
     query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())

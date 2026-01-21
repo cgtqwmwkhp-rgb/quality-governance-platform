@@ -70,6 +70,8 @@ async def create_incident(
         department=incident_data.department,
         reference_number=reference_number,
         reporter_id=current_user.id,
+        reporter_email=incident_data.reporter_email,
+        reporter_name=incident_data.reporter_name,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -123,6 +125,7 @@ async def list_incidents(
     current_user: CurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+    reporter_email: str = Query(None, description="Filter by reporter email"),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -133,14 +136,23 @@ async def list_incidents(
 
     Requires authentication.
     """
+    # Build base query
+    query = select(Incident)
+    count_query = select(sa_func.count()).select_from(Incident)
+    
+    # Filter by reporter_email if provided
+    if reporter_email:
+        query = query.where(Incident.reporter_email == reporter_email)
+        count_query = count_query.where(Incident.reporter_email == reporter_email)
+    
     # Count total
-    count_result = await db.execute(select(sa_func.count()).select_from(Incident))
+    count_result = await db.execute(count_query)
     total = count_result.scalar_one()
 
     # Get paginated results with deterministic ordering
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(Incident).order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
+        query.order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
     )
     incidents = result.scalars().all()
 

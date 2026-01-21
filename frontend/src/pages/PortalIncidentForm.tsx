@@ -267,6 +267,8 @@ export default function PortalIncidentForm() {
           reported_date: new Date().toISOString(),
           location: formData.location || undefined,
           department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
+          reporter_email: user?.email || undefined,
+          reporter_name: user?.name || undefined,
         };
         const response = await incidentsApi.create(incidentPayload);
         setSubmittedRef(response.data.reference_number);

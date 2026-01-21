@@ -278,73 +278,75 @@ export default function PortalTrack() {
       let hasSuccessfulFetch = false;
       let authError = false;
       
-      // Fetch incidents
+      // Fetch incidents - filter by reporter_email if user is authenticated
       try {
-        const incidentsRes = await fetch(`${apiBase}/api/v1/incidents?page=1&size=20`, { headers });
+        const incidentsUrl = user?.email 
+          ? `${apiBase}/api/v1/incidents?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
+          : `${apiBase}/api/v1/incidents?page=1&size=20`;
+        const incidentsRes = await fetch(incidentsUrl, { headers });
         if (incidentsRes.ok) {
           hasSuccessfulFetch = true;
           const data = await incidentsRes.json();
           (data.items || []).forEach((inc: any) => {
-            // Filter to only show reports from current user if email matches
-            if (!user?.email || inc.reported_by_email === user.email || inc.reported_by === user.name) {
-              allReports.push({
-                reference_number: inc.reference_number,
-                report_type: 'incident',
-                title: inc.title,
-                status: inc.status?.toUpperCase() || 'OPEN',
-                status_label: getStatusLabel(inc.status),
-                submitted_at: inc.reported_date || inc.created_at,
-                updated_at: inc.created_at,
-              });
-            }
+            allReports.push({
+              reference_number: inc.reference_number,
+              report_type: 'incident',
+              title: inc.title,
+              status: inc.status?.toUpperCase() || 'OPEN',
+              status_label: getStatusLabel(inc.status),
+              submitted_at: inc.reported_date || inc.created_at,
+              updated_at: inc.created_at,
+            });
           });
         } else if (incidentsRes.status === 401) {
           authError = true;
         }
       } catch (e) { console.error('Failed to fetch incidents:', e); }
       
-      // Fetch RTAs
+      // Fetch RTAs - filter by reporter_email
       try {
-        const rtasRes = await fetch(`${apiBase}/api/v1/rtas?page=1&size=20`, { headers });
+        const rtasUrl = user?.email 
+          ? `${apiBase}/api/v1/rtas?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
+          : `${apiBase}/api/v1/rtas?page=1&size=20`;
+        const rtasRes = await fetch(rtasUrl, { headers });
         if (rtasRes.ok) {
           hasSuccessfulFetch = true;
           const data = await rtasRes.json();
           (data.items || []).forEach((rta: any) => {
-            if (!user?.email || rta.driver_email === user.email || rta.reported_by === user.name) {
-              allReports.push({
-                reference_number: rta.reference_number,
-                report_type: 'rta',
-                title: rta.description?.substring(0, 100) || 'Road Traffic Collision',
-                status: rta.status?.toUpperCase() || 'REPORTED',
-                status_label: getStatusLabel(rta.status),
-                submitted_at: rta.incident_date || rta.created_at,
-                updated_at: rta.created_at,
-              });
-            }
+            allReports.push({
+              reference_number: rta.reference_number,
+              report_type: 'rta',
+              title: rta.description?.substring(0, 100) || 'Road Traffic Collision',
+              status: rta.status?.toUpperCase() || 'REPORTED',
+              status_label: getStatusLabel(rta.status),
+              submitted_at: rta.collision_date || rta.created_at,
+              updated_at: rta.created_at,
+            });
           });
         } else if (rtasRes.status === 401) {
           authError = true;
         }
       } catch (e) { console.error('Failed to fetch RTAs:', e); }
       
-      // Fetch complaints
+      // Fetch complaints - filter by complainant_email
       try {
-        const complaintsRes = await fetch(`${apiBase}/api/v1/complaints?page=1&size=20`, { headers });
+        const complaintsUrl = user?.email 
+          ? `${apiBase}/api/v1/complaints?page=1&size=20&complainant_email=${encodeURIComponent(user.email)}`
+          : `${apiBase}/api/v1/complaints?page=1&size=20`;
+        const complaintsRes = await fetch(complaintsUrl, { headers });
         if (complaintsRes.ok) {
           hasSuccessfulFetch = true;
           const data = await complaintsRes.json();
           (data.items || []).forEach((comp: any) => {
-            if (!user?.email || comp.complainant_email === user.email || comp.reported_by === user.name) {
-              allReports.push({
-                reference_number: comp.reference_number,
-                report_type: 'complaint',
-                title: comp.title,
-                status: comp.status?.toUpperCase() || 'OPEN',
-                status_label: getStatusLabel(comp.status),
-                submitted_at: comp.received_date || comp.created_at,
-                updated_at: comp.created_at,
-              });
-            }
+            allReports.push({
+              reference_number: comp.reference_number,
+              report_type: 'complaint',
+              title: comp.title,
+              status: comp.status?.toUpperCase() || 'OPEN',
+              status_label: getStatusLabel(comp.status),
+              submitted_at: comp.received_date || comp.created_at,
+              updated_at: comp.created_at,
+            });
           });
         } else if (complaintsRes.status === 401) {
           authError = true;

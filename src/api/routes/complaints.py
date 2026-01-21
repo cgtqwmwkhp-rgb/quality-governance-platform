@@ -88,6 +88,7 @@ async def list_complaints(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = None,
+    complainant_email: Optional[str] = Query(None, description="Filter by complainant email"),
 ) -> ComplaintListResponse:
     """
     List all complaints with deterministic ordering.
@@ -97,6 +98,8 @@ async def list_complaints(
     """
     query = select(Complaint)
 
+    if complainant_email:
+        query = query.where(Complaint.complainant_email == complainant_email)
     if status_filter:
         query = query.where(Complaint.status == status_filter)
 

@@ -70,9 +70,14 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     # Driver details
     driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     driver_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    driver_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)  # Portal user email for tracking
     driver_statement: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     driver_injured: Mapped[bool] = mapped_column(Boolean, default=False)
     driver_injury_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Reporter details (if different from driver)
+    reporter_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    reporter_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Third party details (JSON for multiple parties)
     third_parties: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)

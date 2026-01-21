@@ -89,6 +89,8 @@ export interface IncidentCreate {
   reported_date: string
   location?: string
   department?: string
+  reporter_email?: string
+  reporter_name?: string
 }
 
 // ============ RTA Types ============

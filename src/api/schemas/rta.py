@@ -61,8 +61,11 @@ class RTACreate(RTABase):
     """Schema for creating an RTA."""
 
     driver_id: Optional[int] = None
+    driver_email: Optional[str] = Field(None, max_length=255, description="Driver's email for portal tracking")
     investigator_id: Optional[int] = None
     reporter_id: Optional[int] = None
+    reporter_email: Optional[str] = Field(None, max_length=255, description="Reporter's email for portal tracking")
+    reporter_name: Optional[str] = Field(None, max_length=255, description="Reporter's name")
 
 
 class RTAUpdate(BaseModel):
@@ -125,8 +128,11 @@ class RTAResponse(RTABase):
     id: int
     reference_number: str
     driver_id: Optional[int] = None
+    driver_email: Optional[str] = None
     investigator_id: Optional[int] = None
     reporter_id: Optional[int] = None
+    reporter_email: Optional[str] = None
+    reporter_name: Optional[str] = None
     closed_at: Optional[datetime] = None
     closed_by_id: Optional[int] = None
     created_at: datetime
