@@ -16,8 +16,6 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 
-# Note: os is used in database_url fixture below
-
 
 # ============================================================================
 # Sync Fixtures (for tests that don't need async)
@@ -92,11 +90,27 @@ async def test_session():
     Note: Tests requiring full database access with seeded data
     should be marked with @pytest.mark.requires_db
     """
-    # For tests that don't actually need DB, we can skip
-    # For tests that do, they should use the real session from infrastructure
     pytest.skip(
-        "Test requires async database session. "
-        "Mark with @pytest.mark.requires_db and ensure DB is configured."
+        "QUARANTINED [GOVPLAT-003]: Async DB session not configured. "
+        "See tests/QUARANTINE_POLICY.yaml"
+    )
+
+
+@pytest.fixture
+def test_user():
+    """Test user fixture - requires database."""
+    pytest.skip(
+        "QUARANTINED [GOVPLAT-003]: Test user requires DB session. "
+        "See tests/QUARANTINE_POLICY.yaml"
+    )
+
+
+@pytest.fixture
+def test_incident():
+    """Test incident fixture - requires database."""
+    pytest.skip(
+        "QUARANTINED [GOVPLAT-003]: Test incident requires DB session. "
+        "See tests/QUARANTINE_POLICY.yaml"
     )
 
 
