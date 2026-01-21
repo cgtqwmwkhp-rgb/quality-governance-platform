@@ -36,9 +36,8 @@ def sync_client() -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    """
-    Async HTTP client for testing FastAPI endpoints.
-    
+    """Async HTTP client for testing FastAPI endpoints.
+
     Uses ASGITransport to call the app directly without network overhead.
     This is the primary client fixture for integration tests.
     """
@@ -57,18 +56,16 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
+    """Test authentication headers.
+
+    Note: These are mock headers that don't pass actual auth validation.
+    Tests requiring authenticated access are quarantined until proper
+    JWT token generation is implemented.
     """
-    Test authentication headers.
-    
-    For integration tests, we use a mock authorization header.
-    The actual auth validation should be mocked or use test tokens.
-    """
-    # In a real setup, this would be a valid JWT for a test user
-    # For now, we return headers that can be used with auth-optional endpoints
-    return {
-        "Authorization": "Bearer test-integration-token",
-        "X-Test-User": "integration-test-user",
-    }
+    pytest.skip(
+        "QUARANTINED [GOVPLAT-003]: Auth headers require valid JWT token generation. "
+        "See tests/QUARANTINE_POLICY.yaml"
+    )
 
 
 @pytest.fixture
@@ -84,9 +81,8 @@ def test_user_id() -> str:
 
 @pytest.fixture
 async def test_session():
-    """
-    Async database session for integration tests.
-    
+    """Async database session for integration tests.
+
     Note: Tests requiring full database access with seeded data
     should be marked with @pytest.mark.requires_db
     """
@@ -121,15 +117,14 @@ def test_incident():
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    """
-    Get database URL from environment.
-    
+    """Get database URL from environment.
+
     CI sets DATABASE_URL to PostgreSQL connection string.
     Falls back to SQLite for local development.
     """
     return os.environ.get(
         "DATABASE_URL",
-        "sqlite+aiosqlite:///./test_integration.db"
+        "sqlite+aiosqlite:///./test_integration.db",
     )
 
 
@@ -142,22 +137,21 @@ def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
         "markers",
-        "phase34: marks tests requiring Phase 3/4 features (quarantined)"
-    )
-    config.addinivalue_line(
-        "markers", 
-        "api_contract_mismatch: marks tests with known API contract issues (quarantined)"
+        "phase34: marks tests requiring Phase 3/4 features (quarantined)",
     )
     config.addinivalue_line(
         "markers",
-        "requires_db: marks tests that require database access"
+        "api_contract_mismatch: marks tests with known API contract issues (quarantined)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "requires_db: marks tests that require database access",
     )
 
 
 def pytest_collection_modifyitems(config, items):
-    """
-    Modify test collection to handle quarantined tests.
-    
+    """Modify test collection to handle quarantined tests.
+
     Tests marked with quarantine markers are skipped with documentation.
     """
     skip_phase34 = pytest.mark.skip(
@@ -168,7 +162,7 @@ def pytest_collection_modifyitems(config, items):
         reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. "
         "Expiry: 2026-02-21. See tests/QUARANTINE_POLICY.yaml"
     )
-    
+
     for item in items:
         if "phase34" in item.keywords:
             item.add_marker(skip_phase34)
