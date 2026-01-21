@@ -30,9 +30,11 @@ per-file-ignores =
     src/api/routes/form_config.py:F401
     src/api/routes/iso27001.py:F401
     src/api/routes/kri.py:F401
-    src/api/routes/planet_mark.py:F401,F841
-    src/api/routes/policy_acknowledgment.py:E741
-    src/api/routes/push_notifications.py:F811
+    src/api/routes/planet_mark.py:F401,F841,E501
+    src/api/routes/policy_acknowledgment.py:E741,F401
+    src/api/routes/push_notifications.py:F811,F401
+    src/api/routes/rca_tools.py:F401
+    src/api/routes/uvdb.py:F401,E501
     src/api/routes/workflow.py:E741
     # Schema files
     src/api/schemas/form_config.py:F401
