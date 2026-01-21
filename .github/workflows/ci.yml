@@ -27,7 +27,9 @@ jobs:
           pip install black flake8 mypy
 
       - name: Check code formatting (black)
-        run: black --check src/ tests/
+        run: |
+          black --diff tests/integration/conftest.py 2>&1 | head -100 || true
+          black --check src/ tests/
 
       - name: Check import sorting (isort)
         run: isort --check-only --settings-path pyproject.toml src/ tests/
