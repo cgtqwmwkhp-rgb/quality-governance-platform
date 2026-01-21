@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ============================================================================
 # Rate Limiter Tests
 # ============================================================================
@@ -23,11 +22,7 @@ class TestRateLimiter:
 
     def test_rate_limiter_import(self):
         """Rate limiter can be imported."""
-        from src.infrastructure.middleware.rate_limiter import (
-            get_rate_limiter,
-            InMemoryRateLimiter,
-            RateLimitConfig,
-        )
+        from src.infrastructure.middleware.rate_limiter import InMemoryRateLimiter, RateLimitConfig, get_rate_limiter
 
         assert get_rate_limiter is not None
         assert InMemoryRateLimiter is not None
@@ -87,12 +82,7 @@ class TestRedisCache:
 
     def test_cache_import(self):
         """Cache can be imported."""
-        from src.infrastructure.cache.redis_cache import (
-            get_cache,
-            InMemoryCache,
-            CacheType,
-            cached,
-        )
+        from src.infrastructure.cache.redis_cache import CacheType, InMemoryCache, cached, get_cache
 
         assert get_cache is not None
         assert InMemoryCache is not None
@@ -172,11 +162,7 @@ class TestMonitoring:
 
     def test_monitoring_import(self):
         """Monitoring can be imported."""
-        from src.infrastructure.monitoring.azure_monitor import (
-            StructuredLogger,
-            MonitoringConfig,
-            logger,
-        )
+        from src.infrastructure.monitoring.azure_monitor import MonitoringConfig, StructuredLogger, logger
 
         assert StructuredLogger is not None
         assert MonitoringConfig is not None
@@ -269,7 +255,7 @@ class TestAPIDependencies:
 
     def test_dependencies_import(self):
         """Dependencies can be imported."""
-        from src.api.dependencies import get_db, DbSession
+        from src.api.dependencies import DbSession, get_db
 
         assert get_db is not None
         assert DbSession is not None

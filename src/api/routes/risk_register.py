@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from src.infrastructure.database import get_db
 from src.domain.models.risk_register import (
     BowTieElement,
     KeyRiskIndicator,
@@ -26,12 +25,8 @@ from src.domain.models.risk_register import (
     RiskControl,
     RiskControlMapping,
 )
-from src.domain.services.risk_service import (
-    BowTieService,
-    KRIService,
-    RiskScoringEngine,
-    RiskService,
-)
+from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 

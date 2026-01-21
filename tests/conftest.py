@@ -251,6 +251,29 @@ def portal_report_data():
 
 
 # ============================================================================
+# Utility Functions (exported for tests)
+# ============================================================================
+
+
+def generate_test_reference(prefix: str = "TEST") -> str:
+    """Generate a unique reference number for tests.
+
+    Args:
+        prefix: The prefix for the reference (default: "TEST")
+
+    Returns:
+        A unique reference string like "TEST-20260121-ABC123"
+    """
+    import random
+    import string
+    from datetime import datetime
+
+    date_part = datetime.now().strftime("%Y%m%d")
+    random_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return f"{prefix}-{date_part}-{random_part}"
+
+
+# ============================================================================
 # Markers
 # ============================================================================
 

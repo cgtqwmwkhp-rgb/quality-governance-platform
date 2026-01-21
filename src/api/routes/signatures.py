@@ -488,6 +488,7 @@ async def get_signature_stats(
 ):
     """Get signature statistics."""
     from sqlalchemy import func
+
     from src.domain.models.digital_signature import Signature, SignatureRequest
 
     # TODO: Get from auth

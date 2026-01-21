@@ -11,9 +11,10 @@ Tests all Phase 1 features:
 Target: 95%+ test coverage and functionality validation.
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # =============================================================================
 # PHASE 1.1: WORKFLOW ENGINE TESTS
@@ -83,8 +84,8 @@ class TestWorkflowEngine:
 
     def test_sla_business_hours_calculation(self):
         """Test SLA due time calculation with business hours."""
+        from src.domain.models.workflow_rules import EntityType, SLAConfiguration
         from src.services.workflow_engine import SLAService
-        from src.domain.models.workflow_rules import SLAConfiguration, EntityType
 
         config = SLAConfiguration(
             id=1,
@@ -130,8 +131,8 @@ class TestRiskScoring:
 
     def test_severity_impact_mapping(self):
         """Test incident severity to likelihood adjustment."""
-        from src.services.risk_scoring import RiskScoringService
         from src.domain.models.incident import IncidentSeverity
+        from src.services.risk_scoring import RiskScoringService
 
         assert RiskScoringService.SEVERITY_IMPACT[IncidentSeverity.CRITICAL] == 2
         assert RiskScoringService.SEVERITY_IMPACT[IncidentSeverity.HIGH] == 1
@@ -146,7 +147,7 @@ class TestRiskScoring:
 
     def test_kri_status_calculation_lower_is_better(self):
         """Test KRI status when lower values are better."""
-        from src.domain.models.kri import KeyRiskIndicator, ThresholdStatus, KRICategory
+        from src.domain.models.kri import KeyRiskIndicator, KRICategory, ThresholdStatus
 
         kri = KeyRiskIndicator(
             code="TEST",
@@ -167,7 +168,7 @@ class TestRiskScoring:
 
     def test_kri_status_calculation_higher_is_better(self):
         """Test KRI status when higher values are better."""
-        from src.domain.models.kri import KeyRiskIndicator, ThresholdStatus, KRICategory
+        from src.domain.models.kri import KeyRiskIndicator, KRICategory, ThresholdStatus
 
         kri = KeyRiskIndicator(
             code="TEST",
@@ -382,7 +383,7 @@ class TestIntegration:
 
     def test_kri_breach_triggers_alert_flow(self):
         """Test that KRI threshold breach triggers alert."""
-        from src.domain.models.kri import KeyRiskIndicator, ThresholdStatus, KRICategory
+        from src.domain.models.kri import KeyRiskIndicator, KRICategory, ThresholdStatus
 
         kri = KeyRiskIndicator(
             code="INC-001",
@@ -484,7 +485,7 @@ class TestModelValidation:
 
     def test_workflow_rule_creation(self):
         """Test WorkflowRule model creation."""
-        from src.domain.models.workflow_rules import WorkflowRule, RuleType, EntityType, TriggerEvent, ActionType
+        from src.domain.models.workflow_rules import ActionType, EntityType, RuleType, TriggerEvent, WorkflowRule
 
         rule = WorkflowRule(
             name="Test Rule",
@@ -521,7 +522,7 @@ class TestModelValidation:
 
     def test_policy_acknowledgment_requirement_creation(self):
         """Test PolicyAcknowledgmentRequirement model."""
-        from src.domain.models.policy_acknowledgment import PolicyAcknowledgmentRequirement, AcknowledgmentType
+        from src.domain.models.policy_acknowledgment import AcknowledgmentType, PolicyAcknowledgmentRequirement
 
         req = PolicyAcknowledgmentRequirement(
             policy_id=1,

@@ -9,18 +9,18 @@ Provides live co-editing with:
 - Conflict resolution
 """
 
-import secrets
 import asyncio
+import secrets
 from datetime import datetime, timedelta
-from typing import Any, Optional, Callable
+from typing import Any, Callable, Optional
 
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, desc, or_
 from sqlalchemy.orm import Session
 
 from src.domain.models.collaboration import (
+    CollaborativeChange,
     CollaborativeDocument,
     CollaborativeSession,
-    CollaborativeChange,
     Comment,
     Presence,
 )

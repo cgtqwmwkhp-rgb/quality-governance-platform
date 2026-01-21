@@ -18,7 +18,6 @@ from sqlalchemy.orm import Session
 from src.api.dependencies import get_db
 from src.domain.services.tenant_service import TenantService
 
-
 router = APIRouter()
 
 

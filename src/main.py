@@ -51,6 +51,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         import time
+
         from fastapi.responses import JSONResponse
 
         # Skip rate limiting for health checks

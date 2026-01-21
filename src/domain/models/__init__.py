@@ -1,5 +1,13 @@
 """Domain models package."""
 
+# AI Copilot (Tier 2)
+from src.domain.models.ai_copilot import (
+    CopilotAction,
+    CopilotFeedback,
+    CopilotKnowledge,
+    CopilotMessage,
+    CopilotSession,
+)
 from src.domain.models.analytics import (
     BenchmarkData,
     CostRecord,
@@ -11,6 +19,15 @@ from src.domain.models.analytics import (
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
+
+# Digital Signatures (Tier 2)
+from src.domain.models.digital_signature import (
+    Signature,
+    SignatureAuditLog,
+    SignatureRequest,
+    SignatureRequestSigner,
+    SignatureTemplate,
+)
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -19,113 +36,84 @@ from src.domain.models.document import (
     DocumentVersion,
     IndexJob,
 )
-from src.domain.models.incident import Incident, IncidentAction
-from src.domain.models.policy import Policy, PolicyVersion
-from src.domain.models.risk import Risk, RiskAssessment, RiskControl
-from src.domain.models.rta import RoadTrafficCollision, RTAAction
-from src.domain.models.standard import Clause, Control, Standard
-from src.domain.models.user import Role, User, UserRole
-
-# Enterprise Risk Register (Tier 1)
-from src.domain.models.risk_register import (
-    Risk as EnterpriseRisk,
-    RiskControl as EnterpriseRiskControl,
-    RiskControlMapping,
-    BowTieElement,
-    KeyRiskIndicator,
-    RiskAssessmentHistory,
-    RiskAppetiteStatement,
-)
-
-# IMS Unification (Tier 1)
-from src.domain.models.ims_unification import (
-    IMSRequirement,
-    CrossStandardMapping,
-    IMSControl,
-    IMSControlRequirementMapping,
-    UnifiedAuditPlan,
-    ManagementReview,
-    ManagementReviewInput,
-    IMSProcessMap,
-    IMSObjective,
-)
 
 # Document Control (Tier 1)
 from src.domain.models.document_control import (
     ControlledDocument,
-    DocumentVersion as ControlledDocumentVersion,
-    DocumentApprovalWorkflow,
-    DocumentApprovalInstance,
+    DocumentAccessLog,
     DocumentApprovalAction,
+    DocumentApprovalInstance,
+    DocumentApprovalWorkflow,
     DocumentDistribution,
     DocumentTrainingLink,
-    DocumentAccessLog,
-    ObsoleteDocumentRecord,
 )
+from src.domain.models.document_control import DocumentVersion as ControlledDocumentVersion
+from src.domain.models.document_control import ObsoleteDocumentRecord
+
+# Form Configuration (Admin Form Builder)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
+
+# IMS Unification (Tier 1)
+from src.domain.models.ims_unification import (
+    CrossStandardMapping,
+    IMSControl,
+    IMSControlRequirementMapping,
+    IMSObjective,
+    IMSProcessMap,
+    IMSRequirement,
+    ManagementReview,
+    ManagementReviewInput,
+    UnifiedAuditPlan,
+)
+from src.domain.models.incident import Incident, IncidentAction
 
 # ISO 27001 Information Security (Tier 1)
 from src.domain.models.iso27001 import (
-    InformationAsset,
-    ISO27001Control,
-    StatementOfApplicability,
-    SoAControlEntry,
-    InformationSecurityRisk,
-    SecurityIncident,
     AccessControlRecord,
     BusinessContinuityPlan,
+    InformationAsset,
+    InformationSecurityRisk,
+    ISO27001Control,
+    SecurityIncident,
+    SoAControlEntry,
+    StatementOfApplicability,
     SupplierSecurityAssessment,
-)
-
-# UVDB Achilles Verify B2 Audit Protocol
-from src.domain.models.uvdb_achilles import (
-    UVDBSection,
-    UVDBQuestion,
-    UVDBAudit,
-    UVDBAuditResponse,
-    UVDBKPIRecord,
-    UVDBISOCrossMapping,
 )
 
 # Planet Mark Carbon Management
 from src.domain.models.planet_mark import (
-    CarbonReportingYear,
-    EmissionSource,
-    Scope3CategoryData,
-    ImprovementAction,
-    DataQualityAssessment,
     CarbonEvidence,
+    CarbonReportingYear,
+    DataQualityAssessment,
+    EmissionSource,
     FleetEmissionRecord,
-    UtilityMeterReading,
-    SupplierEmissionData,
+    ImprovementAction,
     ISO14001CrossMapping,
+    Scope3CategoryData,
+    SupplierEmissionData,
+    UtilityMeterReading,
 )
+from src.domain.models.policy import Policy, PolicyVersion
+from src.domain.models.risk import Risk, RiskAssessment, RiskControl
 
-# AI Copilot (Tier 2)
-from src.domain.models.ai_copilot import (
-    CopilotSession,
-    CopilotMessage,
-    CopilotAction,
-    CopilotKnowledge,
-    CopilotFeedback,
-)
+# Enterprise Risk Register (Tier 1)
+from src.domain.models.risk_register import BowTieElement, KeyRiskIndicator
+from src.domain.models.risk_register import Risk as EnterpriseRisk
+from src.domain.models.risk_register import RiskAppetiteStatement, RiskAssessmentHistory
+from src.domain.models.risk_register import RiskControl as EnterpriseRiskControl
+from src.domain.models.risk_register import RiskControlMapping
+from src.domain.models.rta import RoadTrafficCollision, RTAAction
+from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.user import Role, User, UserRole
 
-# Digital Signatures (Tier 2)
-from src.domain.models.digital_signature import (
-    SignatureRequest,
-    SignatureRequestSigner,
-    Signature,
-    SignatureTemplate,
-    SignatureAuditLog,
-)
-
-# Form Configuration (Admin Form Builder)
-from src.domain.models.form_config import (
-    FormTemplate,
-    FormStep,
-    FormField,
-    Contract,
-    SystemSetting,
-    LookupOption,
+# UVDB Achilles Verify B2 Audit Protocol
+from src.domain.models.uvdb_achilles import (
+    UVDBAudit,
+    UVDBAuditResponse,
+    UVDBISOCrossMapping,
+    UVDBKPIRecord,
+    UVDBQuestion,
+    UVDBSection,
 )
 
 __all__ = [

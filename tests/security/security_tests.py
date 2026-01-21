@@ -27,6 +27,7 @@ class TestSecurityHeaders:
     def client(self):
         """Get test client."""
         from fastapi.testclient import TestClient
+
         from src.main import app
 
         return TestClient(app)
@@ -55,6 +56,7 @@ class TestAuthenticationSecurity:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from src.main import app
 
         return TestClient(app)
@@ -106,6 +108,7 @@ class TestInputValidation:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from src.main import app
 
         return TestClient(app)
@@ -209,6 +212,7 @@ class TestDataProtection:
     def test_error_messages_not_verbose(self):
         """Test that error messages don't leak sensitive info."""
         from fastapi.testclient import TestClient
+
         from src.main import app
 
         client = TestClient(app)
@@ -229,6 +233,7 @@ class TestFileUploadSecurity:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from src.main import app
 
         return TestClient(app)
@@ -305,6 +310,7 @@ class TestAPISecurityBestPractices:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from src.main import app
 
         return TestClient(app)

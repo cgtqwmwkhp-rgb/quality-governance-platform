@@ -50,6 +50,7 @@ class SmokeTestConfig:
 def client():
     """Create test client."""
     from fastapi.testclient import TestClient
+
     from src.main import app
 
     return TestClient(app)

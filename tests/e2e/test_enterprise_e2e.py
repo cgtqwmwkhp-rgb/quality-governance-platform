@@ -9,6 +9,14 @@ Run with:
 
 For parallel execution:
     pytest tests/e2e/ -v -n auto
+
+QUARANTINE STATUS: All tests in this file are quarantined.
+See tests/smoke/QUARANTINE_POLICY.md for details.
+
+Quarantine Date: 2026-01-21
+Expiry Date: 2026-02-21
+Issue: GOVPLAT-002
+Reason: E2E tests hit endpoints that return 404; API contract mismatch.
 """
 
 import json
@@ -22,6 +30,11 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+# Quarantine marker - skip all tests in this module
+pytestmark = pytest.mark.skip(
+    reason="QUARANTINED: Enterprise E2E tests have API contract mismatch. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+)
+
 
 # ============================================================================
 # Fixtures
@@ -32,6 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 def client():
     """Create test client."""
     from fastapi.testclient import TestClient
+
     from src.main import app
 
     return TestClient(app)

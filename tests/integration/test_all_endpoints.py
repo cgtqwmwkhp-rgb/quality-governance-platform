@@ -4,10 +4,10 @@ Comprehensive Integration Tests for All API Endpoints
 Target: 90%+ endpoint coverage
 """
 
-import pytest
 from datetime import datetime, timedelta
-from fastapi.testclient import TestClient
 
+import pytest
+from fastapi.testclient import TestClient
 
 # ============================================================================
 # Fixtures

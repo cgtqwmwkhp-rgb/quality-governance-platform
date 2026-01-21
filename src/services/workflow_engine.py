@@ -434,9 +434,9 @@ class ActionExecutor:
     def _get_model_for_entity(self, entity_type: EntityType):
         """Get SQLAlchemy model for entity type."""
         # Import models here to avoid circular imports
+        from src.domain.models.complaint import Complaint
         from src.domain.models.incident import Incident
         from src.domain.models.near_miss import NearMiss
-        from src.domain.models.complaint import Complaint
         from src.domain.models.rta import RTA
 
         models = {

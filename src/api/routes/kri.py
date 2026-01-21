@@ -13,27 +13,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user, get_db
 from src.api.schemas.kri import (
+    KRIAlertListResponse,
+    KRIAlertResponse,
     KRICreate,
     KRIDashboardResponse,
     KRIListResponse,
-    KRIResponse,
-    KRIUpdate,
-    KRIAlertListResponse,
-    KRIAlertResponse,
     KRIMeasurementListResponse,
     KRIMeasurementResponse,
+    KRIResponse,
+    KRIUpdate,
     RiskScoreHistoryResponse,
     RiskTrendResponse,
     SIFAssessmentCreate,
     SIFAssessmentResponse,
 )
-from src.domain.models.kri import (
-    KeyRiskIndicator,
-    KRIAlert,
-    KRIMeasurement,
-    RiskScoreHistory,
-)
 from src.domain.models.incident import Incident
+from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.services.risk_scoring import KRIService, RiskScoringService
 
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])

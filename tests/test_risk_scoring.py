@@ -8,24 +8,22 @@ Tests cover:
 - SIF classification
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.risk_scoring import (
-    RiskScoringService,
-    KRIService,
-)
+import pytest
+
+from src.domain.models.incident import IncidentSeverity
 from src.domain.models.kri import (
     KeyRiskIndicator,
     KRIAlert,
-    KRIMeasurement,
     KRICategory,
+    KRIMeasurement,
     KRITrendDirection,
     RiskScoreHistory,
     ThresholdStatus,
 )
-from src.domain.models.incident import IncidentSeverity
+from src.services.risk_scoring import KRIService, RiskScoringService
 
 
 class TestRiskScoringService:

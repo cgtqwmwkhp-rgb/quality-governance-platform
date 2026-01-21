@@ -4,16 +4,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func as sa_func, select
+from sqlalchemy import func as sa_func
+from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.near_miss import (
-    NearMissCreate,
-    NearMissListResponse,
-    NearMissResponse,
-    NearMissUpdate,
-)
+from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 
@@ -232,6 +228,7 @@ async def list_near_miss_investigations(
 ):
     """List investigations for a near miss."""
     from math import ceil
+
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 

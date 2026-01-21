@@ -12,17 +12,17 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus
-from src.domain.models.near_miss import NearMiss
-from src.domain.models.risk import Risk, RiskAssessment, RiskStatus
 from src.domain.models.kri import (
     KeyRiskIndicator,
     KRIAlert,
-    KRIMeasurement,
     KRICategory,
+    KRIMeasurement,
     KRITrendDirection,
     RiskScoreHistory,
     ThresholdStatus,
 )
+from src.domain.models.near_miss import NearMiss
+from src.domain.models.risk import Risk, RiskAssessment, RiskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -538,7 +538,7 @@ class KRIService:
 
     async def _count_overdue_actions(self) -> float:
         """Count overdue corrective actions."""
-        from src.domain.models.incident import IncidentAction, ActionStatus
+        from src.domain.models.incident import ActionStatus, IncidentAction
 
         now = datetime.utcnow()
 

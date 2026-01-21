@@ -16,9 +16,10 @@ Each workflow is tested for:
 6. API response consistency
 """
 
-import pytest
 from datetime import datetime, timezone
-from httpx import AsyncClient, ASGITransport
+
+import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.main import app

@@ -7,10 +7,10 @@ Tests all Phase 2 features:
 Target: 95%+ test coverage and functionality validation.
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # =============================================================================
 # PHASE 2.1: RCA TOOLS TESTS
@@ -92,7 +92,7 @@ class TestFishboneDiagram:
 
     def test_fishbone_model_creation(self):
         """Test creating a Fishbone diagram."""
-        from src.domain.models.rca_tools import FishboneDiagram, FishboneCategory
+        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
 
         diagram = FishboneDiagram(
             effect_statement="Product quality defect",
@@ -104,7 +104,7 @@ class TestFishboneDiagram:
 
     def test_add_cause_to_category(self):
         """Test adding causes to categories."""
-        from src.domain.models.rca_tools import FishboneDiagram, FishboneCategory
+        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
 
         diagram = FishboneDiagram(
             effect_statement="Defect",
@@ -121,7 +121,7 @@ class TestFishboneDiagram:
 
     def test_add_causes_multiple_categories(self):
         """Test adding causes to multiple categories."""
-        from src.domain.models.rca_tools import FishboneDiagram, FishboneCategory
+        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
 
         diagram = FishboneDiagram(
             effect_statement="Defect",
@@ -140,7 +140,7 @@ class TestFishboneDiagram:
 
     def test_get_all_causes(self):
         """Test getting all causes across categories."""
-        from src.domain.models.rca_tools import FishboneDiagram, FishboneCategory
+        from src.domain.models.rca_tools import FishboneCategory, FishboneDiagram
 
         diagram = FishboneDiagram(
             effect_statement="Defect",
@@ -445,7 +445,7 @@ class TestRCAIntegration:
 
     def test_five_whys_to_capa_flow(self):
         """Test flow from 5-Whys analysis to CAPA creation."""
-        from src.domain.models.rca_tools import FiveWhysAnalysis, CAPAItem
+        from src.domain.models.rca_tools import CAPAItem, FiveWhysAnalysis
 
         # Create 5-Whys analysis
         analysis = FiveWhysAnalysis(
@@ -469,7 +469,7 @@ class TestRCAIntegration:
 
     def test_fishbone_to_capa_flow(self):
         """Test flow from Fishbone to CAPA creation."""
-        from src.domain.models.rca_tools import FishboneDiagram, CAPAItem
+        from src.domain.models.rca_tools import CAPAItem, FishboneDiagram
 
         # Create Fishbone
         diagram = FishboneDiagram(
@@ -497,7 +497,7 @@ class TestCompetenceIntegration:
 
     def test_auditor_qualification_check(self):
         """Test checking if auditor meets criteria."""
-        from src.domain.models.auditor_competence import AuditorProfile, AuditAssignmentCriteria, CompetenceLevel
+        from src.domain.models.auditor_competence import AuditAssignmentCriteria, AuditorProfile, CompetenceLevel
 
         # Define criteria
         criteria = AuditAssignmentCriteria(

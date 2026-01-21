@@ -277,7 +277,7 @@ class PushNotificationService:
         """Send actual Web Push message using pywebpush."""
         try:
             # Try to import pywebpush
-            from pywebpush import webpush, WebPushException
+            from pywebpush import WebPushException, webpush
 
             subscription_info = {
                 "endpoint": subscription.endpoint,

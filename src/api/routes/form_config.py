@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func as sa_func, select, delete
+from sqlalchemy import delete
+from sqlalchemy import func as sa_func
+from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -32,14 +34,7 @@ from src.api.schemas.form_config import (
     SystemSettingResponse,
     SystemSettingUpdate,
 )
-from src.domain.models.form_config import (
-    Contract,
-    FormField,
-    FormStep,
-    FormTemplate,
-    LookupOption,
-    SystemSetting,
-)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()

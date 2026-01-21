@@ -18,7 +18,6 @@ from sqlalchemy.orm import Session
 from src.api.dependencies import get_db
 from src.domain.services.audit_log_service import AuditLogService
 
-
 router = APIRouter()
 
 

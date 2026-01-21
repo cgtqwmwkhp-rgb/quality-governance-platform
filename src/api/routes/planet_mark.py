@@ -19,18 +19,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
-from src.infrastructure.database import get_db
 from src.domain.models.planet_mark import (
-    CarbonReportingYear,
-    EmissionSource,
-    Scope3CategoryData,
-    ImprovementAction,
-    DataQualityAssessment,
     CarbonEvidence,
+    CarbonReportingYear,
+    DataQualityAssessment,
+    EmissionSource,
     FleetEmissionRecord,
-    UtilityMeterReading,
+    ImprovementAction,
+    Scope3CategoryData,
     SupplierEmissionData,
+    UtilityMeterReading,
 )
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 

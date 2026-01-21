@@ -12,7 +12,7 @@ Provides live co-editing with:
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, JSON, LargeBinary, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base

@@ -15,14 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from src.infrastructure.database import get_db
-from src.domain.services.ai_predictive_service import (
-    AnomalyDetector,
-    IncidentPredictor,
-    RecommendationEngine,
-    RootCauseAnalyzer,
-    TextAnalyzer,
-)
 from src.domain.services.ai_audit_service import (
     AuditQuestionGenerator,
     AuditReportGenerator,
@@ -30,6 +22,14 @@ from src.domain.services.ai_audit_service import (
     EvidenceMatcher,
     FindingClassifier,
 )
+from src.domain.services.ai_predictive_service import (
+    AnomalyDetector,
+    IncidentPredictor,
+    RecommendationEngine,
+    RootCauseAnalyzer,
+    TextAnalyzer,
+)
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 

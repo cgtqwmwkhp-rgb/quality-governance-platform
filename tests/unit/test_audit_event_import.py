@@ -5,8 +5,9 @@ These tests prevent regression of the ImportError that caused startup crashes.
 See: ImportError: cannot import name 'AuditEvent' from 'src.domain.models.audit_log'
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 
 class TestAuditEventImportContract:

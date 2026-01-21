@@ -8,27 +8,23 @@ Tests cover:
 - Rule execution logging
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.workflow_engine import (
-    ConditionEvaluator,
-    ActionExecutor,
-    WorkflowEngine,
-    SLAService,
-)
+import pytest
+
 from src.domain.models.workflow_rules import (
     ActionType,
     EntityType,
-    RuleType,
-    TriggerEvent,
-    WorkflowRule,
-    SLAConfiguration,
-    SLATracking,
     EscalationLevel,
     RuleExecution,
+    RuleType,
+    SLAConfiguration,
+    SLATracking,
+    TriggerEvent,
+    WorkflowRule,
 )
+from src.services.workflow_engine import ActionExecutor, ConditionEvaluator, SLAService, WorkflowEngine
 
 
 class TestConditionEvaluator:

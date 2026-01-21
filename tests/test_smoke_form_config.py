@@ -8,8 +8,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.main import app
-from src.domain.models.form_config import FormTemplate, FormStep, FormField, Contract, SystemSetting, LookupOption
 
 
 class TestFormTemplateEndpoints:
