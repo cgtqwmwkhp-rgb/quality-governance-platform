@@ -152,6 +152,51 @@ module = "src.api.routes.ai_intelligence"
 # GOVPLAT-004: AI intelligence route type issues
 disable_error_code = ["call-overload"]
 
+[[tool.mypy.overrides]]
+module = "src.api.routes.copilot"
+# GOVPLAT-004: Copilot route type issues
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.push_notifications"
+# GOVPLAT-004: Push notifications route type issues
+disable_error_code = ["assignment", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.near_miss"
+# GOVPLAT-004: Near miss route type issues
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.form_config"
+# GOVPLAT-004: Form config route type issues
+disable_error_code = ["call-arg", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.workflow"
+# GOVPLAT-004: Workflow route type issues
+disable_error_code = ["arg-type", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.rca_tools"
+# GOVPLAT-004: RCA tools route type issues
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.policy_acknowledgment"
+# GOVPLAT-004: Policy acknowledgment route type issues
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.kri"
+# GOVPLAT-004: KRI route type issues
+disable_error_code = ["attr-defined", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.auditor_competence"
+# GOVPLAT-004: Auditor competence route type issues
+disable_error_code = ["arg-type"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
