@@ -20,10 +20,10 @@ from src.infrastructure.database import close_db, init_db
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
-    
+
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
-        
+
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -31,36 +31,36 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        
+
         # Cache control for security
         if "/api/" in request.url.path:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
             response.headers["Pragma"] = "no-cache"
-        
+
         return response
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple in-memory rate limiting middleware."""
-    
+
     def __init__(self, app, requests_per_minute: int = 60):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.request_counts: dict = {}
         self.window_start: dict = {}
-    
+
     async def dispatch(self, request: Request, call_next):
         import time
         from fastapi.responses import JSONResponse
-        
+
         # Skip rate limiting for health checks
         if request.url.path in ["/healthz", "/readyz", "/health"]:
             return await call_next(request)
-        
+
         # Get client IP
         client_ip = request.client.host if request.client else "unknown"
         current_time = time.time()
-        
+
         # Clean up old entries (every 60 seconds)
         if client_ip in self.window_start:
             if current_time - self.window_start[client_ip] >= 60:
@@ -69,10 +69,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         else:
             self.window_start[client_ip] = current_time
             self.request_counts[client_ip] = 0
-        
+
         # Increment request count
         self.request_counts[client_ip] = self.request_counts.get(client_ip, 0) + 1
-        
+
         # Check rate limit
         if self.request_counts[client_ip] > self.requests_per_minute:
             return JSONResponse(
@@ -81,9 +81,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "detail": "Too many requests. Please try again later.",
                     "retry_after": 60,
                 },
-                headers={"Retry-After": "60"}
+                headers={"Retry-After": "60"},
             )
-        
+
         return await call_next(request)
 
 
@@ -148,10 +148,10 @@ def create_application() -> FastAPI:
 
     # Add Request State Middleware (must be first for request_id propagation)
     app.add_middleware(RequestStateMiddleware)
-    
+
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
-    
+
     # Add Rate Limiting Middleware (60 requests per minute per IP)
     app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class AcknowledgmentRequirementBase(BaseModel):
     """Base schema for acknowledgment requirements."""
+
     policy_id: int
     acknowledgment_type: str = Field("read_only", description="Type: read_only, accept, quiz, sign")
     required_for_all: bool = False
@@ -25,11 +26,13 @@ class AcknowledgmentRequirementBase(BaseModel):
 
 class AcknowledgmentRequirementCreate(AcknowledgmentRequirementBase):
     """Schema for creating an acknowledgment requirement."""
+
     pass
 
 
 class AcknowledgmentRequirementResponse(AcknowledgmentRequirementBase):
     """Schema for acknowledgment requirement response."""
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -40,6 +43,7 @@ class AcknowledgmentRequirementResponse(AcknowledgmentRequirementBase):
 
 class PolicyAcknowledgmentBase(BaseModel):
     """Base schema for policy acknowledgment."""
+
     requirement_id: int
     policy_id: int
     user_id: int
@@ -50,6 +54,7 @@ class PolicyAcknowledgmentBase(BaseModel):
 
 class PolicyAcknowledgmentResponse(BaseModel):
     """Schema for policy acknowledgment response."""
+
     id: int
     requirement_id: int
     policy_id: int
@@ -72,12 +77,14 @@ class PolicyAcknowledgmentResponse(BaseModel):
 
 class PolicyAcknowledgmentListResponse(BaseModel):
     """List response for policy acknowledgments."""
+
     items: List[PolicyAcknowledgmentResponse]
     total: int
 
 
 class RecordAcknowledgmentRequest(BaseModel):
     """Request to record an acknowledgment."""
+
     quiz_score: Optional[int] = None
     acceptance_statement: Optional[str] = None
     signature_data: Optional[str] = None
@@ -85,12 +92,14 @@ class RecordAcknowledgmentRequest(BaseModel):
 
 class AssignAcknowledgmentRequest(BaseModel):
     """Request to assign acknowledgments to users."""
+
     user_ids: List[int]
     policy_version: Optional[str] = None
 
 
 class PolicyAcknowledgmentStatusResponse(BaseModel):
     """Status summary for a policy's acknowledgments."""
+
     policy_id: int
     total_assigned: int
     completed: int
@@ -101,6 +110,7 @@ class PolicyAcknowledgmentStatusResponse(BaseModel):
 
 class DocumentReadLogResponse(BaseModel):
     """Schema for document read log."""
+
     id: int
     document_type: str
     document_id: int
@@ -117,12 +127,14 @@ class DocumentReadLogResponse(BaseModel):
 
 class DocumentReadLogListResponse(BaseModel):
     """List response for document read logs."""
+
     items: List[DocumentReadLogResponse]
     total: int
 
 
 class LogDocumentReadRequest(BaseModel):
     """Request to log a document read."""
+
     document_type: str
     document_id: int
     document_version: Optional[str] = None
@@ -133,6 +145,7 @@ class LogDocumentReadRequest(BaseModel):
 
 class ComplianceDashboardResponse(BaseModel):
     """Schema for compliance dashboard."""
+
     total_assignments: int
     completed: int
     pending: int

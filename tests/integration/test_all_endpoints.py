@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 def client():
     """Create test client."""
     from src.main import app
+
     return TestClient(app)
 
 
@@ -112,11 +113,11 @@ class TestIncidentEndpoints:
         """GET /api/incidents with filters works."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         # Filter by status
         response = client.get("/api/incidents?status=open", headers=auth_headers)
         assert response.status_code == 200
-        
+
         # Filter by severity
         response = client.get("/api/incidents?severity=high", headers=auth_headers)
         assert response.status_code == 200
@@ -125,7 +126,7 @@ class TestIncidentEndpoints:
         """POST /api/incidents creates incident."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         response = client.post(
             "/api/incidents",
             json={
@@ -143,7 +144,7 @@ class TestIncidentEndpoints:
         """POST /api/incidents validates input."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         response = client.post(
             "/api/incidents",
             json={"title": ""},  # Invalid - empty title
@@ -218,7 +219,7 @@ class TestRiskEndpoints:
         """POST /api/risks creates risk."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         response = client.post(
             "/api/risks",
             json={
@@ -252,7 +253,7 @@ class TestComplaintEndpoints:
         """POST /api/complaints creates complaint."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         response = client.post(
             "/api/complaints",
             json={

@@ -95,7 +95,7 @@ def list_audit_logs(
     """List audit log entries with filters."""
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
-    
+
     entries = service.get_entries(
         tenant_id=tenant_id,
         entity_type=entity_type,
@@ -107,7 +107,7 @@ def list_audit_logs(
         limit=per_page,
         offset=(page - 1) * per_page,
     )
-    
+
     return entries
 
 
@@ -120,13 +120,13 @@ def get_entity_history(
     """Get complete audit history for an entity."""
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
-    
+
     entries = service.get_entity_history(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
     )
-    
+
     return entries
 
 
@@ -139,13 +139,13 @@ def get_user_activity(
     """Get recent activity for a user."""
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
-    
+
     entries = service.get_user_activity(
         tenant_id=tenant_id,
         user_id=user_id,
         days=days,
     )
-    
+
     return entries
 
 
@@ -156,12 +156,12 @@ def get_audit_entry(
 ) -> Any:
     """Get a single audit log entry with full details."""
     from src.domain.models.audit_log import AuditLogEntry
-    
+
     entry = db.query(AuditLogEntry).filter(AuditLogEntry.id == entry_id).first()
-    
+
     if not entry:
         raise HTTPException(status_code=404, detail="Audit entry not found")
-    
+
     return entry
 
 
@@ -178,21 +178,21 @@ def verify_chain(
 ) -> Any:
     """
     Verify the integrity of the audit log hash chain.
-    
+
     This checks that no entries have been tampered with by recomputing
     and comparing cryptographic hashes.
     """
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
     user_id = 1  # Should be current_user.id
-    
+
     verification = service.verify_chain(
         tenant_id=tenant_id,
         start_sequence=start_sequence,
         end_sequence=end_sequence,
         verified_by_id=user_id,
     )
-    
+
     return verification
 
 
@@ -204,12 +204,12 @@ def list_verifications(
     """Get history of chain verifications."""
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
-    
+
     verifications = service.get_verifications(
         tenant_id=tenant_id,
         limit=limit,
     )
-    
+
     return verifications
 
 
@@ -225,14 +225,14 @@ def export_audit_logs(
 ) -> Any:
     """
     Export audit logs for compliance.
-    
+
     Returns the exported data and creates a record of the export
     for audit purposes.
     """
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
     user_id = 1  # Should be current_user.id
-    
+
     exported_data, export_record = service.export_logs(
         tenant_id=tenant_id,
         exported_by_id=user_id,
@@ -242,7 +242,7 @@ def export_audit_logs(
         entity_type=data.entity_type,
         reason=data.reason,
     )
-    
+
     return {
         "export_id": export_record.id,
         "entries_count": len(exported_data),
@@ -264,9 +264,9 @@ def get_audit_stats(
     """Get audit log statistics."""
     service = AuditLogService(db)
     tenant_id = 1  # Should come from request context
-    
+
     stats = service.get_stats(tenant_id=tenant_id, days=days)
-    
+
     return stats
 
 
@@ -281,7 +281,14 @@ def list_actions() -> Any:
     return {
         "data": ["create", "update", "delete", "view", "export", "approve", "reject", "assign"],
         "auth": ["login", "logout", "login_failed", "password_change", "password_reset", "mfa_enabled", "mfa_disabled"],
-        "admin": ["user_created", "user_deleted", "role_changed", "permission_granted", "permission_revoked", "settings_changed"],
+        "admin": [
+            "user_created",
+            "user_deleted",
+            "role_changed",
+            "permission_granted",
+            "permission_revoked",
+            "settings_changed",
+        ],
         "system": ["backup_created", "backup_restored", "migration_run", "maintenance_started", "maintenance_ended"],
     }
 

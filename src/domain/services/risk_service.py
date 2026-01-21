@@ -136,9 +136,7 @@ class RiskService:
 
         # Get appetite threshold for category
         appetite = (
-            self.db.query(RiskAppetiteStatement)
-            .filter(RiskAppetiteStatement.category == data.get("category"))
-            .first()
+            self.db.query(RiskAppetiteStatement).filter(RiskAppetiteStatement.category == data.get("category")).first()
         )
         appetite_threshold = appetite.max_residual_score if appetite else 12
 
@@ -198,12 +196,8 @@ class RiskService:
             risk.residual_impact = data["residual_impact"]
 
         # Recalculate scores
-        risk.inherent_score = RiskScoringEngine.calculate_score(
-            risk.inherent_likelihood, risk.inherent_impact
-        )
-        risk.residual_score = RiskScoringEngine.calculate_score(
-            risk.residual_likelihood, risk.residual_impact
-        )
+        risk.inherent_score = RiskScoringEngine.calculate_score(risk.inherent_likelihood, risk.inherent_impact)
+        risk.residual_score = RiskScoringEngine.calculate_score(risk.residual_likelihood, risk.residual_impact)
 
         # Check appetite
         risk.is_within_appetite = risk.residual_score <= risk.appetite_threshold
@@ -223,9 +217,7 @@ class RiskService:
 
         return risk
 
-    def _record_assessment(
-        self, risk: Risk, assessed_by: Optional[int] = None, notes: Optional[str] = None
-    ) -> None:
+    def _record_assessment(self, risk: Risk, assessed_by: Optional[int] = None, notes: Optional[str] = None) -> None:
         """Record assessment in history"""
         history = RiskAssessmentHistory(
             risk_id=risk.id,
@@ -243,9 +235,7 @@ class RiskService:
         self.db.add(history)
         self.db.commit()
 
-    def get_heat_map_data(
-        self, category: Optional[str] = None, department: Optional[str] = None
-    ) -> dict[str, Any]:
+    def get_heat_map_data(self, category: Optional[str] = None, department: Optional[str] = None) -> dict[str, Any]:
         """Generate heat map data for visualization"""
         query = self.db.query(Risk).filter(Risk.status != "closed")
 
@@ -261,11 +251,7 @@ class RiskService:
         for likelihood in range(5, 0, -1):
             row = []
             for impact in range(1, 6):
-                cell_risks = [
-                    r
-                    for r in risks
-                    if r.residual_likelihood == likelihood and r.residual_impact == impact
-                ]
+                cell_risks = [r for r in risks if r.residual_likelihood == likelihood and r.residual_impact == impact]
                 score = RiskScoringEngine.calculate_score(likelihood, impact)
                 row.append(
                     {
@@ -294,26 +280,18 @@ class RiskService:
                 "critical_risks": critical_risks,
                 "high_risks": high_risks,
                 "outside_appetite": outside_appetite,
-                "average_inherent_score": (
-                    sum(r.inherent_score for r in risks) / total_risks if total_risks else 0
-                ),
-                "average_residual_score": (
-                    sum(r.residual_score for r in risks) / total_risks if total_risks else 0
-                ),
+                "average_inherent_score": (sum(r.inherent_score for r in risks) / total_risks if total_risks else 0),
+                "average_residual_score": (sum(r.residual_score for r in risks) / total_risks if total_risks else 0),
             },
             "likelihood_labels": RiskScoringEngine.LIKELIHOOD_LABELS,
             "impact_labels": RiskScoringEngine.IMPACT_LABELS,
         }
 
-    def get_risk_trends(
-        self, risk_id: Optional[int] = None, days: int = 365
-    ) -> list[dict[str, Any]]:
+    def get_risk_trends(self, risk_id: Optional[int] = None, days: int = 365) -> list[dict[str, Any]]:
         """Get risk score trends over time"""
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        query = self.db.query(RiskAssessmentHistory).filter(
-            RiskAssessmentHistory.assessment_date >= cutoff
-        )
+        query = self.db.query(RiskAssessmentHistory).filter(RiskAssessmentHistory.assessment_date >= cutoff)
 
         if risk_id:
             query = query.filter(RiskAssessmentHistory.risk_id == risk_id)
@@ -407,9 +385,7 @@ class KRIService:
         if kri.historical_values is None:
             kri.historical_values = []
 
-        kri.historical_values.append(
-            {"value": new_value, "date": datetime.utcnow().isoformat()}
-        )
+        kri.historical_values.append({"value": new_value, "date": datetime.utcnow().isoformat()})
 
         # Update current value
         kri.current_value = new_value
@@ -504,17 +480,9 @@ class BowTieService:
         escalation_factors = [e for e in elements if e.is_escalation_factor]
 
         # Get linked controls
-        control_mappings = (
-            self.db.query(RiskControlMapping)
-            .filter(RiskControlMapping.risk_id == risk_id)
-            .all()
-        )
+        control_mappings = self.db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
         control_ids = [m.control_id for m in control_mappings]
-        controls = (
-            self.db.query(RiskControl)
-            .filter(RiskControl.id.in_(control_ids))
-            .all() if control_ids else []
-        )
+        controls = self.db.query(RiskControl).filter(RiskControl.id.in_(control_ids)).all() if control_ids else []
 
         return {
             "risk": {
@@ -526,10 +494,7 @@ class BowTieService:
                 "inherent_score": risk.inherent_score,
                 "residual_score": risk.residual_score,
             },
-            "causes": [
-                {"id": c.id, "title": c.title, "description": c.description}
-                for c in causes
-            ],
+            "causes": [{"id": c.id, "title": c.title, "description": c.description} for c in causes],
             "prevention_barriers": [
                 {
                     "id": b.id,
@@ -540,10 +505,7 @@ class BowTieService:
                 }
                 for b in prevention_barriers
             ],
-            "consequences": [
-                {"id": c.id, "title": c.title, "description": c.description}
-                for c in consequences
-            ],
+            "consequences": [{"id": c.id, "title": c.title, "description": c.description} for c in consequences],
             "mitigation_barriers": [
                 {
                     "id": b.id,
@@ -555,8 +517,7 @@ class BowTieService:
                 for b in mitigation_barriers
             ],
             "escalation_factors": [
-                {"id": e.id, "title": e.title, "description": e.description}
-                for e in escalation_factors
+                {"id": e.id, "title": e.title, "description": e.description} for e in escalation_factors
             ],
             "controls": [
                 {
@@ -585,9 +546,7 @@ class BowTieService:
         # Get next order index
         max_order = (
             self.db.query(func.max(BowTieElement.order_index))
-            .filter(
-                and_(BowTieElement.risk_id == risk_id, BowTieElement.element_type == element_type)
-            )
+            .filter(and_(BowTieElement.risk_id == risk_id, BowTieElement.element_type == element_type))
             .scalar()
             or 0
         )

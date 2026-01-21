@@ -602,9 +602,7 @@ class AuditQuestionGenerator:
 
         return evidence if evidence else ["Interview response", "Visual observation"]
 
-    def _generate_ai_questions(
-        self, standard: str, clause: str, context: str
-    ) -> list[dict[str, Any]]:
+    def _generate_ai_questions(self, standard: str, clause: str, context: str) -> list[dict[str, Any]]:
         """Generate context-specific questions using AI"""
         prompt = f"""Generate 3 specific audit questions for {standard} clause {clause}.
 
@@ -693,9 +691,7 @@ class EvidenceMatcher:
         # Search compliance evidence
         compliance_evidence = (
             self.db.query(ComplianceEvidence)
-            .filter(
-                ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}])
-            )
+            .filter(ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}]))
             .all()
         )
 
@@ -763,9 +759,7 @@ class EvidenceMatcher:
 
         gaps = []
         for finding in findings:
-            existing_evidence = self.find_evidence_for_clause(
-                finding.standard or "", finding.clause or ""
-            )
+            existing_evidence = self.find_evidence_for_clause(finding.standard or "", finding.clause or "")
             if len(existing_evidence) < 2:
                 gaps.append(
                     {
@@ -855,7 +849,9 @@ class FindingClassifier:
 
         return {
             "severity": severity,
-            "severity_confidence": 0.8 if any(kw in text_lower for kws in self.SEVERITY_KEYWORDS.values() for kw in kws) else 0.5,
+            "severity_confidence": (
+                0.8 if any(kw in text_lower for kws in self.SEVERITY_KEYWORDS.values() for kw in kws) else 0.5
+            ),
             "root_cause_category": root_cause,
             "root_cause_confidence": min(root_cause_score * 0.3, 0.9),
         }
@@ -882,11 +878,7 @@ class AuditReportGenerator:
         if not audit:
             return "Audit not found"
 
-        findings = (
-            self.db.query(AuditFinding)
-            .filter(AuditFinding.audit_id == audit_id)
-            .all()
-        )
+        findings = self.db.query(AuditFinding).filter(AuditFinding.audit_id == audit_id).all()
 
         # Count findings by type
         finding_counts = Counter(f.conformance for f in findings if f.conformance)
@@ -902,7 +894,9 @@ class AuditReportGenerator:
             recommendation = "Certification cannot be recommended until major non-conformances are closed."
         elif minor_nc > 3:
             conclusion = "The audit identified several minor non-conformances requiring corrective action."
-            recommendation = "Conditional certification/continuation recommended subject to corrective action implementation."
+            recommendation = (
+                "Conditional certification/continuation recommended subject to corrective action implementation."
+            )
         elif minor_nc > 0:
             conclusion = "The audit identified minor non-conformances. The management system is generally effective."
             recommendation = "Certification/continuation is recommended. Corrective actions should be implemented before next surveillance."
@@ -981,12 +975,7 @@ class AuditTrendAnalyzer:
 
         cutoff = datetime.utcnow() - timedelta(days=months * 30)
 
-        audits = (
-            self.db.query(Audit)
-            .filter(Audit.audit_date >= cutoff)
-            .order_by(Audit.audit_date)
-            .all()
-        )
+        audits = self.db.query(Audit).filter(Audit.audit_date >= cutoff).order_by(Audit.audit_date).all()
 
         monthly_data: dict[str, dict] = defaultdict(
             lambda: {"major_nc": 0, "minor_nc": 0, "observation": 0, "opportunity": 0}
@@ -997,11 +986,7 @@ class AuditTrendAnalyzer:
                 continue
             month_key = audit.audit_date.strftime("%Y-%m")
 
-            findings = (
-                self.db.query(AuditFinding)
-                .filter(AuditFinding.audit_id == audit.id)
-                .all()
-            )
+            findings = self.db.query(AuditFinding).filter(AuditFinding.audit_id == audit.id).all()
 
             for finding in findings:
                 if finding.conformance in monthly_data[month_key]:
@@ -1044,9 +1029,7 @@ class AuditTrendAnalyzer:
                 "total_audits": len(audits),
                 "total_major_nc": total_major,
                 "total_minor_nc": total_minor,
-                "avg_findings_per_audit": (
-                    sum(t["total"] for t in trends) / len(audits) if audits else 0
-                ),
+                "avg_findings_per_audit": (sum(t["total"] for t in trends) / len(audits) if audits else 0),
                 "trend_direction": trend_direction,
             },
         }
@@ -1058,11 +1041,7 @@ class AuditTrendAnalyzer:
         # Group findings by clause
         clause_findings: dict[str, list] = defaultdict(list)
 
-        findings = (
-            self.db.query(AuditFinding)
-            .filter(AuditFinding.conformance.in_(["major_nc", "minor_nc"]))
-            .all()
-        )
+        findings = self.db.query(AuditFinding).filter(AuditFinding.conformance.in_(["major_nc", "minor_nc"])).all()
 
         for finding in findings:
             if finding.clause:
@@ -1078,9 +1057,7 @@ class AuditTrendAnalyzer:
                         "findings": [
                             {
                                 "description": f.description,
-                                "audit_date": (
-                                    f.created_at.isoformat() if f.created_at else None
-                                ),
+                                "audit_date": (f.created_at.isoformat() if f.created_at else None),
                                 "conformance": f.conformance,
                             }
                             for f in clause_list[:5]  # Show first 5

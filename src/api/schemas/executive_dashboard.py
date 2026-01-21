@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class HealthScoreComponent(BaseModel):
     """Individual health score component."""
+
     incidents: float
     near_miss_culture: float
     risk_management: float
@@ -18,6 +19,7 @@ class HealthScoreComponent(BaseModel):
 
 class HealthScore(BaseModel):
     """Overall health score."""
+
     score: float = Field(..., ge=0, le=100)
     status: str  # healthy, attention_needed, at_risk
     color: str  # green, amber, red
@@ -26,6 +28,7 @@ class HealthScore(BaseModel):
 
 class IncidentSummary(BaseModel):
     """Incident module summary."""
+
     total_in_period: int
     open: int
     by_severity: Dict[str, int]
@@ -36,6 +39,7 @@ class IncidentSummary(BaseModel):
 
 class NearMissSummary(BaseModel):
     """Near-miss module summary."""
+
     total_in_period: int
     previous_period: int
     trend_percent: float
@@ -44,6 +48,7 @@ class NearMissSummary(BaseModel):
 
 class ComplaintSummary(BaseModel):
     """Complaint module summary."""
+
     total_in_period: int
     open: int
     closed_in_period: int
@@ -52,11 +57,13 @@ class ComplaintSummary(BaseModel):
 
 class RTASummary(BaseModel):
     """RTA module summary."""
+
     total_in_period: int
 
 
 class RiskSummary(BaseModel):
     """Risk module summary."""
+
     total_active: int
     by_level: Dict[str, int]
     high_critical: int
@@ -65,6 +72,7 @@ class RiskSummary(BaseModel):
 
 class KRISummary(BaseModel):
     """KRI module summary."""
+
     total_active: int
     by_status: Dict[str, int]
     at_risk: int
@@ -73,6 +81,7 @@ class KRISummary(BaseModel):
 
 class ComplianceSummary(BaseModel):
     """Compliance/policy acknowledgment summary."""
+
     total_assigned: int
     completed: int
     overdue: int
@@ -81,6 +90,7 @@ class ComplianceSummary(BaseModel):
 
 class SLASummary(BaseModel):
     """SLA performance summary."""
+
     total_tracked: int
     met: int
     breached: int
@@ -89,17 +99,20 @@ class SLASummary(BaseModel):
 
 class TrendDataPoint(BaseModel):
     """Single trend data point."""
+
     week_start: str
     count: int
 
 
 class TrendData(BaseModel):
     """Trend data for charts."""
+
     incidents_weekly: List[TrendDataPoint]
 
 
 class ActiveAlert(BaseModel):
     """Active alert requiring attention."""
+
     type: str
     severity: str
     title: str
@@ -108,6 +121,7 @@ class ActiveAlert(BaseModel):
 
 class ExecutiveDashboardResponse(BaseModel):
     """Complete executive dashboard response."""
+
     generated_at: str
     period_days: int
     health_score: HealthScore
@@ -125,6 +139,7 @@ class ExecutiveDashboardResponse(BaseModel):
 
 class DashboardSummaryResponse(BaseModel):
     """Simplified dashboard summary for quick overview."""
+
     health_score: float
     health_status: str
     open_incidents: int

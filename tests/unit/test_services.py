@@ -88,23 +88,24 @@ class TestWorkflowEngine:
     def test_workflow_engine_import(self):
         """Workflow engine can be imported."""
         from src.domain.services.workflow_engine import WorkflowEngine
+
         assert WorkflowEngine is not None
 
     def test_workflow_step_types(self):
         """Workflow step types are defined."""
         from src.domain.services.workflow_engine import WorkflowStepType
-        
-        assert hasattr(WorkflowStepType, 'APPROVAL')
-        assert hasattr(WorkflowStepType, 'NOTIFICATION')
-        assert hasattr(WorkflowStepType, 'TASK')
+
+        assert hasattr(WorkflowStepType, "APPROVAL")
+        assert hasattr(WorkflowStepType, "NOTIFICATION")
+        assert hasattr(WorkflowStepType, "TASK")
 
     def test_workflow_status_types(self):
         """Workflow status types are defined."""
         from src.domain.services.workflow_engine import WorkflowStatus
-        
-        assert hasattr(WorkflowStatus, 'PENDING')
-        assert hasattr(WorkflowStatus, 'IN_PROGRESS')
-        assert hasattr(WorkflowStatus, 'COMPLETED')
+
+        assert hasattr(WorkflowStatus, "PENDING")
+        assert hasattr(WorkflowStatus, "IN_PROGRESS")
+        assert hasattr(WorkflowStatus, "COMPLETED")
 
 
 # ============================================================================
@@ -118,12 +119,13 @@ class TestAnalyticsService:
     def test_analytics_service_import(self):
         """Analytics service can be imported."""
         from src.domain.services.analytics_service import AnalyticsService
+
         assert AnalyticsService is not None
 
     def test_analytics_service_initialization(self, mock_db_session):
         """Analytics service can be initialized."""
         from src.domain.services.analytics_service import AnalyticsService
-        
+
         service = AnalyticsService(mock_db_session)
         assert service is not None
         assert service.db == mock_db_session
@@ -132,11 +134,11 @@ class TestAnalyticsService:
     async def test_get_incident_trends(self, mock_db_session):
         """Get incident trends calculation."""
         from src.domain.services.analytics_service import AnalyticsService
-        
+
         service = AnalyticsService(mock_db_session)
         # Mock the query results
         mock_db_session.execute.return_value.fetchall.return_value = []
-        
+
         # This should not raise an error
         try:
             result = await service.get_incident_trends(days=30)
@@ -156,6 +158,7 @@ class TestRiskService:
     def test_risk_service_import(self):
         """Risk service can be imported."""
         from src.domain.services.risk_service import RiskService
+
         assert RiskService is not None
 
     def test_calculate_risk_score(self):
@@ -164,11 +167,12 @@ class TestRiskService:
         likelihood = 3
         impact = 4
         expected_score = 12
-        
+
         assert likelihood * impact == expected_score
 
     def test_risk_level_categorization(self):
         """Risk levels are correctly categorized."""
+
         # Low: 1-4, Medium: 5-9, High: 10-14, Critical: 15-25
         def get_risk_level(score: int) -> str:
             if score <= 4:
@@ -179,7 +183,7 @@ class TestRiskService:
                 return "high"
             else:
                 return "critical"
-        
+
         assert get_risk_level(3) == "low"
         assert get_risk_level(6) == "medium"
         assert get_risk_level(12) == "high"
@@ -205,12 +209,13 @@ class TestAuditService:
     def test_audit_service_import(self):
         """Audit service can be imported."""
         from src.domain.services.audit_service import AuditService
+
         assert AuditService is not None
 
     def test_finding_severity_levels(self):
         """Finding severity levels are defined correctly."""
         severities = ["critical", "major", "minor", "observation", "opportunity"]
-        
+
         for severity in severities:
             assert severity in ["critical", "major", "minor", "observation", "opportunity"]
 
@@ -219,7 +224,7 @@ class TestAuditService:
         total_questions = 20
         conforming = 18
         expected_score = (conforming / total_questions) * 100
-        
+
         assert expected_score == 90.0
 
 
@@ -234,19 +239,20 @@ class TestNotificationService:
     def test_notification_service_import(self):
         """Notification service can be imported."""
         from src.domain.services.notification_service import NotificationService
+
         assert NotificationService is not None
 
     def test_notification_types(self):
         """Notification types are defined."""
         types = ["incident", "action", "audit", "compliance", "mention", "reminder"]
-        
+
         for notification_type in types:
             assert notification_type in types
 
     def test_notification_channels(self):
         """Notification channels are valid."""
         channels = ["push", "email", "sms", "in_app"]
-        
+
         for channel in channels:
             assert channel in channels
 
@@ -262,29 +268,30 @@ class TestEmailService:
     def test_email_service_import(self):
         """Email service can be imported."""
         from src.domain.services.email_service import EmailService
+
         assert EmailService is not None
 
     def test_email_validation(self):
         """Email validation works correctly."""
         import re
-        
-        email_pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        
+
+        email_pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+
         valid_emails = [
             "user@example.com",
             "user.name@example.co.uk",
             "user+tag@example.org",
         ]
-        
+
         invalid_emails = [
             "invalid",
             "@example.com",
             "user@",
         ]
-        
+
         for email in valid_emails:
             assert re.match(email_pattern, email) is not None
-        
+
         for email in invalid_emails:
             assert re.match(email_pattern, email) is None
 
@@ -300,27 +307,28 @@ class TestISOComplianceService:
     def test_iso_compliance_service_import(self):
         """ISO compliance service can be imported."""
         from src.domain.services.iso_compliance_service import ISOComplianceService
+
         assert ISOComplianceService is not None
 
     def test_iso_standards_defined(self):
         """ISO standards are properly defined."""
         standards = ["iso9001", "iso14001", "iso45001", "iso27001"]
-        
+
         for standard in standards:
             assert standard.startswith("iso")
 
     def test_clause_format_validation(self):
         """Clause format validation works."""
         import re
-        
-        clause_pattern = r'^\d+(\.\d+)*$'
-        
+
+        clause_pattern = r"^\d+(\.\d+)*$"
+
         valid_clauses = ["4", "4.1", "4.1.2", "10.2.1"]
         invalid_clauses = ["a", "4.a", "4-1"]
-        
+
         for clause in valid_clauses:
             assert re.match(clause_pattern, clause) is not None
-        
+
         for clause in invalid_clauses:
             assert re.match(clause_pattern, clause) is None
 
@@ -336,6 +344,7 @@ class TestAIAuditService:
     def test_ai_audit_service_import(self):
         """AI audit service can be imported."""
         from src.domain.services.ai_audit_service import AuditQuestionGenerator
+
         assert AuditQuestionGenerator is not None
 
     def test_question_generation_structure(self):
@@ -346,14 +355,14 @@ class TestAIAuditService:
             "clause": "4.3",
             "standard": "ISO 9001:2015",
         }
-        
+
         assert "text" in sample_question
         assert "clause" in sample_question
 
     def test_iso_clauses_coverage(self):
         """ISO clauses are properly covered."""
         iso9001_clauses = ["4", "5", "6", "7", "8", "9", "10"]
-        
+
         for clause in iso9001_clauses:
             assert int(clause) >= 4
             assert int(clause) <= 10
@@ -372,12 +381,13 @@ class TestComplianceAutomationService:
         from src.domain.services.compliance_automation_service import (
             ComplianceAutomationService,
         )
+
         assert ComplianceAutomationService is not None
 
     def test_regulatory_sources(self):
         """Regulatory sources are defined."""
         sources = ["HSE", "ISO", "IOSH", "OSHA"]
-        
+
         for source in sources:
             assert len(source) >= 2
 
@@ -393,12 +403,13 @@ class TestDocumentAIService:
     def test_document_ai_service_import(self):
         """Document AI service can be imported."""
         from src.domain.services.document_ai_service import DocumentAIService
+
         assert DocumentAIService is not None
 
     def test_document_types(self):
         """Document types are valid."""
         types = ["policy", "procedure", "form", "record", "manual", "specification"]
-        
+
         for doc_type in types:
             assert len(doc_type) > 0
 
@@ -414,12 +425,13 @@ class TestAIPredictiveService:
     def test_ai_predictive_service_import(self):
         """AI predictive service can be imported."""
         from src.domain.services.ai_predictive_service import AIPredictiveService
+
         assert AIPredictiveService is not None
 
     def test_prediction_confidence_range(self):
         """Prediction confidence is in valid range."""
         confidences = [0.0, 0.5, 0.85, 1.0]
-        
+
         for confidence in confidences:
             assert 0.0 <= confidence <= 1.0
 
@@ -435,35 +447,39 @@ class TestAIModels:
     def test_ai_config_from_env(self):
         """AI config can be loaded from environment."""
         from src.domain.services.ai_models import AIConfig
-        
+
         config = AIConfig.from_env()
         assert config is not None
 
     def test_ai_provider_enum(self):
         """AI provider enum is defined."""
         from src.domain.services.ai_models import AIProvider
-        
-        assert hasattr(AIProvider, 'OPENAI')
-        assert hasattr(AIProvider, 'ANTHROPIC')
+
+        assert hasattr(AIProvider, "OPENAI")
+        assert hasattr(AIProvider, "ANTHROPIC")
 
     def test_incident_analyzer_import(self):
         """Incident analyzer can be imported."""
         from src.domain.services.ai_models import IncidentAnalyzer
+
         assert IncidentAnalyzer is not None
 
     def test_risk_scorer_import(self):
         """Risk scorer can be imported."""
         from src.domain.services.ai_models import RiskScorer
+
         assert RiskScorer is not None
 
     def test_document_classifier_import(self):
         """Document classifier can be imported."""
         from src.domain.services.ai_models import DocumentClassifier
+
         assert DocumentClassifier is not None
 
     def test_audit_assistant_import(self):
         """Audit assistant can be imported."""
         from src.domain.services.ai_models import AuditAssistant
+
         assert AuditAssistant is not None
 
 
@@ -478,12 +494,13 @@ class TestWorkflowService:
     def test_workflow_service_import(self):
         """Workflow service can be imported."""
         from src.domain.services.workflow_service import WorkflowService
+
         assert WorkflowService is not None
 
     def test_approval_status_types(self):
         """Approval status types are valid."""
         statuses = ["pending", "approved", "rejected", "escalated"]
-        
+
         for status in statuses:
             assert status in statuses
 
@@ -499,21 +516,22 @@ class TestSMSService:
     def test_sms_service_import(self):
         """SMS service can be imported."""
         from src.domain.services.sms_service import SMSService
+
         assert SMSService is not None
 
     def test_phone_number_format(self):
         """Phone number format validation."""
         import re
-        
+
         # E.164 format
-        phone_pattern = r'^\+[1-9]\d{1,14}$'
-        
+        phone_pattern = r"^\+[1-9]\d{1,14}$"
+
         valid_numbers = ["+447700900000", "+12025551234", "+861012345678"]
         invalid_numbers = ["07700900000", "12025551234", "+0123"]
-        
+
         for number in valid_numbers:
             assert re.match(phone_pattern, number) is not None
-        
+
         for number in invalid_numbers:
             assert re.match(phone_pattern, number) is None
 
@@ -529,21 +547,21 @@ class TestUtilityFunctions:
     def test_reference_number_generation(self):
         """Reference number generation format."""
         import re
-        
-        pattern = r'^[A-Z]{3}-\d{4}-\d{4}$'
-        
+
+        pattern = r"^[A-Z]{3}-\d{4}-\d{4}$"
+
         valid_refs = ["INC-2026-0001", "RTA-2026-0234", "CMP-2026-0015"]
-        
+
         for ref in valid_refs:
             assert re.match(pattern, ref) is not None
 
     def test_date_formatting(self):
         """Date formatting is consistent."""
         from datetime import datetime
-        
+
         now = datetime.now()
         iso_format = now.isoformat()
-        
+
         assert "T" in iso_format
         assert len(iso_format) >= 19
 
@@ -555,7 +573,7 @@ class TestUtilityFunctions:
             "high": 3,
             "critical": 4,
         }
-        
+
         assert severities["low"] < severities["medium"]
         assert severities["medium"] < severities["high"]
         assert severities["high"] < severities["critical"]
@@ -568,6 +586,6 @@ class TestUtilityFunctions:
             "pending_review": ["in_progress", "closed"],
             "closed": ["open"],  # Reopen capability
         }
-        
+
         # "open" should be able to transition to "in_progress"
         assert "in_progress" in valid_transitions["open"]

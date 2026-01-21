@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 def client():
     """Get test client."""
     from src.main import app
+
     return TestClient(app)
 
 
@@ -175,7 +176,7 @@ class TestAuditWorkflow:
             "evidence": "Observed outdated document in use",
             "recommendations": "Refresh training on document control",
         }
-        
+
         # Would create finding if audit run exists
         response = client.get(
             "/api/audits/findings",

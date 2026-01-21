@@ -43,6 +43,7 @@ router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 # KRI CRUD Operations
 # =============================================================================
 
+
 @router.get("", response_model=KRIListResponse)
 async def list_kris(
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -53,7 +54,7 @@ async def list_kris(
 ):
     """List all KRIs with optional filtering."""
     query = select(KeyRiskIndicator)
-    
+
     filters = []
     if category:
         filters.append(KeyRiskIndicator.category == category)
@@ -61,15 +62,15 @@ async def list_kris(
         filters.append(KeyRiskIndicator.is_active == is_active)
     if status:
         filters.append(KeyRiskIndicator.current_status == status)
-    
+
     if filters:
         query = query.where(and_(*filters))
-    
+
     query = query.order_by(KeyRiskIndicator.category, KeyRiskIndicator.code)
-    
+
     result = await db.execute(query)
     kris = result.scalars().all()
-    
+
     return KRIListResponse(
         items=[KRIResponse.from_orm(k) for k in kris],
         total=len(kris),
@@ -84,12 +85,10 @@ async def create_kri(
 ):
     """Create a new KRI."""
     # Check for duplicate code
-    existing = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code)
-    )
+    existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="KRI code already exists")
-    
+
     kri = KeyRiskIndicator(
         **kri_data.dict(),
         created_by=current_user.get("email"),
@@ -97,7 +96,7 @@ async def create_kri(
     db.add(kri)
     await db.commit()
     await db.refresh(kri)
-    
+
     return KRIResponse.from_orm(kri)
 
 
@@ -119,7 +118,7 @@ async def calculate_all_kris(
     """Trigger calculation for all auto-calculate KRIs."""
     kri_service = KRIService(db)
     results = await kri_service.calculate_all_kris()
-    
+
     return {
         "message": "KRI calculations completed",
         "calculated": len(results),
@@ -134,14 +133,12 @@ async def get_kri(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific KRI."""
-    result = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
-    
+
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
-    
+
     return KRIResponse.from_orm(kri)
 
 
@@ -153,23 +150,21 @@ async def update_kri(
     current_user: dict = Depends(get_current_user),
 ):
     """Update a KRI."""
-    result = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
-    
+
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
-    
+
     update_data = kri_data.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(kri, field, value)
-    
+
     kri.updated_by = current_user.get("email")
-    
+
     await db.commit()
     await db.refresh(kri)
-    
+
     return KRIResponse.from_orm(kri)
 
 
@@ -180,14 +175,12 @@ async def delete_kri(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete a KRI."""
-    result = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
-    
+
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
-    
+
     await db.delete(kri)
     await db.commit()
 
@@ -201,16 +194,17 @@ async def calculate_kri(
     """Trigger calculation for a specific KRI."""
     kri_service = KRIService(db)
     result = await kri_service.calculate_kri(kri_id)
-    
+
     if not result:
         raise HTTPException(status_code=400, detail="Could not calculate KRI")
-    
+
     return result
 
 
 # =============================================================================
 # KRI Measurements
 # =============================================================================
+
 
 @router.get("/{kri_id}/measurements", response_model=KRIMeasurementListResponse)
 async def get_kri_measurements(
@@ -227,7 +221,7 @@ async def get_kri_measurements(
         .limit(limit)
     )
     measurements = result.scalars().all()
-    
+
     return KRIMeasurementListResponse(
         items=[KRIMeasurementResponse.from_orm(m) for m in measurements],
         total=len(measurements),
@@ -237,6 +231,7 @@ async def get_kri_measurements(
 # =============================================================================
 # KRI Alerts
 # =============================================================================
+
 
 @router.get("/alerts/pending", response_model=KRIAlertListResponse)
 async def get_pending_alerts(
@@ -255,7 +250,7 @@ async def get_pending_alerts(
         .order_by(KRIAlert.triggered_at.desc())
     )
     alerts = result.scalars().all()
-    
+
     return KRIAlertListResponse(
         items=[KRIAlertResponse.from_orm(a) for a in alerts],
         total=len(alerts),
@@ -270,21 +265,19 @@ async def acknowledge_alert(
     current_user: dict = Depends(get_current_user),
 ):
     """Acknowledge a KRI alert."""
-    result = await db.execute(
-        select(KRIAlert).where(KRIAlert.id == alert_id)
-    )
+    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
     alert = result.scalar_one_or_none()
-    
+
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
-    
+
     alert.is_acknowledged = True
     alert.acknowledged_at = datetime.utcnow()
     alert.acknowledged_by_id = current_user.get("id")
     alert.acknowledgment_notes = notes
-    
+
     await db.commit()
-    
+
     return {"message": "Alert acknowledged", "alert_id": alert_id}
 
 
@@ -296,27 +289,26 @@ async def resolve_alert(
     current_user: dict = Depends(get_current_user),
 ):
     """Resolve a KRI alert."""
-    result = await db.execute(
-        select(KRIAlert).where(KRIAlert.id == alert_id)
-    )
+    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
     alert = result.scalar_one_or_none()
-    
+
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
-    
+
     alert.is_resolved = True
     alert.resolved_at = datetime.utcnow()
     alert.resolved_by_id = current_user.get("id")
     alert.resolution_notes = notes
-    
+
     await db.commit()
-    
+
     return {"message": "Alert resolved", "alert_id": alert_id}
 
 
 # =============================================================================
 # Risk Score History
 # =============================================================================
+
 
 @router.get("/risks/{risk_id}/trend", response_model=RiskTrendResponse)
 async def get_risk_trend(
@@ -328,7 +320,7 @@ async def get_risk_trend(
     """Get risk score trend over time."""
     scoring_service = RiskScoringService(db)
     trend_data = await scoring_service.get_risk_trend(risk_id, days)
-    
+
     return RiskTrendResponse(
         risk_id=risk_id,
         trend_data=trend_data,
@@ -339,6 +331,7 @@ async def get_risk_trend(
 # SIF Classification
 # =============================================================================
 
+
 @router.post("/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse)
 async def assess_incident_sif(
     incident_id: int,
@@ -347,14 +340,12 @@ async def assess_incident_sif(
     current_user: dict = Depends(get_current_user),
 ):
     """Assess an incident for SIF/pSIF classification."""
-    result = await db.execute(
-        select(Incident).where(Incident.id == incident_id)
-    )
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
     incident = result.scalar_one_or_none()
-    
+
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     # Update SIF fields
     incident.is_sif = assessment.is_sif
     incident.is_psif = assessment.is_psif
@@ -365,18 +356,15 @@ async def assess_incident_sif(
     incident.life_altering_potential = assessment.life_altering_potential
     incident.precursor_events = assessment.precursor_events
     incident.control_failures = assessment.control_failures
-    
+
     # If SIF or pSIF, trigger risk score update
     if assessment.is_sif or assessment.is_psif:
         scoring_service = RiskScoringService(db)
-        await scoring_service.recalculate_risk_score_for_incident(
-            incident_id,
-            trigger_type="sif_assessment"
-        )
-    
+        await scoring_service.recalculate_risk_score_for_incident(incident_id, trigger_type="sif_assessment")
+
     await db.commit()
     await db.refresh(incident)
-    
+
     return SIFAssessmentResponse(
         incident_id=incident.id,
         is_sif=incident.is_sif,
@@ -398,17 +386,15 @@ async def get_incident_sif_assessment(
     current_user: dict = Depends(get_current_user),
 ):
     """Get SIF assessment for an incident."""
-    result = await db.execute(
-        select(Incident).where(Incident.id == incident_id)
-    )
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
     incident = result.scalar_one_or_none()
-    
+
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     if not incident.sif_classification:
         raise HTTPException(status_code=404, detail="No SIF assessment found for this incident")
-    
+
     return SIFAssessmentResponse(
         incident_id=incident.id,
         is_sif=incident.is_sif or False,

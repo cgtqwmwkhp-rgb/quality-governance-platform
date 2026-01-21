@@ -145,9 +145,7 @@ class IMSControlRequirementMapping(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     control_id: Mapped[int] = mapped_column(ForeignKey("ims_controls.id", ondelete="CASCADE"), nullable=False)
-    requirement_id: Mapped[int] = mapped_column(
-        ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False
-    )
+    requirement_id: Mapped[int] = mapped_column(ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False)
 
     # Coverage
     coverage_level: Mapped[str] = mapped_column(String(50), default="full")  # full, partial
@@ -218,9 +216,7 @@ class ManagementReviewInput(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Review identification
-    review_id: Mapped[int] = mapped_column(
-        ForeignKey("management_reviews.id", ondelete="CASCADE"), nullable=False
-    )
+    review_id: Mapped[int] = mapped_column(ForeignKey("management_reviews.id", ondelete="CASCADE"), nullable=False)
 
     # Input category (aligned with ISO Annex SL)
     category: Mapped[str] = mapped_column(String(100), nullable=False)

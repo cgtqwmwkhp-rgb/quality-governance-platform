@@ -26,7 +26,7 @@ async def get_executive_dashboard(
     current_user: dict = Depends(get_current_user),
 ):
     """Get complete executive dashboard with all KPIs.
-    
+
     Returns a comprehensive view of organizational performance including:
     - Overall health score (0-100)
     - Module-specific summaries (incidents, near-misses, complaints, RTAs, risks)
@@ -47,21 +47,18 @@ async def get_dashboard_summary(
     current_user: dict = Depends(get_current_user),
 ):
     """Get simplified dashboard summary for quick overview.
-    
+
     Suitable for widgets or mobile views.
     """
     service = ExecutiveDashboardService(db)
     dashboard = await service.get_full_dashboard(30)
-    
+
     # Calculate pending actions
-    pending_actions = (
-        dashboard["incidents"]["open"] +
-        dashboard["complaints"]["open"]
-    )
-    
+    pending_actions = dashboard["incidents"]["open"] + dashboard["complaints"]["open"]
+
     # Calculate overdue items
     overdue_items = dashboard["compliance"]["overdue"]
-    
+
     return DashboardSummaryResponse(
         health_score=dashboard["health_score"]["score"],
         health_status=dashboard["health_score"]["status"],
@@ -81,11 +78,12 @@ async def get_incident_dashboard(
     """Get incident-specific dashboard data."""
     service = ExecutiveDashboardService(db)
     from datetime import datetime, timedelta
+
     cutoff = datetime.utcnow() - timedelta(days=period_days)
-    
+
     summary = await service._get_incident_summary(cutoff)
     trends = await service._get_trends(period_days)
-    
+
     return {
         "period_days": period_days,
         "summary": summary,
@@ -100,10 +98,10 @@ async def get_risk_dashboard(
 ):
     """Get risk-specific dashboard data."""
     service = ExecutiveDashboardService(db)
-    
+
     summary = await service._get_risk_summary()
     kri_summary = await service._get_kri_summary()
-    
+
     return {
         "risks": summary,
         "kris": kri_summary,
@@ -117,10 +115,10 @@ async def get_compliance_dashboard(
 ):
     """Get compliance-specific dashboard data."""
     service = ExecutiveDashboardService(db)
-    
+
     compliance_summary = await service._get_compliance_summary()
     sla_summary = await service._get_sla_summary()
-    
+
     return {
         "policy_acknowledgments": compliance_summary,
         "sla_performance": sla_summary,
@@ -135,7 +133,7 @@ async def get_active_alerts(
     """Get all active alerts requiring attention."""
     service = ExecutiveDashboardService(db)
     alerts = await service._get_active_alerts()
-    
+
     return {
         "total": len(alerts),
         "alerts": alerts,
@@ -150,5 +148,5 @@ async def get_health_score(
     """Get current organizational health score."""
     service = ExecutiveDashboardService(db)
     dashboard = await service.get_full_dashboard(30)
-    
+
     return dashboard["health_score"]

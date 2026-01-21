@@ -28,12 +28,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 class SmokeTestConfig:
     """Configuration for smoke tests."""
-    
+
     BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
     TEST_TIMEOUT = 30
     CRITICAL_RESPONSE_TIME_MS = 2000
-    
+
     # Test credentials (use env vars in production)
     TEST_USER = os.getenv("TEST_USER", "testuser@plantexpand.com")
     TEST_PASS = os.getenv("TEST_PASS", "testpassword123")
@@ -51,6 +51,7 @@ def client():
     """Create test client."""
     from fastapi.testclient import TestClient
     from src.main import app
+
     return TestClient(app)
 
 
@@ -118,13 +119,15 @@ class TestHealthSmoke:
     def test_api_response_time(self, client):
         """✓ API must respond within acceptable time."""
         import time
+
         start = time.time()
         response = client.get("/health")
         elapsed_ms = (time.time() - start) * 1000
-        
+
         assert response.status_code == 200
-        assert elapsed_ms < SmokeTestConfig.CRITICAL_RESPONSE_TIME_MS, \
-            f"API too slow: {elapsed_ms:.0f}ms (max: {SmokeTestConfig.CRITICAL_RESPONSE_TIME_MS}ms)"
+        assert (
+            elapsed_ms < SmokeTestConfig.CRITICAL_RESPONSE_TIME_MS
+        ), f"API too slow: {elapsed_ms:.0f}ms (max: {SmokeTestConfig.CRITICAL_RESPONSE_TIME_MS}ms)"
 
     def test_api_version_available(self, client):
         """✓ API version information available."""
@@ -147,8 +150,7 @@ class TestAuthSmoke:
             json={"username": "test", "password": "test"},
         )
         # Should return 401 for bad credentials, not 500 or 404
-        assert response.status_code in [200, 401, 422], \
-            f"Login endpoint error: {response.status_code}"
+        assert response.status_code in [200, 401, 422], f"Login endpoint error: {response.status_code}"
 
     def test_valid_credentials_work(self, auth_token):
         """✓ Valid credentials must return token."""
@@ -162,16 +164,14 @@ class TestAuthSmoke:
     def test_protected_endpoint_requires_auth(self, client):
         """✓ Protected endpoints must require authentication."""
         response = client.get("/api/users/me")
-        assert response.status_code == 401, \
-            "Protected endpoint accessible without auth"
+        assert response.status_code == 401, "Protected endpoint accessible without auth"
 
     def test_authenticated_access_works(self, client, auth_headers):
         """✓ Authenticated requests must succeed."""
         if not auth_headers:
             pytest.skip("Auth not available")
         response = client.get("/api/users/me", headers=auth_headers)
-        assert response.status_code == 200, \
-            f"Authenticated request failed: {response.status_code}"
+        assert response.status_code == 200, f"Authenticated request failed: {response.status_code}"
 
 
 # ============================================================================
@@ -292,9 +292,8 @@ class TestPortalSmoke:
                 "is_anonymous": True,
             },
         )
-        assert response.status_code in [200, 201], \
-            f"Portal report submission failed: {response.status_code}"
-        
+        assert response.status_code in [200, 201], f"Portal report submission failed: {response.status_code}"
+
         data = response.json()
         assert "reference_number" in data, "No reference number returned"
 
@@ -310,12 +309,12 @@ class TestPortalSmoke:
                 "severity": "low",
             },
         )
-        
+
         if submit.status_code in [200, 201]:
             data = submit.json()
             ref = data.get("reference_number")
             code = data.get("tracking_code")
-            
+
             if ref and code:
                 track = client.get(
                     f"/api/portal/track/{ref}",
@@ -476,7 +475,7 @@ class TestSecuritySmoke:
         """✓ SQL injection attempts are blocked."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        
+
         # Try SQL injection in query param
         response = client.get(
             "/api/incidents?search='; DROP TABLE incidents; --",
@@ -498,9 +497,9 @@ class TestDataIntegritySmoke:
         """✓ Create and read incident maintains data."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        
+
         unique_title = f"Smoke Test Incident {datetime.now().isoformat()}"
-        
+
         # Create
         create_response = client.post(
             "/api/incidents",
@@ -512,18 +511,18 @@ class TestDataIntegritySmoke:
             },
             headers=auth_headers,
         )
-        
+
         if create_response.status_code in [200, 201]:
             created = create_response.json()
             incident_id = created.get("id")
-            
+
             if incident_id:
                 # Read back
                 read_response = client.get(
                     f"/api/incidents/{incident_id}",
                     headers=auth_headers,
                 )
-                
+
                 if read_response.status_code == 200:
                     read_data = read_response.json()
                     assert read_data.get("title") == unique_title
@@ -541,20 +540,20 @@ class TestPerformanceSmoke:
         """✓ List endpoints respond quickly."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        
+
         import time
-        
+
         endpoints = [
             "/api/incidents?page=1&per_page=10",
             "/api/audits/runs?page=1&per_page=10",
             "/api/risks?page=1&per_page=10",
         ]
-        
+
         for endpoint in endpoints:
             start = time.time()
             response = client.get(endpoint, headers=auth_headers)
             elapsed_ms = (time.time() - start) * 1000
-            
+
             assert response.status_code == 200, f"Failed: {endpoint}"
             assert elapsed_ms < 5000, f"{endpoint} too slow: {elapsed_ms:.0f}ms"
 
@@ -569,9 +568,9 @@ def test_smoke_test_summary():
     ═══════════════════════════════════════════════════════════════════════════
     SMOKE TEST SUMMARY
     ═══════════════════════════════════════════════════════════════════════════
-    
+
     This test suite validates:
-    
+
     ✓ API Health & Response Times
     ✓ Authentication (login, tokens, protection)
     ✓ Core Modules (incidents, audits, risks, compliance, documents)
@@ -582,9 +581,9 @@ def test_smoke_test_summary():
     ✓ Security (CORS, injection, auth)
     ✓ Data Integrity
     ✓ Performance Baselines
-    
+
     If ANY test fails, DO NOT deploy to production.
-    
+
     ═══════════════════════════════════════════════════════════════════════════
     """
     assert True, "Smoke test suite loaded successfully"

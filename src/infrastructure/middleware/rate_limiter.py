@@ -24,6 +24,7 @@ from fastapi.routing import APIRoute
 @dataclass
 class RateLimitConfig:
     """Configuration for rate limiting."""
+
     requests_per_minute: int = 60
     requests_per_hour: int = 1000
     burst_limit: int = 10
@@ -45,7 +46,7 @@ class InMemoryRateLimiter:
     ) -> tuple[bool, int, int]:
         """
         Check if request is allowed and return remaining quota.
-        
+
         Returns:
             Tuple of (is_allowed, remaining, reset_time)
         """
@@ -54,9 +55,7 @@ class InMemoryRateLimiter:
             window_start = now - window_seconds
 
             # Clean old requests
-            self._requests[key] = [
-                ts for ts in self._requests[key] if ts > window_start
-            ]
+            self._requests[key] = [ts for ts in self._requests[key] if ts > window_start]
 
             current_count = len(self._requests[key])
             remaining = max(0, limit - current_count)
@@ -73,9 +72,7 @@ class InMemoryRateLimiter:
         async with self._lock:
             now = time.time()
             for key in list(self._requests.keys()):
-                self._requests[key] = [
-                    ts for ts in self._requests[key] if ts > now - 3600
-                ]
+                self._requests[key] = [ts for ts in self._requests[key] if ts > now - 3600]
                 if not self._requests[key]:
                     del self._requests[key]
 
@@ -93,6 +90,7 @@ class RedisRateLimiter:
         if self._redis is None:
             try:
                 import redis.asyncio as redis
+
                 self._redis = redis.from_url(self._redis_url)
                 await self._redis.ping()
             except Exception as e:
@@ -108,7 +106,7 @@ class RedisRateLimiter:
     ) -> tuple[bool, int, int]:
         """Check if request is allowed using Redis sliding window."""
         redis = await self._get_redis()
-        
+
         if redis is None:
             return await self._fallback.is_allowed(key, limit, window_seconds)
 
@@ -123,7 +121,7 @@ class RedisRateLimiter:
             pipe.zcard(redis_key)
             pipe.zadd(redis_key, {str(now): now})
             pipe.expire(redis_key, window_seconds)
-            
+
             results = await pipe.execute()
             current_count = results[1]
 
@@ -149,6 +147,7 @@ def get_rate_limiter() -> InMemoryRateLimiter | RedisRateLimiter:
     global _rate_limiter
     if _rate_limiter is None:
         import os
+
         redis_url = os.getenv("REDIS_URL")
         if redis_url:
             _rate_limiter = RedisRateLimiter(redis_url)
@@ -165,6 +164,7 @@ def get_client_identifier(request: Request) -> str:
     if auth_header.startswith("Bearer "):
         try:
             import jwt
+
             token = auth_header[7:]
             # Decode without verification just to get sub claim
             payload = jwt.decode(token, options={"verify_signature": False})
@@ -200,13 +200,10 @@ ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     "/api/auth/login": RateLimitConfig(requests_per_minute=10, burst_limit=5),
     "/api/auth/register": RateLimitConfig(requests_per_minute=5, burst_limit=2),
     "/api/auth/forgot-password": RateLimitConfig(requests_per_minute=3, burst_limit=2),
-    
     # Portal endpoints - moderate limits
     "/api/portal/": RateLimitConfig(requests_per_minute=30, burst_limit=10),
-    
     # Standard API - default limits
     "default": RateLimitConfig(requests_per_minute=60, burst_limit=20),
-    
     # High-frequency endpoints - higher limits
     "/api/notifications/": RateLimitConfig(requests_per_minute=120, burst_limit=30),
     "/api/realtime/": RateLimitConfig(requests_per_minute=300, burst_limit=50),
@@ -224,7 +221,7 @@ def get_limit_config(path: str) -> RateLimitConfig:
 async def rate_limit_middleware(request: Request, call_next: Callable) -> Response:
     """
     Rate limiting middleware for FastAPI.
-    
+
     Adds X-RateLimit headers to responses:
     - X-RateLimit-Limit: Maximum requests allowed
     - X-RateLimit-Remaining: Requests remaining in window
@@ -285,13 +282,14 @@ def rate_limit(
 ):
     """
     Decorator for custom rate limiting on specific endpoints.
-    
+
     Usage:
         @router.get("/expensive-operation")
         @rate_limit(requests_per_minute=10, burst_limit=3)
         async def expensive_operation():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -326,6 +324,7 @@ def rate_limit(
             return await func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 

@@ -33,6 +33,7 @@ def client():
     """Create test client."""
     from fastapi.testclient import TestClient
     from src.main import app
+
     return TestClient(app)
 
 
@@ -77,7 +78,7 @@ class TestIncidentLifecycleE2E:
         """E2E: Full incident lifecycle from report to closure."""
         if not auth_headers:
             pytest.skip("Auth required")
-        
+
         # === Step 1: Submit incident via Portal ===
         submit_response = client.post(
             "/api/portal/report",
@@ -138,11 +139,11 @@ class TestIncidentLifecycleE2E:
             },
             headers=auth_headers,
         )
-        
+
         if create_response.status_code in [200, 201]:
             incident = create_response.json()
             incident_id = incident.get("id")
-            
+
             # List investigations
             inv_response = client.get("/api/investigations", headers=auth_headers)
             assert inv_response.status_code == 200
@@ -212,7 +213,7 @@ class TestAuditLifecycleE2E:
                 }
             ],
         }
-        
+
         create_template = client.post(
             "/api/audit-templates",
             json=template_data,
@@ -281,7 +282,7 @@ class TestRiskManagementE2E:
             "impact": 4,
             "owner": "Operations Manager",
         }
-        
+
         create_response = client.post(
             "/api/risks",
             json=risk_data,
@@ -356,7 +357,7 @@ class TestComplianceE2E:
             pytest.skip("Auth required")
 
         standards = ["iso9001", "iso14001", "iso45001", "iso27001"]
-        
+
         for standard in standards:
             response = client.get(
                 f"/api/standards/{standard}",
@@ -401,7 +402,7 @@ class TestDocumentControlE2E:
             "category": "quality",
             "version": "1.0",
         }
-        
+
         create_response = client.post(
             "/api/policies",
             json=policy_data,
@@ -525,7 +526,7 @@ class TestAnalyticsE2E:
             "date_to": datetime.now().isoformat(),
             "format": "pdf",
         }
-        
+
         response = client.post(
             "/api/analytics/reports/generate",
             json=report_request,
@@ -547,7 +548,7 @@ class TestNewEmployeeJourneyE2E:
 
     def test_new_employee_complete_journey(self, client):
         """E2E: New employee uses portal for first time."""
-        
+
         # === Step 1: View portal stats ===
         stats_response = client.get("/api/portal/stats")
         assert stats_response.status_code == 200
@@ -567,11 +568,11 @@ class TestNewEmployeeJourneyE2E:
             },
         )
         assert incident_response.status_code in [200, 201]
-        
+
         data = incident_response.json()
         reference = data.get("reference_number")
         tracking = data.get("tracking_code")
-        
+
         # === Step 3: Track the report ===
         if reference and tracking:
             track_response = client.get(
@@ -638,7 +639,7 @@ class TestEdgeCasesE2E:
     def test_large_description_handling(self, client):
         """E2E: Handle large text inputs."""
         large_description = "This is a detailed description. " * 500
-        
+
         response = client.post(
             "/api/portal/report",
             json={
@@ -653,7 +654,7 @@ class TestEdgeCasesE2E:
     def test_special_characters_handling(self, client):
         """E2E: Handle special characters."""
         special_title = "Test with émojis 🚨 and spëcial çharacters"
-        
+
         response = client.post(
             "/api/portal/report",
             json={
@@ -675,7 +676,7 @@ class TestEdgeCasesE2E:
         for _ in range(5):
             response = client.get("/api/incidents?page=1&per_page=5", headers=auth_headers)
             responses.append(response.status_code)
-        
+
         # All should succeed
         assert all(status == 200 for status in responses)
 
@@ -703,7 +704,7 @@ class TestE2ESummary:
             "/api/policies",
             "/api/users/me",
         ]
-        
+
         for endpoint in critical_endpoints:
             response = client.get(endpoint, headers=auth_headers)
             assert response.status_code == 200, f"Failed: {endpoint}"

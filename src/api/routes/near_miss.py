@@ -29,7 +29,7 @@ async def create_near_miss(
 ) -> NearMiss:
     """
     Report a new near miss.
-    
+
     Near misses are events that could have resulted in injury, damage, or loss
     but didn't. Tracking these helps prevent future incidents.
     """
@@ -38,7 +38,7 @@ async def create_near_miss(
     count_result = await db.execute(select(sa_func.count()).select_from(NearMiss))
     count = count_result.scalar_one()
     reference_number = f"NM-{year}-{count + 1:04d}"
-    
+
     near_miss = NearMiss(
         **data.model_dump(),
         reference_number=reference_number,
@@ -47,10 +47,10 @@ async def create_near_miss(
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
-    
+
     db.add(near_miss)
     await db.flush()
-    
+
     await record_audit_event(
         db=db,
         event_type="near_miss.created",
@@ -62,7 +62,7 @@ async def create_near_miss(
         user_id=current_user.id,
         request_id=request_id,
     )
-    
+
     await db.commit()
     await db.refresh(near_miss)
     return near_miss
@@ -80,13 +80,13 @@ async def list_near_misses(
 ) -> NearMissListResponse:
     """
     List near misses with pagination and filtering.
-    
+
     Ordered by event_date DESC, id ASC for deterministic results.
     """
     import math
-    
+
     query = select(NearMiss)
-    
+
     # Apply filters
     if status_filter:
         query = query.where(NearMiss.status == status_filter)
@@ -94,20 +94,20 @@ async def list_near_misses(
         query = query.where(NearMiss.priority == priority)
     if contract:
         query = query.where(NearMiss.contract == contract)
-    
+
     # Count total
     count_query = select(sa_func.count()).select_from(query.subquery())
     count_result = await db.execute(count_query)
     total = count_result.scalar_one()
-    
+
     # Deterministic ordering
     query = query.order_by(NearMiss.event_date.desc(), NearMiss.id.asc())
-    
+
     # Pagination
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    
+
     return NearMissListResponse(
         items=[NearMissResponse.model_validate(nm) for nm in items],
         total=total,
@@ -126,13 +126,13 @@ async def get_near_miss(
     """Get a near miss by ID."""
     result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
     near_miss = result.scalar_one_or_none()
-    
+
     if not near_miss:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Near Miss with ID {near_miss_id} not found",
         )
-    
+
     return near_miss
 
 
@@ -147,31 +147,31 @@ async def update_near_miss(
     """Update a near miss."""
     result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
     near_miss = result.scalar_one_or_none()
-    
+
     if not near_miss:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Near Miss with ID {near_miss_id} not found",
         )
-    
+
     update_data = data.model_dump(exclude_unset=True)
     old_status = near_miss.status
-    
+
     for field, value in update_data.items():
         setattr(near_miss, field, value)
-    
+
     # Handle status changes
     if "status" in update_data:
         if update_data["status"] == "CLOSED" and near_miss.closed_at is None:
             near_miss.closed_at = datetime.now(timezone.utc)
             near_miss.closed_by_id = current_user.id
-    
+
     # Handle assignment
     if "assigned_to_id" in update_data and near_miss.assigned_at is None:
         near_miss.assigned_at = datetime.now(timezone.utc)
-    
+
     near_miss.updated_by_id = current_user.id
-    
+
     await record_audit_event(
         db=db,
         event_type="near_miss.updated",
@@ -183,7 +183,7 @@ async def update_near_miss(
         user_id=current_user.id,
         request_id=request_id,
     )
-    
+
     await db.commit()
     await db.refresh(near_miss)
     return near_miss
@@ -199,13 +199,13 @@ async def delete_near_miss(
     """Delete a near miss."""
     result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
     near_miss = result.scalar_one_or_none()
-    
+
     if not near_miss:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Near Miss with ID {near_miss_id} not found",
         )
-    
+
     await record_audit_event(
         db=db,
         event_type="near_miss.deleted",
@@ -217,7 +217,7 @@ async def delete_near_miss(
         user_id=current_user.id,
         request_id=request_id,
     )
-    
+
     await db.delete(near_miss)
     await db.commit()
 
@@ -234,17 +234,17 @@ async def list_near_miss_investigations(
     from math import ceil
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
-    
+
     # Verify near miss exists
     result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
     near_miss = result.scalar_one_or_none()
-    
+
     if not near_miss:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Near Miss with ID {near_miss_id} not found",
         )
-    
+
     # Get investigations
     count_query = (
         select(sa_func.count())
@@ -255,7 +255,7 @@ async def list_near_miss_investigations(
         )
     )
     total = (await db.execute(count_query)).scalar() or 0
-    
+
     query = (
         select(InvestigationRun)
         .where(
@@ -267,7 +267,7 @@ async def list_near_miss_investigations(
         .limit(page_size)
     )
     investigations = (await db.execute(query)).scalars().all()
-    
+
     return {
         "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
         "total": total,

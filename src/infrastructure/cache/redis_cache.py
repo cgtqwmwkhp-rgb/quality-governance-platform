@@ -26,7 +26,7 @@ T = TypeVar("T")
 
 class CacheType(Enum):
     """Cache categories with default TTLs."""
-    
+
     SHORT = 60  # 1 minute - for frequently changing data
     MEDIUM = 300  # 5 minutes - for moderately stable data
     LONG = 3600  # 1 hour - for stable reference data
@@ -37,7 +37,7 @@ class CacheType(Enum):
 @dataclass
 class CacheConfig:
     """Cache configuration."""
-    
+
     redis_url: Optional[str] = None
     default_ttl: int = 300
     max_memory_items: int = 1000
@@ -47,45 +47,45 @@ class CacheConfig:
 
 class InMemoryCache:
     """Thread-safe in-memory LRU cache with TTL support."""
-    
+
     def __init__(self, max_size: int = 1000):
         self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
         self._max_size = max_size
         self._lock = asyncio.Lock()
         self._stats = {"hits": 0, "misses": 0, "sets": 0, "deletes": 0}
-    
+
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache."""
         async with self._lock:
             if key not in self._cache:
                 self._stats["misses"] += 1
                 return None
-            
+
             value, expires_at = self._cache[key]
-            
+
             # Check if expired
             if expires_at and time.time() > expires_at:
                 del self._cache[key]
                 self._stats["misses"] += 1
                 return None
-            
+
             # Move to end (most recently used)
             self._cache.move_to_end(key)
             self._stats["hits"] += 1
             return value
-    
+
     async def set(self, key: str, value: Any, ttl: int = 300) -> bool:
         """Set value in cache with TTL."""
         async with self._lock:
             # Evict oldest items if at capacity
             while len(self._cache) >= self._max_size:
                 self._cache.popitem(last=False)
-            
+
             expires_at = time.time() + ttl if ttl > 0 else None
             self._cache[key] = (value, expires_at)
             self._stats["sets"] += 1
             return True
-    
+
     async def delete(self, key: str) -> bool:
         """Delete key from cache."""
         async with self._lock:
@@ -94,23 +94,24 @@ class InMemoryCache:
                 self._stats["deletes"] += 1
                 return True
             return False
-    
+
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching pattern (simple glob)."""
         async with self._lock:
             import fnmatch
+
             keys_to_delete = [k for k in self._cache.keys() if fnmatch.fnmatch(k, pattern)]
             for key in keys_to_delete:
                 del self._cache[key]
             self._stats["deletes"] += len(keys_to_delete)
             return len(keys_to_delete)
-    
+
     async def clear(self) -> bool:
         """Clear all cache entries."""
         async with self._lock:
             self._cache.clear()
             return True
-    
+
     async def get_stats(self) -> dict:
         """Get cache statistics."""
         async with self._lock:
@@ -126,19 +127,20 @@ class InMemoryCache:
 
 class RedisCache:
     """Redis-backed cache with connection pooling."""
-    
+
     def __init__(self, redis_url: str, key_prefix: str = "qgp:"):
         self._redis_url = redis_url
         self._key_prefix = key_prefix
         self._redis = None
         self._fallback = InMemoryCache()
         self._use_fallback = False
-    
+
     async def _get_redis(self):
         """Get or create Redis connection."""
         if self._redis is None and not self._use_fallback:
             try:
                 import redis.asyncio as redis
+
                 self._redis = redis.from_url(
                     self._redis_url,
                     encoding="utf-8",
@@ -150,20 +152,20 @@ class RedisCache:
                 self._use_fallback = True
                 self._redis = None
         return self._redis
-    
+
     def _make_key(self, key: str) -> str:
         """Create prefixed key."""
         return f"{self._key_prefix}{key}"
-    
+
     async def get(self, key: str) -> Optional[Any]:
         """Get value from Redis."""
         if self._use_fallback:
             return await self._fallback.get(key)
-        
+
         redis = await self._get_redis()
         if redis is None:
             return await self._fallback.get(key)
-        
+
         try:
             data = await redis.get(self._make_key(key))
             if data is None:
@@ -172,16 +174,16 @@ class RedisCache:
         except Exception as e:
             print(f"[Cache] Redis get error: {e}")
             return await self._fallback.get(key)
-    
+
     async def set(self, key: str, value: Any, ttl: int = 300) -> bool:
         """Set value in Redis with TTL."""
         if self._use_fallback:
             return await self._fallback.set(key, value, ttl)
-        
+
         redis = await self._get_redis()
         if redis is None:
             return await self._fallback.set(key, value, ttl)
-        
+
         try:
             data = pickle.dumps(value)
             if ttl > 0:
@@ -192,62 +194,62 @@ class RedisCache:
         except Exception as e:
             print(f"[Cache] Redis set error: {e}")
             return await self._fallback.set(key, value, ttl)
-    
+
     async def delete(self, key: str) -> bool:
         """Delete key from Redis."""
         if self._use_fallback:
             return await self._fallback.delete(key)
-        
+
         redis = await self._get_redis()
         if redis is None:
             return await self._fallback.delete(key)
-        
+
         try:
             result = await redis.delete(self._make_key(key))
             return result > 0
         except Exception as e:
             print(f"[Cache] Redis delete error: {e}")
             return await self._fallback.delete(key)
-    
+
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching pattern."""
         if self._use_fallback:
             return await self._fallback.delete_pattern(pattern)
-        
+
         redis = await self._get_redis()
         if redis is None:
             return await self._fallback.delete_pattern(pattern)
-        
+
         try:
             full_pattern = self._make_key(pattern)
             keys = []
             async for key in redis.scan_iter(match=full_pattern):
                 keys.append(key)
-            
+
             if keys:
                 await redis.delete(*keys)
             return len(keys)
         except Exception as e:
             print(f"[Cache] Redis delete pattern error: {e}")
             return await self._fallback.delete_pattern(pattern)
-    
+
     async def clear(self) -> bool:
         """Clear all cache entries with prefix."""
         return await self.delete_pattern("*") > 0
-    
+
     async def get_stats(self) -> dict:
         """Get cache statistics."""
         if self._use_fallback:
             stats = await self._fallback.get_stats()
             stats["backend"] = "in-memory"
             return stats
-        
+
         redis = await self._get_redis()
         if redis is None:
             stats = await self._fallback.get_stats()
             stats["backend"] = "in-memory"
             return stats
-        
+
         try:
             info = await redis.info("stats")
             memory = await redis.info("memory")
@@ -294,40 +296,41 @@ def cached(
 ):
     """
     Decorator for caching function results.
-    
+
     Usage:
         @cached(ttl=60)
         async def get_user(user_id: int):
             ...
-        
+
         @cached(cache_type=CacheType.LONG)
         async def get_standards():
             ...
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
             cache = get_cache()
-            
+
             # Build cache key
             prefix = key_prefix or f"{func.__module__}.{func.__name__}"
             arg_key = make_cache_key(*args, **kwargs)
             cache_key = f"{prefix}:{arg_key}"
-            
+
             # Check cache
             cached_value = await cache.get(cache_key)
             if cached_value is not None:
                 return cached_value
-            
+
             # Call function
             result = await func(*args, **kwargs)
-            
+
             # Cache result
             cache_ttl = cache_type.value if cache_type else ttl
             await cache.set(cache_key, result, cache_ttl)
-            
+
             return result
-        
+
         # Add cache invalidation helper
         async def invalidate(*args, **kwargs):
             cache = get_cache()
@@ -335,25 +338,27 @@ def cached(
             arg_key = make_cache_key(*args, **kwargs)
             cache_key = f"{prefix}:{arg_key}"
             await cache.delete(cache_key)
-        
+
         wrapper.invalidate = invalidate
         wrapper.invalidate_all = lambda: get_cache().delete_pattern(
             f"{key_prefix or func.__module__}.{func.__name__}:*"
         )
-        
+
         return wrapper
+
     return decorator
 
 
 def invalidate_cache(pattern: str):
     """
     Decorator to invalidate cache after function execution.
-    
+
     Usage:
         @invalidate_cache("users:*")
         async def update_user(user_id: int, data: dict):
             ...
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
@@ -361,7 +366,9 @@ def invalidate_cache(pattern: str):
             cache = get_cache()
             await cache.delete_pattern(pattern)
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -373,7 +380,7 @@ def invalidate_cache(pattern: str):
 async def warmup_cache():
     """Warm up cache with frequently accessed data."""
     cache = get_cache()
-    
+
     # Example: Pre-load standards data
     # This would be called on application startup
     pass

@@ -20,7 +20,7 @@ class TestAdminFormBuilderE2E:
         auth_headers: dict,
     ):
         """Test complete workflow: create template -> add steps -> add fields -> publish."""
-        
+
         # Step 1: Create a new form template
         template_response = await async_client.post(
             "/api/v1/admin/config/templates",
@@ -241,7 +241,7 @@ class TestContractManagementE2E:
         auth_headers: dict,
     ):
         """Test complete workflow: create -> update -> list -> delete."""
-        
+
         # Step 1: Create multiple contracts
         contracts_to_create = [
             {
@@ -332,7 +332,7 @@ class TestLookupOptionsE2E:
         auth_headers: dict,
     ):
         """Test complete workflow for managing lookup options."""
-        
+
         # Step 1: Create lookup options for a new category
         options_to_create = [
             {
@@ -406,7 +406,7 @@ class TestSystemSettingsE2E:
         auth_headers: dict,
     ):
         """Test complete workflow for managing system settings."""
-        
+
         # Step 1: Create settings
         settings_to_create = [
             {
@@ -472,7 +472,7 @@ class TestFormFieldTypesE2E:
         auth_headers: dict,
     ):
         """Test creating a form with all supported field types."""
-        
+
         # Create a template for testing all field types
         template_response = await async_client.post(
             "/api/v1/admin/config/templates",
@@ -505,7 +505,12 @@ class TestFormFieldTypesE2E:
             {"name": "date_field", "field_type": "date", "label": "Date"},
             {"name": "time_field", "field_type": "time", "label": "Time"},
             {"name": "datetime_field", "field_type": "datetime", "label": "DateTime"},
-            {"name": "select_field", "field_type": "select", "label": "Select", "options": [{"value": "a", "label": "A"}]},
+            {
+                "name": "select_field",
+                "field_type": "select",
+                "label": "Select",
+                "options": [{"value": "a", "label": "A"}],
+            },
             {"name": "multi_select_field", "field_type": "multi_select", "label": "Multi Select"},
             {"name": "radio_field", "field_type": "radio", "label": "Radio"},
             {"name": "checkbox_field", "field_type": "checkbox", "label": "Checkbox"},

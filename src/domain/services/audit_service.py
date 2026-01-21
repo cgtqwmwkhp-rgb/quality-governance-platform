@@ -71,9 +71,9 @@ async def record_audit_event(
         resource_id=resource_id or str(entity_id),
         user_id=final_actor_user_id,
     )
-    
+
     # Note: Not adding to db.session since AuditEvent is not a SQLAlchemy model.
     # Events are logged for observability. Full persistence requires migration.
     # See: TODO in AuditEvent class docstring.
-    
+
     return event

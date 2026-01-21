@@ -76,12 +76,12 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
 
     # Third party details (JSON for multiple parties)
     third_parties: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    # Structure: [{ name, contact, phone, email, vehicle_reg, vehicle_make_model, damage, 
+    # Structure: [{ name, contact, phone, email, vehicle_reg, vehicle_make_model, damage,
     #               injured, injury_details, insurer, insurer_policy_number, is_at_fault }]
-    
+
     # Multiple vehicles involved count
     vehicles_involved_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-    
+
     # CCTV / Dashcam footage
     cctv_available: Mapped[bool] = mapped_column(Boolean, default=False)
     cctv_location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
@@ -133,6 +133,10 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
 
     def __repr__(self) -> str:
         return f"<RoadTrafficCollision(id={self.id}, ref='{self.reference_number}', severity='{self.severity}')>"
+
+
+# Alias for convenience
+RTA = RoadTrafficCollision
 
 
 class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):

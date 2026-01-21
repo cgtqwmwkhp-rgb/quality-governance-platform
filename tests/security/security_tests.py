@@ -28,6 +28,7 @@ class TestSecurityHeaders:
         """Get test client."""
         from fastapi.testclient import TestClient
         from src.main import app
+
         return TestClient(app)
 
     def test_cors_headers(self, client):
@@ -55,6 +56,7 @@ class TestAuthenticationSecurity:
     def client(self):
         from fastapi.testclient import TestClient
         from src.main import app
+
         return TestClient(app)
 
     def test_login_rate_limiting(self, client):
@@ -65,7 +67,7 @@ class TestAuthenticationSecurity:
                 "/api/auth/login",
                 json={"username": "fake@test.com", "password": "wrongpassword"},
             )
-        
+
         # Should eventually get rate limited (429)
         # This test validates rate limiting is in place
 
@@ -105,6 +107,7 @@ class TestInputValidation:
     def client(self):
         from fastapi.testclient import TestClient
         from src.main import app
+
         return TestClient(app)
 
     def test_sql_injection_prevention(self, client):
@@ -116,7 +119,7 @@ class TestInputValidation:
             "admin'--",
             "' UNION SELECT * FROM users--",
         ]
-        
+
         for payload in malicious_inputs:
             response = client.get(f"/api/incidents?search={payload}")
             # Should not cause server error
@@ -131,7 +134,7 @@ class TestInputValidation:
             "<svg onload=alert('XSS')>",
             "';alert('XSS');//",
         ]
-        
+
         for payload in xss_payloads:
             # Try to create an incident with XSS payload
             response = client.post(
@@ -157,7 +160,7 @@ class TestInputValidation:
             "....//....//....//etc/passwd",
             "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
         ]
-        
+
         for payload in traversal_payloads:
             response = client.get(f"/api/documents/{payload}")
             assert response.status_code in [400, 404, 422]
@@ -171,7 +174,7 @@ class TestInputValidation:
             "`id`",
             "&& rm -rf /",
         ]
-        
+
         for payload in cmd_payloads:
             response = client.post(
                 "/api/portal/report",
@@ -192,9 +195,9 @@ class TestDataProtection:
         """Ensure sensitive data is not passed in URLs."""
         # Check that API routes don't include sensitive data in GET params
         from src.api import router
-        
+
         sensitive_patterns = ["password", "token", "secret", "key", "ssn", "credit_card"]
-        
+
         for route in router.routes:
             if hasattr(route, "path"):
                 path = route.path.lower()
@@ -207,9 +210,9 @@ class TestDataProtection:
         """Test that error messages don't leak sensitive info."""
         from fastapi.testclient import TestClient
         from src.main import app
-        
+
         client = TestClient(app)
-        
+
         # Try to trigger various errors
         response = client.get("/api/incidents/999999")
         if response.status_code == 404:
@@ -227,13 +230,14 @@ class TestFileUploadSecurity:
     def client(self):
         from fastapi.testclient import TestClient
         from src.main import app
+
         return TestClient(app)
 
     def test_file_type_validation(self, client):
         """Test that only allowed file types can be uploaded."""
         # Try to upload a PHP file disguised as an image
         malicious_file = b"<?php system($_GET['cmd']); ?>"
-        
+
         response = client.post(
             "/api/documents/upload",
             files={"file": ("malicious.php", malicious_file, "image/jpeg")},
@@ -245,7 +249,7 @@ class TestFileUploadSecurity:
         """Test file size limits are enforced."""
         # Create a large file (>10MB)
         large_content = b"x" * (11 * 1024 * 1024)
-        
+
         response = client.post(
             "/api/documents/upload",
             files={"file": ("large.pdf", large_content, "application/pdf")},
@@ -266,14 +270,14 @@ class TestSecurityConfiguration:
             r"token\s*=\s*['\"][^'\"]+['\"]",
             r"AWS_SECRET_ACCESS_KEY\s*=\s*['\"][^'\"]+['\"]",
         ]
-        
+
         # Directories to scan
         scan_dirs = [PROJECT_ROOT / "src", PROJECT_ROOT / "frontend" / "src"]
-        
+
         for scan_dir in scan_dirs:
             if not scan_dir.exists():
                 continue
-                
+
             for py_file in scan_dir.rglob("*.py"):
                 content = py_file.read_text()
                 for pattern in secret_patterns:
@@ -302,6 +306,7 @@ class TestAPISecurityBestPractices:
     def client(self):
         from fastapi.testclient import TestClient
         from src.main import app
+
         return TestClient(app)
 
     def test_authentication_required_for_sensitive_endpoints(self, client):
@@ -313,7 +318,7 @@ class TestAPISecurityBestPractices:
             "/api/risks",
             "/api/documents",
         ]
-        
+
         for endpoint in protected_endpoints:
             response = client.get(endpoint)
             assert response.status_code in [401, 403], f"Endpoint {endpoint} is not protected"
@@ -321,7 +326,7 @@ class TestAPISecurityBestPractices:
     def test_no_server_version_disclosure(self, client):
         """Test that server version is not disclosed."""
         response = client.get("/api/health")
-        
+
         # Check headers for version disclosure
         headers = dict(response.headers)
         assert "Server" not in headers or "version" not in headers.get("Server", "").lower()

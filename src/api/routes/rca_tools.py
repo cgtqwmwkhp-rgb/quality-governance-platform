@@ -20,6 +20,7 @@ router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 # SCHEMAS
 # =============================================================================
 
+
 class CreateFiveWhysRequest(BaseModel):
     problem_statement: str
     entity_type: Optional[str] = None
@@ -88,6 +89,7 @@ class VerifyCAPARequest(BaseModel):
 # 5-WHYS ENDPOINTS
 # =============================================================================
 
+
 @router.post("/five-whys", status_code=status.HTTP_201_CREATED)
 async def create_five_whys_analysis(
     request: CreateFiveWhysRequest,
@@ -119,10 +121,10 @@ async def get_five_whys_analysis(
     """Get a 5-Whys analysis by ID."""
     service = FiveWhysService(db)
     analysis = await service.get_analysis(analysis_id)
-    
+
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    
+
     return {
         "id": analysis.id,
         "problem_statement": analysis.problem_statement,
@@ -146,7 +148,7 @@ async def add_why_iteration(
 ):
     """Add a why iteration to an existing analysis."""
     service = FiveWhysService(db)
-    
+
     try:
         analysis = await service.add_why_iteration(
             analysis_id=analysis_id,
@@ -156,7 +158,7 @@ async def add_why_iteration(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": analysis.id,
         "whys": analysis.whys,
@@ -173,7 +175,7 @@ async def set_five_whys_root_cause(
 ):
     """Set the root cause for an analysis."""
     service = FiveWhysService(db)
-    
+
     try:
         analysis = await service.set_root_cause(
             analysis_id=analysis_id,
@@ -182,7 +184,7 @@ async def set_five_whys_root_cause(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": analysis.id,
         "primary_root_cause": analysis.primary_root_cause,
@@ -199,7 +201,7 @@ async def complete_five_whys_analysis(
 ):
     """Mark a 5-Whys analysis as complete."""
     service = FiveWhysService(db)
-    
+
     try:
         analysis = await service.complete_analysis(
             analysis_id=analysis_id,
@@ -208,7 +210,7 @@ async def complete_five_whys_analysis(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": analysis.id,
         "completed": analysis.completed,
@@ -226,7 +228,7 @@ async def get_five_whys_for_entity(
     """Get all 5-Whys analyses for an entity."""
     service = FiveWhysService(db)
     analyses = await service.get_analyses_for_entity(entity_type, entity_id)
-    
+
     return {
         "entity_type": entity_type,
         "entity_id": entity_id,
@@ -245,6 +247,7 @@ async def get_five_whys_for_entity(
 # =============================================================================
 # FISHBONE ENDPOINTS
 # =============================================================================
+
 
 @router.post("/fishbone", status_code=status.HTTP_201_CREATED)
 async def create_fishbone_diagram(
@@ -277,10 +280,10 @@ async def get_fishbone_diagram(
     """Get a Fishbone diagram by ID."""
     service = FishboneService(db)
     diagram = await service.get_diagram(diagram_id)
-    
+
     if not diagram:
         raise HTTPException(status_code=404, detail="Diagram not found")
-    
+
     return {
         "id": diagram.id,
         "effect_statement": diagram.effect_statement,
@@ -303,7 +306,7 @@ async def add_fishbone_cause(
 ):
     """Add a cause to a Fishbone diagram."""
     service = FishboneService(db)
-    
+
     try:
         diagram = await service.add_cause(
             diagram_id=diagram_id,
@@ -313,7 +316,7 @@ async def add_fishbone_cause(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     return {
         "id": diagram.id,
         "causes": diagram.causes,
@@ -330,7 +333,7 @@ async def set_fishbone_root_cause(
 ):
     """Set the root cause for a Fishbone diagram."""
     service = FishboneService(db)
-    
+
     try:
         diagram = await service.set_root_cause(
             diagram_id=diagram_id,
@@ -340,7 +343,7 @@ async def set_fishbone_root_cause(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": diagram.id,
         "root_cause": diagram.root_cause,
@@ -357,7 +360,7 @@ async def complete_fishbone_diagram(
 ):
     """Mark a Fishbone diagram as complete."""
     service = FishboneService(db)
-    
+
     try:
         diagram = await service.complete_diagram(
             diagram_id=diagram_id,
@@ -366,7 +369,7 @@ async def complete_fishbone_diagram(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": diagram.id,
         "completed": diagram.completed,
@@ -377,6 +380,7 @@ async def complete_fishbone_diagram(
 # =============================================================================
 # CAPA ENDPOINTS
 # =============================================================================
+
 
 @router.post("/capa", status_code=status.HTTP_201_CREATED)
 async def create_capa(
@@ -416,7 +420,7 @@ async def update_capa_status(
 ):
     """Update CAPA status."""
     service = CAPAService(db)
-    
+
     try:
         capa = await service.update_status(
             capa_id=capa_id,
@@ -425,7 +429,7 @@ async def update_capa_status(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": capa.id,
         "status": capa.status,
@@ -442,7 +446,7 @@ async def verify_capa(
 ):
     """Verify a CAPA has been completed effectively."""
     service = CAPAService(db)
-    
+
     try:
         capa = await service.verify_capa(
             capa_id=capa_id,
@@ -452,7 +456,7 @@ async def verify_capa(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     return {
         "id": capa.id,
         "status": capa.status,
@@ -470,7 +474,7 @@ async def get_capas_for_investigation(
     """Get all CAPAs for an investigation."""
     service = CAPAService(db)
     capas = await service.get_capas_for_investigation(investigation_id)
-    
+
     return {
         "investigation_id": investigation_id,
         "capas": [
@@ -495,7 +499,7 @@ async def get_overdue_capas(
     """Get all overdue CAPA items."""
     service = CAPAService(db)
     capas = await service.get_overdue_capas()
-    
+
     return {
         "overdue_count": len(capas),
         "capas": [

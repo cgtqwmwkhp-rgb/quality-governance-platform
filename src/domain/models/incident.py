@@ -120,7 +120,7 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # SIF (Serious Injury or Fatality) Classification
     is_sif: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
     is_psif: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)  # Potential SIF

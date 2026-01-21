@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 def client():
     """Get test client."""
     from src.main import app
+
     return TestClient(app)
 
 
@@ -170,12 +171,12 @@ class TestReportTracking:
                 "severity": "low",
             },
         )
-        
+
         if submit_response.status_code in [200, 201]:
             data = submit_response.json()
             reference = data.get("reference_number")
             tracking_code = data.get("tracking_code")
-            
+
             if reference and tracking_code:
                 # Track the report
                 track_response = client.get(
@@ -204,11 +205,11 @@ class TestReportTracking:
                 "severity": "low",
             },
         )
-        
+
         if submit_response.status_code in [200, 201]:
             data = submit_response.json()
             reference = data.get("reference_number")
-            
+
             if reference:
                 # Try with wrong tracking code
                 track_response = client.get(

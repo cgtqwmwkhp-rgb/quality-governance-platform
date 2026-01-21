@@ -92,7 +92,7 @@ def create_tenant(
 ) -> Any:
     """Create a new tenant."""
     service = TenantService(db)
-    
+
     try:
         tenant = service.create_tenant(
             name=data.name,
@@ -115,7 +115,7 @@ def list_tenants(
 ) -> Any:
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
-    
+
     tenants = db.query(Tenant).offset(skip).limit(limit).all()
     return tenants
 
@@ -128,10 +128,10 @@ def get_current_tenant(
     """Get the current tenant context."""
     service = TenantService(db)
     tenant = service.get_tenant(1)  # Should use tenant_id from context
-    
+
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     return tenant
 
 
@@ -143,10 +143,10 @@ def get_tenant(
     """Get tenant by ID."""
     service = TenantService(db)
     tenant = service.get_tenant(tenant_id)
-    
+
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     return tenant
 
 
@@ -158,7 +158,7 @@ def update_tenant(
 ) -> Any:
     """Update tenant settings."""
     service = TenantService(db)
-    
+
     try:
         updates = data.dict(exclude_unset=True)
         tenant = service.update_tenant(tenant_id, **updates)
@@ -180,7 +180,7 @@ def update_branding(
 ) -> Any:
     """Update tenant branding."""
     service = TenantService(db)
-    
+
     try:
         tenant = service.update_branding(tenant_id, **data.dict(exclude_unset=True))
         return tenant
@@ -201,7 +201,7 @@ def list_tenant_users(
     """List all users in a tenant."""
     service = TenantService(db)
     users = service.get_tenant_users(tenant_id)
-    
+
     return {
         "items": [
             {
@@ -224,11 +224,11 @@ def add_user_to_tenant(
 ) -> Any:
     """Add a user to a tenant."""
     service = TenantService(db)
-    
+
     # Check user limit
     if not service.can_add_user(tenant_id):
         raise HTTPException(status_code=400, detail="User limit reached")
-    
+
     try:
         tenant_user = service.add_user_to_tenant(
             tenant_id=tenant_id,
@@ -248,7 +248,7 @@ def remove_user_from_tenant(
 ) -> Any:
     """Remove a user from a tenant."""
     service = TenantService(db)
-    
+
     try:
         service.remove_user_from_tenant(tenant_id, user_id)
         return {"status": "removed"}
@@ -269,14 +269,14 @@ def create_invitation(
 ) -> Any:
     """Create an invitation to join a tenant."""
     service = TenantService(db)
-    
+
     invitation = service.create_invitation(
         tenant_id=tenant_id,
         email=data.email,
         invited_by_id=1,  # Should be current_user.id
         role=data.role,
     )
-    
+
     return {
         "id": invitation.id,
         "email": invitation.email,
@@ -292,7 +292,7 @@ def accept_invitation(
 ) -> Any:
     """Accept a tenant invitation."""
     service = TenantService(db)
-    
+
     try:
         tenant_user = service.accept_invitation(token, user_id=1)  # Should be current_user.id
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
@@ -313,10 +313,10 @@ def get_features(
     """Get enabled features for a tenant."""
     service = TenantService(db)
     tenant = service.get_tenant(tenant_id)
-    
+
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     return tenant.features_enabled
 
 
@@ -329,12 +329,12 @@ def toggle_feature(
 ) -> Any:
     """Enable or disable a feature for a tenant."""
     service = TenantService(db)
-    
+
     if enabled:
         service.enable_feature(tenant_id, feature)
     else:
         service.disable_feature(tenant_id, feature)
-    
+
     return {"feature": feature, "enabled": enabled}
 
 
@@ -351,12 +351,12 @@ def get_limits(
     """Get usage limits for a tenant."""
     service = TenantService(db)
     tenant = service.get_tenant(tenant_id)
-    
+
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     current_users, max_users = service.check_user_limit(tenant_id)
-    
+
     return {
         "users": {"current": current_users, "max": max_users},
         "storage_gb": {"current": 0, "max": tenant.max_storage_gb},  # Would calculate actual usage

@@ -31,9 +31,12 @@ class EntityTypeEnum:
 # Workflow Rule Schemas
 class WorkflowRuleBase(BaseModel):
     """Base schema for workflow rules."""
+
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
-    rule_type: str = Field(..., description="Type: conditional_trigger, escalation, auto_assignment, sla_monitor, notification")
+    rule_type: str = Field(
+        ..., description="Type: conditional_trigger, escalation, auto_assignment, sla_monitor, notification"
+    )
     entity_type: str = Field(..., description="Entity: incident, near_miss, complaint, rta, audit, risk, etc.")
     trigger_event: str = Field(..., description="Event: created, updated, status_changed, sla_breach, etc.")
     conditions: Optional[Dict[str, Any]] = Field(None, description="Condition JSON for rule evaluation")
@@ -50,11 +53,13 @@ class WorkflowRuleBase(BaseModel):
 
 class WorkflowRuleCreate(WorkflowRuleBase):
     """Schema for creating a workflow rule."""
+
     pass
 
 
 class WorkflowRuleUpdate(BaseModel):
     """Schema for updating a workflow rule."""
+
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     rule_type: Optional[str] = None
@@ -74,6 +79,7 @@ class WorkflowRuleUpdate(BaseModel):
 
 class WorkflowRuleResponse(WorkflowRuleBase):
     """Schema for workflow rule response."""
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -85,6 +91,7 @@ class WorkflowRuleResponse(WorkflowRuleBase):
 
 class WorkflowRuleListResponse(BaseModel):
     """List response for workflow rules."""
+
     items: List[WorkflowRuleResponse]
     total: int
     page: int
@@ -94,6 +101,7 @@ class WorkflowRuleListResponse(BaseModel):
 # Rule Execution Schemas
 class RuleExecutionResponse(BaseModel):
     """Schema for rule execution log entry."""
+
     id: int
     rule_id: int
     entity_type: str
@@ -111,6 +119,7 @@ class RuleExecutionResponse(BaseModel):
 
 class RuleExecutionListResponse(BaseModel):
     """List response for rule executions."""
+
     items: List[RuleExecutionResponse]
     total: int
 
@@ -118,6 +127,7 @@ class RuleExecutionListResponse(BaseModel):
 # SLA Configuration Schemas
 class SLAConfigurationBase(BaseModel):
     """Base schema for SLA configurations."""
+
     entity_type: str = Field(..., description="Entity type this SLA applies to")
     priority: Optional[str] = Field(None, description="Priority level (critical, high, medium, low)")
     category: Optional[str] = Field(None, description="Category (incident type, complaint type, etc.)")
@@ -137,11 +147,13 @@ class SLAConfigurationBase(BaseModel):
 
 class SLAConfigurationCreate(SLAConfigurationBase):
     """Schema for creating an SLA configuration."""
+
     pass
 
 
 class SLAConfigurationUpdate(BaseModel):
     """Schema for updating an SLA configuration."""
+
     priority: Optional[str] = None
     category: Optional[str] = None
     department: Optional[str] = None
@@ -160,6 +172,7 @@ class SLAConfigurationUpdate(BaseModel):
 
 class SLAConfigurationResponse(SLAConfigurationBase):
     """Schema for SLA configuration response."""
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -170,6 +183,7 @@ class SLAConfigurationResponse(SLAConfigurationBase):
 
 class SLAConfigurationListResponse(BaseModel):
     """List response for SLA configurations."""
+
     items: List[SLAConfigurationResponse]
     total: int
 
@@ -177,6 +191,7 @@ class SLAConfigurationListResponse(BaseModel):
 # SLA Tracking Schemas
 class SLATrackingResponse(BaseModel):
     """Schema for SLA tracking status."""
+
     id: int
     entity_type: str
     entity_id: int
@@ -203,6 +218,7 @@ class SLATrackingResponse(BaseModel):
 
 class SLAStatusSummary(BaseModel):
     """Summary of SLA status for an entity."""
+
     entity_type: str
     entity_id: int
     status: str  # on_track, warning, breached, resolved
@@ -215,6 +231,7 @@ class SLAStatusSummary(BaseModel):
 # Escalation Level Schemas
 class EscalationLevelBase(BaseModel):
     """Base schema for escalation levels."""
+
     entity_type: str = Field(..., description="Entity type this level applies to")
     level: int = Field(..., ge=1, description="Escalation level (1 = first)")
     name: str = Field(..., max_length=100)
@@ -230,11 +247,13 @@ class EscalationLevelBase(BaseModel):
 
 class EscalationLevelCreate(EscalationLevelBase):
     """Schema for creating an escalation level."""
+
     pass
 
 
 class EscalationLevelUpdate(BaseModel):
     """Schema for updating an escalation level."""
+
     name: Optional[str] = None
     description: Optional[str] = None
     escalate_to_role: Optional[str] = None
@@ -248,6 +267,7 @@ class EscalationLevelUpdate(BaseModel):
 
 class EscalationLevelResponse(EscalationLevelBase):
     """Schema for escalation level response."""
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -258,6 +278,7 @@ class EscalationLevelResponse(EscalationLevelBase):
 
 class EscalationLevelListResponse(BaseModel):
     """List response for escalation levels."""
+
     items: List[EscalationLevelResponse]
     total: int
 
@@ -265,6 +286,7 @@ class EscalationLevelListResponse(BaseModel):
 # Condition Builder Helper Schema
 class ConditionSchema(BaseModel):
     """Schema for a single condition."""
+
     field: str = Field(..., description="Field name to evaluate")
     operator: str = Field(..., description="Comparison operator")
     value: Any = Field(..., description="Value to compare against")
@@ -272,6 +294,7 @@ class ConditionSchema(BaseModel):
 
 class ConditionGroupSchema(BaseModel):
     """Schema for grouped conditions."""
+
     and_conditions: Optional[List["ConditionSchema"]] = Field(None, alias="and")
     or_conditions: Optional[List["ConditionSchema"]] = Field(None, alias="or")
     not_condition: Optional["ConditionSchema"] = Field(None, alias="not")

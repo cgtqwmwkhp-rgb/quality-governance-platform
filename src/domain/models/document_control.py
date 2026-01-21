@@ -225,15 +225,9 @@ class DocumentApprovalInstance(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
-    workflow_id: Mapped[int] = mapped_column(
-        ForeignKey("document_approval_workflows.id"), nullable=False
-    )
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("document_versions.id"), nullable=True
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("document_approval_workflows.id"), nullable=False)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 
     # Current state
     current_step: Mapped[int] = mapped_column(Integer, default=1)
@@ -293,12 +287,8 @@ class DocumentDistribution(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("document_versions.id"), nullable=True
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 
     # Recipient
     recipient_type: Mapped[str] = mapped_column(String(50), nullable=False)  # user, department, role, external
@@ -340,9 +330,7 @@ class DocumentTrainingLink(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
 
     # Training details
     training_title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -376,9 +364,7 @@ class DocumentAccessLog(Base):
     document_id: Mapped[int] = mapped_column(
         ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("document_versions.id"), nullable=True
-    )
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 
     # User
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -404,9 +390,7 @@ class ObsoleteDocumentRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
 
     # Obsolescence details
     obsolete_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -415,9 +399,7 @@ class ObsoleteDocumentRecord(Base):
     obsoleted_by_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Supersession
-    superseded_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("controlled_documents.id"), nullable=True
-    )
+    superseded_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_documents.id"), nullable=True)
     superseded_by_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Handling

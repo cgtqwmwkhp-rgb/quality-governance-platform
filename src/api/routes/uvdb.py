@@ -470,14 +470,16 @@ async def list_sections(
     # Return from static data or database
     sections = []
     for section in UVDB_B2_SECTIONS:
-        sections.append({
-            "number": section["number"],
-            "title": section["title"],
-            "max_score": section["max_score"],
-            "question_count": len(section.get("questions", [])),
-            "iso_mapping": section.get("iso_mapping", {}),
-        })
-    
+        sections.append(
+            {
+                "number": section["number"],
+                "title": section["title"],
+                "max_score": section["max_score"],
+                "question_count": len(section.get("questions", [])),
+                "iso_mapping": section.get("iso_mapping", {}),
+            }
+        )
+
     return {
         "total_sections": len(sections),
         "sections": sections,
@@ -495,10 +497,10 @@ async def get_section_questions(
         if section["number"] == section_number:
             section_data = section
             break
-    
+
     if not section_data:
         raise HTTPException(status_code=404, detail="Section not found")
-    
+
     return {
         "section_number": section_data["number"],
         "section_title": section_data["title"],
@@ -521,15 +523,15 @@ async def list_audits(
 ) -> dict[str, Any]:
     """List UVDB audits"""
     query = db.query(UVDBAudit)
-    
+
     if status:
         query = query.filter(UVDBAudit.status == status)
     if company_name:
         query = query.filter(UVDBAudit.company_name.ilike(f"%{company_name}%"))
-    
+
     total = query.count()
     audits = query.order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit).all()
-    
+
     return {
         "total": total,
         "audits": [
@@ -556,7 +558,7 @@ async def create_audit(
     """Create a new UVDB audit"""
     count = db.query(UVDBAudit).count()
     audit_reference = f"UVDB-{datetime.utcnow().year}-{(count + 1):04d}"
-    
+
     audit = UVDBAudit(
         audit_reference=audit_reference,
         status="scheduled",
@@ -565,7 +567,7 @@ async def create_audit(
     db.add(audit)
     db.commit()
     db.refresh(audit)
-    
+
     return {
         "id": audit.id,
         "audit_reference": audit_reference,
@@ -582,7 +584,7 @@ async def get_audit(
     audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
-    
+
     return {
         "id": audit.id,
         "audit_reference": audit.audit_reference,
@@ -624,14 +626,14 @@ async def update_audit(
     audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
-    
+
     update_data = audit_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(audit, key, value)
-    
+
     audit.updated_at = datetime.utcnow()
     db.commit()
-    
+
     return {"message": "Audit updated", "id": audit.id}
 
 
@@ -648,7 +650,7 @@ async def create_response(
     audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
-    
+
     response = UVDBAuditResponse(
         audit_id=audit_id,
         **response_data.model_dump(),
@@ -656,7 +658,7 @@ async def create_response(
     db.add(response)
     db.commit()
     db.refresh(response)
-    
+
     return {"id": response.id, "message": "Response recorded"}
 
 
@@ -669,11 +671,9 @@ async def get_audit_responses(
     audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
-    
-    responses = db.query(UVDBAuditResponse).filter(
-        UVDBAuditResponse.audit_id == audit_id
-    ).all()
-    
+
+    responses = db.query(UVDBAuditResponse).filter(UVDBAuditResponse.audit_id == audit_id).all()
+
     return {
         "audit_id": audit_id,
         "total_responses": len(responses),
@@ -704,13 +704,13 @@ async def add_kpi_record(
     audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
-    
+
     # Calculate rates if man hours provided
     ltifr = None
     if kpi_data.total_man_hours and kpi_data.total_man_hours > 0:
         lost_time = kpi_data.lost_time_incidents_1_7_days + kpi_data.riddor_reportable
         ltifr = (lost_time / kpi_data.total_man_hours) * 1000000
-    
+
     kpi = UVDBKPIRecord(
         audit_id=audit_id,
         ltifr=ltifr,
@@ -719,7 +719,7 @@ async def add_kpi_record(
     db.add(kpi)
     db.commit()
     db.refresh(kpi)
-    
+
     return {"id": kpi.id, "message": "KPI record added", "ltifr": ltifr}
 
 
@@ -729,10 +729,8 @@ async def get_audit_kpis(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
-    kpis = db.query(UVDBKPIRecord).filter(
-        UVDBKPIRecord.audit_id == audit_id
-    ).order_by(UVDBKPIRecord.year.desc()).all()
-    
+    kpis = db.query(UVDBKPIRecord).filter(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc()).all()
+
     return {
         "audit_id": audit_id,
         "kpi_records": [
@@ -763,20 +761,24 @@ async def get_audit_kpis(
 async def get_iso_cross_mapping() -> dict[str, Any]:
     """Get cross-mapping between UVDB sections and ISO standards"""
     mappings = []
-    
+
     for section in UVDB_B2_SECTIONS:
         for question in section.get("questions", []):
             if "iso_mapping" in question and question["iso_mapping"]:
-                mappings.append({
-                    "uvdb_section": section["number"],
-                    "uvdb_question": question["number"],
-                    "uvdb_text": question["text"][:100] + "..." if len(question["text"]) > 100 else question["text"],
-                    "iso_9001": question["iso_mapping"].get("9001", []),
-                    "iso_14001": question["iso_mapping"].get("14001", []),
-                    "iso_45001": question["iso_mapping"].get("45001", []),
-                    "iso_27001": question["iso_mapping"].get("27001", []),
-                })
-    
+                mappings.append(
+                    {
+                        "uvdb_section": section["number"],
+                        "uvdb_question": question["number"],
+                        "uvdb_text": (
+                            question["text"][:100] + "..." if len(question["text"]) > 100 else question["text"]
+                        ),
+                        "iso_9001": question["iso_mapping"].get("9001", []),
+                        "iso_14001": question["iso_mapping"].get("14001", []),
+                        "iso_45001": question["iso_mapping"].get("45001", []),
+                        "iso_27001": question["iso_mapping"].get("27001", []),
+                    }
+                )
+
     return {
         "description": "Cross-mapping between UVDB B2 questions and ISO standard clauses",
         "total_mappings": len(mappings),
@@ -799,23 +801,18 @@ async def get_uvdb_dashboard(
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
     total_audits = db.query(UVDBAudit).count()
-    active_audits = db.query(UVDBAudit).filter(
-        UVDBAudit.status.in_(["scheduled", "in_progress"])
-    ).count()
-    completed_audits = db.query(UVDBAudit).filter(
-        UVDBAudit.status == "completed"
-    ).count()
-    
+    active_audits = db.query(UVDBAudit).filter(UVDBAudit.status.in_(["scheduled", "in_progress"])).count()
+    completed_audits = db.query(UVDBAudit).filter(UVDBAudit.status == "completed").count()
+
     # Average score
-    completed = db.query(UVDBAudit).filter(
-        UVDBAudit.status == "completed",
-        UVDBAudit.percentage_score.isnot(None)
-    ).all()
-    
+    completed = (
+        db.query(UVDBAudit).filter(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)).all()
+    )
+
     avg_score = 0
     if completed:
         avg_score = sum(a.percentage_score for a in completed) / len(completed)
-    
+
     return {
         "summary": {
             "total_audits": total_audits,

@@ -34,6 +34,7 @@ import httpx
 
 class AIProvider(Enum):
     """Available AI providers."""
+
     OPENAI = "openai"
     AZURE_OPENAI = "azure_openai"
     ANTHROPIC = "anthropic"
@@ -43,6 +44,7 @@ class AIProvider(Enum):
 @dataclass
 class AIConfig:
     """AI service configuration."""
+
     provider: AIProvider = AIProvider.OPENAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4-turbo-preview"
@@ -53,13 +55,13 @@ class AIConfig:
     anthropic_model: str = "claude-3-opus-20240229"
     local_model_path: str = ""
     embedding_model: str = "text-embedding-3-small"
-    
+
     @classmethod
     def from_env(cls) -> "AIConfig":
         """Load configuration from environment variables."""
         provider_str = os.getenv("AI_PROVIDER", "openai")
         provider = AIProvider(provider_str) if provider_str in [p.value for p in AIProvider] else AIProvider.OPENAI
-        
+
         return cls(
             provider=provider,
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
@@ -81,7 +83,7 @@ class AIConfig:
 
 class AIClient(ABC):
     """Abstract base class for AI clients."""
-    
+
     @abstractmethod
     async def complete(
         self,
@@ -92,12 +94,12 @@ class AIClient(ABC):
     ) -> str:
         """Generate text completion."""
         pass
-    
+
     @abstractmethod
     async def embed(self, text: str) -> list[float]:
         """Generate text embedding."""
         pass
-    
+
     @abstractmethod
     async def analyze(
         self,
@@ -110,13 +112,13 @@ class AIClient(ABC):
 
 class OpenAIClient(AIClient):
     """OpenAI API client."""
-    
+
     def __init__(self, config: AIConfig):
         self.config = config
         self.api_key = config.openai_api_key
         self.model = config.openai_model
         self.embedding_model = config.embedding_model
-    
+
     async def complete(
         self,
         prompt: str,
@@ -129,7 +131,7 @@ class OpenAIClient(AIClient):
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -148,7 +150,7 @@ class OpenAIClient(AIClient):
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
-    
+
     async def embed(self, text: str) -> list[float]:
         """Generate embedding using OpenAI."""
         async with httpx.AsyncClient() as client:
@@ -167,7 +169,7 @@ class OpenAIClient(AIClient):
             response.raise_for_status()
             data = response.json()
             return data["data"][0]["embedding"]
-    
+
     async def analyze(
         self,
         text: str,
@@ -180,15 +182,15 @@ class OpenAIClient(AIClient):
             "root_cause": "Analyze the following incident description and suggest potential root causes. Return a JSON object with 'primary_cause', 'contributing_factors' (list), and 'recommendations' (list).",
             "risk_assessment": "Assess the risk level of the following scenario. Return a JSON object with 'likelihood' (1-5), 'impact' (1-5), 'risk_score' (1-25), 'risk_level' (low/medium/high/critical), and 'mitigation_suggestions' (list).",
         }
-        
+
         system_prompt = prompts.get(analysis_type, prompts["classification"])
-        
+
         result = await self.complete(
             prompt=f"Text to analyze:\n\n{text}\n\nProvide your analysis in valid JSON format only.",
             system_prompt=system_prompt,
             temperature=0.3,
         )
-        
+
         # Parse JSON from response
         try:
             # Try to extract JSON from the response
@@ -204,12 +206,12 @@ class OpenAIClient(AIClient):
 
 class AnthropicClient(AIClient):
     """Anthropic Claude API client."""
-    
+
     def __init__(self, config: AIConfig):
         self.config = config
         self.api_key = config.anthropic_api_key
         self.model = config.anthropic_model
-    
+
     async def complete(
         self,
         prompt: str,
@@ -237,7 +239,7 @@ class AnthropicClient(AIClient):
             response.raise_for_status()
             data = response.json()
             return data["content"][0]["text"]
-    
+
     async def embed(self, text: str) -> list[float]:
         """Generate embedding (not natively supported, use OpenAI fallback)."""
         # Claude doesn't have native embeddings, use OpenAI
@@ -246,7 +248,7 @@ class AnthropicClient(AIClient):
             return await openai_client.embed(text)
         # Return empty for now
         return []
-    
+
     async def analyze(
         self,
         text: str,
@@ -261,7 +263,7 @@ class AnthropicClient(AIClient):
             system_prompt="You are an expert analyst. Always respond with valid JSON only.",
             temperature=0.3,
         )
-        
+
         try:
             if "```json" in result:
                 json_str = result.split("```json")[1].split("```")[0]
@@ -282,7 +284,7 @@ class AnthropicClient(AIClient):
 def get_ai_client(config: Optional[AIConfig] = None) -> AIClient:
     """Factory function to get appropriate AI client."""
     config = config or AIConfig.from_env()
-    
+
     if config.provider == AIProvider.ANTHROPIC and config.anthropic_api_key:
         return AnthropicClient(config)
     elif config.provider == AIProvider.OPENAI and config.openai_api_key:
@@ -299,10 +301,10 @@ def get_ai_client(config: Optional[AIConfig] = None) -> AIClient:
 
 class IncidentAnalyzer:
     """AI-powered incident analysis."""
-    
+
     def __init__(self, client: Optional[AIClient] = None):
         self.client = client or get_ai_client()
-    
+
     async def predict_severity(
         self,
         title: str,
@@ -313,9 +315,9 @@ class IncidentAnalyzer:
         text = f"Title: {title}\nDescription: {description}"
         if location:
             text += f"\nLocation: {location}"
-        
+
         return await self.client.analyze(text, "classification")
-    
+
     async def suggest_root_causes(
         self,
         incident_description: str,
@@ -324,7 +326,7 @@ class IncidentAnalyzer:
         """Suggest potential root causes for an incident."""
         text = f"Incident Type: {incident_type}\nDescription: {incident_description}"
         return await self.client.analyze(text, "root_cause")
-    
+
     async def cluster_similar_incidents(
         self,
         incidents: list[dict],
@@ -335,11 +337,13 @@ class IncidentAnalyzer:
         for incident in incidents:
             text = f"{incident.get('title', '')} {incident.get('description', '')}"
             embedding = await self.client.embed(text)
-            embeddings.append({
-                "id": incident.get("id"),
-                "embedding": embedding,
-            })
-        
+            embeddings.append(
+                {
+                    "id": incident.get("id"),
+                    "embedding": embedding,
+                }
+            )
+
         # Simple clustering would happen here (e.g., using sklearn)
         # For now, return with embeddings attached
         return embeddings
@@ -347,10 +351,10 @@ class IncidentAnalyzer:
 
 class RiskScorer:
     """AI-powered risk scoring."""
-    
+
     def __init__(self, client: Optional[AIClient] = None):
         self.client = client or get_ai_client()
-    
+
     async def score_risk(
         self,
         risk_description: str,
@@ -360,9 +364,9 @@ class RiskScorer:
         text = f"Risk Description: {risk_description}"
         if context:
             text += f"\nContext: {json.dumps(context)}"
-        
+
         return await self.client.analyze(text, "risk_assessment")
-    
+
     async def recommend_controls(
         self,
         risk_description: str,
@@ -372,13 +376,13 @@ class RiskScorer:
         prompt = f"Risk: {risk_description}"
         if current_controls:
             prompt += f"\nCurrent Controls: {', '.join(current_controls)}"
-        
+
         result = await self.client.complete(
             prompt=prompt,
             system_prompt="You are a risk management expert. Suggest specific, actionable controls to mitigate the given risk. Return a JSON array of control recommendations.",
             temperature=0.4,
         )
-        
+
         try:
             if "```json" in result:
                 json_str = result.split("```json")[1].split("```")[0]
@@ -391,10 +395,10 @@ class RiskScorer:
 
 class DocumentClassifier:
     """AI-powered document classification and tagging."""
-    
+
     def __init__(self, client: Optional[AIClient] = None):
         self.client = client or get_ai_client()
-    
+
     async def classify_document(
         self,
         content: str,
@@ -404,7 +408,7 @@ class DocumentClassifier:
         text = content[:4000]  # Limit for API
         if title:
             text = f"Title: {title}\n\n{text}"
-        
+
         result = await self.client.complete(
             prompt=f"Document:\n{text}",
             system_prompt="""Classify this document and return a JSON object with:
@@ -416,7 +420,7 @@ class DocumentClassifier:
             - 'confidence': Confidence score 0-1""",
             temperature=0.3,
         )
-        
+
         try:
             if "```json" in result:
                 json_str = result.split("```json")[1].split("```")[0]
@@ -425,7 +429,7 @@ class DocumentClassifier:
             return json.loads(json_str)
         except json.JSONDecodeError:
             return {"raw_response": result}
-    
+
     async def extract_compliance_evidence(
         self,
         content: str,
@@ -443,7 +447,7 @@ class DocumentClassifier:
             - 'recommendations': Suggestions for improvement""",
             temperature=0.3,
         )
-        
+
         try:
             if "```json" in result:
                 json_str = result.split("```json")[1].split("```")[0]
@@ -456,10 +460,10 @@ class DocumentClassifier:
 
 class AuditAssistant:
     """AI-powered audit assistance."""
-    
+
     def __init__(self, client: Optional[AIClient] = None):
         self.client = client or get_ai_client()
-    
+
     async def generate_audit_questions(
         self,
         standard: str,
@@ -470,7 +474,7 @@ class AuditAssistant:
         prompt = f"Standard: {standard}\nClause: {clause}"
         if context:
             prompt += f"\nContext: {context}"
-        
+
         result = await self.client.complete(
             prompt=prompt,
             system_prompt="""Generate 5 audit questions for this ISO clause. 
@@ -481,7 +485,7 @@ class AuditAssistant:
             Return a JSON array of question strings.""",
             temperature=0.4,
         )
-        
+
         try:
             if "```json" in result:
                 json_str = result.split("```json")[1].split("```")[0]
@@ -490,7 +494,7 @@ class AuditAssistant:
             return json.loads(json_str)
         except json.JSONDecodeError:
             return [result]
-    
+
     async def analyze_finding(
         self,
         finding_description: str,
@@ -507,7 +511,7 @@ class AuditAssistant:
             - 'risk_if_unaddressed': Potential consequence if not corrected""",
             temperature=0.3,
         )
-        
+
         try:
             if "```json" in result:
                 json_str = result.split("```json")[1].split("```")[0]

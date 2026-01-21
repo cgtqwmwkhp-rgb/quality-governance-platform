@@ -136,7 +136,9 @@ class ISO27001Control(Base):
     # Control attributes (ISO 27001:2022)
     control_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # preventive, detective, corrective
     information_security_properties: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # C, I, A
-    cybersecurity_concepts: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Identify, Protect, Detect, Respond, Recover
+    cybersecurity_concepts: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # Identify, Protect, Detect, Respond, Recover
     operational_capabilities: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     security_domains: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
@@ -210,12 +212,8 @@ class SoAControlEntry(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    soa_id: Mapped[int] = mapped_column(
-        ForeignKey("statement_of_applicability.id", ondelete="CASCADE"), nullable=False
-    )
-    control_id: Mapped[int] = mapped_column(
-        ForeignKey("iso27001_controls.id"), nullable=False
-    )
+    soa_id: Mapped[int] = mapped_column(ForeignKey("statement_of_applicability.id", ondelete="CASCADE"), nullable=False)
+    control_id: Mapped[int] = mapped_column(ForeignKey("iso27001_controls.id"), nullable=False)
 
     # Applicability
     is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -305,7 +303,9 @@ class SecurityIncident(Base):
     priority: Mapped[str] = mapped_column(String(50), default="medium")
 
     # Impact
-    cia_impact: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ["confidentiality", "integrity", "availability"]
+    cia_impact: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # ["confidentiality", "integrity", "availability"]
     affected_assets: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     affected_users: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     data_compromised: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -371,7 +371,9 @@ class AccessControlRecord(Base):
     # Access details
     access_level: Mapped[str] = mapped_column(String(50), nullable=False)  # read, write, admin, owner
     access_type: Mapped[str] = mapped_column(String(50), default="role_based")  # role_based, discretionary, mandatory
-    access_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # password, mfa, certificate, biometric
+    access_method: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # password, mfa, certificate, biometric
 
     # Validity
     granted_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -430,7 +432,9 @@ class BusinessContinuityPlan(Base):
 
     # Testing
     last_test_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    last_test_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # tabletop, walkthrough, simulation, full
+    last_test_type: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # tabletop, walkthrough, simulation, full
     last_test_result: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     next_test_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     test_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
@@ -456,7 +460,9 @@ class SupplierSecurityAssessment(Base):
 
     # Supplier
     supplier_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    supplier_type: Mapped[str] = mapped_column(String(100), nullable=False)  # cloud, software, hardware, service, consultant
+    supplier_type: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # cloud, software, hardware, service, consultant
     services_provided: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     data_access_level: Mapped[str] = mapped_column(String(50), default="none")  # none, limited, full
 
@@ -466,7 +472,9 @@ class SupplierSecurityAssessment(Base):
     assessor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Results
-    overall_rating: Mapped[str] = mapped_column(String(50), nullable=False)  # compliant, partially_compliant, non_compliant
+    overall_rating: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # compliant, partially_compliant, non_compliant
     security_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-100
 
     # Certifications

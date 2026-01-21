@@ -31,16 +31,16 @@ class ABACService:
     """
     Attribute-Based Access Control engine.
     """
-    
+
     def __init__(self, db: Session):
         self.db = db
         self._policy_cache: dict[str, list[ABACPolicy]] = {}
         self._role_permission_cache: dict[int, set[str]] = {}
-    
+
     # =========================================================================
     # Main Permission Check
     # =========================================================================
-    
+
     def check_permission(
         self,
         subject: dict[str, Any],
@@ -52,7 +52,7 @@ class ABACService:
     ) -> tuple[bool, Optional[ABACPolicy]]:
         """
         Check if a subject can perform an action on a resource.
-        
+
         Args:
             subject: User attributes (id, roles, department, clearance, etc.)
             resource_type: Type of resource (incident, audit, risk, etc.)
@@ -60,19 +60,19 @@ class ABACService:
             resource: Resource attributes (optional, for resource-based checks)
             environment: Environmental attributes (time, IP, location, etc.)
             tenant_id: Tenant context
-        
+
         Returns:
             Tuple of (allowed, matched_policy)
         """
         resource = resource or {}
         environment = environment or {}
-        
+
         # Get applicable policies
         policies = self._get_applicable_policies(resource_type, action, tenant_id)
-        
+
         # Sort by priority (highest first) and effect (deny before allow)
         policies.sort(key=lambda p: (-p.priority, 0 if p.effect == "deny" else 1))
-        
+
         # Evaluate each policy
         for policy in policies:
             if self._evaluate_policy(policy, subject, resource, environment):
@@ -90,7 +90,7 @@ class ABACService:
                     environment=environment,
                 )
                 return (policy.effect == "allow", policy)
-        
+
         # Default deny if no policy matches
         self._log_permission_check(
             tenant_id=tenant_id or 0,
@@ -105,7 +105,7 @@ class ABACService:
             environment=environment,
         )
         return (False, None)
-    
+
     def check_permission_simple(
         self,
         user_id: int,
@@ -124,24 +124,24 @@ class ABACService:
             )
             .all()
         )
-        
+
         if not user_roles:
             return False
-        
+
         # Check if any role has the required permission
         permission_code = f"{resource_type}.{action}"
-        
+
         for user_role in user_roles:
             role_permissions = self._get_role_permissions(user_role.role_id)
             if permission_code in role_permissions or f"{resource_type}.*" in role_permissions:
                 return True
-        
+
         return False
-    
+
     # =========================================================================
     # Field-Level Access
     # =========================================================================
-    
+
     def get_allowed_fields(
         self,
         subject: dict[str, Any],
@@ -151,13 +151,13 @@ class ABACService:
     ) -> tuple[set[str], set[str]]:
         """
         Get allowed and denied fields for a resource type.
-        
+
         Returns:
             Tuple of (allowed_fields, denied_fields)
         """
         allowed = set()
         denied = set()
-        
+
         # Get field-level permissions
         field_perms = (
             self.db.query(FieldLevelPermission)
@@ -171,13 +171,13 @@ class ABACService:
             )
             .all()
         )
-        
+
         user_roles = set(subject.get("roles", []))
-        
+
         for perm in field_perms:
             # Check if this permission applies to the user
             perm_roles = set(perm.role_codes or [])
-            
+
             if not perm_roles or perm_roles.intersection(user_roles):
                 if perm.access_level == "none":
                     denied.add(perm.field_name)
@@ -186,9 +186,9 @@ class ABACService:
                 elif perm.access_level == "mask":
                     # Masked fields are "allowed" but will be transformed
                     allowed.add(perm.field_name)
-        
+
         return allowed, denied
-    
+
     def mask_field_value(
         self,
         resource_type: str,
@@ -207,26 +207,27 @@ class ABACService:
             )
             .first()
         )
-        
+
         if not perm:
             return value
-        
+
         if perm.mask_type == "full":
             return "********"
         elif perm.mask_type == "partial" and perm.mask_pattern:
             return self._apply_mask_pattern(value, perm.mask_pattern)
         elif perm.mask_type == "hash":
             import hashlib
+
             return hashlib.sha256(str(value).encode()).hexdigest()[:16]
         elif perm.mask_type == "redact":
             return "[REDACTED]"
-        
+
         return value
-    
+
     # =========================================================================
     # Policy Management
     # =========================================================================
-    
+
     def create_policy(
         self,
         name: str,
@@ -256,12 +257,12 @@ class ABACService:
         self.db.add(policy)
         self.db.commit()
         self.db.refresh(policy)
-        
+
         # Invalidate cache
         self._invalidate_policy_cache(resource_type, action)
-        
+
         return policy
-    
+
     def get_policies(
         self,
         resource_type: Optional[str] = None,
@@ -269,21 +270,19 @@ class ABACService:
     ) -> list[ABACPolicy]:
         """Get all policies, optionally filtered."""
         query = self.db.query(ABACPolicy).filter(ABACPolicy.is_active == True)
-        
+
         if resource_type:
             query = query.filter(ABACPolicy.resource_type == resource_type)
-        
+
         if tenant_id is not None:
-            query = query.filter(
-                or_(ABACPolicy.tenant_id == tenant_id, ABACPolicy.tenant_id == None)
-            )
-        
+            query = query.filter(or_(ABACPolicy.tenant_id == tenant_id, ABACPolicy.tenant_id == None))
+
         return query.all()
-    
+
     # =========================================================================
     # Role Management
     # =========================================================================
-    
+
     def create_role(
         self,
         code: str,
@@ -303,27 +302,23 @@ class ABACService:
         )
         self.db.add(role)
         self.db.flush()
-        
+
         # Add permissions
         if permission_codes:
-            permissions = (
-                self.db.query(Permission)
-                .filter(Permission.code.in_(permission_codes))
-                .all()
-            )
+            permissions = self.db.query(Permission).filter(Permission.code.in_(permission_codes)).all()
             for perm in permissions:
                 role_perm = RolePermission(role_id=role.id, permission_id=perm.id)
                 self.db.add(role_perm)
-        
+
         self.db.commit()
         self.db.refresh(role)
-        
+
         # Invalidate cache
         if role.id in self._role_permission_cache:
             del self._role_permission_cache[role.id]
-        
+
         return role
-    
+
     def assign_role_to_user(
         self,
         user_id: int,
@@ -345,13 +340,13 @@ class ABACService:
         self.db.add(user_role)
         self.db.commit()
         self.db.refresh(user_role)
-        
+
         return user_role
-    
+
     # =========================================================================
     # Internal Methods
     # =========================================================================
-    
+
     def _get_applicable_policies(
         self,
         resource_type: str,
@@ -360,10 +355,10 @@ class ABACService:
     ) -> list[ABACPolicy]:
         """Get all policies that could apply to this resource/action."""
         cache_key = f"{tenant_id}:{resource_type}:{action}"
-        
+
         if cache_key in self._policy_cache:
             return self._policy_cache[cache_key]
-        
+
         policies = (
             self.db.query(ABACPolicy)
             .filter(
@@ -383,10 +378,10 @@ class ABACService:
             )
             .all()
         )
-        
+
         self._policy_cache[cache_key] = policies
         return policies
-    
+
     def _evaluate_policy(
         self,
         policy: ABACPolicy,
@@ -399,21 +394,19 @@ class ABACService:
         if policy.subject_conditions:
             if not self._evaluate_conditions(policy.subject_conditions, subject):
                 return False
-        
+
         # Check resource conditions
         if policy.resource_conditions:
-            if not self._evaluate_conditions(
-                policy.resource_conditions, resource, subject_context=subject
-            ):
+            if not self._evaluate_conditions(policy.resource_conditions, resource, subject_context=subject):
                 return False
-        
+
         # Check environment conditions
         if policy.environment_conditions:
             if not self._evaluate_conditions(policy.environment_conditions, environment):
                 return False
-        
+
         return True
-    
+
     def _evaluate_conditions(
         self,
         conditions: dict,
@@ -422,7 +415,7 @@ class ABACService:
     ) -> bool:
         """
         Evaluate ABAC conditions against a context.
-        
+
         Supports:
         - Direct value matching: {"role": "admin"}
         - List membership: {"role": ["admin", "manager"]}
@@ -431,7 +424,7 @@ class ABACService:
         """
         for key, expected in conditions.items():
             actual = context.get(key)
-            
+
             if isinstance(expected, dict):
                 # Operator-based comparison
                 for op, value in expected.items():
@@ -439,7 +432,7 @@ class ABACService:
                     if isinstance(value, str) and value.startswith("$subject."):
                         if subject_context:
                             value = subject_context.get(value[9:])  # Skip "$subject."
-                    
+
                     if not self._compare(actual, op, value):
                         return False
             elif isinstance(expected, list):
@@ -450,9 +443,9 @@ class ABACService:
                 # Direct equality
                 if actual != expected:
                     return False
-        
+
         return True
-    
+
     def _compare(self, actual: Any, operator: str, expected: Any) -> bool:
         """Perform comparison based on operator."""
         if operator == "eq":
@@ -477,26 +470,26 @@ class ABACService:
             return bool(re.match(expected, str(actual))) if actual else False
         elif operator == "exists":
             return (actual is not None) == expected
-        
+
         return False
-    
+
     def _get_role_permissions(self, role_id: int) -> set[str]:
         """Get all permission codes for a role (with caching)."""
         if role_id in self._role_permission_cache:
             return self._role_permission_cache[role_id]
-        
+
         role_perms = (
             self.db.query(Permission.code)
             .join(RolePermission, RolePermission.permission_id == Permission.id)
             .filter(RolePermission.role_id == role_id)
             .all()
         )
-        
+
         codes = {rp[0] for rp in role_perms}
         self._role_permission_cache[role_id] = codes
-        
+
         return codes
-    
+
     def _log_permission_check(
         self,
         tenant_id: int,
@@ -525,18 +518,18 @@ class ABACService:
         )
         self.db.add(audit)
         # Don't commit here - let the caller handle transaction
-    
+
     def _apply_mask_pattern(self, value: Any, pattern: str) -> str:
         """Apply a mask pattern to a value."""
         value_str = str(value)
-        
+
         # Handle {last4} style patterns
         if "{last4}" in pattern:
             last4 = value_str[-4:] if len(value_str) >= 4 else value_str
             return pattern.replace("{last4}", last4)
-        
+
         return pattern
-    
+
     def _invalidate_policy_cache(
         self,
         resource_type: Optional[str] = None,
@@ -544,10 +537,7 @@ class ABACService:
     ) -> None:
         """Invalidate the policy cache."""
         if resource_type and action:
-            keys_to_remove = [
-                k for k in self._policy_cache
-                if resource_type in k and action in k
-            ]
+            keys_to_remove = [k for k in self._policy_cache if resource_type in k and action in k]
             for key in keys_to_remove:
                 del self._policy_cache[key]
         else:

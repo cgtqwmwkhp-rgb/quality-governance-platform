@@ -161,17 +161,13 @@ class AnomalyDetector:
         if entity_type == "department":
             recent_incidents = (
                 self.db.query(Incident)
-                .filter(
-                    and_(Incident.department == entity, Incident.reported_date >= cutoff)
-                )
+                .filter(and_(Incident.department == entity, Incident.reported_date >= cutoff))
                 .all()
             )
         elif entity_type == "location":
             recent_incidents = (
                 self.db.query(Incident)
-                .filter(
-                    and_(Incident.location.ilike(f"%{entity}%"), Incident.reported_date >= cutoff)
-                )
+                .filter(and_(Incident.location.ilike(f"%{entity}%"), Incident.reported_date >= cutoff))
                 .all()
             )
         else:
@@ -221,11 +217,7 @@ class AnomalyDetector:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        recent = (
-            self.db.query(Incident)
-            .filter(Incident.reported_date >= cutoff)
-            .all()
-        )
+        recent = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
 
         anomalies = []
 
@@ -287,11 +279,7 @@ class IncidentPredictor:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        incidents = (
-            self.db.query(Incident)
-            .filter(Incident.reported_date >= cutoff)
-            .all()
-        )
+        incidents = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
 
         if not incidents:
             return []
@@ -434,9 +422,7 @@ class RecommendationEngine:
         # Rule-based recommendations
         return self._get_rule_based_recommendations(incident_description, category)
 
-    def _get_ai_recommendations(
-        self, description: str, category: Optional[str] = None
-    ) -> list[dict[str, Any]]:
+    def _get_ai_recommendations(self, description: str, category: Optional[str] = None) -> list[dict[str, Any]]:
         """Get recommendations from Claude AI"""
         prompt = f"""Analyze this workplace incident and provide 3-5 specific corrective action recommendations.
 
@@ -471,9 +457,7 @@ Format as JSON array with objects containing: title, description, priority, time
 
         return []
 
-    def _get_rule_based_recommendations(
-        self, description: str, category: Optional[str] = None
-    ) -> list[dict[str, Any]]:
+    def _get_rule_based_recommendations(self, description: str, category: Optional[str] = None) -> list[dict[str, Any]]:
         """Rule-based fallback recommendations"""
         keywords = TextAnalyzer.extract_keywords(description)
 
@@ -593,9 +577,7 @@ class RootCauseAnalyzer:
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
         incidents = (
             self.db.query(Incident)
-            .filter(
-                and_(Incident.reported_date >= cutoff, Incident.description.isnot(None))
-            )
+            .filter(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
             .all()
         )
 
@@ -627,7 +609,9 @@ class RootCauseAnalyzer:
                         ),
                         "suggested_action": f"Investigate systemic causes of {category.replace('_', ' ')} incidents",
                         "priority": (
-                            "high" if len(cluster_incidents) >= 10 else "medium" if len(cluster_incidents) >= 5 else "low"
+                            "high"
+                            if len(cluster_incidents) >= 10
+                            else "medium" if len(cluster_incidents) >= 5 else "low"
                         ),
                     }
                 )
@@ -661,9 +645,7 @@ class RootCauseAnalyzer:
 
             # Generate recommendations based on root cause keywords
             root_keywords = TextAnalyzer.extract_keywords(answers[-1])
-            recommendations = RecommendationEngine(self.db)._get_rule_based_recommendations(
-                answers[-1], None
-            )
+            recommendations = RecommendationEngine(self.db)._get_rule_based_recommendations(answers[-1], None)
             analysis["recommendations"] = recommendations
 
         return analysis

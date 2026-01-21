@@ -328,15 +328,16 @@ async def get_current_soa(
 ) -> dict[str, Any]:
     """Get current Statement of Applicability"""
     soa = db.query(StatementOfApplicability).filter(StatementOfApplicability.is_current == True).first()
-    
+
     if not soa:
         # Return summary from controls
         total = db.query(ISO27001Control).count()
         applicable = db.query(ISO27001Control).filter(ISO27001Control.is_applicable == True).count()
-        implemented = db.query(ISO27001Control).filter(
-            ISO27001Control.is_applicable == True,
-            ISO27001Control.implementation_status == "implemented"
-        ).count()
+        implemented = (
+            db.query(ISO27001Control)
+            .filter(ISO27001Control.is_applicable == True, ISO27001Control.implementation_status == "implemented")
+            .count()
+        )
 
         return {
             "version": "N/A",
@@ -361,9 +362,7 @@ async def get_current_soa(
         "implemented_controls": soa.implemented_controls,
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
-        "implementation_percentage": round(
-            (soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1
-        ),
+        "implementation_percentage": round((soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1),
         "status": soa.status,
         "document_link": soa.document_link,
     }
@@ -587,7 +586,14 @@ async def create_supplier_assessment(
     """Create supplier security assessment"""
     assessment = SupplierSecurityAssessment(
         assessment_date=datetime.utcnow(),
-        next_assessment_date=datetime.utcnow() + timedelta(days=assessment_data.assessment_frequency_months if hasattr(assessment_data, 'assessment_frequency_months') else 365),
+        next_assessment_date=datetime.utcnow()
+        + timedelta(
+            days=(
+                assessment_data.assessment_frequency_months
+                if hasattr(assessment_data, "assessment_frequency_months")
+                else 365
+            )
+        ),
         **assessment_data.model_dump(),
     )
     db.add(assessment)
@@ -607,38 +613,41 @@ async def get_isms_dashboard(
     """Get ISMS dashboard summary"""
     # Assets
     total_assets = db.query(InformationAsset).filter(InformationAsset.is_active == True).count()
-    critical_assets = db.query(InformationAsset).filter(
-        InformationAsset.is_active == True,
-        InformationAsset.criticality == "critical"
-    ).count()
+    critical_assets = (
+        db.query(InformationAsset)
+        .filter(InformationAsset.is_active == True, InformationAsset.criticality == "critical")
+        .count()
+    )
 
     # Controls
     total_controls = db.query(ISO27001Control).count()
-    implemented_controls = db.query(ISO27001Control).filter(
-        ISO27001Control.implementation_status == "implemented"
-    ).count()
+    implemented_controls = (
+        db.query(ISO27001Control).filter(ISO27001Control.implementation_status == "implemented").count()
+    )
     applicable_controls = db.query(ISO27001Control).filter(ISO27001Control.is_applicable == True).count()
 
     # Risks
-    open_risks = db.query(InformationSecurityRisk).filter(
-        InformationSecurityRisk.status != "closed"
-    ).count()
-    high_risks = db.query(InformationSecurityRisk).filter(
-        InformationSecurityRisk.residual_risk_score > 16,
-        InformationSecurityRisk.status != "closed"
-    ).count()
+    open_risks = db.query(InformationSecurityRisk).filter(InformationSecurityRisk.status != "closed").count()
+    high_risks = (
+        db.query(InformationSecurityRisk)
+        .filter(InformationSecurityRisk.residual_risk_score > 16, InformationSecurityRisk.status != "closed")
+        .count()
+    )
 
     # Incidents
     open_incidents = db.query(SecurityIncident).filter(SecurityIncident.status == "open").count()
-    incidents_30d = db.query(SecurityIncident).filter(
-        SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30)
-    ).count()
+    incidents_30d = (
+        db.query(SecurityIncident)
+        .filter(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
+        .count()
+    )
 
     # Suppliers
-    high_risk_suppliers = db.query(SupplierSecurityAssessment).filter(
-        SupplierSecurityAssessment.risk_level == "high",
-        SupplierSecurityAssessment.status == "active"
-    ).count()
+    high_risk_suppliers = (
+        db.query(SupplierSecurityAssessment)
+        .filter(SupplierSecurityAssessment.risk_level == "high", SupplierSecurityAssessment.status == "active")
+        .count()
+    )
 
     return {
         "assets": {

@@ -24,17 +24,17 @@ class AuditLogService:
     """
     Immutable audit logging with blockchain-style hash chain.
     """
-    
+
     # Genesis hash for first entry
     GENESIS_HASH = "0" * 64
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     # =========================================================================
     # Logging
     # =========================================================================
-    
+
     def log(
         self,
         tenant_id: int,
@@ -58,7 +58,7 @@ class AuditLogService:
     ) -> AuditLogEntry:
         """
         Create an immutable audit log entry.
-        
+
         Each entry is linked to the previous via cryptographic hash,
         creating a tamper-evident chain.
         """
@@ -69,24 +69,23 @@ class AuditLogService:
             .order_by(desc(AuditLogEntry.sequence))
             .first()
         )
-        
+
         if previous_entry:
             sequence = previous_entry.sequence + 1
             previous_hash = previous_entry.entry_hash
         else:
             sequence = 1
             previous_hash = self.GENESIS_HASH
-        
+
         # Calculate changed fields
         changed_fields = None
         if old_values and new_values:
             changed_fields = [
-                k for k in set(old_values.keys()) | set(new_values.keys())
-                if old_values.get(k) != new_values.get(k)
+                k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
             ]
-        
+
         timestamp = datetime.utcnow()
-        
+
         # Compute entry hash
         entry_hash = AuditLogEntry.compute_hash(
             sequence=sequence,
@@ -99,7 +98,7 @@ class AuditLogService:
             old_values=old_values,
             new_values=new_values,
         )
-        
+
         # Create entry
         entry = AuditLogEntry(
             tenant_id=tenant_id,
@@ -126,13 +125,13 @@ class AuditLogService:
             timestamp=timestamp,
             is_sensitive=is_sensitive,
         )
-        
+
         self.db.add(entry)
         self.db.commit()
         self.db.refresh(entry)
-        
+
         return entry
-    
+
     def log_create(
         self,
         tenant_id: int,
@@ -150,7 +149,7 @@ class AuditLogService:
             new_values=new_values,
             **kwargs,
         )
-    
+
     def log_update(
         self,
         tenant_id: int,
@@ -170,7 +169,7 @@ class AuditLogService:
             new_values=new_values,
             **kwargs,
         )
-    
+
     def log_delete(
         self,
         tenant_id: int,
@@ -188,7 +187,7 @@ class AuditLogService:
             old_values=old_values,
             **kwargs,
         )
-    
+
     def log_view(
         self,
         tenant_id: int,
@@ -204,7 +203,7 @@ class AuditLogService:
             action="view",
             **kwargs,
         )
-    
+
     def log_auth(
         self,
         tenant_id: int,
@@ -222,7 +221,7 @@ class AuditLogService:
             user_id=user_id,
             **kwargs,
         )
-    
+
     def log_admin(
         self,
         tenant_id: int,
@@ -240,11 +239,11 @@ class AuditLogService:
             action_category="admin",
             **kwargs,
         )
-    
+
     # =========================================================================
     # Querying
     # =========================================================================
-    
+
     def get_entries(
         self,
         tenant_id: int,
@@ -259,7 +258,7 @@ class AuditLogService:
     ) -> list[AuditLogEntry]:
         """Query audit log entries with filters."""
         query = self.db.query(AuditLogEntry).filter(AuditLogEntry.tenant_id == tenant_id)
-        
+
         if entity_type:
             query = query.filter(AuditLogEntry.entity_type == entity_type)
         if entity_id:
@@ -272,14 +271,9 @@ class AuditLogService:
             query = query.filter(AuditLogEntry.timestamp >= date_from)
         if date_to:
             query = query.filter(AuditLogEntry.timestamp <= date_to)
-        
-        return (
-            query.order_by(desc(AuditLogEntry.timestamp))
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-    
+
+        return query.order_by(desc(AuditLogEntry.timestamp)).offset(offset).limit(limit).all()
+
     def get_entity_history(
         self,
         tenant_id: int,
@@ -297,7 +291,7 @@ class AuditLogService:
             .order_by(AuditLogEntry.timestamp)
             .all()
         )
-    
+
     def get_user_activity(
         self,
         tenant_id: int,
@@ -311,11 +305,11 @@ class AuditLogService:
             user_id=user_id,
             date_from=date_from,
         )
-    
+
     # =========================================================================
     # Verification
     # =========================================================================
-    
+
     def verify_chain(
         self,
         tenant_id: int,
@@ -325,18 +319,18 @@ class AuditLogService:
     ) -> AuditLogVerification:
         """
         Verify the integrity of the audit log hash chain.
-        
+
         Detects any tampering by recomputing and comparing hashes.
         """
         query = self.db.query(AuditLogEntry).filter(AuditLogEntry.tenant_id == tenant_id)
-        
+
         if start_sequence is not None:
             query = query.filter(AuditLogEntry.sequence >= start_sequence)
         if end_sequence is not None:
             query = query.filter(AuditLogEntry.sequence <= end_sequence)
-        
+
         entries = query.order_by(AuditLogEntry.sequence).all()
-        
+
         if not entries:
             # No entries to verify
             return AuditLogVerification(
@@ -347,20 +341,22 @@ class AuditLogService:
                 entries_verified=0,
                 verified_by_id=verified_by_id,
             )
-        
+
         invalid_entries = []
         previous_hash = self.GENESIS_HASH
-        
+
         for entry in entries:
             # Verify hash chain link
             if entry.previous_hash != previous_hash:
-                invalid_entries.append({
-                    "sequence": entry.sequence,
-                    "error": "Previous hash mismatch",
-                    "expected": previous_hash,
-                    "actual": entry.previous_hash,
-                })
-            
+                invalid_entries.append(
+                    {
+                        "sequence": entry.sequence,
+                        "error": "Previous hash mismatch",
+                        "expected": previous_hash,
+                        "actual": entry.previous_hash,
+                    }
+                )
+
             # Verify entry hash
             computed_hash = AuditLogEntry.compute_hash(
                 sequence=entry.sequence,
@@ -373,17 +369,19 @@ class AuditLogService:
                 old_values=entry.old_values,
                 new_values=entry.new_values,
             )
-            
+
             if computed_hash != entry.entry_hash:
-                invalid_entries.append({
-                    "sequence": entry.sequence,
-                    "error": "Entry hash mismatch",
-                    "expected": computed_hash,
-                    "actual": entry.entry_hash,
-                })
-            
+                invalid_entries.append(
+                    {
+                        "sequence": entry.sequence,
+                        "error": "Entry hash mismatch",
+                        "expected": computed_hash,
+                        "actual": entry.entry_hash,
+                    }
+                )
+
             previous_hash = entry.entry_hash
-        
+
         # Record verification result
         verification = AuditLogVerification(
             tenant_id=tenant_id,
@@ -394,13 +392,13 @@ class AuditLogService:
             invalid_entries=invalid_entries if invalid_entries else None,
             verified_by_id=verified_by_id,
         )
-        
+
         self.db.add(verification)
         self.db.commit()
         self.db.refresh(verification)
-        
+
         return verification
-    
+
     def get_verifications(
         self,
         tenant_id: int,
@@ -414,11 +412,11 @@ class AuditLogService:
             .limit(limit)
             .all()
         )
-    
+
     # =========================================================================
     # Export
     # =========================================================================
-    
+
     def export_logs(
         self,
         tenant_id: int,
@@ -431,7 +429,7 @@ class AuditLogService:
     ) -> tuple[list[dict], AuditLogExport]:
         """
         Export audit logs with compliance tracking.
-        
+
         Returns:
             Tuple of (exported_data, export_record)
         """
@@ -442,32 +440,32 @@ class AuditLogService:
             date_to=date_to,
             limit=100000,  # Large limit for export
         )
-        
+
         # Convert to exportable format
         data = []
         for entry in entries:
-            data.append({
-                "sequence": entry.sequence,
-                "timestamp": entry.timestamp.isoformat(),
-                "entity_type": entry.entity_type,
-                "entity_id": entry.entity_id,
-                "entity_name": entry.entity_name,
-                "action": entry.action,
-                "user_id": entry.user_id,
-                "user_email": entry.user_email,
-                "user_name": entry.user_name,
-                "old_values": entry.old_values,
-                "new_values": entry.new_values,
-                "changed_fields": entry.changed_fields,
-                "ip_address": entry.ip_address,
-                "entry_hash": entry.entry_hash,
-            })
-        
+            data.append(
+                {
+                    "sequence": entry.sequence,
+                    "timestamp": entry.timestamp.isoformat(),
+                    "entity_type": entry.entity_type,
+                    "entity_id": entry.entity_id,
+                    "entity_name": entry.entity_name,
+                    "action": entry.action,
+                    "user_id": entry.user_id,
+                    "user_email": entry.user_email,
+                    "user_name": entry.user_name,
+                    "old_values": entry.old_values,
+                    "new_values": entry.new_values,
+                    "changed_fields": entry.changed_fields,
+                    "ip_address": entry.ip_address,
+                    "entry_hash": entry.entry_hash,
+                }
+            )
+
         # Compute hash of export for integrity
-        export_hash = hashlib.sha256(
-            json.dumps(data, sort_keys=True, default=str).encode()
-        ).hexdigest()
-        
+        export_hash = hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
+
         # Record the export
         export_record = AuditLogExport(
             tenant_id=tenant_id,
@@ -485,21 +483,21 @@ class AuditLogService:
             exported_by_id=exported_by_id,
             reason=reason,
         )
-        
+
         self.db.add(export_record)
         self.db.commit()
         self.db.refresh(export_record)
-        
+
         return data, export_record
-    
+
     # =========================================================================
     # Statistics
     # =========================================================================
-    
+
     def get_stats(self, tenant_id: int, days: int = 30) -> dict:
         """Get audit log statistics."""
         date_from = datetime.utcnow() - timedelta(days=days)
-        
+
         # Total entries
         total = (
             self.db.query(func.count(AuditLogEntry.id))
@@ -509,7 +507,7 @@ class AuditLogService:
             )
             .scalar()
         )
-        
+
         # By action
         by_action = dict(
             self.db.query(AuditLogEntry.action, func.count(AuditLogEntry.id))
@@ -520,7 +518,7 @@ class AuditLogService:
             .group_by(AuditLogEntry.action)
             .all()
         )
-        
+
         # By entity type
         by_entity = dict(
             self.db.query(AuditLogEntry.entity_type, func.count(AuditLogEntry.id))
@@ -531,7 +529,7 @@ class AuditLogService:
             .group_by(AuditLogEntry.entity_type)
             .all()
         )
-        
+
         # Most active users
         top_users = (
             self.db.query(AuditLogEntry.user_email, func.count(AuditLogEntry.id))
@@ -545,7 +543,7 @@ class AuditLogService:
             .limit(10)
             .all()
         )
-        
+
         return {
             "total_entries": total,
             "by_action": by_action,

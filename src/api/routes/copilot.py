@@ -20,6 +20,7 @@ router = APIRouter()
 # Schemas
 # ============================================================================
 
+
 class SessionCreate(BaseModel):
     context_type: Optional[str] = None
     context_id: Optional[str] = None
@@ -35,7 +36,7 @@ class SessionResponse(BaseModel):
     is_active: bool
     created_at: datetime
     last_message_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True
 
@@ -55,7 +56,7 @@ class MessageResponse(BaseModel):
     action_result: Optional[dict]
     action_status: Optional[str]
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -82,6 +83,7 @@ class SuggestedAction(BaseModel):
 # Session Endpoints
 # ============================================================================
 
+
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(
     data: SessionCreate,
@@ -89,13 +91,13 @@ async def create_session(
 ):
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
-    
+
     # TODO: Get from auth
     tenant_id = 1
     user_id = 1
-    
+
     session = service.create_session(
         tenant_id=tenant_id,
         user_id=user_id,
@@ -104,7 +106,7 @@ async def create_session(
         context_data=data.context_data,
         current_page=data.current_page,
     )
-    
+
     return session
 
 
@@ -112,12 +114,12 @@ async def create_session(
 async def get_active_session(db: Session = Depends(get_db)):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
-    
+
     # TODO: Get from auth
     user_id = 1
-    
+
     session = service.get_active_session(user_id)
     return session
 
@@ -126,13 +128,13 @@ async def get_active_session(db: Session = Depends(get_db)):
 async def get_session(session_id: int, db: Session = Depends(get_db)):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
     session = service.get_session(session_id)
-    
+
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     return session
 
 
@@ -140,10 +142,10 @@ async def get_session(session_id: int, db: Session = Depends(get_db)):
 async def close_session(session_id: int, db: Session = Depends(get_db)):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
     service.close_session(session_id)
-    
+
     return {"status": "closed"}
 
 
@@ -154,10 +156,10 @@ async def list_sessions(
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
-    
+
     # TODO: Get from auth
     user_id = 1
-    
+
     sessions = (
         db.query(CopilotSession)
         .filter(CopilotSession.user_id == user_id)
@@ -165,13 +167,14 @@ async def list_sessions(
         .limit(limit)
         .all()
     )
-    
+
     return sessions
 
 
 # ============================================================================
 # Message Endpoints
 # ============================================================================
+
 
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
 async def send_message(
@@ -181,12 +184,12 @@ async def send_message(
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
-    
+
     # TODO: Get from auth
     user_id = 1
-    
+
     try:
         message = await service.send_message(
             session_id=session_id,
@@ -206,10 +209,10 @@ async def get_messages(
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
     messages = service.get_session_messages(session_id, limit=limit)
-    
+
     return messages
 
 
@@ -221,13 +224,13 @@ async def submit_feedback(
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
-    
+
     # TODO: Get from auth
     tenant_id = 1
     user_id = 1
-    
+
     try:
         feedback = service.submit_feedback(
             message_id=message_id,
@@ -246,16 +249,17 @@ async def submit_feedback(
 # Action Endpoints
 # ============================================================================
 
+
 @router.get("/actions", response_model=list[dict])
 async def list_actions(category: Optional[str] = None):
     """List available copilot actions."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
-    
+
     actions = list(COPILOT_ACTIONS.values())
-    
+
     if category:
         actions = [a for a in actions if a["category"] == category]
-    
+
     return actions
 
 
@@ -266,13 +270,13 @@ async def execute_action(
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
-    
+
     if data.action_name not in COPILOT_ACTIONS:
         raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
-    
+
     # Execute the action
     # This would actually perform the action
-    
+
     return {
         "status": "executed",
         "action": data.action_name,
@@ -289,32 +293,36 @@ async def suggest_actions(
 ):
     """Get suggested actions for current context."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
-    
+
     suggestions = []
-    
+
     # Context-based suggestions
     if context_type == "incident":
-        suggestions.extend([
-            SuggestedAction(
-                action="create_action",
-                display_name="Create Corrective Action",
-                description="Create a CAPA for this incident",
-            ),
-            SuggestedAction(
-                action="search_incidents",
-                display_name="Find Similar Incidents",
-                description="Search for related incidents",
-            ),
-        ])
+        suggestions.extend(
+            [
+                SuggestedAction(
+                    action="create_action",
+                    display_name="Create Corrective Action",
+                    description="Create a CAPA for this incident",
+                ),
+                SuggestedAction(
+                    action="search_incidents",
+                    display_name="Find Similar Incidents",
+                    description="Search for related incidents",
+                ),
+            ]
+        )
     elif context_type == "audit":
-        suggestions.extend([
-            SuggestedAction(
-                action="create_action",
-                display_name="Create Finding",
-                description="Record an audit finding",
-            ),
-        ])
-    
+        suggestions.extend(
+            [
+                SuggestedAction(
+                    action="create_action",
+                    display_name="Create Finding",
+                    description="Record an audit finding",
+                ),
+            ]
+        )
+
     # Page-based suggestions
     if page == "/incidents":
         suggestions.append(
@@ -332,7 +340,7 @@ async def suggest_actions(
                 description="View current risk summary",
             )
         )
-    
+
     # Default suggestions
     if not suggestions:
         suggestions = [
@@ -347,13 +355,14 @@ async def suggest_actions(
                 description="Go to a specific page",
             ),
         ]
-    
+
     return suggestions
 
 
 # ============================================================================
 # Knowledge Base Endpoints
 # ============================================================================
+
 
 @router.get("/knowledge/search")
 async def search_knowledge(
@@ -364,19 +373,19 @@ async def search_knowledge(
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
-    
+
     # TODO: Get from auth
     tenant_id = 1
-    
+
     results = service.search_knowledge(
         query=query,
         tenant_id=tenant_id,
         category=category,
         limit=limit,
     )
-    
+
     return [
         {
             "id": r.id,
@@ -399,12 +408,12 @@ async def add_knowledge(
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService
-    
+
     service = CopilotService(db)
-    
+
     # TODO: Get from auth
     tenant_id = 1
-    
+
     knowledge = service.add_knowledge(
         title=title,
         content=content,
@@ -412,7 +421,7 @@ async def add_knowledge(
         tenant_id=tenant_id,
         tags=tags,
     )
-    
+
     return {"id": knowledge.id, "title": knowledge.title}
 
 
@@ -420,19 +429,20 @@ async def add_knowledge(
 # WebSocket for Real-time Chat
 # ============================================================================
 
+
 class ConnectionManager:
     """Manage WebSocket connections for real-time chat."""
-    
+
     def __init__(self):
         self.active_connections: dict[int, WebSocket] = {}
-    
+
     async def connect(self, websocket: WebSocket, session_id: int):
         await websocket.accept()
         self.active_connections[session_id] = websocket
-    
+
     def disconnect(self, session_id: int):
         self.active_connections.pop(session_id, None)
-    
+
     async def send_message(self, message: dict, session_id: int):
         if session_id in self.active_connections:
             await self.active_connections[session_id].send_json(message)
@@ -446,17 +456,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat."""
     from src.domain.services.copilot_service import CopilotService
     from src.infrastructure.database import SessionLocal
-    
+
     await manager.connect(websocket, session_id)
-    
+
     try:
         while True:
             data = await websocket.receive_json()
-            
+
             db = SessionLocal()
             try:
                 service = CopilotService(db)
-                
+
                 # Handle different message types
                 if data.get("type") == "message":
                     message = await service.send_message(
@@ -464,7 +474,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         content=data["content"],
                         user_id=data.get("user_id", 1),
                     )
-                    
+
                     await manager.send_message(
                         {
                             "type": "response",
@@ -480,11 +490,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         },
                         session_id,
                     )
-                
+
                 elif data.get("type") == "typing":
                     # User is typing indicator
                     pass
-                
+
                 elif data.get("type") == "feedback":
                     service.submit_feedback(
                         message_id=data["message_id"],
@@ -493,14 +503,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         rating=data["rating"],
                         feedback_type=data.get("feedback_type", "other"),
                     )
-                    
+
                     await manager.send_message(
                         {"type": "feedback_received"},
                         session_id,
                     )
-            
+
             finally:
                 db.close()
-    
+
     except WebSocketDisconnect:
         manager.disconnect(session_id)

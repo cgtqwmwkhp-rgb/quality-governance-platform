@@ -199,15 +199,15 @@ class CopilotService:
     """
     AI Copilot conversation service.
     """
-    
+
     def __init__(self, db: Session):
         self.db = db
         self._ai_client = None
-    
+
     # =========================================================================
     # Session Management
     # =========================================================================
-    
+
     def create_session(
         self,
         tenant_id: int,
@@ -229,13 +229,13 @@ class CopilotService:
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
-        
+
         return session
-    
+
     def get_session(self, session_id: int) -> Optional[CopilotSession]:
         """Get a session by ID."""
         return self.db.query(CopilotSession).filter(CopilotSession.id == session_id).first()
-    
+
     def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
         """Get the user's active session."""
         return (
@@ -244,7 +244,7 @@ class CopilotService:
             .order_by(CopilotSession.updated_at.desc())
             .first()
         )
-    
+
     def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
         """Get messages for a session."""
         return (
@@ -254,7 +254,7 @@ class CopilotService:
             .limit(limit)
             .all()
         )
-    
+
     def close_session(self, session_id: int) -> CopilotSession:
         """Close a session."""
         session = self.get_session(session_id)
@@ -263,11 +263,11 @@ class CopilotService:
             self.db.commit()
             self.db.refresh(session)
         return session
-    
+
     # =========================================================================
     # Conversation
     # =========================================================================
-    
+
     async def send_message(
         self,
         session_id: int,
@@ -280,7 +280,7 @@ class CopilotService:
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
-        
+
         # Save user message
         user_message = CopilotMessage(
             session_id=session_id,
@@ -289,20 +289,18 @@ class CopilotService:
         )
         self.db.add(user_message)
         self.db.commit()
-        
+
         # Get conversation history
         history = self.get_session_messages(session_id, limit=20)
-        
+
         # Build context
         context = self._build_context(session)
-        
+
         # Generate AI response
         start_time = time.time()
-        response_content, action_data = await self._generate_response(
-            content, history, context
-        )
+        response_content, action_data = await self._generate_response(content, history, context)
         latency_ms = int((time.time() - start_time) * 1000)
-        
+
         # Save assistant message
         assistant_message = CopilotMessage(
             session_id=session_id,
@@ -316,21 +314,21 @@ class CopilotService:
             latency_ms=latency_ms,
         )
         self.db.add(assistant_message)
-        
+
         # Update session
         session.last_message_at = datetime.utcnow()
         if not session.title and len(content) > 0:
             session.title = content[:50] + ("..." if len(content) > 50 else "")
-        
+
         self.db.commit()
         self.db.refresh(assistant_message)
-        
+
         # Execute action if present
         if action_data:
             await self._execute_action(assistant_message, action_data)
-        
+
         return assistant_message
-    
+
     async def _generate_response(
         self,
         user_message: str,
@@ -338,7 +336,7 @@ class CopilotService:
         context: dict,
     ) -> tuple[str, Optional[dict]]:
         """Generate AI response using the configured AI provider."""
-        
+
         # Build messages for AI
         messages = [
             {
@@ -349,20 +347,20 @@ class CopilotService:
                 ),
             }
         ]
-        
+
         # Add history
         for msg in history[-10:]:  # Last 10 messages
             messages.append({"role": msg.role, "content": msg.content})
-        
+
         # Add current message
         messages.append({"role": "user", "content": user_message})
-        
+
         # In production, this would call the actual AI API
         # For now, we'll use pattern matching for demo
         response_content, action_data = self._simulate_ai_response(user_message, context)
-        
+
         return response_content, action_data
-    
+
     def _simulate_ai_response(
         self,
         user_message: str,
@@ -370,16 +368,18 @@ class CopilotService:
     ) -> tuple[str, Optional[dict]]:
         """Simulate AI response for demo purposes."""
         message_lower = user_message.lower()
-        
+
         # Create incident
-        if any(word in message_lower for word in ["create incident", "log incident", "report incident", "new incident"]):
+        if any(
+            word in message_lower for word in ["create incident", "log incident", "report incident", "new incident"]
+        ):
             # Extract title from message
             title = user_message
             if ":" in user_message:
                 title = user_message.split(":", 1)[1].strip()
             elif "for" in message_lower:
                 title = user_message.split("for", 1)[1].strip()
-            
+
             return (
                 f"I'll create an incident report for you. Here are the details I've extracted:\n\n"
                 f"**Title:** {title}\n"
@@ -393,7 +393,7 @@ class CopilotService:
                     },
                 },
             )
-        
+
         # Compliance status
         if "compliance" in message_lower or "iso" in message_lower:
             standard = "iso9001"
@@ -403,7 +403,7 @@ class CopilotService:
                 standard = "iso45001"
             elif "27001" in message_lower:
                 standard = "iso27001"
-            
+
             return (
                 f"Here's your current {standard.upper()} compliance status:\n\n"
                 f"📊 **Overall Compliance:** 92%\n"
@@ -417,7 +417,7 @@ class CopilotService:
                     "parameters": {"standard": standard},
                 },
             )
-        
+
         # Risk summary
         if "risk" in message_lower:
             return (
@@ -431,40 +431,41 @@ class CopilotService:
                 f"Would you like to see the risk heat map or create a treatment plan?",
                 None,
             )
-        
+
         # Explain something
         if message_lower.startswith("what is") or message_lower.startswith("explain"):
             topic = user_message.split(" ", 2)[-1].strip("?")
-            
+
             explanations = {
                 "capa": "**CAPA (Corrective and Preventive Action)** is a systematic approach to:\n\n"
-                       "1. **Corrective Action:** Fix the immediate problem and its root cause\n"
-                       "2. **Preventive Action:** Prevent similar problems from occurring\n\n"
-                       "CAPAs are required by ISO 9001 (Clause 10.2) and are essential for continuous improvement.",
+                "1. **Corrective Action:** Fix the immediate problem and its root cause\n"
+                "2. **Preventive Action:** Prevent similar problems from occurring\n\n"
+                "CAPAs are required by ISO 9001 (Clause 10.2) and are essential for continuous improvement.",
                 "riddor": "**RIDDOR (Reporting of Injuries, Diseases and Dangerous Occurrences Regulations)** "
-                         "is UK legislation requiring employers to report:\n\n"
-                         "• Deaths and specified injuries\n"
-                         "• Over-7-day incapacitation\n"
-                         "• Occupational diseases\n"
-                         "• Dangerous occurrences\n\n"
-                         "Reports must be made to the HSE within 10-15 days depending on severity.",
+                "is UK legislation requiring employers to report:\n\n"
+                "• Deaths and specified injuries\n"
+                "• Over-7-day incapacitation\n"
+                "• Occupational diseases\n"
+                "• Dangerous occurrences\n\n"
+                "Reports must be made to the HSE within 10-15 days depending on severity.",
                 "iso 45001": "**ISO 45001** is the international standard for Occupational Health & Safety Management Systems.\n\n"
-                            "Key elements:\n"
-                            "• Leadership commitment\n"
-                            "• Worker participation\n"
-                            "• Hazard identification\n"
-                            "• Legal compliance\n"
-                            "• Continual improvement\n\n"
-                            "It replaced OHSAS 18001 in 2018.",
+                "Key elements:\n"
+                "• Leadership commitment\n"
+                "• Worker participation\n"
+                "• Hazard identification\n"
+                "• Legal compliance\n"
+                "• Continual improvement\n\n"
+                "It replaced OHSAS 18001 in 2018.",
             }
-            
-            explanation = explanations.get(topic.lower(), 
+
+            explanation = explanations.get(
+                topic.lower(),
                 f"**{topic}** is a term used in quality and safety management. "
-                f"Would you like me to search our knowledge base for more specific information?"
+                f"Would you like me to search our knowledge base for more specific information?",
             )
-            
+
             return (explanation, None)
-        
+
         # Navigation
         if any(word in message_lower for word in ["go to", "open", "show me", "navigate"]):
             destinations = {
@@ -475,7 +476,7 @@ class CopilotService:
                 "settings": "/settings",
                 "reports": "/reports",
             }
-            
+
             for dest, path in destinations.items():
                 if dest in message_lower:
                     return (
@@ -485,10 +486,10 @@ class CopilotService:
                             "parameters": {"destination": path},
                         },
                     )
-        
+
         # Default response
         return (
-            f"I understand you're asking about: \"{user_message}\"\n\n"
+            f'I understand you\'re asking about: "{user_message}"\n\n'
             f"I can help you with:\n"
             f"• 📝 Creating and managing incidents\n"
             f"• 📋 Scheduling and tracking audits\n"
@@ -498,7 +499,7 @@ class CopilotService:
             f"What would you like to do?",
             None,
         )
-    
+
     async def _execute_action(
         self,
         message: CopilotMessage,
@@ -507,14 +508,14 @@ class CopilotService:
         """Execute a copilot action."""
         action_name = action_data.get("action")
         parameters = action_data.get("parameters", {})
-        
+
         try:
             result = None
-            
+
             if action_name == "navigate":
                 # Navigation is handled client-side
                 result = {"navigated": True, "destination": parameters.get("destination")}
-            
+
             elif action_name == "create_incident":
                 # Would create actual incident
                 result = {
@@ -522,24 +523,24 @@ class CopilotService:
                     "incident_id": "INC-2026-0100",
                     "title": parameters.get("title"),
                 }
-            
+
             elif action_name == "get_compliance_status":
                 result = {
                     "standard": parameters.get("standard"),
                     "compliance_percentage": 92,
                     "gaps": 4,
                 }
-            
+
             # Update message with result
             message.action_result = result
             message.action_status = "completed"
-            
+
         except Exception as e:
             message.action_status = "failed"
             message.action_result = {"error": str(e)}
-        
+
         self.db.commit()
-    
+
     def _build_context(self, session: CopilotSession) -> dict:
         """Build context information for the AI."""
         return {
@@ -548,11 +549,11 @@ class CopilotService:
             "context_id": session.context_id,
             "context_data": session.context_data,
         }
-    
+
     # =========================================================================
     # Feedback
     # =========================================================================
-    
+
     def submit_feedback(
         self,
         message_id: int,
@@ -564,10 +565,10 @@ class CopilotService:
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
         message = self.db.query(CopilotMessage).filter(CopilotMessage.id == message_id).first()
-        
+
         if not message:
             raise ValueError(f"Message {message_id} not found")
-        
+
         # Get the user query (previous message)
         user_query_msg = (
             self.db.query(CopilotMessage)
@@ -579,7 +580,7 @@ class CopilotService:
             .order_by(CopilotMessage.created_at.desc())
             .first()
         )
-        
+
         feedback = CopilotFeedback(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -590,22 +591,22 @@ class CopilotService:
             user_query=user_query_msg.content if user_query_msg else "",
             assistant_response=message.content,
         )
-        
+
         self.db.add(feedback)
-        
+
         # Also update the message
         message.feedback_rating = rating
         message.feedback_text = feedback_text
-        
+
         self.db.commit()
         self.db.refresh(feedback)
-        
+
         return feedback
-    
+
     # =========================================================================
     # Knowledge Base
     # =========================================================================
-    
+
     def search_knowledge(
         self,
         query: str,
@@ -616,28 +617,24 @@ class CopilotService:
         """Search the knowledge base."""
         # In production, this would use vector similarity search
         # For now, simple text search
-        
+
         query_db = self.db.query(CopilotKnowledge).filter(
             CopilotKnowledge.is_active == True,
         )
-        
+
         if tenant_id:
-            query_db = query_db.filter(
-                (CopilotKnowledge.tenant_id == tenant_id) | 
-                (CopilotKnowledge.tenant_id == None)
-            )
-        
+            query_db = query_db.filter((CopilotKnowledge.tenant_id == tenant_id) | (CopilotKnowledge.tenant_id == None))
+
         if category:
             query_db = query_db.filter(CopilotKnowledge.category == category)
-        
+
         # Simple keyword matching
         query_db = query_db.filter(
-            CopilotKnowledge.content.ilike(f"%{query}%") |
-            CopilotKnowledge.title.ilike(f"%{query}%")
+            CopilotKnowledge.content.ilike(f"%{query}%") | CopilotKnowledge.title.ilike(f"%{query}%")
         )
-        
+
         return query_db.limit(limit).all()
-    
+
     def add_knowledge(
         self,
         title: str,
@@ -658,9 +655,9 @@ class CopilotService:
             source_type=source_type,
             source_id=source_id,
         )
-        
+
         self.db.add(knowledge)
         self.db.commit()
         self.db.refresh(knowledge)
-        
+
         return knowledge

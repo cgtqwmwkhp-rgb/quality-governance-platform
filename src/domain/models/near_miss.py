@@ -16,71 +16,71 @@ class NearMiss(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    
+
     # Reporter information
     reporter_name: Mapped[str] = mapped_column(String(200), nullable=False)
     reporter_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reporter_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     reporter_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     was_involved: Mapped[bool] = mapped_column(Boolean, default=True)
-    
+
     # Contract/Location
     contract: Mapped[str] = mapped_column(String(100), nullable=False)
     contract_other: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     location: Mapped[str] = mapped_column(Text, nullable=False)
     location_coordinates: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    
+
     # Event details
     event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     event_time: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    
+
     # Description
     description: Mapped[str] = mapped_column(Text, nullable=False)
     potential_consequences: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     preventive_action_suggested: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # People involved
     persons_involved: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array or comma-separated
     witnesses_present: Mapped[bool] = mapped_column(Boolean, default=False)
     witness_names: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # Asset information
     asset_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     asset_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    
+
     # Risk assessment
-    risk_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # environmental, safety, equipment, etc.
+    risk_category: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # environmental, safety, equipment, etc.
     potential_severity: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # low, medium, high, critical
-    
+
     # Attachments (JSON array of file URLs)
     attachments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # Status workflow
     status: Mapped[str] = mapped_column(String(50), default="REPORTED", nullable=False)
     # REPORTED -> UNDER_REVIEW -> ACTION_REQUIRED -> IN_PROGRESS -> CLOSED
-    
+
     priority: Mapped[str] = mapped_column(String(20), default="MEDIUM", nullable=False)
-    
+
     # Assignment
     assigned_to_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+
     # Resolution
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrective_actions_taken: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     # Audit fields
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     updated_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     # Relationships
     assigned_to = relationship("User", foreign_keys=[assigned_to_id], lazy="joined")
     created_by = relationship("User", foreign_keys=[created_by_id], lazy="joined")

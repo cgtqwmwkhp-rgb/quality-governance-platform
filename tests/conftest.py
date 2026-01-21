@@ -25,20 +25,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 class TestConfig:
     """Global test configuration."""
-    
+
     # API Configuration
     API_BASE_URL = os.getenv("TEST_API_URL", "http://localhost:8000")
-    
+
     # Test Credentials
     TEST_USER_EMAIL = os.getenv("TEST_USER_EMAIL", "testuser@plantexpand.com")
     TEST_USER_PASSWORD = os.getenv("TEST_USER_PASSWORD", "testpassword123")
     ADMIN_USER_EMAIL = os.getenv("ADMIN_USER_EMAIL", "admin@plantexpand.com")
     ADMIN_USER_PASSWORD = os.getenv("ADMIN_USER_PASSWORD", "adminpassword123")
-    
+
     # Timeouts
     REQUEST_TIMEOUT = 30
     SLOW_TEST_THRESHOLD = 5.0
-    
+
     # Feature Flags for Tests
     SKIP_SLOW_TESTS = os.getenv("SKIP_SLOW_TESTS", "false").lower() == "true"
     SKIP_INTEGRATION_TESTS = os.getenv("SKIP_INTEGRATION", "false").lower() == "true"
@@ -59,6 +59,7 @@ def test_config() -> TestConfig:
 def app():
     """Create FastAPI application instance."""
     from src.main import app as fastapi_app
+
     return fastapi_app
 
 
@@ -66,6 +67,7 @@ def app():
 def client(app):
     """Create test client for the application."""
     from fastapi.testclient import TestClient
+
     return TestClient(app)
 
 
@@ -73,6 +75,7 @@ def client(app):
 def module_client(app):
     """Module-scoped test client."""
     from fastapi.testclient import TestClient
+
     return TestClient(app)
 
 
@@ -136,31 +139,32 @@ def admin_headers(admin_token) -> dict:
 @pytest.fixture(scope="module")
 def auth_client(client, auth_headers):
     """Client with authentication already applied."""
+
     class AuthenticatedClient:
         def __init__(self, client, headers):
             self._client = client
             self._headers = headers
-        
+
         def get(self, url, **kwargs):
             headers = {**self._headers, **kwargs.pop("headers", {})}
             return self._client.get(url, headers=headers, **kwargs)
-        
+
         def post(self, url, **kwargs):
             headers = {**self._headers, **kwargs.pop("headers", {})}
             return self._client.post(url, headers=headers, **kwargs)
-        
+
         def put(self, url, **kwargs):
             headers = {**self._headers, **kwargs.pop("headers", {})}
             return self._client.put(url, headers=headers, **kwargs)
-        
+
         def patch(self, url, **kwargs):
             headers = {**self._headers, **kwargs.pop("headers", {})}
             return self._client.patch(url, headers=headers, **kwargs)
-        
+
         def delete(self, url, **kwargs):
             headers = {**self._headers, **kwargs.pop("headers", {})}
             return self._client.delete(url, headers=headers, **kwargs)
-    
+
     return AuthenticatedClient(client, auth_headers)
 
 
@@ -174,6 +178,7 @@ def db_session():
     """Create database session for tests."""
     try:
         from src.infrastructure.database import SessionLocal
+
         session = SessionLocal()
         yield session
         session.close()
@@ -197,11 +202,8 @@ def clean_db(db_session):
 @pytest.fixture
 def incident_data():
     """Factory for incident test data."""
-    def _create_incident(
-        title: str = "Test Incident",
-        severity: str = "medium",
-        **kwargs
-    ) -> dict:
+
+    def _create_incident(title: str = "Test Incident", severity: str = "medium", **kwargs) -> dict:
         return {
             "title": title,
             "description": kwargs.get("description", "Test incident description"),
@@ -210,18 +212,15 @@ def incident_data():
             "location": kwargs.get("location", "Test Location"),
             **kwargs,
         }
+
     return _create_incident
 
 
 @pytest.fixture
 def risk_data():
     """Factory for risk test data."""
-    def _create_risk(
-        title: str = "Test Risk",
-        likelihood: int = 3,
-        impact: int = 3,
-        **kwargs
-    ) -> dict:
+
+    def _create_risk(title: str = "Test Risk", likelihood: int = 3, impact: int = 3, **kwargs) -> dict:
         return {
             "title": title,
             "description": kwargs.get("description", "Test risk description"),
@@ -230,17 +229,15 @@ def risk_data():
             "impact": impact,
             **kwargs,
         }
+
     return _create_risk
 
 
 @pytest.fixture
 def portal_report_data():
     """Factory for portal report test data."""
-    def _create_report(
-        report_type: str = "incident",
-        title: str = "Test Report",
-        **kwargs
-    ) -> dict:
+
+    def _create_report(report_type: str = "incident", title: str = "Test Report", **kwargs) -> dict:
         return {
             "report_type": report_type,
             "title": title,
@@ -249,6 +246,7 @@ def portal_report_data():
             "is_anonymous": kwargs.get("is_anonymous", True),
             **kwargs,
         }
+
     return _create_report
 
 
@@ -259,28 +257,18 @@ def portal_report_data():
 
 def pytest_configure(config):
     """Configure custom pytest markers."""
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
-    )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "e2e: marks tests as end-to-end tests"
-    )
-    config.addinivalue_line(
-        "markers", "smoke: marks tests as smoke tests"
-    )
-    config.addinivalue_line(
-        "markers", "security: marks tests as security tests"
-    )
+    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
+    config.addinivalue_line("markers", "e2e: marks tests as end-to-end tests")
+    config.addinivalue_line("markers", "smoke: marks tests as smoke tests")
+    config.addinivalue_line("markers", "security: marks tests as security tests")
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection based on markers."""
     skip_slow = pytest.mark.skip(reason="Skipping slow tests")
     skip_integration = pytest.mark.skip(reason="Skipping integration tests")
-    
+
     for item in items:
         if TestConfig.SKIP_SLOW_TESTS and "slow" in item.keywords:
             item.add_marker(skip_slow)
@@ -304,20 +292,20 @@ def pytest_runtest_makereport(item, call):
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Add custom summary to test report."""
     terminalreporter.write_sep("=", "Test Suite Summary")
-    
+
     passed = len(terminalreporter.stats.get("passed", []))
     failed = len(terminalreporter.stats.get("failed", []))
     skipped = len(terminalreporter.stats.get("skipped", []))
-    
+
     total = passed + failed + skipped
     pass_rate = (passed / total * 100) if total > 0 else 0
-    
+
     terminalreporter.write_line(f"Total Tests: {total}")
     terminalreporter.write_line(f"Passed: {passed}")
     terminalreporter.write_line(f"Failed: {failed}")
     terminalreporter.write_line(f"Skipped: {skipped}")
     terminalreporter.write_line(f"Pass Rate: {pass_rate:.1f}%")
-    
+
     if pass_rate >= 95:
         terminalreporter.write_line("✅ PRODUCTION READY", green=True)
     elif pass_rate >= 80:

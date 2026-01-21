@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class KRIBase(BaseModel):
     """Base schema for KRI."""
+
     code: str = Field(..., max_length=50, description="Unique KRI code")
     name: str = Field(..., max_length=200, description="KRI name")
     description: Optional[str] = None
@@ -29,11 +30,13 @@ class KRIBase(BaseModel):
 
 class KRICreate(KRIBase):
     """Schema for creating a KRI."""
+
     pass
 
 
 class KRIUpdate(BaseModel):
     """Schema for updating a KRI."""
+
     name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
@@ -54,6 +57,7 @@ class KRIUpdate(BaseModel):
 
 class KRIResponse(KRIBase):
     """Schema for KRI response."""
+
     id: int
     current_value: Optional[float] = None
     current_status: Optional[str] = None
@@ -68,12 +72,14 @@ class KRIResponse(KRIBase):
 
 class KRIListResponse(BaseModel):
     """List response for KRIs."""
+
     items: List[KRIResponse]
     total: int
 
 
 class KRIMeasurementResponse(BaseModel):
     """Schema for KRI measurement."""
+
     id: int
     kri_id: int
     measurement_date: datetime
@@ -89,12 +95,14 @@ class KRIMeasurementResponse(BaseModel):
 
 class KRIMeasurementListResponse(BaseModel):
     """List response for KRI measurements."""
+
     items: List[KRIMeasurementResponse]
     total: int
 
 
 class KRIAlertResponse(BaseModel):
     """Schema for KRI alert."""
+
     id: int
     kri_id: int
     alert_type: str
@@ -116,12 +124,14 @@ class KRIAlertResponse(BaseModel):
 
 class KRIAlertListResponse(BaseModel):
     """List response for KRI alerts."""
+
     items: List[KRIAlertResponse]
     total: int
 
 
 class KRIDashboardResponse(BaseModel):
     """Schema for KRI dashboard."""
+
     total: int
     by_status: Dict[str, int]
     by_category: Dict[str, int]
@@ -131,6 +141,7 @@ class KRIDashboardResponse(BaseModel):
 
 class RiskScoreHistoryResponse(BaseModel):
     """Schema for risk score history entry."""
+
     id: int
     risk_id: int
     recorded_at: datetime
@@ -151,6 +162,7 @@ class RiskScoreHistoryResponse(BaseModel):
 
 class RiskTrendResponse(BaseModel):
     """Schema for risk trend data."""
+
     risk_id: int
     trend_data: List[Dict[str, Any]]
 
@@ -158,6 +170,7 @@ class RiskTrendResponse(BaseModel):
 # SIF Classification Schemas
 class SIFAssessmentCreate(BaseModel):
     """Schema for SIF assessment."""
+
     is_sif: bool = Field(False, description="Is this a Serious Injury or Fatality?")
     is_psif: bool = Field(False, description="Is this a Potential SIF?")
     sif_classification: str = Field(..., description="Classification: SIF, pSIF, Non-SIF")
@@ -169,6 +182,7 @@ class SIFAssessmentCreate(BaseModel):
 
 class SIFAssessmentResponse(BaseModel):
     """Schema for SIF assessment response."""
+
     incident_id: int
     is_sif: bool
     is_psif: bool

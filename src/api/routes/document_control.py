@@ -135,8 +135,7 @@ async def list_documents(
         query = query.filter(ControlledDocument.status == status)
     if search:
         query = query.filter(
-            ControlledDocument.title.ilike(f"%{search}%")
-            | ControlledDocument.document_number.ilike(f"%{search}%")
+            ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%")
         )
 
     total = query.count()
@@ -157,9 +156,7 @@ async def list_documents(
                 "owner_name": d.owner_name,
                 "effective_date": d.effective_date.isoformat() if d.effective_date else None,
                 "next_review_date": d.next_review_date.isoformat() if d.next_review_date else None,
-                "is_overdue": (
-                    d.next_review_date < datetime.utcnow() if d.next_review_date else False
-                ),
+                "is_overdue": (d.next_review_date < datetime.utcnow() if d.next_review_date else False),
             }
             for d in documents
         ],
@@ -230,11 +227,7 @@ async def get_document(
     )
 
     # Get distributions
-    distributions = (
-        db.query(DocumentDistribution)
-        .filter(DocumentDistribution.document_id == document_id)
-        .all()
-    )
+    distributions = db.query(DocumentDistribution).filter(DocumentDistribution.document_id == document_id).all()
 
     # Log access
     log = DocumentAccessLog(
@@ -389,10 +382,11 @@ async def get_version_diff(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get diff between versions"""
-    version = db.query(DocumentVersion).filter(
-        DocumentVersion.id == version_id,
-        DocumentVersion.document_id == document_id
-    ).first()
+    version = (
+        db.query(DocumentVersion)
+        .filter(DocumentVersion.id == version_id, DocumentVersion.document_id == document_id)
+        .first()
+    )
 
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -408,10 +402,11 @@ async def get_version_diff(
     }
 
     if compare_to:
-        compare_version = db.query(DocumentVersion).filter(
-            DocumentVersion.id == compare_to,
-            DocumentVersion.document_id == document_id
-        ).first()
+        compare_version = (
+            db.query(DocumentVersion)
+            .filter(DocumentVersion.id == compare_to, DocumentVersion.document_id == document_id)
+            .first()
+        )
         if compare_version:
             result["compare_to"] = {
                 "id": compare_version.id,
@@ -506,9 +501,7 @@ async def take_approval_action(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    instance = db.query(DocumentApprovalInstance).filter(
-        DocumentApprovalInstance.id == instance_id
-    ).first()
+    instance = db.query(DocumentApprovalInstance).filter(DocumentApprovalInstance.id == instance_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Approval instance not found")
 
@@ -526,13 +519,9 @@ async def take_approval_action(
     db.add(action)
 
     # Get workflow to determine next steps
-    workflow = db.query(DocumentApprovalWorkflow).filter(
-        DocumentApprovalWorkflow.id == instance.workflow_id
-    ).first()
+    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == instance.workflow_id).first()
 
-    document = db.query(ControlledDocument).filter(
-        ControlledDocument.id == instance.document_id
-    ).first()
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == instance.document_id).first()
 
     if action_request.action == "approved":
         # Check if this was the last step
@@ -544,9 +533,7 @@ async def take_approval_action(
                 document.status = "approved"
                 document.approved_date = datetime.utcnow()
                 document.effective_date = datetime.utcnow()
-                document.next_review_date = datetime.utcnow() + timedelta(
-                    days=document.review_frequency_months * 30
-                )
+                document.next_review_date = datetime.utcnow() + timedelta(days=document.review_frequency_months * 30)
         else:
             instance.current_step += 1
 
@@ -610,10 +597,11 @@ async def acknowledge_distribution(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Acknowledge receipt of document"""
-    dist = db.query(DocumentDistribution).filter(
-        DocumentDistribution.id == distribution_id,
-        DocumentDistribution.document_id == document_id
-    ).first()
+    dist = (
+        db.query(DocumentDistribution)
+        .filter(DocumentDistribution.id == distribution_id, DocumentDistribution.document_id == document_id)
+        .first()
+    )
 
     if not dist:
         raise HTTPException(status_code=404, detail="Distribution not found")
@@ -703,32 +691,38 @@ async def get_document_summary(
 ) -> dict[str, Any]:
     """Get document control summary statistics"""
     total = db.query(ControlledDocument).filter(ControlledDocument.is_current == True).count()
-    active = db.query(ControlledDocument).filter(
-        ControlledDocument.status == "active",
-        ControlledDocument.is_current == True
-    ).count()
-    draft = db.query(ControlledDocument).filter(
-        ControlledDocument.status == "draft",
-        ControlledDocument.is_current == True
-    ).count()
-    pending_approval = db.query(ControlledDocument).filter(
-        ControlledDocument.status == "pending_approval",
-        ControlledDocument.is_current == True
-    ).count()
-    overdue_review = db.query(ControlledDocument).filter(
-        ControlledDocument.next_review_date < datetime.utcnow(),
-        ControlledDocument.status == "active",
-        ControlledDocument.is_current == True
-    ).count()
-    obsolete = db.query(ControlledDocument).filter(
-        ControlledDocument.status == "obsolete"
-    ).count()
+    active = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "active", ControlledDocument.is_current == True)
+        .count()
+    )
+    draft = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "draft", ControlledDocument.is_current == True)
+        .count()
+    )
+    pending_approval = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "pending_approval", ControlledDocument.is_current == True)
+        .count()
+    )
+    overdue_review = (
+        db.query(ControlledDocument)
+        .filter(
+            ControlledDocument.next_review_date < datetime.utcnow(),
+            ControlledDocument.status == "active",
+            ControlledDocument.is_current == True,
+        )
+        .count()
+    )
+    obsolete = db.query(ControlledDocument).filter(ControlledDocument.status == "obsolete").count()
 
     # Pending acknowledgments
-    pending_ack = db.query(DocumentDistribution).filter(
-        DocumentDistribution.acknowledged == False,
-        DocumentDistribution.acknowledgment_required == True
-    ).count()
+    pending_ack = (
+        db.query(DocumentDistribution)
+        .filter(DocumentDistribution.acknowledged == False, DocumentDistribution.acknowledgment_required == True)
+        .count()
+    )
 
     # By type
     by_type = (

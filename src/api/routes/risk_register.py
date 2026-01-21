@@ -204,11 +204,7 @@ async def get_risk(
         raise HTTPException(status_code=404, detail="Risk not found")
 
     # Get linked controls
-    control_mappings = (
-        db.query(RiskControlMapping)
-        .filter(RiskControlMapping.risk_id == risk_id)
-        .all()
-    )
+    control_mappings = db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
     control_ids = [m.control_id for m in control_mappings]
     controls = db.query(RiskControl).filter(RiskControl.id.in_(control_ids)).all() if control_ids else []
 
@@ -455,10 +451,7 @@ async def delete_bow_tie_element(
     db: Session = Depends(get_db),
 ) -> None:
     """Delete bow-tie element"""
-    element = db.query(BowTieElement).filter(
-        BowTieElement.id == element_id,
-        BowTieElement.risk_id == risk_id
-    ).first()
+    element = db.query(BowTieElement).filter(BowTieElement.id == element_id, BowTieElement.risk_id == risk_id).first()
 
     if not element:
         raise HTTPException(status_code=404, detail="Element not found")
@@ -595,10 +588,14 @@ async def link_control_to_risk(
         raise HTTPException(status_code=404, detail="Control not found")
 
     # Check if already linked
-    existing = db.query(RiskControlMapping).filter(
-        RiskControlMapping.risk_id == risk_id,
-        RiskControlMapping.control_id == control_id,
-    ).first()
+    existing = (
+        db.query(RiskControlMapping)
+        .filter(
+            RiskControlMapping.risk_id == risk_id,
+            RiskControlMapping.control_id == control_id,
+        )
+        .first()
+    )
 
     if existing:
         raise HTTPException(status_code=400, detail="Control already linked to this risk")
@@ -623,11 +620,7 @@ async def list_appetite_statements(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List risk appetite statements by category"""
-    statements = (
-        db.query(RiskAppetiteStatement)
-        .filter(RiskAppetiteStatement.is_active == True)
-        .all()
-    )
+    statements = db.query(RiskAppetiteStatement).filter(RiskAppetiteStatement.is_active == True).all()
 
     return [
         {
@@ -659,18 +652,12 @@ async def get_risk_summary(
     medium_risks = db.query(Risk).filter(Risk.residual_score.between(5, 11), Risk.status != "closed").count()
     low_risks = db.query(Risk).filter(Risk.residual_score <= 4, Risk.status != "closed").count()
     outside_appetite = db.query(Risk).filter(Risk.is_within_appetite == False, Risk.status != "closed").count()
-    overdue_review = db.query(Risk).filter(
-        Risk.next_review_date < datetime.utcnow(),
-        Risk.status != "closed"
-    ).count()
+    overdue_review = db.query(Risk).filter(Risk.next_review_date < datetime.utcnow(), Risk.status != "closed").count()
     escalated = db.query(Risk).filter(Risk.is_escalated == True, Risk.status != "closed").count()
 
     # Category breakdown
     categories = (
-        db.query(Risk.category, db.func.count(Risk.id))
-        .filter(Risk.status != "closed")
-        .group_by(Risk.category)
-        .all()
+        db.query(Risk.category, db.func.count(Risk.id)).filter(Risk.status != "closed").group_by(Risk.category).all()
     )
 
     return {

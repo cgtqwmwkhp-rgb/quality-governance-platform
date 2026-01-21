@@ -25,6 +25,7 @@ from src.domain.models.risk import Risk, RiskAssessment, RiskControl
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
+
 # Enterprise Risk Register (Tier 1)
 from src.domain.models.risk_register import (
     Risk as EnterpriseRisk,
@@ -35,6 +36,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskAppetiteStatement,
 )
+
 # IMS Unification (Tier 1)
 from src.domain.models.ims_unification import (
     IMSRequirement,
@@ -47,6 +49,7 @@ from src.domain.models.ims_unification import (
     IMSProcessMap,
     IMSObjective,
 )
+
 # Document Control (Tier 1)
 from src.domain.models.document_control import (
     ControlledDocument,
@@ -59,6 +62,7 @@ from src.domain.models.document_control import (
     DocumentAccessLog,
     ObsoleteDocumentRecord,
 )
+
 # ISO 27001 Information Security (Tier 1)
 from src.domain.models.iso27001 import (
     InformationAsset,
@@ -71,6 +75,7 @@ from src.domain.models.iso27001 import (
     BusinessContinuityPlan,
     SupplierSecurityAssessment,
 )
+
 # UVDB Achilles Verify B2 Audit Protocol
 from src.domain.models.uvdb_achilles import (
     UVDBSection,
@@ -80,6 +85,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBKPIRecord,
     UVDBISOCrossMapping,
 )
+
 # Planet Mark Carbon Management
 from src.domain.models.planet_mark import (
     CarbonReportingYear,
@@ -93,6 +99,7 @@ from src.domain.models.planet_mark import (
     SupplierEmissionData,
     ISO14001CrossMapping,
 )
+
 # AI Copilot (Tier 2)
 from src.domain.models.ai_copilot import (
     CopilotSession,
@@ -101,6 +108,7 @@ from src.domain.models.ai_copilot import (
     CopilotKnowledge,
     CopilotFeedback,
 )
+
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
     SignatureRequest,
@@ -109,6 +117,7 @@ from src.domain.models.digital_signature import (
     SignatureTemplate,
     SignatureAuditLog,
 )
+
 # Form Configuration (Admin Form Builder)
 from src.domain.models.form_config import (
     FormTemplate,

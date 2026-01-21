@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field
 
 # ==================== Form Field Schemas ====================
 
+
 class FormFieldBase(BaseModel):
     """Base schema for form fields."""
-    
+
     name: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
     field_type: str = Field(..., min_length=1, max_length=50)
@@ -31,12 +32,13 @@ class FormFieldBase(BaseModel):
 
 class FormFieldCreate(FormFieldBase):
     """Schema for creating a form field."""
+
     pass
 
 
 class FormFieldUpdate(BaseModel):
     """Schema for updating a form field."""
-    
+
     name: Optional[str] = None
     label: Optional[str] = None
     field_type: Optional[str] = None
@@ -57,7 +59,7 @@ class FormFieldUpdate(BaseModel):
 
 class FormFieldResponse(FormFieldBase):
     """Schema for form field response."""
-    
+
     id: int
     step_id: int
     created_at: datetime
@@ -69,9 +71,10 @@ class FormFieldResponse(FormFieldBase):
 
 # ==================== Form Step Schemas ====================
 
+
 class FormStepBase(BaseModel):
     """Base schema for form steps."""
-    
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     order: int = 0
@@ -81,13 +84,13 @@ class FormStepBase(BaseModel):
 
 class FormStepCreate(FormStepBase):
     """Schema for creating a form step."""
-    
+
     fields: Optional[List[FormFieldCreate]] = None
 
 
 class FormStepUpdate(BaseModel):
     """Schema for updating a form step."""
-    
+
     name: Optional[str] = None
     description: Optional[str] = None
     order: Optional[int] = None
@@ -97,7 +100,7 @@ class FormStepUpdate(BaseModel):
 
 class FormStepResponse(FormStepBase):
     """Schema for form step response."""
-    
+
     id: int
     template_id: int
     fields: List[FormFieldResponse] = []
@@ -110,9 +113,10 @@ class FormStepResponse(FormStepBase):
 
 # ==================== Form Template Schemas ====================
 
+
 class FormTemplateBase(BaseModel):
     """Base schema for form templates."""
-    
+
     name: str = Field(..., min_length=1, max_length=200)
     slug: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
@@ -131,13 +135,13 @@ class FormTemplateBase(BaseModel):
 
 class FormTemplateCreate(FormTemplateBase):
     """Schema for creating a form template."""
-    
+
     steps: Optional[List[FormStepCreate]] = None
 
 
 class FormTemplateUpdate(BaseModel):
     """Schema for updating a form template."""
-    
+
     name: Optional[str] = None
     slug: Optional[str] = None
     description: Optional[str] = None
@@ -157,7 +161,7 @@ class FormTemplateUpdate(BaseModel):
 
 class FormTemplateResponse(FormTemplateBase):
     """Schema for form template response."""
-    
+
     id: int
     version: int
     is_active: bool
@@ -173,7 +177,7 @@ class FormTemplateResponse(FormTemplateBase):
 
 class FormTemplateListResponse(BaseModel):
     """Schema for list of form templates."""
-    
+
     items: List[FormTemplateResponse]
     total: int
     page: int
@@ -182,9 +186,10 @@ class FormTemplateListResponse(BaseModel):
 
 # ==================== Contract Schemas ====================
 
+
 class ContractBase(BaseModel):
     """Base schema for contracts."""
-    
+
     name: str = Field(..., min_length=1, max_length=200)
     code: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
@@ -199,12 +204,13 @@ class ContractBase(BaseModel):
 
 class ContractCreate(ContractBase):
     """Schema for creating a contract."""
+
     pass
 
 
 class ContractUpdate(BaseModel):
     """Schema for updating a contract."""
-    
+
     name: Optional[str] = None
     code: Optional[str] = None
     description: Optional[str] = None
@@ -219,7 +225,7 @@ class ContractUpdate(BaseModel):
 
 class ContractResponse(ContractBase):
     """Schema for contract response."""
-    
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -230,16 +236,17 @@ class ContractResponse(ContractBase):
 
 class ContractListResponse(BaseModel):
     """Schema for list of contracts."""
-    
+
     items: List[ContractResponse]
     total: int
 
 
 # ==================== System Setting Schemas ====================
 
+
 class SystemSettingBase(BaseModel):
     """Base schema for system settings."""
-    
+
     key: str = Field(..., min_length=1, max_length=100)
     value: str
     category: str = "general"
@@ -251,12 +258,13 @@ class SystemSettingBase(BaseModel):
 
 class SystemSettingCreate(SystemSettingBase):
     """Schema for creating a system setting."""
+
     pass
 
 
 class SystemSettingUpdate(BaseModel):
     """Schema for updating a system setting."""
-    
+
     value: Optional[str] = None
     description: Optional[str] = None
     is_public: Optional[bool] = None
@@ -264,7 +272,7 @@ class SystemSettingUpdate(BaseModel):
 
 class SystemSettingResponse(SystemSettingBase):
     """Schema for system setting response."""
-    
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -275,16 +283,17 @@ class SystemSettingResponse(SystemSettingBase):
 
 class SystemSettingListResponse(BaseModel):
     """Schema for list of system settings."""
-    
+
     items: List[SystemSettingResponse]
     total: int
 
 
 # ==================== Lookup Option Schemas ====================
 
+
 class LookupOptionBase(BaseModel):
     """Base schema for lookup options."""
-    
+
     category: str = Field(..., min_length=1, max_length=50)
     code: str = Field(..., min_length=1, max_length=50)
     label: str = Field(..., min_length=1, max_length=200)
@@ -296,12 +305,13 @@ class LookupOptionBase(BaseModel):
 
 class LookupOptionCreate(LookupOptionBase):
     """Schema for creating a lookup option."""
+
     pass
 
 
 class LookupOptionUpdate(BaseModel):
     """Schema for updating a lookup option."""
-    
+
     code: Optional[str] = None
     label: Optional[str] = None
     description: Optional[str] = None
@@ -312,7 +322,7 @@ class LookupOptionUpdate(BaseModel):
 
 class LookupOptionResponse(LookupOptionBase):
     """Schema for lookup option response."""
-    
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -323,6 +333,6 @@ class LookupOptionResponse(LookupOptionBase):
 
 class LookupOptionListResponse(BaseModel):
     """Schema for list of lookup options."""
-    
+
     items: List[LookupOptionResponse]
     total: int

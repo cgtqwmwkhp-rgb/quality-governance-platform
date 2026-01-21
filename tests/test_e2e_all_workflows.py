@@ -48,16 +48,16 @@ class TestIncidentWorkflow:
                 "location": "Test Location - Building A",
                 "reported_by": "Test User",
             }
-            
+
             response = await client.post(
                 "/api/v1/incidents/",
                 json=incident_data,
                 headers=auth_headers,
             )
-            
+
             # Should create successfully or require auth
             assert response.status_code in [201, 401, 403]
-            
+
             if response.status_code == 201:
                 data = response.json()
                 assert "reference_number" in data
@@ -78,9 +78,9 @@ class TestIncidentWorkflow:
                 "/api/v1/incidents/?page=1&page_size=10",
                 headers=auth_headers,
             )
-            
+
             assert response.status_code in [200, 401]
-            
+
             if response.status_code == 200:
                 data = response.json()
                 assert "items" in data or isinstance(data, list)
@@ -111,15 +111,15 @@ class TestComplaintWorkflow:
                 "complainant_name": "Test Complainant",
                 "complainant_email": "test@example.com",
             }
-            
+
             response = await client.post(
                 "/api/v1/complaints/",
                 json=complaint_data,
                 headers=auth_headers,
             )
-            
+
             assert response.status_code in [201, 401, 403, 422]
-            
+
             if response.status_code == 201:
                 data = response.json()
                 assert "reference_number" in data
@@ -133,7 +133,7 @@ class TestComplaintWorkflow:
                 "/api/v1/complaints/?status=OPEN&page=1",
                 headers=auth_headers,
             )
-            
+
             assert response.status_code in [200, 401]
 
 
@@ -156,15 +156,15 @@ class TestRTAWorkflow:
                 "weather_conditions": "clear",
                 "road_conditions": "dry",
             }
-            
+
             response = await client.post(
                 "/api/v1/rtas/",
                 json=rta_data,
                 headers=auth_headers,
             )
-            
+
             assert response.status_code in [201, 401, 403, 422]
-            
+
             if response.status_code == 201:
                 data = response.json()
                 assert "reference_number" in data
@@ -204,13 +204,13 @@ class TestRTAWorkflow:
                     }
                 ],
             }
-            
+
             response = await client.post(
                 "/api/v1/rtas/",
                 json=rta_data,
                 headers=auth_headers,
             )
-            
+
             # Validate structure even if auth fails
             assert response.status_code in [201, 401, 403, 422]
 
@@ -236,15 +236,15 @@ class TestNearMissWorkflow:
                 "risk_category": "slip-trip-fall",
                 "potential_severity": "medium",
             }
-            
+
             response = await client.post(
                 "/api/v1/near-misses/",
                 json=near_miss_data,
                 headers=auth_headers,
             )
-            
+
             assert response.status_code in [201, 401, 403, 422]
-            
+
             if response.status_code == 201:
                 data = response.json()
                 assert "reference_number" in data
@@ -264,9 +264,9 @@ class TestNearMissWorkflow:
                 "/api/v1/near-misses/?page=1&page_size=20",
                 headers=auth_headers,
             )
-            
+
             assert response.status_code in [200, 401]
-            
+
             if response.status_code == 200:
                 data = response.json()
                 assert "items" in data
@@ -410,7 +410,7 @@ class TestAPIHealthAndStructure:
             data = response.json()
             assert "openapi" in data
             assert "paths" in data
-            
+
             # Validate all workflow endpoints exist
             paths = data["paths"]
             assert "/api/v1/incidents/" in paths or "/api/v1/incidents" in paths
@@ -425,6 +425,7 @@ class TestReferenceNumberFormats:
     def test_incident_reference_format(self):
         """Validate INC-YYYY-NNNN format."""
         import re
+
         pattern = r"^INC-\d{4}-\d{4}$"
         test_refs = ["INC-2026-0001", "INC-2026-0123", "INC-2026-9999"]
         for ref in test_refs:
@@ -433,6 +434,7 @@ class TestReferenceNumberFormats:
     def test_complaint_reference_format(self):
         """Validate COMP-YYYY-NNNN format."""
         import re
+
         pattern = r"^COMP-\d{4}-\d{4}$"
         test_refs = ["COMP-2026-0001", "COMP-2026-0500"]
         for ref in test_refs:
@@ -441,6 +443,7 @@ class TestReferenceNumberFormats:
     def test_rta_reference_format(self):
         """Validate RTA-YYYY-NNNN format."""
         import re
+
         pattern = r"^RTA-\d{4}-\d{4}$"
         test_refs = ["RTA-2026-0001", "RTA-2026-0050"]
         for ref in test_refs:
@@ -449,6 +452,7 @@ class TestReferenceNumberFormats:
     def test_near_miss_reference_format(self):
         """Validate NM-YYYY-NNNN format."""
         import re
+
         pattern = r"^NM-\d{4}-\d{4}$"
         test_refs = ["NM-2026-0001", "NM-2026-0100"]
         for ref in test_refs:

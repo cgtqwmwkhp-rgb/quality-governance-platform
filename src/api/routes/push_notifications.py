@@ -33,6 +33,7 @@ router = APIRouter(tags=["Push Notifications"])
 
 class PushSubscription(Base):
     """Web Push subscription storage."""
+
     __tablename__ = "push_subscriptions"
 
     id = Column(Integer, primary_key=True)
@@ -48,53 +49,55 @@ class PushSubscription(Base):
 
 class NotificationPreference(Base):
     """User notification preferences."""
+
     __tablename__ = "notification_preferences"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, unique=True)
-    
+
     # Channels
     push_enabled = Column(Boolean, default=True)
     email_enabled = Column(Boolean, default=True)
     sms_enabled = Column(Boolean, default=False)
-    
+
     # Event types
     incident_alerts = Column(Boolean, default=True)
     action_reminders = Column(Boolean, default=True)
     audit_notifications = Column(Boolean, default=True)
     compliance_updates = Column(Boolean, default=True)
     mentions = Column(Boolean, default=True)
-    
+
     # Frequency
     digest_frequency = Column(String(20), default="immediate")  # immediate, daily, weekly
     quiet_hours_start = Column(String(5), nullable=True)  # "22:00"
     quiet_hours_end = Column(String(5), nullable=True)  # "07:00"
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class NotificationLog(Base):
     """Log of sent notifications."""
+
     __tablename__ = "notification_logs"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=True)
     subscription_id = Column(Integer, nullable=True)
-    
+
     notification_type = Column(String(50), nullable=False)
     title = Column(String(255), nullable=False)
     body = Column(Text, nullable=True)
     data = Column(JSONB, nullable=True)
-    
+
     channel = Column(String(20), nullable=False)  # push, email, sms
     status = Column(String(20), default="pending")  # pending, sent, failed, delivered
     error_message = Column(Text, nullable=True)
-    
+
     sent_at = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)
     read_at = Column(DateTime, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -105,12 +108,14 @@ class NotificationLog(Base):
 
 class PushSubscriptionCreate(BaseModel):
     """Web Push subscription from browser."""
+
     endpoint: str
     keys: dict = Field(..., description="Contains p256dh and auth keys")
 
 
 class NotificationPreferenceUpdate(BaseModel):
     """Update notification preferences."""
+
     push_enabled: Optional[bool] = None
     email_enabled: Optional[bool] = None
     sms_enabled: Optional[bool] = None
@@ -126,6 +131,7 @@ class NotificationPreferenceUpdate(BaseModel):
 
 class SendNotificationRequest(BaseModel):
     """Request to send a notification."""
+
     user_ids: Optional[list[int]] = None  # Specific users, or None for all
     notification_type: str = Field(..., description="Type: incident, action, audit, compliance, mention")
     title: str = Field(..., min_length=1, max_length=255)
@@ -157,9 +163,9 @@ class PushNotificationService:
     ) -> PushSubscription:
         """Register a new push subscription."""
         # Check if subscription already exists
-        existing = self.db.query(PushSubscription).filter(
-            PushSubscription.endpoint == subscription_data.endpoint
-        ).first()
+        existing = (
+            self.db.query(PushSubscription).filter(PushSubscription.endpoint == subscription_data.endpoint).first()
+        )
 
         if existing:
             existing.user_id = user_id
@@ -183,9 +189,7 @@ class PushNotificationService:
 
     async def unsubscribe(self, endpoint: str) -> bool:
         """Unsubscribe from push notifications."""
-        subscription = self.db.query(PushSubscription).filter(
-            PushSubscription.endpoint == endpoint
-        ).first()
+        subscription = self.db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
 
         if subscription:
             subscription.is_active = False
@@ -206,33 +210,37 @@ class PushNotificationService:
         results = []
 
         # Check user preferences
-        prefs = self.db.query(NotificationPreference).filter(
-            NotificationPreference.user_id == user_id
-        ).first()
+        prefs = self.db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
 
         if prefs and not prefs.push_enabled:
             return [{"status": "skipped", "reason": "Push notifications disabled"}]
 
         # Get active subscriptions for user
-        subscriptions = self.db.query(PushSubscription).filter(
-            PushSubscription.user_id == user_id,
-            PushSubscription.is_active == True,
-        ).all()
+        subscriptions = (
+            self.db.query(PushSubscription)
+            .filter(
+                PushSubscription.user_id == user_id,
+                PushSubscription.is_active == True,
+            )
+            .all()
+        )
 
         if not subscriptions:
             return [{"status": "skipped", "reason": "No active subscriptions"}]
 
         # Prepare notification payload
-        payload = json.dumps({
-            "title": title,
-            "body": body,
-            "icon": "/icons/icon-192x192.png",
-            "badge": "/icons/badge-72x72.png",
-            "url": url or "/portal",
-            "tag": notification_type,
-            "data": data or {},
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        payload = json.dumps(
+            {
+                "title": title,
+                "body": body,
+                "icon": "/icons/icon-192x192.png",
+                "badge": "/icons/badge-72x72.png",
+                "url": url or "/portal",
+                "tag": notification_type,
+                "data": data or {},
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Send to each subscription
         for sub in subscriptions:
@@ -381,9 +389,7 @@ async def get_notification_preferences(
     current_user: CurrentUser = Depends(),
 ) -> dict[str, Any]:
     """Get notification preferences for current user."""
-    prefs = db.query(NotificationPreference).filter(
-        NotificationPreference.user_id == current_user.id
-    ).first()
+    prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
 
     if not prefs:
         # Return defaults
@@ -421,9 +427,7 @@ async def update_notification_preferences(
     current_user: CurrentUser = Depends(),
 ) -> dict[str, Any]:
     """Update notification preferences."""
-    prefs = db.query(NotificationPreference).filter(
-        NotificationPreference.user_id == current_user.id
-    ).first()
+    prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
 
     if not prefs:
         prefs = NotificationPreference(user_id=current_user.id)
@@ -445,7 +449,7 @@ async def send_notification(
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
     # TODO: Add admin role check
-    
+
     service = PushNotificationService(db)
 
     if request.user_ids:
@@ -459,13 +463,17 @@ async def send_notification(
         )
     else:
         # Get all users with active subscriptions
-        subscriptions = db.query(PushSubscription).filter(
-            PushSubscription.is_active == True,
-            PushSubscription.user_id.isnot(None),
-        ).all()
-        
+        subscriptions = (
+            db.query(PushSubscription)
+            .filter(
+                PushSubscription.is_active == True,
+                PushSubscription.user_id.isnot(None),
+            )
+            .all()
+        )
+
         user_ids = list(set(s.user_id for s in subscriptions if s.user_id))
-        
+
         results = await service.send_bulk_notification(
             user_ids=user_ids,
             title=request.title,
