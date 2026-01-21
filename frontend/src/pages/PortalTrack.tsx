@@ -254,7 +254,11 @@ export default function PortalTrack() {
     setError(null);
     
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+      // Ensure HTTPS is always used (fix mixed content issues)
+      let apiBase = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+      if (apiBase.startsWith('http://')) {
+        apiBase = apiBase.replace('http://', 'https://');
+      }
       const allReports: ReportSummary[] = [];
       
       // Get auth token - try portal token first, then admin token

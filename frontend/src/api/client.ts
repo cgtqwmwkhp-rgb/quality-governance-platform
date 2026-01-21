@@ -1,6 +1,10 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://qgp-staging-plantexpand.azurewebsites.net'
+// Get API base URL and ensure HTTPS is always used (fix mixed content issues)
+let API_BASE_URL = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net'
+if (API_BASE_URL.startsWith('http://')) {
+  API_BASE_URL = API_BASE_URL.replace('http://', 'https://')
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
