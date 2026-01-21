@@ -96,12 +96,8 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle quarantined tests."""
-    skip_phase34 = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-02-21"
-    )
-    skip_contract = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. Expiry: 2026-02-21"
-    )
+    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-02-21")
+    skip_contract = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. Expiry: 2026-02-21")
 
     for item in items:
         if "phase34" in item.keywords:
