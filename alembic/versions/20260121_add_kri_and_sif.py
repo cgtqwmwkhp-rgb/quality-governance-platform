@@ -122,35 +122,52 @@ def upgrade() -> None:
     op.create_index('ix_risk_score_history_risk_id', 'risk_score_history', ['risk_id'])
     op.create_index('ix_risk_score_history_recorded_at', 'risk_score_history', ['recorded_at'])
 
-    # Add SIF/pSIF classification fields to incidents table
-    op.add_column('incidents', sa.Column('is_sif', sa.Boolean(), default=False, nullable=True))
-    op.add_column('incidents', sa.Column('is_psif', sa.Boolean(), default=False, nullable=True))
-    op.add_column('incidents', sa.Column('sif_classification', sa.String(50), nullable=True))
-    op.add_column('incidents', sa.Column('sif_assessment_date', sa.DateTime(timezone=True), nullable=True))
-    op.add_column('incidents', sa.Column('sif_assessed_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True))
-    op.add_column('incidents', sa.Column('sif_rationale', sa.Text(), nullable=True))
-    op.add_column('incidents', sa.Column('life_altering_potential', sa.Boolean(), default=False, nullable=True))
-    op.add_column('incidents', sa.Column('precursor_events', sa.JSON(), nullable=True))
-    op.add_column('incidents', sa.Column('control_failures', sa.JSON(), nullable=True))
+    # Add SIF/pSIF classification fields to incidents table (if table exists)
+    from sqlalchemy import inspect
     
-    # Add linked_risk_ids to near_misses if not exists
-    op.add_column('near_misses', sa.Column('linked_risk_ids', sa.Text(), nullable=True))
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
+    if 'incidents' in existing_tables:
+        op.add_column('incidents', sa.Column('is_sif', sa.Boolean(), default=False, nullable=True))
+        op.add_column('incidents', sa.Column('is_psif', sa.Boolean(), default=False, nullable=True))
+        op.add_column('incidents', sa.Column('sif_classification', sa.String(50), nullable=True))
+        op.add_column('incidents', sa.Column('sif_assessment_date', sa.DateTime(timezone=True), nullable=True))
+        op.add_column('incidents', sa.Column('sif_assessed_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True))
+        op.add_column('incidents', sa.Column('sif_rationale', sa.Text(), nullable=True))
+        op.add_column('incidents', sa.Column('life_altering_potential', sa.Boolean(), default=False, nullable=True))
+        op.add_column('incidents', sa.Column('precursor_events', sa.JSON(), nullable=True))
+        op.add_column('incidents', sa.Column('control_failures', sa.JSON(), nullable=True))
+    
+    # Add linked_risk_ids to near_misses if table exists
+    if 'near_misses' in existing_tables:
+        op.add_column('near_misses', sa.Column('linked_risk_ids', sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    # Remove SIF fields from incidents
-    op.drop_column('incidents', 'is_sif')
-    op.drop_column('incidents', 'is_psif')
-    op.drop_column('incidents', 'sif_classification')
-    op.drop_column('incidents', 'sif_assessment_date')
-    op.drop_column('incidents', 'sif_assessed_by_id')
-    op.drop_column('incidents', 'sif_rationale')
-    op.drop_column('incidents', 'life_altering_potential')
-    op.drop_column('incidents', 'precursor_events')
-    op.drop_column('incidents', 'control_failures')
+    # Remove SIF fields from incidents (if table exists)
+    from sqlalchemy import inspect
     
-    # Remove linked_risk_ids from near_misses
-    op.drop_column('near_misses', 'linked_risk_ids')
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
+    if 'incidents' in existing_tables:
+        for col in ['is_sif', 'is_psif', 'sif_classification', 'sif_assessment_date', 
+                    'sif_assessed_by_id', 'sif_rationale', 'life_altering_potential',
+                    'precursor_events', 'control_failures']:
+            try:
+                op.drop_column('incidents', col)
+            except Exception:
+                pass
+    
+    # Remove linked_risk_ids from near_misses (if table exists)
+    if 'near_misses' in existing_tables:
+        try:
+            op.drop_column('near_misses', 'linked_risk_ids')
+        except Exception:
+            pass
     
     # Drop tables
     op.drop_table('risk_score_history')

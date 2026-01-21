@@ -149,19 +149,52 @@ def upgrade() -> None:
     op.create_index('ix_escalation_levels_entity_type', 'escalation_levels', ['entity_type'])
     op.create_index('ix_escalation_levels_level', 'escalation_levels', ['level'])
 
-    # Add escalation_level column to main entity tables
-    op.add_column('incidents', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
-    op.add_column('complaints', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
-    op.add_column('near_misses', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
-    op.add_column('rtas', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
+    # Add escalation_level column to main entity tables (if they exist)
+    from sqlalchemy import inspect
+    from alembic import op
+    
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
+    if 'incidents' in existing_tables:
+        op.add_column('incidents', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
+    if 'complaints' in existing_tables:
+        op.add_column('complaints', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
+    if 'near_misses' in existing_tables:
+        op.add_column('near_misses', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
+    if 'rtas' in existing_tables:
+        op.add_column('rtas', sa.Column('escalation_level', sa.Integer(), default=0, nullable=True))
 
 
 def downgrade() -> None:
-    # Remove escalation_level columns
-    op.drop_column('incidents', 'escalation_level')
-    op.drop_column('complaints', 'escalation_level')
-    op.drop_column('near_misses', 'escalation_level')
-    op.drop_column('rtas', 'escalation_level')
+    # Remove escalation_level columns (if tables exist)
+    from sqlalchemy import inspect
+    
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
+    if 'incidents' in existing_tables:
+        try:
+            op.drop_column('incidents', 'escalation_level')
+        except Exception:
+            pass
+    if 'complaints' in existing_tables:
+        try:
+            op.drop_column('complaints', 'escalation_level')
+        except Exception:
+            pass
+    if 'near_misses' in existing_tables:
+        try:
+            op.drop_column('near_misses', 'escalation_level')
+        except Exception:
+            pass
+    if 'rtas' in existing_tables:
+        try:
+            op.drop_column('rtas', 'escalation_level')
+        except Exception:
+            pass
 
     # Drop tables
     op.drop_table('escalation_levels')
