@@ -151,7 +151,6 @@ def upgrade() -> None:
 
     # Add escalation_level column to main entity tables (if they exist)
     from sqlalchemy import inspect
-    from alembic import op
     
     conn = op.get_bind()
     inspector = inspect(conn)
