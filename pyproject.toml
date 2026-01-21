@@ -37,17 +37,85 @@ known_first_party = ["src"]
 
 [tool.mypy]
 python_version = "3.11"
-# Disabled for pre-existing issues - tracked as tech debt
-warn_return_any = false
-warn_unused_configs = false
 ignore_missing_imports = true
-# Allow Any types in function signatures (pre-existing)
-disallow_any_generics = false
-disallow_untyped_defs = false
-# Skip strict checking (pre-existing issues to be addressed as tech debt)
-check_untyped_defs = false
-strict_optional = false
+# Re-enable basic warnings
+warn_unused_configs = true
+# Skip test files (tested separately)
 exclude = ["alembic/versions", "tests"]
+
+# Per-module overrides for pre-existing issues
+# Each module with type issues is explicitly listed with specific ignores
+# This prevents masking new errors while allowing known issues
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.ai_predictive_service"
+# GOVPLAT-004: Incident model attribute references
+disable_error_code = ["attr-defined", "arg-type", "return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.ai_audit_service"
+# GOVPLAT-004: AuditFinding model attribute references
+disable_error_code = ["attr-defined", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.ai_models"
+# GOVPLAT-004: AI model type issues
+disable_error_code = ["no-any-return", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.audit_log_service"
+# GOVPLAT-004: SQLAlchemy Row type issues
+disable_error_code = ["var-annotated", "arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.abac_service"
+# GOVPLAT-004: ABAC type issues
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.signature_service"
+# GOVPLAT-004: Signature service type issues
+disable_error_code = ["no-any-return", "operator"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.collaboration_service"
+# GOVPLAT-004: Collaboration service type issues
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.tenant_service"
+# GOVPLAT-004: Tenant service type issues
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "src.services.auditor_competence"
+# GOVPLAT-004: Type assignment issues
+disable_error_code = ["assignment", "operator"]
+
+[[tool.mypy.overrides]]
+module = "src.services.policy_acknowledgment"
+# GOVPLAT-004: Return type issues
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.infrastructure.cache.redis_cache"
+# GOVPLAT-004: Cache decorator type issues
+disable_error_code = ["misc", "attr-defined", "return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.infrastructure.monitoring.azure_monitor"
+# GOVPLAT-004: Azure monitor type issues
+disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.uvdb"
+# GOVPLAT-004: UVDB route type issues
+disable_error_code = ["arg-type", "attr-defined", "assignment"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.planet_mark"
+# GOVPLAT-004: Planet mark route type issues
+disable_error_code = ["operator"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

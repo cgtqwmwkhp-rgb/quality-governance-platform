@@ -39,9 +39,6 @@ jobs:
         run: python3 scripts/validate_type_ignores.py
 
       - name: Type check with mypy
-        # Allow mypy to fail - pre-existing type issues tracked as tech debt
-        # Remove 'continue-on-error' once type issues are resolved
-        continue-on-error: true
         run: mypy src/ --config-file pyproject.toml
 
   config-failfast-proof:

@@ -2,21 +2,47 @@
 # Line length to match black
 max-line-length = 120
 
-# Ignore certain errors that are pre-existing or handled by other tools
+# Global ignores - only for patterns that are intentional or black-compatibility
 # E203: whitespace before ':' (conflicts with black slice formatting)
-# E402: module level import not at top of file (needed for conditional imports)
-# E501: line too long (handled by black)
 # W503: line break before binary operator (conflicts with black)
-# F401: imported but unused (pre-existing in many files, cleanup tracked as tech debt)
-# F541: f-string is missing placeholders (pre-existing, minor style issue)
 # E711: comparison to None - required for SQLAlchemy column filters (== None is intentional)
-# E712: comparison to True/False - required for SQLAlchemy column filters (== is intentional)
-# E741: ambiguous variable name - pre-existing in list comprehensions
-# F841: local variable assigned but never used (pre-existing, cleanup as tech debt)
-# F811: redefinition of unused variable (pre-existing, refactor as tech debt)
-# W291: trailing whitespace (handled by black, should auto-fix)
-# C901: function too complex (pre-existing, refactor as tech debt)
-extend-ignore = E203, E402, E501, W503, F401, F541, E711, E712, E741, F841, F811, W291, C901
+# E712: comparison to True/False - required for SQLAlchemy column filters (== True is intentional)
+extend-ignore = E203, W503, E711, E712
+
+# Per-file ignores for specific pre-existing issues
+# Format: path:CODE,CODE
+per-file-ignores =
+    # Domain models - re-exports for convenience
+    src/domain/models/__init__.py:F401
+    # Infrastructure modules with conditional imports
+    src/infrastructure/cache/redis_cache.py:E402,F401
+    # Services with complex AI logic (to be refactored)
+    src/domain/services/ai_audit_service.py:C901,F841
+    src/domain/services/ai_predictive_service.py:C901,F841
+    src/domain/services/ai_models.py:F841
+    # Routes with unused imports from refactoring
+    src/api/routes/ai_intelligence.py:F401
+    src/api/routes/audit_trail.py:F401
+    src/api/routes/auditor_competence.py:F401
+    src/api/routes/copilot.py:F401
+    src/api/routes/document_control.py:F401
+    src/api/routes/executive_dashboard.py:F401
+    src/api/routes/form_config.py:F401
+    src/api/routes/iso27001.py:F401
+    src/api/routes/kri.py:F401
+    src/api/routes/planet_mark.py:F401,F841
+    src/api/routes/policy_acknowledgment.py:E741
+    src/api/routes/push_notifications.py:F811
+    src/api/routes/workflow.py:E741
+    # Schema files
+    src/api/schemas/form_config.py:F401
+    # Test files
+    tests/security/test_owasp_comprehensive.py:E203
+    tests/test_e2e_form_workflow.py:F541
+    # Services
+    src/domain/services/copilot_service.py:F541
+    src/services/auditor_competence.py:F401
+    src/infrastructure/monitoring/azure_monitor.py:F401
 
 # Exclude directories
 exclude =
@@ -28,5 +54,5 @@ exclude =
     dist,
     *.egg-info
 
-# Maximum complexity
-max-complexity = 15
+# Maximum complexity (raise to allow pre-existing complex functions)
+max-complexity = 20
