@@ -1,25 +1,36 @@
 import axios from 'axios'
-import { API_BASE_URL } from '../config/apiBase'
+
+// HARDCODED HTTPS - bypassing any potential env var issues
+const HTTPS_API_BASE = 'https://app-qgp-prod.azurewebsites.net';
+
+console.log('[Axios Client] Using API base:', HTTPS_API_BASE);
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: HTTPS_API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// CRITICAL: Enforce HTTPS on all requests (failsafe for cached old bundles)
+// CRITICAL: Enforce HTTPS on all requests at interceptor level
 api.interceptors.request.use((config) => {
-  // Enforce HTTPS on baseURL
-  if (config.baseURL?.startsWith('http:')) {
-    config.baseURL = config.baseURL.replace('http:', 'https:');
-    console.warn('[Axios] Forced HTTPS on baseURL');
+  // Log the request for debugging
+  const fullUrl = config.baseURL + (config.url || '');
+  console.log('[Axios] Request to:', fullUrl);
+  
+  // Force HTTPS on baseURL
+  if (config.baseURL && !config.baseURL.startsWith('https://')) {
+    config.baseURL = config.baseURL.replace(/^http:/, 'https:');
+    if (!config.baseURL.startsWith('https://')) {
+      config.baseURL = 'https://' + config.baseURL.replace(/^\/\//, '');
+    }
+    console.warn('[Axios] Forced HTTPS on baseURL:', config.baseURL);
   }
   
-  // Enforce HTTPS on full URL if present
-  if (config.url?.startsWith('http:')) {
-    config.url = config.url.replace('http:', 'https:');
-    console.warn('[Axios] Forced HTTPS on URL');
+  // Force HTTPS on URL if it's absolute
+  if (config.url && config.url.startsWith('http:')) {
+    config.url = config.url.replace(/^http:/, 'https:');
+    console.warn('[Axios] Forced HTTPS on URL:', config.url);
   }
   
   // Add auth token

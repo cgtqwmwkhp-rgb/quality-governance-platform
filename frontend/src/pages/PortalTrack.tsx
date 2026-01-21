@@ -254,14 +254,9 @@ export default function PortalTrack() {
     setError(null);
     
     try {
-      // Use centralized API base URL (HTTPS enforced)
-      let { API_BASE_URL: apiBase } = await import('../config/apiBase');
-      
-      // CRITICAL: Runtime HTTPS enforcement (failsafe for any cached issues)
-      if (apiBase.startsWith('http:')) {
-        apiBase = apiBase.replace('http:', 'https:');
-        console.warn('[PortalTrack] Forced HTTPS on API base');
-      }
+      // HARDCODED HTTPS - bypassing any caching/env issues
+      const apiBase = 'https://app-qgp-prod.azurewebsites.net';
+      console.log('[PortalTrack] Using API base:', apiBase);
       
       const allReports: ReportSummary[] = [];
       
