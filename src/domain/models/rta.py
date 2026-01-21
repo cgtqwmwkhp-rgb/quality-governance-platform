@@ -76,10 +76,23 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
 
     # Third party details (JSON for multiple parties)
     third_parties: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    # Structure: [{ name, contact, vehicle_reg, vehicle_make_model, damage, injured, injury_details, insurer }]
+    # Structure: [{ name, contact, phone, email, vehicle_reg, vehicle_make_model, damage, 
+    #               injured, injury_details, insurer, insurer_policy_number, is_at_fault }]
+    
+    # Multiple vehicles involved count
+    vehicles_involved_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    
+    # CCTV / Dashcam footage
+    cctv_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    cctv_location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    dashcam_footage_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    footage_secured: Mapped[bool] = mapped_column(Boolean, default=False)
+    footage_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Witnesses
+    # Witnesses (structured JSON for multiple witnesses)
     witnesses: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    witnesses_structured: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Structure: [{ name, phone, email, statement, willing_to_provide_statement }]
 
     # Police involvement
     police_attended: Mapped[bool] = mapped_column(Boolean, default=False)

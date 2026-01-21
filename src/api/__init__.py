@@ -21,6 +21,7 @@ from src.api.routes import (
     investigation_templates,
     investigations,
     iso27001,
+    near_miss,
     notifications,
     planet_mark,
     policies,
@@ -79,5 +80,7 @@ router.include_router(tenants.router, prefix="/tenants", tags=["Multi-Tenancy"])
 router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Trail"])
 # Admin Form Builder & Configuration
 router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
+# Near Misses
+router.include_router(near_miss.router, prefix="/near-misses", tags=["Near Misses"])
 
 __all__ = ["router"]

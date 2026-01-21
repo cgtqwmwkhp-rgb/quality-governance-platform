@@ -25,6 +25,7 @@ import PortalTrack from './pages/PortalTrack'
 import PortalHelp from './pages/PortalHelp'
 import PortalIncidentForm from './pages/PortalIncidentForm'
 import PortalRTAForm from './pages/PortalRTAForm'
+import PortalNearMissForm from './pages/PortalNearMissForm'
 import PortalDynamicForm from './pages/PortalDynamicForm'
 // Enterprise Enhancement Pages
 import Analytics from './pages/Analytics'
@@ -133,6 +134,7 @@ function App() {
           
           {/* Legacy static forms (fallback) */}
           <Route path="report/incident-legacy" element={<PortalIncidentForm />} />
+          <Route path="report/near-miss-static" element={<PortalNearMissForm />} />
           
           {/* Other Portal Pages */}
           <Route path="track" element={<PortalTrack />} />
