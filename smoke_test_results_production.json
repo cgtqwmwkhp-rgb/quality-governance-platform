@@ -1,6 +1,6 @@
 {
   "environment": "production",
-  "timestamp": "2026-01-21T07:32:17.019965",
+  "timestamp": "2026-01-21T07:39:15.253095",
   "passed": 28,
   "failed": 3,
   "results": [
@@ -134,7 +134,7 @@
       "name": "List Roles Lookup",
       "status": "fail",
       "expected": 200,
-      "actual": 502
+      "actual": 500
     },
     {
       "name": "List Medical Assistance Lookup",

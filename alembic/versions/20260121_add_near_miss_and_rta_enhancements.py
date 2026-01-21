@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '20260121_near_miss_rta'
-down_revision = '20260120_add_form_config_tables'
+down_revision = '20260120_form_config'
 branch_labels = None
 depends_on = None
 
