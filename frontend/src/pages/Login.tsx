@@ -26,6 +26,7 @@ export default function Login({ onLogin }: LoginProps) {
       const DEMO_CREDENTIALS = [
         { email: 'admin@plantexpand.com', password: 'TestUser123!' },
         { email: 'demo@plantexpand.com', password: 'demo123' },
+        { email: 'jamie.uncle@plantexpand.com', password: 'Plantexpand2026!' },
       ]
       
       const isDemoLogin = DEMO_CREDENTIALS.some(
@@ -34,10 +35,18 @@ export default function Login({ onLogin }: LoginProps) {
       
       if (isDemoLogin) {
         // Generate a demo token (JWT-like structure for demo purposes)
+        const getUserName = (email: string) => {
+          const names: Record<string, string> = {
+            'admin@plantexpand.com': 'Admin User',
+            'demo@plantexpand.com': 'Demo User',
+            'jamie.uncle@plantexpand.com': 'Jamie Uncle',
+          }
+          return names[email.toLowerCase()] || 'User'
+        }
         const demoPayload = {
           sub: email,
           email: email,
-          name: email === 'admin@plantexpand.com' ? 'Admin User' : 'Demo User',
+          name: getUserName(email),
           role: 'admin',
           exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
         }
