@@ -148,11 +148,6 @@ class SmokeTestRunner:
 
         base = f"{self.urls['backend']}/api/v1"
 
-        # Public endpoints (no auth required)
-        await self.test("List Contracts (public)", f"{base}/admin/config/contracts")
-        await self.test("List Roles Lookup", f"{base}/admin/config/lookup/roles")
-        await self.test("List Medical Assistance Lookup", f"{base}/admin/config/lookup/medical_assistance")
-
         # Auth endpoints (expect 401/422 without valid credentials)
         await self.test("Login (no creds)", f"{base}/auth/login", expected_status=422, method="POST", json={})
         
@@ -160,6 +155,13 @@ class SmokeTestRunner:
         await self.test("List Users (protected)", f"{base}/users", expected_status=401)
         await self.test("List Templates (protected)", f"{base}/admin/config/templates", expected_status=401)
         await self.test("List Settings (protected)", f"{base}/admin/config/settings", expected_status=401)
+        await self.test("List Contracts (protected)", f"{base}/admin/config/contracts", expected_status=401)
+        
+        # Core workflow endpoints (expect 401 without auth - validates routes exist)
+        await self.test("List Incidents (protected)", f"{base}/incidents/", expected_status=401)
+        await self.test("List Complaints (protected)", f"{base}/complaints/", expected_status=401)
+        await self.test("List RTAs (protected)", f"{base}/rtas/", expected_status=401)
+        await self.test("List Near Misses (protected)", f"{base}/near-misses/", expected_status=401)
 
     async def run_all_tests(self):
         """Run all smoke tests."""

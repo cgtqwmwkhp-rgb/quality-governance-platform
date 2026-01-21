@@ -1,8 +1,8 @@
 {
   "environment": "production",
-  "timestamp": "2026-01-21T07:39:15.253095",
-  "passed": 28,
-  "failed": 3,
+  "timestamp": "2026-01-21T08:02:53.481953",
+  "passed": 32,
+  "failed": 1,
   "results": [
     {
       "name": "Homepage",
@@ -125,24 +125,6 @@
       "code": 200
     },
     {
-      "name": "List Contracts (public)",
-      "status": "fail",
-      "expected": 200,
-      "actual": 500
-    },
-    {
-      "name": "List Roles Lookup",
-      "status": "fail",
-      "expected": 200,
-      "actual": 500
-    },
-    {
-      "name": "List Medical Assistance Lookup",
-      "status": "fail",
-      "expected": 200,
-      "actual": 500
-    },
-    {
       "name": "Login (no creds)",
       "status": "pass",
       "code": 422
@@ -159,6 +141,32 @@
     },
     {
       "name": "List Settings (protected)",
+      "status": "pass",
+      "code": 401
+    },
+    {
+      "name": "List Contracts (protected)",
+      "status": "fail",
+      "expected": 401,
+      "actual": 500
+    },
+    {
+      "name": "List Incidents (protected)",
+      "status": "pass",
+      "code": 401
+    },
+    {
+      "name": "List Complaints (protected)",
+      "status": "pass",
+      "code": 401
+    },
+    {
+      "name": "List RTAs (protected)",
+      "status": "pass",
+      "code": 401
+    },
+    {
+      "name": "List Near Misses (protected)",
       "status": "pass",
       "code": 401
     }
