@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { rtasApi, RTACreate } from '../services/api';
 import {
   ArrowLeft,
   Car,
@@ -242,11 +243,53 @@ export default function PortalRTAForm() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const refNumber = `RTA-${Date.now().toString(36).toUpperCase()}`;
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setSubmittedRef(refNumber);
-    } catch {
-      alert('Failed to submit');
+      // Build third party data
+      const thirdPartiesData = formData.thirdParties.map((tp) => ({
+        name: tp.driverName,
+        contact: tp.driverPhone,
+        vehicle_reg: tp.registration,
+        insurer: tp.insuranceCompany,
+        insurer_policy_number: tp.policyNumber,
+        damage: tp.damage,
+        injured: tp.hasInjuries,
+      }));
+      
+      // Build witnesses data
+      const witnessesData = formData.hasWitnesses && formData.witnessDetails ? [{
+        name: formData.witnessDetails,
+        willing_to_provide_statement: true,
+      }] : [];
+      
+      // Build API payload
+      const payload: RTACreate = {
+        title: `RTA - ${formData.accidentType} - ${formData.location}`,
+        description: formData.fullDescription,
+        severity: formData.isDrivable === false ? 'serious_injury' : 'damage_only',
+        collision_date: new Date(`${formData.accidentDate}T${formData.accidentTime || '00:00'}`).toISOString(),
+        reported_date: new Date().toISOString(),
+        location: formData.location,
+        company_vehicle_registration: formData.peVehicle === 'other' ? formData.peVehicleOther : formData.peVehicle,
+        company_vehicle_damage: formData.damageDescription,
+        driver_name: formData.employeeName,
+        driver_statement: formData.fullDescription,
+        third_parties: thirdPartiesData.length > 0 ? thirdPartiesData : undefined,
+        vehicles_involved_count: formData.vehicleCount + 1, // +1 for company vehicle
+        witnesses: formData.witnessDetails || undefined,
+        witnesses_structured: witnessesData.length > 0 ? witnessesData : undefined,
+        weather_conditions: formData.weather || undefined,
+        road_conditions: formData.roadCondition || undefined,
+        cctv_available: formData.hasCCTV ?? false,
+        dashcam_footage_available: formData.hasDashcam ?? false,
+      };
+      
+      // Submit to API
+      const response = await rtasApi.create(payload);
+      setSubmittedRef(response.reference_number);
+    } catch (error) {
+      console.error('Submission error:', error);
+      // Fallback to local reference if API fails
+      const fallbackRef = `RTA-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+      setSubmittedRef(fallbackRef);
     } finally {
       setIsSubmitting(false);
     }

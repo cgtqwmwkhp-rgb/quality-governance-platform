@@ -1,93 +1,110 @@
 {
-  "environment": "production",
-  "timestamp": "2026-01-21T07:32:17.019965",
-  "passed": 28,
-  "failed": 3,
+  "environment": "staging",
+  "timestamp": "2026-01-21T07:31:40.686770",
+  "passed": 11,
+  "failed": 20,
   "results": [
     {
       "name": "Homepage",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Portal Main",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Portal Login",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Portal Report",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Portal Track",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Portal Help",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Incident Form",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Near Miss Form",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Complaint Form",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "RTA Form",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Admin Dashboard",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Admin Forms List",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Admin Contracts",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Admin Settings",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Manifest JSON",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Service Worker",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Icon 192x192",
-      "status": "pass",
-      "code": 200
+      "status": "fail",
+      "expected": 200,
+      "actual": 404
     },
     {
       "name": "Root Endpoint",
@@ -134,7 +151,7 @@
       "name": "List Roles Lookup",
       "status": "fail",
       "expected": 200,
-      "actual": 502
+      "actual": 500
     },
     {
       "name": "List Medical Assistance Lookup",

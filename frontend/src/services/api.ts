@@ -273,6 +273,209 @@ export const portalApi = {
     }>(`/portal/track/${referenceNumber}`),
 };
 
+// ==================== Near Miss API ====================
+
+export interface NearMissCreate {
+  reporter_name: string;
+  reporter_email?: string;
+  reporter_phone?: string;
+  reporter_role?: string;
+  was_involved: boolean;
+  contract: string;
+  contract_other?: string;
+  location: string;
+  location_coordinates?: string;
+  event_date: string;
+  event_time?: string;
+  description: string;
+  potential_consequences?: string;
+  preventive_action_suggested?: string;
+  persons_involved?: string;
+  witnesses_present: boolean;
+  witness_names?: string;
+  asset_number?: string;
+  asset_type?: string;
+  risk_category?: string;
+  potential_severity?: string;
+  attachments?: string;
+}
+
+export interface NearMissResponse extends NearMissCreate {
+  id: number;
+  reference_number: string;
+  status: string;
+  priority: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const nearMissApi = {
+  create: (data: NearMissCreate) =>
+    apiRequest<NearMissResponse>('/near-misses/', { method: 'POST', body: data }),
+  
+  list: (page = 1, pageSize = 20, status?: string, contract?: string) => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) params.append('status', status);
+    if (contract) params.append('contract', contract);
+    return apiRequest<{ items: NearMissResponse[]; total: number; page: number; pages: number }>(
+      `/near-misses/?${params.toString()}`
+    );
+  },
+  
+  get: (id: number) =>
+    apiRequest<NearMissResponse>(`/near-misses/${id}`),
+  
+  update: (id: number, data: Partial<NearMissCreate>) =>
+    apiRequest<NearMissResponse>(`/near-misses/${id}`, { method: 'PATCH', body: data }),
+  
+  delete: (id: number) =>
+    apiRequest<void>(`/near-misses/${id}`, { method: 'DELETE' }),
+};
+
+// ==================== Incidents API ====================
+
+export interface IncidentCreate {
+  title: string;
+  description: string;
+  severity: string;
+  incident_date: string;
+  location: string;
+  reported_by: string;
+  contract?: string;
+  injuries_occurred?: boolean;
+  injury_details?: string;
+  witnesses?: string;
+  attachments?: string;
+}
+
+export interface IncidentResponse extends IncidentCreate {
+  id: number;
+  reference_number: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const incidentsApi = {
+  create: (data: IncidentCreate) =>
+    apiRequest<IncidentResponse>('/incidents/', { method: 'POST', body: data }),
+  
+  list: (page = 1, pageSize = 20, status?: string) => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) params.append('status', status);
+    return apiRequest<{ items: IncidentResponse[]; total: number }>(
+      `/incidents/?${params.toString()}`
+    );
+  },
+  
+  get: (id: number) =>
+    apiRequest<IncidentResponse>(`/incidents/${id}`),
+  
+  update: (id: number, data: Partial<IncidentCreate>) =>
+    apiRequest<IncidentResponse>(`/incidents/${id}`, { method: 'PATCH', body: data }),
+};
+
+// ==================== RTA API ====================
+
+export interface RTACreate {
+  title: string;
+  description: string;
+  severity: string;
+  collision_date: string;
+  reported_date: string;
+  location: string;
+  company_vehicle_registration?: string;
+  company_vehicle_make_model?: string;
+  company_vehicle_damage?: string;
+  driver_name?: string;
+  driver_statement?: string;
+  driver_injured?: boolean;
+  driver_injury_details?: string;
+  third_parties?: Record<string, unknown>[];
+  vehicles_involved_count?: number;
+  witnesses?: string;
+  witnesses_structured?: Record<string, unknown>[];
+  weather_conditions?: string;
+  road_conditions?: string;
+  lighting_conditions?: string;
+  police_attended?: boolean;
+  police_reference?: string;
+  cctv_available?: boolean;
+  cctv_location?: string;
+  dashcam_footage_available?: boolean;
+  footage_secured?: boolean;
+  footage_notes?: string;
+  attachments?: string;
+}
+
+export interface RTAResponse extends RTACreate {
+  id: number;
+  reference_number: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const rtasApi = {
+  create: (data: RTACreate) =>
+    apiRequest<RTAResponse>('/rtas/', { method: 'POST', body: data }),
+  
+  list: (page = 1, pageSize = 20, status?: string) => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) params.append('status', status);
+    return apiRequest<{ items: RTAResponse[]; total: number }>(
+      `/rtas/?${params.toString()}`
+    );
+  },
+  
+  get: (id: number) =>
+    apiRequest<RTAResponse>(`/rtas/${id}`),
+  
+  update: (id: number, data: Partial<RTACreate>) =>
+    apiRequest<RTAResponse>(`/rtas/${id}`, { method: 'PATCH', body: data }),
+};
+
+// ==================== Complaints API ====================
+
+export interface ComplaintCreate {
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  complainant_name: string;
+  complainant_email?: string;
+  complainant_phone?: string;
+  contract?: string;
+  attachments?: string;
+}
+
+export interface ComplaintResponse extends ComplaintCreate {
+  id: number;
+  reference_number: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const complaintsApi = {
+  create: (data: ComplaintCreate) =>
+    apiRequest<ComplaintResponse>('/complaints/', { method: 'POST', body: data }),
+  
+  list: (page = 1, pageSize = 20, status?: string) => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) params.append('status', status);
+    return apiRequest<{ items: ComplaintResponse[]; total: number }>(
+      `/complaints/?${params.toString()}`
+    );
+  },
+  
+  get: (id: number) =>
+    apiRequest<ComplaintResponse>(`/complaints/${id}`),
+  
+  update: (id: number, data: Partial<ComplaintCreate>) =>
+    apiRequest<ComplaintResponse>(`/complaints/${id}`, { method: 'PATCH', body: data }),
+};
+
 // Utility for clearing cache
 export function clearApiCache() {
   cache.clear();

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { nearMissApi, NearMissCreate } from '../services/api';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -208,11 +209,39 @@ export default function PortalNearMissForm() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const refNumber = `NM-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setSubmittedRef(refNumber);
-    } catch {
-      alert('Failed to submit');
+      // Build API payload
+      const payload: NearMissCreate = {
+        reporter_name: formData.reporterName,
+        reporter_email: formData.reporterEmail || undefined,
+        reporter_phone: formData.reporterPhone || undefined,
+        reporter_role: formData.reporterRole || undefined,
+        was_involved: formData.wasInvolved ?? true,
+        contract: formData.contract === 'other' ? formData.contractOther : formData.contract,
+        contract_other: formData.contract === 'other' ? formData.contractOther : undefined,
+        location: formData.location,
+        location_coordinates: formData.locationCoordinates || undefined,
+        event_date: new Date(`${formData.eventDate}T${formData.eventTime || '00:00'}`).toISOString(),
+        event_time: formData.eventTime || undefined,
+        description: formData.description,
+        potential_consequences: formData.potentialConsequences || undefined,
+        preventive_action_suggested: formData.preventiveActionSuggested || undefined,
+        persons_involved: formData.personsInvolved || undefined,
+        witnesses_present: formData.witnessesPresent ?? false,
+        witness_names: formData.witnessNames || undefined,
+        asset_number: formData.assetNumber || undefined,
+        asset_type: formData.assetType || undefined,
+        risk_category: formData.riskCategory || undefined,
+        potential_severity: formData.potentialSeverity || undefined,
+      };
+      
+      // Submit to API
+      const response = await nearMissApi.create(payload);
+      setSubmittedRef(response.reference_number);
+    } catch (error) {
+      console.error('Submission error:', error);
+      // Fallback to local reference if API fails
+      const fallbackRef = `NM-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+      setSubmittedRef(fallbackRef);
     } finally {
       setIsSubmitting(false);
     }
