@@ -14,18 +14,21 @@ const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
 // Static assets to cache immediately
+// IMPORTANT: Only include assets that DEFINITELY exist to prevent install failures
 const STATIC_ASSETS = [
   '/',
+  '/index.html',
+  '/manifest.json',
+  '/offline.html',
+];
+
+// Optional assets to cache (failures won't block install)
+const OPTIONAL_ASSETS = [
   '/portal',
   '/portal/login',
   '/portal/report',
   '/portal/track',
-  '/portal/sos',
   '/portal/help',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico',
-  '/offline.html',
 ];
 
 // API routes to cache for offline
@@ -35,14 +38,47 @@ const CACHEABLE_API_ROUTES = [
   '/api/users/me',
 ];
 
-// Install event - cache static assets
+/**
+ * Safely cache a single asset - returns true on success, false on failure
+ */
+async function cacheAsset(cache, url) {
+  try {
+    const response = await fetch(url, { cache: 'no-cache' });
+    if (response.ok) {
+      await cache.put(url, response);
+      return true;
+    }
+    console.warn(`[SW] Skipping ${url} - status ${response.status}`);
+    return false;
+  } catch (err) {
+    console.warn(`[SW] Failed to cache ${url}:`, err.message);
+    return false;
+  }
+}
+
+// Install event - cache static assets with defensive handling
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing service worker...');
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('[SW] Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
+      .then(async (cache) => {
+        console.log('[SW] Caching critical assets');
+        
+        // Cache critical assets - these must succeed
+        try {
+          await cache.addAll(STATIC_ASSETS);
+        } catch (err) {
+          console.error('[SW] Failed to cache critical assets:', err);
+          // Don't throw - continue installation
+        }
+        
+        // Cache optional assets - failures are OK
+        console.log('[SW] Caching optional assets');
+        await Promise.allSettled(
+          OPTIONAL_ASSETS.map(url => cacheAsset(cache, url))
+        );
+        
+        console.log('[SW] Install complete');
       })
       .then(() => self.skipWaiting())
   );

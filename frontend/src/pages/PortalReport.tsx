@@ -49,9 +49,9 @@ const REPORT_TYPES = [
     icon: Car,
     iconBg: 'bg-orange-100 dark:bg-orange-900/20',
     iconColor: 'text-orange-600 dark:text-orange-400',
-    title: 'Road Traffic Accident',
+    title: 'Road Traffic Collision',
     subtitle: 'Vehicle incident',
-    description: 'Report an RTA involving a company vehicle',
+    description: 'Report an RTC involving a company vehicle',
   },
 ];
 
