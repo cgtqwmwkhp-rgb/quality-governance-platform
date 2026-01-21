@@ -251,64 +251,99 @@ export default function PortalTrack() {
 
   const loadMyReports = async () => {
     setIsLoadingMyReports(true);
+    setError(null);
+    
     try {
       const apiBase = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
       const allReports: ReportSummary[] = [];
       
+      // Get auth token - try portal token first, then admin token
+      const portalToken = localStorage.getItem('portal_id_token');
+      const adminToken = localStorage.getItem('access_token');
+      const token = portalToken || adminToken;
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Track if any API calls succeed
+      let hasSuccessfulFetch = false;
+      let authError = false;
+      
       // Fetch incidents
       try {
-        const incidentsRes = await fetch(`${apiBase}/api/v1/incidents?page=1&size=20`);
+        const incidentsRes = await fetch(`${apiBase}/api/v1/incidents?page=1&size=20`, { headers });
         if (incidentsRes.ok) {
+          hasSuccessfulFetch = true;
           const data = await incidentsRes.json();
           (data.items || []).forEach((inc: any) => {
-            allReports.push({
-              reference_number: inc.reference_number,
-              report_type: 'incident',
-              title: inc.title,
-              status: inc.status?.toUpperCase() || 'OPEN',
-              status_label: getStatusLabel(inc.status),
-              submitted_at: inc.reported_date || inc.created_at,
-              updated_at: inc.created_at,
-            });
+            // Filter to only show reports from current user if email matches
+            if (!user?.email || inc.reported_by_email === user.email || inc.reported_by === user.name) {
+              allReports.push({
+                reference_number: inc.reference_number,
+                report_type: 'incident',
+                title: inc.title,
+                status: inc.status?.toUpperCase() || 'OPEN',
+                status_label: getStatusLabel(inc.status),
+                submitted_at: inc.reported_date || inc.created_at,
+                updated_at: inc.created_at,
+              });
+            }
           });
+        } else if (incidentsRes.status === 401) {
+          authError = true;
         }
       } catch (e) { console.error('Failed to fetch incidents:', e); }
       
       // Fetch RTAs
       try {
-        const rtasRes = await fetch(`${apiBase}/api/v1/rtas?page=1&size=20`);
+        const rtasRes = await fetch(`${apiBase}/api/v1/rtas?page=1&size=20`, { headers });
         if (rtasRes.ok) {
+          hasSuccessfulFetch = true;
           const data = await rtasRes.json();
           (data.items || []).forEach((rta: any) => {
-            allReports.push({
-              reference_number: rta.reference_number,
-              report_type: 'rta',
-              title: rta.description?.substring(0, 100) || 'Road Traffic Collision',
-              status: rta.status?.toUpperCase() || 'REPORTED',
-              status_label: getStatusLabel(rta.status),
-              submitted_at: rta.incident_date || rta.created_at,
-              updated_at: rta.created_at,
-            });
+            if (!user?.email || rta.driver_email === user.email || rta.reported_by === user.name) {
+              allReports.push({
+                reference_number: rta.reference_number,
+                report_type: 'rta',
+                title: rta.description?.substring(0, 100) || 'Road Traffic Collision',
+                status: rta.status?.toUpperCase() || 'REPORTED',
+                status_label: getStatusLabel(rta.status),
+                submitted_at: rta.incident_date || rta.created_at,
+                updated_at: rta.created_at,
+              });
+            }
           });
+        } else if (rtasRes.status === 401) {
+          authError = true;
         }
       } catch (e) { console.error('Failed to fetch RTAs:', e); }
       
       // Fetch complaints
       try {
-        const complaintsRes = await fetch(`${apiBase}/api/v1/complaints?page=1&size=20`);
+        const complaintsRes = await fetch(`${apiBase}/api/v1/complaints?page=1&size=20`, { headers });
         if (complaintsRes.ok) {
+          hasSuccessfulFetch = true;
           const data = await complaintsRes.json();
           (data.items || []).forEach((comp: any) => {
-            allReports.push({
-              reference_number: comp.reference_number,
-              report_type: 'complaint',
-              title: comp.title,
-              status: comp.status?.toUpperCase() || 'OPEN',
-              status_label: getStatusLabel(comp.status),
-              submitted_at: comp.received_date || comp.created_at,
-              updated_at: comp.created_at,
-            });
+            if (!user?.email || comp.complainant_email === user.email || comp.reported_by === user.name) {
+              allReports.push({
+                reference_number: comp.reference_number,
+                report_type: 'complaint',
+                title: comp.title,
+                status: comp.status?.toUpperCase() || 'OPEN',
+                status_label: getStatusLabel(comp.status),
+                submitted_at: comp.received_date || comp.created_at,
+                updated_at: comp.created_at,
+              });
+            }
           });
+        } else if (complaintsRes.status === 401) {
+          authError = true;
         }
       } catch (e) { console.error('Failed to fetch complaints:', e); }
       
@@ -316,8 +351,14 @@ export default function PortalTrack() {
       allReports.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
       
       setMyReports(allReports);
+      
+      // Show appropriate message if no reports and auth failed
+      if (!hasSuccessfulFetch && authError) {
+        setError('Unable to load reports. Your session may have expired. Please try logging in again.');
+      }
     } catch (err) {
       console.error('Failed to load reports:', err);
+      setError('Failed to load reports. Please try again later.');
     } finally {
       setIsLoadingMyReports(false);
     }
@@ -587,6 +628,23 @@ export default function PortalTrack() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
                 <p className="text-muted-foreground">Loading your reports...</p>
               </div>
+            ) : error && myReports.length === 0 ? (
+              <Card className="p-8 text-center border-destructive/20">
+                <div className="w-16 h-16 bg-destructive/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <XCircle className="w-8 h-8 text-destructive" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Unable to Load Reports</h3>
+                <p className="text-muted-foreground mb-4">{error}</p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button onClick={loadMyReports} variant="outline">
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Try Again
+                  </Button>
+                  <Button onClick={() => navigate('/portal/login')}>
+                    Sign In Again
+                  </Button>
+                </div>
+              </Card>
             ) : myReports.length > 0 ? (
               <div className="space-y-3">
                 {myReports.map((report) => (
