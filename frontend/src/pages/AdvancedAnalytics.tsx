@@ -188,7 +188,7 @@ export default function AdvancedAnalytics() {
     onClick?: () => void;
   }) => (
     <div 
-      className={`bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-5 hover:border-${color}-500/50 transition-all cursor-pointer group`}
+      className={`bg-card/50 backdrop-blur-sm border border-border rounded-xl p-5 hover:border-primary/50 transition-all cursor-pointer group`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-3">
@@ -196,16 +196,16 @@ export default function AdvancedAnalytics() {
           <Icon className={`w-5 h-5 text-${color}-400`} />
         </div>
         {trend !== undefined && (
-          <div className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <div className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-success' : 'text-destructive'}`}>
             {trend >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
             <span>{Math.abs(trend)}%</span>
           </div>
         )}
       </div>
-      <div className="text-2xl font-bold text-white mb-1">{value}</div>
-      <div className="text-sm text-gray-400">{title}</div>
-      {subtitle && <div className="text-xs text-gray-500 mt-1">{subtitle}</div>}
-      <div className="flex items-center gap-1 mt-3 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="text-2xl font-bold text-foreground mb-1">{value}</div>
+      <div className="text-sm text-muted-foreground">{title}</div>
+      {subtitle && <div className="text-xs text-muted-foreground/70 mt-1">{subtitle}</div>}
+      <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
         <Eye className="w-3 h-3" />
         <span>Click to drill down</span>
       </div>
@@ -218,8 +218,8 @@ export default function AdvancedAnalytics() {
     const range = max - min || 1;
     
     return (
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-        <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
+      <div className="bg-card/50 border border-border rounded-xl p-5">
+        <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-32 flex items-end gap-1">
           {data.map((value, i) => (
             <div
@@ -234,7 +234,7 @@ export default function AdvancedAnalytics() {
             />
           ))}
         </div>
-        <div className="flex justify-between mt-2 text-xs text-gray-500">
+        <div className="flex justify-between mt-2 text-xs text-muted-foreground">
           <span>30 days ago</span>
           <span>Today</span>
         </div>
@@ -246,48 +246,48 @@ export default function AdvancedAnalytics() {
     const position = (data.your_percentile / 100) * 100;
     
     return (
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+      <div className="bg-card/50 border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white capitalize">{metric.replace(/_/g, ' ')}</h3>
+          <h3 className="text-lg font-semibold text-foreground capitalize">{metric.replace(/_/g, ' ')}</h3>
           <span className={`px-2 py-1 rounded text-xs font-medium ${
-            data.trend === 'improving' ? 'bg-emerald-500/20 text-emerald-400' :
-            data.trend === 'stable' ? 'bg-blue-500/20 text-blue-400' :
-            'bg-red-500/20 text-red-400'
+            data.trend === 'improving' ? 'bg-success/10 text-success' :
+            data.trend === 'stable' ? 'bg-info/10 text-info' :
+            'bg-destructive/10 text-destructive'
           }`}>
             {data.trend}
           </span>
         </div>
         
         {/* Gauge */}
-        <div className="relative h-8 bg-slate-700 rounded-full overflow-hidden mb-4">
+        <div className="relative h-8 bg-surface rounded-full overflow-hidden mb-4">
           <div className="absolute inset-0 flex">
-            <div className="w-1/4 bg-red-500/30" />
-            <div className="w-1/4 bg-yellow-500/30" />
-            <div className="w-1/4 bg-blue-500/30" />
-            <div className="w-1/4 bg-emerald-500/30" />
+            <div className="w-1/4 bg-destructive/30" />
+            <div className="w-1/4 bg-warning/30" />
+            <div className="w-1/4 bg-info/30" />
+            <div className="w-1/4 bg-success/30" />
           </div>
           <div 
-            className="absolute top-0 bottom-0 w-1 bg-white shadow-lg transition-all"
+            className="absolute top-0 bottom-0 w-1 bg-foreground shadow-lg transition-all"
             style={{ left: `${position}%` }}
           />
         </div>
         
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-gray-400">Your Value:</span>
-            <span className="text-white font-semibold ml-2">{data.your_value}</span>
+            <span className="text-muted-foreground">Your Value:</span>
+            <span className="text-foreground font-semibold ml-2">{data.your_value}</span>
           </div>
           <div>
-            <span className="text-gray-400">Industry Avg:</span>
-            <span className="text-white font-semibold ml-2">{data.industry_average}</span>
+            <span className="text-muted-foreground">Industry Avg:</span>
+            <span className="text-foreground font-semibold ml-2">{data.industry_average}</span>
           </div>
           <div>
-            <span className="text-gray-400">Percentile:</span>
-            <span className="text-emerald-400 font-semibold ml-2">{data.your_percentile}th</span>
+            <span className="text-muted-foreground">Percentile:</span>
+            <span className="text-success font-semibold ml-2">{data.your_percentile}th</span>
           </div>
           <div>
-            <span className="text-gray-400">Top 10%:</span>
-            <span className="text-white font-semibold ml-2">{data.percentile_90}</span>
+            <span className="text-muted-foreground">Top 10%:</span>
+            <span className="text-foreground font-semibold ml-2">{data.percentile_90}</span>
           </div>
         </div>
       </div>
@@ -305,7 +305,7 @@ export default function AdvancedAnalytics() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent" />
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -315,14 +315,14 @@ export default function AdvancedAnalytics() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Advanced Analytics</h1>
-          <p className="text-gray-400 mt-1">Interactive insights with forecasting and benchmarks</p>
+          <h1 className="text-2xl font-bold text-foreground">Advanced Analytics</h1>
+          <p className="text-muted-foreground mt-1">Interactive insights with forecasting and benchmarks</p>
         </div>
         <div className="flex items-center gap-3">
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm focus:ring-2 focus:ring-emerald-500"
+            className="bg-background border border-border rounded-lg px-4 py-2 text-foreground text-sm focus:ring-2 focus:ring-primary/50"
           >
             {timeRanges.map(range => (
               <option key={range.value} value={range.value}>{range.label}</option>

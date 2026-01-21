@@ -148,14 +148,14 @@ export default function AuditTrail() {
   ];
 
   const actionIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-    create: { icon: <Plus className="w-4 h-4" />, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-    update: { icon: <Edit className="w-4 h-4" />, color: 'text-blue-400', bg: 'bg-blue-500/20' },
-    delete: { icon: <Trash2 className="w-4 h-4" />, color: 'text-red-400', bg: 'bg-red-500/20' },
-    view: { icon: <Eye className="w-4 h-4" />, color: 'text-slate-400', bg: 'bg-slate-500/20' },
-    login: { icon: <LogIn className="w-4 h-4" />, color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
-    logout: { icon: <LogOut className="w-4 h-4" />, color: 'text-slate-400', bg: 'bg-slate-500/20' },
-    approve: { icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-    reject: { icon: <AlertTriangle className="w-4 h-4" />, color: 'text-amber-400', bg: 'bg-amber-500/20' },
+    create: { icon: <Plus className="w-4 h-4" />, color: 'text-success', bg: 'bg-success/20' },
+    update: { icon: <Edit className="w-4 h-4" />, color: 'text-info', bg: 'bg-info/20' },
+    delete: { icon: <Trash2 className="w-4 h-4" />, color: 'text-destructive', bg: 'bg-destructive/20' },
+    view: { icon: <Eye className="w-4 h-4" />, color: 'text-muted-foreground', bg: 'bg-muted' },
+    login: { icon: <LogIn className="w-4 h-4" />, color: 'text-info', bg: 'bg-info/20' },
+    logout: { icon: <LogOut className="w-4 h-4" />, color: 'text-muted-foreground', bg: 'bg-muted' },
+    approve: { icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-success', bg: 'bg-success/20' },
+    reject: { icon: <AlertTriangle className="w-4 h-4" />, color: 'text-warning', bg: 'bg-warning/20' },
     export: { icon: <Download className="w-4 h-4" />, color: 'text-purple-400', bg: 'bg-purple-500/20' }
   };
 
@@ -181,26 +181,26 @@ export default function AuditTrail() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl">
-              <History className="w-8 h-8" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <History className="w-8 h-8 text-primary" />
             </div>
             Audit Trail
           </h1>
-          <p className="text-slate-400 mt-1">Complete history of system activities</p>
+          <p className="text-muted-foreground mt-1">Complete history of system activities</p>
         </div>
         
         <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
-            className={`p-2 bg-slate-800/50 rounded-lg text-slate-400 hover:text-white transition-all ${
+            className={`p-2 bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-all ${
               isLoading ? 'animate-spin' : ''
             }`}
           >
             <RefreshCw className="w-5 h-5" />
           </button>
           
-          <button className="px-4 py-2 bg-slate-800/50 border border-slate-700 text-white font-medium rounded-xl hover:bg-slate-700/50 transition-all flex items-center gap-2">
+          <button className="px-4 py-2 bg-secondary border border-border text-foreground font-medium rounded-xl hover:bg-surface transition-all flex items-center gap-2">
             <Download className="w-5 h-5" />
             Export Log
           </button>
@@ -208,17 +208,17 @@ export default function AuditTrail() {
       </div>
 
       {/* Filters */}
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4">
+      <div className="bg-card/50 backdrop-blur-sm rounded-xl border border-border p-4">
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Search */}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by user, action, or resource..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
           
@@ -227,14 +227,14 @@ export default function AuditTrail() {
             <select
               value={selectedAction}
               onChange={(e) => setSelectedAction(e.target.value)}
-              className="appearance-none pl-4 pr-10 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[150px]"
+              className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
               <option value="all">All Actions</option>
               {actions.map((action) => (
                 <option key={action} value={action}>{action.charAt(0).toUpperCase() + action.slice(1)}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
           
           {/* Module Filter */}
@@ -242,14 +242,14 @@ export default function AuditTrail() {
             <select
               value={selectedModule}
               onChange={(e) => setSelectedModule(e.target.value)}
-              className="appearance-none pl-4 pr-10 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[150px]"
+              className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
               <option value="all">All Modules</option>
               {modules.map((module) => (
                 <option key={module} value={module}>{module}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
           
           {/* Date Range */}
@@ -257,7 +257,7 @@ export default function AuditTrail() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="appearance-none pl-4 pr-10 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[150px]"
+              className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
               <option value="today">Today</option>
               <option value="yesterday">Yesterday</option>
@@ -265,7 +265,7 @@ export default function AuditTrail() {
               <option value="month">This Month</option>
               <option value="all">All Time</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
         </div>
       </div>
@@ -279,7 +279,7 @@ export default function AuditTrail() {
           >
             {/* Timeline Line */}
             {index < filteredEntries.length - 1 && (
-              <div className="absolute left-3 top-10 bottom-0 w-0.5 bg-slate-700" />
+              <div className="absolute left-3 top-10 bottom-0 w-0.5 bg-border" />
             )}
             
             {/* Timeline Dot */}
@@ -291,10 +291,10 @@ export default function AuditTrail() {
             
             {/* Entry Card */}
             <div
-              className={`bg-slate-800/50 backdrop-blur-sm rounded-xl border transition-all cursor-pointer ${
+              className={`bg-card/50 backdrop-blur-sm rounded-xl border transition-all cursor-pointer ${
                 expandedEntry === entry.id
-                  ? 'border-violet-500/50'
-                  : 'border-slate-700/50 hover:border-slate-600'
+                  ? 'border-primary/50'
+                  : 'border-border hover:border-border-strong'
               }`}
               onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
             >
@@ -302,21 +302,21 @@ export default function AuditTrail() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-primary-foreground text-sm font-semibold">
                         {entry.user.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <div>
-                        <span className="font-medium text-white">{entry.user.name}</span>
-                        <span className="text-slate-400 mx-2">•</span>
+                        <span className="font-medium text-foreground">{entry.user.name}</span>
+                        <span className="text-muted-foreground mx-2">•</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionIcons[entry.action].bg} ${actionIcons[entry.action].color}`}>
                           {entry.action}
                         </span>
                       </div>
                     </div>
                     
-                    <p className="text-slate-300">{entry.details}</p>
+                    <p className="text-muted-foreground">{entry.details}</p>
                     
-                    <div className="flex items-center gap-4 mt-3 text-sm text-slate-500">
+                    <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
                         {entry.timestamp}

@@ -147,10 +147,10 @@ export default function DashboardBuilder() {
 
     return (
       <div
-        className={`relative bg-slate-800/80 border rounded-xl p-4 cursor-pointer transition-all ${
+        className={`relative bg-card/80 border rounded-xl p-4 cursor-pointer transition-all ${
           isSelected 
-            ? 'border-emerald-500 ring-2 ring-emerald-500/30' 
-            : 'border-slate-700 hover:border-slate-600'
+            ? 'border-primary ring-2 ring-primary/30' 
+            : 'border-border hover:border-border-strong'
         }`}
         style={{
           gridColumn: `span ${widget.w}`,
@@ -164,7 +164,7 @@ export default function DashboardBuilder() {
       >
         {/* Drag Handle */}
         <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <GripVertical className="w-4 h-4 text-gray-500" />
+          <GripVertical className="w-4 h-4 text-muted-foreground" />
         </div>
 
         {/* Widget Actions */}
@@ -172,13 +172,13 @@ export default function DashboardBuilder() {
           <div className="absolute top-2 right-2 flex items-center gap-1">
             <button 
               onClick={(e) => { e.stopPropagation(); setShowConfigPanel(true); }}
-              className="p-1.5 bg-slate-700 rounded hover:bg-slate-600 text-gray-400 hover:text-white"
+              className="p-1.5 bg-surface rounded hover:bg-muted text-muted-foreground hover:text-foreground"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
             <button 
               onClick={(e) => { e.stopPropagation(); deleteWidget(widget.id); }}
-              className="p-1.5 bg-slate-700 rounded hover:bg-red-600 text-gray-400 hover:text-white"
+              className="p-1.5 bg-surface rounded hover:bg-destructive text-muted-foreground hover:text-destructive-foreground"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -188,21 +188,21 @@ export default function DashboardBuilder() {
         {/* Widget Content Preview */}
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-2 mb-3">
-            <Icon className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm font-medium text-white truncate">{widget.title}</span>
+            <Icon className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-foreground truncate">{widget.title}</span>
           </div>
           
           {widget.type === 'kpi_card' && (
             <div className="flex-1 flex flex-col justify-center">
-              <div className="text-3xl font-bold text-white">47</div>
-              <div className="text-sm text-gray-400 mt-1">Total {widget.metric}</div>
+              <div className="text-3xl font-bold text-foreground">47</div>
+              <div className="text-sm text-muted-foreground mt-1">Total {widget.metric}</div>
             </div>
           )}
 
           {widget.type === 'line_chart' && (
             <div className="flex-1 flex items-end gap-1 pb-2">
               {[30, 45, 35, 60, 55, 70, 65, 80, 75, 85].map((h, i) => (
-                <div key={i} className="flex-1 bg-emerald-500/30 rounded-t" style={{ height: `${h}%` }} />
+                <div key={i} className="flex-1 bg-primary/30 rounded-t" style={{ height: `${h}%` }} />
               ))}
             </div>
           )}
@@ -210,30 +210,30 @@ export default function DashboardBuilder() {
           {widget.type === 'bar_chart' && (
             <div className="flex-1 flex items-end gap-2 pb-2">
               {[60, 80, 45, 70, 55].map((h, i) => (
-                <div key={i} className="flex-1 bg-blue-500 rounded-t" style={{ height: `${h}%` }} />
+                <div key={i} className="flex-1 bg-info rounded-t" style={{ height: `${h}%` }} />
               ))}
             </div>
           )}
 
           {widget.type === 'pie_chart' && (
             <div className="flex-1 flex items-center justify-center">
-              <div className="w-20 h-20 rounded-full bg-gradient-conic from-emerald-500 via-blue-500 to-purple-500" />
+              <div className="w-20 h-20 rounded-full bg-gradient-conic from-primary via-info to-purple-500" />
             </div>
           )}
 
           {widget.type === 'gauge' && (
             <div className="flex-1 flex items-center justify-center">
               <div className="relative w-20 h-10 overflow-hidden">
-                <div className="absolute inset-0 rounded-t-full bg-gradient-to-r from-red-500 via-yellow-500 to-emerald-500" />
-                <div className="absolute bottom-0 left-1/2 w-1 h-10 bg-white origin-bottom -translate-x-1/2 rotate-45" />
+                <div className="absolute inset-0 rounded-t-full bg-gradient-to-r from-destructive via-warning to-success" />
+                <div className="absolute bottom-0 left-1/2 w-1 h-10 bg-foreground origin-bottom -translate-x-1/2 rotate-45" />
               </div>
             </div>
           )}
 
           {widget.type === 'trend_card' && (
             <div className="flex-1 flex flex-col justify-center">
-              <div className="text-2xl font-bold text-white">-8.5%</div>
-              <div className="flex items-center gap-1 text-emerald-400 text-sm">
+              <div className="text-2xl font-bold text-foreground">-8.5%</div>
+              <div className="flex items-center gap-1 text-success text-sm">
                 <TrendingUp className="w-4 h-4" />
                 Improving
               </div>
@@ -243,16 +243,16 @@ export default function DashboardBuilder() {
           {widget.type === 'data_table' && (
             <div className="flex-1 space-y-2">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-4 bg-slate-700/50 rounded" />
+                <div key={i} className="h-4 bg-surface rounded" />
               ))}
             </div>
           )}
 
           {widget.type === 'timeline' && (
             <div className="flex-1 flex items-center">
-              <div className="w-full h-2 bg-slate-700 rounded-full relative">
+              <div className="w-full h-2 bg-surface rounded-full relative">
                 {[20, 40, 60, 80].map((pos, i) => (
-                  <div key={i} className="absolute w-3 h-3 bg-emerald-500 rounded-full top-1/2 -translate-y-1/2" style={{ left: `${pos}%` }} />
+                  <div key={i} className="absolute w-3 h-3 bg-primary rounded-full top-1/2 -translate-y-1/2" style={{ left: `${pos}%` }} />
                 ))}
               </div>
             </div>
@@ -269,7 +269,7 @@ export default function DashboardBuilder() {
       {/* Main Canvas */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center justify-between p-4 bg-slate-800/50 border-b border-slate-700">
+        <div className="flex items-center justify-between p-4 bg-card/50 border-b border-border">
           <div className="flex items-center gap-4">
             {editingName ? (
               <input
@@ -278,23 +278,23 @@ export default function DashboardBuilder() {
                 onChange={(e) => setDashboard(prev => ({ ...prev, name: e.target.value }))}
                 onBlur={() => setEditingName(false)}
                 onKeyDown={(e) => e.key === 'Enter' && setEditingName(false)}
-                className="bg-slate-700 border border-slate-600 rounded px-3 py-1 text-white text-lg font-semibold focus:ring-2 focus:ring-emerald-500"
+                className="bg-surface border border-border rounded px-3 py-1 text-foreground text-lg font-semibold focus:ring-2 focus:ring-primary/50"
                 autoFocus
               />
             ) : (
               <h1 
-                className="text-xl font-bold text-white cursor-pointer hover:text-emerald-400 transition-colors"
+                className="text-xl font-bold text-foreground cursor-pointer hover:text-primary transition-colors"
                 onClick={() => setEditingName(true)}
               >
                 {dashboard.name}
               </h1>
             )}
-            <span className="text-sm text-gray-400">{dashboard.widgets.length} widgets</span>
+            <span className="text-sm text-muted-foreground">{dashboard.widgets.length} widgets</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowWidgetPicker(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Widget

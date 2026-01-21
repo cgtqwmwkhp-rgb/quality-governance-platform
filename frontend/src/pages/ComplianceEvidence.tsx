@@ -198,7 +198,7 @@ export default function ComplianceEvidence() {
     if (children.length === 0) return null;
 
     return (
-      <div className={`${level > 0 ? 'ml-6 border-l border-slate-700 pl-4' : ''}`}>
+      <div className={`${level > 0 ? 'ml-6 border-l border-border pl-4' : ''}`}>
         {children.map(clause => {
           const coverage = getCoverageStatus(clause.id);
           const evidence = getEvidenceForClause(clause.id);
@@ -212,15 +212,15 @@ export default function ComplianceEvidence() {
               <div 
                 className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
                   selectedClause?.id === clause.id 
-                    ? 'bg-slate-700 ring-2 ring-emerald-500' 
-                    : 'bg-slate-800/50 hover:bg-slate-700/50'
+                    ? 'bg-surface ring-2 ring-primary' 
+                    : 'bg-surface/50 hover:bg-surface'
                 }`}
                 onClick={() => setSelectedClause(clause)}
               >
                 {hasChildren ? (
                   <button 
                     onClick={(e) => { e.stopPropagation(); toggleClause(clause.id); }}
-                    className="text-gray-400 hover:text-white"
+                    className="text-muted-foreground hover:text-foreground"
                   >
                     {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   </button>
@@ -229,18 +229,18 @@ export default function ComplianceEvidence() {
                 )}
 
                 <div className={`w-2 h-2 rounded-full ${
-                  coverage === 'full' ? 'bg-emerald-500' : 
-                  coverage === 'partial' ? 'bg-yellow-500' : 
-                  'bg-red-500'
+                  coverage === 'full' ? 'bg-success' : 
+                  coverage === 'partial' ? 'bg-warning' : 
+                  'bg-destructive'
                 }`} />
 
                 <StandardIcon className={`w-4 h-4 text-${color}-400`} />
 
-                <span className="text-sm font-medium text-gray-400">{clause.clauseNumber}</span>
-                <span className="text-sm text-white flex-grow">{clause.title}</span>
+                <span className="text-sm font-medium text-muted-foreground">{clause.clauseNumber}</span>
+                <span className="text-sm text-foreground flex-grow">{clause.title}</span>
 
                 {evidence.length > 0 && (
-                  <span className="text-xs bg-slate-700 text-gray-300 px-2 py-1 rounded-full flex items-center gap-1">
+                  <span className="text-xs bg-surface text-muted-foreground px-2 py-1 rounded-full flex items-center gap-1 border border-border">
                     <Link2 className="w-3 h-3" />
                     {evidence.length} evidence
                   </span>
@@ -256,28 +256,28 @@ export default function ComplianceEvidence() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Target className="w-8 h-8 text-emerald-400" />
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+              <Target className="w-8 h-8 text-primary" />
               ISO Compliance Evidence Center
             </h1>
-            <p className="text-gray-400 mt-1">
+            <p className="text-muted-foreground mt-1">
               Central repository for all compliance evidence mapped to ISO standards
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setShowAutoTagger(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-medium hover:from-purple-700 hover:to-pink-700 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary-hover transition-all"
             >
               <Sparkles className="w-4 h-4" />
               AI Auto-Tagger
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 rounded-lg text-white font-medium hover:bg-slate-600 transition-all">
+            <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border rounded-lg text-secondary-foreground font-medium hover:bg-surface transition-all">
               <Download className="w-4 h-4" />
               Export Report
             </button>
@@ -296,10 +296,10 @@ export default function ComplianceEvidence() {
               <div 
                 key={standard.id}
                 onClick={() => setSelectedStandard(standard.id)}
-                className={`p-4 rounded-xl bg-slate-800 border-2 cursor-pointer transition-all duration-200 ${
+                className={`p-4 rounded-xl bg-card border-2 cursor-pointer transition-all duration-200 ${
                   selectedStandard === standard.id 
-                    ? `border-${color}-500 shadow-lg shadow-${color}-500/20` 
-                    : 'border-slate-700 hover:border-slate-600'
+                    ? `border-primary shadow-lg shadow-primary/20` 
+                    : 'border-border hover:border-border-strong'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -308,14 +308,14 @@ export default function ComplianceEvidence() {
                       <Icon className={`w-5 h-5 text-${color}-400`} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white">{standard.code}</h3>
-                      <p className="text-xs text-gray-400">{standard.name}</p>
+                      <h3 className="font-bold text-foreground">{standard.code}</h3>
+                      <p className="text-xs text-muted-foreground">{standard.name}</p>
                     </div>
                   </div>
                   <div className={`text-2xl font-bold text-${color}-400`}>{percentage}%</div>
                 </div>
 
-                <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+                <div className="w-full bg-surface rounded-full h-2 mb-3">
                   <div 
                     className={`h-2 rounded-full bg-gradient-to-r from-${color}-600 to-${color}-400`}
                     style={{ width: `${percentage}%` }}
@@ -323,9 +323,9 @@ export default function ComplianceEvidence() {
                 </div>
 
                 <div className="flex justify-between text-xs">
-                  <span className="text-emerald-400">{stats.covered} Full</span>
-                  <span className="text-yellow-400">{stats.partial} Partial</span>
-                  <span className="text-red-400">{stats.gaps} Gaps</span>
+                  <span className="text-success">{stats.covered} Full</span>
+                  <span className="text-warning">{stats.partial} Partial</span>
+                  <span className="text-destructive">{stats.gaps} Gaps</span>
                 </div>
               </div>
             );
@@ -334,7 +334,7 @@ export default function ComplianceEvidence() {
 
         {/* View Mode Tabs & Search */}
         <div className="flex items-center justify-between gap-4">
-          <div className="flex bg-slate-800 rounded-lg p-1">
+          <div className="flex bg-secondary rounded-lg p-1">
             {[
               { id: 'clauses', label: 'Clause View', icon: BookOpen },
               { id: 'evidence', label: 'Evidence List', icon: FileText },
@@ -345,8 +345,8 @@ export default function ComplianceEvidence() {
                 onClick={() => setViewMode(tab.id as typeof viewMode)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
                   viewMode === tab.id 
-                    ? 'bg-emerald-600 text-white' 
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -357,20 +357,20 @@ export default function ComplianceEvidence() {
 
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search clauses or keywords..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-80 pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-80 pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
               />
             </div>
 
             <select
               value={selectedStandard}
               onChange={(e) => setSelectedStandard(e.target.value)}
-              className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+              className="px-4 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50"
             >
               <option value="all">All Standards</option>
               {ISO_STANDARDS.map(s => (
@@ -384,17 +384,17 @@ export default function ComplianceEvidence() {
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Panel - Clause Tree / Evidence List */}
-        <div className="lg:col-span-2 bg-slate-800 rounded-xl p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           {viewMode === 'clauses' && (
             <>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-primary" />
                 Clause Structure
               </h2>
               {selectedStandard === 'all' ? (
                 ISO_STANDARDS.map(standard => (
                   <div key={standard.id} className="mb-6">
-                    <h3 className="text-md font-semibold text-white mb-3 flex items-center gap-2">
+                    <h3 className="text-md font-semibold text-foreground mb-3 flex items-center gap-2">
                       {React.createElement(standardIcons[standard.id], { className: `w-4 h-4 text-${standardColors[standard.id]}-400` })}
                       {standard.code}
                     </h3>

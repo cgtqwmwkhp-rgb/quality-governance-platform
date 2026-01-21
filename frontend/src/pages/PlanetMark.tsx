@@ -159,24 +159,24 @@ export default function PlanetMark() {
     : null
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl">
-            <Leaf className="w-8 h-8 text-white" />
+          <div className="p-3 bg-primary/10 rounded-xl">
+            <Leaf className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white">Planet Mark Carbon</h1>
-            <p className="text-gray-400">Net-Zero Journey • GHG Protocol Aligned</p>
+            <h1 className="text-3xl font-bold text-foreground">Planet Mark Carbon</h1>
+            <p className="text-muted-foreground">Net-Zero Journey • GHG Protocol Aligned</p>
           </div>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
             <Download className="w-4 h-4" />
             Export Report
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
             Add Emission
           </button>
@@ -185,50 +185,50 @@ export default function PlanetMark() {
 
       {/* Year Selector & Summary Banner */}
       {currentYear && (
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 rounded-xl p-6 mb-8">
+        <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <select
                   value={currentYear.id}
                   onChange={(e) => setCurrentYear(years.find(y => y.id === parseInt(e.target.value)) || years[0])}
-                  className="bg-white/20 border border-white/30 rounded-lg px-3 py-1 text-white font-bold text-lg"
+                  className="bg-primary-foreground/20 border border-primary-foreground/30 rounded-lg px-3 py-1 text-primary-foreground font-bold text-lg"
                 >
                   {years.map(y => (
-                    <option key={y.id} value={y.id} className="bg-slate-800 text-white">
+                    <option key={y.id} value={y.id} className="bg-card text-foreground">
                       {y.year_label} {y.is_baseline ? '(Baseline)' : ''}
                     </option>
                   ))}
                 </select>
                 {currentYear.certification_status === 'certified' && (
-                  <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-medium flex items-center gap-1">
+                  <span className="px-3 py-1 bg-primary-foreground/20 rounded-full text-sm font-medium flex items-center gap-1 text-primary-foreground">
                     <Award className="w-4 h-4" /> Certified
                   </span>
                 )}
               </div>
-              <p className="text-green-100">
+              <p className="text-primary-foreground/80">
                 Reporting: 1 Jul {2024 + currentYear.year_number - 1} → 30 Jun {2024 + currentYear.year_number}
               </p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-white">{currentYear.total_emissions.toFixed(1)}</div>
-                <div className="text-green-100 text-sm">tCO₂e Total</div>
+                <div className="text-3xl font-bold text-primary-foreground">{currentYear.total_emissions.toFixed(1)}</div>
+                <div className="text-primary-foreground/80 text-sm">tCO₂e Total</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-white">{currentYear.emissions_per_fte.toFixed(2)}</div>
-                <div className="text-green-100 text-sm">tCO₂e/FTE</div>
+                <div className="text-3xl font-bold text-primary-foreground">{currentYear.emissions_per_fte.toFixed(2)}</div>
+                <div className="text-primary-foreground/80 text-sm">tCO₂e/FTE</div>
               </div>
               <div className="text-center">
-                <div className={`text-3xl font-bold ${yoyChange && yoyChange < 0 ? 'text-white' : 'text-yellow-300'}`}>
+                <div className={`text-3xl font-bold ${yoyChange && yoyChange < 0 ? 'text-primary-foreground' : 'text-warning'}`}>
                   {yoyChange ? `${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%` : '—'}
                 </div>
-                <div className="text-green-100 text-sm">vs Baseline</div>
+                <div className="text-primary-foreground/80 text-sm">vs Baseline</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-white">{currentYear.data_quality}/16</div>
-                <div className="text-green-100 text-sm">Data Quality</div>
+                <div className="text-3xl font-bold text-primary-foreground">{currentYear.data_quality}/16</div>
+                <div className="text-primary-foreground/80 text-sm">Data Quality</div>
               </div>
             </div>
           </div>
@@ -236,7 +236,7 @@ export default function PlanetMark() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-slate-700 pb-2 overflow-x-auto">
+      <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
           { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
           { id: 'emissions', label: 'Emissions', icon: Factory },
@@ -252,8 +252,8 @@ export default function PlanetMark() {
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-green-600 text-white'
-                  : 'text-gray-400 hover:bg-slate-700 hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-surface hover:text-foreground'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -265,7 +265,7 @@ export default function PlanetMark() {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-green-400 animate-spin" />
+          <RefreshCw className="w-8 h-8 text-primary animate-spin" />
         </div>
       ) : (
         <>
@@ -282,31 +282,31 @@ export default function PlanetMark() {
                   const Icon = scope.icon
                   const pct = ((scope.value / currentYear.total_emissions) * 100).toFixed(1)
                   return (
-                    <div key={scope.scope} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <div key={scope.scope} className="bg-card rounded-xl p-6 border border-border">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className={`p-3 ${scope.color} rounded-xl`}>
                             <Icon className="w-6 h-6 text-white" />
                           </div>
                           <div>
-                            <div className="font-bold text-white">{scope.scope}</div>
-                            <div className="text-xs text-gray-400">{scope.label}</div>
+                            <div className="font-bold text-foreground">{scope.scope}</div>
+                            <div className="text-xs text-muted-foreground">{scope.label}</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-white">{scope.value.toFixed(1)}</div>
-                          <div className="text-xs text-gray-400">tCO₂e</div>
+                          <div className="text-2xl font-bold text-foreground">{scope.value.toFixed(1)}</div>
+                          <div className="text-xs text-muted-foreground">tCO₂e</div>
                         </div>
                       </div>
-                      <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
+                      <div className="w-full bg-surface rounded-full h-3 mb-2">
                         <div
                           className={`h-3 rounded-full ${scope.color}`}
                           style={{ width: `${pct}%` }}
                         ></div>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">{scope.detail}</span>
-                        <span className="text-white font-medium">{pct}%</span>
+                        <span className="text-muted-foreground">{scope.detail}</span>
+                        <span className="text-foreground font-medium">{pct}%</span>
                       </div>
                     </div>
                   )
@@ -316,10 +316,10 @@ export default function PlanetMark() {
               {/* Key Sources & Action Progress */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Key Emission Sources */}
-                <div className="bg-slate-800 rounded-xl border border-slate-700">
-                  <div className="p-4 bg-slate-700 border-b border-slate-600">
-                    <h3 className="font-bold text-white">Key Emission Sources</h3>
-                    <p className="text-sm text-gray-400">Top contributors to carbon footprint</p>
+                <div className="bg-card rounded-xl border border-border">
+                  <div className="p-4 bg-surface border-b border-border">
+                    <h3 className="font-bold text-foreground">Key Emission Sources</h3>
+                    <p className="text-sm text-muted-foreground">Top contributors to carbon footprint</p>
                   </div>
                   <div className="p-4 space-y-4">
                     {[
@@ -335,12 +335,12 @@ export default function PlanetMark() {
                           <Icon className={`w-5 h-5 ${source.color}`} />
                           <div className="flex-grow">
                             <div className="flex justify-between text-sm mb-1">
-                              <span className="text-white">{source.source}</span>
-                              <span className="text-gray-400">{source.value} tCO₂e ({source.pct}%)</span>
+                              <span className="text-foreground">{source.source}</span>
+                              <span className="text-muted-foreground">{source.value} tCO₂e ({source.pct}%)</span>
                             </div>
-                            <div className="w-full bg-slate-700 rounded-full h-2">
+                            <div className="w-full bg-surface rounded-full h-2">
                               <div
-                                className="h-2 rounded-full bg-green-500"
+                                className="h-2 rounded-full bg-primary"
                                 style={{ width: `${Math.min(source.pct, 100)}%` }}
                               ></div>
                             </div>

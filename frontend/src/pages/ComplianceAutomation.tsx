@@ -76,7 +76,7 @@ interface ScheduledAudit {
 }
 
 const impactColors: Record<string, string> = {
-  critical: 'bg-red-500/20 text-red-400 border-red-500/30',
+  critical: 'bg-destructive/20 text-destructive border-destructive/30',
   high: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   low: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -84,11 +84,11 @@ const impactColors: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  valid: 'bg-emerald-500/20 text-emerald-400',
-  expiring_soon: 'bg-yellow-500/20 text-yellow-400',
-  expired: 'bg-red-500/20 text-red-400',
-  scheduled: 'bg-blue-500/20 text-blue-400',
-  overdue: 'bg-red-500/20 text-red-400',
+  valid: 'bg-success/10 text-success',
+  expiring_soon: 'bg-warning/10 text-warning',
+  expired: 'bg-destructive/10 text-destructive',
+  scheduled: 'bg-info/10 text-info',
+  overdue: 'bg-destructive/10 text-destructive',
 };
 
 export default function ComplianceAutomation() {
@@ -227,7 +227,7 @@ export default function ComplianceAutomation() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent" />
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -251,49 +251,49 @@ export default function ComplianceAutomation() {
 
       {/* Score Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-1 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-xl p-6 text-white">
+        <div className="lg:col-span-1 bg-gradient-to-br from-primary to-primary-hover rounded-xl p-6 text-primary-foreground">
           <div className="flex items-center justify-between mb-4">
             <Shield className="w-8 h-8 opacity-80" />
-            <span className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-emerald-200' : 'text-red-200'}`}>
+            <span className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}>
               {complianceScore.change >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
               {complianceScore.change >= 0 ? '+' : ''}{complianceScore.change}%
             </span>
           </div>
           <div className="text-4xl font-bold mb-1">{complianceScore.overall}%</div>
-          <div className="text-emerald-200 text-sm">Overall Compliance Score</div>
+          <div className="text-primary-foreground/80 text-sm">Overall Compliance Score</div>
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+        <div className="bg-card/50 border border-border rounded-xl p-4">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-red-500/20">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
+            <div className="p-2 rounded-lg bg-destructive/20">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
             </div>
-            <span className="text-gray-400 text-sm">Regulatory Updates</span>
+            <span className="text-muted-foreground text-sm">Regulatory Updates</span>
           </div>
-          <div className="text-2xl font-bold text-white">{updates.filter(u => !u.is_reviewed).length}</div>
-          <div className="text-sm text-gray-500">Pending review</div>
+          <div className="text-2xl font-bold text-foreground">{updates.filter(u => !u.is_reviewed).length}</div>
+          <div className="text-sm text-muted-foreground">Pending review</div>
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+        <div className="bg-card/50 border border-border rounded-xl p-4">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-yellow-500/20">
-              <Clock className="w-5 h-5 text-yellow-400" />
+            <div className="p-2 rounded-lg bg-warning/20">
+              <Clock className="w-5 h-5 text-warning" />
             </div>
-            <span className="text-gray-400 text-sm">Expiring Certificates</span>
+            <span className="text-muted-foreground text-sm">Expiring Certificates</span>
           </div>
-          <div className="text-2xl font-bold text-white">{certificates.filter(c => c.status === 'expiring_soon').length}</div>
-          <div className="text-sm text-gray-500">Within 60 days</div>
+          <div className="text-2xl font-bold text-foreground">{certificates.filter(c => c.status === 'expiring_soon').length}</div>
+          <div className="text-sm text-muted-foreground">Within 60 days</div>
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+        <div className="bg-card/50 border border-border rounded-xl p-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-orange-500/20">
               <Calendar className="w-5 h-5 text-orange-400" />
             </div>
-            <span className="text-gray-400 text-sm">Overdue Audits</span>
+            <span className="text-muted-foreground text-sm">Overdue Audits</span>
           </div>
-          <div className="text-2xl font-bold text-white">{audits.filter(a => a.status === 'overdue').length}</div>
-          <div className="text-sm text-gray-500">Require attention</div>
+          <div className="text-2xl font-bold text-foreground">{audits.filter(a => a.status === 'overdue').length}</div>
+          <div className="text-sm text-muted-foreground">Require attention</div>
         </div>
       </div>
 

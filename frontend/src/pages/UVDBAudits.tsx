@@ -81,11 +81,11 @@ export default function UVDBAudits() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-emerald-500/20 text-emerald-400'
-      case 'in_progress': return 'bg-blue-500/20 text-blue-400'
-      case 'scheduled': return 'bg-yellow-500/20 text-yellow-400'
-      case 'expired': return 'bg-red-500/20 text-red-400'
-      default: return 'bg-gray-500/20 text-gray-400'
+      case 'completed': return 'bg-success/10 text-success'
+      case 'in_progress': return 'bg-info/10 text-info'
+      case 'scheduled': return 'bg-warning/10 text-warning'
+      case 'expired': return 'bg-destructive/10 text-destructive'
+      default: return 'bg-muted text-muted-foreground'
     }
   }
 
@@ -132,22 +132,22 @@ export default function UVDBAudits() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <Award className="w-8 h-8 text-yellow-400" />
+          <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+            <Award className="w-8 h-8 text-warning" />
             UVDB Achilles Verify B2
           </h1>
-          <p className="text-gray-400">Utilities Vendor Database - Supply Chain Qualification Audit</p>
+          <p className="text-muted-foreground">Utilities Vendor Database - Supply Chain Qualification Audit</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
             <Download className="w-4 h-4" />
             Export Protocol
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
             New Audit
           </button>
@@ -155,31 +155,31 @@ export default function UVDBAudits() {
       </div>
 
       {/* Protocol Info Banner */}
-      <div className="bg-gradient-to-r from-yellow-600 to-orange-600 rounded-xl p-6 mb-8">
+      <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1">UVDB-QS-003 - Verify B2 Audit Protocol</h2>
-            <p className="text-yellow-100">Version 11.2 - UK Utilities Sector Qualification Standard</p>
+            <h2 className="text-2xl font-bold text-primary-foreground mb-1">UVDB-QS-003 - Verify B2 Audit Protocol</h2>
+            <p className="text-primary-foreground/80">Version 11.2 - UK Utilities Sector Qualification Standard</p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">{sections.length}</div>
-              <div className="text-yellow-100 text-sm">Sections</div>
+              <div className="text-3xl font-bold text-primary-foreground">{sections.length}</div>
+              <div className="text-primary-foreground/80 text-sm">Sections</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">{totalMaxScore}</div>
-              <div className="text-yellow-100 text-sm">Max Score</div>
+              <div className="text-3xl font-bold text-primary-foreground">{totalMaxScore}</div>
+              <div className="text-primary-foreground/80 text-sm">Max Score</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">4</div>
-              <div className="text-yellow-100 text-sm">ISO Aligned</div>
+              <div className="text-3xl font-bold text-primary-foreground">4</div>
+              <div className="text-primary-foreground/80 text-sm">ISO Aligned</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-slate-700 pb-2 overflow-x-auto">
+      <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
           { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
           { id: 'protocol', label: 'Protocol Sections', icon: ClipboardList },
@@ -193,8 +193,8 @@ export default function UVDBAudits() {
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-yellow-600 text-white'
-                  : 'text-gray-400 hover:bg-slate-700 hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-surface hover:text-foreground'
               }`}
             >
               <Icon className="w-4 h-4" />
