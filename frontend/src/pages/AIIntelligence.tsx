@@ -127,7 +127,7 @@ export default function AIIntelligence() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
-            <Brain className="w-8 h-8 text-purple-500" />
+            <Brain className="w-8 h-8 text-primary" />
             AI Intelligence Hub
           </h1>
           <p className="text-muted-foreground">Predictive Analytics & Smart Recommendations</p>
@@ -136,7 +136,6 @@ export default function AIIntelligence() {
           <Button
             onClick={handleAnalyze}
             disabled={analyzing}
-            className="bg-purple-600 hover:bg-purple-700"
           >
             {analyzing ? (
               <>
@@ -155,36 +154,44 @@ export default function AIIntelligence() {
 
       {/* AI Status Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
           <div className="flex items-center gap-3 mb-2">
-            <Zap className="w-5 h-5 text-purple-200" />
-            <span className="text-2xl font-bold text-white">5</span>
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <Zap className="w-5 h-5 text-purple-500" />
+            </div>
+            <span className="text-2xl font-bold text-foreground">5</span>
           </div>
-          <p className="text-sm text-purple-200">Risk Predictions</p>
+          <p className="text-sm text-muted-foreground">Risk Predictions</p>
         </div>
 
-        <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
           <div className="flex items-center gap-3 mb-2">
-            <AlertTriangle className="w-5 h-5 text-red-200" />
-            <span className="text-2xl font-bold text-white">3</span>
+            <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+            </div>
+            <span className="text-2xl font-bold text-foreground">3</span>
           </div>
-          <p className="text-sm text-red-200">Anomalies Detected</p>
+          <p className="text-sm text-muted-foreground">Anomalies Detected</p>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
           <div className="flex items-center gap-3 mb-2">
-            <Layers className="w-5 h-5 text-blue-200" />
-            <span className="text-2xl font-bold text-white">4</span>
+            <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+              <Layers className="w-5 h-5 text-info" />
+            </div>
+            <span className="text-2xl font-bold text-foreground">4</span>
           </div>
-          <p className="text-sm text-blue-200">Incident Clusters</p>
+          <p className="text-sm text-muted-foreground">Incident Clusters</p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
           <div className="flex items-center gap-3 mb-2">
-            <Lightbulb className="w-5 h-5 text-emerald-200" />
-            <span className="text-2xl font-bold text-white">4</span>
+            <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+              <Lightbulb className="w-5 h-5 text-success" />
+            </div>
+            <span className="text-2xl font-bold text-foreground">4</span>
           </div>
-          <p className="text-sm text-emerald-200">Recommendations</p>
+          <p className="text-sm text-muted-foreground">Recommendations</p>
         </div>
       </div>
 
@@ -204,7 +211,7 @@ export default function AIIntelligence() {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap",
                 activeTab === tab.id
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
@@ -219,33 +226,33 @@ export default function AIIntelligence() {
       {activeTab === 'predictions' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Risk Factor Analysis */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700">
-            <div className="p-4 border-b border-slate-700">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-purple-400" />
+          <div className="bg-card rounded-xl border border-border">
+            <div className="p-4 border-b border-border">
+              <h3 className="font-bold text-foreground flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-primary" />
                 Predictive Risk Factors
               </h3>
-              <p className="text-sm text-gray-400">Based on 365 days of incident data</p>
+              <p className="text-sm text-muted-foreground">Based on 365 days of incident data</p>
             </div>
             <div className="p-4 space-y-4">
               {predictions.map((pred, i) => (
-                <div key={i} className="p-4 bg-slate-700/50 rounded-lg">
+                <div key={i} className="p-4 bg-surface rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 uppercase">{pred.factor_type}</span>
+                      <span className="text-xs text-muted-foreground uppercase">{pred.factor_type}</span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
                           pred.risk_level === 'high'
-                            ? 'bg-red-500/20 text-red-400'
+                            ? 'bg-destructive/10 text-destructive border-destructive/20'
                             : pred.risk_level === 'medium'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : 'bg-green-500/20 text-green-400'
+                            ? 'bg-warning/10 text-warning border-warning/20'
+                            : 'bg-success/10 text-success border-success/20'
                         }`}
                       >
                         {pred.risk_level}
                       </span>
                     </div>
-                    <span className="text-white font-bold">{pred.percentage}%</span>
+                    <span className="text-foreground font-bold">{pred.percentage}%</span>
                   </div>
                   <div className="text-lg font-semibold text-white">{pred.factor_value}</div>
                   {pred.incident_count && (
