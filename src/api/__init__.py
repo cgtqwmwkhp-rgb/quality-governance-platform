@@ -7,6 +7,7 @@ from src.api.routes import (
     analytics,
     audit_templates,
     audit_trail,
+    auditor_competence,
     audits,
     auth,
     complaints,
@@ -16,15 +17,19 @@ from src.api.routes import (
     document_control,
     documents,
     employee_portal,
+    executive_dashboard,
     form_config,
     incidents,
     investigation_templates,
     investigations,
     iso27001,
+    kri,
     near_miss,
     notifications,
     planet_mark,
     policies,
+    policy_acknowledgment,
+    rca_tools,
     realtime,
     risk_register,
     risks,
@@ -34,6 +39,7 @@ from src.api.routes import (
     tenants,
     users,
     uvdb,
+    workflow,
     workflows,
 )
 
@@ -82,5 +88,17 @@ router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Tr
 router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
 # Near Misses
 router.include_router(near_miss.router, prefix="/near-misses", tags=["Near Misses"])
+# Workflow Engine (SLA, Escalation, Automation)
+router.include_router(workflow.router, tags=["Workflow Engine"])
+# Key Risk Indicators & SIF Classification
+router.include_router(kri.router, tags=["Key Risk Indicators"])
+# Policy Acknowledgments & Document Read Tracking
+router.include_router(policy_acknowledgment.router, tags=["Policy Acknowledgments"])
+# Executive Dashboard
+router.include_router(executive_dashboard.router, tags=["Executive Dashboard"])
+# RCA Tools (5-Whys, Fishbone, CAPA)
+router.include_router(rca_tools.router, tags=["RCA Tools"])
+# Auditor Competence Management
+router.include_router(auditor_competence.router, tags=["Auditor Competence"])
 
 __all__ = ["router"]
