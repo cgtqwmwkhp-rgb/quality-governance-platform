@@ -23,8 +23,18 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token')
-      window.location.href = '/login'
+      // Only redirect to login if we're not already there and this is an auth failure
+      // (not just a missing/invalid token for a specific endpoint)
+      const currentPath = window.location.pathname
+      const isLoginPage = currentPath === '/login' || currentPath === '/portal'
+      const isAuthEndpoint = error.config?.url?.includes('/auth/')
+      
+      // Only clear token and redirect for auth-related 401s, not data endpoint 401s
+      if (isAuthEndpoint && !isLoginPage) {
+        localStorage.removeItem('access_token')
+        window.location.href = '/login'
+      }
+      // For non-auth endpoints, just reject and let the component handle it
     }
     return Promise.reject(error)
   }
