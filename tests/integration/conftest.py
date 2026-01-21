@@ -1,11 +1,4 @@
-"""
-Integration Test Configuration
-
-Provides async and sync fixtures for integration testing against PostgreSQL.
-Uses pytest-asyncio for async test support and httpx.AsyncClient for API testing.
-
-Database: PostgreSQL with alembic migrations applied before test run.
-"""
+"""Integration Test Configuration."""
 
 import os
 from typing import AsyncGenerator, Generator
@@ -17,11 +10,6 @@ from httpx import ASGITransport, AsyncClient
 from src.main import app
 
 
-# ============================================================================
-# Sync Fixtures (for tests that don't need async)
-# ============================================================================
-
-
 @pytest.fixture
 def sync_client() -> Generator[TestClient, None, None]:
     """Synchronous test client for basic integration tests."""
@@ -29,18 +17,9 @@ def sync_client() -> Generator[TestClient, None, None]:
         yield c
 
 
-# ============================================================================
-# Async Fixtures (for async integration tests)
-# ============================================================================
-
-
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    """Async HTTP client for testing FastAPI endpoints.
-
-    Uses ASGITransport to call the app directly without network overhead.
-    This is the primary client fixture for integration tests.
-    """
+    """Async HTTP client for testing FastAPI endpoints."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -55,15 +34,10 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def auth_headers() -> dict[str, str]:
-    """Test authentication headers.
-
-    Note: These are mock headers that don't pass actual auth validation.
-    Tests requiring authenticated access are quarantined until proper
-    JWT token generation is implemented.
-    """
+def auth_headers():
+    """Test authentication headers - quarantined."""
     pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Auth headers require valid JWT token generation. "
+        "QUARANTINED [GOVPLAT-003]: Auth headers require valid JWT. "
         "See tests/QUARANTINE_POLICY.yaml"
     )
 
@@ -76,25 +50,16 @@ def test_user_id() -> str:
 
 @pytest.fixture
 def superuser_auth_headers():
-    """Superuser authentication headers - requires valid JWT."""
+    """Superuser authentication headers - quarantined."""
     pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Superuser auth requires JWT token generation. "
+        "QUARANTINED [GOVPLAT-003]: Superuser auth requires JWT. "
         "See tests/QUARANTINE_POLICY.yaml"
     )
 
 
-# ============================================================================
-# Database Session Fixtures
-# ============================================================================
-
-
 @pytest.fixture
 async def test_session():
-    """Async database session for integration tests.
-
-    Note: Tests requiring full database access with seeded data
-    should be marked with @pytest.mark.requires_db
-    """
+    """Async database session - quarantined."""
     pytest.skip(
         "QUARANTINED [GOVPLAT-003]: Async DB session not configured. "
         "See tests/QUARANTINE_POLICY.yaml"
@@ -103,7 +68,7 @@ async def test_session():
 
 @pytest.fixture
 def test_user():
-    """Test user fixture - requires database."""
+    """Test user fixture - quarantined."""
     pytest.skip(
         "QUARANTINED [GOVPLAT-003]: Test user requires DB session. "
         "See tests/QUARANTINE_POLICY.yaml"
@@ -112,34 +77,20 @@ def test_user():
 
 @pytest.fixture
 def test_incident():
-    """Test incident fixture - requires database."""
+    """Test incident fixture - quarantined."""
     pytest.skip(
         "QUARANTINED [GOVPLAT-003]: Test incident requires DB session. "
         "See tests/QUARANTINE_POLICY.yaml"
     )
 
 
-# ============================================================================
-# Database URL Configuration
-# ============================================================================
-
-
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    """Get database URL from environment.
-
-    CI sets DATABASE_URL to PostgreSQL connection string.
-    Falls back to SQLite for local development.
-    """
+    """Get database URL from environment."""
     return os.environ.get(
         "DATABASE_URL",
         "sqlite+aiosqlite:///./test_integration.db",
     )
-
-
-# ============================================================================
-# Pytest Configuration
-# ============================================================================
 
 
 def pytest_configure(config):
@@ -150,7 +101,7 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "api_contract_mismatch: marks tests with known API contract issues (quarantined)",
+        "api_contract_mismatch: marks tests with API contract issues (quarantined)",
     )
     config.addinivalue_line(
         "markers",
@@ -159,10 +110,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Modify test collection to handle quarantined tests.
-
-    Tests marked with quarantine markers are skipped with documentation.
-    """
+    """Modify test collection to handle quarantined tests."""
     skip_phase34 = pytest.mark.skip(
         reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 features not implemented. "
         "Expiry: 2026-02-21. See tests/QUARANTINE_POLICY.yaml"
@@ -177,4 +125,3 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_phase34)
         if "api_contract_mismatch" in item.keywords:
             item.add_marker(skip_contract)
-
