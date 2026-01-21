@@ -36,10 +36,7 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 @pytest.fixture
 def auth_headers():
     """Test authentication headers - quarantined."""
-    pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Auth headers require valid JWT. "
-        "See tests/QUARANTINE_POLICY.yaml"
-    )
+    pytest.skip("QUARANTINED [GOVPLAT-003]: Auth headers require valid JWT. See tests/QUARANTINE_POLICY.yaml")
 
 
 @pytest.fixture
@@ -51,37 +48,25 @@ def test_user_id() -> str:
 @pytest.fixture
 def superuser_auth_headers():
     """Superuser authentication headers - quarantined."""
-    pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Superuser auth requires JWT. "
-        "See tests/QUARANTINE_POLICY.yaml"
-    )
+    pytest.skip("QUARANTINED [GOVPLAT-003]: Superuser auth requires JWT. See tests/QUARANTINE_POLICY.yaml")
 
 
 @pytest.fixture
 async def test_session():
     """Async database session - quarantined."""
-    pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Async DB session not configured. "
-        "See tests/QUARANTINE_POLICY.yaml"
-    )
+    pytest.skip("QUARANTINED [GOVPLAT-003]: Async DB session not configured. See tests/QUARANTINE_POLICY.yaml")
 
 
 @pytest.fixture
 def test_user():
     """Test user fixture - quarantined."""
-    pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Test user requires DB session. "
-        "See tests/QUARANTINE_POLICY.yaml"
-    )
+    pytest.skip("QUARANTINED [GOVPLAT-003]: Test user requires DB session. See tests/QUARANTINE_POLICY.yaml")
 
 
 @pytest.fixture
 def test_incident():
     """Test incident fixture - quarantined."""
-    pytest.skip(
-        "QUARANTINED [GOVPLAT-003]: Test incident requires DB session. "
-        "See tests/QUARANTINE_POLICY.yaml"
-    )
+    pytest.skip("QUARANTINED [GOVPLAT-003]: Test incident requires DB session. See tests/QUARANTINE_POLICY.yaml")
 
 
 @pytest.fixture(scope="session")
@@ -112,12 +97,10 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle quarantined tests."""
     skip_phase34 = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 features not implemented. "
-        "Expiry: 2026-02-21. See tests/QUARANTINE_POLICY.yaml"
+        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-02-21"
     )
     skip_contract = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. "
-        "Expiry: 2026-02-21. See tests/QUARANTINE_POLICY.yaml"
+        reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. Expiry: 2026-02-21"
     )
 
     for item in items:
