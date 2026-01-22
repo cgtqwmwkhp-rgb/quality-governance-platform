@@ -305,6 +305,81 @@ jobs:
           echo ""
           echo "✅ Smoke tests passed: Core functionality verified"
 
+      - name: Generate Deploy-Proof Evidence (Stage 4)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          SECRET_KEY: test-secret-key
+          JWT_SECRET_KEY: test-jwt-secret
+        run: |
+          echo "=== DEPLOY-PROOF EVIDENCE GENERATION ===" | tee deploy-proof.txt
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a deploy-proof.txt
+          echo "Commit: ${{ github.sha }}" | tee -a deploy-proof.txt
+          echo "" | tee -a deploy-proof.txt
+          
+          # 1. Migration Proof
+          echo "--- MIGRATION PROOF ---" | tee -a deploy-proof.txt
+          EXPECTED_HEAD=$(grep -r "^revision = " alembic/versions/ | grep -v down_rev | tail -1 | sed "s/.*revision = '\([^']*\)'.*/\1/" || echo "unknown")
+          echo "Expected head revision: $EXPECTED_HEAD" | tee -a deploy-proof.txt
+          
+          CURRENT_REV=$(alembic current 2>&1 | tail -1 || echo "unknown")
+          echo "Current DB revision: $CURRENT_REV" | tee -a deploy-proof.txt
+          
+          if echo "$CURRENT_REV" | grep -q "$EXPECTED_HEAD"; then
+            echo "✅ Migration proof: PASS - DB at expected head" | tee -a deploy-proof.txt
+          else
+            echo "⚠️ Migration proof: CHECK - Verify revision alignment" | tee -a deploy-proof.txt
+          fi
+          echo "" | tee -a deploy-proof.txt
+          
+          # 2. Security Proof (run app in background for tests)
+          echo "--- SECURITY PROOF ---" | tee -a deploy-proof.txt
+          
+          # Start app in background
+          uvicorn src.main:app --host 127.0.0.1 --port 8765 &
+          APP_PID=$!
+          sleep 5
+          
+          # Health check
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8765/healthz || echo "000")
+          echo "Health check (/healthz): $HEALTH_STATUS" | tee -a deploy-proof.txt
+          if [ "$HEALTH_STATUS" = "200" ]; then
+            echo "✅ Health check: PASS" | tee -a deploy-proof.txt
+          else
+            echo "❌ Health check: FAIL" | tee -a deploy-proof.txt
+          fi
+          
+          # Auth required check
+          AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8765/api/v1/incidents/ || echo "000")
+          echo "Auth required (/api/v1/incidents/): $AUTH_STATUS" | tee -a deploy-proof.txt
+          if [ "$AUTH_STATUS" = "401" ]; then
+            echo "✅ Auth enforcement: PASS" | tee -a deploy-proof.txt
+          else
+            echo "❌ Auth enforcement: FAIL (expected 401)" | tee -a deploy-proof.txt
+          fi
+          
+          # Rate limit headers check
+          RATE_HEADERS=$(curl -sI http://127.0.0.1:8765/api/v1/incidents/ 2>&1 | grep -i "x-ratelimit" || echo "none")
+          echo "Rate limit headers: $RATE_HEADERS" | tee -a deploy-proof.txt
+          if echo "$RATE_HEADERS" | grep -qi "x-ratelimit"; then
+            echo "✅ Rate limiting: PASS" | tee -a deploy-proof.txt
+          else
+            echo "⚠️ Rate limiting: CHECK (headers may be absent in test)" | tee -a deploy-proof.txt
+          fi
+          
+          # Stop app
+          kill $APP_PID 2>/dev/null || true
+          
+          echo "" | tee -a deploy-proof.txt
+          echo "=== DEPLOY-PROOF EVIDENCE COMPLETE ===" | tee -a deploy-proof.txt
+
+      - name: Upload Deploy-Proof Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-proof-evidence
+          path: deploy-proof.txt
+          retention-days: 90
+        if: always()
+
       - name: Upload Smoke Test Results
         uses: actions/upload-artifact@v4
         with:

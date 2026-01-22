@@ -12,7 +12,15 @@ from src.main import app
 
 @pytest.fixture
 def sync_client() -> Generator[TestClient, None, None]:
-    """Synchronous test client for basic integration tests."""
+    """Synchronous test client for basic integration tests.
+
+    DEPRECATED: Prefer async `client` fixture to avoid event loop conflicts.
+    See GOVPLAT-ASYNC-001: Mixing sync TestClient with async fixtures
+    (asyncpg pools, etc.) causes "attached to a different loop" errors.
+
+    This fixture is kept for compatibility but should not be used in
+    tests that run alongside async tests in the same session.
+    """
     with TestClient(app) as c:
         yield c
 
