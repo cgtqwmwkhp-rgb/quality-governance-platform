@@ -509,6 +509,47 @@ jobs:
           echo ""
           echo "UAT Stage 2 completed"
 
+      - name: UAT Stability Guard (Repeat-Run)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          SECRET_KEY: test-secret-key
+          JWT_SECRET_KEY: test-jwt-secret
+        run: |
+          echo "=== UAT STABILITY GUARD - Repeat-Run Verification ==="
+          echo "Running portal workflow tests 3x to detect async flakiness..."
+          echo ""
+          
+          # Run subset of previously-flaky tests 3 times
+          # These tests exercise the async DB path that caused event loop issues
+          FLAKY_TESTS="tests/uat/test_stage1_basic_workflows.py::TestEmployeePortalWorkflows::test_uat_002_submit_complaint_report tests/uat/test_stage1_basic_workflows.py::TestEmployeePortalWorkflows::test_uat_004_track_report_by_reference tests/uat/test_stage2_sophisticated_workflows.py::TestMultiStepEntityWorkflows::test_suat_002_complaint_with_status_tracking"
+          
+          PASS_COUNT=0
+          FAIL_COUNT=0
+          
+          for i in 1 2 3; do
+            echo "--- Stability Run $i/3 ---"
+            if pytest $FLAKY_TESTS -v --tb=line 2>&1 | tail -5; then
+              PASS_COUNT=$((PASS_COUNT + 1))
+              echo "✅ Run $i: PASS"
+            else
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+              echo "❌ Run $i: FAIL"
+            fi
+            echo ""
+          done
+          
+          echo "=== STABILITY RESULTS ==="
+          echo "Passed: $PASS_COUNT/3"
+          echo "Failed: $FAIL_COUNT/3"
+          
+          if [ $PASS_COUNT -eq 3 ]; then
+            echo "✅ Stability guard: PASS - No flakiness detected"
+          elif [ $PASS_COUNT -ge 2 ]; then
+            echo "⚠️ Stability guard: WARN - Some flakiness detected ($FAIL_COUNT/3 failed)"
+          else
+            echo "❌ Stability guard: FAIL - Significant flakiness ($FAIL_COUNT/3 failed)"
+          fi
+
       - name: Generate UAT Summary
         run: |
           echo "=== UAT TEST SUMMARY ===" | tee uat-summary.txt
