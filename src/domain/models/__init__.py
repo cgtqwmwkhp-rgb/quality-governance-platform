@@ -97,11 +97,15 @@ from src.domain.models.policy import Policy, PolicyVersion
 from src.domain.models.risk import Risk, RiskAssessment, RiskControl
 
 # Enterprise Risk Register (Tier 1)
-from src.domain.models.risk_register import BowTieElement, KeyRiskIndicator
-from src.domain.models.risk_register import Risk as EnterpriseRisk
-from src.domain.models.risk_register import RiskAppetiteStatement, RiskAssessmentHistory
-from src.domain.models.risk_register import RiskControl as EnterpriseRiskControl
-from src.domain.models.risk_register import RiskControlMapping
+from src.domain.models.risk_register import (
+    BowTieElement,
+    EnterpriseKeyRiskIndicator,
+    EnterpriseRisk,
+    EnterpriseRiskControl,
+    RiskAppetiteStatement,
+    RiskAssessmentHistory,
+    RiskControlMapping,
+)
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
@@ -168,9 +172,9 @@ __all__ = [
     # Enterprise Risk Register (Tier 1)
     "EnterpriseRisk",
     "EnterpriseRiskControl",
+    "EnterpriseKeyRiskIndicator",
     "RiskControlMapping",
     "BowTieElement",
-    "KeyRiskIndicator",
     "RiskAssessmentHistory",
     "RiskAppetiteStatement",
     # IMS Unification (Tier 1)

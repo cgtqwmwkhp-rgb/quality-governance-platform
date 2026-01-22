@@ -86,8 +86,8 @@ class TreatmentStrategy(str, Enum):
     TERMINATE = "terminate"  # Avoid the activity
 
 
-class Risk(Base):
-    """Main risk entity"""
+class EnterpriseRisk(Base):
+    """Main risk entity (Enterprise Risk Register)"""
 
     __tablename__ = "risks_v2"
 
@@ -172,7 +172,7 @@ class Risk(Base):
         return f"<Risk(ref={self.reference}, title={self.title[:30]})>"
 
 
-class RiskControl(Base):
+class EnterpriseRiskControl(Base):
     """Controls linked to risks (Enterprise Risk Register)"""
 
     __tablename__ = "enterprise_risk_controls"
@@ -270,8 +270,8 @@ class BowTieElement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class KeyRiskIndicator(Base):
-    """Key Risk Indicators (KRIs) for monitoring"""
+class EnterpriseKeyRiskIndicator(Base):
+    """Key Risk Indicators (KRIs) for monitoring (Enterprise)"""
 
     __tablename__ = "key_risk_indicators"
 

@@ -18,11 +18,11 @@ from sqlalchemy.orm import Session
 
 from src.domain.models.risk_register import (
     BowTieElement,
-    KeyRiskIndicator,
-    Risk,
+    EnterpriseKeyRiskIndicator,
+    EnterpriseRisk,
+    EnterpriseRiskControl,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
-    RiskControl,
     RiskControlMapping,
 )
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
