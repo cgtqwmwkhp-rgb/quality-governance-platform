@@ -11,9 +11,9 @@ from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
-    OperationalRiskControlCreate,
-    OperationalRiskControlResponse,
-    OperationalRiskControlUpdate,
+    RiskControlCreate,
+    RiskControlResponse,
+    RiskControlUpdate,
     RiskCreate,
     RiskDetailResponse,
     RiskListResponse,
@@ -386,7 +386,7 @@ async def delete_risk(
 @router.post("/{risk_id}/controls", response_model=OperationalRiskControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     risk_id: int,
-    control_data: OperationalRiskControlCreate,
+    control_data: RiskControlCreate,
     db: DbSession,
     current_user: CurrentUser,
 ) -> OperationalRiskControlResponse:
@@ -446,7 +446,7 @@ async def list_controls(
 @router.patch("/controls/{control_id}", response_model=OperationalRiskControlResponse)
 async def update_control(
     control_id: int,
-    control_data: OperationalRiskControlUpdate,
+    control_data: RiskControlUpdate,
     db: DbSession,
     current_user: CurrentUser,
 ) -> OperationalRiskControlResponse:
