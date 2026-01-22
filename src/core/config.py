@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
+    # Azure AD Authentication (for portal users)
+    azure_client_id: str = ""
+    azure_tenant_id: str = ""
+
     # Azure Blob Storage
     azure_storage_connection_string: str = ""
     azure_storage_container_name: str = "attachments"

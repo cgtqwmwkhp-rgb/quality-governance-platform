@@ -55,6 +55,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    azure_oid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
 
     # Relationships
     roles: Mapped[List["Role"]] = relationship(

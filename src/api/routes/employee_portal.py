@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
-from src.api.dependencies import DbSession
+from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 
@@ -84,6 +84,27 @@ class PortalStatsResponse(BaseModel):
     average_resolution_days: float
     reports_resolved_this_week: int
     anonymous_reports_percentage: float
+
+
+class MyReportSummary(BaseModel):
+    """Summary of a user's own report."""
+
+    reference_number: str
+    report_type: str
+    title: str
+    status: str
+    status_label: str
+    submitted_at: datetime
+    updated_at: datetime
+
+
+class MyReportsResponse(BaseModel):
+    """Response containing user's own reports."""
+
+    items: list[MyReportSummary]
+    total: int
+    page: int
+    page_size: int
 
 
 # ============================================================================
@@ -467,3 +488,89 @@ async def get_report_types():
             },
         ],
     }
+
+
+# =============================================================================
+# Authenticated Portal Endpoints (My Reports)
+# =============================================================================
+
+
+@router.get(
+    "/my-reports/",
+    response_model=MyReportsResponse,
+    summary="Get My Reports",
+    description="Get all reports submitted by the authenticated user. "
+    "Identity is derived from the JWT token, not from query parameters.",
+)
+async def get_my_reports(
+    current_user: CurrentUser,
+    db: DbSession,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+) -> MyReportsResponse:
+    """
+    Get all reports submitted by the current authenticated user.
+
+    This endpoint uses the authenticated user's email from the JWT token
+    to filter reports. It does NOT accept email as a query parameter,
+    preventing users from enumerating other users' reports.
+
+    Security:
+        - Requires valid JWT token
+        - Uses server-side identity from token
+        - No email enumeration possible
+    """
+    user_email = current_user.email.lower()
+    all_reports: list[MyReportSummary] = []
+
+    # Fetch incidents where user is reporter
+    incidents_query = select(Incident).where(func.lower(Incident.reporter_email) == user_email)
+    incidents_result = await db.execute(incidents_query)
+    incidents = incidents_result.scalars().all()
+
+    for inc in incidents:
+        all_reports.append(
+            MyReportSummary(
+                reference_number=inc.reference_number,
+                report_type="incident",
+                title=inc.title,
+                status=inc.status.value if hasattr(inc.status, "value") else str(inc.status),
+                status_label=get_status_label(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
+                submitted_at=inc.reported_date or inc.created_at,
+                updated_at=inc.updated_at or inc.created_at,
+            )
+        )
+
+    # Fetch complaints where user is complainant
+    complaints_query = select(Complaint).where(func.lower(Complaint.complainant_email) == user_email)
+    complaints_result = await db.execute(complaints_query)
+    complaints = complaints_result.scalars().all()
+
+    for comp in complaints:
+        all_reports.append(
+            MyReportSummary(
+                reference_number=comp.reference_number,
+                report_type="complaint",
+                title=comp.title,
+                status=comp.status.value if hasattr(comp.status, "value") else str(comp.status),
+                status_label=get_status_label(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
+                submitted_at=comp.received_date or comp.created_at,
+                updated_at=comp.updated_at or comp.created_at,
+            )
+        )
+
+    # Sort by submitted_at descending
+    all_reports.sort(key=lambda r: r.submitted_at, reverse=True)
+
+    # Paginate
+    total = len(all_reports)
+    start = (page - 1) * page_size
+    end = start + page_size
+    paginated = all_reports[start:end]
+
+    return MyReportsResponse(
+        items=paginated,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
