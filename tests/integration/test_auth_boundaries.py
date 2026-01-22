@@ -13,8 +13,9 @@ filtered by reporter_email. This is a deliberate design to support portal users
 who authenticate via Azure AD (external token) but need to view their own reports.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestOptionalAuthEndpoints:

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.models.document_control import (
     ControlledDocument,
-    ControlledControlledDocumentVersion,
+    ControlledDocumentVersion,
     DocumentAccessLog,
     DocumentApprovalAction,
     DocumentApprovalInstance,

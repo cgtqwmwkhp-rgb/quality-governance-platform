@@ -12,9 +12,10 @@ The application runs behind Azure App Service which terminates TLS.
 The application must trust X-Forwarded-* headers to generate correct URLs.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 
 
 class TestProxyHeaders:
