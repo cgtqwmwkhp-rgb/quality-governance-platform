@@ -110,8 +110,8 @@ async def exchange_azure_token(
         logger.info(f"Created new user from Azure AD: {email}")
     else:
         # Update Azure OID if not set
-        if azure_oid and not getattr(user, "azure_oid", None):
-            user.azure_oid = azure_oid  # type: ignore
+        if azure_oid and not user.azure_oid:
+            user.azure_oid = azure_oid
             await db.commit()
 
         # Update last login
