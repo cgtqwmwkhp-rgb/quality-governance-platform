@@ -463,10 +463,10 @@ class TestRiskRegisterModels:
         assert EnterpriseRisk is not None
 
     def test_risk_control_import(self):
-        """RiskControl model can be imported."""
-        from src.domain.models.risk_register import RiskControl
+        """EnterpriseRiskControl model can be imported."""
+        from src.domain.models.risk_register import EnterpriseRiskControl
 
-        assert RiskControl is not None
+        assert EnterpriseRiskControl is not None
 
 
 # ============================================================================
