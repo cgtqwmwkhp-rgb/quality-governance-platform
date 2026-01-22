@@ -142,7 +142,9 @@ async def list_incidents(
     # unless they have admin/view-all permissions
     if reporter_email:
         user_email = getattr(current_user, "email", None)
-        has_view_all = current_user.has_permission("incident:view_all") if hasattr(current_user, "has_permission") else False
+        has_view_all = (
+            current_user.has_permission("incident:view_all") if hasattr(current_user, "has_permission") else False
+        )
         is_superuser = getattr(current_user, "is_superuser", False)
 
         if not has_view_all and not is_superuser:
