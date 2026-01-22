@@ -12,69 +12,12 @@ Categories:
 - UAT-036 to UAT-040: User & Role Management
 - UAT-041 to UAT-045: Workflow & Approvals
 - UAT-046 to UAT-050: System Health & Security
+
+Note: Fixtures (client, valid_incident_report, etc.) are defined in conftest.py
 """
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from src.main import app
-
-# ============================================================================
-# Fixtures
-# ============================================================================
-
-
-@pytest.fixture
-async def client():
-    """Async HTTP client for UAT tests."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
-
-@pytest.fixture
-def valid_incident_report():
-    """Valid incident report data for employee portal."""
-    return {
-        "report_type": "incident",
-        "title": "UAT Test - Slip hazard near entrance",
-        "description": "Water leak causing slippery floor near main entrance. "
-        "Multiple employees have reported near-misses.",
-        "location": "Building A - Main Entrance",
-        "severity": "high",
-        "reporter_name": "UAT Test User",
-        "reporter_email": "uat.test@example.com",
-        "department": "Operations",
-        "is_anonymous": False,
-    }
-
-
-@pytest.fixture
-def valid_complaint_report():
-    """Valid complaint report data for employee portal."""
-    return {
-        "report_type": "complaint",
-        "title": "UAT Test - Service quality concern",
-        "description": "Repeated delays in equipment maintenance requests. "
-        "This has impacted productivity significantly.",
-        "severity": "medium",
-        "reporter_name": "UAT Complainant",
-        "reporter_email": "uat.complainant@example.com",
-        "is_anonymous": False,
-    }
-
-
-@pytest.fixture
-def anonymous_report():
-    """Anonymous report data."""
-    return {
-        "report_type": "incident",
-        "title": "UAT Test - Anonymous safety concern",
-        "description": "Confidential safety concern requiring investigation.",
-        "severity": "critical",
-        "is_anonymous": True,
-    }
-
+from httpx import AsyncClient
 
 # ============================================================================
 # UAT-001 to UAT-010: Employee Portal (Anonymous Reporting)

@@ -13,29 +13,15 @@ Results Classification:
 - WORKING: Test passes, feature functions correctly
 - NOT_WORKING: Test fails, feature needs attention
 - PARTIAL: Feature works with limitations
+
+Note: The `client` fixture is defined in conftest.py with proper async isolation.
 """
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from src.main import app
-
-# ============================================================================
-# Fixtures
-# ============================================================================
-
-
-@pytest.fixture
-async def client():
-    """Async HTTP client for sophisticated UAT tests."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
+from httpx import AsyncClient
 
 # ============================================================================
 # Test Result Tracking
