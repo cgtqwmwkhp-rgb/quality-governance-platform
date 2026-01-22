@@ -383,13 +383,13 @@ async def delete_risk(
 # ============== Risk Control Endpoints ==============
 
 
-@router.post("/{risk_id}/controls", response_model=OperationalRiskControlResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{risk_id}/controls", response_model=RiskControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     risk_id: int,
     control_data: RiskControlCreate,
     db: DbSession,
     current_user: CurrentUser,
-) -> OperationalRiskControlResponse:
+) -> RiskControlResponse:
     """Create a new control for a risk."""
     # Verify risk exists
     result = await db.execute(select(Risk).where(Risk.id == risk_id))
@@ -418,15 +418,15 @@ async def create_control(
     await db.commit()
     await db.refresh(control)
 
-    return OperationalRiskControlResponse.model_validate(control)
+    return RiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=list[OperationalRiskControlResponse])
+@router.get("/{risk_id}/controls", response_model=list[RiskControlResponse])
 async def list_controls(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[OperationalRiskControlResponse]:
+) -> list[RiskControlResponse]:
     """List all controls for a risk."""
     result = await db.execute(
         select(OperationalRiskControl)
@@ -440,16 +440,16 @@ async def list_controls(
     )
     controls = result.scalars().all()
 
-    return [OperationalRiskControlResponse.model_validate(c) for c in controls]
+    return [RiskControlResponse.model_validate(c) for c in controls]
 
 
-@router.patch("/controls/{control_id}", response_model=OperationalRiskControlResponse)
+@router.patch("/controls/{control_id}", response_model=RiskControlResponse)
 async def update_control(
     control_id: int,
     control_data: RiskControlUpdate,
     db: DbSession,
     current_user: CurrentUser,
-) -> OperationalRiskControlResponse:
+) -> RiskControlResponse:
     """Update a risk control."""
     result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
     control = result.scalar_one_or_none()
@@ -474,7 +474,7 @@ async def update_control(
     await db.commit()
     await db.refresh(control)
 
-    return OperationalRiskControlResponse.model_validate(control)
+    return RiskControlResponse.model_validate(control)
 
 
 @router.delete("/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT)
