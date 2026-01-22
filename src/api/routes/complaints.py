@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
@@ -84,7 +84,7 @@ async def get_complaint(
 @router.get("/", response_model=ComplaintListResponse)
 async def list_complaints(
     db: DbSession,
-    current_user: OptionalCurrentUser,
+    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = None,
@@ -95,21 +95,28 @@ async def list_complaints(
 
     Ordering: received_date DESC, id ASC
 
-    Authentication is optional when filtering by complainant_email.
-    This allows portal users (Azure AD auth) to view their own complaints.
+    Requires authentication. Users can only filter by their own email
+    unless they have admin permissions.
     """
     import logging
     import math
 
     logger = logging.getLogger(__name__)
 
-    # If no valid auth token and no complainant_email filter, require authentication
-    if current_user is None and not complainant_email:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required when not filtering by complainant_email",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # SECURITY FIX: If filtering by email, enforce that users can only access their own data
+    # unless they have admin/view-all permissions
+    if complainant_email:
+        user_email = getattr(current_user, "email", None)
+        has_view_all = current_user.has_permission("complaint:view_all") if hasattr(current_user, "has_permission") else False
+        is_superuser = getattr(current_user, "is_superuser", False)
+
+        if not has_view_all and not is_superuser:
+            # Non-admin users can only filter by their own email
+            if user_email and complainant_email.lower() != user_email.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own complaints",
+                )
 
     try:
         query = select(Complaint)
