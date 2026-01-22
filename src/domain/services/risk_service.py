@@ -377,9 +377,9 @@ class KRIService:
     def __init__(self, db: Session):
         self.db = db
 
-    def update_kri_value(self, kri_id: int, new_value: float) -> KeyRiskIndicator:
+    def update_kri_value(self, kri_id: int, new_value: float) -> EnterpriseKeyRiskIndicator:
         """Update KRI with new value and check thresholds"""
-        kri = self.db.query(KeyRiskIndicator).filter(KeyRiskIndicator.id == kri_id).first()
+        kri = self.db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.id == kri_id).first()
         if not kri:
             raise ValueError(f"KRI {kri_id} not found")
 

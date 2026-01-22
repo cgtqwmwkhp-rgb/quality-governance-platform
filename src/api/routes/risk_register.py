@@ -18,12 +18,12 @@ from sqlalchemy.orm import Session
 
 from src.domain.models.risk_register import (
     BowTieElement,
+    EnterpriseEnterpriseRiskControl,
     EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
-    EnterpriseRiskControl,
+    EnterpriseRiskControlMapping,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
-    RiskControlMapping,
 )
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.database import get_db
@@ -199,12 +199,16 @@ async def get_risk(
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
     # Get linked controls
-    control_mappings = db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
+    control_mappings = (
+        db.query(EnterpriseRiskControlMapping).filter(EnterpriseRiskControlMapping.risk_id == risk_id).all()
+    )
     control_ids = [m.control_id for m in control_mappings]
-    controls = db.query(RiskControl).filter(RiskControl.id.in_(control_ids)).all() if control_ids else []
+    controls = (
+        db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id.in_(control_ids)).all() if control_ids else []
+    )
 
     # Get KRIs
-    kris = db.query(KeyRiskIndicator).filter(KeyRiskIndicator.risk_id == risk_id).all()
+    kris = db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.risk_id == risk_id).all()
 
     # Get assessment history
     history = (
@@ -478,7 +482,7 @@ async def create_kri(
     if not risk:
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
-    kri = KeyRiskIndicator(**kri_data.model_dump())
+    kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
     db.add(kri)
     db.commit()
     db.refresh(kri)
@@ -511,7 +515,7 @@ async def get_kri_history(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Get KRI historical values"""
-    kri = db.query(KeyRiskIndicator).filter(KeyRiskIndicator.id == kri_id).first()
+    kri = db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.id == kri_id).first()
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
 
@@ -526,7 +530,7 @@ async def list_controls(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List all risk controls"""
-    controls = db.query(RiskControl).filter(RiskControl.is_active == True).all()
+    controls = db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.is_active == True).all()
 
     return [
         {
@@ -550,10 +554,10 @@ async def create_control(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Create a risk control"""
-    count = db.query(RiskControl).count()
+    count = db.query(EnterpriseRiskControl).count()
     reference = f"CTRL-{(count + 1):04d}"
 
-    control = RiskControl(
+    control = EnterpriseRiskControl(
         reference=reference,
         **control_data.model_dump(),
     )
@@ -575,7 +579,7 @@ async def link_control_to_risk(
     """Link a control to a risk"""
     # Verify both exist
     risk = db.query(EnterpriseRisk).filter(EnterpriseRisk.id == risk_id).first()
-    control = db.query(RiskControl).filter(RiskControl.id == control_id).first()
+    control = db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id == control_id).first()
 
     if not risk:
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
@@ -584,10 +588,10 @@ async def link_control_to_risk(
 
     # Check if already linked
     existing = (
-        db.query(RiskControlMapping)
+        db.query(EnterpriseRiskControlMapping)
         .filter(
-            RiskControlMapping.risk_id == risk_id,
-            RiskControlMapping.control_id == control_id,
+            EnterpriseRiskControlMapping.risk_id == risk_id,
+            EnterpriseRiskControlMapping.control_id == control_id,
         )
         .first()
     )
@@ -595,7 +599,7 @@ async def link_control_to_risk(
     if existing:
         raise HTTPException(status_code=400, detail="Control already linked to this risk")
 
-    mapping = RiskControlMapping(
+    mapping = EnterpriseRiskControlMapping(
         risk_id=risk_id,
         control_id=control_id,
         reduces_likelihood=reduces_likelihood,
