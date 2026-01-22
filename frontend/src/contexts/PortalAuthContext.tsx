@@ -7,6 +7,9 @@ const MSAL_CONFIG = {
   redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin + '/portal',
 };
 
+// API base URL for token exchange
+const API_BASE = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+
 // Check if Azure AD is properly configured
 const isAzureConfigured = () => {
   return (
@@ -29,6 +32,18 @@ export interface PortalUser {
   isDemoUser?: boolean;
 }
 
+// Token exchange response from backend
+interface TokenExchangeResponse {
+  access_token: string;
+  refresh_token: string;
+  user: {
+    id: number;
+    email: string;
+    full_name: string;
+    is_superuser: boolean;
+  };
+}
+
 interface PortalAuthContextType {
   user: PortalUser | null;
   isAuthenticated: boolean;
@@ -38,6 +53,7 @@ interface PortalAuthContextType {
   logout: () => void;
   error: string | null;
   isAzureADAvailable: boolean;
+  platformToken: string | null;  // Platform JWT for API calls
 }
 
 const PortalAuthContext = createContext<PortalAuthContextType | undefined>(undefined);
@@ -58,6 +74,41 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
   const [user, setUser] = useState<PortalUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [platformToken, setPlatformToken] = useState<string | null>(() => {
+    // Restore platform token from sessionStorage on mount
+    return sessionStorage.getItem('platform_access_token');
+  });
+
+  // Exchange Azure AD id_token for platform JWT
+  const exchangeToken = async (idToken: string): Promise<TokenExchangeResponse | null> => {
+    try {
+      console.log('[PortalAuth] Exchanging Azure token for platform token...');
+      const response = await fetch(`${API_BASE}/api/v1/auth/token-exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[PortalAuth] Token exchange failed:', response.status, errorData);
+        return null;
+      }
+
+      const data: TokenExchangeResponse = await response.json();
+      console.log('[PortalAuth] Token exchange successful for user:', data.user.email);
+      
+      // Store platform tokens securely (sessionStorage clears on tab close)
+      sessionStorage.setItem('platform_access_token', data.access_token);
+      sessionStorage.setItem('platform_refresh_token', data.refresh_token);
+      setPlatformToken(data.access_token);
+      
+      return data;
+    } catch (err) {
+      console.error('[PortalAuth] Token exchange error:', err);
+      return null;
+    }
+  };
 
   // Parse JWT token
   const parseJwt = (token: string) => {
@@ -78,7 +129,7 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
   };
 
   // Handle OAuth callback (check URL for tokens)
-  const handleOAuthCallback = useCallback(() => {
+  const handleOAuthCallback = useCallback(async (): Promise<boolean> => {
     // Check for id_token in URL hash (fragment response mode)
     const hash = window.location.hash;
     if (hash && hash.includes('id_token')) {
@@ -96,25 +147,49 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
       }
 
       if (idToken) {
-        const payload = parseJwt(idToken);
-        if (payload) {
+        // Clear the hash from URL immediately to prevent re-processing
+        window.history.replaceState(null, '', window.location.pathname);
+
+        // Exchange Azure token for platform token (secure server-side validation)
+        const exchangeResult = await exchangeToken(idToken);
+        
+        if (exchangeResult) {
+          // Use server-validated user info from token exchange
           const newUser: PortalUser = {
-            id: payload.oid || payload.sub || 'unknown',
-            email: payload.email || payload.preferred_username || payload.upn || '',
-            name: payload.name || 'User',
-            firstName: payload.given_name || payload.name?.split(' ')[0] || 'User',
-            lastName: payload.family_name || payload.name?.split(' ').slice(1).join(' ') || '',
-            jobTitle: payload.jobTitle || '',
-            department: payload.department || '',
+            id: String(exchangeResult.user.id),
+            email: exchangeResult.user.email,
+            name: exchangeResult.user.full_name,
+            firstName: exchangeResult.user.full_name.split(' ')[0] || 'User',
+            lastName: exchangeResult.user.full_name.split(' ').slice(1).join(' ') || '',
+            jobTitle: '',
+            department: '',
           };
 
           setUser(newUser);
           localStorage.setItem('portal_user', JSON.stringify(newUser));
           localStorage.setItem('portal_session_time', Date.now().toString());
-          localStorage.setItem('portal_id_token', idToken);
-
-          // Clear the hash from URL
-          window.history.replaceState(null, '', window.location.pathname);
+          // Note: We no longer store portal_id_token - platform token in sessionStorage
+          
+          return true;
+        } else {
+          // Token exchange failed - fall back to client-side parsing for user display
+          // but mark as not fully authenticated (no platform token)
+          const payload = parseJwt(idToken);
+          if (payload) {
+            const newUser: PortalUser = {
+              id: payload.oid || payload.sub || 'unknown',
+              email: payload.email || payload.preferred_username || payload.upn || '',
+              name: payload.name || 'User',
+              firstName: payload.given_name || payload.name?.split(' ')[0] || 'User',
+              lastName: payload.family_name || payload.name?.split(' ').slice(1).join(' ') || '',
+              jobTitle: payload.jobTitle || '',
+              department: payload.department || '',
+            };
+            setUser(newUser);
+            localStorage.setItem('portal_user', JSON.stringify(newUser));
+            localStorage.setItem('portal_session_time', Date.now().toString());
+            setError('Session established but API access may be limited. Please try logging in again if issues persist.');
+          }
           return true;
         }
       }
@@ -127,8 +202,9 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     const checkSession = async () => {
       setIsLoading(true);
       
-      // First check for OAuth callback
-      if (handleOAuthCallback()) {
+      // First check for OAuth callback (async - handles token exchange)
+      const wasCallback = await handleOAuthCallback();
+      if (wasCallback) {
         setIsLoading(false);
         return;
       }
@@ -144,11 +220,19 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
             const elapsed = Date.now() - parseInt(sessionTime);
             if (elapsed < 24 * 60 * 60 * 1000) {
               setUser(parsedUser);
+              // Also restore platform token from sessionStorage if still valid
+              const storedPlatformToken = sessionStorage.getItem('platform_access_token');
+              if (storedPlatformToken) {
+                setPlatformToken(storedPlatformToken);
+              }
             } else {
-              // Session expired
+              // Session expired - clear everything
               localStorage.removeItem('portal_user');
               localStorage.removeItem('portal_session_time');
               localStorage.removeItem('portal_id_token');
+              sessionStorage.removeItem('platform_access_token');
+              sessionStorage.removeItem('platform_refresh_token');
+              setPlatformToken(null);
             }
           }
         }
@@ -229,11 +313,16 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     const wasAzureUser = user && !user.isDemoUser && isAzureConfigured();
     
     setUser(null);
+    setPlatformToken(null);
+    
+    // Clear all stored tokens
     localStorage.removeItem('portal_user');
     localStorage.removeItem('portal_session_time');
     localStorage.removeItem('portal_id_token');
     sessionStorage.removeItem('oauth_state');
     sessionStorage.removeItem('oauth_nonce');
+    sessionStorage.removeItem('platform_access_token');
+    sessionStorage.removeItem('platform_refresh_token');
 
     // If was Azure AD user, redirect to Microsoft logout
     if (wasAzureUser) {
@@ -254,6 +343,7 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
         logout,
         error,
         isAzureADAvailable: isAzureConfigured(),
+        platformToken,
       }}
     >
       {children}
