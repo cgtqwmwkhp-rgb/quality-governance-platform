@@ -98,6 +98,10 @@ async def list_complaints(
     Authentication is optional when filtering by complainant_email.
     This allows portal users (Azure AD auth) to view their own complaints.
     """
+    import math
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # If no valid auth token and no complainant_email filter, require authentication
     if current_user is None and not complainant_email:
         raise HTTPException(
@@ -106,35 +110,45 @@ async def list_complaints(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    query = select(Complaint)
+    try:
+        query = select(Complaint)
 
-    if complainant_email:
-        query = query.where(Complaint.complainant_email == complainant_email)
-    if status_filter:
-        query = query.where(Complaint.status == status_filter)
+        if complainant_email:
+            query = query.where(Complaint.complainant_email == complainant_email)
+        if status_filter:
+            query = query.where(Complaint.status == status_filter)
 
-    # Total count
-    count_query = select(func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
+        # Total count
+        count_query = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_query)
+        total = count_result.scalar() or 0
 
-    # Deterministic ordering: received_date DESC, id ASC
-    query = query.order_by(Complaint.received_date.desc(), Complaint.id.asc())
+        # Deterministic ordering: received_date DESC, id ASC
+        query = query.order_by(Complaint.received_date.desc(), Complaint.id.asc())
 
-    # Pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    complaints = result.scalars().all()
+        # Pagination
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        complaints = result.scalars().all()
 
-    import math
-
-    return ComplaintListResponse(
-        items=[ComplaintResponse.model_validate(c) for c in complaints],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=math.ceil(total / page_size) if total > 0 else 1,
-    )
+        return ComplaintListResponse(
+            items=[ComplaintResponse.model_validate(c) for c in complaints],
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=math.ceil(total / page_size) if total > 0 else 1,
+        )
+    except Exception as e:
+        logger.error(f"Error listing complaints: {e}", exc_info=True)
+        if "email" in str(e).lower() or "column" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database migration pending. Email filtering not yet available.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing complaints: {str(e)}",
+        )
 
 
 @router.patch("/{complaint_id}", response_model=ComplaintResponse)

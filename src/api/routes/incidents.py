@@ -145,35 +145,51 @@ async def list_incidents(
             detail="Authentication required when not filtering by reporter_email",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # Build base query
-    query = select(Incident)
-    count_query = select(sa_func.count()).select_from(Incident)
     
-    # Filter by reporter_email if provided
-    if reporter_email:
-        query = query.where(Incident.reporter_email == reporter_email)
-        count_query = count_query.where(Incident.reporter_email == reporter_email)
-    
-    # Count total
-    count_result = await db.execute(count_query)
-    total = count_result.scalar_one()
-
-    # Get paginated results with deterministic ordering
-    offset = (page - 1) * page_size
-    result = await db.execute(
-        query.order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
-    )
-    incidents = result.scalars().all()
-
     import math
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Build base query
+        query = select(Incident)
+        count_query = select(sa_func.count()).select_from(Incident)
+        
+        # Filter by reporter_email if provided
+        if reporter_email:
+            query = query.where(Incident.reporter_email == reporter_email)
+            count_query = count_query.where(Incident.reporter_email == reporter_email)
+        
+        # Count total
+        count_result = await db.execute(count_query)
+        total = count_result.scalar_one()
 
-    return IncidentListResponse(
-        items=[IncidentResponse.model_validate(i) for i in incidents],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=math.ceil(total / page_size) if total > 0 else 1,
-    )
+        # Get paginated results with deterministic ordering
+        offset = (page - 1) * page_size
+        result = await db.execute(
+            query.order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
+        )
+        incidents = result.scalars().all()
+
+        return IncidentListResponse(
+            items=[IncidentResponse.model_validate(i) for i in incidents],
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=math.ceil(total / page_size) if total > 0 else 1,
+        )
+    except Exception as e:
+        logger.error(f"Error listing incidents: {e}", exc_info=True)
+        # If reporter_email column doesn't exist, return empty list with helpful message
+        if "reporter_email" in str(e).lower() or "column" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database migration pending. reporter_email filtering not yet available.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing incidents: {str(e)}",
+        )
 
 
 @router.get("/{incident_id}/investigations", response_model=dict)

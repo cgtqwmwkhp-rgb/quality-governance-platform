@@ -81,6 +81,9 @@ async def list_rtas(
     Authentication is optional when filtering by reporter_email.
     This allows portal users (Azure AD auth) to view their own RTAs.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # If no valid auth token and no reporter_email filter, require authentication
     if current_user is None and not reporter_email:
         raise HTTPException(
@@ -89,39 +92,51 @@ async def list_rtas(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    query = select(RoadTrafficCollision)
+    try:
+        query = select(RoadTrafficCollision)
 
-    # Apply filters
-    if severity:
-        query = query.where(RoadTrafficCollision.severity == severity)
-    if status:
-        query = query.where(RoadTrafficCollision.status == status)
-    if reporter_email:
-        query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
+        # Apply filters
+        if severity:
+            query = query.where(RoadTrafficCollision.severity == severity)
+        if status:
+            query = query.where(RoadTrafficCollision.status == status)
+        if reporter_email:
+            query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
 
-    # Deterministic ordering: created_at DESC, id ASC
-    query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())
+        # Deterministic ordering: created_at DESC, id ASC
+        query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())
 
-    # Total count
-    count_query = select(func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
+        # Total count
+        count_query = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_query)
+        total = count_result.scalar() or 0
 
-    # Calculate total pages
-    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+        # Calculate total pages
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
-    # Pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
+        # Pagination
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        items = result.scalars().all()
 
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": total_pages,
-    }
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
+    except Exception as e:
+        logger.error(f"Error listing RTAs: {e}", exc_info=True)
+        if "reporter_email" in str(e).lower() or "column" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database migration pending. reporter_email filtering not yet available.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing RTAs: {str(e)}",
+        )
 
 
 @router.get("/{rta_id}", response_model=RTAResponse)
