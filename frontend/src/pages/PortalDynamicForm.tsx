@@ -362,18 +362,33 @@ export default function PortalDynamicForm() {
   };
 
   const handleSubmit = async (formData: DynamicFormData): Promise<{ reference_number: string }> => {
+    // Debug: log what we received
+    console.log('[PortalDynamicForm] Form data received:', formData);
+    
     // Build the portal report payload from dynamic form data
     const reportType = formType === 'complaint' ? 'complaint' : 'incident';
     
-    // Extract relevant fields from dynamic form data
-    const title = formData.description 
-      ? `${template?.name || formType} - ${String(formData.contract || formData.location || 'Report').substring(0, 50)}`
-      : `${template?.name || formType} Report`;
+    // Extract description - try multiple possible field names
+    const descriptionRaw = formData.description || 
+                          formData.complaint_description || 
+                          formData.full_description ||
+                          formData.what_happened ||
+                          '';
+    // Ensure minimum length for API validation (10 chars required)
+    const description = String(descriptionRaw).trim().length >= 10 
+      ? String(descriptionRaw).trim()
+      : `${template?.name || 'Report'} submitted via portal. ${String(descriptionRaw || 'No additional details provided.')}`;
+    
+    // Build a descriptive title (minimum 5 chars required)
+    const contractName = formData.contract ? String(formData.contract) : '';
+    const locationName = formData.location ? String(formData.location) : '';
+    const titleSuffix = contractName || locationName || 'Report';
+    const title = `${template?.name || 'Incident Report'} - ${titleSuffix}`.substring(0, 200);
     
     const payload: PortalReportPayload = {
       report_type: reportType,
-      title: title,
-      description: String(formData.description || formData.complaint_description || 'No description provided'),
+      title: title.length >= 5 ? title : `${template?.name || 'Report'} - Submitted`,
+      description: description,
       location: formData.location ? String(formData.location) : undefined,
       severity: formData.severity ? String(formData.severity) : 'medium',
       reporter_name: formData.person_name ? String(formData.person_name) : 
@@ -385,8 +400,12 @@ export default function PortalDynamicForm() {
       is_anonymous: false,
     };
     
+    console.log('[PortalDynamicForm] Submitting payload:', payload);
+    
     // Call the real API
     const result = await submitPortalReport(payload);
+    
+    console.log('[PortalDynamicForm] API response:', result);
     
     // Store tracking code for later access
     if (result.tracking_code) {
