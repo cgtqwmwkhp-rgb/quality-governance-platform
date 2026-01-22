@@ -170,9 +170,7 @@ class TestSecurityHeaders:
         assert response.status_code == 401
         # Verify response is JSON with error details
         data = response.json()
-        assert "detail" in data or "error" in data or "message" in data, (
-            "401 response should include error details"
-        )
+        assert "detail" in data or "error" in data or "message" in data, "401 response should include error details"
 
 
 class TestEndpointAccessMatrix:
