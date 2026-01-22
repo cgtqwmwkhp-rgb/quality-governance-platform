@@ -18,13 +18,13 @@ from sqlalchemy.orm import Session
 
 from src.domain.models.document_control import (
     ControlledDocument,
+    ControlledControlledDocumentVersion,
     DocumentAccessLog,
     DocumentApprovalAction,
     DocumentApprovalInstance,
     DocumentApprovalWorkflow,
     DocumentDistribution,
     DocumentTrainingLink,
-    DocumentVersion,
     ObsoleteDocumentRecord,
 )
 from src.infrastructure.database import get_db
@@ -188,7 +188,7 @@ async def create_document(
     db.refresh(document)
 
     # Create initial version record
-    version = DocumentVersion(
+    version = ControlledDocumentVersion(
         document_id=document.id,
         version_number="0.1",
         major_version=0,
@@ -220,9 +220,9 @@ async def get_document(
 
     # Get version history
     versions = (
-        db.query(DocumentVersion)
-        .filter(DocumentVersion.document_id == document_id)
-        .order_by(DocumentVersion.created_at.desc())
+        db.query(ControlledDocumentVersion)
+        .filter(ControlledDocumentVersion.document_id == document_id)
+        .order_by(ControlledDocumentVersion.created_at.desc())
         .all()
     )
 
@@ -353,7 +353,7 @@ async def create_new_version(
     document.updated_at = datetime.utcnow()
 
     # Create version record
-    version = DocumentVersion(
+    version = ControlledDocumentVersion(
         document_id=document_id,
         version_number=new_version_number,
         major_version=new_major,
@@ -383,8 +383,8 @@ async def get_version_diff(
 ) -> dict[str, Any]:
     """Get diff between versions"""
     version = (
-        db.query(DocumentVersion)
-        .filter(DocumentVersion.id == version_id, DocumentVersion.document_id == document_id)
+        db.query(ControlledDocumentVersion)
+        .filter(ControlledDocumentVersion.id == version_id, ControlledDocumentVersion.document_id == document_id)
         .first()
     )
 
@@ -403,8 +403,8 @@ async def get_version_diff(
 
     if compare_to:
         compare_version = (
-            db.query(DocumentVersion)
-            .filter(DocumentVersion.id == compare_to, DocumentVersion.document_id == document_id)
+            db.query(ControlledDocumentVersion)
+            .filter(ControlledDocumentVersion.id == compare_to, ControlledDocumentVersion.document_id == document_id)
             .first()
         )
         if compare_version:

@@ -24,7 +24,9 @@ class TestOptionalAuthEndpoints:
     def mock_db(self):
         """Create mock database session."""
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))))
+        session.execute = AsyncMock(
+            return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+        )
         return session
 
     def test_incidents_list_allows_filtered_unauthenticated(self, mock_db):
@@ -75,7 +77,7 @@ class TestProtectedEndpoints:
 class TestEndpointAccessMatrix:
     """
     Document and test the endpoint access matrix.
-    
+
     | Endpoint                    | Unauthenticated | Portal User | Admin User |
     |-----------------------------|-----------------|-------------|------------|
     | GET /api/v1/incidents/      | ✅ (filtered)   | ✅ (filtered)| ✅ (all)   |
@@ -105,7 +107,7 @@ class TestSecurityMitigations:
         """
         Security mitigation: When no auth token is provided,
         the endpoint should only return records matching the provided email.
-        
+
         Without this, unauthenticated users could enumerate all records.
         """
         pass

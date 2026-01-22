@@ -23,13 +23,13 @@ class TestProxyHeaders:
     def test_redirect_preserves_https_scheme(self):
         """
         Regression test: Redirects must not downgrade to http.
-        
+
         Root cause of mixed content error:
         - FastAPI generates redirect URLs using the scheme from the request
         - Behind a reverse proxy, the scheme is http (TLS terminated at proxy)
         - Without --proxy-headers, FastAPI uses http in Location header
         - Browser blocks http redirect from https page (mixed content)
-        
+
         Fix: uvicorn --proxy-headers --forwarded-allow-ips "*"
         """
         pass
@@ -60,7 +60,7 @@ class TestSchemeEnforcement:
     def test_location_header_uses_https(self):
         """
         Location headers in redirects must use https.
-        
+
         Test by calling an endpoint that redirects (e.g., without trailing slash)
         and verifying the Location header scheme.
         """
@@ -103,7 +103,7 @@ class TestSecurityHeaders:
 
 
 # Evidence from production investigation:
-# 
+#
 # curl -sI "https://app-qgp-prod.azurewebsites.net/api/v1/incidents?page=1&size=50"
 # HTTP/2 307
 # location: http://app-qgp-prod.azurewebsites.net/api/v1/incidents/?page=1&size=50
