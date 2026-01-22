@@ -33,7 +33,44 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { cn } from '../helpers/utils';
-import { incidentsApi, complaintsApi, IncidentCreate, ComplaintCreate } from '../api/client';
+import { API_BASE_URL } from '../config/apiBase';
+
+// Portal report submission - uses public endpoint (no auth required)
+interface PortalReportPayload {
+  report_type: 'incident' | 'complaint';
+  title: string;
+  description: string;
+  location?: string;
+  severity: string;
+  reporter_name?: string;
+  reporter_email?: string;
+  reporter_phone?: string;
+  department?: string;
+  is_anonymous: boolean;
+}
+
+interface PortalReportResponse {
+  success: boolean;
+  reference_number: string;
+  tracking_code: string;
+  message: string;
+  estimated_response: string;
+}
+
+async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Submission failed: ${response.status}`);
+  }
+  
+  return response.json();
+}
 
 // Determine report type from URL path
 const getReportTypeFromPath = (pathname: string) => {
@@ -144,6 +181,7 @@ export default function PortalIncidentForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Geolocation hook
   const { isLoading: geolocating, error: geoError, getLocationString } = useGeolocation();
@@ -228,57 +266,43 @@ export default function PortalIncidentForm() {
     }));
   };
 
-  // Form submission
+  // Form submission - uses public portal endpoint (no auth required)
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setError(null);
+    
     try {
-      if (reportType === 'complaint') {
-        // Build complaint payload
-        const complaintPayload: ComplaintCreate = {
-          title: `Complaint - ${formData.contract} - ${formData.location}`,
-          description: formData.description,
-          complaint_type: 'customer',
-          priority: 'medium',
-          received_date: new Date().toISOString(),
-          complainant_name: formData.complainantName,
-          complainant_phone: formData.complainantContact || undefined,
-          complainant_company: formData.contract !== 'other' ? formData.contract : formData.contractOther,
-          department: formData.personRole || undefined,
-        };
-        const response = await complaintsApi.create(complaintPayload);
-        setSubmittedRef(response.data.reference_number);
-      } else {
-        // Build incident/near-miss payload
-        const incidentType = reportType === 'near-miss' ? 'near_miss' : 
-          formData.hasInjuries ? 'injury' : 'hazard';
-        
-        const severity = formData.hasInjuries && formData.medicalAssistance === 'ambulance' ? 'critical' :
-          formData.hasInjuries ? 'high' : 
-          reportType === 'near-miss' ? 'low' : 'medium';
-        
-        const incidentPayload: IncidentCreate = {
-          title: `${reportType === 'near-miss' ? 'Near Miss' : 'Incident'} - ${formData.contract} - ${formData.location}`,
-          description: formData.description,
-          incident_type: incidentType,
-          severity: severity,
-          incident_date: formData.incidentDate && formData.incidentTime 
-            ? new Date(`${formData.incidentDate}T${formData.incidentTime}`).toISOString()
-            : new Date().toISOString(),
-          reported_date: new Date().toISOString(),
-          location: formData.location || undefined,
-          department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
-          reporter_email: user?.email || undefined,
-          reporter_name: user?.name || undefined,
-        };
-        const response = await incidentsApi.create(incidentPayload);
-        setSubmittedRef(response.data.reference_number);
+      // Determine severity based on form data
+      const severity = formData.hasInjuries && formData.medicalAssistance === 'ambulance' ? 'critical' :
+        formData.hasInjuries ? 'high' : 
+        reportType === 'near-miss' ? 'low' : 'medium';
+      
+      // Build portal report payload
+      const payload: PortalReportPayload = {
+        report_type: reportType === 'complaint' ? 'complaint' : 'incident',
+        title: reportType === 'complaint' 
+          ? `Complaint - ${formData.contract} - ${formData.location}`
+          : `${reportType === 'near-miss' ? 'Near Miss' : 'Incident'} - ${formData.contract} - ${formData.location}`,
+        description: formData.description,
+        location: formData.location || undefined,
+        severity: severity,
+        reporter_name: reportType === 'complaint' ? formData.complainantName : formData.personName,
+        reporter_email: user?.email || undefined,
+        reporter_phone: formData.complainantContact || undefined,
+        department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
+        is_anonymous: false, // Portal users are identified
+      };
+      
+      const response = await submitPortalReport(payload);
+      setSubmittedRef(response.reference_number);
+      // Store tracking code for anonymous access if needed
+      if (response.tracking_code) {
+        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code);
       }
     } catch (error) {
       console.error('Submission error:', error);
-      // Fallback to local reference if API fails
-      const prefix = reportType === 'incident' ? 'INC' : reportType === 'near-miss' ? 'NM' : 'CMP';
-      const fallbackRef = `${prefix}-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-      setSubmittedRef(fallbackRef);
+      // Show real error - do NOT generate fake reference numbers
+      setError(error instanceof Error ? error.message : 'Failed to submit report. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -759,6 +783,24 @@ export default function PortalIncidentForm() {
 
       {/* Fixed Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border p-4">
+        <div className="max-w-lg mx-auto">
+          {/* Error display */}
+          {error && (
+            <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
+              <AlertIcon className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Submission Failed</p>
+                <p className="text-sm text-destructive/80">{error}</p>
+              </div>
+              <button 
+                onClick={() => setError(null)} 
+                className="ml-auto text-destructive/60 hover:text-destructive"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
         <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
             <Button

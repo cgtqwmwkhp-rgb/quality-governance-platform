@@ -1,7 +1,44 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
-import { rtasApi, RTACreate } from '../services/api';
+import { API_BASE_URL } from '../config/apiBase';
+
+// Portal report submission - uses public endpoint (no auth required)
+interface PortalReportPayload {
+  report_type: 'incident' | 'complaint';
+  title: string;
+  description: string;
+  location?: string;
+  severity: string;
+  reporter_name?: string;
+  reporter_email?: string;
+  reporter_phone?: string;
+  department?: string;
+  is_anonymous: boolean;
+}
+
+interface PortalReportResponse {
+  success: boolean;
+  reference_number: string;
+  tracking_code: string;
+  message: string;
+  estimated_response: string;
+}
+
+async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Submission failed: ${response.status}`);
+  }
+  
+  return response.json();
+}
 import {
   ArrowLeft,
   Car,
@@ -29,6 +66,7 @@ import {
   Siren,
   Video,
   Navigation,
+  AlertCircle,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 import { Card } from '../components/ui/Card';
@@ -137,6 +175,7 @@ export default function PortalRTAForm() {
   const [isRecording, setIsRecording] = useState(false);
   const [geolocating, setGeolocating] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const createEmptyThirdParty = (): ThirdParty => ({
     registration: '',
@@ -239,57 +278,50 @@ export default function PortalRTAForm() {
     setFormData((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
   };
 
-  // Submit
+  // Submit - uses public portal endpoint (no auth required)
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setError(null);
+    
     try {
-      // Build third party data
-      const thirdPartiesData = formData.thirdParties.map((tp) => ({
-        name: tp.driverName,
-        contact: tp.driverPhone,
-        vehicle_reg: tp.registration,
-        insurer: tp.insuranceCompany,
-        insurer_policy_number: tp.policyNumber,
-        damage: tp.damage,
-        injured: tp.hasInjuries,
-      }));
+      // Build detailed RTA description
+      const thirdPartiesDesc = formData.thirdParties.length > 0 
+        ? `\n\nThird Parties:\n${formData.thirdParties.map((tp, i) => 
+            `${i + 1}. ${tp.registration || 'Unknown'} - Driver: ${tp.driverName || 'Unknown'}`
+          ).join('\n')}`
+        : '';
       
-      // Build witnesses data
-      const witnessesData = formData.hasWitnesses && formData.witnessDetails ? [{
-        name: formData.witnessDetails,
-        willing_to_provide_statement: true,
-      }] : [];
-      
-      // Build API payload
-      const payload: RTACreate = {
+      const fullDescription = `${formData.fullDescription}
+
+Vehicle: ${formData.peVehicle === 'other' ? formData.peVehicleOther : formData.peVehicle}
+Damage: ${formData.damageDescription}
+Weather: ${formData.weather || 'Not specified'}
+Road Conditions: ${formData.roadCondition || 'Not specified'}
+Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
+
+      // Build portal report payload (RTA is submitted as incident type)
+      const payload: PortalReportPayload = {
+        report_type: 'incident', // RTA is a type of incident
         title: `RTA - ${formData.accidentType} - ${formData.location}`,
-        description: formData.fullDescription,
-        severity: formData.isDrivable === false ? 'serious_injury' : 'damage_only',
-        collision_date: new Date(`${formData.accidentDate}T${formData.accidentTime || '00:00'}`).toISOString(),
-        reported_date: new Date().toISOString(),
+        description: fullDescription,
         location: formData.location,
-        company_vehicle_registration: formData.peVehicle === 'other' ? formData.peVehicleOther : formData.peVehicle,
-        company_vehicle_damage: formData.damageDescription,
-        driver_name: formData.employeeName,
-        driver_statement: formData.fullDescription,
-        third_parties: thirdPartiesData.length > 0 ? thirdPartiesData : undefined,
-        vehicles_involved_count: formData.vehicleCount + 1, // +1 for company vehicle
-        witnesses: formData.witnessDetails || undefined,
-        witnesses_structured: witnessesData.length > 0 ? witnessesData : undefined,
-        weather_conditions: formData.weather || undefined,
-        road_conditions: formData.roadCondition || undefined,
-        cctv_available: formData.hasCCTV ?? false,
-        dashcam_footage_available: formData.hasDashcam ?? false,
+        severity: formData.isDrivable === false ? 'critical' : 'high',
+        reporter_name: formData.employeeName,
+        reporter_email: user?.email || undefined,
+        department: undefined,
+        is_anonymous: false,
       };
       
-      // Submit to API
-      const response = await rtasApi.create(payload);
+      const response = await submitPortalReport(payload);
       setSubmittedRef(response.reference_number);
+      // Store tracking code for anonymous access if needed
+      if (response.tracking_code) {
+        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code);
+      }
     } catch (error) {
       console.error('Submission error:', error);
-      // Fallback to local reference if API fails
-      const fallbackRef = `RTA-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-      setSubmittedRef(fallbackRef);
+      // Show real error - do NOT generate fake reference numbers
+      setError(error instanceof Error ? error.message : 'Failed to submit report. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -859,6 +891,24 @@ export default function PortalRTAForm() {
 
       {/* Fixed Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border p-4">
+        <div className="max-w-lg mx-auto">
+          {/* Error display */}
+          {error && (
+            <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Submission Failed</p>
+                <p className="text-sm text-destructive/80">{error}</p>
+              </div>
+              <button 
+                onClick={() => setError(null)} 
+                className="ml-auto text-destructive/60 hover:text-destructive"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
         <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
             <Button
