@@ -101,7 +101,7 @@ async def get_optional_current_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Optional[User]:
     """Get the current user if valid token provided, otherwise return None.
-    
+
     This allows endpoints to be accessed without authentication while still
     supporting authenticated access for additional permissions.
     Used by portal users who authenticate via Azure AD (tokens not validated here)

@@ -77,13 +77,14 @@ async def list_rtas(
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ):
     """List RTAs with deterministic ordering and pagination.
-    
+
     Authentication is optional when filtering by reporter_email.
     This allows portal users (Azure AD auth) to view their own RTAs.
     """
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     # If no valid auth token and no reporter_email filter, require authentication
     if current_user is None and not reporter_email:
         raise HTTPException(
@@ -91,7 +92,7 @@ async def list_rtas(
             detail="Authentication required when not filtering by reporter_email",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     try:
         query = select(RoadTrafficCollision)
 
@@ -129,10 +130,10 @@ async def list_rtas(
     except Exception as e:
         error_str = str(e).lower()
         logger.error(f"Error listing RTAs: {e}", exc_info=True)
-        
+
         column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
-        
+
         if is_column_error:
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(

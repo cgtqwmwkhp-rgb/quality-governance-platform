@@ -94,14 +94,15 @@ async def list_complaints(
     List all complaints with deterministic ordering.
 
     Ordering: received_date DESC, id ASC
-    
+
     Authentication is optional when filtering by complainant_email.
     This allows portal users (Azure AD auth) to view their own complaints.
     """
     import math
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     # If no valid auth token and no complainant_email filter, require authentication
     if current_user is None and not complainant_email:
         raise HTTPException(
@@ -109,7 +110,7 @@ async def list_complaints(
             detail="Authentication required when not filtering by complainant_email",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     try:
         query = select(Complaint)
 
@@ -141,10 +142,10 @@ async def list_complaints(
     except Exception as e:
         error_str = str(e).lower()
         logger.error(f"Error listing complaints: {e}", exc_info=True)
-        
+
         column_errors = ["email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
-        
+
         if is_column_error:
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(

@@ -86,7 +86,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Who was involved
     reporter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    reporter_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)  # Portal user email for tracking
+    reporter_email: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, index=True
+    )  # Portal user email for tracking
     reporter_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Portal user name
     people_involved: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Names/details of people involved
     witnesses: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

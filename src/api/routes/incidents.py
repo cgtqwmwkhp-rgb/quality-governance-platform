@@ -145,21 +145,22 @@ async def list_incidents(
             detail="Authentication required when not filtering by reporter_email",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     import math
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Build base query
         query = select(Incident)
         count_query = select(sa_func.count()).select_from(Incident)
-        
+
         # Filter by reporter_email if provided
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)
             count_query = count_query.where(Incident.reporter_email == reporter_email)
-        
+
         # Count total
         count_result = await db.execute(count_query)
         total = count_result.scalar_one()
@@ -181,28 +182,28 @@ async def list_incidents(
     except Exception as e:
         error_str = str(e).lower()
         logger.error(f"Error listing incidents: {e}", exc_info=True)
-        
+
         # Check for various database column errors
         column_errors = [
             "reporter_email",
             "column",
-            "does not exist", 
+            "does not exist",
             "unknown column",
             "no such column",
             "undefined column",
             "relation",
             "programmingerror",
         ]
-        
+
         is_column_error = any(err in error_str for err in column_errors)
-        
+
         if is_column_error:
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database migration pending. Please wait for migrations to complete.",
             )
-        
+
         # Re-raise with details for debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
