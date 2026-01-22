@@ -9,11 +9,11 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.risk import (
+    RiskAssessmentCreate,
+    RiskAssessmentResponse,
     OperationalRiskControlCreate,
     OperationalRiskControlResponse,
     OperationalRiskControlUpdate,
-    RiskAssessmentCreate,
-    RiskAssessmentResponse,
     RiskCreate,
     RiskDetailResponse,
     RiskListResponse,
@@ -23,7 +23,7 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
-from src.domain.models.risk import OperationalOperationalRiskControl, Risk, RiskAssessment, RiskStatus
+from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
