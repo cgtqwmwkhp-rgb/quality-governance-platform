@@ -1,6 +1,7 @@
 """Incident API routes."""
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
@@ -125,7 +126,7 @@ async def list_incidents(
     current_user: OptionalCurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
-    reporter_email: str = Query(None, description="Filter by reporter email"),
+    reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
