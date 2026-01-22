@@ -280,7 +280,7 @@ jobs:
             echo "This may indicate migration drift - manual verification recommended"
           fi
 
-      - name: Verify deployment
+      - name: Verify deployment - Health checks
         run: |
           echo "Waiting for app to restart..."
           sleep 45
@@ -311,7 +311,63 @@ jobs:
             echo "✅ OpenAPI docs accessible"
           fi
           
-          echo "✅ All deployment verification checks passed!"
+          echo "✅ Health checks passed!"
+
+      - name: Verify deployment - Security checks (Stage 4)
+        run: |
+          echo "Running post-deployment security verification..."
+          PROD_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          
+          # Test 1: Auth required for incidents (no email filter)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/api/v1/incidents/")
+          if [ "$STATUS" != "401" ]; then
+            echo "❌ SECURITY ISSUE: Incidents accessible without auth (got $STATUS, expected 401)"
+            exit 1
+          fi
+          echo "✅ Auth required for incidents"
+          
+          # Test 2: Auth required for incidents WITH email filter (CVE fix verification)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/api/v1/incidents/?reporter_email=test@example.com")
+          if [ "$STATUS" != "401" ]; then
+            echo "❌ CRITICAL SECURITY ISSUE: Email filter bypass detected (got $STATUS, expected 401)"
+            exit 1
+          fi
+          echo "✅ CVE fix verified: Auth required for incidents with email filter"
+          
+          # Test 3: Auth required for complaints WITH email filter
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/api/v1/complaints/?complainant_email=test@example.com")
+          if [ "$STATUS" != "401" ]; then
+            echo "❌ CRITICAL SECURITY ISSUE: Email filter bypass detected (got $STATUS, expected 401)"
+            exit 1
+          fi
+          echo "✅ CVE fix verified: Auth required for complaints with email filter"
+          
+          # Test 4: Auth required for RTAs WITH email filter
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/api/v1/rtas/?reporter_email=test@example.com")
+          if [ "$STATUS" != "401" ]; then
+            echo "❌ CRITICAL SECURITY ISSUE: Email filter bypass detected (got $STATUS, expected 401)"
+            exit 1
+          fi
+          echo "✅ CVE fix verified: Auth required for RTAs with email filter"
+          
+          # Test 5: Security headers present
+          HEADERS=$(curl -sI "$PROD_URL/healthz")
+          if ! echo "$HEADERS" | grep -qi "x-content-type-options"; then
+            echo "⚠️ Warning: X-Content-Type-Options header missing"
+          else
+            echo "✅ Security headers present"
+          fi
+          
+          # Test 6: Rate limit headers present
+          HEADERS=$(curl -sI "$PROD_URL/api/v1/incidents/")
+          if echo "$HEADERS" | grep -qi "x-ratelimit"; then
+            echo "✅ Rate limiting active"
+          else
+            echo "⚠️ Warning: Rate limit headers not found (may be configured differently)"
+          fi
+          
+          echo ""
+          echo "✅ All security verification checks passed!"
 
       - name: Production deployment summary
         run: |
