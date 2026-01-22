@@ -225,7 +225,7 @@ const ReportListItem = ({
 export default function PortalTrack() {
   const navigate = useNavigate();
   const { referenceNumber: urlRef } = useParams();
-  const { user, isAuthenticated } = usePortalAuth();
+  const { user, isAuthenticated, platformToken } = usePortalAuth();
   
   const [searchRef, setSearchRef] = useState(urlRef || '');
   const [isSearching, setIsSearching] = useState(false);
@@ -235,12 +235,12 @@ export default function PortalTrack() {
   const [error, setError] = useState<string | null>(null);
   const [showManualSearch, setShowManualSearch] = useState(false);
 
-  // Load user's reports if authenticated
+  // Load user's reports if authenticated with platform token
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user && platformToken) {
       loadMyReports();
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, platformToken]);
 
   // Load specific report from URL
   useEffect(() => {
@@ -254,117 +254,55 @@ export default function PortalTrack() {
     setError(null);
     
     try {
-      // HARDCODED HTTPS - bypassing any caching/env issues
-      const apiBase = 'https://app-qgp-prod.azurewebsites.net';
-      console.log('[PortalTrack] Using API base:', apiBase);
+      // Use platform token for secure, server-side identity-based lookup
+      const apiBase = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+      console.log('[PortalTrack] Loading my reports via secure endpoint');
       
-      const allReports: ReportSummary[] = [];
+      // Require platform token for my-reports (no email enumeration)
+      const token = platformToken || sessionStorage.getItem('platform_access_token');
       
-      // Get auth token - try portal token first, then admin token
-      const portalToken = localStorage.getItem('portal_id_token');
-      const adminToken = localStorage.getItem('access_token');
-      const token = portalToken || adminToken;
+      if (!token) {
+        console.warn('[PortalTrack] No platform token available');
+        setError('Please sign in again to view your reports.');
+        setMyReports([]);
+        setIsLoadingMyReports(false);
+        return;
+      }
       
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
-      // Track if any API calls succeed
-      let hasSuccessfulFetch = false;
-      let authError = false;
+      // Use the secure /portal/my-reports endpoint (server-side identity lookup)
+      // This endpoint uses the authenticated user's email from the JWT, not query params
+      const response = await fetch(`${apiBase}/api/v1/portal/my-reports/?page=1&page_size=50`, { headers });
       
-      // Fetch incidents - filter by reporter_email if user is authenticated
-      // NOTE: Trailing slash required - FastAPI routes use trailing slashes
-      try {
-        const incidentsUrl = user?.email 
-          ? `${apiBase}/api/v1/incidents/?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
-          : `${apiBase}/api/v1/incidents/?page=1&size=20`;
-        const incidentsRes = await fetch(incidentsUrl, { headers });
-        if (incidentsRes.ok) {
-          hasSuccessfulFetch = true;
-          const data = await incidentsRes.json();
-          (data.items || []).forEach((inc: any) => {
-            allReports.push({
-              reference_number: inc.reference_number,
-              report_type: 'incident',
-              title: inc.title,
-              status: inc.status?.toUpperCase() || 'OPEN',
-              status_label: getStatusLabel(inc.status),
-              submitted_at: inc.reported_date || inc.created_at,
-              updated_at: inc.created_at,
-            });
-          });
-        } else if (incidentsRes.status === 401) {
-          authError = true;
-        }
-      } catch (e) { console.error('Failed to fetch incidents:', e); }
-      
-      // Fetch RTAs - filter by reporter_email
-      // NOTE: Trailing slash required - FastAPI routes use trailing slashes
-      try {
-        const rtasUrl = user?.email 
-          ? `${apiBase}/api/v1/rtas/?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
-          : `${apiBase}/api/v1/rtas/?page=1&size=20`;
-        const rtasRes = await fetch(rtasUrl, { headers });
-        if (rtasRes.ok) {
-          hasSuccessfulFetch = true;
-          const data = await rtasRes.json();
-          (data.items || []).forEach((rta: any) => {
-            allReports.push({
-              reference_number: rta.reference_number,
-              report_type: 'rta',
-              title: rta.description?.substring(0, 100) || 'Road Traffic Collision',
-              status: rta.status?.toUpperCase() || 'REPORTED',
-              status_label: getStatusLabel(rta.status),
-              submitted_at: rta.collision_date || rta.created_at,
-              updated_at: rta.created_at,
-            });
-          });
-        } else if (rtasRes.status === 401) {
-          authError = true;
-        }
-      } catch (e) { console.error('Failed to fetch RTAs:', e); }
-      
-      // Fetch complaints - filter by complainant_email
-      try {
-        const complaintsUrl = user?.email 
-          ? `${apiBase}/api/v1/complaints/?page=1&size=20&complainant_email=${encodeURIComponent(user.email)}`
-          : `${apiBase}/api/v1/complaints/?page=1&size=20`;
-        const complaintsRes = await fetch(complaintsUrl, { headers });
-        if (complaintsRes.ok) {
-          hasSuccessfulFetch = true;
-          const data = await complaintsRes.json();
-          (data.items || []).forEach((comp: any) => {
-            allReports.push({
-              reference_number: comp.reference_number,
-              report_type: 'complaint',
-              title: comp.title,
-              status: comp.status?.toUpperCase() || 'OPEN',
-              status_label: getStatusLabel(comp.status),
-              submitted_at: comp.received_date || comp.created_at,
-              updated_at: comp.created_at,
-            });
-          });
-        } else if (complaintsRes.status === 401) {
-          authError = true;
-        }
-      } catch (e) { console.error('Failed to fetch complaints:', e); }
-      
-      // Sort by most recent
-      allReports.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
-      
-      setMyReports(allReports);
-      
-      // Show appropriate message if no reports and auth failed
-      if (!hasSuccessfulFetch && authError) {
-        setError('Unable to load reports. Your session may have expired. Please try logging in again.');
+      if (response.ok) {
+        const data = await response.json();
+        const reports: ReportSummary[] = (data.items || []).map((item: any) => ({
+          reference_number: item.reference_number,
+          report_type: item.report_type,
+          title: item.title,
+          status: item.status?.toUpperCase() || 'OPEN',
+          status_label: item.status_label || getStatusLabel(item.status),
+          submitted_at: item.submitted_at,
+          updated_at: item.updated_at,
+        }));
+        
+        // Sort by most recent
+        reports.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+        setMyReports(reports);
+      } else if (response.status === 401) {
+        console.error('[PortalTrack] Authentication failed - token may be expired');
+        setError('Your session has expired. Please sign in again.');
+        setMyReports([]);
+      } else {
+        console.error('[PortalTrack] Failed to load reports:', response.status);
+        setError('Failed to load reports. Please try again later.');
       }
     } catch (err) {
-      console.error('Failed to load reports:', err);
+      console.error('[PortalTrack] Failed to load reports:', err);
       setError('Failed to load reports. Please try again later.');
     } finally {
       setIsLoadingMyReports(false);

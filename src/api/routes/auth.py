@@ -1,13 +1,16 @@
 """Authentication API routes."""
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.auth import LoginRequest, PasswordChangeRequest, RefreshTokenRequest, TokenResponse
 from src.api.schemas.user import UserResponse
+from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
     create_access_token,
     create_refresh_token,
@@ -17,7 +20,118 @@ from src.core.security import (
 )
 from src.domain.models.user import User
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+# =============================================================================
+# Azure AD Token Exchange
+# =============================================================================
+
+
+class AzureTokenExchangeRequest(BaseModel):
+    """Request to exchange Azure AD token for platform token."""
+
+    id_token: str
+
+
+class AzureTokenExchangeResponse(BaseModel):
+    """Response containing platform tokens."""
+
+    access_token: str
+    refresh_token: str
+    user: dict
+
+
+@router.post("/token-exchange", response_model=AzureTokenExchangeResponse)
+async def exchange_azure_token(
+    request: AzureTokenExchangeRequest,
+    db: DbSession,
+) -> AzureTokenExchangeResponse:
+    """
+    Exchange an Azure AD id_token for platform access tokens.
+
+    This enables portal users who authenticate via Microsoft to access
+    protected API endpoints using platform-issued JWTs.
+
+    Security:
+        - Validates Azure AD token signature via JWKS
+        - Verifies issuer, audience, and expiration
+        - Creates or updates user in database
+        - Issues platform JWT with user's database ID
+    """
+    # Validate the Azure AD token
+    payload = validate_azure_id_token(request.id_token)
+
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired Azure AD token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Extract user info
+    user_info = extract_user_info_from_azure_token(payload)
+
+    if not user_info.get("email"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token does not contain email claim",
+        )
+
+    email = user_info["email"].lower()
+    azure_oid = user_info.get("oid")
+
+    # Find or create user
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        # Create new user from Azure AD profile
+        name_parts = (user_info.get("name") or email.split("@")[0]).split(" ", 1)
+        first_name = name_parts[0] if name_parts else "User"
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        user = User(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            hashed_password="",  # No password - Azure AD auth only
+            is_active=True,
+            is_superuser=False,
+            azure_oid=azure_oid,
+            department=user_info.get("department"),
+            job_title=user_info.get("job_title"),
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        logger.info(f"Created new user from Azure AD: {email}")
+    else:
+        # Update Azure OID if not set
+        if azure_oid and not user.azure_oid:
+            user.azure_oid = azure_oid
+            await db.commit()
+
+        # Update last login
+        user.last_login = datetime.now(timezone.utc).isoformat()
+        await db.commit()
+
+    # Generate platform tokens
+    access_token = create_access_token(subject=user.id)
+    refresh_token = create_refresh_token(subject=user.id)
+
+    return AzureTokenExchangeResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user={
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_superuser": user.is_superuser,
+        },
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
