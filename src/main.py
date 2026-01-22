@@ -41,51 +41,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple in-memory rate limiting middleware."""
+    """
+    Rate limiting middleware using sophisticated per-endpoint limits.
 
-    def __init__(self, app, requests_per_minute: int = 60):
-        super().__init__(app)
-        self.requests_per_minute = requests_per_minute
-        self.request_counts: dict = {}
-        self.window_start: dict = {}
+    Uses the infrastructure rate limiter which supports:
+    - Per-endpoint configurable limits
+    - IP-based and user-based limiting
+    - Redis backend for distributed deployments
+    - Fallback to in-memory when Redis unavailable
+    - Different limits for authenticated vs anonymous users
+    """
 
     async def dispatch(self, request: Request, call_next):
-        import time
+        from src.infrastructure.middleware.rate_limiter import rate_limit_middleware
 
-        from fastapi.responses import JSONResponse
-
-        # Skip rate limiting for health checks
-        if request.url.path in ["/healthz", "/readyz", "/health"]:
-            return await call_next(request)
-
-        # Get client IP
-        client_ip = request.client.host if request.client else "unknown"
-        current_time = time.time()
-
-        # Clean up old entries (every 60 seconds)
-        if client_ip in self.window_start:
-            if current_time - self.window_start[client_ip] >= 60:
-                self.request_counts[client_ip] = 0
-                self.window_start[client_ip] = current_time
-        else:
-            self.window_start[client_ip] = current_time
-            self.request_counts[client_ip] = 0
-
-        # Increment request count
-        self.request_counts[client_ip] = self.request_counts.get(client_ip, 0) + 1
-
-        # Check rate limit
-        if self.request_counts[client_ip] > self.requests_per_minute:
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": "Too many requests. Please try again later.",
-                    "retry_after": 60,
-                },
-                headers={"Retry-After": "60"},
-            )
-
-        return await call_next(request)
+        return await rate_limit_middleware(request, call_next)
 
 
 @asynccontextmanager
@@ -153,8 +123,8 @@ def create_application() -> FastAPI:
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Add Rate Limiting Middleware (60 requests per minute per IP)
-    app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
+    # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
+    app.add_middleware(RateLimitMiddleware)
 
     # Configure CORS
     app.add_middleware(
