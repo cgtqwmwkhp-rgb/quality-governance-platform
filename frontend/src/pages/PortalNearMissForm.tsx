@@ -1,7 +1,44 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
-import { nearMissApi, NearMissCreate } from '../services/api';
+import { API_BASE_URL } from '../config/apiBase';
+
+// Portal report submission - uses public endpoint (no auth required)
+interface PortalReportPayload {
+  report_type: 'incident' | 'complaint';
+  title: string;
+  description: string;
+  location?: string;
+  severity: string;
+  reporter_name?: string;
+  reporter_email?: string;
+  reporter_phone?: string;
+  department?: string;
+  is_anonymous: boolean;
+}
+
+interface PortalReportResponse {
+  success: boolean;
+  reference_number: string;
+  tracking_code: string;
+  message: string;
+  estimated_response: string;
+}
+
+async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Submission failed: ${response.status}`);
+  }
+  
+  return response.json();
+}
 import {
   ArrowLeft,
   AlertTriangle,
@@ -107,6 +144,7 @@ export default function PortalNearMissForm() {
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { latitude, longitude, isLoading: geoLoading, error: geoError, getLocation } = useGeolocation();
   const { 
@@ -205,43 +243,37 @@ export default function PortalNearMissForm() {
     setFormData((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
   };
 
-  // Submit
+  // Submit - uses public portal endpoint (no auth required)
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setError(null);
+    
     try {
-      // Build API payload
-      const payload: NearMissCreate = {
+      // Build portal report payload (near miss is submitted as incident type)
+      const payload: PortalReportPayload = {
+        report_type: 'incident', // Near miss is a type of incident
+        title: `Near Miss - ${formData.contract === 'other' ? formData.contractOther : formData.contract} - ${formData.location}`,
+        description: `${formData.description}${formData.potentialConsequences ? `\n\nPotential consequences: ${formData.potentialConsequences}` : ''}${formData.preventiveActionSuggested ? `\n\nPreventive action suggested: ${formData.preventiveActionSuggested}` : ''}`,
+        location: formData.location,
+        severity: formData.potentialSeverity === 'severe' ? 'high' : 
+                  formData.potentialSeverity === 'moderate' ? 'medium' : 'low',
         reporter_name: formData.reporterName,
         reporter_email: formData.reporterEmail || undefined,
         reporter_phone: formData.reporterPhone || undefined,
-        reporter_role: formData.reporterRole || undefined,
-        was_involved: formData.wasInvolved ?? true,
-        contract: formData.contract === 'other' ? formData.contractOther : formData.contract,
-        contract_other: formData.contract === 'other' ? formData.contractOther : undefined,
-        location: formData.location,
-        location_coordinates: formData.locationCoordinates || undefined,
-        event_date: new Date(`${formData.eventDate}T${formData.eventTime || '00:00'}`).toISOString(),
-        event_time: formData.eventTime || undefined,
-        description: formData.description,
-        potential_consequences: formData.potentialConsequences || undefined,
-        preventive_action_suggested: formData.preventiveActionSuggested || undefined,
-        persons_involved: formData.personsInvolved || undefined,
-        witnesses_present: formData.witnessesPresent ?? false,
-        witness_names: formData.witnessNames || undefined,
-        asset_number: formData.assetNumber || undefined,
-        asset_type: formData.assetType || undefined,
-        risk_category: formData.riskCategory || undefined,
-        potential_severity: formData.potentialSeverity || undefined,
+        department: formData.contract === 'other' ? formData.contractOther : formData.contract,
+        is_anonymous: false,
       };
       
-      // Submit to API
-      const response = await nearMissApi.create(payload);
+      const response = await submitPortalReport(payload);
       setSubmittedRef(response.reference_number);
+      // Store tracking code for anonymous access if needed
+      if (response.tracking_code) {
+        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code);
+      }
     } catch (error) {
       console.error('Submission error:', error);
-      // Fallback to local reference if API fails
-      const fallbackRef = `NM-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-      setSubmittedRef(fallbackRef);
+      // Show real error - do NOT generate fake reference numbers
+      setError(error instanceof Error ? error.message : 'Failed to submit report. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -666,6 +698,24 @@ export default function PortalNearMissForm() {
 
       {/* Fixed Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border p-4">
+        <div className="max-w-lg mx-auto">
+          {/* Error display */}
+          {error && (
+            <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
+              <CircleAlert className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Submission Failed</p>
+                <p className="text-sm text-destructive/80">{error}</p>
+              </div>
+              <button 
+                onClick={() => setError(null)} 
+                className="ml-auto text-destructive/60 hover:text-destructive"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
         <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
             <Button
