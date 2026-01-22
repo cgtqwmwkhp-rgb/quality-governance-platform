@@ -6,7 +6,7 @@
  */
 
 // Cache version - CI injects git SHA + timestamp
-const CACHE_VERSION = 'qgp-v3.0.0-20260121';
+const CACHE_VERSION = 'qgp-v3.1.0-20260122';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -150,21 +150,18 @@ self.addEventListener('fetch', (event) => {
 // Caching Strategies
 // ============================================================================
 
+/**
+ * Network-only strategy for API requests.
+ * NEVER cache API responses to ensure fresh data (read-your-writes guarantee).
+ */
 async function networkFirstApi(request) {
   try {
     const response = await fetch(request);
-    // Only cache successful responses
-    if (response.ok) {
-      const cache = await caches.open(API_CACHE);
-      cache.put(request, response.clone());
-    }
+    // DO NOT cache API responses - always return fresh data
     return response;
   } catch (error) {
-    console.log('[SW] API fetch failed, trying cache');
-    const cached = await caches.match(request);
-    if (cached) {
-      return cached;
-    }
+    console.log('[SW] API fetch failed - network unavailable');
+    // Return error response, do NOT serve stale cached data for API calls
     return new Response(JSON.stringify({ error: 'Offline', message: 'Network unavailable' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },

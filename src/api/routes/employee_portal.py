@@ -195,7 +195,7 @@ async def submit_quick_report(
         count = result.scalar() or 0
         ref_number = f"INC-{year}-{count + 1:04d}"
 
-        # Create incident
+        # Create incident with reporter info for "My Reports" linkage
         incident = Incident(
             reference_number=ref_number,
             title=report.title,
@@ -207,14 +207,10 @@ async def submit_quick_report(
             department=report.department,
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
-            # Store tracking hash in a metadata field or use reporter info
-            # For anonymous, we'll use the tracking hash
+            # CRITICAL: Set reporter info for My Reports identity linkage
+            reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
+            reporter_email=report.reporter_email if not report.is_anonymous else None,
         )
-
-        # Store reporter info if not anonymous
-        if not report.is_anonymous:
-            # Note: Would need to add these fields to model or use JSON metadata
-            pass
 
         db.add(incident)
         await db.commit()
