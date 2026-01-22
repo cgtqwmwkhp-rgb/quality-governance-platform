@@ -200,6 +200,11 @@ ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     "/api/auth/login": RateLimitConfig(requests_per_minute=10, burst_limit=5),
     "/api/auth/register": RateLimitConfig(requests_per_minute=5, burst_limit=2),
     "/api/auth/forgot-password": RateLimitConfig(requests_per_minute=3, burst_limit=2),
+    # Security-sensitive list endpoints with email filters - stricter limits
+    # These endpoints accept email filters which could be abused for enumeration
+    "/api/v1/incidents": RateLimitConfig(requests_per_minute=30, burst_limit=10),
+    "/api/v1/complaints": RateLimitConfig(requests_per_minute=30, burst_limit=10),
+    "/api/v1/rtas": RateLimitConfig(requests_per_minute=30, burst_limit=10),
     # Portal endpoints - moderate limits
     "/api/portal/": RateLimitConfig(requests_per_minute=30, burst_limit=10),
     # Standard API - default limits

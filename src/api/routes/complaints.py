@@ -85,6 +85,7 @@ async def get_complaint(
 async def list_complaints(
     db: DbSession,
     current_user: CurrentUser,  # SECURITY FIX: Always require authentication
+    request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = None,
@@ -119,6 +120,25 @@ async def list_complaints(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You can only view your own complaints",
                 )
+
+        # AUDIT: Log email filter usage for security monitoring
+        # Note: We log the filter type but NOT the raw email (privacy compliance)
+        await record_audit_event(
+            db=db,
+            event_type="complaint.list_filtered",
+            entity_type="complaint",
+            entity_id="*",  # Wildcard - listing operation
+            action="list",
+            description="Complaint list accessed with email filter",
+            payload={
+                "filter_type": "complainant_email",
+                "is_own_email": user_email and complainant_email.lower() == user_email.lower(),
+                "has_view_all_permission": has_view_all,
+                "is_superuser": is_superuser,
+            },
+            user_id=current_user.id,
+            request_id=request_id,
+        )
 
     try:
         query = select(Complaint)
