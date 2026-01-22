@@ -179,16 +179,34 @@ async def list_incidents(
             pages=math.ceil(total / page_size) if total > 0 else 1,
         )
     except Exception as e:
+        error_str = str(e).lower()
         logger.error(f"Error listing incidents: {e}", exc_info=True)
-        # If reporter_email column doesn't exist, return empty list with helpful message
-        if "reporter_email" in str(e).lower() or "column" in str(e).lower():
+        
+        # Check for various database column errors
+        column_errors = [
+            "reporter_email",
+            "column",
+            "does not exist", 
+            "unknown column",
+            "no such column",
+            "undefined column",
+            "relation",
+            "programmingerror",
+        ]
+        
+        is_column_error = any(err in error_str for err in column_errors)
+        
+        if is_column_error:
+            logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database migration pending. reporter_email filtering not yet available.",
+                detail="Database migration pending. Please wait for migrations to complete.",
             )
+        
+        # Re-raise with details for debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing incidents: {str(e)}",
+            detail=f"Error listing incidents: {type(e).__name__}: {str(e)[:200]}",
         )
 
 

@@ -127,15 +127,21 @@ async def list_rtas(
             "total_pages": total_pages,
         }
     except Exception as e:
+        error_str = str(e).lower()
         logger.error(f"Error listing RTAs: {e}", exc_info=True)
-        if "reporter_email" in str(e).lower() or "column" in str(e).lower():
+        
+        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        is_column_error = any(err in error_str for err in column_errors)
+        
+        if is_column_error:
+            logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database migration pending. reporter_email filtering not yet available.",
+                detail="Database migration pending. Please wait for migrations to complete.",
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing RTAs: {str(e)}",
+            detail=f"Error listing RTAs: {type(e).__name__}: {str(e)[:200]}",
         )
 
 
