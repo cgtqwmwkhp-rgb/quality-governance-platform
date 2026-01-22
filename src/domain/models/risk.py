@@ -77,8 +77,8 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    controls: Mapped[List["RiskControl"]] = relationship(
-        "RiskControl",
+    controls: Mapped[List["OperationalRiskControl"]] = relationship(
+        "OperationalRiskControl",
         back_populates="risk",
         cascade="all, delete-orphan",
     )
@@ -93,8 +93,8 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         return f"<Risk(id={self.id}, ref='{self.reference_number}', level='{self.risk_level}')>"
 
 
-class RiskControl(Base, TimestampMixin, AuditTrailMixin):
-    """Risk control/mitigation model."""
+class OperationalRiskControl(Base, TimestampMixin, AuditTrailMixin):
+    """Risk control/mitigation model for operational risks."""
 
     __tablename__ = "risk_controls"
 
@@ -127,7 +127,7 @@ class RiskControl(Base, TimestampMixin, AuditTrailMixin):
     risk: Mapped["Risk"] = relationship("Risk", back_populates="controls")
 
     def __repr__(self) -> str:
-        return f"<RiskControl(id={self.id}, title='{self.title[:50]}')>"
+        return f"<OperationalRiskControl(id={self.id}, title='{self.title[:50]}')>"
 
 
 class RiskAssessment(Base, TimestampMixin):

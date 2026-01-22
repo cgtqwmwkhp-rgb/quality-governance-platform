@@ -217,7 +217,7 @@ class EnterpriseRiskControl(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
-        return f"<RiskControl(ref={self.reference}, name={self.name[:30]})>"
+        return f"<EnterpriseRiskControl(ref={self.reference}, name={self.name[:30]})>"
 
 
 class RiskControlMapping(Base):

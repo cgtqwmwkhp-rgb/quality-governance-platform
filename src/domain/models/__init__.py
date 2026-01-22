@@ -94,7 +94,7 @@ from src.domain.models.planet_mark import (
     UtilityMeterReading,
 )
 from src.domain.models.policy import Policy, PolicyVersion
-from src.domain.models.risk import Risk, RiskAssessment, RiskControl
+from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment
 
 # Enterprise Risk Register (Tier 1)
 from src.domain.models.risk_register import (
@@ -141,7 +141,7 @@ __all__ = [
     "AuditFinding",
     # Risk models
     "Risk",
-    "RiskControl",
+    "OperationalRiskControl",
     "RiskAssessment",
     # Incident models
     "Incident",

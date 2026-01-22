@@ -9,11 +9,11 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.risk import (
+    OperationalRiskControlCreate,
+    OperationalRiskControlResponse,
+    OperationalRiskControlUpdate,
     RiskAssessmentCreate,
     RiskAssessmentResponse,
-    RiskControlCreate,
-    RiskControlResponse,
-    RiskControlUpdate,
     RiskCreate,
     RiskDetailResponse,
     RiskListResponse,
@@ -23,7 +23,7 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
-from src.domain.models.risk import Risk, RiskAssessment, RiskControl, RiskStatus
+from src.domain.models.risk import OperationalOperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
@@ -383,13 +383,13 @@ async def delete_risk(
 # ============== Risk Control Endpoints ==============
 
 
-@router.post("/{risk_id}/controls", response_model=RiskControlResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{risk_id}/controls", response_model=OperationalRiskControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     risk_id: int,
-    control_data: RiskControlCreate,
+    control_data: OperationalRiskControlCreate,
     db: DbSession,
     current_user: CurrentUser,
-) -> RiskControlResponse:
+) -> OperationalRiskControlResponse:
     """Create a new control for a risk."""
     # Verify risk exists
     result = await db.execute(select(Risk).where(Risk.id == risk_id))
@@ -403,7 +403,7 @@ async def create_control(
 
     control_dict = control_data.model_dump(exclude={"clause_ids", "control_ids"})
 
-    control = RiskControl(
+    control = OperationalRiskControl(
         risk_id=risk_id,
         **control_dict,
     )
@@ -418,40 +418,40 @@ async def create_control(
     await db.commit()
     await db.refresh(control)
 
-    return RiskControlResponse.model_validate(control)
+    return OperationalRiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=list[RiskControlResponse])
+@router.get("/{risk_id}/controls", response_model=list[OperationalRiskControlResponse])
 async def list_controls(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[RiskControlResponse]:
+) -> list[OperationalRiskControlResponse]:
     """List all controls for a risk."""
     result = await db.execute(
-        select(RiskControl)
+        select(OperationalRiskControl)
         .where(
             and_(
-                RiskControl.risk_id == risk_id,
-                RiskControl.is_active == True,
+                OperationalRiskControl.risk_id == risk_id,
+                OperationalRiskControl.is_active == True,
             )
         )
-        .order_by(RiskControl.created_at)
+        .order_by(OperationalRiskControl.created_at)
     )
     controls = result.scalars().all()
 
-    return [RiskControlResponse.model_validate(c) for c in controls]
+    return [OperationalRiskControlResponse.model_validate(c) for c in controls]
 
 
-@router.patch("/controls/{control_id}", response_model=RiskControlResponse)
+@router.patch("/controls/{control_id}", response_model=OperationalRiskControlResponse)
 async def update_control(
     control_id: int,
-    control_data: RiskControlUpdate,
+    control_data: OperationalRiskControlUpdate,
     db: DbSession,
     current_user: CurrentUser,
-) -> RiskControlResponse:
+) -> OperationalRiskControlResponse:
     """Update a risk control."""
-    result = await db.execute(select(RiskControl).where(RiskControl.id == control_id))
+    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
     control = result.scalar_one_or_none()
 
     if not control:
@@ -474,7 +474,7 @@ async def update_control(
     await db.commit()
     await db.refresh(control)
 
-    return RiskControlResponse.model_validate(control)
+    return OperationalRiskControlResponse.model_validate(control)
 
 
 @router.delete("/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -484,7 +484,7 @@ async def delete_control(
     current_user: CurrentUser,
 ) -> None:
     """Soft delete a risk control."""
-    result = await db.execute(select(RiskControl).where(RiskControl.id == control_id))
+    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
     control = result.scalar_one_or_none()
 
     if not control:
