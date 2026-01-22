@@ -18,12 +18,12 @@ from sqlalchemy.orm import Session
 
 from src.domain.models.risk_register import (
     BowTieElement,
-    EnterpriseEnterpriseRiskControl,
     EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
-    EnterpriseRiskControlMapping,
+    EnterpriseRiskControl,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
+    RiskControlMapping,
 )
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.database import get_db
@@ -199,9 +199,7 @@ async def get_risk(
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
     # Get linked controls
-    control_mappings = (
-        db.query(EnterpriseRiskControlMapping).filter(EnterpriseRiskControlMapping.risk_id == risk_id).all()
-    )
+    control_mappings = db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
     control_ids = [m.control_id for m in control_mappings]
     controls = (
         db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id.in_(control_ids)).all() if control_ids else []
@@ -588,10 +586,10 @@ async def link_control_to_risk(
 
     # Check if already linked
     existing = (
-        db.query(EnterpriseRiskControlMapping)
+        db.query(RiskControlMapping)
         .filter(
-            EnterpriseRiskControlMapping.risk_id == risk_id,
-            EnterpriseRiskControlMapping.control_id == control_id,
+            RiskControlMapping.risk_id == risk_id,
+            RiskControlMapping.control_id == control_id,
         )
         .first()
     )
@@ -599,7 +597,7 @@ async def link_control_to_risk(
     if existing:
         raise HTTPException(status_code=400, detail="Control already linked to this risk")
 
-    mapping = EnterpriseRiskControlMapping(
+    mapping = RiskControlMapping(
         risk_id=risk_id,
         control_id=control_id,
         reduces_likelihood=reduces_likelihood,
