@@ -120,10 +120,10 @@ class RiskService:
         self.db = db
         self.scoring = RiskScoringEngine()
 
-    def create_risk(self, data: dict, created_by: Optional[int] = None) -> Risk:
+    def create_risk(self, data: dict, created_by: Optional[int] = None) -> EnterpriseRisk:
         """Create a new risk with automatic scoring"""
         # Generate reference
-        count = self.db.query(Risk).count()
+        count = self.db.query(EnterpriseRisk).count()
         reference = f"RISK-{(count + 1):04d}"
 
         # Calculate scores
@@ -140,7 +140,7 @@ class RiskService:
         )
         appetite_threshold = appetite.max_residual_score if appetite else 12
 
-        risk = Risk(
+        risk = EnterpriseRisk(
             reference=reference,
             title=data.get("title"),
             description=data.get("description", ""),
@@ -179,9 +179,9 @@ class RiskService:
 
         return risk
 
-    def update_risk_assessment(self, risk_id: int, data: dict, assessed_by: Optional[int] = None) -> Risk:
+    def update_risk_assessment(self, risk_id: int, data: dict, assessed_by: Optional[int] = None) -> EnterpriseRisk:
         """Update risk assessment scores"""
-        risk = self.db.query(Risk).filter(Risk.id == risk_id).first()
+        risk = self.db.query(EnterpriseRisk).filter(EnterpriseRisk.id == risk_id).first()
         if not risk:
             raise ValueError(f"Risk {risk_id} not found")
 
@@ -217,7 +217,9 @@ class RiskService:
 
         return risk
 
-    def _record_assessment(self, risk: Risk, assessed_by: Optional[int] = None, notes: Optional[str] = None) -> None:
+    def _record_assessment(
+        self, risk: EnterpriseRisk, assessed_by: Optional[int] = None, notes: Optional[str] = None
+    ) -> None:
         """Record assessment in history"""
         history = RiskAssessmentHistory(
             risk_id=risk.id,
@@ -237,12 +239,12 @@ class RiskService:
 
     def get_heat_map_data(self, category: Optional[str] = None, department: Optional[str] = None) -> dict[str, Any]:
         """Generate heat map data for visualization"""
-        query = self.db.query(Risk).filter(Risk.status != "closed")
+        query = self.db.query(EnterpriseRisk).filter(EnterpriseRisk.status != "closed")
 
         if category:
-            query = query.filter(Risk.category == category)
+            query = query.filter(EnterpriseRisk.category == category)
         if department:
-            query = query.filter(Risk.department == department)
+            query = query.filter(EnterpriseRisk.department == department)
 
         risks = query.all()
 
@@ -414,7 +416,7 @@ class KRIService:
 
     def get_kri_dashboard(self) -> dict[str, Any]:
         """Get KRI dashboard summary"""
-        kris = self.db.query(KeyRiskIndicator).filter(KeyRiskIndicator.is_active == True).all()
+        kris = self.db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.is_active == True).all()
 
         return {
             "total_kris": len(kris),
@@ -461,7 +463,7 @@ class BowTieService:
 
     def get_bow_tie(self, risk_id: int) -> dict[str, Any]:
         """Get bow-tie diagram data for a risk"""
-        risk = self.db.query(Risk).filter(Risk.id == risk_id).first()
+        risk = self.db.query(EnterpriseRisk).filter(EnterpriseRisk.id == risk_id).first()
         if not risk:
             raise ValueError(f"Risk {risk_id} not found")
 
@@ -482,7 +484,11 @@ class BowTieService:
         # Get linked controls
         control_mappings = self.db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
         control_ids = [m.control_id for m in control_mappings]
-        controls = self.db.query(RiskControl).filter(RiskControl.id.in_(control_ids)).all() if control_ids else []
+        controls = (
+            self.db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id.in_(control_ids)).all()
+            if control_ids
+            else []
+        )
 
         return {
             "risk": {
