@@ -134,7 +134,7 @@ class TestEmailEnumerationPrevention:
 class TestReadYourWritesGuarantee:
     """
     Tests for read-your-writes guarantee.
-    
+
     When a user creates a report, it MUST be immediately visible in
     their "My Reports" list without requiring a refresh or delay.
     """
@@ -153,14 +153,12 @@ class TestReadYourWritesGuarantee:
     async def test_user_with_token(self):
         """Create a test user and return (user, token) tuple."""
         test_email = "read-your-writes-test@example.com"
-        
+
         async with async_session_maker() as session:
             # Check if user exists
-            result = await session.execute(
-                select(User).where(User.email == test_email)
-            )
+            result = await session.execute(select(User).where(User.email == test_email))
             user = result.scalar_one_or_none()
-            
+
             if not user:
                 # Create test user
                 user = User(
@@ -173,22 +171,22 @@ class TestReadYourWritesGuarantee:
                 session.add(user)
                 await session.commit()
                 await session.refresh(user)
-            
+
             # Generate platform token for this user
             token = create_access_token(subject=user.id)
-            
+
             return user, token
 
     @pytest.mark.asyncio
     async def test_created_incident_appears_in_my_reports(self, client, test_user_with_token):
         """
         CRITICAL: A report created via portal MUST immediately appear in My Reports.
-        
+
         This test verifies the read-your-writes guarantee that was broken when
         reporter_email was not being set on incident creation.
         """
         user, token = test_user_with_token
-        
+
         # Step 1: Create incident with reporter_email
         create_response = await client.post(
             "/api/v1/portal/reports/",
@@ -202,21 +200,21 @@ class TestReadYourWritesGuarantee:
                 "reporter_name": f"{user.first_name} {user.last_name}",
             },
         )
-        
+
         assert create_response.status_code == 201, f"Create failed: {create_response.text}"
         created = create_response.json()
         reference_number = created["reference_number"]
         assert reference_number.startswith("INC-"), f"Expected INC- prefix: {reference_number}"
-        
+
         # Step 2: IMMEDIATELY fetch My Reports (same request session)
         my_reports_response = await client.get(
             "/api/v1/portal/my-reports/",
             headers={"Authorization": f"Bearer {token}"},
         )
-        
+
         assert my_reports_response.status_code == 200, f"My Reports failed: {my_reports_response.text}"
         my_reports = my_reports_response.json()
-        
+
         # Step 3: Verify the created incident appears in the list
         reference_numbers = [r["reference_number"] for r in my_reports["items"]]
         assert reference_number in reference_numbers, (
@@ -228,7 +226,7 @@ class TestReadYourWritesGuarantee:
     async def test_anonymous_report_not_in_my_reports(self, client, test_user_with_token):
         """Anonymous reports should NOT appear in My Reports (no identity linkage)."""
         user, token = test_user_with_token
-        
+
         # Create anonymous incident
         create_response = await client.post(
             "/api/v1/portal/reports/",
@@ -240,31 +238,31 @@ class TestReadYourWritesGuarantee:
                 "is_anonymous": True,
             },
         )
-        
+
         assert create_response.status_code == 201
         created = create_response.json()
         reference_number = created["reference_number"]
-        
+
         # Fetch My Reports
         my_reports_response = await client.get(
             "/api/v1/portal/my-reports/",
             headers={"Authorization": f"Bearer {token}"},
         )
-        
+
         assert my_reports_response.status_code == 200
         my_reports = my_reports_response.json()
-        
+
         # Verify anonymous report does NOT appear (correct behavior)
         reference_numbers = [r["reference_number"] for r in my_reports["items"]]
-        assert reference_number not in reference_numbers, (
-            f"Anonymous report {reference_number} should NOT appear in My Reports"
-        )
+        assert (
+            reference_number not in reference_numbers
+        ), f"Anonymous report {reference_number} should NOT appear in My Reports"
 
     @pytest.mark.asyncio
     async def test_other_user_cannot_see_my_reports(self, client, test_user_with_token):
         """Reports should only be visible to the user who created them."""
         user, token = test_user_with_token
-        
+
         # Create incident as user
         create_response = await client.post(
             "/api/v1/portal/reports/",
@@ -277,10 +275,10 @@ class TestReadYourWritesGuarantee:
                 "reporter_email": user.email,
             },
         )
-        
+
         assert create_response.status_code == 201
         reference_number = create_response.json()["reference_number"]
-        
+
         # Create a different user and token
         async with async_session_maker() as session:
             other_user = User(
@@ -294,18 +292,18 @@ class TestReadYourWritesGuarantee:
             await session.commit()
             await session.refresh(other_user)
             other_token = create_access_token(subject=other_user.id)
-        
+
         # Other user fetches their My Reports
         other_reports_response = await client.get(
             "/api/v1/portal/my-reports/",
             headers={"Authorization": f"Bearer {other_token}"},
         )
-        
+
         assert other_reports_response.status_code == 200
         other_reports = other_reports_response.json()
-        
+
         # Verify other user cannot see this report
         other_reference_numbers = [r["reference_number"] for r in other_reports["items"]]
-        assert reference_number not in other_reference_numbers, (
-            f"SECURITY: Report {reference_number} visible to wrong user!"
-        )
+        assert (
+            reference_number not in other_reference_numbers
+        ), f"SECURITY: Report {reference_number} visible to wrong user!"
