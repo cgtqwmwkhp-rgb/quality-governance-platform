@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.risk import Risk, RiskControl
+from src.domain.models.risk import OperationalRiskControl, Risk
 from src.domain.models.user import User
 from tests.conftest import generate_test_reference
 
@@ -226,7 +226,7 @@ class TestRisksAPI:
         await test_session.refresh(risk)
 
         controls = [
-            RiskControl(
+            OperationalRiskControl(
                 risk_id=risk.id,
                 title=f"Control {i}",
                 description=f"Description {i}",
