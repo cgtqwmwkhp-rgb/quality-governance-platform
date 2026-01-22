@@ -16,8 +16,46 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { cn } from '../helpers/utils';
+import { API_BASE_URL } from '../config/apiBase';
 import type { FormTemplate, Contract, LookupOption } from '../services/api';
 import type { DynamicFormData } from '../components/DynamicForm';
+
+// Portal report submission - uses public endpoint (no auth required)
+interface PortalReportPayload {
+  report_type: 'incident' | 'complaint';
+  title: string;
+  description: string;
+  location?: string;
+  severity: string;
+  reporter_name?: string;
+  reporter_email?: string;
+  reporter_phone?: string;
+  department?: string;
+  is_anonymous: boolean;
+}
+
+interface PortalReportResponse {
+  success: boolean;
+  reference_number: string;
+  tracking_code: string;
+  message: string;
+  estimated_response: string;
+}
+
+async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Submission failed: ${response.status}`);
+  }
+  
+  return response.json();
+}
 
 // Fallback form configurations when API is unavailable
 const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
@@ -323,24 +361,39 @@ export default function PortalDynamicForm() {
     complaint_date: new Date().toISOString().split('T')[0],
   };
 
-  const handleSubmit = async (_formData: DynamicFormData): Promise<{ reference_number: string }> => {
-    // In production, this would call the API
-    // const result = await portalApi.submitForm({
-    //   form_type: formType,
-    //   form_slug: template?.slug || formType,
-    //   data: _formData,
-    // });
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Generate reference number
-    const prefix = template?.reference_prefix || 'REF';
-    const year = new Date().getFullYear();
-    const number = Math.floor(Math.random() * 9999) + 1;
-    const reference_number = `${prefix}-${year}-${String(number).padStart(4, '0')}`;
-
-    return { reference_number };
+  const handleSubmit = async (formData: DynamicFormData): Promise<{ reference_number: string }> => {
+    // Build the portal report payload from dynamic form data
+    const reportType = formType === 'complaint' ? 'complaint' : 'incident';
+    
+    // Extract relevant fields from dynamic form data
+    const title = formData.description 
+      ? `${template?.name || formType} - ${String(formData.contract || formData.location || 'Report').substring(0, 50)}`
+      : `${template?.name || formType} Report`;
+    
+    const payload: PortalReportPayload = {
+      report_type: reportType,
+      title: title,
+      description: String(formData.description || formData.complaint_description || 'No description provided'),
+      location: formData.location ? String(formData.location) : undefined,
+      severity: formData.severity ? String(formData.severity) : 'medium',
+      reporter_name: formData.person_name ? String(formData.person_name) : 
+                     formData.complainant_name ? String(formData.complainant_name) : 
+                     user?.name,
+      reporter_email: formData.person_contact ? String(formData.person_contact) : user?.email,
+      reporter_phone: formData.complainant_contact ? String(formData.complainant_contact) : undefined,
+      department: formData.contract ? String(formData.contract) : undefined,
+      is_anonymous: false,
+    };
+    
+    // Call the real API
+    const result = await submitPortalReport(payload);
+    
+    // Store tracking code for later access
+    if (result.tracking_code) {
+      sessionStorage.setItem(`tracking_${result.reference_number}`, result.tracking_code);
+    }
+    
+    return { reference_number: result.reference_number };
   };
 
   const handleCancel = () => {
