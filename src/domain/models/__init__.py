@@ -40,15 +40,15 @@ from src.domain.models.document import (
 # Document Control (Tier 1)
 from src.domain.models.document_control import (
     ControlledDocument,
+    ControlledDocumentVersion,
     DocumentAccessLog,
     DocumentApprovalAction,
     DocumentApprovalInstance,
     DocumentApprovalWorkflow,
     DocumentDistribution,
     DocumentTrainingLink,
+    ObsoleteDocumentRecord,
 )
-from src.domain.models.document_control import ControlledDocumentVersion
-from src.domain.models.document_control import ObsoleteDocumentRecord
 
 # Form Configuration (Admin Form Builder)
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting

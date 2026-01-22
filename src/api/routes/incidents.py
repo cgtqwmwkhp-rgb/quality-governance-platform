@@ -146,8 +146,8 @@ async def list_incidents(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    import math
     import logging
+    import math
 
     logger = logging.getLogger(__name__)
 

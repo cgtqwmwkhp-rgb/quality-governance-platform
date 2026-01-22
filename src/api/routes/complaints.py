@@ -98,8 +98,8 @@ async def list_complaints(
     Authentication is optional when filtering by complainant_email.
     This allows portal users (Azure AD auth) to view their own complaints.
     """
-    import math
     import logging
+    import math
 
     logger = logging.getLogger(__name__)
 
