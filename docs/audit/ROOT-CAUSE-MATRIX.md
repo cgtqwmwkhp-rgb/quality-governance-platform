@@ -178,6 +178,37 @@ Test 4: OpenAPI specification
 
 ---
 
+---
+
+## FAILURE CLASS 6: Duplicate Model Class Names
+
+### Symptom
+- 500 Internal Server Error on any database query
+- Error: `InvalidRequestError: Multiple classes found for path "DocumentVersion"`
+
+### Root Cause
+Two model classes with the same name `DocumentVersion`:
+- `document_control.py:143` → table `controlled_document_versions`
+- `document.py:281` → table `document_versions`
+
+SQLAlchemy cannot resolve which class to use.
+
+### Evidence
+```python
+# src/domain/models/document_control.py:143
+class DocumentVersion(Base):  # DUPLICATE NAME!
+    __tablename__ = "controlled_document_versions"
+
+# src/domain/models/document.py:281
+class DocumentVersion(Base, TimestampMixin):
+    __tablename__ = "document_versions"
+```
+
+### Fix Applied
+Renamed `document_control.py:DocumentVersion` → `ControlledDocumentVersion`
+
+---
+
 ## VARIANCE MATRIX: Single Points of Failure
 
 | Component | Count | Locations | Issue |
