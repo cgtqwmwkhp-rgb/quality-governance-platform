@@ -24,6 +24,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -92,7 +93,7 @@ class TestMultiStepEntityWorkflows:
             "is_anonymous": False,
         }
 
-        submit_response = await client.post("/api/portal/reports/", json=incident)
+        submit_response = await client.post("/api/v1/portal/reports/", json=incident)
 
         if submit_response.status_code != 201:
             TestResult.record("SUAT-001", "NOT_WORKING", f"Submission failed: {submit_response.status_code}")
@@ -106,7 +107,7 @@ class TestMultiStepEntityWorkflows:
         assert ref_number.startswith("INC-"), f"Invalid reference format: {ref_number}"
 
         # Step 3: Track the report
-        track_response = await client.get(f"/api/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
 
         if track_response.status_code != 200:
             TestResult.record("SUAT-001", "PARTIAL", "Submission works but tracking fails")
@@ -136,12 +137,12 @@ class TestMultiStepEntityWorkflows:
         }
 
         # Submit
-        submit_response = await client.post("/api/portal/reports/", json=complaint)
+        submit_response = await client.post("/api/v1/portal/reports/", json=complaint)
         assert submit_response.status_code == 201
         ref_number = submit_response.json()["reference_number"]
 
         # Track
-        track_response = await client.get(f"/api/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
         assert track_response.status_code == 200
 
         data = track_response.json()
@@ -165,12 +166,12 @@ class TestMultiStepEntityWorkflows:
             "is_anonymous": True,
         }
 
-        submit_response = await client.post("/api/portal/reports/", json=anonymous_report)
+        submit_response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
         assert submit_response.status_code == 201
         ref_number = submit_response.json()["reference_number"]
 
         # Track the report
-        track_response = await client.get(f"/api/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
         assert track_response.status_code == 200
 
         data = track_response.json()
@@ -195,7 +196,7 @@ class TestMultiStepEntityWorkflows:
             "is_anonymous": False,
         }
 
-        submit_response = await client.post("/api/portal/reports/", json=incident)
+        submit_response = await client.post("/api/v1/portal/reports/", json=incident)
         assert submit_response.status_code == 201
 
         data = submit_response.json()
@@ -204,7 +205,7 @@ class TestMultiStepEntityWorkflows:
         ref_number = data["reference_number"]
 
         # Fetch QR data
-        qr_response = await client.get(f"/api/portal/qr/{ref_number}/")
+        qr_response = await client.get(f"/api/v1/portal/qr/{ref_number}/")
         assert qr_response.status_code == 200
 
         qr_data = qr_response.json()
@@ -230,7 +231,7 @@ class TestMultiStepEntityWorkflows:
                 "is_anonymous": True,
             }
 
-            response = await client.post("/api/portal/reports/", json=report)
+            response = await client.post("/api/v1/portal/reports/", json=report)
             assert response.status_code == 201, f"Report {i + 1} failed"
 
             ref = response.json()["reference_number"]
@@ -265,7 +266,7 @@ class TestConcurrentOperations:
                 "severity": "low",
                 "is_anonymous": True,
             }
-            response = await client.post("/api/portal/reports/", json=report)
+            response = await client.post("/api/v1/portal/reports/", json=report)
             return response.status_code, response.json().get("reference_number")
 
         # Submit 10 reports concurrently
@@ -317,11 +318,11 @@ class TestConcurrentOperations:
             "severity": "medium",
             "is_anonymous": True,
         }
-        submit_response = await client.post("/api/portal/reports/", json=report)
+        submit_response = await client.post("/api/v1/portal/reports/", json=report)
         ref_number = submit_response.json()["reference_number"]
 
         async def track_report():
-            response = await client.get(f"/api/portal/reports/{ref_number}/")
+            response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
             return response.status_code, response.json()
 
         tasks = [track_report() for _ in range(10)]
@@ -361,7 +362,7 @@ class TestErrorHandlingEdgeCases:
             "is_anonymous": True,
         }
 
-        response = await client.post("/api/portal/reports/", json=report)
+        response = await client.post("/api/v1/portal/reports/", json=report)
 
         # Should either succeed or fail gracefully with 422
         if response.status_code == 201:
@@ -387,12 +388,12 @@ class TestErrorHandlingEdgeCases:
             "is_anonymous": True,
         }
 
-        response = await client.post("/api/portal/reports/", json=report)
+        response = await client.post("/api/v1/portal/reports/", json=report)
 
         if response.status_code == 201:
             # Verify the special characters are stored/escaped properly
             ref = response.json()["reference_number"]
-            track = await client.get(f"/api/portal/reports/{ref}/")
+            track = await client.get(f"/api/v1/portal/reports/{ref}/")
 
             # Should not execute script, title should be sanitized or stored safely
             assert "<script>" not in track.text or "alert" not in track.text
@@ -415,12 +416,12 @@ class TestErrorHandlingEdgeCases:
             "is_anonymous": False,
         }
 
-        response = await client.post("/api/portal/reports/", json=unicode_report)
+        response = await client.post("/api/v1/portal/reports/", json=unicode_report)
 
         assert response.status_code == 201, f"Unicode submission failed: {response.text}"
 
         ref = response.json()["reference_number"]
-        track = await client.get(f"/api/portal/reports/{ref}/")
+        track = await client.get(f"/api/v1/portal/reports/{ref}/")
 
         assert track.status_code == 200
         # Title should contain unicode
@@ -440,7 +441,7 @@ class TestErrorHandlingEdgeCases:
             "severity": "low",
         }
 
-        response = await client.post("/api/portal/reports/", json=minimal_report)
+        response = await client.post("/api/v1/portal/reports/", json=minimal_report)
 
         assert response.status_code == 201
         TestResult.record("SUAT-012", "WORKING")
@@ -451,7 +452,7 @@ class TestErrorHandlingEdgeCases:
         SUAT-013: Invalid JSON is handled gracefully.
         """
         response = await client.post(
-            "/api/portal/reports/",
+            "/api/v1/portal/reports/",
             content="not valid json {{{",
             headers={"Content-Type": "application/json"},
         )
@@ -472,7 +473,7 @@ class TestErrorHandlingEdgeCases:
         }
 
         # Send without explicit content-type (httpx will still send it)
-        response = await client.post("/api/portal/reports/", json=report)
+        response = await client.post("/api/v1/portal/reports/", json=report)
 
         # Should work with json= parameter
         assert response.status_code in [201, 422]
@@ -519,9 +520,9 @@ class TestAPIContractVerification:
         paths = spec.get("paths", {})
 
         expected_paths = [
-            "/api/portal/reports/",
-            "/api/portal/stats/",
-            "/api/portal/report-types/",
+            "/api/v1/portal/reports/",
+            "/api/v1/portal/stats/",
+            "/api/v1/portal/report-types/",
         ]
 
         missing = [p for p in expected_paths if p not in paths and not any(p in path for path in paths)]
@@ -544,11 +545,11 @@ class TestAPIContractVerification:
         error_responses.append(("401", r1))
 
         # 404 errors
-        r2 = await client.get("/api/portal/reports/NONEXISTENT-REF/")
+        r2 = await client.get("/api/v1/portal/reports/NONEXISTENT-REF/")
         error_responses.append(("404", r2))
 
         # 422 errors
-        r3 = await client.post("/api/portal/reports/", json={})
+        r3 = await client.post("/api/v1/portal/reports/", json={})
         error_responses.append(("422", r3))
 
         all_have_detail = True
@@ -572,7 +573,7 @@ class TestAPIContractVerification:
             "/health",
             "/healthz",
             "/api/v1/incidents/",
-            "/api/portal/stats/",
+            "/api/v1/portal/stats/",
         ]
 
         missing_request_id = []
@@ -595,7 +596,7 @@ class TestAPIContractVerification:
         but real paginated endpoints require auth.
         """
         # Portal stats doesn't paginate, but let's verify consistency
-        response = await client.get("/api/portal/stats/")
+        response = await client.get("/api/v1/portal/stats/")
         assert response.status_code == 200
 
         # Verify the response has expected structure
@@ -622,10 +623,10 @@ class TestAPIContractVerification:
             "is_anonymous": True,
         }
 
-        submit = await client.post("/api/portal/reports/", json=report)
+        submit = await client.post("/api/v1/portal/reports/", json=report)
         ref = submit.json()["reference_number"]
 
-        track = await client.get(f"/api/portal/reports/{ref}/")
+        track = await client.get(f"/api/v1/portal/reports/{ref}/")
         data = track.json()
 
         # Check datetime fields

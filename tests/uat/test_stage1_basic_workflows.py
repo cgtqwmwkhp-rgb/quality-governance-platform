@@ -19,6 +19,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -87,7 +88,7 @@ class TestEmployeePortalWorkflows:
     @pytest.mark.asyncio
     async def test_uat_001_submit_incident_report(self, client, valid_incident_report):
         """UAT-001: Employee can submit an incident report via portal."""
-        response = await client.post("/api/portal/reports/", json=valid_incident_report)
+        response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
 
         assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
         data = response.json()
@@ -100,7 +101,7 @@ class TestEmployeePortalWorkflows:
     @pytest.mark.asyncio
     async def test_uat_002_submit_complaint_report(self, client, valid_complaint_report):
         """UAT-002: Employee can submit a complaint via portal."""
-        response = await client.post("/api/portal/reports/", json=valid_complaint_report)
+        response = await client.post("/api/v1/portal/reports/", json=valid_complaint_report)
 
         assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
         data = response.json()
@@ -110,7 +111,7 @@ class TestEmployeePortalWorkflows:
     @pytest.mark.asyncio
     async def test_uat_003_submit_anonymous_report(self, client, anonymous_report):
         """UAT-003: Employee can submit an anonymous report."""
-        response = await client.post("/api/portal/reports/", json=anonymous_report)
+        response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
 
         assert response.status_code == 201
         data = response.json()
@@ -122,12 +123,12 @@ class TestEmployeePortalWorkflows:
     async def test_uat_004_track_report_by_reference(self, client, valid_incident_report):
         """UAT-004: Employee can track report status by reference number."""
         # First submit a report
-        submit_response = await client.post("/api/portal/reports/", json=valid_incident_report)
+        submit_response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
         assert submit_response.status_code == 201
         ref_number = submit_response.json()["reference_number"]
 
         # Then track it
-        track_response = await client.get(f"/api/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
 
         assert track_response.status_code == 200
         data = track_response.json()
@@ -138,7 +139,7 @@ class TestEmployeePortalWorkflows:
     @pytest.mark.asyncio
     async def test_uat_005_get_portal_statistics(self, client):
         """UAT-005: Portal statistics endpoint is accessible."""
-        response = await client.get("/api/portal/stats/")
+        response = await client.get("/api/v1/portal/stats/")
 
         assert response.status_code == 200
         data = response.json()
@@ -148,7 +149,7 @@ class TestEmployeePortalWorkflows:
     @pytest.mark.asyncio
     async def test_uat_006_get_report_types(self, client):
         """UAT-006: Available report types are documented."""
-        response = await client.get("/api/portal/report-types/")
+        response = await client.get("/api/v1/portal/report-types/")
 
         assert response.status_code == 200
         data = response.json()
@@ -160,11 +161,11 @@ class TestEmployeePortalWorkflows:
     async def test_uat_007_generate_qr_code_data(self, client, valid_incident_report):
         """UAT-007: QR code data can be generated for report tracking."""
         # Submit report
-        submit_response = await client.post("/api/portal/reports/", json=valid_incident_report)
+        submit_response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
         ref_number = submit_response.json()["reference_number"]
 
         # Get QR data
-        qr_response = await client.get(f"/api/portal/qr/{ref_number}/")
+        qr_response = await client.get(f"/api/v1/portal/qr/{ref_number}/")
 
         assert qr_response.status_code == 200
         data = qr_response.json()
@@ -180,7 +181,7 @@ class TestEmployeePortalWorkflows:
             "severity": "low",
         }
 
-        response = await client.post("/api/portal/reports/", json=invalid_report)
+        response = await client.post("/api/v1/portal/reports/", json=invalid_report)
 
         assert response.status_code == 422  # Validation error
 
@@ -194,14 +195,14 @@ class TestEmployeePortalWorkflows:
             "severity": "low",
         }
 
-        response = await client.post("/api/portal/reports/", json=invalid_report)
+        response = await client.post("/api/v1/portal/reports/", json=invalid_report)
 
         assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_uat_010_track_nonexistent_report(self, client):
         """UAT-010: Tracking non-existent report returns 404."""
-        response = await client.get("/api/portal/reports/INC-9999-9999/")
+        response = await client.get("/api/v1/portal/reports/INC-9999-9999/")
 
         assert response.status_code == 404
 
