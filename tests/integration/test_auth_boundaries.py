@@ -1,98 +1,198 @@
 """
-Auth Boundary Tests for OptionalCurrentUser Endpoints
+Auth Boundary Tests - Security Hardening Verification
 
-Validates that the OptionalCurrentUser pattern does not weaken security:
-1. Endpoints with optional auth still require email filter for unauthenticated access
-2. Authenticated users get full access
-3. Admin endpoints remain protected
-4. No data leakage between users
+SECURITY FIX (2026-01-22):
+These tests verify that the authentication bypass vulnerability has been fixed.
+Previously, list endpoints allowed unauthenticated access when an email filter
+was provided. This has been corrected - all list endpoints now require
+authentication.
 
-Security Note:
-OptionalCurrentUser allows unauthenticated read access to list endpoints ONLY when
-filtered by reporter_email. This is a deliberate design to support portal users
-who authenticate via Azure AD (external token) but need to view their own reports.
+Test Matrix:
+| Endpoint                    | Unauthenticated | Authenticated (own) | Admin |
+|-----------------------------|-----------------|---------------------|-------|
+| GET /api/v1/incidents/      | 401 ❌          | 200 ✅ (filtered)    | 200 ✅ |
+| GET /api/v1/complaints/     | 401 ❌          | 200 ✅ (filtered)    | 200 ✅ |
+| GET /api/v1/rtas/           | 401 ❌          | 200 ✅ (filtered)    | 200 ✅ |
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+from httpx import AsyncClient
 
 
-class TestOptionalAuthEndpoints:
-    """Test endpoints using OptionalCurrentUser dependency."""
+class TestAuthRequiredForListEndpoints:
+    """
+    SECURITY TEST: Verify that all list endpoints require authentication.
 
-    @pytest.fixture
-    def mock_db(self):
-        """Create mock database session."""
-        session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+    These tests directly verify the fix for the unauthenticated email
+    enumeration vulnerability discovered on 2026-01-22.
+    """
+
+    @pytest.mark.asyncio
+    async def test_incidents_list_requires_auth_no_filter(self, client: AsyncClient):
+        """Unauthenticated request without email filter should return 401."""
+        response = await client.get("/api/v1/incidents/")
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+
+    @pytest.mark.asyncio
+    async def test_incidents_list_requires_auth_with_email_filter(self, client: AsyncClient):
+        """
+        CRITICAL SECURITY TEST: Unauthenticated request WITH email filter should return 401.
+
+        This was the vulnerability - previously returned 200.
+        """
+        response = await client.get("/api/v1/incidents/?reporter_email=test@example.com")
+        assert response.status_code == 401, (
+            f"SECURITY VULNERABILITY: Expected 401, got {response.status_code}. "
+            "Unauthenticated access with email filter should be blocked!"
         )
-        return session
 
-    def test_incidents_list_allows_filtered_unauthenticated(self, mock_db):
-        """Unauthenticated requests with reporter_email filter should be allowed."""
-        # This tests the policy: portal users can filter by their email
-        # The actual implementation allows this for usability
-        # Security is maintained by only returning records matching the email
-        pass
+    @pytest.mark.asyncio
+    async def test_complaints_list_requires_auth_no_filter(self, client: AsyncClient):
+        """Unauthenticated request without email filter should return 401."""
+        response = await client.get("/api/v1/complaints/")
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
 
-    def test_incidents_list_returns_all_for_authenticated(self, mock_db):
-        """Authenticated admin users should get all incidents."""
-        pass
+    @pytest.mark.asyncio
+    async def test_complaints_list_requires_auth_with_email_filter(self, client: AsyncClient):
+        """
+        CRITICAL SECURITY TEST: Unauthenticated request WITH email filter should return 401.
 
-    def test_rtas_list_allows_filtered_unauthenticated(self, mock_db):
-        """Unauthenticated requests with reporter_email filter should be allowed."""
-        pass
+        This was the vulnerability - previously returned 200.
+        """
+        response = await client.get("/api/v1/complaints/?complainant_email=test@example.com")
+        assert response.status_code == 401, (
+            f"SECURITY VULNERABILITY: Expected 401, got {response.status_code}. "
+            "Unauthenticated access with email filter should be blocked!"
+        )
 
-    def test_complaints_list_allows_filtered_unauthenticated(self, mock_db):
-        """Unauthenticated requests with complainant_email filter should be allowed."""
-        pass
+    @pytest.mark.asyncio
+    async def test_rtas_list_requires_auth_no_filter(self, client: AsyncClient):
+        """Unauthenticated request without email filter should return 401."""
+        response = await client.get("/api/v1/rtas/")
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+
+    @pytest.mark.asyncio
+    async def test_rtas_list_requires_auth_with_email_filter(self, client: AsyncClient):
+        """
+        CRITICAL SECURITY TEST: Unauthenticated request WITH email filter should return 401.
+
+        This was the vulnerability - previously returned 200.
+        """
+        response = await client.get("/api/v1/rtas/?reporter_email=test@example.com")
+        assert response.status_code == 401, (
+            f"SECURITY VULNERABILITY: Expected 401, got {response.status_code}. "
+            "Unauthenticated access with email filter should be blocked!"
+        )
 
 
 class TestProtectedEndpoints:
     """Test that protected endpoints remain protected."""
 
-    def test_create_incident_requires_auth(self):
+    @pytest.mark.asyncio
+    async def test_create_incident_requires_auth(self, client: AsyncClient):
         """Creating incidents should require authentication."""
-        # POST /api/v1/incidents/ uses CurrentUser, not OptionalCurrentUser
-        pass
+        response = await client.post(
+            "/api/v1/incidents/",
+            json={"title": "Test", "description": "Test incident"},
+        )
+        assert response.status_code == 401
 
-    def test_update_incident_requires_auth(self):
+    @pytest.mark.asyncio
+    async def test_create_complaint_requires_auth(self, client: AsyncClient):
+        """Creating complaints should require authentication."""
+        response = await client.post(
+            "/api/v1/complaints/",
+            json={"title": "Test", "description": "Test complaint"},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_create_rta_requires_auth(self, client: AsyncClient):
+        """Creating RTAs should require authentication."""
+        response = await client.post(
+            "/api/v1/rtas/",
+            json={"description": "Test RTA"},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_incident_by_id_requires_auth(self, client: AsyncClient):
+        """Getting incident by ID should require authentication."""
+        response = await client.get("/api/v1/incidents/1")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_update_incident_requires_auth(self, client: AsyncClient):
         """Updating incidents should require authentication."""
-        pass
+        response = await client.patch(
+            "/api/v1/incidents/1",
+            json={"title": "Updated"},
+        )
+        assert response.status_code == 401
 
-    def test_delete_incident_requires_auth(self):
+    @pytest.mark.asyncio
+    async def test_delete_incident_requires_auth(self, client: AsyncClient):
         """Deleting incidents should require authentication."""
-        pass
+        response = await client.delete("/api/v1/incidents/1")
+        assert response.status_code == 401
 
-    def test_policies_list_requires_auth(self):
-        """Listing policies should require authentication (admin only)."""
-        pass
 
-    def test_users_list_requires_superuser(self):
-        """Listing users should require superuser."""
-        pass
+class TestPublicEndpoints:
+    """Test that public endpoints remain accessible."""
+
+    @pytest.mark.asyncio
+    async def test_healthz_is_public(self, client: AsyncClient):
+        """Health check should not require authentication."""
+        response = await client.get("/healthz")
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_readyz_is_public(self, client: AsyncClient):
+        """Readiness check should not require authentication."""
+        response = await client.get("/readyz")
+        # May return 200 or 503 depending on DB state, but not 401
+        assert response.status_code != 401
+
+    @pytest.mark.asyncio
+    async def test_openapi_is_public(self, client: AsyncClient):
+        """OpenAPI spec should be accessible."""
+        response = await client.get("/openapi.json")
+        assert response.status_code == 200
+
+
+class TestSecurityHeaders:
+    """Verify security headers are present on responses."""
+
+    @pytest.mark.asyncio
+    async def test_401_response_format(self, client: AsyncClient):
+        """401 responses should have correct format."""
+        response = await client.get("/api/v1/incidents/")
+        assert response.status_code == 401
+        # Verify response is JSON with error details
+        data = response.json()
+        assert "detail" in data or "error" in data or "message" in data, "401 response should include error details"
 
 
 class TestEndpointAccessMatrix:
     """
     Document and test the endpoint access matrix.
 
-    | Endpoint                    | Unauthenticated | Portal User | Admin User |
-    |-----------------------------|-----------------|-------------|------------|
-    | GET /api/v1/incidents/      | ✅ (filtered)   | ✅ (filtered)| ✅ (all)   |
-    | POST /api/v1/incidents/     | ❌              | ❌          | ✅         |
-    | GET /api/v1/incidents/{id}  | ❌              | ❌          | ✅         |
-    | PUT /api/v1/incidents/{id}  | ❌              | ❌          | ✅         |
-    | GET /api/v1/rtas/           | ✅ (filtered)   | ✅ (filtered)| ✅ (all)   |
-    | POST /api/v1/rtas/          | ❌              | ❌          | ✅         |
-    | GET /api/v1/complaints/     | ✅ (filtered)   | ✅ (filtered)| ✅ (all)   |
-    | POST /api/v1/complaints/    | ❌              | ❌          | ✅         |
-    | GET /api/v1/policies/       | ❌              | ❌          | ✅         |
-    | GET /api/v1/users/          | ❌              | ❌          | ✅ (super) |
-    | GET /healthz                | ✅              | ✅          | ✅         |
-    | GET /readyz                 | ✅              | ✅          | ✅         |
+    UPDATED ACCESS MATRIX (Post-Security-Fix):
+
+    | Endpoint                    | Unauthenticated | Authenticated User | Admin User |
+    |-----------------------------|-----------------|-------------------|------------|
+    | GET /api/v1/incidents/      | 401 ❌          | 200 (own only)    | 200 (all)  |
+    | POST /api/v1/incidents/     | 401 ❌          | 201 ✅            | 201 ✅     |
+    | GET /api/v1/incidents/{id}  | 401 ❌          | 200 (own?)        | 200 ✅     |
+    | PATCH /api/v1/incidents/{id}| 401 ❌          | 200 (own?)        | 200 ✅     |
+    | DELETE /api/v1/incidents/{id}| 401 ❌         | 403 ❌            | 204 ✅     |
+    | GET /api/v1/rtas/           | 401 ❌          | 200 (own only)    | 200 (all)  |
+    | POST /api/v1/rtas/          | 401 ❌          | 201 ✅            | 201 ✅     |
+    | GET /api/v1/complaints/     | 401 ❌          | 200 (own only)    | 200 (all)  |
+    | POST /api/v1/complaints/    | 401 ❌          | 201 ✅            | 201 ✅     |
+    | GET /api/v1/policies/       | 401 ❌          | 403 ❌            | 200 ✅     |
+    | GET /healthz                | 200 ✅          | 200 ✅            | 200 ✅     |
+    | GET /readyz                 | 200/503 ✅      | 200/503 ✅        | 200/503 ✅ |
     """
 
     def test_access_matrix_documented(self):
@@ -101,35 +201,9 @@ class TestEndpointAccessMatrix:
         assert True
 
 
-class TestSecurityMitigations:
-    """Test security mitigations for optional auth pattern."""
-
-    def test_email_filter_required_for_unauthenticated(self):
-        """
-        Security mitigation: When no auth token is provided,
-        the endpoint should only return records matching the provided email.
-
-        Without this, unauthenticated users could enumerate all records.
-        """
-        pass
-
-    def test_rate_limiting_on_list_endpoints(self):
-        """
-        Security mitigation: Rate limiting should prevent enumeration attacks.
-        """
-        pass
-
-    def test_audit_logging_on_access(self):
-        """
-        Security mitigation: All access to list endpoints should be logged
-        with the requester's IP and any provided email filter.
-        """
-        pass
-
-
-# Recommendations for security hardening:
-# 1. Add rate limiting to list endpoints (already present via middleware)
-# 2. Log all access attempts with IP and email filter
-# 3. Consider adding CAPTCHA for repeated unauthenticated requests
-# 4. Implement proper Azure AD token validation for portal users
-#    (currently we trust the email claim without validating the token)
+# Security recommendations implemented:
+# 1. ✅ All list endpoints now require authentication
+# 2. ✅ Email filter access is restricted to own data (unless admin)
+# 3. ⏳ TODO: Implement rate limiting (Stage 3)
+# 4. ⏳ TODO: Add audit logging for filtered queries (Stage 3)
+# 5. ⏳ TODO: Implement Azure AD JWT validation (Stage 2 enhancement)

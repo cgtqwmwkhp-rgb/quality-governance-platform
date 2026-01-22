@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.domain.models.incident import Incident
@@ -123,7 +123,7 @@ async def get_incident(
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
-    current_user: OptionalCurrentUser,
+    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
@@ -135,16 +135,25 @@ async def list_incidents(
     1. reported_date DESC (newest first)
     2. id ASC (stable secondary sort)
 
-    Authentication is optional when filtering by reporter_email.
-    This allows portal users (Azure AD auth) to view their own incidents.
+    Requires authentication. Users can only filter by their own email
+    unless they have admin permissions.
     """
-    # If no valid auth token and no reporter_email filter, require authentication
-    if current_user is None and not reporter_email:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required when not filtering by reporter_email",
-            headers={"WWW-Authenticate": "Bearer"},
+    # SECURITY FIX: If filtering by email, enforce that users can only access their own data
+    # unless they have admin/view-all permissions
+    if reporter_email:
+        user_email = getattr(current_user, "email", None)
+        has_view_all = (
+            current_user.has_permission("incident:view_all") if hasattr(current_user, "has_permission") else False
         )
+        is_superuser = getattr(current_user, "is_superuser", False)
+
+        if not has_view_all and not is_superuser:
+            # Non-admin users can only filter by their own email
+            if user_email and reporter_email.lower() != user_email.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own incidents",
+                )
 
     import logging
     import math
