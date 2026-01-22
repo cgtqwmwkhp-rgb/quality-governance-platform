@@ -47,7 +47,7 @@ from src.domain.models.document_control import (
     DocumentDistribution,
     DocumentTrainingLink,
 )
-from src.domain.models.document_control import DocumentVersion as ControlledDocumentVersion
+from src.domain.models.document_control import ControlledDocumentVersion
 from src.domain.models.document_control import ObsoleteDocumentRecord
 
 # Form Configuration (Admin Form Builder)

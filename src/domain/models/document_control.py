@@ -140,7 +140,7 @@ class ControlledDocument(Base):
         return f"<ControlledDocument({self.document_number}: {self.title[:30]})>"
 
 
-class DocumentVersion(Base):
+class ControlledDocumentVersion(Base):
     """Version history for controlled documents"""
 
     __tablename__ = "controlled_document_versions"
