@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
@@ -84,7 +84,7 @@ async def get_complaint(
 @router.get("/", response_model=ComplaintListResponse)
 async def list_complaints(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: OptionalCurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = None,
@@ -94,8 +94,18 @@ async def list_complaints(
     List all complaints with deterministic ordering.
 
     Ordering: received_date DESC, id ASC
-    Requires authentication.
+    
+    Authentication is optional when filtering by complainant_email.
+    This allows portal users (Azure AD auth) to view their own complaints.
     """
+    # If no valid auth token and no complainant_email filter, require authentication
+    if current_user is None and not complainant_email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required when not filtering by complainant_email",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     query = select(Complaint)
 
     if complainant_email:

@@ -1,4 +1,4 @@
-# DEBUG LOG: Mixed Content API Errors
+# DEBUG LOG: Mixed Content + Auth API Errors
 
 **Date**: 2026-01-21
 **Status**: FIXED
@@ -68,3 +68,48 @@ $ curl -sI "https://app-qgp-prod.azurewebsites.net/api/v1/incidents?page=1&size=
 1. Backend must always use `--proxy-headers` when behind reverse proxy
 2. Added this debug log for future reference
 3. Consider adding trailing slashes to all frontend API paths
+
+---
+
+# FOLLOW-UP FIX: Portal 401 Authentication Errors
+
+## Symptom (Round 2)
+
+After fixing mixed content, portal users still saw 401 errors:
+```
+/api/v1/incidents/?page=1&size=20&reporter_email=... → 401
+/api/v1/rtas?page=1&size=20&reporter_email=... → 404 (missing trailing slash)
+/api/v1/complaints/?page=1&size=20&complainant_email=... → 401
+```
+
+## Root Cause
+
+1. **RTAs 404**: Missing trailing slash on line 309-310 of PortalTrack.tsx
+2. **401 Auth**: Portal uses Azure AD tokens (MSAL), but backend `decode_token` uses platform JWT secret. Incompatible token types.
+
+## Fix Applied
+
+### Change 1: Fix RTAs trailing slash
+```diff
+- ${apiBase}/api/v1/rtas?page=1&size=20
++ ${apiBase}/api/v1/rtas/?page=1&size=20
+```
+
+### Change 2: Add optional authentication to backend
+
+Created `OptionalCurrentUser` dependency that returns `None` for invalid tokens
+instead of raising 401. Updated list endpoints to allow unauthenticated access
+when filtering by reporter_email/complainant_email.
+
+**Files changed:**
+- `src/api/dependencies/__init__.py` - Added `get_optional_current_user` and `OptionalCurrentUser`
+- `src/api/routes/incidents.py` - Use `OptionalCurrentUser` for list endpoint
+- `src/api/routes/rtas.py` - Use `OptionalCurrentUser` for list endpoint
+- `src/api/routes/complaints.py` - Use `OptionalCurrentUser` for list endpoint
+- `frontend/src/pages/PortalTrack.tsx` - Fixed RTAs trailing slash
+
+## Security Note
+
+This change allows unauthenticated access to list endpoints ONLY when filtering
+by reporter_email/complainant_email. Users can only see their own reports.
+Without the email filter, authentication is still required.

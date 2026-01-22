@@ -304,10 +304,11 @@ export default function PortalTrack() {
       } catch (e) { console.error('Failed to fetch incidents:', e); }
       
       // Fetch RTAs - filter by reporter_email
+      // NOTE: Trailing slash required - FastAPI routes use trailing slashes
       try {
         const rtasUrl = user?.email 
-          ? `${apiBase}/api/v1/rtas?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
-          : `${apiBase}/api/v1/rtas?page=1&size=20`;
+          ? `${apiBase}/api/v1/rtas/?page=1&size=20&reporter_email=${encodeURIComponent(user.email)}`
+          : `${apiBase}/api/v1/rtas/?page=1&size=20`;
         const rtasRes = await fetch(rtasUrl, { headers });
         if (rtasRes.ok) {
           hasSuccessfulFetch = true;

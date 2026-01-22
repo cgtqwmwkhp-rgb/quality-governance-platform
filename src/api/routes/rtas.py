@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.rta import (
     RTAActionCreate,
@@ -69,14 +69,26 @@ async def create_rta(
 @router.get("/", response_model=RTAListResponse)
 async def list_rtas(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: OptionalCurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     severity: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ):
-    """List RTAs with deterministic ordering and pagination."""
+    """List RTAs with deterministic ordering and pagination.
+    
+    Authentication is optional when filtering by reporter_email.
+    This allows portal users (Azure AD auth) to view their own RTAs.
+    """
+    # If no valid auth token and no reporter_email filter, require authentication
+    if current_user is None and not reporter_email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required when not filtering by reporter_email",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     query = select(RoadTrafficCollision)
 
     # Apply filters

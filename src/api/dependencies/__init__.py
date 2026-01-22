@@ -1,8 +1,8 @@
 """API dependencies for dependency injection."""
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +11,9 @@ from src.core.security import decode_token
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
 
-# Security scheme
+# Security scheme - auto_error=False allows optional auth
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
@@ -95,8 +96,47 @@ def require_permission(permission: str):
     return permission_checker
 
 
+async def get_optional_current_user(
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(optional_security)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Optional[User]:
+    """Get the current user if valid token provided, otherwise return None.
+    
+    This allows endpoints to be accessed without authentication while still
+    supporting authenticated access for additional permissions.
+    Used by portal users who authenticate via Azure AD (tokens not validated here)
+    but can still filter by their email address.
+    """
+    if credentials is None:
+        return None
+
+    token = credentials.credentials
+    payload = decode_token(token)
+
+    if payload is None:
+        # Invalid token - return None instead of raising error
+        return None
+
+    user_id_raw = payload.get("sub")
+    if user_id_raw is None:
+        return None
+    user_id: str = str(user_id_raw)
+
+    # Get user from database with roles eagerly loaded
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
+    user = result.scalar_one_or_none()
+
+    if user is None or not user.is_active:
+        return None
+
+    return user
+
+
 # Type aliases for cleaner route signatures
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentActiveUser = Annotated[User, Depends(get_current_active_user)]
 CurrentSuperuser = Annotated[User, Depends(get_current_superuser)]
+OptionalCurrentUser = Annotated[Optional[User], Depends(get_optional_current_user)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]

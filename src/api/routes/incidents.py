@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.domain.models.incident import Incident
@@ -122,7 +122,7 @@ async def get_incident(
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: OptionalCurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     reporter_email: str = Query(None, description="Filter by reporter email"),
@@ -134,8 +134,16 @@ async def list_incidents(
     1. reported_date DESC (newest first)
     2. id ASC (stable secondary sort)
 
-    Requires authentication.
+    Authentication is optional when filtering by reporter_email.
+    This allows portal users (Azure AD auth) to view their own incidents.
     """
+    # If no valid auth token and no reporter_email filter, require authentication
+    if current_user is None and not reporter_email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required when not filtering by reporter_email",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     # Build base query
     query = select(Incident)
     count_query = select(sa_func.count()).select_from(Incident)
