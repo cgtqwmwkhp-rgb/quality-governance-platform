@@ -129,8 +129,8 @@ class TestInMemoryRateLimiter:
 
         _, _, reset_time = await limiter.is_allowed("test-user-3", 10, 60)
 
-        # Reset time should be within the window
-        assert reset_time >= now
+        # Reset time should be within the window (allow 1 second tolerance for int truncation)
+        assert reset_time >= now - 1
         assert reset_time <= now + 60
 
     @pytest.mark.asyncio
