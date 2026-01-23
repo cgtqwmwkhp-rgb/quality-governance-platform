@@ -37,12 +37,27 @@ const ENTITY_TO_SOURCE_TYPE: Record<string, string> = {
   complaint: 'complaint',
 }
 
+// Action type for display
+interface ActionItem {
+  id: number
+  title: string
+  description: string
+  priority: string
+  status: string
+  due_date?: string
+  owner_email?: string
+}
+
 export default function Investigations() {
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null)
+  
+  // Actions for selected investigation
+  const [investigationActions, setInvestigationActions] = useState<ActionItem[]>([])
+  const [loadingActions, setLoadingActions] = useState(false)
   
   // Action modal state
   const [showActionModal, setShowActionModal] = useState(false)
@@ -58,6 +73,35 @@ export default function Investigations() {
   useEffect(() => {
     loadInvestigations()
   }, [])
+
+  // Load actions when investigation is selected
+  useEffect(() => {
+    if (selectedInvestigation) {
+      loadActionsForInvestigation(selectedInvestigation)
+    } else {
+      setInvestigationActions([])
+    }
+  }, [selectedInvestigation])
+
+  const loadActionsForInvestigation = async (investigation: Investigation) => {
+    const sourceType = ENTITY_TO_SOURCE_TYPE[investigation.assigned_entity_type]
+    if (!sourceType) return
+    
+    setLoadingActions(true)
+    try {
+      const response = await actionsApi.list(1, 50)
+      // Filter actions for this entity
+      const filtered = (response.data.items || []).filter(
+        (a: any) => a.source_type === sourceType && a.source_id === investigation.assigned_entity_id
+      )
+      setInvestigationActions(filtered)
+    } catch (err) {
+      console.error('Failed to load actions:', err)
+      setInvestigationActions([])
+    } finally {
+      setLoadingActions(false)
+    }
+  }
 
   const loadInvestigations = async () => {
     try {
@@ -105,7 +149,8 @@ export default function Investigations() {
         due_date: '',
         assigned_to: '',
       })
-      alert('Corrective action created successfully!')
+      // Reload actions to show the new one
+      loadActionsForInvestigation(selectedInvestigation)
     } catch (err: any) {
       console.error('Failed to create action:', err)
       alert(`Failed to create action: ${err?.response?.data?.message || err?.message || 'Unknown error'}`)
@@ -353,6 +398,60 @@ export default function Investigations() {
                 {/* Corrective Actions */}
                 <div>
                   <h3 className="text-lg font-semibold text-foreground mb-4">Corrective Actions</h3>
+                  
+                  {/* Existing Actions */}
+                  {loadingActions ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : investigationActions.length > 0 ? (
+                    <div className="space-y-3 mb-4">
+                      {investigationActions.map((action) => (
+                        <Card key={action.id} className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-foreground">{action.title}</h4>
+                              <p className="text-sm text-muted-foreground line-clamp-2">{action.description}</p>
+                              {action.owner_email && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Assigned to: <span className="text-foreground">{action.owner_email}</span>
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className={cn(
+                                "px-2 py-0.5 text-xs font-medium rounded",
+                                action.status === 'open' && "bg-warning/10 text-warning",
+                                action.status === 'in_progress' && "bg-info/10 text-info",
+                                action.status === 'completed' && "bg-success/10 text-success",
+                              )}>
+                                {action.status.replace('_', ' ')}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 text-xs font-medium rounded",
+                                action.priority === 'critical' && "bg-destructive/10 text-destructive",
+                                action.priority === 'high' && "bg-warning/10 text-warning",
+                                action.priority === 'medium' && "bg-info/10 text-info",
+                                action.priority === 'low' && "bg-muted text-muted-foreground",
+                              )}>
+                                {action.priority}
+                              </span>
+                              {action.due_date && (
+                                <span className="text-xs text-muted-foreground">
+                                  Due: {new Date(action.due_date).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4 mb-4">
+                      No corrective actions yet
+                    </p>
+                  )}
+                  
                   <Button variant="outline" className="w-full" onClick={() => setShowActionModal(true)}>
                     <Plus className="w-5 h-5" />
                     Add Corrective Action
