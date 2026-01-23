@@ -8,19 +8,68 @@ import {
   Phone,
   Calendar,
   FileText,
+  Plus,
+  FlaskConical,
+  CheckCircle,
   Loader2,
+  ClipboardList,
   History,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react'
-import { complaintsApi, Complaint } from '../api/client'
+import { complaintsApi, Complaint, ComplaintCreate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { Textarea } from '../components/ui/Textarea'
+import { Input } from '../components/ui/Input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/Dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
+import { cn } from '../helpers/utils'
+import { UserEmailSearch } from '../components/UserEmailSearch'
 
 export default function ComplaintDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [complaint, setComplaint] = useState<Complaint | null>(null)
+  const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
+  const [showInvestigationModal, setShowInvestigationModal] = useState(false)
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<ComplaintCreate>>({})
+
+  // Investigation form
+  const [investigationForm, setInvestigationForm] = useState({
+    title: '',
+    description: '',
+    investigation_type: 'root_cause_analysis',
+    lead_investigator: '',
+  })
+
+  // Action form
+  const [actionForm, setActionForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium',
+    due_date: '',
+    assigned_to: '',
+  })
 
   useEffect(() => {
     if (id) {
@@ -32,11 +81,126 @@ export default function ComplaintDetail() {
     try {
       const response = await complaintsApi.get(complaintId)
       setComplaint(response.data)
+      setEditForm({
+        title: response.data.title,
+        description: response.data.description,
+        complaint_type: response.data.complaint_type,
+        priority: response.data.priority,
+        status: response.data.status,
+        complainant_name: response.data.complainant_name,
+        complainant_email: response.data.complainant_email,
+        complainant_phone: response.data.complainant_phone,
+        resolution_summary: response.data.resolution_summary,
+      })
+      loadActions()
     } catch (err) {
       console.error('Failed to load complaint:', err)
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadActions = async () => {
+    try {
+      const response = await actionsApi.list(1, 50)
+      setActions(response.data.items || [])
+    } catch (err) {
+      console.error('Failed to load actions:', err)
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!complaint) return
+    setSaving(true)
+    try {
+      const response = await complaintsApi.update(complaint.id, editForm)
+      setComplaint(response.data)
+      setIsEditing(false)
+    } catch (err) {
+      console.error('Failed to update complaint:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    if (complaint) {
+      setEditForm({
+        title: complaint.title,
+        description: complaint.description,
+        complaint_type: complaint.complaint_type,
+        priority: complaint.priority,
+        status: complaint.status,
+        complainant_name: complaint.complainant_name,
+        complainant_email: complaint.complainant_email,
+        complainant_phone: complaint.complainant_phone,
+        resolution_summary: complaint.resolution_summary,
+      })
+    }
+    setIsEditing(false)
+  }
+
+  const handleCreateInvestigation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!complaint) return
+    setCreating(true)
+    try {
+      await investigationsApi.create({
+        template_id: 1,
+        assigned_entity_type: 'complaint',
+        assigned_entity_id: complaint.id,
+        title: investigationForm.title || `Investigation - ${complaint.reference_number}`,
+        description: `${investigationForm.description || ''}\n\nInvestigation Type: ${investigationForm.investigation_type}\nLead Investigator: ${investigationForm.lead_investigator || 'TBD'}`,
+      })
+      setShowInvestigationModal(false)
+      setInvestigationForm({
+        title: '',
+        description: '',
+        investigation_type: 'root_cause_analysis',
+        lead_investigator: '',
+      })
+      navigate('/investigations')
+    } catch (err) {
+      console.error('Failed to create investigation:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleCreateAction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!complaint) return
+    setCreating(true)
+    try {
+      await actionsApi.create({
+        title: actionForm.title,
+        description: `${actionForm.description}\n\nRelated to: ${complaint.reference_number}\nAssigned to: ${actionForm.assigned_to}`,
+        priority: actionForm.priority,
+        due_date: actionForm.due_date || undefined,
+        action_type: 'corrective',
+      })
+      setShowActionModal(false)
+      setActionForm({
+        title: '',
+        description: '',
+        priority: 'medium',
+        due_date: '',
+        assigned_to: '',
+      })
+      loadActions()
+    } catch (err) {
+      console.error('Failed to create action:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
+    setActionForm({ ...actionForm, assigned_to: email })
+  }
+
+  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
+    setInvestigationForm({ ...investigationForm, lead_investigator: email })
   }
 
   const getPriorityVariant = (priority: string) => {
@@ -125,6 +289,35 @@ export default function ComplaintDetail() {
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          {isEditing ? (
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Changes
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button variant="outline" onClick={() => setShowActionModal(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Action
+              </Button>
+              <Button onClick={() => setShowInvestigationModal(true)}>
+                <FlaskConical className="w-4 h-4 mr-2" />
+                Start Investigation
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Main Content Grid */}
@@ -140,35 +333,121 @@ export default function ComplaintDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Description</label>
-                <p className="mt-1 text-foreground whitespace-pre-wrap">
-                  {complaint.description || 'No description provided'}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Type</label>
-                  <p className="mt-1 text-foreground capitalize flex items-center gap-2">
-                    <span>{getTypeIcon(complaint.complaint_type)}</span>
-                    {complaint.complaint_type.replace('_', ' ')}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Priority</label>
-                  <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Status</label>
-                  <p className="mt-1 text-foreground capitalize">{complaint.status.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Received Date</label>
-                  <p className="mt-1 text-foreground">
-                    {new Date(complaint.received_date).toLocaleString()}
-                  </p>
-                </div>
-              </div>
+              {isEditing ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Title</label>
+                    <Input
+                      value={editForm.title || ''}
+                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <Textarea
+                      value={editForm.description || ''}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      rows={4}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Type</label>
+                      <Select
+                        value={editForm.complaint_type}
+                        onValueChange={(value) => setEditForm({ ...editForm, complaint_type: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="product">Product</SelectItem>
+                          <SelectItem value="service">Service</SelectItem>
+                          <SelectItem value="delivery">Delivery</SelectItem>
+                          <SelectItem value="communication">Communication</SelectItem>
+                          <SelectItem value="billing">Billing</SelectItem>
+                          <SelectItem value="staff">Staff</SelectItem>
+                          <SelectItem value="environmental">Environmental</SelectItem>
+                          <SelectItem value="safety">Safety</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                      <Select
+                        value={editForm.priority}
+                        onValueChange={(value) => setEditForm({ ...editForm, priority: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="critical">Critical</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <Select
+                        value={editForm.status}
+                        onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="received">Received</SelectItem>
+                          <SelectItem value="acknowledged">Acknowledged</SelectItem>
+                          <SelectItem value="under_investigation">Under Investigation</SelectItem>
+                          <SelectItem value="pending_response">Pending Response</SelectItem>
+                          <SelectItem value="awaiting_customer">Awaiting Customer</SelectItem>
+                          <SelectItem value="escalated">Escalated</SelectItem>
+                          <SelectItem value="resolved">Resolved</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">
+                      {complaint.description || 'No description provided'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Type</label>
+                      <p className="mt-1 text-foreground capitalize flex items-center gap-2">
+                        <span>{getTypeIcon(complaint.complaint_type)}</span>
+                        {complaint.complaint_type.replace('_', ' ')}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                      <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <p className="mt-1 text-foreground capitalize">{complaint.status.replace('_', ' ')}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Received Date</label>
+                      <p className="mt-1 text-foreground">
+                        {new Date(complaint.received_date).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -181,37 +460,129 @@ export default function ComplaintDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Name</label>
-                  <p className="mt-1 text-foreground">{complaint.complainant_name || 'Not specified'}</p>
+              {isEditing ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Name</label>
+                    <Input
+                      value={editForm.complainant_name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, complainant_name: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <Input
+                      type="email"
+                      value={editForm.complainant_email || ''}
+                      onChange={(e) => setEditForm({ ...editForm, complainant_email: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Phone</label>
+                    <Input
+                      type="tel"
+                      value={editForm.complainant_phone || ''}
+                      onChange={(e) => setEditForm({ ...editForm, complainant_phone: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Email</label>
-                  <p className="mt-1 text-foreground">{complaint.complainant_email || 'Not specified'}</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Name</label>
+                    <p className="mt-1 text-foreground">{complaint.complainant_name || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <p className="mt-1 text-foreground">{complaint.complainant_email || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Phone</label>
+                    <p className="mt-1 text-foreground">{complaint.complainant_phone || 'Not specified'}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Phone</label>
-                  <p className="mt-1 text-foreground">{complaint.complainant_phone || 'Not specified'}</p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Resolution */}
-          {complaint.resolution_summary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-success" />
-                  Resolution
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-foreground whitespace-pre-wrap">{complaint.resolution_summary}</p>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-success" />
+                Resolution
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isEditing ? (
+                <Textarea
+                  value={editForm.resolution_summary || ''}
+                  onChange={(e) => setEditForm({ ...editForm, resolution_summary: e.target.value })}
+                  rows={4}
+                  placeholder="Enter resolution details..."
+                />
+              ) : (
+                <p className="text-foreground whitespace-pre-wrap">
+                  {complaint.resolution_summary || 'No resolution recorded yet'}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Actions Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-primary" />
+                Actions ({actions.length})
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
+                <Plus className="w-4 h-4 mr-1" />
+                Add
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {actions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No actions yet</p>
+                  <p className="text-sm">Create actions to track follow-up tasks</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {actions.slice(0, 5).map((action) => (
+                    <div
+                      key={action.id}
+                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center",
+                          action.status === 'completed' ? 'bg-success/10 text-success' :
+                          action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
+                          'bg-warning/10 text-warning'
+                        )}>
+                          <CheckCircle className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{action.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'No due date'}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={action.status === 'completed' ? 'resolved' : 'in-progress' as any}>
+                        {action.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right Column - Quick Info */}
@@ -286,6 +657,154 @@ export default function ComplaintDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Create Investigation Modal */}
+      <Dialog open={showInvestigationModal} onOpenChange={setShowInvestigationModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-primary" />
+              Start Investigation
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateInvestigation} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Investigation Title
+              </label>
+              <Input
+                value={investigationForm.title}
+                onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
+                placeholder={`Investigation - ${complaint.reference_number}`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Investigation Type
+              </label>
+              <Select
+                value={investigationForm.investigation_type}
+                onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="root_cause_analysis">Root Cause Analysis</SelectItem>
+                  <SelectItem value="5_whys">5 Whys</SelectItem>
+                  <SelectItem value="fishbone">Fishbone Analysis</SelectItem>
+                  <SelectItem value="incident_review">Incident Review</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <UserEmailSearch
+              label="Lead Investigator"
+              value={investigationForm.lead_investigator}
+              onChange={handleInvestigatorChange}
+              placeholder="Search by email..."
+            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Initial Notes
+              </label>
+              <Textarea
+                value={investigationForm.description}
+                onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
+                placeholder="Describe the scope and initial findings..."
+                rows={4}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Investigation'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Action Modal */}
+      <Dialog open={showActionModal} onOpenChange={setShowActionModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
+              Add Action
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateAction} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Action Title *
+              </label>
+              <Input
+                value={actionForm.title}
+                onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
+                placeholder="e.g., Contact customer for follow-up"
+                required
+              />
+            </div>
+            <UserEmailSearch
+              label="Assign To"
+              value={actionForm.assigned_to}
+              onChange={handleAssigneeChange}
+              placeholder="Search by email..."
+              required
+            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Priority
+              </label>
+              <Select
+                value={actionForm.priority}
+                onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Due Date
+              </label>
+              <Input
+                type="date"
+                value={actionForm.due_date}
+                onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Description
+              </label>
+              <Textarea
+                value={actionForm.description}
+                onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+                placeholder="Describe the action to be taken..."
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating || !actionForm.title}>
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

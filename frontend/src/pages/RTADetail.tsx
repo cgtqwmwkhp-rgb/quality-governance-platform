@@ -6,20 +6,70 @@ import {
   MapPin,
   Calendar,
   FileText,
+  Plus,
+  FlaskConical,
+  CheckCircle,
   Loader2,
+  ClipboardList,
   History,
   Shield,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react'
-import { rtasApi, RTA } from '../api/client'
+import { rtasApi, RTA, RTACreate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { Textarea } from '../components/ui/Textarea'
+import { Input } from '../components/ui/Input'
+import { Switch } from '../components/ui/Switch'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/Dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
+import { cn } from '../helpers/utils'
+import { UserEmailSearch } from '../components/UserEmailSearch'
 
 export default function RTADetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [rta, setRta] = useState<RTA | null>(null)
+  const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
+  const [showInvestigationModal, setShowInvestigationModal] = useState(false)
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<RTACreate>>({})
+
+  // Investigation form
+  const [investigationForm, setInvestigationForm] = useState({
+    title: '',
+    description: '',
+    investigation_type: 'root_cause_analysis',
+    lead_investigator: '',
+  })
+
+  // Action form
+  const [actionForm, setActionForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium',
+    due_date: '',
+    assigned_to: '',
+  })
 
   useEffect(() => {
     if (id) {
@@ -31,11 +81,126 @@ export default function RTADetail() {
     try {
       const response = await rtasApi.get(rtaId)
       setRta(response.data)
+      setEditForm({
+        title: response.data.title,
+        description: response.data.description,
+        severity: response.data.severity,
+        status: response.data.status,
+        location: response.data.location,
+        driver_name: response.data.driver_name,
+        company_vehicle_registration: response.data.company_vehicle_registration,
+        police_attended: response.data.police_attended,
+        driver_injured: response.data.driver_injured,
+      })
+      loadActions()
     } catch (err) {
       console.error('Failed to load RTA:', err)
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadActions = async () => {
+    try {
+      const response = await actionsApi.list(1, 50)
+      setActions(response.data.items || [])
+    } catch (err) {
+      console.error('Failed to load actions:', err)
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!rta) return
+    setSaving(true)
+    try {
+      const response = await rtasApi.update(rta.id, editForm)
+      setRta(response.data)
+      setIsEditing(false)
+    } catch (err) {
+      console.error('Failed to update RTA:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    if (rta) {
+      setEditForm({
+        title: rta.title,
+        description: rta.description,
+        severity: rta.severity,
+        status: rta.status,
+        location: rta.location,
+        driver_name: rta.driver_name,
+        company_vehicle_registration: rta.company_vehicle_registration,
+        police_attended: rta.police_attended,
+        driver_injured: rta.driver_injured,
+      })
+    }
+    setIsEditing(false)
+  }
+
+  const handleCreateInvestigation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!rta) return
+    setCreating(true)
+    try {
+      await investigationsApi.create({
+        template_id: 1,
+        assigned_entity_type: 'road_traffic_collision',
+        assigned_entity_id: rta.id,
+        title: investigationForm.title || `Investigation - ${rta.reference_number}`,
+        description: `${investigationForm.description || ''}\n\nInvestigation Type: ${investigationForm.investigation_type}\nLead Investigator: ${investigationForm.lead_investigator || 'TBD'}`,
+      })
+      setShowInvestigationModal(false)
+      setInvestigationForm({
+        title: '',
+        description: '',
+        investigation_type: 'root_cause_analysis',
+        lead_investigator: '',
+      })
+      navigate('/investigations')
+    } catch (err) {
+      console.error('Failed to create investigation:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleCreateAction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!rta) return
+    setCreating(true)
+    try {
+      await actionsApi.create({
+        title: actionForm.title,
+        description: `${actionForm.description}\n\nRelated to: ${rta.reference_number}\nAssigned to: ${actionForm.assigned_to}`,
+        priority: actionForm.priority,
+        due_date: actionForm.due_date || undefined,
+        action_type: 'corrective',
+      })
+      setShowActionModal(false)
+      setActionForm({
+        title: '',
+        description: '',
+        priority: 'medium',
+        due_date: '',
+        assigned_to: '',
+      })
+      loadActions()
+    } catch (err) {
+      console.error('Failed to create action:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
+    setActionForm({ ...actionForm, assigned_to: email })
+  }
+
+  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
+    setInvestigationForm({ ...investigationForm, lead_investigator: email })
   }
 
   const getSeverityVariant = (severity: string) => {
@@ -109,6 +274,35 @@ export default function RTADetail() {
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          {isEditing ? (
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Changes
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button variant="outline" onClick={() => setShowActionModal(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Action
+              </Button>
+              <Button onClick={() => setShowInvestigationModal(true)}>
+                <FlaskConical className="w-4 h-4 mr-2" />
+                Start Investigation
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Main Content Grid */}
@@ -124,32 +318,102 @@ export default function RTADetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Description</label>
-                <p className="mt-1 text-foreground whitespace-pre-wrap">
-                  {rta.description || 'No description provided'}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Severity</label>
-                  <p className="mt-1 text-foreground capitalize">{rta.severity.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Status</label>
-                  <p className="mt-1 text-foreground capitalize">{rta.status.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Collision Date</label>
-                  <p className="mt-1 text-foreground">
-                    {new Date(rta.collision_date).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Location</label>
-                  <p className="mt-1 text-foreground">{rta.location || 'Not specified'}</p>
-                </div>
-              </div>
+              {isEditing ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Title</label>
+                    <Input
+                      value={editForm.title || ''}
+                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <Textarea
+                      value={editForm.description || ''}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      rows={4}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <Select
+                        value={editForm.severity}
+                        onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="near_miss">Near Miss</SelectItem>
+                          <SelectItem value="damage_only">Damage Only</SelectItem>
+                          <SelectItem value="minor_injury">Minor Injury</SelectItem>
+                          <SelectItem value="serious_injury">Serious Injury</SelectItem>
+                          <SelectItem value="fatal">Fatal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <Select
+                        value={editForm.status}
+                        onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="reported">Reported</SelectItem>
+                          <SelectItem value="under_investigation">Under Investigation</SelectItem>
+                          <SelectItem value="pending_insurance">Pending Insurance</SelectItem>
+                          <SelectItem value="pending_actions">Pending Actions</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <Input
+                        value={editForm.location || ''}
+                        onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">
+                      {rta.description || 'No description provided'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <p className="mt-1 text-foreground capitalize">{rta.severity.replace('_', ' ')}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <p className="mt-1 text-foreground capitalize">{rta.status.replace('_', ' ')}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Collision Date</label>
+                      <p className="mt-1 text-foreground">
+                        {new Date(rta.collision_date).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <p className="mt-1 text-foreground">{rta.location || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -162,24 +426,112 @@ export default function RTADetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
-                  <p className="mt-1 text-foreground">{rta.company_vehicle_registration || 'Not specified'}</p>
+              {isEditing ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
+                    <Input
+                      value={editForm.company_vehicle_registration || ''}
+                      onChange={(e) => setEditForm({ ...editForm, company_vehicle_registration: e.target.value })}
+                      className="mt-1"
+                      placeholder="AB12 CDE"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Driver Name</label>
+                    <Input
+                      value={editForm.driver_name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 pt-4">
+                    <Switch
+                      checked={editForm.driver_injured || false}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, driver_injured: checked })}
+                    />
+                    <label className="text-sm text-foreground">Driver Injured</label>
+                  </div>
+                  <div className="flex items-center gap-3 pt-4">
+                    <Switch
+                      checked={editForm.police_attended || false}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, police_attended: checked })}
+                    />
+                    <label className="text-sm text-foreground">Police Attended</label>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Driver Name</label>
-                  <p className="mt-1 text-foreground">{rta.driver_name || 'Not specified'}</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
+                    <p className="mt-1 text-foreground">{rta.company_vehicle_registration || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Driver Name</label>
+                    <p className="mt-1 text-foreground">{rta.driver_name || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Driver Injured</label>
+                    <p className="mt-1 text-foreground">{rta.driver_injured ? 'Yes' : 'No'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Police Attended</label>
+                    <p className="mt-1 text-foreground">{rta.police_attended ? 'Yes' : 'No'}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Driver Injured</label>
-                  <p className="mt-1 text-foreground">{rta.driver_injured ? 'Yes' : 'No'}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Actions Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-primary" />
+                Actions ({actions.length})
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
+                <Plus className="w-4 h-4 mr-1" />
+                Add
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {actions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No actions yet</p>
+                  <p className="text-sm">Create actions to track follow-up tasks</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Police Attended</label>
-                  <p className="mt-1 text-foreground">{rta.police_attended ? 'Yes' : 'No'}</p>
+              ) : (
+                <div className="space-y-3">
+                  {actions.slice(0, 5).map((action) => (
+                    <div
+                      key={action.id}
+                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center",
+                          action.status === 'completed' ? 'bg-success/10 text-success' :
+                          action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
+                          'bg-warning/10 text-warning'
+                        )}>
+                          <CheckCircle className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{action.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'No due date'}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={action.status === 'completed' ? 'resolved' : 'in-progress' as any}>
+                        {action.status}
+                      </Badge>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -256,6 +608,154 @@ export default function RTADetail() {
           </Card>
         </div>
       </div>
+
+      {/* Create Investigation Modal */}
+      <Dialog open={showInvestigationModal} onOpenChange={setShowInvestigationModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-primary" />
+              Start Investigation
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateInvestigation} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Investigation Title
+              </label>
+              <Input
+                value={investigationForm.title}
+                onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
+                placeholder={`Investigation - ${rta.reference_number}`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Investigation Type
+              </label>
+              <Select
+                value={investigationForm.investigation_type}
+                onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="root_cause_analysis">Root Cause Analysis</SelectItem>
+                  <SelectItem value="5_whys">5 Whys</SelectItem>
+                  <SelectItem value="fishbone">Fishbone Analysis</SelectItem>
+                  <SelectItem value="incident_review">Incident Review</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <UserEmailSearch
+              label="Lead Investigator"
+              value={investigationForm.lead_investigator}
+              onChange={handleInvestigatorChange}
+              placeholder="Search by email..."
+            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Initial Notes
+              </label>
+              <Textarea
+                value={investigationForm.description}
+                onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
+                placeholder="Describe the scope and initial findings..."
+                rows={4}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Investigation'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Action Modal */}
+      <Dialog open={showActionModal} onOpenChange={setShowActionModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
+              Add Action
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateAction} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Action Title *
+              </label>
+              <Input
+                value={actionForm.title}
+                onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
+                placeholder="e.g., Review driver training"
+                required
+              />
+            </div>
+            <UserEmailSearch
+              label="Assign To"
+              value={actionForm.assigned_to}
+              onChange={handleAssigneeChange}
+              placeholder="Search by email..."
+              required
+            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Priority
+              </label>
+              <Select
+                value={actionForm.priority}
+                onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Due Date
+              </label>
+              <Input
+                type="date"
+                value={actionForm.due_date}
+                onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Description
+              </label>
+              <Textarea
+                value={actionForm.description}
+                onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+                placeholder="Describe the action to be taken..."
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating || !actionForm.title}>
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

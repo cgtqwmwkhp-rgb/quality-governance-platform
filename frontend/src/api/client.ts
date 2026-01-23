@@ -394,6 +394,8 @@ export const incidentsApi = {
     api.post<Incident>('/api/v1/incidents/', data),
   get: (id: number) => 
     api.get<Incident>(`/api/v1/incidents/${id}`),
+  update: (id: number, data: Partial<IncidentCreate>) =>
+    api.patch<Incident>(`/api/v1/incidents/${id}`, data),
 }
 
 export const rtasApi = {
@@ -403,6 +405,8 @@ export const rtasApi = {
     api.post<RTA>('/api/v1/rtas/', data),
   get: (id: number) => 
     api.get<RTA>(`/api/v1/rtas/${id}`),
+  update: (id: number, data: Partial<RTACreate>) =>
+    api.patch<RTA>(`/api/v1/rtas/${id}`, data),
 }
 
 export const complaintsApi = {
@@ -412,6 +416,8 @@ export const complaintsApi = {
     api.post<Complaint>('/api/v1/complaints/', data),
   get: (id: number) => 
     api.get<Complaint>(`/api/v1/complaints/${id}`),
+  update: (id: number, data: Partial<ComplaintCreate>) =>
+    api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
 }
 
 export const policiesApi = {
@@ -474,6 +480,21 @@ export const actionsApi = {
     api.get<Action>(`/api/v1/actions/${id}`),
   update: (id: number, data: Partial<Action>) => 
     api.patch<Action>(`/api/v1/actions/${id}`, data),
+}
+
+// User type for search results
+export interface UserSearchResult {
+  id: number
+  email: string
+  full_name: string
+  department?: string
+}
+
+export const usersApi = {
+  search: (query: string) =>
+    api.get<UserSearchResult[]>(`/api/v1/users/search/?q=${encodeURIComponent(query)}`),
+  list: (page = 1, size = 50) =>
+    api.get<PaginatedResponse<UserSearchResult>>(`/api/v1/users/?page=${page}&size=${size}`),
 }
 
 export default api

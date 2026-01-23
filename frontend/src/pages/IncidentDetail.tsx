@@ -13,8 +13,11 @@ import {
   Loader2,
   ClipboardList,
   History,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react'
-import { incidentsApi, Incident, investigationsApi, actionsApi, Action } from '../api/client'
+import { incidentsApi, Incident, IncidentCreate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -35,6 +38,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
+import { UserEmailSearch } from '../components/UserEmailSearch'
 
 export default function IncidentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -45,6 +49,9 @@ export default function IncidentDetail() {
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
   const [showActionModal, setShowActionModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<IncidentCreate>>({})
 
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({
@@ -73,7 +80,15 @@ export default function IncidentDetail() {
     try {
       const response = await incidentsApi.get(incidentId)
       setIncident(response.data)
-      // Also load related actions
+      setEditForm({
+        title: response.data.title,
+        description: response.data.description,
+        incident_type: response.data.incident_type,
+        severity: response.data.severity,
+        status: response.data.status,
+        location: response.data.location,
+        department: response.data.department,
+      })
       loadActions()
     } catch (err) {
       console.error('Failed to load incident:', err)
@@ -85,11 +100,39 @@ export default function IncidentDetail() {
   const loadActions = async () => {
     try {
       const response = await actionsApi.list(1, 50)
-      // Filter actions related to this incident (by reference in title/description)
       setActions(response.data.items || [])
     } catch (err) {
       console.error('Failed to load actions:', err)
     }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!incident) return
+    setSaving(true)
+    try {
+      const response = await incidentsApi.update(incident.id, editForm)
+      setIncident(response.data)
+      setIsEditing(false)
+    } catch (err) {
+      console.error('Failed to update incident:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    if (incident) {
+      setEditForm({
+        title: incident.title,
+        description: incident.description,
+        incident_type: incident.incident_type,
+        severity: incident.severity,
+        status: incident.status,
+        location: incident.location,
+        department: incident.department,
+      })
+    }
+    setIsEditing(false)
   }
 
   const handleCreateInvestigation = async (e: React.FormEvent) => {
@@ -98,7 +141,7 @@ export default function IncidentDetail() {
     setCreating(true)
     try {
       await investigationsApi.create({
-        template_id: 1, // Default template
+        template_id: 1,
         assigned_entity_type: 'reporting_incident',
         assigned_entity_id: incident.id,
         title: investigationForm.title || `Investigation - ${incident.reference_number}`,
@@ -111,7 +154,6 @@ export default function IncidentDetail() {
         investigation_type: 'root_cause_analysis',
         lead_investigator: '',
       })
-      // Navigate to investigations or show success
       navigate('/investigations')
     } catch (err) {
       console.error('Failed to create investigation:', err)
@@ -127,7 +169,7 @@ export default function IncidentDetail() {
     try {
       await actionsApi.create({
         title: actionForm.title,
-        description: `${actionForm.description}\n\nRelated to: ${incident.reference_number}`,
+        description: `${actionForm.description}\n\nRelated to: ${incident.reference_number}\nAssigned to: ${actionForm.assigned_to}`,
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
         action_type: 'corrective',
@@ -146,6 +188,14 @@ export default function IncidentDetail() {
     } finally {
       setCreating(false)
     }
+  }
+
+  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
+    setActionForm({ ...actionForm, assigned_to: email })
+  }
+
+  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
+    setInvestigationForm({ ...investigationForm, lead_investigator: email })
   }
 
   const getSeverityVariant = (severity: string) => {
@@ -218,14 +268,33 @@ export default function IncidentDetail() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setShowActionModal(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Action
-          </Button>
-          <Button onClick={() => setShowInvestigationModal(true)}>
-            <FlaskConical className="w-4 h-4 mr-2" />
-            Start Investigation
-          </Button>
+          {isEditing ? (
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Changes
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button variant="outline" onClick={() => setShowActionModal(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Action
+              </Button>
+              <Button onClick={() => setShowInvestigationModal(true)}>
+                <FlaskConical className="w-4 h-4 mr-2" />
+                Start Investigation
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -242,32 +311,119 @@ export default function IncidentDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Description</label>
-                <p className="mt-1 text-foreground whitespace-pre-wrap">
-                  {incident.description || 'No description provided'}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
-                  <p className="mt-1 text-foreground capitalize">{incident.incident_type.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Severity</label>
-                  <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Incident Date</label>
-                  <p className="mt-1 text-foreground">
-                    {new Date(incident.incident_date).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Location</label>
-                  <p className="mt-1 text-foreground">{incident.location || 'Not specified'}</p>
-                </div>
-              </div>
+              {isEditing ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Title</label>
+                    <Input
+                      value={editForm.title || ''}
+                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <Textarea
+                      value={editForm.description || ''}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      rows={4}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
+                      <Select
+                        value={editForm.incident_type}
+                        onValueChange={(value) => setEditForm({ ...editForm, incident_type: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="safety">Safety</SelectItem>
+                          <SelectItem value="environmental">Environmental</SelectItem>
+                          <SelectItem value="quality">Quality</SelectItem>
+                          <SelectItem value="security">Security</SelectItem>
+                          <SelectItem value="near_miss">Near Miss</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <Select
+                        value={editForm.severity}
+                        onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="critical">Critical</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <Select
+                        value={editForm.status}
+                        onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Open</SelectItem>
+                          <SelectItem value="under_investigation">Under Investigation</SelectItem>
+                          <SelectItem value="pending_actions">Pending Actions</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <Input
+                        value={editForm.location || ''}
+                        onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">
+                      {incident.description || 'No description provided'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
+                      <p className="mt-1 text-foreground capitalize">{incident.incident_type.replace('_', ' ')}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Incident Date</label>
+                      <p className="mt-1 text-foreground">
+                        {new Date(incident.incident_date).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <p className="mt-1 text-foreground">{incident.location || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -437,16 +593,12 @@ export default function IncidentDetail() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Lead Investigator
-              </label>
-              <Input
-                value={investigationForm.lead_investigator}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, lead_investigator: e.target.value })}
-                placeholder="Enter name or email"
-              />
-            </div>
+            <UserEmailSearch
+              label="Lead Investigator"
+              value={investigationForm.lead_investigator}
+              onChange={handleInvestigatorChange}
+              placeholder="Search by email..."
+            />
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
                 Initial Notes
@@ -491,6 +643,13 @@ export default function IncidentDetail() {
                 required
               />
             </div>
+            <UserEmailSearch
+              label="Assign To"
+              value={actionForm.assigned_to}
+              onChange={handleAssigneeChange}
+              placeholder="Search by email..."
+              required
+            />
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
                 Priority
