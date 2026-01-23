@@ -129,6 +129,36 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           images: ${{ env.IMAGE_TAG }}
 
+      - name: Configure App Service environment
+        run: |
+          echo "🔧 Configuring App Service with Azure AD settings..."
+          
+          # Fetch secrets from Key Vault
+          DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv)
+          SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
+          JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
+          
+          # Configure app settings
+          az webapp config appsettings set \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group rg-qgp-prod \
+            --settings \
+              APP_ENV="production" \
+              DATABASE_URL="$DB_URL" \
+              SECRET_KEY="$SECRET_KEY_VAL" \
+              JWT_SECRET_KEY="$JWT_SECRET_VAL" \
+              JWT_ALGORITHM="HS256" \
+              JWT_ACCESS_TOKEN_EXPIRE_MINUTES="30" \
+              JWT_REFRESH_TOKEN_EXPIRE_DAYS="7" \
+              LOG_LEVEL="INFO" \
+              DATABASE_ECHO="false" \
+              WEBSITES_PORT="8000" \
+              AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
+              AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
+            --output none
+          
+          echo "✅ Application settings configured"
+
       - name: Cleanup old migration containers
         continue-on-error: true
         run: |

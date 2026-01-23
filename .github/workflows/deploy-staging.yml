@@ -149,6 +149,8 @@ jobs:
               CORS_ORIGINS='["https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"]' \
               DATABASE_ECHO="false" \
               WEBSITES_PORT="8000" \
+              AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
+              AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
             --output none
           
           echo "   ✅ Application settings configured"
