@@ -141,7 +141,7 @@ jobs:
           # Configure app settings
           az webapp config appsettings set \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group rg-qgp-prod \
+            --resource-group rg-qgp-staging \
             --settings \
               APP_ENV="production" \
               DATABASE_URL="$DB_URL" \
