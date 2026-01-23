@@ -27,7 +27,7 @@ class ActionBase(BaseModel):
     description: str
     action_type: str = Field(default="corrective")
     priority: str = Field(default="medium")
-    due_date: Optional[datetime] = None
+    due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
 
 
 class ActionCreate(ActionBase):
@@ -52,13 +52,13 @@ class ActionResponse(BaseModel):
     action_type: str
     priority: str
     status: str
-    due_date: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    due_date: Optional[str] = None
+    completed_at: Optional[str] = None
     source_type: str
     source_id: int
     owner_id: Optional[int] = None
     owner_email: Optional[str] = None
-    created_at: datetime
+    created_at: str
 
     class Config:
         from_attributes = True
@@ -88,13 +88,13 @@ def _action_to_response(
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
         status=action.status.value if hasattr(action.status, "value") else str(action.status),
-        due_date=action.due_date,
-        completed_at=action.completed_at,
+        due_date=action.due_date.isoformat() if action.due_date else None,
+        completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=source_type,
         source_id=source_id,
         owner_id=action.owner_id,
         owner_email=None,
-        created_at=action.created_at,
+        created_at=action.created_at.isoformat() if action.created_at else "",
     )
 
 
@@ -206,6 +206,21 @@ async def create_action(
     src_type = action_data.source_type.lower()
     src_id = action_data.source_id
 
+    # Parse due_date string to datetime if provided
+    parsed_due_date: Optional[datetime] = None
+    if action_data.due_date:
+        try:
+            # Try ISO format first (YYYY-MM-DD)
+            parsed_due_date = datetime.fromisoformat(action_data.due_date.replace("Z", "+00:00"))
+        except ValueError:
+            # Try other common formats
+            for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
+                try:
+                    parsed_due_date = datetime.strptime(action_data.due_date, fmt)
+                    break
+                except ValueError:
+                    continue
+
     # Using type: ignore for Union type - we use src_id directly for source_id
     action: Union[IncidentAction, RTAAction, ComplaintAction]  # type: ignore[assignment]
 
@@ -216,7 +231,7 @@ async def create_action(
             description=action_data.description,
             action_type=action_data.action_type,
             priority=action_data.priority,
-            due_date=action_data.due_date,
+            due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
             created_by_id=current_user.id,
@@ -228,7 +243,7 @@ async def create_action(
             description=action_data.description,
             action_type=action_data.action_type,
             priority=action_data.priority,
-            due_date=action_data.due_date,
+            due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
             created_by_id=current_user.id,
@@ -240,7 +255,7 @@ async def create_action(
             description=action_data.description,
             action_type=action_data.action_type,
             priority=action_data.priority,
-            due_date=action_data.due_date,
+            due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
             created_by_id=current_user.id,
@@ -263,13 +278,13 @@ async def create_action(
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
         status=action.status.value if hasattr(action.status, "value") else str(action.status),
-        due_date=action.due_date,
-        completed_at=action.completed_at,
+        due_date=action.due_date.isoformat() if action.due_date else None,
+        completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=src_type,
         source_id=src_id,
         owner_id=action.owner_id,
         owner_email=action_data.assigned_to_email,
-        created_at=action.created_at,
+        created_at=action.created_at.isoformat() if action.created_at else "",
     )
 
 
