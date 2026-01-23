@@ -99,21 +99,56 @@ async def create_investigation(
     """
     request_id = "N/A"  # TODO: Get from request context
 
-    # Validate template exists
+    # Validate template exists, create default if missing
     template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation_data.template_id)
     template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "TEMPLATE_NOT_FOUND",
-                "message": f"Investigation template with ID {investigation_data.template_id} not found",
-                "details": {"template_id": investigation_data.template_id},
-                "request_id": request_id,
-            },
-        )
+        # Auto-create a default template if template_id is 1 and doesn't exist
+        if investigation_data.template_id == 1:
+            default_template = InvestigationTemplate(
+                id=1,
+                name="Default Investigation Template",
+                description="Standard investigation template for incidents, RTAs, and complaints",
+                version="1.0",
+                is_active=True,
+                structure={
+                    "sections": [
+                        {
+                            "id": "rca",
+                            "title": "Root Cause Analysis",
+                            "fields": [
+                                {"id": "problem_statement", "type": "text", "required": True},
+                                {"id": "root_cause", "type": "text", "required": True},
+                                {"id": "contributing_factors", "type": "array", "required": False},
+                                {"id": "corrective_actions", "type": "array", "required": True},
+                            ],
+                        }
+                    ]
+                },
+                applicable_entity_types=[
+                    "road_traffic_collision",
+                    "reporting_incident",
+                    "complaint",
+                ],
+                created_by_id=current_user.id,
+                updated_by_id=current_user.id,
+            )
+            db.add(default_template)
+            await db.commit()
+            await db.refresh(default_template)
+            template = default_template
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error_code": "TEMPLATE_NOT_FOUND",
+                    "message": f"Investigation template with ID {investigation_data.template_id} not found",
+                    "details": {"template_id": investigation_data.template_id},
+                    "request_id": request_id,
+                },
+            )
 
     # Validate assigned entity exists
     await validate_assigned_entity(
