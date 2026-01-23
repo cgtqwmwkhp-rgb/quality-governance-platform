@@ -24,7 +24,7 @@ export function UserEmailSearch({
   const [showDropdown, setShowDropdown] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<NodeJS.Timeout>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
   useEffect(() => {
     setQuery(value)

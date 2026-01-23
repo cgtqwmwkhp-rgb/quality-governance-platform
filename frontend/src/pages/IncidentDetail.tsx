@@ -17,7 +17,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { incidentsApi, Incident, IncidentCreate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
+import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -51,7 +51,7 @@ export default function IncidentDetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [editForm, setEditForm] = useState<Partial<IncidentCreate>>({})
+  const [editForm, setEditForm] = useState<IncidentUpdate>({})
 
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({

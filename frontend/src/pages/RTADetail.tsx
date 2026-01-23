@@ -17,7 +17,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { rtasApi, RTA, RTACreate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
+import { rtasApi, RTA, RTAUpdate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -52,7 +52,7 @@ export default function RTADetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [editForm, setEditForm] = useState<Partial<RTACreate>>({})
+  const [editForm, setEditForm] = useState<RTAUpdate>({})
 
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({

@@ -18,7 +18,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { complaintsApi, Complaint, ComplaintCreate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
+import { complaintsApi, Complaint, ComplaintUpdate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -52,7 +52,7 @@ export default function ComplaintDetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [editForm, setEditForm] = useState<Partial<ComplaintCreate>>({})
+  const [editForm, setEditForm] = useState<ComplaintUpdate>({})
 
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({

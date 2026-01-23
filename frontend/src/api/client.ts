@@ -112,6 +112,16 @@ export interface IncidentCreate {
   reporter_name?: string
 }
 
+export interface IncidentUpdate {
+  title?: string
+  description?: string
+  incident_type?: string
+  severity?: string
+  status?: string
+  location?: string
+  department?: string
+}
+
 // ============ RTA Types ============
 export interface RTA {
   id: number
@@ -153,6 +163,18 @@ export interface RTACreate {
   police_attended?: boolean
 }
 
+export interface RTAUpdate {
+  title?: string
+  description?: string
+  severity?: string
+  status?: string
+  location?: string
+  company_vehicle_registration?: string
+  driver_name?: string
+  driver_injured?: boolean
+  police_attended?: boolean
+}
+
 // ============ Complaint Types ============
 export interface Complaint {
   id: number
@@ -185,6 +207,18 @@ export interface ComplaintCreate {
   complainant_company?: string
   related_reference?: string
   department?: string
+}
+
+export interface ComplaintUpdate {
+  title?: string
+  description?: string
+  complaint_type?: string
+  priority?: string
+  status?: string
+  complainant_name?: string
+  complainant_email?: string
+  complainant_phone?: string
+  resolution_summary?: string
 }
 
 // ============ Policy Types ============
@@ -394,7 +428,7 @@ export const incidentsApi = {
     api.post<Incident>('/api/v1/incidents/', data),
   get: (id: number) => 
     api.get<Incident>(`/api/v1/incidents/${id}`),
-  update: (id: number, data: Partial<IncidentCreate>) =>
+  update: (id: number, data: IncidentUpdate) =>
     api.patch<Incident>(`/api/v1/incidents/${id}`, data),
 }
 
@@ -405,7 +439,7 @@ export const rtasApi = {
     api.post<RTA>('/api/v1/rtas/', data),
   get: (id: number) => 
     api.get<RTA>(`/api/v1/rtas/${id}`),
-  update: (id: number, data: Partial<RTACreate>) =>
+  update: (id: number, data: RTAUpdate) =>
     api.patch<RTA>(`/api/v1/rtas/${id}`, data),
 }
 
@@ -416,7 +450,7 @@ export const complaintsApi = {
     api.post<Complaint>('/api/v1/complaints/', data),
   get: (id: number) => 
     api.get<Complaint>(`/api/v1/complaints/${id}`),
-  update: (id: number, data: Partial<ComplaintCreate>) =>
+  update: (id: number, data: ComplaintUpdate) =>
     api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
 }
 
