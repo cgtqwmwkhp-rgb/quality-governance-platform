@@ -87,9 +87,7 @@ async def list_actions(
     actions = []
 
     # Query incident actions
-    incident_query = select(IncidentAction).options(
-        selectinload(IncidentAction.incident)
-    )
+    incident_query = select(IncidentAction).options(selectinload(IncidentAction.incident))
     if status_filter:
         incident_query = incident_query.where(IncidentAction.status == status_filter)
     if source_type == "incident" and source_id:
@@ -99,22 +97,24 @@ async def list_actions(
 
     result = await db.execute(incident_query)
     for action in result.scalars().all():
-        actions.append({
-            "id": action.id,
-            "reference_number": action.reference_number,
-            "title": action.title,
-            "description": action.description,
-            "action_type": action.action_type or "corrective",
-            "priority": action.priority or "medium",
-            "status": action.status.value if hasattr(action.status, "value") else str(action.status),
-            "due_date": action.due_date,
-            "completed_at": action.completed_at,
-            "source_type": "incident",
-            "source_id": action.incident_id,
-            "owner_id": action.owner_id,
-            "owner_email": None,
-            "created_at": action.created_at,
-        })
+        actions.append(
+            {
+                "id": action.id,
+                "reference_number": action.reference_number,
+                "title": action.title,
+                "description": action.description,
+                "action_type": action.action_type or "corrective",
+                "priority": action.priority or "medium",
+                "status": action.status.value if hasattr(action.status, "value") else str(action.status),
+                "due_date": action.due_date,
+                "completed_at": action.completed_at,
+                "source_type": "incident",
+                "source_id": action.incident_id,
+                "owner_id": action.owner_id,
+                "owner_email": None,
+                "created_at": action.created_at,
+            }
+        )
 
     # Query RTA actions
     rta_query = select(RTAAction).options(selectinload(RTAAction.rta))
@@ -127,22 +127,24 @@ async def list_actions(
 
     result = await db.execute(rta_query)
     for action in result.scalars().all():
-        actions.append({
-            "id": action.id,
-            "reference_number": action.reference_number,
-            "title": action.title,
-            "description": action.description,
-            "action_type": action.action_type or "corrective",
-            "priority": action.priority or "medium",
-            "status": action.status.value if hasattr(action.status, "value") else str(action.status),
-            "due_date": action.due_date,
-            "completed_at": action.completed_at,
-            "source_type": "rta",
-            "source_id": action.rta_id,
-            "owner_id": action.owner_id,
-            "owner_email": None,
-            "created_at": action.created_at,
-        })
+        actions.append(
+            {
+                "id": action.id,
+                "reference_number": action.reference_number,
+                "title": action.title,
+                "description": action.description,
+                "action_type": action.action_type or "corrective",
+                "priority": action.priority or "medium",
+                "status": action.status.value if hasattr(action.status, "value") else str(action.status),
+                "due_date": action.due_date,
+                "completed_at": action.completed_at,
+                "source_type": "rta",
+                "source_id": action.rta_id,
+                "owner_id": action.owner_id,
+                "owner_email": None,
+                "created_at": action.created_at,
+            }
+        )
 
     # Query Complaint actions
     complaint_query = select(ComplaintAction).options(selectinload(ComplaintAction.complaint))
@@ -155,22 +157,24 @@ async def list_actions(
 
     result = await db.execute(complaint_query)
     for action in result.scalars().all():
-        actions.append({
-            "id": action.id,
-            "reference_number": action.reference_number,
-            "title": action.title,
-            "description": action.description,
-            "action_type": action.action_type or "corrective",
-            "priority": action.priority or "medium",
-            "status": action.status.value if hasattr(action.status, "value") else str(action.status),
-            "due_date": action.due_date,
-            "completed_at": action.completed_at,
-            "source_type": "complaint",
-            "source_id": action.complaint_id,
-            "owner_id": action.owner_id,
-            "owner_email": None,
-            "created_at": action.created_at,
-        })
+        actions.append(
+            {
+                "id": action.id,
+                "reference_number": action.reference_number,
+                "title": action.title,
+                "description": action.description,
+                "action_type": action.action_type or "corrective",
+                "priority": action.priority or "medium",
+                "status": action.status.value if hasattr(action.status, "value") else str(action.status),
+                "due_date": action.due_date,
+                "completed_at": action.completed_at,
+                "source_type": "complaint",
+                "source_id": action.complaint_id,
+                "owner_id": action.owner_id,
+                "owner_email": None,
+                "created_at": action.created_at,
+            }
+        )
 
     # Sort by created_at descending
     actions.sort(key=lambda x: x["created_at"], reverse=True)
@@ -200,9 +204,7 @@ async def create_action(
     # Find owner by email if provided
     owner_id = None
     if action_data.assigned_to_email:
-        result = await db.execute(
-            select(User).where(User.email == action_data.assigned_to_email)
-        )
+        result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
         user = result.scalar_one_or_none()
         if user:
             owner_id = user.id
@@ -285,9 +287,7 @@ async def get_action(
     source_type = source_type.lower()
 
     if source_type == "incident":
-        result = await db.execute(
-            select(IncidentAction).where(IncidentAction.id == action_id)
-        )
+        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
         action = result.scalar_one_or_none()
         if action:
             return ActionResponse(
@@ -307,9 +307,7 @@ async def get_action(
                 created_at=action.created_at,
             )
     elif source_type == "rta":
-        result = await db.execute(
-            select(RTAAction).where(RTAAction.id == action_id)
-        )
+        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
         action = result.scalar_one_or_none()
         if action:
             return ActionResponse(
@@ -329,9 +327,7 @@ async def get_action(
                 created_at=action.created_at,
             )
     elif source_type == "complaint":
-        result = await db.execute(
-            select(ComplaintAction).where(ComplaintAction.id == action_id)
-        )
+        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
         action = result.scalar_one_or_none()
         if action:
             return ActionResponse(
