@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../config/apiBase';
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
-  report_type: 'incident' | 'complaint';
+  report_type: 'incident' | 'complaint' | 'rta' | 'near_miss';
   title: string;
   description: string;
   location?: string;
@@ -299,9 +299,9 @@ Weather: ${formData.weather || 'Not specified'}
 Road Conditions: ${formData.roadCondition || 'Not specified'}
 Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
-      // Build portal report payload (RTA is submitted as incident type)
+      // Build portal report payload - RTA goes to RTA dashboard
       const payload: PortalReportPayload = {
-        report_type: 'incident', // RTA is a type of incident
+        report_type: 'rta', // Routes to RTA dashboard, not Incidents
         title: `RTA - ${formData.accidentType} - ${formData.location}`,
         description: fullDescription,
         location: formData.location,

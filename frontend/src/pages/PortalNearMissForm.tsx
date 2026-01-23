@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../config/apiBase';
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
-  report_type: 'incident' | 'complaint';
+  report_type: 'incident' | 'complaint' | 'rta' | 'near_miss';
   title: string;
   description: string;
   location?: string;
@@ -249,9 +249,9 @@ export default function PortalNearMissForm() {
     setError(null);
     
     try {
-      // Build portal report payload (near miss is submitted as incident type)
+      // Build portal report payload - Near miss goes to Near Miss/Incidents dashboard
       const payload: PortalReportPayload = {
-        report_type: 'incident', // Near miss is a type of incident
+        report_type: 'near_miss', // Routes to Near Miss records, not general Incidents
         title: `Near Miss - ${formData.contract === 'other' ? formData.contractOther : formData.contract} - ${formData.location}`,
         description: `${formData.description}${formData.potentialConsequences ? `\n\nPotential consequences: ${formData.potentialConsequences}` : ''}${formData.preventiveActionSuggested ? `\n\nPreventive action suggested: ${formData.preventiveActionSuggested}` : ''}`,
         location: formData.location,

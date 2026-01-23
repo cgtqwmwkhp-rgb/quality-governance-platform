@@ -22,7 +22,7 @@ import type { DynamicFormData } from '../components/DynamicForm';
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
-  report_type: 'incident' | 'complaint';
+  report_type: 'incident' | 'complaint' | 'rta' | 'near_miss';
   title: string;
   description: string;
   location?: string;
@@ -366,7 +366,15 @@ export default function PortalDynamicForm() {
     console.log('[PortalDynamicForm] Form data received:', formData);
     
     // Build the portal report payload from dynamic form data
-    const reportType = formType === 'complaint' ? 'complaint' : 'incident';
+    // Map form type to correct report type for proper routing
+    const reportTypeMap: Record<string, 'incident' | 'complaint' | 'rta' | 'near_miss'> = {
+      'incident': 'incident',
+      'complaint': 'complaint',
+      'rta': 'rta',
+      'near-miss': 'near_miss',
+      'near_miss': 'near_miss',
+    };
+    const reportType = reportTypeMap[formType] || 'incident';
     
     // Extract description - try multiple possible field names
     const descriptionRaw = formData.description || 

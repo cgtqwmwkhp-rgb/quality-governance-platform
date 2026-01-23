@@ -18,6 +18,8 @@ from sqlalchemy import func, select
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
+from src.domain.models.near_miss import NearMiss
+from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 
 router = APIRouter(tags=["Employee Portal"])
 
@@ -260,10 +262,99 @@ async def submit_quick_report(
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
         )
 
+    elif report.report_type.lower() == "rta":
+        # Generate reference number for Road Traffic Collision
+        year = datetime.now(timezone.utc).year
+        count_query = select(func.count()).select_from(RoadTrafficCollision)
+        result = await db.execute(count_query)
+        count = result.scalar() or 0
+        ref_number = f"RTA-{year}-{count + 1:04d}"
+
+        # Map severity
+        rta_severity_map = {
+            "low": RTASeverity.DAMAGE_ONLY,
+            "medium": RTASeverity.MINOR_INJURY,
+            "high": RTASeverity.SERIOUS_INJURY,
+            "critical": RTASeverity.FATAL,
+        }
+        rta_severity = rta_severity_map.get(report.severity.lower(), RTASeverity.DAMAGE_ONLY)
+
+        # Create RTA record
+        rta = RoadTrafficCollision(
+            reference_number=ref_number,
+            title=report.title,
+            description=report.description,
+            severity=rta_severity,
+            status=RTAStatus.REPORTED,
+            location=report.location or "Not specified",
+            collision_date=datetime.now(timezone.utc),
+            reported_date=datetime.now(timezone.utc),
+            reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
+            reporter_email=report.reporter_email if not report.is_anonymous else None,
+            driver_name=report.reporter_name if not report.is_anonymous else "Anonymous",
+        )
+
+        db.add(rta)
+        await db.commit()
+        await db.refresh(rta)
+
+        return QuickReportResponse(
+            success=True,
+            reference_number=ref_number,
+            tracking_code=tracking_code,
+            message="Your RTA report has been submitted successfully.",
+            estimated_response="A fleet manager will review your report within 24 hours.",
+            qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+        )
+
+    elif report.report_type.lower() == "near_miss":
+        # Generate reference number for Near Miss
+        year = datetime.now(timezone.utc).year
+        count_query = select(func.count()).select_from(NearMiss)
+        result = await db.execute(count_query)
+        count = result.scalar() or 0
+        ref_number = f"NM-{year}-{count + 1:04d}"
+
+        # Map severity to priority
+        priority_map = {
+            "low": "LOW",
+            "medium": "MEDIUM",
+            "high": "HIGH",
+            "critical": "CRITICAL",
+        }
+        priority = priority_map.get(report.severity.lower(), "MEDIUM")
+
+        # Create Near Miss record
+        near_miss = NearMiss(
+            reference_number=ref_number,
+            reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
+            reporter_email=report.reporter_email if not report.is_anonymous else None,
+            contract=report.department or "Not specified",
+            location=report.location or "Not specified",
+            event_date=datetime.now(timezone.utc),
+            description=report.description,
+            potential_severity=report.severity.lower(),
+            status="REPORTED",
+            priority=priority,
+        )
+
+        db.add(near_miss)
+        await db.commit()
+        await db.refresh(near_miss)
+
+        return QuickReportResponse(
+            success=True,
+            reference_number=ref_number,
+            tracking_code=tracking_code,
+            message="Your near miss report has been submitted successfully.",
+            estimated_response="A safety manager will review your report within 24 hours.",
+            qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+        )
+
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid report_type. Must be 'incident' or 'complaint'.",
+            detail="Invalid report_type. Must be 'incident', 'complaint', 'rta', or 'near_miss'.",
         )
 
 
@@ -366,6 +457,88 @@ async def track_report(
             timeline=timeline,
             next_steps="A case manager will contact you soon.",
             resolution=complaint.resolution_summary,
+        )
+
+    elif reference_number.startswith("RTA-"):
+        rta_query = select(RoadTrafficCollision).where(RoadTrafficCollision.reference_number == reference_number)
+        rta_result = await db.execute(rta_query)
+        rta = rta_result.scalar_one_or_none()
+
+        if not rta:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Report not found. Please check your reference number.",
+            )
+
+        timeline = [
+            {
+                "date": rta.created_at.isoformat(),
+                "event": "RTA Report Submitted",
+                "icon": "🚗",
+            },
+        ]
+
+        if rta.status != RTAStatus.REPORTED:
+            timeline.append(
+                {
+                    "date": rta.updated_at.isoformat(),
+                    "event": f"Status changed to {get_status_label(rta.status.value)}",
+                    "icon": "🔄",
+                }
+            )
+
+        return ReportStatusResponse(
+            reference_number=rta.reference_number,
+            report_type="Road Traffic Collision",
+            title=rta.title,
+            status=rta.status.value,
+            status_label=get_status_label(rta.status.value),
+            submitted_at=rta.created_at,
+            updated_at=rta.updated_at,
+            priority=get_priority_label(rta.severity.value.upper()),
+            timeline=timeline,
+            next_steps="A fleet manager will review your report.",
+        )
+
+    elif reference_number.startswith("NM-"):
+        nm_query = select(NearMiss).where(NearMiss.reference_number == reference_number)
+        nm_result = await db.execute(nm_query)
+        near_miss = nm_result.scalar_one_or_none()
+
+        if not near_miss:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Report not found. Please check your reference number.",
+            )
+
+        timeline = [
+            {
+                "date": near_miss.created_at.isoformat(),
+                "event": "Near Miss Reported",
+                "icon": "⚠️",
+            },
+        ]
+
+        if near_miss.status != "REPORTED":
+            timeline.append(
+                {
+                    "date": near_miss.updated_at.isoformat(),
+                    "event": f"Status changed to {get_status_label(near_miss.status)}",
+                    "icon": "🔄",
+                }
+            )
+
+        return ReportStatusResponse(
+            reference_number=near_miss.reference_number,
+            report_type="Near Miss",
+            title=f"Near Miss - {near_miss.contract}",
+            status=near_miss.status,
+            status_label=get_status_label(near_miss.status),
+            submitted_at=near_miss.created_at,
+            updated_at=near_miss.updated_at,
+            priority=get_priority_label(near_miss.priority),
+            timeline=timeline,
+            next_steps="A safety manager will review your report.",
         )
 
     else:
@@ -552,6 +725,42 @@ async def get_my_reports(
                 status_label=get_status_label(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
                 submitted_at=comp.received_date or comp.created_at,
                 updated_at=comp.updated_at or comp.created_at,
+            )
+        )
+
+    # Fetch RTAs where user is reporter
+    rtas_query = select(RoadTrafficCollision).where(func.lower(RoadTrafficCollision.reporter_email) == user_email)
+    rtas_result = await db.execute(rtas_query)
+    rtas = rtas_result.scalars().all()
+
+    for rta in rtas:
+        all_reports.append(
+            MyReportSummary(
+                reference_number=rta.reference_number,
+                report_type="rta",
+                title=rta.title,
+                status=rta.status.value if hasattr(rta.status, "value") else str(rta.status),
+                status_label=get_status_label(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
+                submitted_at=rta.reported_date or rta.created_at,
+                updated_at=rta.updated_at or rta.created_at,
+            )
+        )
+
+    # Fetch near misses where user is reporter
+    nm_query = select(NearMiss).where(func.lower(NearMiss.reporter_email) == user_email)
+    nm_result = await db.execute(nm_query)
+    near_misses = nm_result.scalars().all()
+
+    for nm in near_misses:
+        all_reports.append(
+            MyReportSummary(
+                reference_number=nm.reference_number,
+                report_type="near_miss",
+                title=f"Near Miss - {nm.contract}",
+                status=nm.status,
+                status_label=get_status_label(nm.status),
+                submitted_at=nm.event_date or nm.created_at,
+                updated_at=nm.updated_at or nm.created_at,
             )
         )
 
