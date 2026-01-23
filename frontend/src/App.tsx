@@ -5,7 +5,9 @@ import Dashboard from './pages/Dashboard'
 import Incidents from './pages/Incidents'
 import IncidentDetail from './pages/IncidentDetail'
 import RTAs from './pages/RTAs'
+import RTADetail from './pages/RTADetail'
 import Complaints from './pages/Complaints'
+import ComplaintDetail from './pages/ComplaintDetail'
 import Policies from './pages/Policies'
 import Risks from './pages/Risks'
 import Audits from './pages/Audits'
@@ -172,7 +174,9 @@ function App() {
           <Route path="incidents" element={<Incidents />} />
           <Route path="incidents/:id" element={<IncidentDetail />} />
           <Route path="rtas" element={<RTAs />} />
+          <Route path="rtas/:id" element={<RTADetail />} />
           <Route path="complaints" element={<Complaints />} />
+          <Route path="complaints/:id" element={<ComplaintDetail />} />
           <Route path="policies" element={<Policies />} />
           <Route path="risks" element={<Risks />} />
           <Route path="audits" element={<Audits />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Car, Search, Loader2 } from 'lucide-react'
 import { rtasApi, RTA, RTACreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -23,6 +24,7 @@ import {
 } from '../components/ui/Select'
 
 export default function RTAs() {
+  const navigate = useNavigate()
   const [rtas, setRtas] = useState<RTA[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -180,6 +182,7 @@ export default function RTAs() {
                       key={rta.id}
                       className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
+                      onClick={() => navigate(`/rtas/${rta.id}`)}
                     >
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm text-primary">{rta.reference_number}</span>

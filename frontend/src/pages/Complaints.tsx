@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
 import { complaintsApi, Complaint, ComplaintCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -22,6 +23,7 @@ import {
 } from '../components/ui/Select'
 
 export default function Complaints() {
+  const navigate = useNavigate()
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -190,6 +192,7 @@ export default function Complaints() {
                       key={complaint.id}
                       className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
+                      onClick={() => navigate(`/complaints/${complaint.id}`)}
                     >
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm text-primary">{complaint.reference_number}</span>
