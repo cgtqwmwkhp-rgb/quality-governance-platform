@@ -199,6 +199,7 @@ export default function ComplaintDetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to create action:', err)
+      alert(`Failed to create action: ${(err as any)?.response?.data?.message || (err as any)?.message || 'Unknown error'}`)
     } finally {
       setCreating(false)
     }

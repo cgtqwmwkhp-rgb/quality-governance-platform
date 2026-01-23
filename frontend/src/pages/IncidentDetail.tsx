@@ -192,8 +192,9 @@ export default function IncidentDetail() {
         assigned_to: '',
       })
       loadActions()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create action:', err)
+      alert(`Failed to create action: ${err?.response?.data?.message || err?.message || 'Unknown error'}`)
     } finally {
       setCreating(false)
     }
@@ -657,7 +658,6 @@ export default function IncidentDetail() {
               value={actionForm.assigned_to}
               onChange={handleAssigneeChange}
               placeholder="Search by email..."
-              required
             />
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
