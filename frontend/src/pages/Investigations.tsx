@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2 } from 'lucide-react'
-import { investigationsApi, Investigation } from '../api/client'
+import { investigationsApi, actionsApi, Investigation } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from '../components/ui/Dialog'
 import { cn } from "../helpers/utils"
+import { UserEmailSearch } from '../components/UserEmailSearch'
 
 const STATUS_STEPS = [
   { id: 'draft', label: 'Draft', icon: FileQuestion },
@@ -26,12 +30,30 @@ const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   complaint: MessageSquare,
 }
 
+// Map entity types from investigation to action source types
+const ENTITY_TO_SOURCE_TYPE: Record<string, string> = {
+  reporting_incident: 'incident',
+  road_traffic_collision: 'rta',
+  complaint: 'complaint',
+}
+
 export default function Investigations() {
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null)
+  
+  // Action modal state
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [creatingAction, setCreatingAction] = useState(false)
+  const [actionForm, setActionForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium',
+    due_date: '',
+    assigned_to: '',
+  })
 
   useEffect(() => {
     loadInvestigations()
@@ -51,6 +73,49 @@ export default function Investigations() {
 
   const getStatusIndex = (status: string) => {
     return STATUS_STEPS.findIndex(s => s.id === status)
+  }
+
+  const handleCreateAction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedInvestigation) return
+    
+    const sourceType = ENTITY_TO_SOURCE_TYPE[selectedInvestigation.assigned_entity_type]
+    if (!sourceType) {
+      alert('Cannot create action: Unknown entity type')
+      return
+    }
+    
+    setCreatingAction(true)
+    try {
+      await actionsApi.create({
+        title: actionForm.title,
+        description: actionForm.description || `Corrective action from investigation ${selectedInvestigation.reference_number}`,
+        priority: actionForm.priority,
+        due_date: actionForm.due_date || undefined,
+        action_type: 'corrective',
+        source_type: sourceType,
+        source_id: selectedInvestigation.assigned_entity_id,
+        assigned_to_email: actionForm.assigned_to || undefined,
+      })
+      setShowActionModal(false)
+      setActionForm({
+        title: '',
+        description: '',
+        priority: 'medium',
+        due_date: '',
+        assigned_to: '',
+      })
+      alert('Corrective action created successfully!')
+    } catch (err: any) {
+      console.error('Failed to create action:', err)
+      alert(`Failed to create action: ${err?.response?.data?.message || err?.message || 'Unknown error'}`)
+    } finally {
+      setCreatingAction(false)
+    }
+  }
+
+  const handleAssigneeChange = (email: string) => {
+    setActionForm({ ...actionForm, assigned_to: email })
   }
 
   const getEntityIcon = (type: string) => {
@@ -288,7 +353,7 @@ export default function Investigations() {
                 {/* Corrective Actions */}
                 <div>
                   <h3 className="text-lg font-semibold text-foreground mb-4">Corrective Actions</h3>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={() => setShowActionModal(true)}>
                     <Plus className="w-5 h-5" />
                     Add Corrective Action
                   </Button>
@@ -310,6 +375,85 @@ export default function Investigations() {
               Investigation creation coming soon. Use the API to create investigations.
             </p>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Action Modal */}
+      <Dialog open={showActionModal} onOpenChange={setShowActionModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Corrective Action</DialogTitle>
+            <DialogDescription>
+              Create a corrective action for this investigation
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateAction} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Action Title *
+              </label>
+              <Input
+                value={actionForm.title}
+                onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
+                placeholder="e.g., Implement additional safety controls"
+                required
+              />
+            </div>
+            <UserEmailSearch
+              label="Assign To"
+              value={actionForm.assigned_to}
+              onChange={handleAssigneeChange}
+              placeholder="Search by email..."
+            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Priority
+              </label>
+              <Select
+                value={actionForm.priority}
+                onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Due Date
+              </label>
+              <Input
+                type="date"
+                value={actionForm.due_date}
+                onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Description
+              </label>
+              <Textarea
+                value={actionForm.description}
+                onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+                placeholder="Describe the corrective action to be taken..."
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creatingAction || !actionForm.title}>
+                {creatingAction ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
