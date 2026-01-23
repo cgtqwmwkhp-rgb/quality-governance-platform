@@ -6,7 +6,7 @@
  */
 
 // Cache version - CI injects git SHA + timestamp
-const CACHE_VERSION = 'qgp-v3.1.0-20260122';
+const CACHE_VERSION = 'qgp-v3.2.0-20260123-auth-fix';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
