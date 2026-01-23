@@ -118,9 +118,9 @@ async def list_actions(
         if source_type == "incident" and source_id:
             incident_query = incident_query.where(IncidentAction.incident_id == source_id)
 
-        result = await db.execute(incident_query)
-        for action in result.scalars().all():
-            actions_list.append(_action_to_response(action, "incident", action.incident_id))
+        incident_result = await db.execute(incident_query)
+        for inc_action in incident_result.scalars().all():
+            actions_list.append(_action_to_response(inc_action, "incident", inc_action.incident_id))
 
     # Only query if source_type not specified or matches "rta"
     if not source_type or source_type == "rta":
@@ -130,9 +130,9 @@ async def list_actions(
         if source_type == "rta" and source_id:
             rta_query = rta_query.where(RTAAction.rta_id == source_id)
 
-        result = await db.execute(rta_query)
-        for action in result.scalars().all():
-            actions_list.append(_action_to_response(action, "rta", action.rta_id))
+        rta_result = await db.execute(rta_query)
+        for rta_action in rta_result.scalars().all():
+            actions_list.append(_action_to_response(rta_action, "rta", rta_action.rta_id))
 
     # Only query if source_type not specified or matches "complaint"
     if not source_type or source_type == "complaint":
@@ -142,9 +142,9 @@ async def list_actions(
         if source_type == "complaint" and source_id:
             complaint_query = complaint_query.where(ComplaintAction.complaint_id == source_id)
 
-        result = await db.execute(complaint_query)
-        for action in result.scalars().all():
-            actions_list.append(_action_to_response(action, "complaint", action.complaint_id))
+        complaint_result = await db.execute(complaint_query)
+        for comp_action in complaint_result.scalars().all():
+            actions_list.append(_action_to_response(comp_action, "complaint", comp_action.complaint_id))
 
     # Sort by created_at descending
     actions_list.sort(key=lambda x: x.created_at, reverse=True)
