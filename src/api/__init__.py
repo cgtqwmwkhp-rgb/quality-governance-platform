@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from src.api.routes import (
+    actions,
     ai_intelligence,
     analytics,
     audit_templates,
@@ -53,6 +54,7 @@ router.include_router(audits.router, prefix="/audits", tags=["Audits & Inspectio
 router.include_router(audit_templates.router, prefix="/audit-templates", tags=["Audit Template Builder"])
 router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
+router.include_router(actions.router, prefix="/actions", tags=["Actions"])
 router.include_router(rtas.router, prefix="/rtas", tags=["Road Traffic Collisions"])
 router.include_router(investigation_templates.router, prefix="/investigation-templates", tags=["Investigations"])
 router.include_router(investigations.router, prefix="/investigations", tags=["Investigations"])

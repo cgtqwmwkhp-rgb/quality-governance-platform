@@ -101,9 +101,15 @@ export default function RTADetail() {
   }
 
   const loadActions = async () => {
+    if (!id) return
     try {
+      // Load actions filtered by this specific RTA
       const response = await actionsApi.list(1, 50)
-      setActions(response.data.items || [])
+      // Filter client-side for this RTA's actions
+      const rtaActions = (response.data.items || []).filter(
+        (a) => a.source_type === 'rta' && a.source_id === parseInt(id)
+      )
+      setActions(rtaActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
     }
@@ -174,10 +180,13 @@ export default function RTADetail() {
     try {
       await actionsApi.create({
         title: actionForm.title,
-        description: `${actionForm.description}\n\nRelated to: ${rta.reference_number}\nAssigned to: ${actionForm.assigned_to}`,
+        description: actionForm.description || `Action for ${rta.reference_number}`,
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
         action_type: 'corrective',
+        source_type: 'rta',
+        source_id: rta.id,
+        assigned_to_email: actionForm.assigned_to || undefined,
       })
       setShowActionModal(false)
       setActionForm({

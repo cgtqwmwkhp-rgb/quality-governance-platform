@@ -410,6 +410,9 @@ export interface ActionCreate {
   action_type?: string
   priority?: string
   due_date?: string
+  source_type: string
+  source_id: number
+  assigned_to_email?: string
 }
 
 // ============ API Functions ============

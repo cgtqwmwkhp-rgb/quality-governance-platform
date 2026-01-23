@@ -25,6 +25,33 @@ router = APIRouter()
 # ============== User Endpoints ==============
 
 
+@router.get("/search/", response_model=list[UserResponse])
+async def search_users(
+    db: DbSession,
+    current_user: CurrentUser,
+    q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
+) -> list[UserResponse]:
+    """Search users by email, first name, or last name."""
+    search_filter = f"%{q}%"
+    query = (
+        select(User)
+        .options(selectinload(User.roles))
+        .where(
+            (User.email.ilike(search_filter))
+            | (User.first_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter))
+        )
+        .where(User.is_active == True)  # noqa: E712
+        .order_by(User.email)
+        .limit(20)
+    )
+
+    result = await db.execute(query)
+    users = result.scalars().all()
+
+    return [UserResponse.model_validate(u) for u in users]
+
+
 @router.get("/", response_model=UserListResponse)
 async def list_users(
     db: DbSession,

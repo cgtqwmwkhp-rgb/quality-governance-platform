@@ -101,9 +101,15 @@ export default function ComplaintDetail() {
   }
 
   const loadActions = async () => {
+    if (!id) return
     try {
+      // Load actions filtered by this specific Complaint
       const response = await actionsApi.list(1, 50)
-      setActions(response.data.items || [])
+      // Filter client-side for this complaint's actions
+      const complaintActions = (response.data.items || []).filter(
+        (a) => a.source_type === 'complaint' && a.source_id === parseInt(id)
+      )
+      setActions(complaintActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
     }
@@ -174,10 +180,13 @@ export default function ComplaintDetail() {
     try {
       await actionsApi.create({
         title: actionForm.title,
-        description: `${actionForm.description}\n\nRelated to: ${complaint.reference_number}\nAssigned to: ${actionForm.assigned_to}`,
+        description: actionForm.description || `Action for ${complaint.reference_number}`,
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
         action_type: 'corrective',
+        source_type: 'complaint',
+        source_id: complaint.id,
+        assigned_to_email: actionForm.assigned_to || undefined,
       })
       setShowActionModal(false)
       setActionForm({

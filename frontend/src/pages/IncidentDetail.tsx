@@ -98,9 +98,15 @@ export default function IncidentDetail() {
   }
 
   const loadActions = async () => {
+    if (!id) return
     try {
+      // Load actions filtered by this specific incident
       const response = await actionsApi.list(1, 50)
-      setActions(response.data.items || [])
+      // Filter client-side for this incident's actions
+      const incidentActions = (response.data.items || []).filter(
+        (a) => a.source_type === 'incident' && a.source_id === parseInt(id)
+      )
+      setActions(incidentActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
     }
@@ -169,10 +175,13 @@ export default function IncidentDetail() {
     try {
       await actionsApi.create({
         title: actionForm.title,
-        description: `${actionForm.description}\n\nRelated to: ${incident.reference_number}\nAssigned to: ${actionForm.assigned_to}`,
+        description: actionForm.description || `Action for ${incident.reference_number}`,
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
         action_type: 'corrective',
+        source_type: 'incident',
+        source_id: incident.id,
+        assigned_to_email: actionForm.assigned_to || undefined,
       })
       setShowActionModal(false)
       setActionForm({
