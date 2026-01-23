@@ -234,7 +234,6 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
-            created_by_id=current_user.id,
         )
     elif src_type == "rta":
         action = RTAAction(
@@ -246,7 +245,6 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
-            created_by_id=current_user.id,
         )
     elif src_type == "complaint":
         action = ComplaintAction(
@@ -258,7 +256,6 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
-            created_by_id=current_user.id,
         )
     else:
         raise HTTPException(

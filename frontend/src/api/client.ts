@@ -36,19 +36,9 @@ api.interceptors.request.use((config) => {
   // Add auth token - check both storage locations
   // Admin login uses localStorage 'access_token'
   // Portal login uses sessionStorage 'platform_access_token'
-  const localToken = localStorage.getItem('access_token')
-  const sessionToken = sessionStorage.getItem('platform_access_token')
-  const token = localToken || sessionToken
-  
-  console.log('[Axios Auth] localStorage token:', localToken ? 'YES (' + localToken.substring(0, 20) + '...)' : 'NO')
-  console.log('[Axios Auth] sessionStorage token:', sessionToken ? 'YES (' + sessionToken.substring(0, 20) + '...)' : 'NO')
-  console.log('[Axios Auth] Using token:', token ? 'YES' : 'NO')
-  
+  const token = localStorage.getItem('access_token') || sessionStorage.getItem('platform_access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
-    console.log('[Axios Auth] Authorization header set')
-  } else {
-    console.warn('[Axios Auth] NO TOKEN AVAILABLE - request will be unauthenticated!')
   }
   return config
 })
