@@ -3,14 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   Car,
-  User,
   MapPin,
   Calendar,
   FileText,
   Loader2,
   History,
   Shield,
-  AlertTriangle,
 } from 'lucide-react'
 import { rtasApi, RTA } from '../api/client'
 import { Button } from '../components/ui/Button'
