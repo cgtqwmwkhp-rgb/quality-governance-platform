@@ -600,6 +600,25 @@ export default function PortalTrack() {
                   />
                 ))}
               </div>
+            ) : !platformToken ? (
+              // User is authenticated but missing platform token - needs re-login
+              <Card className="p-8 text-center border-warning/20">
+                <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <RefreshCw className="w-8 h-8 text-warning" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Session Refresh Required</h3>
+                <p className="text-muted-foreground mb-4">
+                  To view your reports, please sign out and sign back in.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button onClick={() => navigate('/portal/login')} variant="outline">
+                    Sign In Again
+                  </Button>
+                  <Button onClick={() => navigate('/portal/report')}>
+                    Submit a Report
+                  </Button>
+                </div>
+              </Card>
             ) : (
               <Card className="p-8 text-center">
                 <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">

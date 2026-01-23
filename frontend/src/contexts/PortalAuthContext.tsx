@@ -172,25 +172,20 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
           
           return true;
         } else {
-          // Token exchange failed - fall back to client-side parsing for user display
-          // but mark as not fully authenticated (no platform token)
-          const payload = parseJwt(idToken);
-          if (payload) {
-            const newUser: PortalUser = {
-              id: payload.oid || payload.sub || 'unknown',
-              email: payload.email || payload.preferred_username || payload.upn || '',
-              name: payload.name || 'User',
-              firstName: payload.given_name || payload.name?.split(' ')[0] || 'User',
-              lastName: payload.family_name || payload.name?.split(' ').slice(1).join(' ') || '',
-              jobTitle: payload.jobTitle || '',
-              department: payload.department || '',
-            };
-            setUser(newUser);
-            localStorage.setItem('portal_user', JSON.stringify(newUser));
-            localStorage.setItem('portal_session_time', Date.now().toString());
-            setError('Session established but API access may be limited. Please try logging in again if issues persist.');
-          }
-          return true;
+          // Token exchange failed - DO NOT maintain half-authenticated state
+          // This would allow report submission but break My Reports linkage
+          console.error('[PortalAuth] Token exchange failed - forcing re-authentication');
+          
+          // Clear any stale session data
+          localStorage.removeItem('portal_user');
+          localStorage.removeItem('portal_session_time');
+          sessionStorage.removeItem('platform_access_token');
+          sessionStorage.removeItem('platform_refresh_token');
+          
+          setError('Authentication failed. Your session may have expired. Please sign in again.');
+          setUser(null);
+          setPlatformToken(null);
+          return false;
         }
       }
     }
@@ -219,14 +214,25 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
           if (sessionTime) {
             const elapsed = Date.now() - parseInt(sessionTime);
             if (elapsed < 24 * 60 * 60 * 1000) {
-              setUser(parsedUser);
-              // Also restore platform token from sessionStorage if still valid
+              // CRITICAL: Only restore full session if platform token exists
+              // Without platformToken, My Reports won't work (half-authenticated state)
               const storedPlatformToken = sessionStorage.getItem('platform_access_token');
               if (storedPlatformToken) {
+                setUser(parsedUser);
                 setPlatformToken(storedPlatformToken);
+                console.log('[PortalAuth] Session restored with platform token for:', parsedUser.email);
+              } else {
+                // User info exists but no platform token (new tab/window)
+                // Set user for display but warn that re-login is needed for full access
+                setUser(parsedUser);
+                console.warn('[PortalAuth] User restored but no platform token - My Reports requires re-login');
+                // Don't clear localStorage - user can still submit reports
+                // But set a visible warning for the user
+                setError('Your session needs to be refreshed. Please sign out and sign in again to view your reports.');
               }
             } else {
               // Session expired - clear everything
+              console.log('[PortalAuth] Session expired - clearing stored data');
               localStorage.removeItem('portal_user');
               localStorage.removeItem('portal_session_time');
               localStorage.removeItem('portal_id_token');
