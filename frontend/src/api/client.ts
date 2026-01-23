@@ -33,8 +33,10 @@ api.interceptors.request.use((config) => {
     console.warn('[Axios] Forced HTTPS on URL:', config.url);
   }
   
-  // Add auth token
-  const token = localStorage.getItem('access_token')
+  // Add auth token - check both storage locations
+  // Admin login uses localStorage 'access_token'
+  // Portal login uses sessionStorage 'platform_access_token'
+  const token = localStorage.getItem('access_token') || sessionStorage.getItem('platform_access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
