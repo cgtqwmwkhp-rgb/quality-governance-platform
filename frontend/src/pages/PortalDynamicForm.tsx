@@ -394,7 +394,9 @@ export default function PortalDynamicForm() {
       reporter_name: formData.person_name ? String(formData.person_name) : 
                      formData.complainant_name ? String(formData.complainant_name) : 
                      user?.name,
-      reporter_email: formData.person_contact ? String(formData.person_contact) : user?.email,
+      // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
+      // Always use the authenticated user's email, not form input (which may be a phone number)
+      reporter_email: user?.email || undefined,
       reporter_phone: formData.complainant_contact ? String(formData.complainant_contact) : undefined,
       department: formData.contract ? String(formData.contract) : undefined,
       is_anonymous: false,

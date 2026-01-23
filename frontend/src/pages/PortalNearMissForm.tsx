@@ -258,7 +258,8 @@ export default function PortalNearMissForm() {
         severity: formData.potentialSeverity === 'severe' ? 'high' : 
                   formData.potentialSeverity === 'moderate' ? 'medium' : 'low',
         reporter_name: formData.reporterName,
-        reporter_email: formData.reporterEmail || undefined,
+        // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
+        reporter_email: user?.email || formData.reporterEmail || undefined,
         reporter_phone: formData.reporterPhone || undefined,
         department: formData.contract === 'other' ? formData.contractOther : formData.contract,
         is_anonymous: false,
