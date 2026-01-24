@@ -273,17 +273,17 @@ async def get_action(
 
     if src_type == "incident":
         result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
-        incident_action: Optional[IncidentAction] = result.scalar_one_or_none()
+        incident_action = result.scalar_one_or_none()
         if incident_action:
             return _action_to_response(incident_action, "incident", incident_action.incident_id)
     elif src_type == "rta":
         result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
-        rta_action: Optional[RTAAction] = result.scalar_one_or_none()
+        rta_action = result.scalar_one_or_none()
         if rta_action:
             return _action_to_response(rta_action, "rta", rta_action.rta_id)
     elif src_type == "complaint":
         result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
-        complaint_action: Optional[ComplaintAction] = result.scalar_one_or_none()
+        complaint_action = result.scalar_one_or_none()
         if complaint_action:
             return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id)
 
