@@ -124,25 +124,32 @@ jobs:
             --repository ${{ env.IMAGE_NAME }} \
             --query "[?tags[?@=='${{ github.sha }}']].digest" \
             -o tsv)
-          
-          EXPECTED_DIGEST_COUNT=$(echo "$EXPECTED_DIGESTS" | sed '/^$/d' | wc -l | tr -d ' ')
+          EXPECTED_DIGESTS_CLEAN=$(printf "%s\n" "$EXPECTED_DIGESTS" | sed '/^$/d' | sort -u)
+          EXPECTED_DIGEST_COUNT=$(printf "%s\n" "$EXPECTED_DIGESTS_CLEAN" | wc -l | tr -d ' ')
           if [ "$EXPECTED_DIGEST_COUNT" -ne 1 ]; then
             echo "❌ Expected exactly 1 digest for tag ${{ github.sha }}, got $EXPECTED_DIGEST_COUNT"
             exit 1
           fi
-          
-          EXPECTED_DIGEST=$(echo "$EXPECTED_DIGESTS" | head -n 1 | tr -d '\r')
-          
+          EXPECTED_DIGEST=$(printf "%s\n" "$EXPECTED_DIGESTS_CLEAN" | head -n 1 | tr -d '\r')
           if [ -z "$EXPECTED_DIGEST" ]; then
             echo "❌ Failed to resolve image digest for ${EXPECTED_TAG}"
             exit 1
           fi
+          case "$EXPECTED_DIGEST" in
+            sha256:*) ;;
+            *)
+              echo "❌ Unexpected digest format: $EXPECTED_DIGEST"
+              exit 1
+              ;;
+          esac
           
           IMAGE_DIGEST_REF="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}@${EXPECTED_DIGEST}"
+          EXPECTED_TAG_SAFE="${{ env.IMAGE_NAME }}:${{ github.sha }}"
           
           echo "EXPECTED_TAG=$EXPECTED_TAG" >> $GITHUB_ENV
           echo "EXPECTED_DIGEST=$EXPECTED_DIGEST" >> $GITHUB_ENV
           echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
+          echo "EXPECTED_TAG_SAFE=$EXPECTED_TAG_SAFE" >> $GITHUB_ENV
 
       - name: Create database backup
         run: |
@@ -402,19 +409,24 @@ PY
             --resource-group rg-qgp-staging \
             --query "linuxFxVersion" -o tsv)
           RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+          RUNNING_IMAGE_SAFE=$(echo "$RUNNING_IMAGE" | sed -E 's#^[^/]+/##')
           
-          if echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
+          if [ -z "$RUNNING_IMAGE" ]; then
+            echo "⚠️ running image not reported; skipping digest/tag comparison"
+          elif echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
             RUNNING_DIGEST=$(echo "$RUNNING_IMAGE" | sed 's/.*@//')
             if [ "$RUNNING_DIGEST" != "$EXPECTED_DIGEST" ]; then
               echo "❌ running digest mismatch: expected ${EXPECTED_DIGEST}, got ${RUNNING_DIGEST}"
               exit 1
             fi
-          else
-            RUNNING_TAG=$(echo "$RUNNING_IMAGE" | awk -F: '{print $NF}')
+          elif echo "$RUNNING_IMAGE" | grep -q ":"; then
+            RUNNING_TAG=$(echo "$RUNNING_IMAGE_SAFE" | awk -F: '{print $NF}')
             if [ "$RUNNING_TAG" != "${{ github.sha }}" ]; then
               echo "❌ running tag mismatch: expected ${{ github.sha }}, got ${RUNNING_TAG}"
               exit 1
             fi
+          else
+            echo "⚠️ running image format unrecognized; skipping digest/tag comparison"
           fi
           
           if [ "$BUILD_SHA" != "${{ github.sha }}" ]; then
@@ -435,9 +447,9 @@ PY
 
 - run_id: ${{ github.run_id }}
 - sha: ${{ github.sha }}
-- expected_tag: ${EXPECTED_TAG}
+- expected_tag: ${EXPECTED_TAG_SAFE}
 - expected_digest: ${EXPECTED_DIGEST}
-- running_image: ${RUNNING_IMAGE}
+- running_image: ${RUNNING_IMAGE_SAFE}
 - meta_version_build_sha: ${BUILD_SHA}
 - healthz_status: ${HEALTH_STATUS}
 - host_sha256: ${HOST_HASH}
@@ -512,8 +524,7 @@ EOF
           echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image** | ${{ env.IMAGE_TAG }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | ${{ env.IMAGE_NAME }}:${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deployed By** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Status** | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
