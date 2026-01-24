@@ -33,9 +33,13 @@ class ActionBase(BaseModel):
 class ActionCreate(ActionBase):
     """Schema for creating an action."""
 
-    source_type: str = Field(..., description="Type of source entity: incident, rta, or complaint")
+    source_type: str = Field(
+        ..., description="Type of source entity: incident, rta, or complaint"
+    )
     source_id: int = Field(..., description="ID of the source entity")
-    assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
+    assigned_to_email: Optional[str] = Field(
+        None, description="Email of user to assign to"
+    )
 
 
 class ActionResponse(BaseModel):
@@ -112,15 +116,23 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "incident"
     if not source_type or source_type == "incident":
-        incident_query = select(IncidentAction).options(selectinload(IncidentAction.incident))
+        incident_query = select(IncidentAction).options(
+            selectinload(IncidentAction.incident)
+        )
         if status_filter:
-            incident_query = incident_query.where(IncidentAction.status == status_filter)
+            incident_query = incident_query.where(
+                IncidentAction.status == status_filter
+            )
         if source_type == "incident" and source_id:
-            incident_query = incident_query.where(IncidentAction.incident_id == source_id)
+            incident_query = incident_query.where(
+                IncidentAction.incident_id == source_id
+            )
 
         incident_result = await db.execute(incident_query)
         for inc_action in incident_result.scalars().all():
-            actions_list.append(_action_to_response(inc_action, "incident", inc_action.incident_id))
+            actions_list.append(
+                _action_to_response(inc_action, "incident", inc_action.incident_id)
+            )
 
     # Only query if source_type not specified or matches "rta"
     if not source_type or source_type == "rta":
@@ -132,19 +144,29 @@ async def list_actions(
 
         rta_result = await db.execute(rta_query)
         for rta_action in rta_result.scalars().all():
-            actions_list.append(_action_to_response(rta_action, "rta", rta_action.rta_id))
+            actions_list.append(
+                _action_to_response(rta_action, "rta", rta_action.rta_id)
+            )
 
     # Only query if source_type not specified or matches "complaint"
     if not source_type or source_type == "complaint":
-        complaint_query = select(ComplaintAction).options(selectinload(ComplaintAction.complaint))
+        complaint_query = select(ComplaintAction).options(
+            selectinload(ComplaintAction.complaint)
+        )
         if status_filter:
-            complaint_query = complaint_query.where(ComplaintAction.status == status_filter)
+            complaint_query = complaint_query.where(
+                ComplaintAction.status == status_filter
+            )
         if source_type == "complaint" and source_id:
-            complaint_query = complaint_query.where(ComplaintAction.complaint_id == source_id)
+            complaint_query = complaint_query.where(
+                ComplaintAction.complaint_id == source_id
+            )
 
         complaint_result = await db.execute(complaint_query)
         for comp_action in complaint_result.scalars().all():
-            actions_list.append(_action_to_response(comp_action, "complaint", comp_action.complaint_id))
+            actions_list.append(
+                _action_to_response(comp_action, "complaint", comp_action.complaint_id)
+            )
 
     # Sort by created_at descending
     actions_list.sort(key=lambda x: x.created_at, reverse=True)
@@ -174,7 +196,9 @@ async def create_action(
     # Find owner by email if provided
     owner_id: Optional[int] = None
     if action_data.assigned_to_email:
-        result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+        result = await db.execute(
+            select(User).where(User.email == action_data.assigned_to_email)
+        )
         user = result.scalar_one_or_none()
         if user:
             owner_id = user.id
@@ -197,8 +221,8 @@ async def create_action(
                 except ValueError:
                     continue
 
-    # Using type: ignore for Union type - we use src_id directly for source_id
-    action: Union[IncidentAction, RTAAction, ComplaintAction]  # type: ignore[assignment]
+    # Declare action variable that will hold one of the three action types
+    action: Union[IncidentAction, RTAAction, ComplaintAction]
 
     if src_type == "incident":
         action = IncidentAction(
@@ -266,26 +290,38 @@ async def get_action(
     action_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    source_type: str = Query(..., description="Type of source: incident, rta, or complaint"),
+    source_type: str = Query(
+        ..., description="Type of source: incident, rta, or complaint"
+    ),
 ) -> ActionResponse:
     """Get a specific action by ID."""
     src_type = source_type.lower()
 
     if src_type == "incident":
-        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
+        result = await db.execute(
+            select(IncidentAction).where(IncidentAction.id == action_id)
+        )
         incident_action = result.scalar_one_or_none()
         if incident_action:
-            return _action_to_response(incident_action, "incident", incident_action.incident_id)
+            return _action_to_response(
+                incident_action, "incident", incident_action.incident_id
+            )
     elif src_type == "rta":
-        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
+        result = await db.execute(
+            select(RTAAction).where(RTAAction.id == action_id)
+        )
         rta_action = result.scalar_one_or_none()
         if rta_action:
             return _action_to_response(rta_action, "rta", rta_action.rta_id)
     elif src_type == "complaint":
-        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
+        result = await db.execute(
+            select(ComplaintAction).where(ComplaintAction.id == action_id)
+        )
         complaint_action = result.scalar_one_or_none()
         if complaint_action:
-            return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id)
+            return _action_to_response(
+                complaint_action, "complaint", complaint_action.complaint_id
+            )
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
