@@ -52,34 +52,36 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "✅ Auto-deployment triggered by successful staging"
             echo "Staging workflow: ${{ github.event.workflow_run.html_url }}"
-            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "approved=true" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.event_name }}" == "release" ]]; then
             echo "✅ Release-triggered deployment"
-            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "approved=true" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.event.inputs.staging_verified }}" == "true" ]]; then
             echo "✅ Manual deployment with staging verification confirmed"
             echo "Reason: ${{ github.event.inputs.reason }}"
-            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "approved=true" >> "$GITHUB_OUTPUT"
           else
             echo "❌ Staging verification required!"
-            echo "approved=false" >> $GITHUB_OUTPUT
+            echo "approved=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
       - name: Log deployment request
         run: |
-          echo "## 🔐 Production Deployment Request" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Actor** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Ref** | ${{ github.ref }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **SHA** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            echo "| **Staging Run** | [View](${{ github.event.workflow_run.html_url }}) |" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "| **Reason** | ${{ github.event.inputs.reason || 'Auto-deploy after staging' }} |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🔐 Production Deployment Request"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| **Trigger** | ${{ github.event_name }} |"
+            echo "| **Actor** | ${{ github.actor }} |"
+            echo "| **Ref** | ${{ github.ref }} |"
+            echo "| **SHA** | ${{ github.sha }} |"
+            if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+              echo "| **Staging Run** | [View](${{ github.event.workflow_run.html_url }}) |"
+            fi
+            echo "| **Reason** | ${{ github.event.inputs.reason || 'Auto-deploy after staging' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-and-deploy:
     name: Build and Deploy to Production
