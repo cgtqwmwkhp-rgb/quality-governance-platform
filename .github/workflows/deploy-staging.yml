@@ -9,7 +9,6 @@ on:
       reason:
         description: 'Reason for manual deployment'
         required: false
-        type: string
         default: 'Manual trigger'
 
 env:
