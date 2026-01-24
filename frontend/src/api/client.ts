@@ -31,17 +31,30 @@ api.interceptors.request.use((config) => {
   
   // DEBUG: Log auth header presence (not the token itself)
   const isApiCall = config.url?.startsWith('/api/')
-  if (isApiCall) {
+  const isAuthEndpoint = config.url?.includes('/auth/login') || config.url?.includes('/auth/token-exchange')
+  
+  if (isApiCall && !isAuthEndpoint) {
     console.log(`[Auth Debug] ${config.method?.toUpperCase()} ${config.url} | token_present=${!!token} | token_length=${token?.length || 0}`)
   }
   
   if (token) {
     // Check if token is expired before attaching
     if (isTokenExpired(token)) {
-      console.warn('[Axios] Token expired - request may fail with 401')
+      console.warn('[Axios] Token expired - clearing and redirecting to login')
+      // Clear expired tokens
+      clearTokens()
+      // Only redirect if not already on login page and not an auth endpoint
+      const currentPath = window.location.pathname
+      const isLoginPage = currentPath === '/login' || currentPath === '/portal' || currentPath === '/portal/login'
+      if (!isLoginPage && !isAuthEndpoint) {
+        window.location.href = '/login'
+        // Return a rejected promise to stop the request
+        return Promise.reject(new Error('Token expired - redirecting to login'))
+      }
+    } else {
+      config.headers.Authorization = `Bearer ${token}`
     }
-    config.headers.Authorization = `Bearer ${token}`
-  } else if (isApiCall) {
+  } else if (isApiCall && !isAuthEndpoint) {
     console.warn('[Auth Debug] No token available for API call - will likely get 401')
   }
   return config
