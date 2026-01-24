@@ -51,6 +51,8 @@ jobs:
 
       - name: Lint workflows
         uses: rhysd/actionlint@v1.7.10
+        with:
+          args: ".github/workflows/ci.yml .github/workflows/deploy-staging.yml .github/workflows/deploy-production.yml"
 
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
