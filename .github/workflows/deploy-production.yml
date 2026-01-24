@@ -394,13 +394,7 @@ jobs:
             exit 1
           fi
           
-          BUILD_SHA=$(python - <<'PY'
-import json
-with open("/tmp/meta.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
-print(data.get("build_sha", ""))
-PY
-          )
+          BUILD_SHA=$(python3 -c 'import json; print(json.load(open("/tmp/meta.json")).get("build_sha",""))')
           
           RUNNING_IMAGE_RAW=$(az webapp config container show \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
@@ -433,25 +427,19 @@ PY
           fi
           
           EVIDENCE_PATH="docs/evidence/DEPLOY_EVIDENCE_production_${{ github.run_id }}.md"
-          HOST_HASH=$(APP_HOST="$APP_HOST" python - <<'PY'
-import hashlib
-import os
-host = os.environ.get("APP_HOST", "")
-print(hashlib.sha256(host.encode("utf-8")).hexdigest() if host else "")
-PY
-          )
+          HOST_HASH=$(APP_HOST="$APP_HOST" python3 -c 'import hashlib, os; host=os.environ.get("APP_HOST",""); print(hashlib.sha256(host.encode("utf-8")).hexdigest() if host else "")')
           cat <<EOF > "$EVIDENCE_PATH"
-## Deploy Evidence (production)
-
-- run_id: ${{ github.run_id }}
-- sha: ${{ github.sha }}
-- expected_tag: ${EXPECTED_TAG_SAFE}
-- expected_digest: ${EXPECTED_DIGEST}
-- running_image: ${RUNNING_IMAGE_SAFE}
-- meta_version_build_sha: ${BUILD_SHA}
-- healthz_status: ${HEALTH_STATUS}
-- host_sha256: ${HOST_HASH}
-EOF
+          ## Deploy Evidence (production)
+          
+          - run_id: ${{ github.run_id }}
+          - sha: ${{ github.sha }}
+          - expected_tag: ${EXPECTED_TAG_SAFE}
+          - expected_digest: ${EXPECTED_DIGEST}
+          - running_image: ${RUNNING_IMAGE_SAFE}
+          - meta_version_build_sha: ${BUILD_SHA}
+          - healthz_status: ${HEALTH_STATUS}
+          - host_sha256: ${HOST_HASH}
+          EOF
 
       - name: Upload deploy evidence artifact
         uses: actions/upload-artifact@v4
