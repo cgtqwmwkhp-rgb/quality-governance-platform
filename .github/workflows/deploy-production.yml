@@ -28,6 +28,7 @@ on:
 env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
+  AZURE_RESOURCE_GROUP: rg-qgp-prod
   IMAGE_NAME: quality-governance-platform
 
 jobs:
@@ -174,7 +175,7 @@ jobs:
           # Configure app settings
           az webapp config appsettings set \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group rg-qgp-staging \
+            --resource-group $AZURE_RESOURCE_GROUP \
             --settings \
               APP_ENV="production" \
               BUILD_SHA="${{ github.sha }}" \
@@ -199,11 +200,11 @@ jobs:
         run: |
           echo "Cleaning up old migration containers..."
           # Delete terminated migration containers to free quota
-          for container in $(az container list --resource-group rg-qgp-staging --query "[?starts_with(name, 'qgp-migration')].name" -o tsv); do
-            STATE=$(az container show --name $container --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Unknown")
+          for container in $(az container list --resource-group $AZURE_RESOURCE_GROUP --query "[?starts_with(name, 'qgp-migration')].name" -o tsv); do
+            STATE=$(az container show --name $container --resource-group $AZURE_RESOURCE_GROUP --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Unknown")
             if [ "$STATE" = "Terminated" ] || [ "$STATE" = "Unknown" ]; then
               echo "Deleting container: $container (state: $STATE)"
-              az container delete --name $container --resource-group rg-qgp-staging --yes || true
+              az container delete --name $container --resource-group $AZURE_RESOURCE_GROUP --yes || true
             fi
           done
           echo "Cleanup complete"
@@ -231,7 +232,7 @@ jobs:
           # Create migration container (with error handling for quota)
           if ! az container create \
             --name qgp-migration-prod-${{ github.run_number }} \
-            --resource-group rg-qgp-staging \
+            --resource-group $AZURE_RESOURCE_GROUP \
             --location westeurope \
             --os-type Linux \
             --image ${{ env.IMAGE_TAG }} \
@@ -257,7 +258,7 @@ jobs:
           MAX_WAIT=300
           WAITED=0
           while [ $WAITED -lt $MAX_WAIT ]; do
-            STATE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
+            STATE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
             if [ "$STATE" = "Terminated" ]; then
               echo "Migration container terminated after ${WAITED}s"
               break
@@ -267,11 +268,11 @@ jobs:
             WAITED=$((WAITED + 10))
           done
           
-          EXIT_CODE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.exitCode" -o tsv || echo "1")
+          EXIT_CODE=$(az container show --name qgp-migration-prod-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP --query "containers[0].instanceView.currentState.exitCode" -o tsv || echo "1")
           
           echo "Migration exit code: $EXIT_CODE"
           echo "Migration logs:"
-          az container logs --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging || true
+          az container logs --name qgp-migration-prod-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP || true
           
           if [ "$EXIT_CODE" != "0" ]; then
             echo "❌ ERROR: Migration failed with exit code $EXIT_CODE"
@@ -281,7 +282,7 @@ jobs:
           echo "migration_status=success" >> $GITHUB_OUTPUT
           
           echo "Cleaning up migration container..."
-          az container delete --name qgp-migration-prod-${{ github.run_number }} --resource-group rg-qgp-staging --yes || true
+          az container delete --name qgp-migration-prod-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP --yes || true
 
       - name: Verify migration revision
         run: |
@@ -300,7 +301,7 @@ jobs:
           
           az container create \
             --name qgp-revision-check-${{ github.run_number }} \
-            --resource-group rg-qgp-staging \
+            --resource-group $AZURE_RESOURCE_GROUP \
             --location westeurope \
             --os-type Linux \
             --image ${{ env.IMAGE_TAG }} \
@@ -321,7 +322,7 @@ jobs:
           MAX_WAIT=60
           WAITED=0
           while [ $WAITED -lt $MAX_WAIT ]; do
-            STATE=$(az container show --name qgp-revision-check-${{ github.run_number }} --resource-group rg-qgp-staging --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
+            STATE=$(az container show --name qgp-revision-check-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP --query "containers[0].instanceView.currentState.state" -o tsv 2>/dev/null || echo "Running")
             if [ "$STATE" = "Terminated" ]; then
               break
             fi
@@ -329,11 +330,11 @@ jobs:
             WAITED=$((WAITED + 5))
           done
           
-          CURRENT_REV=$(az container logs --name qgp-revision-check-${{ github.run_number }} --resource-group rg-qgp-staging 2>/dev/null | grep -o '[a-z0-9_]*' | tail -1 || echo "unknown")
+          CURRENT_REV=$(az container logs --name qgp-revision-check-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP 2>/dev/null | grep -o '[a-z0-9_]*' | tail -1 || echo "unknown")
           echo "Current DB revision: $CURRENT_REV"
           
           # Cleanup
-          az container delete --name qgp-revision-check-${{ github.run_number }} --resource-group rg-qgp-staging --yes || true
+          az container delete --name qgp-revision-check-${{ github.run_number }} --resource-group $AZURE_RESOURCE_GROUP --yes || true
           
           # Assert revision matches (note: alembic current may output multiple lines)
           if echo "$CURRENT_REV" | grep -q "$EXPECTED_HEAD"; then
@@ -382,7 +383,7 @@ jobs:
         run: |
           APP_HOST=$(az webapp show \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group rg-qgp-staging \
+            --resource-group $AZURE_RESOURCE_GROUP \
             --query defaultHostName -o tsv)
           APP_URL="https://${APP_HOST}"
           
@@ -398,7 +399,7 @@ jobs:
           
           RUNNING_IMAGE_RAW=$(az webapp config container show \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group rg-qgp-staging \
+            --resource-group $AZURE_RESOURCE_GROUP \
             --query "linuxFxVersion" -o tsv)
           RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
           RUNNING_IMAGE_SAFE=$(echo "$RUNNING_IMAGE" | sed -E 's#^[^/]+/##')
