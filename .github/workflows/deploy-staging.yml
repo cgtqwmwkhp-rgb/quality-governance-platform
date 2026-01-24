@@ -14,6 +14,8 @@ on:
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+  AZURE_RESOURCE_GROUP: rg-qgp-staging
+  ENVIRONMENT_NAME: staging
   IMAGE_NAME: quality-governance-platform
   # Health check configuration - enterprise grade
   HEALTH_CHECK_MAX_ATTEMPTS: 30
@@ -51,6 +53,31 @@ jobs:
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Reason** | ${{ github.event.inputs.reason || 'Push to main' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Timestamp** | $(date -u +"%Y-%m-%dT%H:%M:%SZ") |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Environment guardrails
+        run: |
+          if [ -z "$AZURE_RESOURCE_GROUP" ] || [ -z "$AZURE_WEBAPP_NAME" ] || [ -z "$ENVIRONMENT_NAME" ]; then
+            echo "❌ Guardrail: required env vars missing"
+            exit 1
+          fi
+          rg_lower=$(echo "$AZURE_RESOURCE_GROUP" | tr '[:upper:]' '[:lower:]')
+          app_lower=$(echo "$AZURE_WEBAPP_NAME" | tr '[:upper:]' '[:lower:]')
+          env_lower=$(echo "$ENVIRONMENT_NAME" | tr '[:upper:]' '[:lower:]')
+          if [ "$env_lower" = "production" ]; then
+            if echo "$rg_lower$app_lower" | grep -q "staging"; then
+              echo "❌ Guardrail: production cannot target staging resources"
+              exit 1
+            fi
+          elif [ "$env_lower" = "staging" ]; then
+            if echo "$rg_lower$app_lower" | grep -q "prod"; then
+              echo "❌ Guardrail: staging cannot target production resources"
+              exit 1
+            fi
+          else
+            echo "❌ Guardrail: unknown environment '$ENVIRONMENT_NAME'"
+            exit 1
+          fi
+          echo "✅ Guardrail: environment targeting validated"
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -112,6 +139,16 @@ jobs:
           echo "EXPECTED_DIGEST=$EXPECTED_DIGEST" >> $GITHUB_ENV
           echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
           echo "EXPECTED_TAG_SAFE=$EXPECTED_TAG_SAFE" >> $GITHUB_ENV
+
+      - name: Preflight validation
+        run: |
+          echo "## ✅ Preflight Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | $ENVIRONMENT_NAME |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

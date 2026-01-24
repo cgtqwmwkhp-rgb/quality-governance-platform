@@ -41,6 +41,17 @@ jobs:
       - name: Type check with mypy
         run: mypy src/ --config-file pyproject.toml
 
+  workflow-lint:
+    name: Workflow Lint (actionlint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint workflows
+        uses: rhysd/actionlint@v1
+
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
     runs-on: ubuntu-latest
@@ -635,7 +646,7 @@ jobs:
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [code-quality, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, openapi-contract-check]
+    needs: [code-quality, workflow-lint, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, openapi-contract-check]
     
     steps:
       - name: Checkout code
