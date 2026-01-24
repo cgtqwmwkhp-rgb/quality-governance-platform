@@ -283,6 +283,24 @@ async def health_check(request: Request) -> dict:
     }
 
 
+# Build version stamp - set by CI/CD or defaults
+import os as _os
+
+_BUILD_SHA = _os.environ.get("BUILD_SHA", "dev")
+_BUILD_TIME = _os.environ.get("BUILD_TIME", "local")
+
+
+@app.get("/api/v1/meta/version", tags=["Meta"])
+async def get_version() -> dict:
+    """Return build version information for deployment verification."""
+    return {
+        "build_sha": _BUILD_SHA,
+        "build_time": _BUILD_TIME,
+        "app_name": settings.app_name,
+        "environment": settings.app_env,
+    }
+
+
 @app.get("/healthz", tags=["Health"])
 async def liveness_check(request: Request) -> dict:
     """Liveness probe: Check if application process is alive.

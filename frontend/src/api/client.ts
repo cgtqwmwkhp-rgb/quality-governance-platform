@@ -28,12 +28,21 @@ api.interceptors.request.use((config) => {
   
   // Add auth token using centralized accessor
   const token = getPlatformToken()
+  
+  // DEBUG: Log auth header presence (not the token itself)
+  const isApiCall = config.url?.startsWith('/api/')
+  if (isApiCall) {
+    console.log(`[Auth Debug] ${config.method?.toUpperCase()} ${config.url} | token_present=${!!token} | token_length=${token?.length || 0}`)
+  }
+  
   if (token) {
     // Check if token is expired before attaching
     if (isTokenExpired(token)) {
       console.warn('[Axios] Token expired - request may fail with 401')
     }
     config.headers.Authorization = `Bearer ${token}`
+  } else if (isApiCall) {
+    console.warn('[Auth Debug] No token available for API call - will likely get 401')
   }
   return config
 })

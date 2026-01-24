@@ -213,6 +213,45 @@ async def get_current_user_info(current_user: CurrentUser) -> UserResponse:
     return UserResponse.model_validate(current_user)
 
 
+class WhoAmIResponse(BaseModel):
+    """Response for whoami endpoint - debugging auth issues."""
+
+    authenticated: bool
+    user_id: int
+    email: str
+    is_active: bool
+    is_superuser: bool
+    token_type: str
+    roles: list[str]
+
+
+@router.get("/whoami", response_model=WhoAmIResponse)
+async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
+    """
+    Diagnostic endpoint to verify token validity and user identity.
+
+    Use this to confirm:
+    1. Token is valid and not expired
+    2. User exists and is active
+    3. Roles/permissions are correct
+
+    If this returns 401, the issue is with token validation.
+    If this returns 200, but /actions returns 401, check endpoint-specific auth.
+    """
+    # Get user roles
+    role_names = [role.name for role in current_user.roles] if current_user.roles else []
+
+    return WhoAmIResponse(
+        authenticated=True,
+        user_id=current_user.id,
+        email=current_user.email,
+        is_active=current_user.is_active,
+        is_superuser=current_user.is_superuser,
+        token_type="platform_jwt",
+        roles=role_names,
+    )
+
+
 @router.post("/change-password")
 async def change_password(
     request: PasswordChangeRequest,
