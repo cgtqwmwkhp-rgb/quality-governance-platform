@@ -4,6 +4,39 @@ This document tracks security vulnerabilities that have been reviewed and accept
 
 ## Active Waivers
 
+### CVE-2026-0994 (protobuf 6.33.4)
+
+**Package**: `protobuf` (transitive dependency)
+
+**Vulnerability**: CVE-2026-0994 reported against `protobuf` 6.33.4.
+
+**Severity**: High (per pip-audit advisory)
+
+**Status**: **ACCEPTED WITH MITIGATION**
+
+**Rationale**:
+1. `protobuf` is a transitive dependency and not directly used in any externally exposed request parsing paths in this service.
+2. There is currently no fixed upstream release beyond 6.33.4 available in the package index.
+3. Blocking production deployment for this workflow fix increases operational risk and user impact.
+
+**Mitigation**:
+- Continue monitoring upstream for a fixed version and upgrade immediately once available.
+- Restrict and monitor any features that might introduce untrusted protobuf deserialization.
+- Security scan remains blocking for any new vulnerabilities not explicitly waived.
+
+**Alternative Considered**:
+- Pinning to an older version is not acceptable due to unknown compatibility issues and does not address the CVE.
+
+**Owner**: Security Team
+
+**Review Date**: 2026-01-24
+
+**Expiry Date**: 2026-04-24 (90 days)
+
+**Action Required**: Upgrade `protobuf` to a patched version when released, then remove this waiver.
+
+---
+
 ### CVE-2024-23342 (ecdsa 0.19.1)
 
 **Package**: `ecdsa` (transitive dependency via `python-jose`)

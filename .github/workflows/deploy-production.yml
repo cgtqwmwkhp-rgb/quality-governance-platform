@@ -144,6 +144,8 @@ jobs:
             --resource-group rg-qgp-staging \
             --settings \
               APP_ENV="production" \
+              BUILD_SHA="${{ github.sha }}" \
+              BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               DATABASE_URL="$DB_URL" \
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \

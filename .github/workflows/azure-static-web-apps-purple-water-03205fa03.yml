@@ -39,6 +39,11 @@ jobs:
           sed -i "s/CACHE_VERSION = 'qgp-v[^']*'/CACHE_VERSION = 'qgp-v2.0.0-${SHA}-${TIMESTAMP}'/" public/sw.js
           echo "Updated SW cache version to: qgp-v2.0.0-${SHA}-${TIMESTAMP}"
       
+      - name: Set build version metadata
+        run: |
+          echo "VITE_BUILD_SHA=${{ github.sha }}" >> $GITHUB_ENV
+          echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+      
       - name: Build Frontend
         working-directory: frontend
         env:
@@ -46,6 +51,8 @@ jobs:
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
+          VITE_BUILD_SHA: ${{ env.VITE_BUILD_SHA }}
+          VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
         run: |
           npm run build
       
