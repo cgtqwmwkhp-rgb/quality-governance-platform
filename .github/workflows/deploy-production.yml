@@ -16,12 +16,10 @@ on:
       staging_verified:
         description: 'Confirm staging has been verified'
         required: true
-        type: boolean
         default: false
       reason:
         description: 'Reason for production deployment'
         required: true
-        type: string
   
   # Also trigger on release
   release:
