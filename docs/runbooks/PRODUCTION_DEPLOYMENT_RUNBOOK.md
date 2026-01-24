@@ -15,6 +15,46 @@
 
 ---
 
+## Governance Guardrails (Enforced)
+
+The deploy workflows enforce environment safety before any Azure mutations:
+
+- **Production guardrail**: fails if the resolved resource group or app name contains `staging`
+- **Staging guardrail**: fails if the resolved resource group or app name contains `prod`
+- Guardrails run **before** Azure login/deploy steps
+
+### Required Environment Variables (non-secret)
+
+| Variable | Staging | Production |
+|----------|---------|------------|
+| `ENVIRONMENT_NAME` | `staging` | `production` |
+| `AZURE_RESOURCE_GROUP` | `rg-qgp-staging` | `rg-qgp-prod` |
+| `AZURE_WEBAPP_NAME` | from repo secrets | from repo secrets |
+
+### Preflight Validation (Evidence)
+
+Each deploy run emits a preflight summary with:
+- `Environment`
+- `Commit` (SHA)
+- `Expected Digest`
+
+### Evidence Artifact Format
+
+Artifacts are uploaded as:
+`docs/evidence/DEPLOY_EVIDENCE_<env>_<run_id>.md`
+
+Fields:
+- `run_id`
+- `sha`
+- `expected_tag`
+- `expected_digest`
+- `running_image` (may be empty if platform does not report)
+- `meta_version_build_sha`
+- `healthz_status`
+- `host_sha256`
+
+---
+
 ## Phase 1: Azure Resource Provisioning (45 min)
 
 ### Step 1.1: Create Production Resource Group
