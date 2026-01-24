@@ -168,19 +168,19 @@ jobs:
           
           # Ensure managed identity is enabled
           IDENTITY_ID=$(az webapp identity show \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group rg-qgp-staging \
             --query principalId -o tsv 2>/dev/null || echo "")
           
           if [ -z "$IDENTITY_ID" ]; then
             echo "   📌 Enabling managed identity..."
             az webapp identity assign \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
               --resource-group rg-qgp-staging \
               --output none
             
             IDENTITY_ID=$(az webapp identity show \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
               --resource-group rg-qgp-staging \
               --query principalId -o tsv)
             
@@ -382,7 +382,7 @@ jobs:
             echo ""
             echo "📋 Recent deployment logs:"
             az webapp log show \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
               --resource-group rg-qgp-staging \
               --output table 2>/dev/null || echo "(no logs available)"
             exit 1
@@ -394,7 +394,7 @@ jobs:
       - name: Capture runtime evidence and enforce determinism
         run: |
           APP_HOST=$(az webapp show \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group rg-qgp-staging \
             --query defaultHostName -o tsv)
           APP_URL="https://${APP_HOST}"
@@ -409,16 +409,16 @@ jobs:
           BUILD_SHA=$(python3 -c 'import json; print(json.load(open("/tmp/meta.json")).get("build_sha",""))')
           
           RUNNING_IMAGE_RAW=$(az webapp config container show \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group rg-qgp-staging \
             --query "linuxFxVersion" -o tsv)
           RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
-          RUNNING_IMAGE_SAFE=$(echo "$RUNNING_IMAGE" | sed -E 's#^[^/]+/##')
+          RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
           
           if [ -z "$RUNNING_IMAGE" ]; then
             echo "⚠️ running image not reported; skipping digest/tag comparison"
           elif echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
-            RUNNING_DIGEST=$(echo "$RUNNING_IMAGE" | sed 's/.*@//')
+            RUNNING_DIGEST="${RUNNING_IMAGE##*@}"
             if [ "$RUNNING_DIGEST" != "$EXPECTED_DIGEST" ]; then
               echo "❌ running digest mismatch: expected ${EXPECTED_DIGEST}, got ${RUNNING_DIGEST}"
               exit 1
