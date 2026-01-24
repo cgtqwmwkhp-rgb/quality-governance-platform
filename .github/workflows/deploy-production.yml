@@ -116,6 +116,34 @@ jobs:
           
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
+      - name: Capture expected image digest
+        run: |
+          EXPECTED_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          EXPECTED_DIGESTS=$(az acr repository show-manifests \
+            --name ${{ env.ACR_NAME }} \
+            --repository ${{ env.IMAGE_NAME }} \
+            --query "[?tags[?@=='${{ github.sha }}']].digest" \
+            -o tsv)
+          
+          EXPECTED_DIGEST_COUNT=$(echo "$EXPECTED_DIGESTS" | sed '/^$/d' | wc -l | tr -d ' ')
+          if [ "$EXPECTED_DIGEST_COUNT" -ne 1 ]; then
+            echo "❌ Expected exactly 1 digest for tag ${{ github.sha }}, got $EXPECTED_DIGEST_COUNT"
+            exit 1
+          fi
+          
+          EXPECTED_DIGEST=$(echo "$EXPECTED_DIGESTS" | head -n 1 | tr -d '\r')
+          
+          if [ -z "$EXPECTED_DIGEST" ]; then
+            echo "❌ Failed to resolve image digest for ${EXPECTED_TAG}"
+            exit 1
+          fi
+          
+          IMAGE_DIGEST_REF="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}@${EXPECTED_DIGEST}"
+          
+          echo "EXPECTED_TAG=$EXPECTED_TAG" >> $GITHUB_ENV
+          echo "EXPECTED_DIGEST=$EXPECTED_DIGEST" >> $GITHUB_ENV
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
+
       - name: Create database backup
         run: |
           echo "Creating pre-deployment database backup..."
@@ -127,7 +155,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          images: ${{ env.IMAGE_TAG }}
+          images: ${{ env.IMAGE_DIGEST_REF }}
 
       - name: Configure App Service environment
         run: |
@@ -344,6 +372,82 @@ jobs:
           fi
           
           echo "✅ Health checks passed!"
+
+      - name: Capture runtime evidence and enforce determinism
+        run: |
+          APP_HOST=$(az webapp show \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group rg-qgp-staging \
+            --query defaultHostName -o tsv)
+          APP_URL="https://${APP_HOST}"
+          
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${APP_URL}/healthz")
+          
+          META_STATUS=$(curl -s -o /tmp/meta.json -w "%{http_code}" --max-time 30 "${APP_URL}/api/v1/meta/version")
+          if [ "$META_STATUS" != "200" ]; then
+            echo "❌ meta/version endpoint failed with HTTP ${META_STATUS}"
+            exit 1
+          fi
+          
+          BUILD_SHA=$(python - <<'PY'
+import json
+with open("/tmp/meta.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+print(data.get("build_sha", ""))
+PY
+          )
+          
+          RUNNING_IMAGE_RAW=$(az webapp config container show \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group rg-qgp-staging \
+            --query "linuxFxVersion" -o tsv)
+          RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+          
+          if echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
+            RUNNING_DIGEST=$(echo "$RUNNING_IMAGE" | sed 's/.*@//')
+            if [ "$RUNNING_DIGEST" != "$EXPECTED_DIGEST" ]; then
+              echo "❌ running digest mismatch: expected ${EXPECTED_DIGEST}, got ${RUNNING_DIGEST}"
+              exit 1
+            fi
+          else
+            RUNNING_TAG=$(echo "$RUNNING_IMAGE" | awk -F: '{print $NF}')
+            if [ "$RUNNING_TAG" != "${{ github.sha }}" ]; then
+              echo "❌ running tag mismatch: expected ${{ github.sha }}, got ${RUNNING_TAG}"
+              exit 1
+            fi
+          fi
+          
+          if [ "$BUILD_SHA" != "${{ github.sha }}" ]; then
+            echo "❌ build_sha mismatch: expected ${{ github.sha }}, got ${BUILD_SHA}"
+            exit 1
+          fi
+          
+          EVIDENCE_PATH="docs/evidence/DEPLOY_EVIDENCE_production_${{ github.run_id }}.md"
+          HOST_HASH=$(APP_HOST="$APP_HOST" python - <<'PY'
+import hashlib
+import os
+host = os.environ.get("APP_HOST", "")
+print(hashlib.sha256(host.encode("utf-8")).hexdigest() if host else "")
+PY
+          )
+          cat <<EOF > "$EVIDENCE_PATH"
+## Deploy Evidence (production)
+
+- run_id: ${{ github.run_id }}
+- sha: ${{ github.sha }}
+- expected_tag: ${EXPECTED_TAG}
+- expected_digest: ${EXPECTED_DIGEST}
+- running_image: ${RUNNING_IMAGE}
+- meta_version_build_sha: ${BUILD_SHA}
+- healthz_status: ${HEALTH_STATUS}
+- host_sha256: ${HOST_HASH}
+EOF
+
+      - name: Upload deploy evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-evidence-production-${{ github.run_id }}
+          path: docs/evidence/DEPLOY_EVIDENCE_production_${{ github.run_id }}.md
 
       - name: Verify deployment - Security checks (Stage 4)
         run: |
