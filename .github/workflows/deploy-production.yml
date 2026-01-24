@@ -135,20 +135,20 @@ jobs:
           IMAGE_RELEASE="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:release-${{ github.run_number }}"
           
           echo "Building production image: $IMAGE_TAG"
-          docker build -t $IMAGE_TAG -t $IMAGE_RELEASE .
+          docker build -t "$IMAGE_TAG" -t "$IMAGE_RELEASE" .
           
           echo "Pushing images..."
-          docker push $IMAGE_TAG
-          docker push $IMAGE_RELEASE
+          docker push "$IMAGE_TAG"
+          docker push "$IMAGE_RELEASE"
           
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
 
       - name: Capture expected image digest
         run: |
           EXPECTED_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           EXPECTED_DIGESTS=$(az acr repository show-manifests \
-            --name ${{ env.ACR_NAME }} \
-            --repository ${{ env.IMAGE_NAME }} \
+            --name "${{ env.ACR_NAME }}" \
+            --repository "${{ env.IMAGE_NAME }}" \
             --query "[?tags[?@=='${{ github.sha }}']].digest" \
             -o tsv)
           EXPECTED_DIGESTS_CLEAN=$(printf "%s\n" "$EXPECTED_DIGESTS" | sed '/^$/d' | sort -u)
@@ -173,20 +173,22 @@ jobs:
           IMAGE_DIGEST_REF="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}@${EXPECTED_DIGEST}"
           EXPECTED_TAG_SAFE="${{ env.IMAGE_NAME }}:${{ github.sha }}"
           
-          echo "EXPECTED_TAG=$EXPECTED_TAG" >> $GITHUB_ENV
-          echo "EXPECTED_DIGEST=$EXPECTED_DIGEST" >> $GITHUB_ENV
-          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
-          echo "EXPECTED_TAG_SAFE=$EXPECTED_TAG_SAFE" >> $GITHUB_ENV
+          echo "EXPECTED_TAG=$EXPECTED_TAG" >> "$GITHUB_ENV"
+          echo "EXPECTED_DIGEST=$EXPECTED_DIGEST" >> "$GITHUB_ENV"
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> "$GITHUB_ENV"
+          echo "EXPECTED_TAG_SAFE=$EXPECTED_TAG_SAFE" >> "$GITHUB_ENV"
 
       - name: Preflight validation
         run: |
-          echo "## ✅ Preflight Validation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | $ENVIRONMENT_NAME |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## ✅ Preflight Validation"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| **Environment** | $ENVIRONMENT_NAME |"
+            echo "| **Commit** | \`${{ github.sha }}\` |"
+            echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create database backup
         run: |
