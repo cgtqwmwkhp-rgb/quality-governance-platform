@@ -449,7 +449,7 @@ jobs:
           if [ -z "$RUNNING_IMAGE" ]; then
             echo "⚠️ running image not reported; skipping digest/tag comparison"
           elif echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
-            RUNNING_DIGEST=$(echo "$RUNNING_IMAGE" | sed 's/.*@//')
+            RUNNING_DIGEST="${RUNNING_IMAGE##*@}"
             if [ "$RUNNING_DIGEST" != "$EXPECTED_DIGEST" ]; then
               echo "❌ running digest mismatch: expected ${EXPECTED_DIGEST}, got ${RUNNING_DIGEST}"
               exit 1

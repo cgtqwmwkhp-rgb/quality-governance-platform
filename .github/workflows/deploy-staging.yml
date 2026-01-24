@@ -34,7 +34,7 @@ jobs:
         id: generate-id
         run: |
           DEPLOYMENT_ID="staging-$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}"
-          echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
           echo "📋 Deployment ID: $DEPLOYMENT_ID"
 
       - name: Checkout code
@@ -42,17 +42,19 @@ jobs:
 
       - name: Log deployment info
         run: |
-          echo "## 🚀 Staging Deployment Started" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Deployment ID** | ${{ steps.generate-id.outputs.deployment_id }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Actor** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Branch** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Reason** | ${{ github.event.inputs.reason || 'Push to main' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Timestamp** | $(date -u +"%Y-%m-%dT%H:%M:%SZ") |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🚀 Staging Deployment Started"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| **Deployment ID** | ${{ steps.generate-id.outputs.deployment_id }} |"
+            echo "| **Trigger** | ${{ github.event_name }} |"
+            echo "| **Actor** | ${{ github.actor }} |"
+            echo "| **Branch** | ${{ github.ref_name }} |"
+            echo "| **Commit** | \`${{ github.sha }}\` |"
+            echo "| **Reason** | ${{ github.event.inputs.reason || 'Push to main' }} |"
+            echo "| **Timestamp** | $(date -u +"%Y-%m-%dT%H:%M:%SZ") |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Environment guardrails
         run: |
@@ -85,7 +87,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
-        run: az acr login --name ${{ env.ACR_NAME }}
+        run: az acr login --name "${{ env.ACR_NAME }}"
 
       - name: Build and push Docker image
         id: build
@@ -94,14 +96,14 @@ jobs:
           IMAGE_LATEST="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
           
           echo "🔨 Building image: $IMAGE_TAG"
-          docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
+          docker build -t "$IMAGE_TAG" -t "$IMAGE_LATEST" .
           
           echo "📤 Pushing images..."
-          docker push $IMAGE_TAG
-          docker push $IMAGE_LATEST
+          docker push "$IMAGE_TAG"
+          docker push "$IMAGE_LATEST"
           
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
           
           echo "✅ Image built and pushed successfully"
 
@@ -109,8 +111,8 @@ jobs:
         run: |
           EXPECTED_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           EXPECTED_DIGESTS=$(az acr repository show-manifests \
-            --name ${{ env.ACR_NAME }} \
-            --repository ${{ env.IMAGE_NAME }} \
+            --name "${{ env.ACR_NAME }}" \
+            --repository "${{ env.IMAGE_NAME }}" \
             --query "[?tags[?@=='${{ github.sha }}']].digest" \
             -o tsv)
           EXPECTED_DIGESTS_CLEAN=$(printf "%s\n" "$EXPECTED_DIGESTS" | sed '/^$/d' | sort -u)
