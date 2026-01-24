@@ -1,6 +1,7 @@
 """Main FastAPI application entry point."""
 
 import logging
+import os as _os
 import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -282,9 +283,6 @@ async def health_check(request: Request) -> dict:
         "request_id": request_id,
     }
 
-
-# Build version stamp - set by CI/CD or defaults
-import os as _os
 
 _BUILD_SHA = _os.environ.get("BUILD_SHA", "dev")
 _BUILD_TIME = _os.environ.get("BUILD_TIME", "local")
