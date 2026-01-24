@@ -102,24 +102,28 @@ jobs:
             echo "❌ Guardrail: required env vars missing"
             exit 1
           fi
-          rg_lower=$(echo "$AZURE_RESOURCE_GROUP" | tr '[:upper:]' '[:lower:]')
           app_lower=$(echo "$AZURE_WEBAPP_NAME" | tr '[:upper:]' '[:lower:]')
           env_lower=$(echo "$ENVIRONMENT_NAME" | tr '[:upper:]' '[:lower:]')
+          # Validate app name matches environment (allows shared RG due to quota)
           if [ "$env_lower" = "production" ]; then
-            if echo "$rg_lower$app_lower" | grep -q "staging"; then
-              echo "❌ Guardrail: production cannot target staging resources"
+            if echo "$app_lower" | grep -q "staging"; then
+              echo "❌ Guardrail: production cannot target staging app"
+              exit 1
+            fi
+            if ! echo "$app_lower" | grep -q "prod"; then
+              echo "❌ Guardrail: production app name must contain 'prod'"
               exit 1
             fi
           elif [ "$env_lower" = "staging" ]; then
-            if echo "$rg_lower$app_lower" | grep -q "prod"; then
-              echo "❌ Guardrail: staging cannot target production resources"
+            if echo "$app_lower" | grep -q "prod"; then
+              echo "❌ Guardrail: staging cannot target production app"
               exit 1
             fi
           else
             echo "❌ Guardrail: unknown environment '$ENVIRONMENT_NAME'"
             exit 1
           fi
-          echo "✅ Guardrail: environment targeting validated"
+          echo "✅ Guardrail: environment targeting validated (app: $app_lower)"
 
       - name: Login to Azure
         uses: azure/login@v2
