@@ -342,15 +342,17 @@ jobs:
 
       - name: Final Summary
         run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "## ✅ Provisioning Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Production URL**: https://${{ env.APP_NAME }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the \`production-secrets\` artifact" >> $GITHUB_STEP_SUMMARY
-          echo "2. Add the secrets to GitHub repository settings" >> $GITHUB_STEP_SUMMARY
-          echo "3. Create \`production\` environment with required reviewers" >> $GITHUB_STEP_SUMMARY
-          echo "4. Update DATABASE-URL in Key Vault with real connection string" >> $GITHUB_STEP_SUMMARY
-          echo "5. Trigger \`deploy-production.yml\` workflow" >> $GITHUB_STEP_SUMMARY
+          {
+            echo ""
+            echo "---"
+            echo "## ✅ Provisioning Complete!"
+            echo ""
+            echo "**Production URL**: https://${{ env.APP_NAME }}.azurewebsites.net"
+            echo ""
+            echo "### Next Steps:"
+            echo "1. Download the \`production-secrets\` artifact"
+            echo "2. Add the secrets to GitHub repository settings"
+            echo "3. Create \`production\` environment with required reviewers"
+            echo "4. Update DATABASE-URL in Key Vault with real connection string"
+            echo "5. Trigger \`deploy-production.yml\` workflow"
+          } >> "$GITHUB_STEP_SUMMARY"
