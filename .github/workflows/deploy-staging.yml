@@ -193,7 +193,7 @@ jobs:
           echo "   🔑 Ensuring Key Vault access..."
           az keyvault set-policy \
             --name kv-qgp-staging \
-            --object-id $IDENTITY_ID \
+            --object-id "$IDENTITY_ID" \
             --secret-permissions get list \
             --output none 2>/dev/null || echo "   ⚠️ Key Vault policy already set or cannot be updated"
           
@@ -212,7 +212,7 @@ jobs:
           # Configure app settings with direct values
           echo "   📝 Setting application configuration..."
           az webapp config appsettings set \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group rg-qgp-staging \
             --settings \
               APP_ENV="staging" \
@@ -237,7 +237,7 @@ jobs:
           # Restart the app to apply new settings
           echo "   🔄 Restarting application..."
           az webapp restart \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group rg-qgp-staging
           
           echo "✅ App Service configuration complete"
@@ -346,7 +346,7 @@ jobs:
                 if [ $attempt -eq 10 ]; then
                   echo "   📋 Capturing diagnostic logs..."
                   az webapp log download \
-                    --name ${{ env.AZURE_WEBAPP_NAME }} \
+                    --name "${{ env.AZURE_WEBAPP_NAME }}" \
                     --resource-group rg-qgp-staging \
                     --log-file /tmp/app_logs.zip 2>/dev/null || true
                 fi
@@ -375,7 +375,7 @@ jobs:
             echo ""
             echo "📋 Checking App Service status..."
             az webapp show \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --name "${{ env.AZURE_WEBAPP_NAME }}" \
               --resource-group rg-qgp-staging \
               --query "{state:state,usageState:usageState,availabilityState:availabilityState}" \
               -o json
