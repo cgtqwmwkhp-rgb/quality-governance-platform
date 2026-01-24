@@ -41,8 +41,8 @@ jobs:
       
       - name: Set build version metadata
         run: |
-          echo "VITE_BUILD_SHA=${{ github.sha }}" >> $GITHUB_ENV
-          echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+          echo "VITE_BUILD_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       
       - name: Build Frontend
         working-directory: frontend
