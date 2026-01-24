@@ -414,13 +414,6 @@ jobs:
             --query "linuxFxVersion" -o tsv)
           RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
           RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
-<<<<<<< HEAD
-          RAW_LEN=${#RUNNING_IMAGE_RAW}
-          if [ -z "$RUNNING_IMAGE_SAFE" ]; then
-            RUNNING_IMAGE_SAFE="not reported"
-          fi
-=======
->>>>>>> origin/main
           
           if [ -z "$RUNNING_IMAGE" ]; then
             echo "⚠️ running image not reported; skipping digest/tag comparison"
@@ -455,10 +448,6 @@ jobs:
           - expected_tag: ${EXPECTED_TAG_SAFE}
           - expected_digest: ${EXPECTED_DIGEST}
           - running_image: ${RUNNING_IMAGE_SAFE}
-<<<<<<< HEAD
-          - running_image_raw_len: ${RAW_LEN}
-=======
->>>>>>> origin/main
           - meta_version_build_sha: ${BUILD_SHA}
           - healthz_status: ${HEALTH_STATUS}
           - host_sha256: ${HOST_HASH}
