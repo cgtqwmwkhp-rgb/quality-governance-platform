@@ -28,7 +28,7 @@ on:
 env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
-  AZURE_RESOURCE_GROUP: rg-qgp-prod
+  AZURE_RESOURCE_GROUP: rg-qgp-staging
   ENVIRONMENT_NAME: production
   IMAGE_NAME: quality-governance-platform
 
