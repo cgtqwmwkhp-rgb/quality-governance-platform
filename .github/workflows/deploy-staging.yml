@@ -137,20 +137,24 @@ jobs:
           IMAGE_DIGEST_REF="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}@${EXPECTED_DIGEST}"
           EXPECTED_TAG_SAFE="${{ env.IMAGE_NAME }}:${{ github.sha }}"
           
-          echo "EXPECTED_TAG=$EXPECTED_TAG" >> $GITHUB_ENV
-          echo "EXPECTED_DIGEST=$EXPECTED_DIGEST" >> $GITHUB_ENV
-          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
-          echo "EXPECTED_TAG_SAFE=$EXPECTED_TAG_SAFE" >> $GITHUB_ENV
+          {
+            echo "EXPECTED_TAG=$EXPECTED_TAG"
+            echo "EXPECTED_DIGEST=$EXPECTED_DIGEST"
+            echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF"
+            echo "EXPECTED_TAG_SAFE=$EXPECTED_TAG_SAFE"
+          } >> "$GITHUB_ENV"
 
       - name: Preflight validation
         run: |
-          echo "## ✅ Preflight Validation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | $ENVIRONMENT_NAME |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## ✅ Preflight Validation"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| **Environment** | $ENVIRONMENT_NAME |"
+            echo "| **Commit** | \`${{ github.sha }}\` |"
+            echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -458,20 +462,26 @@ jobs:
       - name: Deployment summary
         if: always()
         run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📊 Deployment Result" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo ""
+            echo "## 📊 Deployment Result"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
           if [[ "${{ job.status }}" == "success" ]]; then
-            echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-            echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| **Image** | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Health Check** | ✅ Passed with retry |" >> $GITHUB_STEP_SUMMARY
+            {
+              echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL"
+              echo ""
+              echo "| Item | Value |"
+              echo "|------|-------|"
+              echo "| **Image** | \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` |"
+              echo "| **Health Check** | ✅ Passed with retry |"
+            } >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "### ❌ STAGING DEPLOYMENT FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+            {
+              echo "### ❌ STAGING DEPLOYMENT FAILED"
+              echo ""
+              echo "Check the workflow logs for details."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # Post-deployment smoke tests
@@ -556,15 +566,17 @@ jobs:
       - name: Smoke test summary
         if: always()
         run: |
-          echo "## 🧪 Staging Smoke Tests" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Health Endpoint | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Readiness Endpoint | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Auth Guard | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| OpenAPI Spec | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| API Docs | ✅ |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🧪 Staging Smoke Tests"
+            echo ""
+            echo "| Test | Status |"
+            echo "|------|--------|"
+            echo "| Health Endpoint | ✅ |"
+            echo "| Readiness Endpoint | ✅ |"
+            echo "| Auth Guard | ✅ |"
+            echo "| OpenAPI Spec | ✅ |"
+            echo "| API Docs | ✅ |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Final notification
   notify:
@@ -576,23 +588,29 @@ jobs:
     steps:
       - name: Final status
         run: |
-          echo "## 📊 Staging Deployment Final Status" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 📊 Staging Deployment Final Status"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
           
           if [[ "${{ needs.build-and-deploy.result }}" == "success" && "${{ needs.smoke-tests.result }}" == "success" ]]; then
-            echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The staging deployment completed successfully. Ready for production promotion." >> $GITHUB_STEP_SUMMARY
-            echo ""
+            {
+              echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL"
+              echo ""
+              echo "The staging deployment completed successfully. Ready for production promotion."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
             echo "🎉 Staging deployment successful!"
             echo "   Deployment ID: ${{ needs.build-and-deploy.outputs.deployment_id }}"
           else
-            echo "### ❌ STAGING DEPLOYMENT FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
-            echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Build & Deploy | ${{ needs.build-and-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo ""
+            {
+              echo "### ❌ STAGING DEPLOYMENT FAILED"
+              echo ""
+              echo "| Stage | Result |"
+              echo "|-------|--------|"
+              echo "| Build & Deploy | ${{ needs.build-and-deploy.result }} |"
+              echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
             echo "❌ Staging deployment failed - check logs above"
           fi
