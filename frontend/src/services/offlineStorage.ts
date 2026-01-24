@@ -388,7 +388,7 @@ class OfflineStorage {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('platform_access_token')}`,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -504,7 +504,7 @@ export function useOfflineEntity<T>(entityType: string, id: string): {
           const baseUrl = API_BASE_URL;
           const response = await fetch(`${baseUrl}/${entityType}/${id}`, {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('platform_access_token')}`,
             },
           });
 

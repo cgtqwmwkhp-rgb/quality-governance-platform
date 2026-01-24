@@ -1,9 +1,8 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
+import { getPlatformToken, isTokenExpired, clearTokens } from '../utils/auth'
 
 // HARDCODED HTTPS - bypassing any potential env var issues
 const HTTPS_API_BASE = 'https://app-qgp-prod.azurewebsites.net';
-
-console.log('[Axios Client] Using API base:', HTTPS_API_BASE);
 
 const api = axios.create({
   baseURL: HTTPS_API_BASE,
@@ -14,56 +13,97 @@ const api = axios.create({
 
 // CRITICAL: Enforce HTTPS on all requests at interceptor level
 api.interceptors.request.use((config) => {
-  // Log the request for debugging
-  const fullUrl = config.baseURL + (config.url || '');
-  console.log('[Axios] Request to:', fullUrl);
-  
   // Force HTTPS on baseURL
   if (config.baseURL && !config.baseURL.startsWith('https://')) {
     config.baseURL = config.baseURL.replace(/^http:/, 'https:');
     if (!config.baseURL.startsWith('https://')) {
       config.baseURL = 'https://' + config.baseURL.replace(/^\/\//, '');
     }
-    console.warn('[Axios] Forced HTTPS on baseURL:', config.baseURL);
   }
   
   // Force HTTPS on URL if it's absolute
   if (config.url && config.url.startsWith('http:')) {
     config.url = config.url.replace(/^http:/, 'https:');
-    console.warn('[Axios] Forced HTTPS on URL:', config.url);
   }
   
-  // Add auth token - check both storage locations
-  // Admin login uses localStorage 'access_token'
-  // Portal login uses sessionStorage 'platform_access_token'
-  const token = localStorage.getItem('access_token') || sessionStorage.getItem('platform_access_token')
+  // Add auth token using centralized accessor
+  const token = getPlatformToken()
   if (token) {
+    // Check if token is expired before attaching
+    if (isTokenExpired(token)) {
+      console.warn('[Axios] Token expired - request may fail with 401')
+    }
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
 
-// Handle 401 responses
+// Handle error responses with proper classification
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Only redirect to login if we're not already there and this is an auth failure
-      // (not just a missing/invalid token for a specific endpoint)
-      const currentPath = window.location.pathname
-      const isLoginPage = currentPath === '/login' || currentPath === '/portal'
+  (error: AxiosError) => {
+    // Classify the error for better user messaging
+    const status = error.response?.status
+    const currentPath = window.location.pathname
+    const isLoginPage = currentPath === '/login' || currentPath === '/portal' || currentPath === '/portal/login'
+    
+    if (status === 401) {
+      // Token is invalid or expired
       const isAuthEndpoint = error.config?.url?.includes('/auth/')
       
-      // Only clear token and redirect for auth-related 401s, not data endpoint 401s
+      // Only auto-redirect for auth endpoint failures (login failures)
       if (isAuthEndpoint && !isLoginPage) {
-        localStorage.removeItem('access_token')
+        clearTokens()
         window.location.href = '/login'
       }
-      // For non-auth endpoints, just reject and let the component handle it
+      // For data endpoints, enhance the error with a clear message
+      if (!error.response?.data) {
+        (error as any).classifiedMessage = 'Session expired. Please sign in again.'
+      }
+    } else if (status === 403) {
+      (error as any).classifiedMessage = "You don't have permission to perform this action."
+    } else if (status === 422) {
+      // Validation error - message should come from server
+      const data = error.response?.data as any
+      (error as any).classifiedMessage = data?.detail || data?.message || 'Validation error. Please check your input.'
+    } else if (status && status >= 500) {
+      (error as any).classifiedMessage = 'Server error. Please try again later.'
+    } else if (!error.response) {
+      // No response - true network error or CORS issue
+      (error as any).classifiedMessage = 'Network error. Please check your connection and try again.'
     }
+    
     return Promise.reject(error)
   }
 )
+
+/**
+ * Get a user-friendly error message from an API error.
+ * Use this in catch blocks for consistent error messaging.
+ */
+export function getApiErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    // Use classified message if available
+    if ((error as any).classifiedMessage) {
+      return (error as any).classifiedMessage
+    }
+    // Fall back to server-provided message
+    const data = error.response?.data as any
+    if (data?.message) {
+      return data.message
+    }
+    if (data?.detail) {
+      return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
+    }
+    // Last resort - use axios error message
+    return error.message
+  }
+  // Non-axios error
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'An unexpected error occurred'
+}
 
 // ============ Auth Types ============
 export interface LoginRequest {

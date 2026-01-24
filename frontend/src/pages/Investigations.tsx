@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2 } from 'lucide-react'
-import { investigationsApi, actionsApi, Investigation } from '../api/client'
+import { investigationsApi, actionsApi, Investigation, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -153,7 +153,7 @@ export default function Investigations() {
       loadActionsForInvestigation(selectedInvestigation)
     } catch (err: any) {
       console.error('Failed to create action:', err)
-      alert(`Failed to create action: ${err?.response?.data?.message || err?.message || 'Unknown error'}`)
+      alert(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreatingAction(false)
     }

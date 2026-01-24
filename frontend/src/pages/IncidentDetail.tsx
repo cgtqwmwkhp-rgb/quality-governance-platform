@@ -17,7 +17,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult } from '../api/client'
+import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -192,9 +192,9 @@ export default function IncidentDetail() {
         assigned_to: '',
       })
       loadActions()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create action:', err)
-      alert(`Failed to create action: ${err?.response?.data?.message || err?.message || 'Unknown error'}`)
+      alert(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreating(false)
     }
