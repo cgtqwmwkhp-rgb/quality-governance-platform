@@ -424,8 +424,8 @@ jobs:
       - name: Capture runtime evidence and enforce determinism
         run: |
           APP_HOST=$(az webapp show \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group $AZURE_RESOURCE_GROUP \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
             --query defaultHostName -o tsv)
           APP_URL="https://${APP_HOST}"
           
@@ -440,11 +440,11 @@ jobs:
           BUILD_SHA=$(python3 -c 'import json; print(json.load(open("/tmp/meta.json")).get("build_sha",""))')
           
           RUNNING_IMAGE_RAW=$(az webapp config container show \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --resource-group $AZURE_RESOURCE_GROUP \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
             --query "linuxFxVersion" -o tsv)
           RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
-          RUNNING_IMAGE_SAFE=$(echo "$RUNNING_IMAGE" | sed -E 's#^[^/]+/##')
+          RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
           
           if [ -z "$RUNNING_IMAGE" ]; then
             echo "⚠️ running image not reported; skipping digest/tag comparison"
@@ -548,15 +548,17 @@ jobs:
 
       - name: Production deployment summary
         run: |
-          echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image** | ${{ env.IMAGE_NAME }}:${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Deployed By** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Status** | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🚀 Production Deployment Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| **Commit** | ${{ github.sha }} |"
+            echo "| **Image** | ${{ env.IMAGE_NAME }}:${{ github.sha }} |"
+            echo "| **Deployed By** | ${{ github.actor }} |"
+            echo "| **Trigger** | ${{ github.event_name }} |"
+            echo "| **Status** | ✅ Deployed |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Notify on completion
   notify:
