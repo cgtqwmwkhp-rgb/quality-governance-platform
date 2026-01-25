@@ -513,6 +513,21 @@ jobs:
         run: |
           set +e  # Don't exit on error - we handle errors explicitly
           
+          # Helper function for robust HTTP status capture (avoids concatenation issues)
+          get_http_status() {
+            local url="$1"
+            local timeout="${2:-10}"
+            local output_file="${3:-/dev/null}"
+            local status
+            status=$(curl -s -o "$output_file" -w "%{http_code}" --max-time "$timeout" "$url" 2>/dev/null)
+            local curl_exit=$?
+            if [ $curl_exit -ne 0 ] || [ -z "$status" ]; then
+              echo "000"
+            else
+              echo "$status"
+            fi
+          }
+          
           APP_HOST=$(az webapp show \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -539,43 +554,10 @@ jobs:
           PROOF_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           PROOF_FILE="/tmp/deploy_proof.json"
           
-          # Phase 1: Verify health is still stable
-          echo "### Phase 1: Health Stability Check"
-          HEALTH_START=$(date +%s%3N)
-          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${APP_URL}/healthz" 2>/dev/null || echo "000")
-          HEALTH_END=$(date +%s%3N)
-          HEALTH_LATENCY=$((HEALTH_END - HEALTH_START))
-          
-          if [ "$HEALTH_STATUS" != "200" ]; then
-            echo "❌ Health check failed: HTTP $HEALTH_STATUS"
-            HEALTH_RESULT="FAIL"
-          else
-            echo "✅ Health check passed (${HEALTH_LATENCY}ms)"
-            HEALTH_RESULT="PASS"
-          fi
-          
-          # Phase 2: Verify readiness is still stable
-          echo ""
-          echo "### Phase 2: Readiness Stability Check"
-          READY_START=$(date +%s%3N)
-          READY_RESPONSE=$(curl -s --max-time 10 "${APP_URL}/readyz" 2>/dev/null || echo '{}')
-          READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${APP_URL}/readyz" 2>/dev/null || echo "000")
-          READY_END=$(date +%s%3N)
-          READY_LATENCY=$((READY_END - READY_START))
-          
-          if [ "$READY_STATUS" = "200" ] && echo "$READY_RESPONSE" | grep -q '"database":"connected"'; then
-            echo "✅ Readiness check passed (${READY_LATENCY}ms)"
-            READY_RESULT="PASS"
-            DB_CONNECTED="true"
-          else
-            echo "❌ Readiness check failed: HTTP $READY_STATUS"
-            READY_RESULT="FAIL"
-            DB_CONNECTED="false"
-          fi
-          
-          # Phase 3: Runtime Identity Verification with bounded retries
-          echo ""
-          echo "### Phase 3: Runtime Identity Verification"
+          # Phase 1: Runtime Identity Verification with bounded retries
+          # This runs FIRST because the app may restart during env var propagation
+          # Health/readiness are checked AFTER identity matches (when app is stable)
+          echo "### Phase 1: Runtime Identity Verification"
           echo "Waiting for build_sha to match expected: $EXPECTED_SHA"
           
           IDENTITY_START=$(date +%s)
@@ -596,7 +578,7 @@ jobs:
             fi
             
             META_REQ_START=$(date +%s%3N)
-            META_STATUS=$(curl -s -o /tmp/meta.json -w "%{http_code}" --max-time 15 "${APP_URL}/api/v1/meta/version" 2>/dev/null || echo "000")
+            META_STATUS=$(get_http_status "${APP_URL}/api/v1/meta/version" 15 /tmp/meta.json)
             META_REQ_END=$(date +%s%3N)
             META_LATENCY=$((META_REQ_END - META_REQ_START))
             
@@ -625,11 +607,46 @@ jobs:
           
           IDENTITY_TOTAL_TIME=$(($(date +%s) - IDENTITY_START))
           
+          # Phase 2: Health check (AFTER identity verification - app should be stable now)
+          echo ""
+          echo "### Phase 2: Health Stability Check"
+          HEALTH_START=$(date +%s%3N)
+          HEALTH_STATUS=$(get_http_status "${APP_URL}/healthz" 10)
+          HEALTH_END=$(date +%s%3N)
+          HEALTH_LATENCY=$((HEALTH_END - HEALTH_START))
+          
+          if [ "$HEALTH_STATUS" != "200" ]; then
+            echo "❌ Health check failed: HTTP $HEALTH_STATUS"
+            HEALTH_RESULT="FAIL"
+          else
+            echo "✅ Health check passed (${HEALTH_LATENCY}ms)"
+            HEALTH_RESULT="PASS"
+          fi
+          
+          # Phase 3: Readiness check (AFTER identity verification - app should be stable now)
+          echo ""
+          echo "### Phase 3: Readiness Stability Check"
+          READY_START=$(date +%s%3N)
+          READY_STATUS=$(get_http_status "${APP_URL}/readyz" 10 /tmp/readyz.json)
+          READY_RESPONSE=$(cat /tmp/readyz.json 2>/dev/null || echo '{}')
+          READY_END=$(date +%s%3N)
+          READY_LATENCY=$((READY_END - READY_START))
+          
+          if [ "$READY_STATUS" = "200" ] && echo "$READY_RESPONSE" | grep -q '"database":"connected"'; then
+            echo "✅ Readiness check passed (${READY_LATENCY}ms)"
+            READY_RESULT="PASS"
+            DB_CONNECTED="true"
+          else
+            echo "❌ Readiness check failed: HTTP $READY_STATUS"
+            READY_RESULT="FAIL"
+            DB_CONNECTED="false"
+          fi
+          
           # Phase 4: OpenAPI latency measurement (non-blocking)
           echo ""
           echo "### Phase 4: OpenAPI Latency Measurement"
           OPENAPI_START=$(date +%s%3N)
-          OPENAPI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${APP_URL}/openapi.json" 2>/dev/null || echo "000")
+          OPENAPI_STATUS=$(get_http_status "${APP_URL}/openapi.json" 15)
           OPENAPI_END=$(date +%s%3N)
           OPENAPI_LATENCY=$((OPENAPI_END - OPENAPI_START))
           
