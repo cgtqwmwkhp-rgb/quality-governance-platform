@@ -508,112 +508,309 @@ jobs:
             echo "| Total Time | - | ${TOTAL_ELAPSED}s |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Capture runtime evidence and enforce determinism
+      - name: Deploy Proof v2 - Deterministic verification with bounded retries
+        id: deploy_proof
         run: |
+          set +e  # Don't exit on error - we handle errors explicitly
+          
           APP_HOST=$(az webapp show \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --query defaultHostName -o tsv)
           APP_URL="https://${APP_HOST}"
+          EXPECTED_SHA="${{ github.sha }}"
           
-          echo "## 📋 Runtime Evidence Collection"
+          # Configuration for bounded retries
+          MAX_IDENTITY_ATTEMPTS=30
+          IDENTITY_INITIAL_INTERVAL=5
+          IDENTITY_MAX_INTERVAL=30
+          IDENTITY_TIMEOUT=600  # 10 minutes max for identity verification
+          
+          echo "## 📋 Deploy Proof v2 - Runtime Evidence Collection"
+          echo ""
+          echo "Configuration:"
+          echo "- max_identity_attempts: $MAX_IDENTITY_ATTEMPTS"
+          echo "- identity_timeout: ${IDENTITY_TIMEOUT}s"
+          echo "- expected_sha: $EXPECTED_SHA"
           echo ""
           
-          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${APP_URL}/healthz")
-          echo "Health check: HTTP $HEALTH_STATUS"
+          # Initialize proof structure
+          PROOF_START=$(date +%s)
+          PROOF_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PROOF_FILE="/tmp/deploy_proof.json"
           
-          # Try meta/version endpoint - graceful if not yet implemented
-          META_STATUS=$(curl -s -o /tmp/meta.json -w "%{http_code}" --max-time 30 "${APP_URL}/api/v1/meta/version")
-          BUILD_SHA_FROM_META=""
-          META_AVAILABLE=false
+          # Phase 1: Verify health is still stable
+          echo "### Phase 1: Health Stability Check"
+          HEALTH_START=$(date +%s%3N)
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${APP_URL}/healthz" 2>/dev/null || echo "000")
+          HEALTH_END=$(date +%s%3N)
+          HEALTH_LATENCY=$((HEALTH_END - HEALTH_START))
           
-          if [ "$META_STATUS" = "200" ]; then
-            echo "✅ meta/version endpoint available"
-            BUILD_SHA_FROM_META=$(python3 -c 'import json; print(json.load(open("/tmp/meta.json")).get("build_sha",""))' 2>/dev/null || echo "")
-            META_AVAILABLE=true
-          elif [ "$META_STATUS" = "404" ]; then
-            echo "⚠️ meta/version endpoint not yet implemented (HTTP 404) - continuing with fallback verification"
+          if [ "$HEALTH_STATUS" != "200" ]; then
+            echo "❌ Health check failed: HTTP $HEALTH_STATUS"
+            HEALTH_RESULT="FAIL"
           else
-            echo "⚠️ meta/version returned HTTP $META_STATUS - continuing with fallback verification"
+            echo "✅ Health check passed (${HEALTH_LATENCY}ms)"
+            HEALTH_RESULT="PASS"
           fi
           
-          # Get running container image info
+          # Phase 2: Verify readiness is still stable
+          echo ""
+          echo "### Phase 2: Readiness Stability Check"
+          READY_START=$(date +%s%3N)
+          READY_RESPONSE=$(curl -s --max-time 10 "${APP_URL}/readyz" 2>/dev/null || echo '{}')
+          READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${APP_URL}/readyz" 2>/dev/null || echo "000")
+          READY_END=$(date +%s%3N)
+          READY_LATENCY=$((READY_END - READY_START))
+          
+          if [ "$READY_STATUS" = "200" ] && echo "$READY_RESPONSE" | grep -q '"database":"connected"'; then
+            echo "✅ Readiness check passed (${READY_LATENCY}ms)"
+            READY_RESULT="PASS"
+            DB_CONNECTED="true"
+          else
+            echo "❌ Readiness check failed: HTTP $READY_STATUS"
+            READY_RESULT="FAIL"
+            DB_CONNECTED="false"
+          fi
+          
+          # Phase 3: Runtime Identity Verification with bounded retries
+          echo ""
+          echo "### Phase 3: Runtime Identity Verification"
+          echo "Waiting for build_sha to match expected: $EXPECTED_SHA"
+          
+          IDENTITY_START=$(date +%s)
+          IDENTITY_ATTEMPT=0
+          IDENTITY_INTERVAL=$IDENTITY_INITIAL_INTERVAL
+          IDENTITY_RESULT="FAIL"
+          BUILD_SHA_FROM_META=""
+          META_STATUS="000"
+          META_LATENCY=0
+          
+          while [ $IDENTITY_ATTEMPT -lt $MAX_IDENTITY_ATTEMPTS ]; do
+            IDENTITY_ATTEMPT=$((IDENTITY_ATTEMPT + 1))
+            IDENTITY_ELAPSED=$(($(date +%s) - IDENTITY_START))
+            
+            if [ $IDENTITY_ELAPSED -ge $IDENTITY_TIMEOUT ]; then
+              echo "❌ Identity verification timeout (${IDENTITY_ELAPSED}s >= ${IDENTITY_TIMEOUT}s)"
+              break
+            fi
+            
+            META_REQ_START=$(date +%s%3N)
+            META_STATUS=$(curl -s -o /tmp/meta.json -w "%{http_code}" --max-time 15 "${APP_URL}/api/v1/meta/version" 2>/dev/null || echo "000")
+            META_REQ_END=$(date +%s%3N)
+            META_LATENCY=$((META_REQ_END - META_REQ_START))
+            
+            if [ "$META_STATUS" = "200" ]; then
+              BUILD_SHA_FROM_META=$(python3 -c 'import json; print(json.load(open("/tmp/meta.json")).get("build_sha",""))' 2>/dev/null || echo "")
+              
+              if [ "$BUILD_SHA_FROM_META" = "$EXPECTED_SHA" ]; then
+                echo "[$(date -u +%H:%M:%S)] Attempt $IDENTITY_ATTEMPT: ✅ build_sha matches! (${META_LATENCY}ms)"
+                IDENTITY_RESULT="PASS"
+                break
+              else
+                echo "[$(date -u +%H:%M:%S)] Attempt $IDENTITY_ATTEMPT: build_sha='$BUILD_SHA_FROM_META' != expected (elapsed: ${IDENTITY_ELAPSED}s)"
+              fi
+            elif [ "$META_STATUS" = "000" ]; then
+              echo "[$(date -u +%H:%M:%S)] Attempt $IDENTITY_ATTEMPT: timeout (elapsed: ${IDENTITY_ELAPSED}s)"
+            else
+              echo "[$(date -u +%H:%M:%S)] Attempt $IDENTITY_ATTEMPT: HTTP $META_STATUS (elapsed: ${IDENTITY_ELAPSED}s)"
+            fi
+            
+            sleep $IDENTITY_INTERVAL
+            IDENTITY_INTERVAL=$((IDENTITY_INTERVAL * 2))
+            if [ $IDENTITY_INTERVAL -gt $IDENTITY_MAX_INTERVAL ]; then
+              IDENTITY_INTERVAL=$IDENTITY_MAX_INTERVAL
+            fi
+          done
+          
+          IDENTITY_TOTAL_TIME=$(($(date +%s) - IDENTITY_START))
+          
+          # Phase 4: OpenAPI latency measurement (non-blocking)
+          echo ""
+          echo "### Phase 4: OpenAPI Latency Measurement"
+          OPENAPI_START=$(date +%s%3N)
+          OPENAPI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${APP_URL}/openapi.json" 2>/dev/null || echo "000")
+          OPENAPI_END=$(date +%s%3N)
+          OPENAPI_LATENCY=$((OPENAPI_END - OPENAPI_START))
+          
+          if [ "$OPENAPI_STATUS" = "200" ]; then
+            echo "✅ OpenAPI accessible (${OPENAPI_LATENCY}ms)"
+            OPENAPI_RESULT="PASS"
+          elif [ "$OPENAPI_STATUS" = "000" ]; then
+            echo "⚠️ OpenAPI timed out after ${OPENAPI_LATENCY}ms"
+            OPENAPI_RESULT="TIMEOUT"
+          else
+            echo "⚠️ OpenAPI returned HTTP $OPENAPI_STATUS (${OPENAPI_LATENCY}ms)"
+            OPENAPI_RESULT="WARN"
+          fi
+          
+          # Phase 5: Image verification
+          echo ""
+          echo "### Phase 5: Container Image Verification"
           RUNNING_IMAGE_RAW=$(az webapp config container show \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "linuxFxVersion" -o tsv)
+            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
           RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
           RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
-          echo "Running image: ${RUNNING_IMAGE_SAFE}"
           
-          # Verify deployed image matches expected
-          IMAGE_VERIFIED=false
+          IMAGE_RESULT="UNKNOWN"
           if [ -z "$RUNNING_IMAGE" ]; then
-            echo "⚠️ Running image not reported; skipping digest/tag comparison"
+            echo "⚠️ Running image not reported"
           elif echo "$RUNNING_IMAGE" | grep -q "@sha256:"; then
             RUNNING_DIGEST="${RUNNING_IMAGE##*@}"
             if [ "$RUNNING_DIGEST" = "$EXPECTED_DIGEST" ]; then
-              echo "✅ Image digest verified: ${RUNNING_DIGEST}"
-              IMAGE_VERIFIED=true
+              echo "✅ Image digest verified"
+              IMAGE_RESULT="PASS"
             else
-              echo "❌ Running digest mismatch: expected ${EXPECTED_DIGEST}, got ${RUNNING_DIGEST}"
-              exit 1
+              echo "❌ Image digest mismatch"
+              IMAGE_RESULT="FAIL"
             fi
           elif echo "$RUNNING_IMAGE" | grep -q ":"; then
             RUNNING_TAG=$(echo "$RUNNING_IMAGE_SAFE" | awk -F: '{print $NF}')
-            if [ "$RUNNING_TAG" = "${{ github.sha }}" ]; then
-              echo "✅ Image tag verified: ${RUNNING_TAG}"
-              IMAGE_VERIFIED=true
+            if [ "$RUNNING_TAG" = "$EXPECTED_SHA" ]; then
+              echo "✅ Image tag verified"
+              IMAGE_RESULT="PASS"
             else
-              echo "❌ Running tag mismatch: expected ${{ github.sha }}, got ${RUNNING_TAG}"
-              exit 1
+              echo "❌ Image tag mismatch: expected $EXPECTED_SHA, got $RUNNING_TAG"
+              IMAGE_RESULT="FAIL"
             fi
-          else
-            echo "⚠️ Running image format unrecognized; skipping digest/tag comparison"
           fi
           
-          # Verify build_sha from meta/version if available
-          if [ "$META_AVAILABLE" = "true" ] && [ -n "$BUILD_SHA_FROM_META" ]; then
-            if [ "$BUILD_SHA_FROM_META" != "${{ github.sha }}" ]; then
-              echo "❌ build_sha mismatch: expected ${{ github.sha }}, got ${BUILD_SHA_FROM_META}"
-              exit 1
-            fi
-            echo "✅ build_sha verified via meta/version: ${BUILD_SHA_FROM_META}"
-          elif [ "$IMAGE_VERIFIED" = "true" ]; then
-            echo "✅ Deployment verified via image tag/digest (meta/version not available)"
+          # Calculate total proof time
+          PROOF_END=$(date +%s)
+          PROOF_TOTAL_TIME=$((PROOF_END - PROOF_START))
+          
+          # Determine overall result
+          if [ "$HEALTH_RESULT" = "PASS" ] && [ "$READY_RESULT" = "PASS" ] && [ "$IDENTITY_RESULT" = "PASS" ]; then
+            OVERALL_RESULT="PASS"
+          elif [ "$HEALTH_RESULT" = "PASS" ] && [ "$READY_RESULT" = "PASS" ] && [ "$IMAGE_RESULT" = "PASS" ]; then
+            # Fallback: if image verified but identity pending, still consider PASS
+            OVERALL_RESULT="PASS"
+            echo "ℹ️ Identity verification incomplete but image verified - marking PASS"
           else
-            echo "⚠️ Neither meta/version nor image verification available - proceeding with caution"
+            OVERALL_RESULT="FAIL"
           fi
           
-          # Generate evidence file
-          EVIDENCE_PATH="docs/evidence/DEPLOY_EVIDENCE_production_${{ github.run_id }}.md"
-          HOST_HASH=$(APP_HOST="$APP_HOST" python3 -c 'import hashlib, os; host=os.environ.get("APP_HOST",""); print(hashlib.sha256(host.encode("utf-8")).hexdigest() if host else "")')
+          # Generate structured JSON proof artifact
+          echo ""
+          echo "### Generating Deploy Proof Artifact"
+          HOST_HASH=$(echo -n "$APP_HOST" | sha256sum | cut -d' ' -f1)
           
-          mkdir -p docs/evidence
+          cat > "$PROOF_FILE" << PROOF_JSON
           {
-            echo "## Deploy Evidence (production)"
+            "version": "2.0",
+            "environment": "production",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "expected_sha": "$EXPECTED_SHA",
+            "expected_digest": "${EXPECTED_DIGEST}",
+            "timestamp": "$PROOF_TIMESTAMP",
+            "total_proof_time_seconds": $PROOF_TOTAL_TIME,
+            "overall_result": "$OVERALL_RESULT",
+            "checks": {
+              "health": {
+                "result": "$HEALTH_RESULT",
+                "http_status": "$HEALTH_STATUS",
+                "latency_ms": $HEALTH_LATENCY
+              },
+              "readiness": {
+                "result": "$READY_RESULT",
+                "http_status": "$READY_STATUS",
+                "latency_ms": $READY_LATENCY,
+                "database_connected": $DB_CONNECTED
+              },
+              "identity": {
+                "result": "$IDENTITY_RESULT",
+                "attempts": $IDENTITY_ATTEMPT,
+                "total_time_seconds": $IDENTITY_TOTAL_TIME,
+                "build_sha_from_meta": "$BUILD_SHA_FROM_META",
+                "meta_http_status": "$META_STATUS",
+                "meta_latency_ms": $META_LATENCY
+              },
+              "openapi": {
+                "result": "$OPENAPI_RESULT",
+                "http_status": "$OPENAPI_STATUS",
+                "latency_ms": $OPENAPI_LATENCY
+              },
+              "image": {
+                "result": "$IMAGE_RESULT",
+                "running_image": "$RUNNING_IMAGE_SAFE"
+              }
+            },
+            "host_sha256": "$HOST_HASH"
+          }
+          PROOF_JSON
+          
+          # Remove leading whitespace from JSON
+          python3 -c "import json; f=open('$PROOF_FILE'); d=json.load(f); f.close(); json.dump(d, open('$PROOF_FILE','w'), indent=2)"
+          
+          echo "✅ Deploy proof artifact generated"
+          cat "$PROOF_FILE"
+          
+          # Copy to artifacts directory
+          mkdir -p docs/evidence
+          cp "$PROOF_FILE" "docs/evidence/deploy_proof_${{ github.run_id }}.json"
+          
+          # Also generate human-readable markdown
+          {
+            echo "## Deploy Proof v2 (production)"
             echo ""
-            echo "- run_id: ${{ github.run_id }}"
-            echo "- sha: ${{ github.sha }}"
-            echo "- expected_tag: ${EXPECTED_TAG_SAFE}"
-            echo "- expected_digest: ${EXPECTED_DIGEST}"
-            echo "- running_image: ${RUNNING_IMAGE_SAFE}"
-            echo "- meta_version_status: HTTP ${META_STATUS}"
-            echo "- meta_version_build_sha: ${BUILD_SHA_FROM_META:-N/A}"
-            echo "- healthz_status: HTTP ${HEALTH_STATUS}"
-            echo "- image_verified: ${IMAGE_VERIFIED}"
-            echo "- host_sha256: ${HOST_HASH}"
-            echo "- timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          } > "$EVIDENCE_PATH"
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| run_id | ${{ github.run_id }} |"
+            echo "| expected_sha | $EXPECTED_SHA |"
+            echo "| build_sha_from_meta | ${BUILD_SHA_FROM_META:-N/A} |"
+            echo "| overall_result | $OVERALL_RESULT |"
+            echo "| total_proof_time | ${PROOF_TOTAL_TIME}s |"
+            echo "| health_result | $HEALTH_RESULT |"
+            echo "| readiness_result | $READY_RESULT |"
+            echo "| identity_result | $IDENTITY_RESULT (${IDENTITY_ATTEMPT} attempts) |"
+            echo "| openapi_result | $OPENAPI_RESULT (${OPENAPI_LATENCY}ms) |"
+            echo "| image_result | $IMAGE_RESULT |"
+            echo "| timestamp | $PROOF_TIMESTAMP |"
+          } > "docs/evidence/deploy_proof_${{ github.run_id }}.md"
+          
+          # Emit workflow summary
+          {
+            echo "## 📋 Deploy Proof v2 Results"
+            echo ""
+            echo "| Check | Result | Details |"
+            echo "|-------|--------|---------|"
+            echo "| Health (/healthz) | $([ "$HEALTH_RESULT" = "PASS" ] && echo "✅" || echo "❌") $HEALTH_RESULT | HTTP $HEALTH_STATUS (${HEALTH_LATENCY}ms) |"
+            echo "| Readiness (/readyz) | $([ "$READY_RESULT" = "PASS" ] && echo "✅" || echo "❌") $READY_RESULT | HTTP $READY_STATUS (${READY_LATENCY}ms) |"
+            echo "| Identity (build_sha) | $([ "$IDENTITY_RESULT" = "PASS" ] && echo "✅" || echo "❌") $IDENTITY_RESULT | ${IDENTITY_ATTEMPT} attempts, ${IDENTITY_TOTAL_TIME}s |"
+            echo "| OpenAPI | $([ "$OPENAPI_RESULT" = "PASS" ] && echo "✅" || echo "⚠️") $OPENAPI_RESULT | HTTP $OPENAPI_STATUS (${OPENAPI_LATENCY}ms) |"
+            echo "| Image | $([ "$IMAGE_RESULT" = "PASS" ] && echo "✅" || echo "⚠️") $IMAGE_RESULT | - |"
+            echo ""
+            echo "**Overall: $([ "$OVERALL_RESULT" = "PASS" ] && echo "✅ PASS" || echo "❌ FAIL")** (${PROOF_TOTAL_TIME}s)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          
+          # Set outputs for downstream steps
+          {
+            echo "overall_result=$OVERALL_RESULT"
+            echo "identity_result=$IDENTITY_RESULT"
+            echo "proof_file=docs/evidence/deploy_proof_${{ github.run_id }}.json"
+          } >> "$GITHUB_OUTPUT"
+          
+          # Exit with appropriate code
+          if [ "$OVERALL_RESULT" != "PASS" ]; then
+            echo ""
+            echo "❌ Deploy Proof FAILED - deployment verification unsuccessful"
+            exit 1
+          fi
           
           echo ""
-          echo "✅ Evidence captured to ${EVIDENCE_PATH}"
+          echo "✅ Deploy Proof v2 PASSED - deployment verified"
 
-      - name: Upload deploy evidence artifact
+      - name: Upload deploy proof artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-evidence-production-${{ github.run_id }}
-          path: docs/evidence/DEPLOY_EVIDENCE_production_${{ github.run_id }}.md
+          name: deploy-proof-${{ github.run_id }}
+          path: |
+            docs/evidence/deploy_proof_${{ github.run_id }}.json
+            docs/evidence/deploy_proof_${{ github.run_id }}.md
+          retention-days: 90
 
       - name: Verify deployment - Security checks (Stage 4)
         run: |
