@@ -53,3 +53,51 @@ async def test_readyz_readiness(client: AsyncClient):
     data = response.json()
     assert "status" in data
     assert "request_id" in data
+
+
+@pytest.mark.asyncio
+async def test_meta_version_endpoint(client: AsyncClient):
+    """Test /api/v1/meta/version endpoint returns build information.
+
+    This endpoint is used by the deploy workflow to verify the correct
+    version is deployed. It must return:
+    - build_sha: Git commit SHA from BUILD_SHA env var
+    - build_time: Build timestamp from BUILD_TIME env var
+    - app_name: Application name
+    - environment: Current environment (staging/production)
+
+    No authentication required - this is public deployment metadata.
+    """
+    response = await client.get("/api/v1/meta/version")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Required fields for deploy verification
+    assert "build_sha" in data
+    assert "build_time" in data
+    assert "app_name" in data
+    assert "environment" in data
+
+    # build_sha should be non-empty (defaults to "dev" in local dev)
+    assert len(data["build_sha"]) > 0
+
+    # build_time should be non-empty (defaults to "local" in local dev)
+    assert len(data["build_time"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_meta_version_no_auth_required(client: AsyncClient):
+    """Verify /api/v1/meta/version is public and does not require auth.
+
+    This endpoint must be accessible without authentication for:
+    - Deploy workflow health checks
+    - Monitoring and observability tools
+    - Runtime version verification
+    """
+    # Request without any auth headers
+    response = await client.get("/api/v1/meta/version")
+
+    # Should return 200, not 401
+    assert response.status_code == 200
+    assert response.json().get("build_sha") is not None
