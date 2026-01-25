@@ -477,12 +477,14 @@ jobs:
             exit 1
           fi
           
-          # Phase 3: OpenAPI docs (non-blocking)
+          # Phase 3: OpenAPI docs (non-blocking - timeout is acceptable)
           echo ""
           echo "### Phase 3: OpenAPI Check (/openapi.json)"
-          DOCS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${APP_URL}/openapi.json")
+          DOCS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${APP_URL}/openapi.json" 2>/dev/null || echo "000")
           if [ "$DOCS_STATUS" = "200" ]; then
             echo "✅ OpenAPI docs accessible"
+          elif [ "$DOCS_STATUS" = "000" ]; then
+            echo "⚠️ OpenAPI docs timed out - non-blocking"
           else
             echo "⚠️ OpenAPI docs not accessible (HTTP $DOCS_STATUS) - non-blocking"
           fi
