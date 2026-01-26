@@ -75,6 +75,7 @@ class TestProductionFailFast:
                 "SECRET_KEY": "a" * 64,  # Non-placeholder value
                 "JWT_SECRET_KEY": "b" * 64,  # Non-placeholder value
                 "DATABASE_URL": "postgresql://user:pass@prod-db.example.com:5432/db",
+                "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=test123==;EndpointSuffix=core.windows.net",
             },
         ):
             # This should not raise an exception
