@@ -1,0 +1,34 @@
+{
+  "audit_type": "link",
+  "timestamp": "2026-01-26T10:08:17.637Z",
+  "total_pages_audited": 1,
+  "total_links": 0,
+  "total_valid": 0,
+  "total_dead": 1,
+  "total_external": 0,
+  "results": [
+    {
+      "source_page": "risks",
+      "route": "/risks",
+      "total_links": 0,
+      "valid_links": 0,
+      "dead_links": 1,
+      "external_links": 0,
+      "links": [
+        {
+          "href": "/risks",
+          "status": "dead",
+          "source_page": "risks",
+          "error": "Test is skipped: Auth type jwt_admin not configured"
+        }
+      ]
+    }
+  ],
+  "dead_end_map": [
+    {
+      "source": "risks",
+      "href": "/risks",
+      "error": "Test is skipped: Auth type jwt_admin not configured"
+    }
+  ]
+}

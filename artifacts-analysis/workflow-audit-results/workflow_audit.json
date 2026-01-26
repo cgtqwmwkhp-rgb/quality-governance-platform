@@ -1,0 +1,52 @@
+{
+  "audit_type": "workflow",
+  "timestamp": "2026-01-26T10:06:36.158Z",
+  "total_workflows": 2,
+  "passed": 0,
+  "failed": 2,
+  "skipped": 0,
+  "dead_ends": [
+    {
+      "workflowId": "portal-incident-report",
+      "error": "Test is skipped: Auth type portal_sso not configured"
+    },
+    {
+      "workflowId": "portal-incident-report",
+      "error": "Test is skipped: Auth type portal_sso not configured"
+    }
+  ],
+  "results": [
+    {
+      "workflowId": "portal-incident-report",
+      "name": "Employee Incident Report Submission",
+      "criticality": "P0",
+      "result": "FAIL",
+      "total_steps": 5,
+      "completed_steps": 0,
+      "total_duration_ms": 33,
+      "terminal_state_reached": false,
+      "apis_called": [],
+      "expected_apis": [
+        "POST /api/v1/employee-portal/reports"
+      ],
+      "step_results": [],
+      "error_message": "Test is skipped: Auth type portal_sso not configured"
+    },
+    {
+      "workflowId": "portal-incident-report",
+      "name": "Employee Incident Report Submission",
+      "criticality": "P0",
+      "result": "FAIL",
+      "total_steps": 5,
+      "completed_steps": 0,
+      "total_duration_ms": 33,
+      "terminal_state_reached": false,
+      "apis_called": [],
+      "expected_apis": [
+        "POST /api/v1/employee-portal/reports"
+      ],
+      "step_results": [],
+      "error_message": "Test is skipped: Auth type portal_sso not configured"
+    }
+  ]
+}

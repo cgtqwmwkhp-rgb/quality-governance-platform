@@ -276,18 +276,20 @@ async function acquireToken() {
 }
 
 // Write output to GitHub Actions
-function writeOutput(name, value) {
+function writeOutput(name, value, isSensitive = true) {
   if (!GITHUB_OUTPUT) {
-    console.log(`ℹ️  Would set output: ${name}=<masked>`);
+    console.log(`ℹ️  Would set output: ${name}=${isSensitive ? '<masked>' : value}`);
     return;
   }
   
-  // Mask the value in logs
-  console.log(`::add-mask::${value}`);
+  // Only mask sensitive values (tokens)
+  if (isSensitive) {
+    console.log(`::add-mask::${value}`);
+  }
   
   // Write to GITHUB_OUTPUT file
   fs.appendFileSync(GITHUB_OUTPUT, `${name}=${value}\n`);
-  console.log(`✅ Output set: ${name}=<masked>`);
+  console.log(`✅ Output set: ${name}=${isSensitive ? '<masked>' : value}`);
 }
 
 // Write failure reason to output
@@ -336,10 +338,10 @@ async function main() {
   const adminToken = await acquireToken();
   
   if (adminToken) {
-    writeOutput('admin_token', adminToken);
+    writeOutput('admin_token', adminToken, true);  // Sensitive - mask
     // Portal uses same token since we're using password auth
-    writeOutput('portal_token', adminToken);
-    writeOutput('tokens_acquired', 'true');
+    writeOutput('portal_token', adminToken, true);  // Sensitive - mask
+    writeOutput('tokens_acquired', 'true', false);  // Not sensitive - don't mask
     console.log('\n✅ Token acquisition complete');
     process.exit(0);
   } else {

@@ -1,0 +1,33 @@
+{
+  "audit_type": "button_wiring",
+  "timestamp": "2026-01-26T10:06:31.265Z",
+  "total_buttons": 2,
+  "passed": 0,
+  "failed": 2,
+  "skipped": 0,
+  "noop_buttons": 0,
+  "results": [
+    {
+      "pageId": "portal-home",
+      "actionId": "navigate-to-report",
+      "selector": "[data-testid='portal-report-btn']",
+      "criticality": "P0",
+      "result": "FAIL",
+      "found": false,
+      "clicked": false,
+      "outcome_observed": false,
+      "error_message": "Test is skipped: Auth not configured"
+    },
+    {
+      "pageId": "portal-home",
+      "actionId": "navigate-to-report",
+      "selector": "[data-testid='portal-report-btn']",
+      "criticality": "P0",
+      "result": "FAIL",
+      "found": false,
+      "clicked": false,
+      "outcome_observed": false,
+      "error_message": "Test is skipped: Auth not configured"
+    }
+  ]
+}
