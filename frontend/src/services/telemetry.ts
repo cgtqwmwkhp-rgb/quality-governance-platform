@@ -46,6 +46,11 @@ interface ExpEventDimensions {
   draftAgeSeconds?: number;
   error?: boolean;
   environment?: string;
+  // Login-specific dimensions (bounded, non-PII)
+  result?: 'success' | 'error';
+  durationBucket?: string;
+  errorCode?: string;
+  action?: 'retry' | 'clear_session';
 }
 
 // ============================================================================

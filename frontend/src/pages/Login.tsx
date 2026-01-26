@@ -54,7 +54,7 @@ type LoginState =
 // Timing constants (from contract)
 const SPINNER_DELAY_MS = 250;      // Don't show spinner for fast requests
 const SLOW_WARNING_MS = 3000;      // Show "Still working..." after 3s
-const REQUEST_TIMEOUT_MS = 15000;  // Hard timeout
+// Note: REQUEST_TIMEOUT_MS (15000) is handled by the API client's AbortController
 
 interface LoginProps {
   onLogin: (token: string) => void
