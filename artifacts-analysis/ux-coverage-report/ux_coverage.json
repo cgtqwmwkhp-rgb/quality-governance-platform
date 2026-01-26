@@ -1,21 +1,21 @@
 {
   "version": "1.0",
-  "timestamp": "2026-01-26T10:29:42.763Z",
-  "score": 80,
-  "status": "HOLD",
+  "timestamp": "2026-01-26T11:37:57.933Z",
+  "score": 100,
+  "status": "GO",
   "readiness": {
-    "staging": false,
-    "canary": false,
-    "production": false
+    "staging": true,
+    "canary": true,
+    "production": true
   },
   "summary": {
-    "total_passed": 0,
-    "total_failed": 3,
-    "total_skipped": 0,
-    "p0_failures": 2,
-    "p1_failures": 2,
+    "total_passed": 2,
+    "total_failed": 0,
+    "total_skipped": 29,
+    "p0_failures": 0,
+    "p1_failures": 0,
     "p2_failures": 0,
-    "dead_ends_count": 2
+    "dead_ends_count": 0
   },
   "thresholds": {
     "staging_ready": {
@@ -35,66 +35,29 @@
   },
   "audits": {
     "page": {
-      "passed": 0,
-      "failed": 1,
-      "skipped": 0
+      "passed": 2,
+      "failed": 0,
+      "skipped": 10
     },
     "link": {
-      "total_links": 0,
-      "valid": 0,
-      "dead": 1,
+      "total_links": 8,
+      "valid": 8,
+      "dead": 0,
       "external": 0
     },
     "button": {
       "passed": 0,
-      "failed": 1,
-      "skipped": 0,
+      "failed": 0,
+      "skipped": 14,
       "noop_count": 0
     },
     "workflow": {
       "passed": 0,
-      "failed": 1,
-      "skipped": 0,
-      "dead_ends": 1
+      "failed": 0,
+      "skipped": 5,
+      "dead_ends": 0
     }
   },
-  "failures": [
-    {
-      "type": "page",
-      "id": "policies",
-      "route": "/policies",
-      "criticality": "P1",
-      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
-    },
-    {
-      "type": "button",
-      "id": "portal-home::navigate-to-report",
-      "criticality": "P0",
-      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano",
-      "noop": false
-    },
-    {
-      "type": "workflow",
-      "id": "portal-incident-report",
-      "name": "Employee Incident Report Submission",
-      "criticality": "P0",
-      "completed_steps": 0,
-      "total_steps": 5,
-      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
-    }
-  ],
-  "dead_ends": [
-    {
-      "source": "risks",
-      "href": "/risks",
-      "type": "broken_link",
-      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is de"
-    },
-    {
-      "source": "portal-incident-report",
-      "href": "step_undefined",
-      "type": "stranded_workflow",
-      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
-    }
-  ]
+  "failures": [],
+  "dead_ends": []
 }

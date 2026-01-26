@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -22,18 +22,27 @@ import {
   Users,
   X,
   AlertCircle as AlertIcon,
+  Save,
 } from 'lucide-react';
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector';
+import DraftRecoveryDialog from '../components/DraftRecoveryDialog';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useVoiceToText } from '../hooks/useVoiceToText';
+import { useFormAutosave } from '../hooks/useFormAutosave';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { cn } from '../helpers/utils';
 import { API_BASE_URL } from '../config/apiBase';
+import { 
+  trackExp001FormOpened, 
+  trackExp001FormSubmitted,
+  trackExp001FormAbandoned 
+} from '../services/telemetry';
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
@@ -183,6 +192,9 @@ export default function PortalIncidentForm() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Feature flag for autosave (EXP-001)
+  const autosaveEnabled = useFeatureFlag('portal_form_autosave');
+
   // Geolocation hook
   const { isLoading: geolocating, error: geoError, getLocationString } = useGeolocation();
 
@@ -196,7 +208,7 @@ export default function PortalIncidentForm() {
     },
   });
 
-  const [formData, setFormData] = useState<FormData>({
+  const initialFormData: FormData = {
     contract: '',
     contractOther: '',
     wasInvolved: null,
@@ -217,7 +229,57 @@ export default function PortalIncidentForm() {
     complainantRole: '',
     complainantContact: '',
     photos: [],
+  };
+
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+
+  // Autosave hook (EXP-001: portal_form_autosave)
+  // Excludes photos from autosave (can't serialize File objects)
+  type AutosaveData = Omit<FormData, 'photos'> & { step: number };
+  
+  const {
+    isRecoveryPromptOpen,
+    draftData,
+    lastSavedAt,
+    saveDraft,
+    recoverDraft,
+    discardDraft,
+    clearDraft,
+    closeRecoveryPrompt,
+  } = useFormAutosave<AutosaveData>({
+    formType: reportType,
+    enabled: autosaveEnabled,
   });
+
+  // Handle draft recovery
+  const handleRecoverDraft = useCallback(() => {
+    const recovered = recoverDraft();
+    if (recovered) {
+      // Restore form data (photos excluded)
+      setFormData((prev) => ({
+        ...prev,
+        ...recovered,
+        photos: [], // Photos can't be recovered
+      }));
+      // Restore step
+      if (recovered.step) {
+        setStep(recovered.step as Step);
+      }
+    }
+  }, [recoverDraft]);
+
+  // Autosave on form data changes
+  useEffect(() => {
+    if (autosaveEnabled && !isSubmitting && !submittedRef) {
+      // Create autosave data (exclude photos, include step)
+      const { photos, ...dataWithoutPhotos } = formData;
+      const autosaveData: AutosaveData = {
+        ...dataWithoutPhotos,
+        step,
+      };
+      saveDraft(autosaveData, step);
+    }
+  }, [formData, step, autosaveEnabled, isSubmitting, submittedRef, saveDraft]);
 
   // Pre-fill user details from SSO
   useEffect(() => {
@@ -230,6 +292,20 @@ export default function PortalIncidentForm() {
       }));
     }
   }, [user]);
+
+  // Track form opened event (EXP-001 telemetry)
+  const [hadDraftOnOpen] = useState(() => !!draftData);
+  useEffect(() => {
+    trackExp001FormOpened(reportType, autosaveEnabled, hadDraftOnOpen);
+    
+    // Track abandonment on unmount (if not submitted)
+    return () => {
+      if (!submittedRef) {
+        trackExp001FormAbandoned(reportType, autosaveEnabled, step, hadDraftOnOpen);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount, cleanup on unmount
 
   const totalSteps = reportType === 'complaint' ? 3 : 4;
 
@@ -299,6 +375,12 @@ export default function PortalIncidentForm() {
       if (response.tracking_code) {
         sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code);
       }
+      // Track successful submission (EXP-001 telemetry - PRIMARY SAMPLE)
+      trackExp001FormSubmitted(reportType, autosaveEnabled, hadDraftOnOpen, totalSteps, false);
+      // Clear draft on successful submission (EXP-001)
+      if (autosaveEnabled) {
+        clearDraft();
+      }
     } catch (error) {
       console.error('Submission error:', error);
       // Show real error - do NOT generate fake reference numbers
@@ -362,6 +444,19 @@ export default function PortalIncidentForm() {
 
   return (
     <div className="min-h-screen bg-surface">
+      {/* Draft Recovery Dialog (EXP-001) */}
+      {autosaveEnabled && draftData && (
+        <DraftRecoveryDialog
+          isOpen={isRecoveryPromptOpen}
+          formType={reportType}
+          savedAt={draftData.savedAt}
+          stepNumber={draftData.step}
+          totalSteps={totalSteps}
+          onRecover={handleRecoverDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
@@ -376,7 +471,16 @@ export default function PortalIncidentForm() {
               <config.icon className={cn('w-5 h-5', config.colorClass)} />
               <span className="font-semibold text-foreground">{config.title}</span>
             </div>
-            <div className="text-xs text-muted-foreground">Step {step} of {totalSteps}</div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Step {step} of {totalSteps}</span>
+              {/* Autosave indicator (EXP-001) */}
+              {autosaveEnabled && lastSavedAt && (
+                <span className="flex items-center gap-1 text-success">
+                  <Save className="w-3 h-3" />
+                  Saved
+                </span>
+              )}
+            </div>
           </div>
         </div>
         

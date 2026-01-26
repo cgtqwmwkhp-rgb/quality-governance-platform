@@ -94,3 +94,5 @@ node_modules/
 
 # Frontend build
 frontend/dist/
+artifacts/
+tests/ux-coverage/results/

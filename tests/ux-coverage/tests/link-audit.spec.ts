@@ -67,20 +67,49 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   
   // Navigate to base URL first to establish origin (localStorage blocked on about:blank)
   const baseUrl = process.env.APP_URL || 'http://localhost:3000';
-  await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  
+  try {
+    const response = await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    
+    // Verify we landed on a valid page with proper origin
+    const currentUrl = page.url();
+    if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.startsWith('http')) {
+      console.warn(`[setupAuth] Invalid page URL after navigation: ${currentUrl}`);
+      return false;
+    }
+    
+    // Check for navigation errors
+    if (!response || response.status() >= 400) {
+      console.warn(`[setupAuth] Navigation failed with status: ${response?.status()}`);
+      return false;
+    }
+  } catch (navError: any) {
+    console.warn(`[setupAuth] Navigation failed: ${navError.message?.slice(0, 100)}`);
+    return false;
+  }
   
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
-    await page.evaluate((token) => {
-      localStorage.setItem('portal_token', token);
-    }, process.env.PORTAL_TEST_TOKEN);
-    return true;
+    try {
+      await page.evaluate((token) => {
+        localStorage.setItem('portal_token', token);
+      }, process.env.PORTAL_TEST_TOKEN);
+      return true;
+    } catch (storageError: any) {
+      console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
+      return false;
+    }
   }
   
   if (authType === 'jwt_admin' && process.env.ADMIN_TEST_TOKEN) {
-    await page.evaluate((token) => {
-      localStorage.setItem('access_token', token);
-    }, process.env.ADMIN_TEST_TOKEN);
-    return true;
+    try {
+      await page.evaluate((token) => {
+        localStorage.setItem('access_token', token);
+      }, process.env.ADMIN_TEST_TOKEN);
+      return true;
+    } catch (storageError: any) {
+      console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
+      return false;
+    }
   }
   
   return false;

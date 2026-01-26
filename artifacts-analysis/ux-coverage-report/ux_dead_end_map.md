@@ -1,22 +1,9 @@
 # UX Dead End Map
 
-**Generated:** 2026-01-26T10:29:42.763Z
-**Total Dead Ends:** 2
+**Generated:** 2026-01-26T11:37:57.933Z
+**Total Dead Ends:** 0
 
-## Dead Ends by Type
-
-### BROKEN LINK (1)
-
-| Source | Target | Error |
-|--------|--------|-------|
-| risks | /risks | page.evaluate: SecurityError: Failed to read the ' |
-
-### STRANDED WORKFLOW (1)
-
-| Source | Target | Error |
-|--------|--------|-------|
-| portal-incident-report | step_undefined | page.evaluate: SecurityError: Failed to read the ' |
-
+✅ No dead ends detected!
 ---
 
 *Use this map to identify and fix navigation issues.*
