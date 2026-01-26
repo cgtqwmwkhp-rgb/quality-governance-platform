@@ -22,6 +22,8 @@ import AuditExecution from './pages/AuditExecution'
 import MobileAuditExecution from './pages/MobileAuditExecution'
 import Portal from './pages/Portal'
 import PortalLogin from './pages/PortalLogin'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import PortalReport from './pages/PortalReport'
 import PortalTrack from './pages/PortalTrack'
 // PortalSOS removed - emergency situations should use phone calls
@@ -157,6 +159,10 @@ function App() {
             )
           }
         />
+        
+        {/* Password Reset Routes - Public */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* Protected Admin Routes */}
         <Route

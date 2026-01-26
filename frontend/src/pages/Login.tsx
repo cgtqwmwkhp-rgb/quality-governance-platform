@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2, RefreshCw, Trash2, Clock } from 'lucide-react'
 import { 
   authApi, 
@@ -18,6 +18,24 @@ import {
   trackLoginRecoveryAction,
   trackLoginSlowWarning 
 } from '../services/telemetry'
+
+// ============ Microsoft Entra ID (Azure AD) Configuration ============
+const AZURE_CONFIG = {
+  clientId: import.meta.env.VITE_AZURE_CLIENT_ID || '',
+  authority: import.meta.env.VITE_AZURE_AUTHORITY || '',
+  redirectUri: window.location.origin + '/login',
+};
+
+const API_BASE = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+
+const isAzureConfigured = () => {
+  return (
+    AZURE_CONFIG.clientId &&
+    AZURE_CONFIG.clientId !== 'your-client-id' &&
+    AZURE_CONFIG.authority &&
+    AZURE_CONFIG.authority !== 'https://login.microsoftonline.com/your-tenant-id'
+  );
+};
 
 // ============ Login State Machine (LOGIN_UX_CONTRACT.md) ============
 type LoginState =
@@ -62,11 +80,113 @@ export default function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('')
   const [loginState, setLoginState] = useState<LoginState>('idle')
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null)
+  const [ssoLoading, setSsoLoading] = useState(false)
+  const [ssoError, setSsoError] = useState<string | null>(null)
   
   // Refs for timing
   const requestStartRef = useRef<number>(0)
   const spinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const slowWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Exchange Azure AD id_token for platform JWT
+  const exchangeToken = async (idToken: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/auth/token-exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+
+      if (!response.ok) {
+        console.error('[AdminAuth] Token exchange failed:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      return data.access_token;
+    } catch (err) {
+      console.error('[AdminAuth] Token exchange error:', err);
+      return null;
+    }
+  };
+
+  // Handle OAuth callback (check URL for tokens)
+  const handleOAuthCallback = useCallback(async (): Promise<boolean> => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('id_token')) {
+      setSsoLoading(true);
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get('id_token');
+      const errorParam = params.get('error');
+      const errorDesc = params.get('error_description');
+
+      // Clear the hash from URL
+      window.history.replaceState(null, '', window.location.pathname);
+
+      if (errorParam) {
+        setSsoError(errorDesc || 'Microsoft authentication failed');
+        setSsoLoading(false);
+        return false;
+      }
+
+      if (idToken) {
+        const accessToken = await exchangeToken(idToken);
+        
+        if (accessToken) {
+          const durationMs = Date.now() - (requestStartRef.current || Date.now());
+          emitLoginTelemetry('success', durationMs);
+          setLoginState('success');
+          onLogin(accessToken);
+          setSsoLoading(false);
+          return true;
+        } else {
+          setSsoError('Failed to authenticate with platform. Please try again.');
+          setSsoLoading(false);
+          return false;
+        }
+      }
+    }
+    return false;
+  }, [onLogin]);
+
+  // Check for OAuth callback on mount
+  useEffect(() => {
+    handleOAuthCallback();
+  }, [handleOAuthCallback]);
+
+  // Microsoft SSO login
+  const handleMicrosoftLogin = () => {
+    setSsoError(null);
+    setSsoLoading(true);
+
+    if (!isAzureConfigured()) {
+      setSsoError('Microsoft login is not configured. Please use email/password or contact your administrator.');
+      setSsoLoading(false);
+      return;
+    }
+
+    // Generate state and nonce for security
+    const state = crypto.randomUUID();
+    const nonce = crypto.randomUUID();
+    
+    // Store state for validation
+    sessionStorage.setItem('oauth_state', state);
+    sessionStorage.setItem('oauth_nonce', nonce);
+
+    // Build authorization URL
+    const authUrl = new URL(`${AZURE_CONFIG.authority}/oauth2/v2.0/authorize`);
+    authUrl.searchParams.set('client_id', AZURE_CONFIG.clientId);
+    authUrl.searchParams.set('response_type', 'id_token');
+    authUrl.searchParams.set('redirect_uri', AZURE_CONFIG.redirectUri);
+    authUrl.searchParams.set('scope', 'openid profile email');
+    authUrl.searchParams.set('response_mode', 'fragment');
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('nonce', nonce);
+    authUrl.searchParams.set('prompt', 'select_account');
+
+    // Redirect to Microsoft login
+    window.location.href = authUrl.toString();
+  };
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -314,7 +434,7 @@ export default function Login({ onLogin }: LoginProps) {
 
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || ssoLoading}
               className="mt-6 w-full"
               size="lg"
               data-testid="submit-button"
@@ -329,6 +449,69 @@ export default function Login({ onLogin }: LoginProps) {
                 </>
               )}
             </Button>
+
+            {/* Forgot Password Link */}
+            <div className="mt-4 text-center">
+              <a
+                href="/forgot-password"
+                className="text-sm text-primary hover:underline"
+                data-testid="forgot-password-link"
+              >
+                Forgot password?
+              </a>
+            </div>
+
+            {/* Divider */}
+            <div className="my-6 flex items-center gap-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">OR</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* SSO Error */}
+            {ssoError && (
+              <div 
+                className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+                data-testid="sso-error"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle size={18} />
+                  <span>{ssoError}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Microsoft SSO Button */}
+            <Button
+              type="button"
+              onClick={handleMicrosoftLogin}
+              disabled={isLoading || ssoLoading}
+              variant="outline"
+              size="lg"
+              className="w-full"
+              data-testid="microsoft-sso-button"
+            >
+              {ssoLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  {/* Microsoft Logo */}
+                  <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none">
+                    <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                    <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                  </svg>
+                  Sign in with Microsoft
+                </>
+              )}
+            </Button>
+
+            {isAzureConfigured() && (
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                Use your <span className="text-primary font-medium">@plantexpand.com</span> email
+              </p>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Demo: admin@plantexpand.com / TestUser123!

@@ -81,3 +81,62 @@ def decode_token(token: str) -> Optional[dict[str, Any]]:
         return dict(payload)
     except jwt.PyJWTError:
         return None
+
+
+def create_password_reset_token(user_id: int, expires_hours: int = 1) -> str:
+    """
+    Create a JWT token for password reset.
+
+    Args:
+        user_id: The ID of the user requesting password reset
+        expires_hours: Token validity period in hours (default: 1)
+
+    Returns:
+        Encoded JWT token for password reset
+    """
+    expire = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+
+    to_encode = {
+        "sub": str(user_id),
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "password_reset",
+    }
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+    return str(encoded_jwt)
+
+
+def verify_password_reset_token(token: str) -> Optional[int]:
+    """
+    Verify a password reset token and return the user_id if valid.
+
+    Args:
+        token: The JWT token to verify
+
+    Returns:
+        User ID if token is valid, None otherwise
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+
+        # Verify token type
+        if payload.get("type") != "password_reset":
+            return None
+
+        # Extract and return user_id
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
+            return None
+
+        return int(user_id_str)
+    except (jwt.PyJWTError, ValueError):
+        return None
