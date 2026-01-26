@@ -1,0 +1,195 @@
+name: Azure SWA Environment Cleanup
+
+on:
+  # Run on PR close to immediately clean up environment
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+  
+  # Nightly cleanup at 02:00 UTC
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Manual trigger with dry-run option
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (list only, no delete)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  SWA_APP_NAME: purple-water-03205fa03
+  # Resource group - update if different
+  RESOURCE_GROUP: rg-qgp-prod
+  # Safety switch - set to 'true' to disable all deletions
+  DISABLE_CLEANUP: 'false'
+
+jobs:
+  cleanup_pr_environment:
+    # Only run on PR close events
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Cleanup PR Environment
+    steps:
+      - name: Check Safety Switch
+        if: env.DISABLE_CLEANUP == 'true'
+        run: |
+          echo "⚠️ DISABLE_CLEANUP is set to true. Skipping cleanup."
+          exit 0
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Delete PR Environment
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "🧹 Cleaning up environment for PR #${PR_NUMBER}"
+          
+          # Check if environment exists
+          ENV_EXISTS=$(az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[?name=='$PR_NUMBER']" \
+            --output tsv 2>/dev/null || echo "")
+          
+          if [ -n "$ENV_EXISTS" ]; then
+            echo "Found environment '$PR_NUMBER', deleting..."
+            az staticwebapp environment delete \
+              --name "$SWA_APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --environment-name "$PR_NUMBER" \
+              --yes
+            echo "✅ Environment '$PR_NUMBER' deleted successfully"
+          else
+            echo "ℹ️ Environment '$PR_NUMBER' not found (already cleaned or never created)"
+          fi
+      
+      - name: List Remaining Environments
+        run: |
+          echo "📋 Current environments:"
+          az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --output table
+
+  scheduled_cleanup:
+    # Run on schedule or manual trigger
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: Scheduled Environment Cleanup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Check Safety Switch
+        if: env.DISABLE_CLEANUP == 'true'
+        run: |
+          echo "⚠️ DISABLE_CLEANUP is set to true. Skipping cleanup."
+          exit 0
+      
+      - name: Setup GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Get Open PR Numbers
+        id: open_prs
+        run: |
+          OPEN_PRS=$(gh pr list --state open --json number --jq '.[].number' | tr '\n' ' ')
+          echo "open_prs=$OPEN_PRS" >> $GITHUB_OUTPUT
+          echo "📋 Open PRs: $OPEN_PRS"
+      
+      - name: List Current Environments
+        id: list_envs
+        run: |
+          echo "📋 Current Azure SWA environments:"
+          az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --output table
+          
+          # Get environment names (excluding 'default' which is production)
+          ENVS=$(az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[?name!='default'].name" \
+            --output tsv)
+          echo "envs=$ENVS" >> $GITHUB_OUTPUT
+      
+      - name: Identify Stale Environments
+        id: stale
+        run: |
+          OPEN_PRS="${{ steps.open_prs.outputs.open_prs }}"
+          ENVS="${{ steps.list_envs.outputs.envs }}"
+          STALE=""
+          
+          echo "🔍 Checking for stale environments..."
+          for env in $ENVS; do
+            # Skip non-numeric environment names (safety)
+            if ! [[ "$env" =~ ^[0-9]+$ ]]; then
+              echo "⚠️ Skipping non-numeric environment: $env"
+              continue
+            fi
+            
+            # Check if this environment corresponds to an open PR
+            if echo "$OPEN_PRS" | grep -q "\b$env\b"; then
+              echo "✓ Environment '$env' has open PR, keeping"
+            else
+              echo "✗ Environment '$env' is stale (no open PR), marking for cleanup"
+              STALE="$STALE $env"
+            fi
+          done
+          
+          echo "stale_envs=$STALE" >> $GITHUB_OUTPUT
+          if [ -n "$STALE" ]; then
+            echo "🧹 Stale environments to clean:$STALE"
+          else
+            echo "✅ No stale environments found"
+          fi
+      
+      - name: Delete Stale Environments
+        if: steps.stale.outputs.stale_envs != ''
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          STALE="${{ steps.stale.outputs.stale_envs }}"
+          
+          for env in $STALE; do
+            if [ "$DRY_RUN" == "true" ]; then
+              echo "🔍 [DRY RUN] Would delete environment: $env"
+            else
+              echo "🧹 Deleting environment: $env"
+              az staticwebapp environment delete \
+                --name "$SWA_APP_NAME" \
+                --resource-group "$RESOURCE_GROUP" \
+                --environment-name "$env" \
+                --yes 2>/dev/null || echo "⚠️ Failed to delete $env (may not exist)"
+              echo "✅ Deleted environment: $env"
+            fi
+          done
+      
+      - name: Final Environment List
+        run: |
+          echo "📋 Final environment list:"
+          az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --output table
+          
+          COUNT=$(az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "length(@)" \
+            --output tsv)
+          echo "✅ Total environments: $COUNT"
