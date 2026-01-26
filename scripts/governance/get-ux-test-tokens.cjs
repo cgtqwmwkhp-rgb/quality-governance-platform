@@ -39,6 +39,15 @@ const TEST_PASSWORD = process.env.UX_TEST_USER_PASSWORD;
 const CI_TEST_SECRET = process.env.CI_TEST_SECRET;
 const GITHUB_OUTPUT = process.env.GITHUB_OUTPUT;
 
+// Retry configuration for staging warmup resilience
+const READINESS_CONFIG = {
+  maxAttempts: 15,
+  initialDelayMs: 2000,
+  maxDelayMs: 15000,
+  maxTotalMs: 180000, // 3 minutes max
+  backoffMultiplier: 1.5,
+};
+
 // Validate required env vars
 function validateEnv() {
   const missing = [];
@@ -53,8 +62,13 @@ function validateEnv() {
   return true;
 }
 
+// Sleep helper
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Make HTTP(S) request
-function makeRequest(url, options, body) {
+function makeRequest(url, options, body, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const isHttps = url.startsWith('https');
     const lib = isHttps ? https : http;
@@ -72,7 +86,7 @@ function makeRequest(url, options, body) {
     });
     
     req.on('error', reject);
-    req.setTimeout(30000, () => {
+    req.setTimeout(timeoutMs, () => {
       req.destroy();
       reject(new Error('Request timeout'));
     });
@@ -82,6 +96,57 @@ function makeRequest(url, options, body) {
     }
     req.end();
   });
+}
+
+// Wait for staging to be ready with bounded retries
+async function waitForStagingReady() {
+  const readyzUrl = `${APP_URL}/readyz`;
+  console.log(`🔍 Checking staging readiness: ${readyzUrl}`);
+  
+  const startTime = Date.now();
+  let attempt = 0;
+  let delayMs = READINESS_CONFIG.initialDelayMs;
+  
+  while (attempt < READINESS_CONFIG.maxAttempts) {
+    const elapsed = Date.now() - startTime;
+    if (elapsed >= READINESS_CONFIG.maxTotalMs) {
+      console.log(`❌ Staging readiness timeout after ${Math.round(elapsed / 1000)}s`);
+      return { ready: false, reason: 'STAGING_UNREACHABLE_TIMEOUT' };
+    }
+    
+    attempt++;
+    
+    try {
+      const response = await makeRequest(readyzUrl, { method: 'GET' }, null, 10000);
+      
+      if (response.status === 200) {
+        const responseTime = Date.now() - startTime;
+        console.log(`✅ Staging ready (attempt ${attempt}, ${responseTime}ms total)`);
+        return { ready: true, attempts: attempt, totalMs: responseTime };
+      }
+      
+      if (response.status >= 500) {
+        console.log(`⚠️  Attempt ${attempt}: HTTP ${response.status} - retrying...`);
+      } else if (response.status === 404) {
+        // /readyz not implemented - try /healthz
+        console.log(`ℹ️  /readyz not found, trying /healthz...`);
+        const healthResponse = await makeRequest(`${APP_URL}/healthz`, { method: 'GET' }, null, 10000);
+        if (healthResponse.status === 200) {
+          console.log(`✅ Staging ready via /healthz (attempt ${attempt})`);
+          return { ready: true, attempts: attempt, totalMs: Date.now() - startTime };
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️  Attempt ${attempt}: ${error.message} - retrying in ${Math.round(delayMs / 1000)}s...`);
+    }
+    
+    // Exponential backoff
+    await sleep(delayMs);
+    delayMs = Math.min(delayMs * READINESS_CONFIG.backoffMultiplier, READINESS_CONFIG.maxDelayMs);
+  }
+  
+  console.log(`❌ Staging unreachable after ${READINESS_CONFIG.maxAttempts} attempts`);
+  return { ready: false, reason: 'STAGING_UNREACHABLE_MAX_ATTEMPTS' };
 }
 
 // Ensure test user exists (staging only)
@@ -225,6 +290,16 @@ function writeOutput(name, value) {
   console.log(`✅ Output set: ${name}=<masked>`);
 }
 
+// Write failure reason to output
+function writeFailure(reason) {
+  if (GITHUB_OUTPUT) {
+    fs.appendFileSync(GITHUB_OUTPUT, 'admin_token=\n');
+    fs.appendFileSync(GITHUB_OUTPUT, 'portal_token=\n');
+    fs.appendFileSync(GITHUB_OUTPUT, 'tokens_acquired=false\n');
+    fs.appendFileSync(GITHUB_OUTPUT, `token_failure_reason=${reason}\n`);
+  }
+}
+
 // Main
 async function main() {
   console.log('🔑 UX Test Token Acquisition');
@@ -232,29 +307,31 @@ async function main() {
   
   // Check if credentials are available
   if (!validateEnv()) {
-    // Write empty tokens - tests will handle gracefully
-    if (GITHUB_OUTPUT) {
-      fs.appendFileSync(GITHUB_OUTPUT, 'admin_token=\n');
-      fs.appendFileSync(GITHUB_OUTPUT, 'portal_token=\n');
-      fs.appendFileSync(GITHUB_OUTPUT, 'tokens_acquired=false\n');
-    }
+    writeFailure('AUTH_CREDENTIALS_MISSING');
     process.exit(0); // Don't fail the job
   }
   
-  // First, ensure the test user exists
+  // Phase 0: Wait for staging to be ready (bounded retries)
+  console.log('\n🔍 Phase 0: Checking staging readiness');
+  const readinessResult = await waitForStagingReady();
+  if (!readinessResult.ready) {
+    console.log(`\n❌ STAGING UNREACHABLE - Reason: ${readinessResult.reason}`);
+    console.log('   This is a P0 infrastructure issue. Creating auto-triage signal.');
+    writeFailure(readinessResult.reason);
+    // Exit with error to signal infra issue - gate will HOLD with clear reason
+    process.exit(1);
+  }
+  
+  // Phase 1: Ensure the test user exists
   console.log('\n🔧 Phase 1: Ensure test user exists');
   const userReady = await ensureTestUser();
   if (!userReady) {
     console.log('\n⚠️  Could not ensure test user');
-    if (GITHUB_OUTPUT) {
-      fs.appendFileSync(GITHUB_OUTPUT, 'admin_token=\n');
-      fs.appendFileSync(GITHUB_OUTPUT, 'portal_token=\n');
-      fs.appendFileSync(GITHUB_OUTPUT, 'tokens_acquired=false\n');
-    }
+    writeFailure('TEST_USER_PROVISION_FAILED');
     process.exit(0);
   }
   
-  // Acquire admin token
+  // Phase 2: Acquire admin token
   console.log('\n📋 Phase 2: Acquiring admin token...');
   const adminToken = await acquireToken();
   
@@ -267,11 +344,7 @@ async function main() {
     process.exit(0);
   } else {
     console.log('\n⚠️  Token acquisition failed');
-    if (GITHUB_OUTPUT) {
-      fs.appendFileSync(GITHUB_OUTPUT, 'admin_token=\n');
-      fs.appendFileSync(GITHUB_OUTPUT, 'portal_token=\n');
-      fs.appendFileSync(GITHUB_OUTPUT, 'tokens_acquired=false\n');
-    }
+    writeFailure('AUTH_LOGIN_FAILED');
     process.exit(0); // Don't fail - tests will skip gracefully
   }
 }

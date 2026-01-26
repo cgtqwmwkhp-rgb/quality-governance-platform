@@ -59,6 +59,8 @@ jobs:
       admin_token: ${{ steps.tokens.outputs.admin_token }}
       portal_token: ${{ steps.tokens.outputs.portal_token }}
       tokens_acquired: ${{ steps.tokens.outputs.tokens_acquired }}
+      token_failure_reason: ${{ steps.tokens.outputs.token_failure_reason }}
+      staging_reachable: ${{ steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_TIMEOUT' && steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_MAX_ATTEMPTS' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,6 +72,7 @@ jobs:
 
       - name: Acquire test tokens
         id: tokens
+        continue-on-error: true  # Allow downstream jobs to run even if staging unreachable
         env:
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           UX_TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
