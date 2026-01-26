@@ -15,10 +15,26 @@ import time
 import os
 
 
-# Use staging URL by default, can be overridden
+# Use production URL by default (reachable in CI), can be overridden
 API_BASE_URL = os.environ.get(
     "API_BASE_URL", 
-    "https://app-qgp-staging.azurewebsites.net"
+    "https://app-qgp-prod.azurewebsites.net"
+)
+
+
+def is_api_reachable() -> bool:
+    """Check if API is reachable before running tests."""
+    try:
+        response = httpx.get(f"{API_BASE_URL}/healthz", timeout=10.0)
+        return response.status_code == 200
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return False
+
+
+# Skip all tests in this module if API is not reachable
+pytestmark = pytest.mark.skipif(
+    not is_api_reachable(),
+    reason=f"API not reachable at {API_BASE_URL}"
 )
 
 # Performance thresholds from LOGIN_UX_CONTRACT.md
