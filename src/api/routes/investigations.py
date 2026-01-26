@@ -541,7 +541,9 @@ async def create_investigation_from_record(
 async def list_source_records(
     db: DbSession,
     current_user: CurrentUser,
-    source_type: str = Query(..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"),
+    source_type: str = Query(
+        ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+    ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
@@ -621,6 +623,7 @@ async def list_source_records(
             search_conditions.append(model_class.description.ilike(search_term))
         if search_conditions:
             from sqlalchemy import or_
+
             base_query = base_query.where(or_(*search_conditions))
 
     # Count total records
