@@ -37,6 +37,7 @@ from src.api.routes import (
     rtas,
     signatures,
     standards,
+    telemetry,
     tenants,
     testing,
     users,
@@ -105,5 +106,7 @@ router.include_router(rca_tools.router, tags=["RCA Tools"])
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
 # CI Testing Endpoints (Staging Only)
 router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
+# Telemetry (EXP-001 and future experiments)
+router.include_router(telemetry.router, tags=["Telemetry"])
 
 __all__ = ["router"]

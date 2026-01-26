@@ -1,65 +1,57 @@
 # UX Functional Coverage Report
 
-**Generated:** 2026-01-26T10:29:42.763Z
-**Score:** 80/100
-**Status:** HOLD
+**Generated:** 2026-01-26T11:37:57.933Z
+**Score:** 100/100
+**Status:** GO
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Total Passed | 0 |
-| Total Failed | 3 |
-| Total Skipped | 0 |
-| P0 Failures | 2 |
-| P1 Failures | 2 |
+| Total Passed | 2 |
+| Total Failed | 0 |
+| Total Skipped | 29 |
+| P0 Failures | 0 |
+| P1 Failures | 0 |
 | P2 Failures | 0 |
-| Dead Ends | 2 |
+| Dead Ends | 0 |
 
 ## Readiness
 
 | Environment | Ready |
 |-------------|-------|
-| Staging | ❌ |
-| Canary | ❌ |
-| Production | ❌ |
+| Staging | ✅ |
+| Canary | ✅ |
+| Production | ✅ |
 
 ## Audit Results
 
 ### Page Load Audit
 
-- Passed: 0
-- Failed: 1
-- Skipped: 0
+- Passed: 2
+- Failed: 0
+- Skipped: 10
 
 ### Link Audit
 
-- Total Links: 0
-- Valid: 0
-- Dead: 1
+- Total Links: 8
+- Valid: 8
+- Dead: 0
 - External: 0
 
 ### Button Wiring Audit
 
 - Passed: 0
-- Failed: 1
-- Skipped: 0
+- Failed: 0
+- Skipped: 14
 - Noop Buttons: 0
 
 ### Workflow Audit
 
 - Passed: 0
-- Failed: 1
-- Skipped: 0
-- Dead Ends: 1
-
-## Failures
-
-| Type | ID | Criticality | Error |
-|------|----|--------------| ----- |
-| page | policies | P1 | page.evaluate: SecurityError: Failed to read the ' |
-| button | portal-home::navigate-to-report | P0 | page.evaluate: SecurityError: Failed to read the ' |
-| workflow | portal-incident-report | P0 | page.evaluate: SecurityError: Failed to read the ' |
+- Failed: 0
+- Skipped: 5
+- Dead Ends: 0
 
 ## Thresholds
 
