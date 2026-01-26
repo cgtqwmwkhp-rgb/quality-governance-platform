@@ -104,7 +104,7 @@ class TelemetryEvent(BaseModel):
 class TelemetryBatch(BaseModel):
     """Batch of telemetry events."""
 
-    events: List[TelemetryEvent] = Field(..., min_items=1, max_items=100)
+    events: List[TelemetryEvent] = Field(..., min_length=1, max_length=100)
 
 
 class MetricsAggregation(BaseModel):
