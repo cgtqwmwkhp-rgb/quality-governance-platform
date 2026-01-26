@@ -4,8 +4,13 @@ import { getPlatformToken, isTokenExpired, clearTokens } from '../utils/auth'
 // HARDCODED HTTPS - bypassing any potential env var issues
 const HTTPS_API_BASE = 'https://app-qgp-prod.azurewebsites.net';
 
+// Request timeout in milliseconds (15 seconds)
+// Prevents infinite spinner if backend hangs
+const REQUEST_TIMEOUT_MS = 15000;
+
 const api = axios.create({
   baseURL: HTTPS_API_BASE,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -90,6 +95,10 @@ api.interceptors.response.use(
       (error as any).classifiedMessage = data?.detail || data?.message || 'Validation error. Please check your input.'
     } else if (status && status >= 500) {
       (error as any).classifiedMessage = 'Server error. Please try again later.'
+    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      // Request timed out
+      (error as any).classifiedMessage = 'Request timed out. Please try again.'
+      ;(error as any).isTimeout = true
     } else if (!error.response) {
       // No response - true network error or CORS issue
       (error as any).classifiedMessage = 'Network error. Please check your connection and try again.'
