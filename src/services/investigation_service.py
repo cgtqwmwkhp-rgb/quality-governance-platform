@@ -150,25 +150,29 @@ class InvestigationService:
             source_value = getattr(record, source_field, None)
 
             if source_value is None:
-                mapping_log.append({
-                    "source_field": source_field,
-                    "target_field": f"{target_section}.{target_field}",
-                    "transform": transform,
-                    "result": "FALLBACK",
-                    "reason_code": MappingReasonCode.SOURCE_MISSING_FIELD,
-                })
+                mapping_log.append(
+                    {
+                        "source_field": source_field,
+                        "target_field": f"{target_section}.{target_field}",
+                        "transform": transform,
+                        "result": "FALLBACK",
+                        "reason_code": MappingReasonCode.SOURCE_MISSING_FIELD,
+                    }
+                )
                 source_value = fallback
             else:
                 # Handle datetime serialization
                 if isinstance(source_value, datetime):
                     source_value = source_value.isoformat()
-                mapping_log.append({
-                    "source_field": source_field,
-                    "target_field": f"{target_section}.{target_field}",
-                    "transform": transform,
-                    "result": MappingReasonCode.SUCCESS,
-                    "reason_code": None,
-                })
+                mapping_log.append(
+                    {
+                        "source_field": source_field,
+                        "target_field": f"{target_section}.{target_field}",
+                        "transform": transform,
+                        "result": MappingReasonCode.SUCCESS,
+                        "reason_code": None,
+                    }
+                )
 
             if target_section not in data["sections"]:
                 data["sections"][target_section] = {}  # type: ignore[index]  # TYPE-IGNORE: Dict indexing
@@ -338,8 +342,16 @@ class InvestigationService:
         # (They are not in investigation.data, so nothing to do here)
 
         # Copy investigation data
-        status_val = investigation.status.value if hasattr(investigation.status, "value") else str(investigation.status) if investigation.status else "unknown"
-        level_val = investigation.level.value if hasattr(investigation.level, "value") else str(investigation.level) if investigation.level else "medium"
+        status_val = (
+            investigation.status.value
+            if hasattr(investigation.status, "value")
+            else str(investigation.status) if investigation.status else "unknown"
+        )
+        level_val = (
+            investigation.level.value
+            if hasattr(investigation.level, "value")
+            else str(investigation.level) if investigation.level else "medium"
+        )
         content: Dict[str, Any] = {
             "investigation_reference": investigation.reference_number,
             "title": investigation.title,
@@ -361,10 +373,20 @@ class InvestigationService:
                     if audience == CustomerPackAudience.EXTERNAL_CUSTOMER:
                         # Redact identity fields by default for external packs
                         identity_fields = [
-                            "reporter_name", "reporter_email", "driver_name", "driver_email",
-                            "complainant_name", "complainant_email", "investigator_name",
-                            "reviewer_name", "approver_name", "persons_involved", "witnesses",
-                            "witness_names", "first_responder", "responsible_person",
+                            "reporter_name",
+                            "reporter_email",
+                            "driver_name",
+                            "driver_email",
+                            "complainant_name",
+                            "complainant_email",
+                            "investigator_name",
+                            "reviewer_name",
+                            "approver_name",
+                            "persons_involved",
+                            "witnesses",
+                            "witness_names",
+                            "first_responder",
+                            "responsible_person",
                         ]
 
                         if field_id in identity_fields and field_value:
@@ -377,11 +399,13 @@ class InvestigationService:
                             else:
                                 field_value = "[Redacted]"
                             redacted = True
-                            redaction_log.append({
-                                "field_path": f"{section_id}.{field_id}",
-                                "redaction_type": "IDENTITY_REDACTION",
-                                "original_type": type(original_value).__name__,
-                            })
+                            redaction_log.append(
+                                {
+                                    "field_path": f"{section_id}.{field_id}",
+                                    "redaction_type": "IDENTITY_REDACTION",
+                                    "original_type": type(original_value).__name__,
+                                }
+                            )
 
                     content["sections"][section_id][field_id] = field_value  # type: ignore[index]  # TYPE-IGNORE: Dict indexing
 
@@ -405,16 +429,18 @@ class InvestigationService:
                         # Flag that this asset may need manual redaction
                         pass
 
-            included_assets.append({
-                "asset_id": asset.id,
-                "title": asset.title,
-                "asset_type": asset.asset_type.value if asset.asset_type else "other",
-                "included": can_include,
-                "exclusion_reason": exclusion_reason,
-                "visibility": asset.visibility.value if asset.visibility else "unknown",
-                "contains_pii": asset.contains_pii,
-                "redaction_required": asset.redaction_required,
-            })
+            included_assets.append(
+                {
+                    "asset_id": asset.id,
+                    "title": asset.title,
+                    "asset_type": asset.asset_type.value if asset.asset_type else "other",
+                    "included": can_include,
+                    "exclusion_reason": exclusion_reason,
+                    "visibility": asset.visibility.value if asset.visibility else "unknown",
+                    "contains_pii": asset.contains_pii,
+                    "redaction_required": asset.redaction_required,
+                }
+            )
 
         return content, redaction_log, included_assets
 
