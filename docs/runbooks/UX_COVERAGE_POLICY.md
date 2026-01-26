@@ -76,6 +76,51 @@ The gate produces the following artifacts (retained 30 days):
 | button_audit.json | JSON | Detailed button wiring results |
 | workflow_audit.json | JSON | Detailed workflow execution results |
 
+## Authentication Requirements
+
+### Token Acquisition
+
+Auth-protected routes require valid tokens for testing. Tokens are acquired dynamically via `/api/v1/auth/login` in CI.
+
+| Route Auth | Token Required | Secret |
+|------------|----------------|--------|
+| `anon` | No | - |
+| `portal_sso` | Yes | `UX_TEST_USER_EMAIL/PASSWORD` |
+| `jwt_admin` | Yes | `UX_TEST_USER_EMAIL/PASSWORD` |
+
+### Auth-Mandatory Policy for P0
+
+**P0 auth-protected routes MUST NOT be skipped due to missing tokens.**
+
+If token acquisition fails, the gate behavior is:
+
+| Condition | Status | Reason Code |
+|-----------|--------|-------------|
+| Tokens missing (secrets not configured) | **HOLD** | `AUTH_TEST_CONFIG_MISSING` |
+| Token acquisition failed (wrong credentials) | **HOLD** | `AUTH_TEST_CREDENTIALS_INVALID` |
+| Token acquisition failed (staging unreachable) | **HOLD** | `AUTH_TEST_STAGING_UNREACHABLE` |
+| P0 route skipped due to missing auth | **P0 FAIL** | `AUTH_REQUIRED_NOT_TESTED` |
+
+### Auto-Triage
+
+When auth issues block the gate, the system automatically:
+
+1. Creates a deduplicated issue in GitHub (one per run, not per route)
+2. Assigns to `@platform` via OWNERSHIP_MAP
+3. Labels with `auth-blocking`, `ux-coverage`, `P0`
+
+Issue title format: `[UX-GATE] Auth blocking P0 coverage - <reason_code>`
+
+### Test User Specification
+
+See: [`docs/runbooks/UX_COVERAGE_TEST_USER.md`](./UX_COVERAGE_TEST_USER.md)
+
+The test user must:
+- Exist only in staging database
+- Have roles: `user`, `employee`, `admin`, `viewer`
+- Have password rotated monthly
+- Never appear in logs or artifacts
+
 ## PII Safety
 
 All audits are PII-safe:
@@ -85,6 +130,7 @@ All audits are PII-safe:
 - ❌ No screenshots with PII selectors
 - ✅ Console logs sanitized (emails, phones redacted)
 - ✅ Test data uses placeholders
+- ✅ Test user email masked in all logs (`ux***@staging.local`)
 
 ## CI Integration
 
