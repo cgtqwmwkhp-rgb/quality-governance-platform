@@ -1,12 +1,9 @@
 name: Azure SWA Environment Cleanup
 
+# NOTE: PR close cleanup is handled by azure-static-web-apps-purple-water-03205fa03.yml
+# This workflow handles scheduled/manual cleanup only (no secrets in PR context)
+
 on:
-  # Run on PR close to immediately clean up environment
-  pull_request:
-    types: [closed]
-    branches:
-      - main
-  
   # Nightly cleanup at 02:00 UTC
   schedule:
     - cron: '0 2 * * *'
@@ -34,74 +31,7 @@ env:
   DISABLE_CLEANUP: 'false'
 
 jobs:
-  cleanup_pr_environment:
-    # Only run on PR close events
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Cleanup PR Environment
-    steps:
-      - name: Check Safety Switch
-        if: env.DISABLE_CLEANUP == 'true'
-        run: |
-          echo "⚠️ DISABLE_CLEANUP=true - Cleanup is disabled."
-          echo "No environments will be deleted."
-          exit 0
-      
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-        continue-on-error: true
-      
-      - name: Delete PR Environment
-        if: success()
-        run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          echo "🧹 Cleaning up environment for PR #${PR_NUMBER}"
-          
-          # Safety: Refuse to delete production
-          if [ "$PR_NUMBER" == "$PRODUCTION_ENV_NAME" ]; then
-            echo "❌ ERROR: PR number matches production env name. Aborting."
-            exit 1
-          fi
-          
-          # List environments first to verify this one exists
-          echo "📋 Current environments:"
-          az staticwebapp environment list \
-            --name "$SWA_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --output table || echo "Failed to list environments"
-          
-          # Check if environment exists before attempting delete
-          ENV_EXISTS=$(az staticwebapp environment list \
-            --name "$SWA_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query "[?name=='$PR_NUMBER'].name" \
-            --output tsv 2>/dev/null || echo "")
-          
-          if [ -n "$ENV_EXISTS" ]; then
-            echo "Deleting environment: $PR_NUMBER"
-            az staticwebapp environment delete \
-              --name "$SWA_APP_NAME" \
-              --resource-group "$RESOURCE_GROUP" \
-              --environment-name "$PR_NUMBER" \
-              --yes && echo "✅ Deleted: $PR_NUMBER" || echo "⚠️ Delete failed"
-          else
-            echo "ℹ️ Environment '$PR_NUMBER' not found (already cleaned or never created)"
-          fi
-      
-      - name: Final State
-        if: always()
-        run: |
-          echo "📋 Remaining environments:"
-          az staticwebapp environment list \
-            --name "$SWA_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --output table 2>/dev/null || echo "Could not list environments"
-
   scheduled_cleanup:
-    # Run on schedule or manual trigger
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Scheduled Environment Cleanup
     outputs:
