@@ -1,0 +1,373 @@
+# Workflow Registry for UX Functional Coverage Gate
+# End-to-end user journeys with exit criteria
+# P0 workflows must complete successfully for production readiness
+
+version: "1.0"
+last_updated: "2026-01-26"
+
+# ==============================================================================
+# P0 CRITICAL WORKFLOWS - Must Pass for Production
+# ==============================================================================
+p0_workflows:
+  # Portal Incident Reporting (Primary Employee Journey)
+  - workflowId: portal-incident-report
+    name: "Employee Incident Report Submission"
+    description: "Employee submits incident report through portal"
+    criticality: P0
+    auth_type: portal_sso
+    steps:
+      - stepId: 1
+        action: "Navigate to portal home"
+        route: /portal
+        exit_criteria: "Portal home page loads with navigation tiles"
+        selector: "[data-testid='portal-home']"
+        
+      - stepId: 2
+        action: "Click Report button"
+        selector: "[data-testid='portal-report-btn']"
+        exit_criteria: "Report type selection page loads"
+        
+      - stepId: 3
+        action: "Select Incident type"
+        selector: "[data-testid='report-incident-card']"
+        exit_criteria: "Incident form loads with required fields"
+        
+      - stepId: 4
+        action: "Fill required fields"
+        form_fields:
+          - selector: "[data-testid='incident-title']"
+            value: "Test Incident - E2E"
+          - selector: "[data-testid='incident-description']"
+            value: "E2E test incident description"
+          - selector: "[data-testid='incident-severity']"
+            value: "low"
+        exit_criteria: "All required fields populated, submit enabled"
+        
+      - stepId: 5
+        action: "Submit form"
+        selector: "[data-testid='submit-report-btn']"
+        exit_criteria: "Success message with reference number"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed, confirmation message visible"
+    recovery_path: "Error banner with retry option"
+    expected_apis:
+      - POST /api/v1/employee-portal/reports
+    max_duration_seconds: 30
+
+  # Portal Near-Miss Reporting
+  - workflowId: portal-near-miss-report
+    name: "Employee Near-Miss Report Submission"
+    description: "Employee submits near-miss report through portal"
+    criticality: P0
+    auth_type: portal_sso
+    steps:
+      - stepId: 1
+        action: "Navigate to portal report"
+        route: /portal/report
+        exit_criteria: "Report type selection visible"
+        
+      - stepId: 2
+        action: "Select Near-Miss type"
+        selector: "[data-testid='report-near-miss-card']"
+        exit_criteria: "Near-miss form loads"
+        
+      - stepId: 3
+        action: "Fill and submit form"
+        form_fields:
+          - selector: "[data-testid='near-miss-description']"
+            value: "E2E test near-miss"
+        exit_criteria: "Form submitted successfully"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed"
+    recovery_path: "Error banner with retry option"
+    expected_apis:
+      - POST /api/v1/employee-portal/reports
+    max_duration_seconds: 30
+
+  # Portal RTA Reporting
+  - workflowId: portal-rta-report
+    name: "Employee RTA Report Submission"
+    description: "Employee submits RTA report through portal"
+    criticality: P0
+    auth_type: portal_sso
+    steps:
+      - stepId: 1
+        action: "Navigate to RTA form"
+        route: /portal/report/rta
+        exit_criteria: "RTA form loads with vehicle section"
+        
+      - stepId: 2
+        action: "Fill vehicle details"
+        form_fields:
+          - selector: "[data-testid='vehicle-registration']"
+            value: "AB12CDE"
+          - selector: "[data-testid='incident-location']"
+            value: "Test Location"
+        exit_criteria: "Vehicle details populated"
+        
+      - stepId: 3
+        action: "Submit form"
+        selector: "[data-testid='submit-rta-btn']"
+        exit_criteria: "Success confirmation"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed"
+    recovery_path: "Error banner with retry option"
+    expected_apis:
+      - POST /api/v1/employee-portal/reports
+    max_duration_seconds: 45
+
+  # Admin Login Flow
+  - workflowId: admin-login
+    name: "Admin Staff Login"
+    description: "Staff member logs into admin dashboard"
+    criticality: P0
+    auth_type: none
+    steps:
+      - stepId: 1
+        action: "Navigate to login"
+        route: /login
+        exit_criteria: "Login form visible"
+        
+      - stepId: 2
+        action: "Enter credentials"
+        form_fields:
+          - selector: "[data-testid='email-input']"
+            value: "${TEST_USER_EMAIL}"
+          - selector: "[data-testid='password-input']"
+            value: "${TEST_USER_PASSWORD}"
+        exit_criteria: "Credentials entered"
+        
+      - stepId: 3
+        action: "Submit login"
+        selector: "[data-testid='login-submit-btn']"
+        exit_criteria: "Redirect to dashboard"
+        expected_api: POST /api/v1/auth/login
+        
+    success_terminal_state: "Dashboard visible with user logged in"
+    recovery_path: "Error message with retry option"
+    expected_apis:
+      - POST /api/v1/auth/login
+      - GET /api/v1/users/me
+    max_duration_seconds: 15
+
+  # Admin Incident View
+  - workflowId: admin-view-incident
+    name: "Admin Views Incident Details"
+    description: "Admin navigates to and views incident details"
+    criticality: P0
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to incidents list"
+        route: /incidents
+        exit_criteria: "Incidents table visible"
+        
+      - stepId: 2
+        action: "Click on first incident"
+        selector: "[data-testid='incident-row-link']:first-of-type"
+        fallback_selector: "table tbody tr:first-child a"
+        exit_criteria: "Incident detail page loads"
+        
+      - stepId: 3
+        action: "Verify detail content"
+        exit_criteria: "Incident ID, status, and description visible"
+        
+    success_terminal_state: "Incident details fully loaded"
+    recovery_path: "Empty state if no incidents, or 404 error"
+    expected_apis:
+      - GET /api/v1/incidents
+      - GET /api/v1/incidents/:id
+    max_duration_seconds: 20
+
+# ==============================================================================
+# P1 IMPORTANT WORKFLOWS - Should Pass
+# ==============================================================================
+p1_workflows:
+  # Admin Creates Incident
+  - workflowId: admin-create-incident
+    name: "Admin Creates New Incident"
+    description: "Admin creates a new incident from dashboard"
+    criticality: P1
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to incidents"
+        route: /incidents
+        exit_criteria: "Incidents page loads"
+        
+      - stepId: 2
+        action: "Click create button"
+        selector: "[data-testid='create-incident-btn']"
+        exit_criteria: "Create form/modal appears"
+        
+      - stepId: 3
+        action: "Fill incident form"
+        form_fields:
+          - selector: "[data-testid='incident-title']"
+            value: "E2E Created Incident"
+          - selector: "[data-testid='incident-severity']"
+            value: "medium"
+        exit_criteria: "Form populated"
+        
+      - stepId: 4
+        action: "Submit"
+        selector: "[data-testid='save-incident-btn']"
+        exit_criteria: "Incident created, redirected or modal closed"
+        expected_api: POST /api/v1/incidents
+        
+    success_terminal_state: "New incident visible in list"
+    recovery_path: "Validation errors displayed"
+    expected_apis:
+      - POST /api/v1/incidents
+    max_duration_seconds: 30
+
+  # Admin Audit Template Creation
+  - workflowId: admin-create-audit-template
+    name: "Admin Creates Audit Template"
+    description: "Admin creates new audit template"
+    criticality: P1
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to audit templates"
+        route: /audit-templates
+        exit_criteria: "Template library loads"
+        
+      - stepId: 2
+        action: "Click new template"
+        selector: "[data-testid='create-template-btn']"
+        exit_criteria: "Template builder opens"
+        
+      - stepId: 3
+        action: "Fill template details"
+        form_fields:
+          - selector: "[data-testid='template-name']"
+            value: "E2E Test Template"
+        exit_criteria: "Template named"
+        
+      - stepId: 4
+        action: "Save template"
+        selector: "[data-testid='save-template-btn']"
+        exit_criteria: "Template saved"
+        expected_api: POST /api/v1/audit-templates
+        
+    success_terminal_state: "Template visible in library"
+    recovery_path: "Validation error displayed"
+    expected_apis:
+      - POST /api/v1/audit-templates
+    max_duration_seconds: 45
+
+  # Portal Track Report
+  - workflowId: portal-track-report
+    name: "Employee Tracks Submitted Report"
+    description: "Employee tracks status of previously submitted report"
+    criticality: P1
+    auth_type: portal_sso
+    steps:
+      - stepId: 1
+        action: "Navigate to track"
+        route: /portal/track
+        exit_criteria: "Track page loads"
+        
+      - stepId: 2
+        action: "Enter reference number"
+        selector: "[data-testid='reference-search']"
+        value: "${KNOWN_REFERENCE}"
+        exit_criteria: "Reference entered"
+        
+      - stepId: 3
+        action: "Search"
+        selector: "[data-testid='search-btn']"
+        exit_criteria: "Results displayed or not found message"
+        expected_api: GET /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Report status visible or 'not found' message"
+    recovery_path: "Error message with retry"
+    expected_apis:
+      - GET /api/v1/employee-portal/reports
+    max_duration_seconds: 15
+
+  # Global Search
+  - workflowId: admin-global-search
+    name: "Admin Uses Global Search"
+    description: "Admin searches across all records"
+    criticality: P1
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to search"
+        route: /search
+        exit_criteria: "Search page loads"
+        
+      - stepId: 2
+        action: "Enter search term"
+        selector: "[data-testid='search-input']"
+        value: "incident"
+        exit_criteria: "Search term entered"
+        
+      - stepId: 3
+        action: "Execute search"
+        selector: "[data-testid='search-submit-btn']"
+        exit_criteria: "Results displayed"
+        expected_api: GET /api/v1/search
+        
+    success_terminal_state: "Search results or 'no results' message"
+    recovery_path: "Error message"
+    expected_apis:
+      - GET /api/v1/search
+    max_duration_seconds: 20
+
+# ==============================================================================
+# P2 OPTIONAL WORKFLOWS - Can Degrade
+# ==============================================================================
+p2_workflows:
+  - workflowId: admin-export-data
+    name: "Admin Exports Data"
+    description: "Admin exports data from export center"
+    criticality: P2
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to export center"
+        route: /exports
+        exit_criteria: "Export page loads"
+        
+      - stepId: 2
+        action: "Select export type"
+        selector: "[data-testid='export-incidents-btn']"
+        exit_criteria: "Export dialog appears"
+        
+    success_terminal_state: "Export initiated or download started"
+    recovery_path: "Export unavailable message"
+    expected_apis:
+      - POST /api/v1/exports
+    max_duration_seconds: 30
+
+  - workflowId: admin-view-analytics
+    name: "Admin Views Analytics"
+    description: "Admin views analytics dashboard"
+    criticality: P2
+    auth_type: jwt_admin
+    steps:
+      - stepId: 1
+        action: "Navigate to analytics"
+        route: /analytics
+        exit_criteria: "Analytics charts visible"
+        
+    success_terminal_state: "Charts rendered (may be empty)"
+    recovery_path: "Loading error with retry"
+    expected_apis:
+      - GET /api/v1/analytics
+    max_duration_seconds: 30
+
+# ==============================================================================
+# SUMMARY
+# ==============================================================================
+summary:
+  total_workflows: 11
+  p0_workflows: 5
+  p1_workflows: 4
+  p2_workflows: 2

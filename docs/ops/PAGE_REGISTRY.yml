@@ -1,0 +1,443 @@
+# Page Registry for UX Functional Coverage Gate
+# All routes with auth requirements and criticality levels
+# P0 = Critical path, must work for production
+# P1 = Important, should work for production  
+# P2 = Nice to have, can degrade gracefully
+
+version: "1.0"
+last_updated: "2026-01-26"
+
+# ==============================================================================
+# PUBLIC ROUTES (No Authentication)
+# ==============================================================================
+public_routes:
+  - pageId: portal-login
+    route: /portal/login
+    auth: anon
+    criticality: P0
+    component: PortalLogin
+    expected_empty_state: "Login form visible"
+    expected_degraded_state: null
+    description: "Employee portal SSO login"
+
+# ==============================================================================
+# PORTAL ROUTES (SSO Authentication - Employee Self-Service)
+# ==============================================================================
+portal_routes:
+  - pageId: portal-home
+    route: /portal
+    auth: portal_sso
+    criticality: P0
+    component: Portal
+    expected_empty_state: "Welcome message and navigation tiles visible"
+    expected_degraded_state: "Offline banner, cached data shown"
+    description: "Portal landing page with report/track options"
+
+  - pageId: portal-report
+    route: /portal/report
+    auth: portal_sso
+    criticality: P0
+    component: PortalReport
+    expected_empty_state: "Report type selection cards visible"
+    expected_degraded_state: null
+    description: "Report type selection (incident/near-miss/complaint/RTA)"
+
+  - pageId: portal-report-incident
+    route: /portal/report/incident
+    auth: portal_sso
+    criticality: P0
+    component: PortalDynamicForm
+    expected_empty_state: "Dynamic form loaded with required fields"
+    expected_degraded_state: "Offline form with local storage"
+    description: "Incident report form (dynamic)"
+
+  - pageId: portal-report-near-miss
+    route: /portal/report/near-miss
+    auth: portal_sso
+    criticality: P0
+    component: PortalDynamicForm
+    expected_empty_state: "Dynamic form loaded with required fields"
+    expected_degraded_state: null
+    description: "Near-miss report form (dynamic)"
+
+  - pageId: portal-report-complaint
+    route: /portal/report/complaint
+    auth: portal_sso
+    criticality: P1
+    component: PortalDynamicForm
+    expected_empty_state: "Dynamic form loaded with required fields"
+    expected_degraded_state: null
+    description: "Complaint report form (dynamic)"
+
+  - pageId: portal-report-rta
+    route: /portal/report/rta
+    auth: portal_sso
+    criticality: P0
+    component: PortalRTAForm
+    expected_empty_state: "RTA form with vehicle/injury sections"
+    expected_degraded_state: null
+    description: "Road Traffic Accident report form"
+
+  - pageId: portal-track
+    route: /portal/track
+    auth: portal_sso
+    criticality: P1
+    component: PortalTrack
+    expected_empty_state: "Search box and empty results message"
+    expected_degraded_state: null
+    description: "Track submitted reports"
+
+  - pageId: portal-help
+    route: /portal/help
+    auth: portal_sso
+    criticality: P2
+    component: PortalHelp
+    expected_empty_state: "Help content and FAQ visible"
+    expected_degraded_state: null
+    description: "Portal help and FAQ"
+
+# ==============================================================================
+# ADMIN ROUTES (JWT Authentication - Staff/Admin)
+# ==============================================================================
+admin_routes:
+  - pageId: login
+    route: /login
+    auth: anon
+    criticality: P0
+    component: Login
+    expected_empty_state: "Login form visible"
+    expected_degraded_state: null
+    description: "Admin/Staff login page"
+
+  - pageId: dashboard
+    route: /dashboard
+    auth: jwt_admin
+    criticality: P0
+    component: Dashboard
+    expected_empty_state: "Dashboard with summary cards (zeros if no data)"
+    expected_degraded_state: "Stale data with timestamp warning"
+    description: "Main admin dashboard"
+
+  - pageId: incidents-list
+    route: /incidents
+    auth: jwt_admin
+    criticality: P0
+    component: Incidents
+    expected_empty_state: "Empty table with 'No incidents' message"
+    expected_degraded_state: null
+    description: "Incident list view"
+
+  - pageId: incident-detail
+    route: /incidents/:id
+    auth: jwt_admin
+    criticality: P0
+    component: IncidentDetail
+    expected_empty_state: null
+    expected_degraded_state: "404 if incident not found"
+    description: "Incident detail view"
+
+  - pageId: rtas-list
+    route: /rtas
+    auth: jwt_admin
+    criticality: P0
+    component: RTAs
+    expected_empty_state: "Empty table with 'No RTAs' message"
+    expected_degraded_state: null
+    description: "RTA list view"
+
+  - pageId: rta-detail
+    route: /rtas/:id
+    auth: jwt_admin
+    criticality: P0
+    component: RTADetail
+    expected_empty_state: null
+    expected_degraded_state: "404 if RTA not found"
+    description: "RTA detail view"
+
+  - pageId: complaints-list
+    route: /complaints
+    auth: jwt_admin
+    criticality: P1
+    component: Complaints
+    expected_empty_state: "Empty table with 'No complaints' message"
+    expected_degraded_state: null
+    description: "Complaints list view"
+
+  - pageId: complaint-detail
+    route: /complaints/:id
+    auth: jwt_admin
+    criticality: P1
+    component: ComplaintDetail
+    expected_empty_state: null
+    expected_degraded_state: "404 if complaint not found"
+    description: "Complaint detail view"
+
+  - pageId: policies
+    route: /policies
+    auth: jwt_admin
+    criticality: P1
+    component: Policies
+    expected_empty_state: "Empty table with 'No policies' message"
+    expected_degraded_state: null
+    description: "Policies list view"
+
+  - pageId: risks
+    route: /risks
+    auth: jwt_admin
+    criticality: P1
+    component: Risks
+    expected_empty_state: "Empty table with 'No risks' message"
+    expected_degraded_state: null
+    description: "Risks list view"
+
+  - pageId: audits
+    route: /audits
+    auth: jwt_admin
+    criticality: P1
+    component: Audits
+    expected_empty_state: "Empty table with 'No audits' message"
+    expected_degraded_state: null
+    description: "Audits list view"
+
+  - pageId: audit-templates
+    route: /audit-templates
+    auth: jwt_admin
+    criticality: P1
+    component: AuditTemplateLibrary
+    expected_empty_state: "Empty template library with 'Create template' CTA"
+    expected_degraded_state: null
+    description: "Audit template library"
+
+  - pageId: investigations
+    route: /investigations
+    auth: jwt_admin
+    criticality: P1
+    component: Investigations
+    expected_empty_state: "Empty table with 'No investigations' message"
+    expected_degraded_state: null
+    description: "Investigations list view"
+
+  - pageId: standards
+    route: /standards
+    auth: jwt_admin
+    criticality: P2
+    component: Standards
+    expected_empty_state: "Standards library visible"
+    expected_degraded_state: null
+    description: "Compliance standards view"
+
+  - pageId: actions
+    route: /actions
+    auth: jwt_admin
+    criticality: P1
+    component: Actions
+    expected_empty_state: "Empty table with 'No actions' message"
+    expected_degraded_state: null
+    description: "Actions list view"
+
+  - pageId: documents
+    route: /documents
+    auth: jwt_admin
+    criticality: P1
+    component: Documents
+    expected_empty_state: "Empty document library"
+    expected_degraded_state: null
+    description: "Document management"
+
+  - pageId: analytics
+    route: /analytics
+    auth: jwt_admin
+    criticality: P1
+    component: Analytics
+    expected_empty_state: "Charts with zero values"
+    expected_degraded_state: null
+    description: "Analytics dashboard"
+
+  - pageId: analytics-advanced
+    route: /analytics/advanced
+    auth: jwt_admin
+    criticality: P2
+    component: AdvancedAnalytics
+    expected_empty_state: "Advanced charts with zero values"
+    expected_degraded_state: null
+    description: "Advanced analytics"
+
+  - pageId: search
+    route: /search
+    auth: jwt_admin
+    criticality: P1
+    component: GlobalSearch
+    expected_empty_state: "Search input and empty results"
+    expected_degraded_state: null
+    description: "Global search"
+
+  - pageId: users
+    route: /users
+    auth: jwt_admin
+    criticality: P1
+    component: UserManagement
+    expected_empty_state: "User list table"
+    expected_degraded_state: null
+    description: "User management"
+
+  - pageId: audit-trail
+    route: /audit-trail
+    auth: jwt_admin
+    criticality: P1
+    component: AuditTrail
+    expected_empty_state: "Empty audit trail table"
+    expected_degraded_state: null
+    description: "System audit trail"
+
+  - pageId: calendar
+    route: /calendar
+    auth: jwt_admin
+    criticality: P2
+    component: CalendarView
+    expected_empty_state: "Calendar grid visible"
+    expected_degraded_state: null
+    description: "Calendar view"
+
+  - pageId: notifications
+    route: /notifications
+    auth: jwt_admin
+    criticality: P2
+    component: Notifications
+    expected_empty_state: "Empty notifications list"
+    expected_degraded_state: null
+    description: "Notification center"
+
+  - pageId: exports
+    route: /exports
+    auth: jwt_admin
+    criticality: P2
+    component: ExportCenter
+    expected_empty_state: "Export options visible"
+    expected_degraded_state: null
+    description: "Export center"
+
+  - pageId: compliance
+    route: /compliance
+    auth: jwt_admin
+    criticality: P1
+    component: ComplianceEvidence
+    expected_empty_state: "Compliance evidence grid"
+    expected_degraded_state: null
+    description: "Compliance evidence"
+
+  - pageId: workflows
+    route: /workflows
+    auth: jwt_admin
+    criticality: P1
+    component: WorkflowCenter
+    expected_empty_state: "Workflow list"
+    expected_degraded_state: null
+    description: "Workflow automation center"
+
+  - pageId: compliance-automation
+    route: /compliance-automation
+    auth: jwt_admin
+    criticality: P2
+    component: ComplianceAutomation
+    expected_empty_state: "Automation rules list"
+    expected_degraded_state: null
+    description: "Compliance automation"
+
+  - pageId: risk-register
+    route: /risk-register
+    auth: jwt_admin
+    criticality: P1
+    component: RiskRegister
+    expected_empty_state: "Risk matrix visible"
+    expected_degraded_state: null
+    description: "Enterprise risk register"
+
+  - pageId: ims
+    route: /ims
+    auth: jwt_admin
+    criticality: P1
+    component: IMSDashboard
+    expected_empty_state: "IMS dashboard with empty metrics"
+    expected_degraded_state: null
+    description: "Integrated Management System dashboard"
+
+  - pageId: ai-intelligence
+    route: /ai-intelligence
+    auth: jwt_admin
+    criticality: P2
+    component: AIIntelligence
+    expected_empty_state: "AI dashboard visible"
+    expected_degraded_state: "AI features disabled banner"
+    description: "AI Intelligence hub"
+
+  - pageId: uvdb
+    route: /uvdb
+    auth: jwt_admin
+    criticality: P2
+    component: UVDBAudits
+    expected_empty_state: "UVDB audit list"
+    expected_degraded_state: null
+    description: "UVDB Achilles audits"
+
+  - pageId: planet-mark
+    route: /planet-mark
+    auth: jwt_admin
+    criticality: P2
+    component: PlanetMark
+    expected_empty_state: "Carbon dashboard"
+    expected_degraded_state: null
+    description: "Planet Mark carbon management"
+
+  - pageId: signatures
+    route: /signatures
+    auth: jwt_admin
+    criticality: P2
+    component: DigitalSignatures
+    expected_empty_state: "Signature requests list"
+    expected_degraded_state: null
+    description: "Digital signatures"
+
+  - pageId: admin-dashboard
+    route: /admin
+    auth: jwt_admin
+    criticality: P1
+    component: AdminDashboard
+    expected_empty_state: "Admin panel visible"
+    expected_degraded_state: null
+    description: "Admin configuration dashboard"
+
+  - pageId: admin-forms
+    route: /admin/forms
+    auth: jwt_admin
+    criticality: P1
+    component: FormsList
+    expected_empty_state: "Form templates list"
+    expected_degraded_state: null
+    description: "Form configuration list"
+
+  - pageId: admin-contracts
+    route: /admin/contracts
+    auth: jwt_admin
+    criticality: P2
+    component: ContractsManagement
+    expected_empty_state: "Contracts list"
+    expected_degraded_state: null
+    description: "Contracts management"
+
+  - pageId: admin-settings
+    route: /admin/settings
+    auth: jwt_admin
+    criticality: P2
+    component: SystemSettings
+    expected_empty_state: "Settings form visible"
+    expected_degraded_state: null
+    description: "System settings"
+
+# ==============================================================================
+# SUMMARY
+# ==============================================================================
+summary:
+  total_routes: 48
+  p0_routes: 12
+  p1_routes: 22
+  p2_routes: 14

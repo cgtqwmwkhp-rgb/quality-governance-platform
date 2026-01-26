@@ -1,0 +1,24 @@
+{
+  "name": "ux-coverage-tests",
+  "version": "1.0.0",
+  "description": "UX Functional Coverage Gate - Playwright Tests",
+  "scripts": {
+    "test": "playwright test",
+    "test:page-audit": "playwright test tests/page-audit.spec.ts",
+    "test:link-audit": "playwright test tests/link-audit.spec.ts",
+    "test:button-audit": "playwright test tests/button-audit.spec.ts",
+    "test:workflow-audit": "playwright test tests/workflow-audit.spec.ts",
+    "test:all": "playwright test",
+    "report": "playwright show-report",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.41.0",
+    "@types/node": "^20.10.0",
+    "js-yaml": "^4.1.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@types/js-yaml": "^4.0.9"
+  }
+}
