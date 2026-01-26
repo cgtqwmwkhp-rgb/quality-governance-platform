@@ -72,9 +72,7 @@ class TestSourceRecordsDeterminism:
         # Should return 422 validation error for size > 100
         assert response.status_code == 422
 
-    async def test_pagination_response_structure(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_pagination_response_structure(self, client: AsyncClient, auth_headers: dict):
         """Test pagination response has required fields."""
         response = await client.get(
             "/api/v1/investigations/source-records",
@@ -124,21 +122,20 @@ class TestSourceRecordsDisplayLabels:
             display_label = item["display_label"]
 
             # Display label MUST start with reference number
-            assert display_label.startswith(item["reference_number"]), \
-                f"Label must start with reference: {display_label}"
+            assert display_label.startswith(
+                item["reference_number"]
+            ), f"Label must start with reference: {display_label}"
 
             # Display label MUST contain em-dash separators (safe format)
-            assert " — " in display_label, \
-                f"Label must use safe format with em-dash: {display_label}"
+            assert " — " in display_label, f"Label must use safe format with em-dash: {display_label}"
 
             # Display label MUST contain status (uppercase)
-            assert item["status"].upper() in display_label, \
-                f"Label must contain status: {display_label}"
+            assert item["status"].upper() in display_label, f"Label must contain status: {display_label}"
 
             # Display label MUST contain date pattern (YYYY-MM-DD)
             import re
-            assert re.search(r"\d{4}-\d{2}-\d{2}", display_label), \
-                f"Label must contain date pattern: {display_label}"
+
+            assert re.search(r"\d{4}-\d{2}-\d{2}", display_label), f"Label must contain date pattern: {display_label}"
 
     async def test_display_label_no_pii(self, client: AsyncClient, auth_headers: dict):
         """Test display labels do not contain PII patterns."""
@@ -158,12 +155,13 @@ class TestSourceRecordsDisplayLabels:
 
             # NO phone patterns (11+ consecutive digits)
             import re
-            assert not re.search(r"\d{11,}", display_label), \
-                f"Label contains phone pattern: {display_label}"
+
+            assert not re.search(r"\d{11,}", display_label), f"Label contains phone pattern: {display_label}"
 
             # Label should NOT contain common name patterns (Mr/Ms/Mrs/Dr + word)
-            assert not re.search(r"\b(Mr|Ms|Mrs|Dr|Miss)\s+\w+", display_label, re.IGNORECASE), \
-                f"Label contains name pattern: {display_label}"
+            assert not re.search(
+                r"\b(Mr|Ms|Mrs|Dr|Miss)\s+\w+", display_label, re.IGNORECASE
+            ), f"Label contains name pattern: {display_label}"
 
 
 @pytest.mark.asyncio
@@ -224,9 +222,7 @@ class TestSourceRecordsInvestigationStatus:
 class TestSourceRecordsValidation:
     """Input validation tests."""
 
-    async def test_invalid_source_type_returns_400(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_invalid_source_type_returns_400(self, client: AsyncClient, auth_headers: dict):
         """Test invalid source_type returns 400 with error code."""
         response = await client.get(
             "/api/v1/investigations/source-records",
@@ -249,9 +245,7 @@ class TestSourceRecordsValidation:
         "source_type",
         ["near_miss", "road_traffic_collision", "complaint", "reporting_incident"],
     )
-    async def test_all_source_types_work(
-        self, client: AsyncClient, auth_headers: dict, source_type: str
-    ):
+    async def test_all_source_types_work(self, client: AsyncClient, auth_headers: dict, source_type: str):
         """Test all valid source types return 200."""
         response = await client.get(
             "/api/v1/investigations/source-records",

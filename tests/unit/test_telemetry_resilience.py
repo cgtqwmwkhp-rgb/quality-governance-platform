@@ -101,6 +101,7 @@ class TestTelemetryQuarantinePolicy:
     def test_adr_0004_exists(self):
         """Test ADR-0004 documentation exists."""
         import os
+
         adr_path = "docs/adr/ADR-0004-TELEMETRY-CORS-QUARANTINE.md"
         assert os.path.exists(adr_path), f"ADR-0004 not found at {adr_path}"
 
