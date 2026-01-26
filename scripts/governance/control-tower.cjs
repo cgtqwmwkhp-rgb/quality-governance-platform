@@ -47,10 +47,33 @@ function aggregate() {
     ci: { status: 'UNKNOWN', passed: 0, failed: 0 },
     deploy_proof: { status: 'UNKNOWN', overall: null },
     ux_coverage: { status: 'UNKNOWN', score: null, p0_fails: null },
+    staging_reachability: { status: 'UNKNOWN', reason: null },
   };
   
   const holdReasons = [];
   let overallStatus = 'GO';
+  
+  // Load staging reachability signal (from token acquisition)
+  const tokenResult = loadArtifact('token_acquisition.json');
+  if (tokenResult) {
+    signals.staging_reachability = {
+      status: tokenResult.staging_reachable ? 'PASS' : 'FAIL',
+      reason: tokenResult.failure_reason || null,
+      attempts: tokenResult.readiness_attempts || null,
+      latency_ms: tokenResult.readiness_latency_ms || null,
+    };
+    
+    if (!tokenResult.staging_reachable) {
+      overallStatus = 'HOLD';
+      holdReasons.push(`Staging unreachable: ${tokenResult.failure_reason}`);
+    }
+    
+    console.log(`🌐 Staging Reachability: ${signals.staging_reachability.status}`);
+  } else {
+    // Infer from UX coverage - if tests ran, staging was reachable
+    signals.staging_reachability.status = 'INFERRED';
+    console.log('🌐 Staging Reachability: INFERRED (tests ran)');
+  }
   
   // Load UX Coverage
   const uxCoverage = loadArtifact('ux_coverage.json');
@@ -64,12 +87,25 @@ function aggregate() {
       readiness: uxCoverage.readiness,
     };
     
-    if (uxCoverage.summary.p0_failures > 0) {
+    // Check for staging unreachable P0 failures (infra issue)
+    if (uxCoverage.infra_failure_reason) {
+      signals.staging_reachability = {
+        status: 'FAIL',
+        reason: uxCoverage.infra_failure_reason,
+      };
+      overallStatus = 'HOLD';
+      holdReasons.push(`Staging infra issue: ${uxCoverage.infra_failure_reason}`);
+    } else if (uxCoverage.summary.p0_failures > 0) {
       overallStatus = 'HOLD';
       holdReasons.push(`UX P0 failures: ${uxCoverage.summary.p0_failures}`);
     } else if (uxCoverage.status === 'HOLD') {
       overallStatus = 'HOLD';
       holdReasons.push(`UX score below threshold: ${uxCoverage.score}/100`);
+    }
+    
+    // If UX coverage ran successfully, staging is reachable
+    if (signals.staging_reachability.status === 'INFERRED') {
+      signals.staging_reachability = { status: 'PASS', reason: 'UX tests completed' };
     }
     
     console.log(`📊 UX Coverage: ${uxCoverage.status} (${uxCoverage.score}/100)`);
@@ -206,6 +242,10 @@ function generateMarkdown(ct) {
     '| Signal | Status | Details |',
     '|--------|--------|---------|',
   ];
+  
+  // Staging Reachability
+  const sr = ct.signals.staging_reachability;
+  lines.push(`| Staging Reachability | ${sr.status === 'PASS' || sr.status === 'INFERRED' ? '✅' : (sr.status === 'UNKNOWN' ? '⏸️' : '❌')} ${sr.status} | ${sr.reason || (sr.latency_ms ? `${sr.latency_ms}ms` : '-')} |`);
   
   // CI
   const ci = ct.signals.ci;
