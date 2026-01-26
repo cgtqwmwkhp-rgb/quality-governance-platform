@@ -29,13 +29,21 @@ jobs:
     steps:
       - name: Check trigger conditions
         id: check
+        env:
+          AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
         run: |
+          # Use AZURE_WEBAPP_NAME secret if set, otherwise default
+          STAGING_URL="${AZURE_WEBAPP_NAME:+https://${AZURE_WEBAPP_NAME}.azurewebsites.net}"
+          STAGING_URL="${STAGING_URL:-https://app-qgp-staging.azurewebsites.net}"
+          
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "app_url=${{ github.event.inputs.app_url || 'https://app-qgp-staging.azurewebsites.net' }}" >> $GITHUB_OUTPUT
+            # Use provided URL or staging URL
+            APP_URL="${{ github.event.inputs.app_url }}"
+            echo "app_url=${APP_URL:-${STAGING_URL}}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "app_url=https://app-qgp-staging.azurewebsites.net" >> $GITHUB_OUTPUT
+            echo "app_url=${STAGING_URL}" >> $GITHUB_OUTPUT
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
             echo "⏭️ Skipping: staging deployment did not succeed"
