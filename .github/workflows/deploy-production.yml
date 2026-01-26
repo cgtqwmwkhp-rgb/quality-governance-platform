@@ -83,11 +83,59 @@ jobs:
             echo "| **Reason** | ${{ github.event.inputs.reason || 'Auto-deploy after staging' }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  build-and-deploy:
-    name: Build and Deploy to Production
+  # ==========================================================================
+  # PROD DEPENDENCIES GATE — Runs BEFORE migrations
+  # ADR-0001/ADR-0002 Compliance: Validates infrastructure dependencies exist
+  # ==========================================================================
+  prod-dependencies-gate:
+    name: Prod Dependencies Gate
     runs-on: ubuntu-latest
     needs: pre-deployment-checks
     if: needs.pre-deployment-checks.outputs.approved == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Run Prod Dependencies Gate
+        id: gate
+        run: |
+          chmod +x scripts/governance/prod-dependencies-gate.sh
+          ./scripts/governance/prod-dependencies-gate.sh
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
+          KEYVAULT_NAME: kv-qgp-prod
+          STORAGE_ACCOUNT: stqgpprdcdd14b
+          STORAGE_CONTAINER: evidence-assets
+
+      - name: Gate Summary
+        if: always()
+        run: |
+          {
+            echo "## 🔒 Prod Dependencies Gate"
+            echo ""
+            if [ "${{ steps.gate.outcome }}" = "success" ]; then
+              echo "✅ **PASS** — All infrastructure dependencies verified"
+              echo ""
+              echo "Deployment may proceed to build and migrations."
+            else
+              echo "❌ **FAIL** — Infrastructure dependencies missing"
+              echo ""
+              echo "Deployment blocked. See gate output for remediation steps."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-and-deploy:
+    name: Build and Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, prod-dependencies-gate]
+    if: needs.pre-deployment-checks.outputs.approved == 'true' && needs.prod-dependencies-gate.result == 'success'
     environment:
       name: production
       url: https://app-qgp-prod.azurewebsites.net
