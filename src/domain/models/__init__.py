@@ -50,6 +50,15 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 
+# Evidence Assets (Shared Attachments Module)
+from src.domain.models.evidence_asset import (
+    EvidenceAsset,
+    EvidenceAssetType,
+    EvidenceRetentionPolicy,
+    EvidenceSourceModule,
+    EvidenceVisibility,
+)
+
 # Form Configuration (Admin Form Builder)
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 
@@ -66,6 +75,19 @@ from src.domain.models.ims_unification import (
     UnifiedAuditPlan,
 )
 from src.domain.models.incident import Incident, IncidentAction
+
+# Investigations (Stage 2)
+from src.domain.models.investigation import (
+    AssignedEntityType,
+    CustomerPackAudience,
+    InvestigationComment,
+    InvestigationCustomerPack,
+    InvestigationLevel,
+    InvestigationRevisionEvent,
+    InvestigationRun,
+    InvestigationStatus,
+    InvestigationTemplate,
+)
 
 # ISO 27001 Information Security (Tier 1)
 from src.domain.models.iso27001 import (
@@ -244,4 +266,20 @@ __all__ = [
     "Contract",
     "SystemSetting",
     "LookupOption",
+    # Evidence Assets (Shared Attachments Module)
+    "EvidenceAsset",
+    "EvidenceAssetType",
+    "EvidenceSourceModule",
+    "EvidenceVisibility",
+    "EvidenceRetentionPolicy",
+    # Investigations (Stage 2)
+    "InvestigationTemplate",
+    "InvestigationRun",
+    "InvestigationStatus",
+    "InvestigationLevel",
+    "AssignedEntityType",
+    "CustomerPackAudience",
+    "InvestigationComment",
+    "InvestigationRevisionEvent",
+    "InvestigationCustomerPack",
 ]

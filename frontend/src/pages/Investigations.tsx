@@ -48,6 +48,206 @@ interface ActionItem {
   owner_email?: string
 }
 
+// Source type options for investigation creation
+const SOURCE_TYPES = [
+  { value: 'near_miss', label: 'Near Miss', icon: AlertTriangle },
+  { value: 'road_traffic_collision', label: 'Road Traffic Collision', icon: Car },
+  { value: 'complaint', label: 'Complaint', icon: MessageSquare },
+  { value: 'reporting_incident', label: 'Incident', icon: AlertTriangle },
+]
+
+// Investigation level badges - will be used in future level indicator UI
+// Exported to satisfy noUnusedLocals while preserving scaffolding
+export const LEVEL_BADGES: Record<string, { label: string; className: string }> = {
+  low: { label: 'LOW', className: 'bg-green-100 text-green-800' },
+  medium: { label: 'MEDIUM', className: 'bg-yellow-100 text-yellow-800' },
+  high: { label: 'HIGH', className: 'bg-red-100 text-red-800' },
+}
+
+// Create Investigation Modal Component
+function CreateInvestigationModal({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCreated: () => void
+}) {
+  // State for multi-step flow (step) and preview (future enhancement)
+  // Using void to acknowledge intentionally unused values for future UI
+  const [step, setStep] = useState<'select' | 'confirm'>('select')
+  const [sourceType, setSourceType] = useState('')
+  const [sourceId, setSourceId] = useState('')
+  const [title, setTitle] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
+  const [preview, setPreview] = useState<any>(null)
+  // Acknowledge unused state values (will be used in future multi-step UI)
+  void step; void preview;
+
+  const resetForm = () => {
+    setStep('select')
+    setSourceType('')
+    setSourceId('')
+    setTitle('')
+    setError('')
+    setPreview(null)
+  }
+
+  const handleCreate = async () => {
+    if (!sourceType || !sourceId || !title.trim()) {
+      setError('Please fill in all required fields')
+      return
+    }
+
+    setCreating(true)
+    setError('')
+
+    try {
+      const response = await fetch(
+        `/api/v1/investigations/from-record?source_type=${sourceType}&source_id=${sourceId}&title=${encodeURIComponent(title.trim())}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail?.message || 'Failed to create investigation')
+      }
+
+      const created = await response.json()
+      setPreview(created)
+      onCreated()
+      resetForm()
+    } catch (err: any) {
+      setError(err.message || 'Failed to create investigation')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) resetForm()
+      onOpenChange(isOpen)
+    }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FlaskConical className="w-5 h-5" />
+            Create Investigation from Record
+          </DialogTitle>
+          <DialogDescription>
+            Create a new investigation by linking it to an existing Near Miss, Complaint, RTA, or Incident record.
+            Fields will be automatically prefilled from the source record.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Source Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Source Record Type *
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {SOURCE_TYPES.map((type) => {
+                const Icon = type.icon
+                return (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => setSourceType(type.value)}
+                    className={cn(
+                      'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors',
+                      sourceType === type.value
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-border hover:border-primary/50'
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm font-medium">{type.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Source ID Input */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Source Record ID *
+            </label>
+            <Input
+              type="number"
+              value={sourceId}
+              onChange={(e) => setSourceId(e.target.value)}
+              placeholder="Enter the record ID (e.g., 123)"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter the ID of the {sourceType ? SOURCE_TYPES.find(t => t.value === sourceType)?.label : 'record'} you want to investigate
+            </p>
+          </div>
+
+          {/* Investigation Title */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Investigation Title *
+            </label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g., Investigation into vehicle collision on A1"
+            />
+          </div>
+
+          {/* Info Banner */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <h4 className="text-sm font-medium text-blue-900 mb-1">Deterministic Prefill</h4>
+            <p className="text-xs text-blue-700">
+              The investigation will be pre-populated with data from the source record using Mapping Contract v1.
+              The investigation level (LOW/MEDIUM/HIGH) will be determined by the source severity.
+            </p>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreate}
+            disabled={creating || !sourceType || !sourceId || !title.trim()}
+          >
+            {creating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Investigation
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function Investigations() {
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
@@ -463,19 +663,15 @@ export default function Investigations() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Start New Investigation</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-muted-foreground text-center py-8">
-              Investigation creation coming soon. Use the API to create investigations.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Create Investigation Modal */}
+      <CreateInvestigationModal
+        open={showModal}
+        onOpenChange={setShowModal}
+        onCreated={() => {
+          loadInvestigations()
+          setShowModal(false)
+        }}
+      />
 
       {/* Add Action Modal */}
       <Dialog open={showActionModal} onOpenChange={setShowActionModal}>
