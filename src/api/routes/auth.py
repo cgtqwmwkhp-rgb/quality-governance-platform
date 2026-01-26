@@ -8,17 +8,27 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.auth import LoginRequest, PasswordChangeRequest, RefreshTokenRequest, TokenResponse
+from src.api.schemas.auth import (
+    LoginRequest,
+    PasswordChangeRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    RefreshTokenRequest,
+    TokenResponse,
+)
 from src.api.schemas.user import UserResponse
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
     create_access_token,
+    create_password_reset_token,
     create_refresh_token,
     decode_token,
     get_password_hash,
     verify_password,
+    verify_password_reset_token,
 )
 from src.domain.models.user import User
+from src.domain.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -269,3 +279,95 @@ async def change_password(
     await db.commit()
 
     return {"message": "Password changed successfully"}
+
+
+# =============================================================================
+# Password Reset (Forgot Password)
+# =============================================================================
+
+
+@router.post("/password-reset/request")
+async def request_password_reset(
+    request: PasswordResetRequest,
+    db: DbSession,
+) -> dict:
+    """
+    Request a password reset email.
+
+    Security:
+        - Always returns 200 regardless of whether user exists (prevent email enumeration)
+        - Token expires in 1 hour
+        - Email is masked in logs
+    """
+    # Find user by email
+    result = await db.execute(select(User).where(User.email == request.email.lower()))
+    user = result.scalar_one_or_none()
+
+    if user is not None and user.is_active:
+        # Generate password reset token
+        reset_token = create_password_reset_token(user.id)
+
+        # Build reset URL (frontend will handle this route)
+        # Use environment variable for frontend URL, fallback to common values
+        import os
+
+        frontend_url = os.getenv("FRONTEND_URL", "https://app-qgp-prod.azurestaticapps.net")
+        reset_url = f"{frontend_url}/reset-password?token={reset_token}"
+
+        # Send password reset email
+        try:
+            await email_service.send_password_reset_email(
+                to=user.email,
+                reset_url=reset_url,
+                user_name=user.first_name or user.email.split("@")[0],
+            )
+            # Mask email for logging (show first 3 chars and domain)
+            masked_email = user.email[:3] + "***@" + user.email.split("@")[1]
+            logger.info(f"Password reset email sent to {masked_email}")
+        except Exception as e:
+            # Log error but don't reveal to user
+            logger.error(f"Failed to send password reset email: {e}")
+
+    # Always return success to prevent email enumeration
+    return {"message": "If an account with that email exists, a password reset link has been sent."}
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(
+    request: PasswordResetConfirm,
+    db: DbSession,
+) -> dict:
+    """
+    Confirm password reset with token and set new password.
+
+    Security:
+        - Validates JWT token signature and expiration
+        - Token must be of type 'password_reset'
+        - User must exist and be active
+    """
+    # Verify the reset token
+    user_id = verify_password_reset_token(request.token)
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
+
+    # Find user
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
+
+    # Update password
+    user.hashed_password = get_password_hash(request.new_password)
+    await db.commit()
+
+    logger.info(f"Password reset successful for user ID {user_id}")
+
+    return {"message": "Password has been reset successfully"}

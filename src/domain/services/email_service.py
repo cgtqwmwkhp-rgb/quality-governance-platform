@@ -422,6 +422,69 @@ class EmailService:
 
         return await self.send_email(to=to, subject="📊 Weekly IMS Summary", html_content=html)
 
+    async def send_password_reset_email(
+        self,
+        to: str,
+        reset_url: str,
+        user_name: str = "User",
+        expires_in_hours: int = 1,
+    ) -> bool:
+        """
+        Send a password reset email with branded template.
+
+        Args:
+            to: Recipient email address
+            reset_url: Full URL for password reset (includes token)
+            user_name: User's first name for personalization
+            expires_in_hours: Token validity period for display
+
+        Returns:
+            True if email sent successfully, False otherwise
+        """
+        content = f"""
+        <h2>🔐 Password Reset Request</h2>
+        <p>Hi {user_name},</p>
+        <p>We received a request to reset your password for your Quality Governance Platform account.</p>
+
+        <div class="alert-box medium">
+            <h3>Reset Your Password</h3>
+            <p>Click the button below to create a new password. This link will expire in {expires_in_hours} hour{'s' if expires_in_hours != 1 else ''}.</p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{reset_url}" class="button">Reset Password →</a>
+        </div>
+
+        <table class="details-table">
+            <tr>
+                <th>Security Notice</th>
+                <td>If you didn't request this, you can safely ignore this email.</td>
+            </tr>
+            <tr>
+                <th>Link Expires</th>
+                <td>{expires_in_hours} hour{'s' if expires_in_hours != 1 else ''} from now</td>
+            </tr>
+        </table>
+
+        <p style="color: #64748b; font-size: 12px; margin-top: 20px;">
+            If the button doesn't work, copy and paste this link into your browser:<br>
+            <span style="color: #94a3b8; word-break: break-all;">{reset_url}</span>
+        </p>
+        """
+
+        html = self._get_base_template().format(
+            subject="Reset Your Password",
+            content=content,
+            alert_color="#f59e0b",
+            year=datetime.now().year,
+        )
+
+        return await self.send_email(
+            to=[to],
+            subject="🔐 Reset Your Password - Quality Governance Platform",
+            html_content=html,
+        )
+
 
 # Singleton instance
 email_service = EmailService()
