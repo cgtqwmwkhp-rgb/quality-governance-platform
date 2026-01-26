@@ -41,10 +41,36 @@ jobs:
             echo "⏭️ Skipping: staging deployment did not succeed"
           fi
 
+  # Acquire auth tokens for testing
+  acquire-tokens:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    outputs:
+      admin_token: ${{ steps.tokens.outputs.admin_token }}
+      portal_token: ${{ steps.tokens.outputs.portal_token }}
+      tokens_acquired: ${{ steps.tokens.outputs.tokens_acquired }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Acquire test tokens
+        id: tokens
+        env:
+          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          UX_TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
+          UX_TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
+        run: node scripts/governance/get-ux-test-tokens.cjs
+
   # Page Load Audit
   page-audit:
     runs-on: ubuntu-latest
-    needs: check-trigger
+    needs: [check-trigger, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -63,12 +89,18 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
+      - name: Mask tokens
+        if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        run: |
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+
       - name: Run Page Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.app_url }}
-          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
-          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
+          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/page-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -82,7 +114,7 @@ jobs:
   # Link Audit
   link-audit:
     runs-on: ubuntu-latest
-    needs: check-trigger
+    needs: [check-trigger, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -101,12 +133,18 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
+      - name: Mask tokens
+        if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        run: |
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+
       - name: Run Link Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.app_url }}
-          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
-          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
+          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/link-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -120,7 +158,7 @@ jobs:
   # Button Wiring Audit
   button-audit:
     runs-on: ubuntu-latest
-    needs: check-trigger
+    needs: [check-trigger, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -139,12 +177,18 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
+      - name: Mask tokens
+        if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        run: |
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+
       - name: Run Button Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.app_url }}
-          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
-          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
+          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/button-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -158,7 +202,7 @@ jobs:
   # Workflow Audit (P0 Critical Paths)
   workflow-audit:
     runs-on: ubuntu-latest
-    needs: check-trigger
+    needs: [check-trigger, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -177,12 +221,18 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
+      - name: Mask tokens
+        if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        run: |
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
+          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+
       - name: Run Workflow Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.app_url }}
-          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
-          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
+          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
           TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
         run: npx playwright test tests/workflow-audit.spec.ts --reporter=list
@@ -198,7 +248,7 @@ jobs:
   # Aggregate Results and Enforce Gate
   aggregate-and-gate:
     runs-on: ubuntu-latest
-    needs: [check-trigger, page-audit, link-audit, button-audit, workflow-audit]
+    needs: [check-trigger, acquire-tokens, page-audit, link-audit, button-audit, workflow-audit]
     if: always() && needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -274,6 +324,7 @@ jobs:
           echo "| P0 Failures | ${{ steps.coverage.outputs.p0_fails }} |" >> $GITHUB_STEP_SUMMARY
           echo "| P1 Failures | ${{ steps.coverage.outputs.p1_fails }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Dead Ends | ${{ steps.coverage.outputs.dead_ends }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tokens Acquired | ${{ needs.acquire-tokens.outputs.tokens_acquired }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.coverage.outputs.status }}" = "GO" ]; then
             echo "✅ **PASS**: Ready for production" >> $GITHUB_STEP_SUMMARY
