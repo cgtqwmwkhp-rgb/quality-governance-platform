@@ -500,6 +500,45 @@ export interface InvestigationCreate {
   description?: string
 }
 
+// === From-Record Types (Stage 2.1) ===
+export interface CreateFromRecordRequest {
+  source_type: 'near_miss' | 'road_traffic_collision' | 'complaint' | 'reporting_incident'
+  source_id: number
+  title: string
+  template_id?: number
+}
+
+export interface CreateFromRecordError {
+  error_code: 'VALIDATION_ERROR' | 'SOURCE_NOT_FOUND' | 'INV_ALREADY_EXISTS' | 'TEMPLATE_NOT_FOUND' | 'INTERNAL_ERROR'
+  message: string
+  details?: {
+    existing_investigation_id?: number
+    existing_reference_number?: string
+    source_type?: string
+    source_id?: number
+  }
+  request_id?: string
+}
+
+export interface SourceRecordItem {
+  source_id: number
+  display_label: string
+  reference_number: string
+  status: string
+  created_at: string
+  investigation_id: number | null
+  investigation_reference: string | null
+}
+
+export interface SourceRecordsResponse {
+  items: SourceRecordItem[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  source_type: string
+}
+
 // ============ Standard Types ============
 export interface Standard {
   id: number
@@ -639,6 +678,26 @@ export const investigationsApi = {
     api.post<Investigation>('/api/v1/investigations/', data),
   get: (id: number) => 
     api.get<Investigation>(`/api/v1/investigations/${id}`),
+  /**
+   * Create investigation from source record using proper JSON body.
+   * Returns 201 on success, 404 if source not found, 409 if already investigated.
+   */
+  createFromRecord: (data: CreateFromRecordRequest) =>
+    api.post<Investigation>('/api/v1/investigations/from-record', data),
+  /**
+   * List source records available for investigation creation.
+   * Records with investigation_id !== null are already investigated.
+   */
+  listSourceRecords: (
+    source_type: string,
+    options?: { q?: string; page?: number; size?: number }
+  ) => {
+    const params = new URLSearchParams({ source_type })
+    if (options?.q) params.set('q', options.q)
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.size) params.set('size', String(options.size))
+    return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
+  },
 }
 
 export const standardsApi = {

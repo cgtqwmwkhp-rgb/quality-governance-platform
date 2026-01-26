@@ -3,13 +3,18 @@
  * 
  * Emits events to:
  * 1. Backend API (for server-side aggregation)
- * 2. Console (for staging debugging)
+ * 2. Console (for staging/development debugging only)
  * 3. LocalStorage buffer (for offline resilience)
  * 
  * NO PII POLICY:
  * - All dimensions must be bounded (enums, not free text)
  * - No user IDs, emails, names, or identifiable data
  * - Form content is NOT captured, only metadata
+ * 
+ * QUARANTINE POLICY (ADR-0004):
+ * - Telemetry failures MUST NOT block user workflows
+ * - Telemetry failures MUST NOT spam console with errors
+ * - TELEMETRY_ENABLED flag controls API calls (default: enabled in dev/staging, disabled in prod)
  */
 
 import { API_BASE_URL } from '../config/apiBase';
@@ -19,10 +24,29 @@ const IS_PRODUCTION = window.location.hostname.includes('azurewebsites.net') &&
                       !window.location.hostname.includes('staging');
 const IS_STAGING = window.location.hostname.includes('staging') || 
                    window.location.hostname === 'localhost';
+const IS_DEVELOPMENT = window.location.hostname === 'localhost';
+
+// === TELEMETRY FEATURE FLAG (ADR-0004) ===
+// Disabled in production until CORS is confirmed working.
+// Enable by setting window.__TELEMETRY_ENABLED__ = true in console or config.
+const TELEMETRY_ENABLED = (() => {
+  // Check for explicit override
+  if (typeof (window as unknown as { __TELEMETRY_ENABLED__?: boolean }).__TELEMETRY_ENABLED__ === 'boolean') {
+    return (window as unknown as { __TELEMETRY_ENABLED__?: boolean }).__TELEMETRY_ENABLED__;
+  }
+  // Default: enabled in dev/staging, DISABLED in production (CORS quarantine)
+  return !IS_PRODUCTION;
+})();
 
 // Event buffer for offline resilience
 const EVENT_BUFFER_KEY = 'exp_telemetry_buffer';
 const MAX_BUFFER_SIZE = 100;
+
+// === SILENT LOGGING (NO CONSOLE SPAM) ===
+// Only log in development, never in staging/production
+const silentLog = IS_DEVELOPMENT 
+  ? (...args: unknown[]) => console.log('[Telemetry]', ...args)
+  : () => {}; // No-op in staging/production
 
 // ============================================================================
 // Types
@@ -104,9 +128,16 @@ function clearBuffer(): void {
 // ============================================================================
 
 /**
- * Send event to backend API
+ * Send event to backend API.
+ * SILENT: Never throws, never logs errors (ADR-0004).
  */
 async function sendToBackend(event: TelemetryEvent): Promise<boolean> {
+  // === QUARANTINE: Skip API calls when disabled (ADR-0004) ===
+  if (!TELEMETRY_ENABLED) {
+    silentLog('Telemetry disabled, skipping API call');
+    return false;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/telemetry/events`, {
       method: 'POST',
@@ -115,14 +146,22 @@ async function sendToBackend(event: TelemetryEvent): Promise<boolean> {
     });
     return response.ok;
   } catch {
+    // SILENT: No console.error - ADR-0004 requires no console spam
     return false;
   }
 }
 
 /**
- * Flush buffered events to backend
+ * Flush buffered events to backend.
+ * SILENT: Never throws, never logs errors (ADR-0004).
  */
 async function flushBuffer(): Promise<void> {
+  // === QUARANTINE: Skip API calls when disabled (ADR-0004) ===
+  if (!TELEMETRY_ENABLED) {
+    silentLog('Telemetry disabled, skipping buffer flush');
+    return;
+  }
+
   const buffer = getEventBuffer();
   if (buffer.length === 0) return;
   
@@ -136,13 +175,15 @@ async function flushBuffer(): Promise<void> {
     if (response.ok) {
       clearBuffer();
     }
+    // SILENT: No logging on failure - ADR-0004
   } catch {
-    // Keep buffer for retry
+    // SILENT: Keep buffer for retry, no console.error - ADR-0004
   }
 }
 
 /**
- * Track an experiment event
+ * Track an experiment event.
+ * NEVER blocks user workflows. NEVER spams console (ADR-0004).
  */
 export function trackExpEvent(
   eventName: string,
@@ -158,15 +199,13 @@ export function trackExpEvent(
     },
   };
   
-  // Console log in non-production (for debugging)
-  if (!IS_PRODUCTION) {
-    console.log(`[Telemetry] ${eventName}`, event.dimensions);
-  }
+  // === SILENT LOGGING: Only in development, never staging/production (ADR-0004) ===
+  silentLog(eventName, event.dimensions);
   
   // Add to buffer first (offline resilience)
   addToBuffer(event);
   
-  // Try to send immediately
+  // Try to send immediately (async, non-blocking)
   sendToBackend(event).then((sent) => {
     if (sent) {
       // Remove from buffer if sent successfully
@@ -176,10 +215,11 @@ export function trackExpEvent(
         try {
           localStorage.setItem(EVENT_BUFFER_KEY, JSON.stringify(updated));
         } catch {
-          // Ignore
+          // SILENT: Ignore storage errors - ADR-0004
         }
       }
     }
+    // SILENT: No logging on failure - ADR-0004
   });
 }
 
