@@ -60,7 +60,7 @@ jobs:
       - name: Install dependencies
         working-directory: tests/ux-coverage
         run: |
-          npm ci
+          npm install
           npx playwright install chromium --with-deps
 
       - name: Run Page Audit
@@ -98,7 +98,7 @@ jobs:
       - name: Install dependencies
         working-directory: tests/ux-coverage
         run: |
-          npm ci
+          npm install
           npx playwright install chromium --with-deps
 
       - name: Run Link Audit
@@ -136,7 +136,7 @@ jobs:
       - name: Install dependencies
         working-directory: tests/ux-coverage
         run: |
-          npm ci
+          npm install
           npx playwright install chromium --with-deps
 
       - name: Run Button Audit
@@ -174,7 +174,7 @@ jobs:
       - name: Install dependencies
         working-directory: tests/ux-coverage
         run: |
-          npm ci
+          npm install
           npx playwright install chromium --with-deps
 
       - name: Run Workflow Audit
