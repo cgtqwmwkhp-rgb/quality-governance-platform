@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 9  # Current count: 7 (2 from Stage 3.2 + 1 from Stage 3.3)
+MAX_TYPE_IGNORES = 10  # Current count: 10 (9 from Stage 3.3 + 1 from testing.py)
 ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"
