@@ -31,6 +31,7 @@ class AssignedEntityType(str, enum.Enum):
     ROAD_TRAFFIC_COLLISION = "road_traffic_collision"
     REPORTING_INCIDENT = "reporting_incident"
     COMPLAINT = "complaint"
+    NEAR_MISS = "near_miss"
 
 
 class InvestigationTemplate(Base, TimestampMixin, AuditTrailMixin):

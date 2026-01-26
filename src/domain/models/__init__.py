@@ -50,6 +50,15 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 
+# Evidence Assets (Shared Attachments Module)
+from src.domain.models.evidence_asset import (
+    EvidenceAsset,
+    EvidenceAssetType,
+    EvidenceRetentionPolicy,
+    EvidenceSourceModule,
+    EvidenceVisibility,
+)
+
 # Form Configuration (Admin Form Builder)
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 
@@ -244,4 +253,10 @@ __all__ = [
     "Contract",
     "SystemSetting",
     "LookupOption",
+    # Evidence Assets (Shared Attachments Module)
+    "EvidenceAsset",
+    "EvidenceAssetType",
+    "EvidenceSourceModule",
+    "EvidenceVisibility",
+    "EvidenceRetentionPolicy",
 ]

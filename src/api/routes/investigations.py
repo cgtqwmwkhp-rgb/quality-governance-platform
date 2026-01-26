@@ -40,6 +40,7 @@ async def validate_assigned_entity(
         AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
         AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
         AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
+        AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
     }
 
     if entity_type not in entity_models:
@@ -131,6 +132,7 @@ async def create_investigation(
                     "road_traffic_collision",
                     "reporting_incident",
                     "complaint",
+                    "near_miss",
                 ],
                 created_by_id=current_user.id,
                 updated_by_id=current_user.id,
