@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react'
-import { authApi } from '../api/client'
+import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { authApi, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
+import { clearTokens } from '../utils/auth'
 
 interface LoginProps {
   onLogin: (token: string) => void
@@ -15,6 +16,18 @@ export default function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showRetry, setShowRetry] = useState(false)
+
+  // Clear session data (for stuck states)
+  const handleClearSession = () => {
+    clearTokens()
+    localStorage.removeItem('user')
+    sessionStorage.clear()
+    setError('')
+    setShowRetry(false)
+    // Reload to reset all state
+    window.location.reload()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,8 +72,16 @@ export default function Login({ onLogin }: LoginProps) {
       const response = await authApi.login({ email, password })
       onLogin(response.data.access_token)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Invalid credentials')
+      // Use the centralized error message extractor
+      const errorMessage = getApiErrorMessage(err)
+      setError(errorMessage)
+      
+      // Show retry button for timeout or network errors
+      if (err.isTimeout || !err.response) {
+        setShowRetry(true)
+      }
     } finally {
+      // CRITICAL: Always clear loading state to prevent infinite spinner
       setLoading(false)
     }
   }
@@ -92,9 +113,35 @@ export default function Login({ onLogin }: LoginProps) {
         <Card className="p-8">
           <form onSubmit={handleSubmit}>
             {error && (
-              <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center gap-3 text-destructive text-sm">
-                <AlertCircle size={18} />
-                {error}
+              <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <AlertCircle size={18} />
+                  {error}
+                </div>
+                {showRetry && (
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setError(''); setShowRetry(false); }}
+                      className="text-xs"
+                    >
+                      <RefreshCw size={14} className="mr-1" />
+                      Try Again
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearSession}
+                      className="text-xs"
+                    >
+                      <Trash2 size={14} className="mr-1" />
+                      Clear Session
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
