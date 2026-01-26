@@ -8,6 +8,77 @@ const HTTPS_API_BASE = 'https://app-qgp-prod.azurewebsites.net';
 // Prevents infinite spinner if backend hangs
 const REQUEST_TIMEOUT_MS = 15000;
 
+// ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
+// These are the ONLY allowed error codes for login
+export type LoginErrorCode =
+  | 'TIMEOUT'
+  | 'UNAUTHORIZED'
+  | 'UNAVAILABLE'
+  | 'SERVER_ERROR'
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN';
+
+// Error code to user message mapping (bounded, no PII)
+export const LOGIN_ERROR_MESSAGES: Record<LoginErrorCode, string> = {
+  TIMEOUT: 'Request timed out. Please try again.',
+  UNAUTHORIZED: 'Incorrect email or password.',
+  UNAVAILABLE: 'Service temporarily unavailable. Please try again in a few minutes.',
+  SERVER_ERROR: 'Something went wrong. Please try again.',
+  NETWORK_ERROR: 'Unable to connect. Please check your internet connection.',
+  UNKNOWN: 'An unexpected error occurred. Please try again.',
+};
+
+// Duration buckets for telemetry
+export type DurationBucket = 'fast' | 'normal' | 'slow' | 'very_slow' | 'timeout';
+
+export function getDurationBucket(durationMs: number): DurationBucket {
+  if (durationMs < 1000) return 'fast';
+  if (durationMs < 3000) return 'normal';
+  if (durationMs < 7000) return 'slow';
+  if (durationMs < 15000) return 'very_slow';
+  return 'timeout';
+}
+
+/**
+ * Classify an error into a bounded LoginErrorCode.
+ * MUST return one of the defined codes - no exceptions.
+ */
+export function classifyLoginError(error: unknown): LoginErrorCode {
+  if (!axios.isAxiosError(error)) {
+    return 'UNKNOWN';
+  }
+  
+  const axiosError = error as AxiosError;
+  
+  // Timeout check first (no response)
+  if (axiosError.code === 'ECONNABORTED' || axiosError.message?.includes('timeout')) {
+    return 'TIMEOUT';
+  }
+  
+  // Network error (no response received)
+  if (!axiosError.response) {
+    return 'NETWORK_ERROR';
+  }
+  
+  // HTTP status-based classification
+  const status = axiosError.response.status;
+  
+  if (status === 401) {
+    return 'UNAUTHORIZED';
+  }
+  
+  if (status === 502 || status === 503) {
+    return 'UNAVAILABLE';
+  }
+  
+  if (status >= 500) {
+    return 'SERVER_ERROR';
+  }
+  
+  // Any other error
+  return 'UNKNOWN';
+}
+
 const api = axios.create({
   baseURL: HTTPS_API_BASE,
   timeout: REQUEST_TIMEOUT_MS,
