@@ -76,6 +76,19 @@ from src.domain.models.ims_unification import (
 )
 from src.domain.models.incident import Incident, IncidentAction
 
+# Investigations (Stage 2)
+from src.domain.models.investigation import (
+    AssignedEntityType,
+    CustomerPackAudience,
+    InvestigationComment,
+    InvestigationCustomerPack,
+    InvestigationLevel,
+    InvestigationRevisionEvent,
+    InvestigationRun,
+    InvestigationStatus,
+    InvestigationTemplate,
+)
+
 # ISO 27001 Information Security (Tier 1)
 from src.domain.models.iso27001 import (
     AccessControlRecord,
@@ -259,4 +272,14 @@ __all__ = [
     "EvidenceSourceModule",
     "EvidenceVisibility",
     "EvidenceRetentionPolicy",
+    # Investigations (Stage 2)
+    "InvestigationTemplate",
+    "InvestigationRun",
+    "InvestigationStatus",
+    "InvestigationLevel",
+    "AssignedEntityType",
+    "CustomerPackAudience",
+    "InvestigationComment",
+    "InvestigationRevisionEvent",
+    "InvestigationCustomerPack",
 ]

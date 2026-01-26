@@ -54,6 +54,13 @@ class Settings(BaseSettings):
                     "Use a production database hostname."
                 )
 
+            # Validate blob storage is configured in production (ADR-0002)
+            if not self.azure_storage_connection_string:
+                raise ValueError(
+                    "CONFIGURATION ERROR: AZURE_STORAGE_CONNECTION_STRING must be set in production mode! "
+                    "Evidence assets require blob storage for persistence."
+                )
+
         # Always validate database URL format
         if not self.database_url.startswith(("postgresql", "sqlite")):
             raise ValueError(

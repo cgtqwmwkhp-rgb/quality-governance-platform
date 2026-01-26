@@ -210,9 +210,28 @@ async def upload_evidence_asset(
     safe_filename = (file.filename or "unnamed").replace("/", "_").replace("\\", "_")
     storage_key = f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
 
-    # TODO: In production, upload to blob storage (Azure Blob, S3, etc.)
-    # For now, we store the key and assume blob storage integration exists
-    # await blob_storage.upload(storage_key, file_content, content_type)
+    # Upload to blob storage
+    from src.infrastructure.storage import StorageError, storage_service
+
+    try:
+        await storage_service().upload(
+            storage_key=storage_key,
+            content=file_content,
+            content_type=content_type,
+            metadata={
+                "source_module": source_module,
+                "source_id": str(source_id),
+                "uploaded_by": str(current_user.id),
+            },
+        )
+    except StorageError as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "STORAGE_UPLOAD_FAILED",
+                "message": f"Failed to upload file to storage: {e}",
+            },
+        )
 
     # Parse captured_at if provided
     parsed_captured_at = None
@@ -514,3 +533,122 @@ async def link_asset_to_investigation(
     await db.refresh(asset)
 
     return asset
+
+
+@router.get("/{asset_id}/signed-url")
+async def get_signed_download_url(
+    asset_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    expires_in: int = Query(3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"),
+):
+    """Get a signed URL for downloading an evidence asset.
+
+    Returns a time-limited signed URL for secure download.
+    """
+    # Get asset
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ASSET_NOT_FOUND",
+                "message": f"Evidence asset with ID {asset_id} not found",
+            },
+        )
+
+    # Generate signed URL
+    from src.infrastructure.storage import storage_service
+
+    content_disposition = f'attachment; filename="{asset.original_filename or "download"}"'
+    signed_url = storage_service().get_signed_url(
+        storage_key=asset.storage_key,
+        expires_in_seconds=expires_in,
+        content_disposition=content_disposition,
+    )
+
+    return {
+        "asset_id": asset_id,
+        "signed_url": signed_url,
+        "expires_in_seconds": expires_in,
+        "content_type": asset.content_type,
+        "filename": asset.original_filename,
+    }
+
+
+@router.get("/download")
+async def download_file_direct(
+    key: str = Query(..., description="Storage key"),
+    expires: int = Query(..., description="Expiry timestamp"),
+    sig: str = Query(..., description="Signature"),
+    cd: Optional[str] = Query(None, description="Content disposition"),
+):
+    """Direct download endpoint for local development signed URLs.
+
+    Validates signature and serves file content.
+    """
+    import hmac as hmac_lib
+
+    from fastapi.responses import Response
+
+    from src.infrastructure.storage import LocalFileStorageService, StorageError, storage_service
+
+    # Only allow this endpoint for local storage
+    svc = storage_service()
+    if not isinstance(svc, LocalFileStorageService):
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "NOT_AVAILABLE", "message": "Direct download not available in production"},
+        )
+
+    # Validate expiry
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    if expires < now_ts:
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "URL_EXPIRED", "message": "Download URL has expired"},
+        )
+
+    # Validate signature
+    message = f"{key}:{expires}"
+    expected_sig = hmac_lib.new(
+        settings.secret_key.encode(),
+        message.encode(),
+        hashlib.sha256,
+    ).hexdigest()[:16]
+
+    if not hmac_lib.compare_digest(sig, expected_sig):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "INVALID_SIGNATURE", "message": "Invalid download signature"},
+        )
+
+    # Download and serve
+    try:
+        content = await svc.download(key)
+    except StorageError as e:
+        raise HTTPException(
+            status_code=404,
+            detail={"error_code": "FILE_NOT_FOUND", "message": str(e)},
+        )
+
+    # Determine content type from file extension
+    import mimetypes
+
+    content_type = mimetypes.guess_type(key)[0] or "application/octet-stream"
+
+    headers = {}
+    if cd:
+        headers["Content-Disposition"] = cd
+
+    return Response(content=content, media_type=content_type, headers=headers)
+
+
+# Import settings at module level for download endpoint
+from src.core.config import settings

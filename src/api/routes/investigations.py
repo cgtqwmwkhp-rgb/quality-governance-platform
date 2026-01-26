@@ -1,7 +1,7 @@
 """Investigation Run API routes."""
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -352,3 +352,507 @@ async def update_investigation(
     await db.refresh(investigation)
 
     return investigation
+
+
+# === Stage 2 Endpoints ===
+
+
+@router.post("/from-record", response_model=InvestigationRunResponse, status_code=201)
+async def create_investigation_from_record(
+    source_type: str,
+    source_id: int,
+    title: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    template_id: int = 1,
+):
+    """Create an investigation from a source record (Near Miss, Complaint, RTA).
+
+    Performs deterministic prefill using Mapping Contract v1:
+    - Creates immutable source snapshot
+    - Maps fields with explicit reason codes
+    - Links existing evidence assets
+    - Determines investigation level from source severity
+
+    Returns the created investigation with prefilled data.
+    """
+    from src.services.investigation_service import InvestigationService
+    from src.services.reference_number import ReferenceNumberService
+
+    request_id = "N/A"
+
+    # Validate source type
+    try:
+        source_type_enum = AssignedEntityType(source_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_SOURCE_TYPE",
+                "message": f"Invalid source type: {source_type}",
+                "details": {"valid_types": [e.value for e in AssignedEntityType]},
+                "request_id": request_id,
+            },
+        )
+
+    # Get source record
+    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
+    if error:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "SOURCE_NOT_FOUND",
+                "message": error,
+                "request_id": request_id,
+            },
+        )
+
+    # Create source snapshot (immutable)
+    source_snapshot = InvestigationService.create_source_snapshot(record, source_type_enum)
+
+    # Map source to investigation data
+    data, mapping_log, level = InvestigationService.map_source_to_investigation(record, source_type_enum)
+
+    # Validate template exists or create default
+    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
+    template_result = await db.execute(template_query)
+    template = template_result.scalar_one_or_none()
+
+    if not template and template_id == 1:
+        # Auto-create default template
+        template = InvestigationTemplate(
+            id=1,
+            name="Investigation Report Template v2.1",
+            description="Standard investigation template based on Plantexpand Template v2.0",
+            version="2.1",
+            is_active=True,
+            structure={"sections": []},
+            applicable_entity_types=[e.value for e in AssignedEntityType],
+            created_by_id=current_user.id,
+            updated_by_id=current_user.id,
+        )
+        db.add(template)
+        await db.commit()
+        await db.refresh(template)
+
+    if not template:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "TEMPLATE_NOT_FOUND",
+                "message": f"Template {template_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Generate reference number
+    reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
+
+    # Create investigation
+    from src.domain.models.investigation import InvestigationLevel as InvLevel
+
+    investigation = InvestigationRun(
+        template_id=template.id,
+        assigned_entity_type=source_type_enum,
+        assigned_entity_id=source_id,
+        title=title,
+        status=InvestigationStatus.DRAFT,
+        level=level,
+        data=data,
+        source_schema_version="1.0",
+        source_snapshot=source_snapshot,
+        mapping_log=mapping_log,
+        version=1,
+        reference_number=reference_number,
+        created_by_id=current_user.id,
+        updated_by_id=current_user.id,
+    )
+
+    db.add(investigation)
+    await db.commit()
+    await db.refresh(investigation)
+
+    # Create revision event
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="CREATED",
+        actor_id=current_user.id,
+        metadata={
+            "source_type": source_type,
+            "source_id": source_id,
+            "mapping_log_count": len(mapping_log),
+        },
+    )
+
+    # Link source evidence assets to investigation
+    evidence_assets = await InvestigationService.get_source_evidence_assets(db, source_type_enum, source_id)
+    for asset in evidence_assets:
+        asset.linked_investigation_id = investigation.id
+
+    await db.commit()
+    await db.refresh(investigation)
+
+    return investigation
+
+
+@router.patch("/{investigation_id}/autosave", response_model=InvestigationRunResponse)
+async def autosave_investigation(
+    investigation_id: int,
+    data: dict,
+    version: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Autosave investigation data with optimistic locking.
+
+    Uses version field to prevent concurrent edit conflicts.
+    Returns 409 Conflict if version mismatch.
+    """
+    from src.services.investigation_service import InvestigationService
+
+    request_id = "N/A"
+
+    # Get investigation with version check
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Optimistic locking: check version
+    if investigation.version != version:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "VERSION_CONFLICT",
+                "message": "Investigation was modified by another user",
+                "details": {
+                    "expected_version": version,
+                    "current_version": investigation.version,
+                },
+                "request_id": request_id,
+            },
+        )
+
+    # Store old data for revision event
+    old_data = investigation.data
+
+    # Update data and increment version
+    investigation.data = data
+    investigation.version += 1
+    investigation.updated_by_id = current_user.id
+
+    # Create revision event
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="DATA_UPDATED",
+        actor_id=current_user.id,
+        old_value=old_data,
+        new_value=data,
+    )
+
+    await db.commit()
+    await db.refresh(investigation)
+
+    return investigation
+
+
+@router.post("/{investigation_id}/comments", status_code=201)
+async def add_comment(
+    investigation_id: int,
+    content: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    section_id: Optional[str] = None,
+    field_id: Optional[str] = None,
+    parent_comment_id: Optional[int] = None,
+):
+    """Add an internal comment to an investigation.
+
+    Comments are INTERNAL ONLY - never included in customer packs.
+    Can be attached to specific sections/fields and support threading.
+    """
+    from src.domain.models.investigation import InvestigationComment
+    from src.services.investigation_service import InvestigationService
+
+    request_id = "N/A"
+
+    # Validate investigation exists
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Validate parent comment if provided
+    if parent_comment_id:
+        parent_query = select(InvestigationComment).where(
+            InvestigationComment.id == parent_comment_id,
+            InvestigationComment.investigation_id == investigation_id,
+            InvestigationComment.deleted_at.is_(None),
+        )
+        parent_result = await db.execute(parent_query)
+        parent_comment = parent_result.scalar_one_or_none()
+        if not parent_comment:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error_code": "PARENT_COMMENT_NOT_FOUND",
+                    "message": f"Parent comment {parent_comment_id} not found",
+                    "request_id": request_id,
+                },
+            )
+
+    # Create comment
+    comment = InvestigationComment(
+        investigation_id=investigation_id,
+        content=content,
+        section_id=section_id,
+        field_id=field_id,
+        parent_comment_id=parent_comment_id,
+        author_id=current_user.id,
+    )
+
+    db.add(comment)
+
+    # Create revision event
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="COMMENT_ADDED",
+        actor_id=current_user.id,
+        metadata={
+            "section_id": section_id,
+            "field_id": field_id,
+            "is_reply": parent_comment_id is not None,
+        },
+    )
+
+    await db.commit()
+    await db.refresh(comment)
+
+    return {
+        "id": comment.id,
+        "investigation_id": comment.investigation_id,
+        "content": comment.content,
+        "section_id": comment.section_id,
+        "field_id": comment.field_id,
+        "parent_comment_id": comment.parent_comment_id,
+        "author_id": comment.author_id,
+        "created_at": comment.created_at.isoformat() if comment.created_at else None,
+    }
+
+
+@router.post("/{investigation_id}/approve", response_model=InvestigationRunResponse)
+async def approve_investigation(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    approved: bool = True,
+    rejection_reason: Optional[str] = None,
+):
+    """Approve or reject an investigation.
+
+    Moves investigation to COMPLETED (approved) or back to IN_PROGRESS (rejected).
+    """
+    from src.services.investigation_service import InvestigationService
+
+    request_id = "N/A"
+
+    # Get investigation
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Check status allows approval
+    if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_STATUS_TRANSITION",
+                "message": f"Cannot approve investigation in status {investigation.status.value}",
+                "request_id": request_id,
+            },
+        )
+
+    old_status = investigation.status
+
+    if approved:
+        investigation.status = InvestigationStatus.COMPLETED
+        investigation.approved_at = datetime.now(timezone.utc)
+        investigation.approved_by_id = current_user.id
+        investigation.completed_at = datetime.now(timezone.utc)
+        investigation.rejection_reason = None
+        event_type = "APPROVED"
+    else:
+        if not rejection_reason:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "REJECTION_REASON_REQUIRED",
+                    "message": "Rejection reason is required",
+                    "request_id": request_id,
+                },
+            )
+        investigation.status = InvestigationStatus.IN_PROGRESS
+        investigation.rejection_reason = rejection_reason
+        event_type = "REJECTED"
+
+    investigation.updated_by_id = current_user.id
+    investigation.version += 1
+
+    # Create revision event
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type=event_type,
+        actor_id=current_user.id,
+        old_value={"status": old_status.value},
+        new_value={"status": investigation.status.value},
+        metadata={"rejection_reason": rejection_reason} if not approved else None,
+    )
+
+    await db.commit()
+    await db.refresh(investigation)
+
+    return investigation
+
+
+@router.post("/{investigation_id}/customer-pack")
+async def generate_customer_pack(
+    investigation_id: int,
+    audience: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Generate a customer pack with audience-specific redaction.
+
+    Audience options:
+    - internal_customer: identities retained, internal comments excluded
+    - external_customer: identities redacted, only external-allowed evidence
+
+    Returns the generated pack with redaction log.
+    """
+    from src.domain.models.investigation import CustomerPackAudience
+    from src.services.investigation_service import InvestigationService
+
+    request_id = "N/A"
+
+    # Validate audience
+    try:
+        audience_enum = CustomerPackAudience(audience)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_AUDIENCE",
+                "message": f"Invalid audience: {audience}",
+                "details": {"valid_audiences": [e.value for e in CustomerPackAudience]},
+                "request_id": request_id,
+            },
+        )
+
+    # Get investigation
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Get linked evidence assets
+    from src.domain.models.evidence_asset import EvidenceAsset
+
+    assets_query = select(EvidenceAsset).where(
+        EvidenceAsset.linked_investigation_id == investigation_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    assets_result = await db.execute(assets_query)
+    evidence_assets = list(assets_result.scalars().all())
+
+    # Generate pack with redaction
+    content, redaction_log, included_assets = InvestigationService.generate_customer_pack(
+        investigation=investigation,
+        audience=audience_enum,
+        evidence_assets=evidence_assets,
+        generated_by_id=current_user.id,
+        generated_by_role=None,  # TODO: Get user role
+    )
+
+    # Create pack entity
+    pack = InvestigationService.create_customer_pack_entity(
+        investigation_id=investigation_id,
+        audience=audience_enum,
+        content=content,
+        redaction_log=redaction_log,
+        included_assets=included_assets,
+        generated_by_id=current_user.id,
+    )
+
+    db.add(pack)
+
+    # Create revision event
+    await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="PACK_GENERATED",
+        actor_id=current_user.id,
+        metadata={
+            "pack_uuid": pack.pack_uuid,
+            "audience": audience,
+            "redaction_count": len(redaction_log),
+            "assets_included": sum(1 for a in included_assets if a["included"]),
+            "assets_excluded": sum(1 for a in included_assets if not a["included"]),
+        },
+    )
+
+    await db.commit()
+    await db.refresh(pack)
+
+    return {
+        "pack_id": pack.id,
+        "pack_uuid": pack.pack_uuid,
+        "audience": pack.audience.value,
+        "investigation_id": investigation_id,
+        "investigation_reference": investigation.reference_number,
+        "generated_at": pack.created_at.isoformat() if pack.created_at else None,
+        "content": pack.content,
+        "redaction_log": pack.redaction_log,
+        "included_assets": pack.included_assets,
+        "checksum": pack.checksum_sha256,
+    }
