@@ -4,7 +4,7 @@ This module provides a lightweight audit event recording mechanism.
 Events are logged for observability but not persisted to the database
 until proper schema migration is implemented.
 
-For full immutable audit trail with blockchain-style hashing, 
+For full immutable audit trail with blockchain-style hashing,
 see AuditLogEntry in src/domain/models/audit_log.py.
 """
 

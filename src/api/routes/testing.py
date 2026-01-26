@@ -127,7 +127,7 @@ async def ensure_test_user(
     if request.roles:
         result = await db.execute(select(Role).where(Role.name.in_(request.roles)))
         roles = result.scalars().all()
-        user.roles = list(roles)  # type: ignore[arg-type]
+        user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-1
         await db.commit()
 
     # Get role names for response

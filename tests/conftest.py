@@ -3,7 +3,7 @@ Pytest Configuration and Shared Fixtures
 
 This module provides shared fixtures for all test suites:
 - Smoke tests
-- E2E tests  
+- E2E tests
 - Integration tests
 - Unit tests
 """
