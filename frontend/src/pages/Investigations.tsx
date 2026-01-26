@@ -88,7 +88,7 @@ function CreateInvestigationModal({
   const [loadingRecords, setLoadingRecords] = useState(false)
   const [recordsError, setRecordsError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(null)
+  const [searchDebounce, setSearchDebounce] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const resetForm = () => {
     setSourceType('')
@@ -163,7 +163,6 @@ function CreateInvestigationModal({
     setSelectedRecord(record)
     // Auto-generate title from record
     if (!title) {
-      const sourceLabel = SOURCE_TYPES.find(t => t.value === sourceType)?.label || 'Record'
       setTitle(`Investigation - ${record.reference_number}`)
     }
   }
