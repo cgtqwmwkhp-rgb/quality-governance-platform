@@ -677,8 +677,8 @@ async def list_source_records(
                 reference_number=ref_num,
                 status=status,
                 created_at=record.created_at,
-                investigation_id=existing_inv.id if existing_inv else None,
-                investigation_reference=existing_inv.reference_number if existing_inv else None,
+                investigation_id=int(existing_inv.id) if existing_inv else None,
+                investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
             )
         )
 
