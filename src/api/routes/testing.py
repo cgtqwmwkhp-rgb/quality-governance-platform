@@ -8,7 +8,7 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Header, status
+from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 

@@ -245,7 +245,6 @@ export default function PortalIncidentForm() {
     recoverDraft,
     discardDraft,
     clearDraft,
-    closeRecoveryPrompt,
   } = useFormAutosave<AutosaveData>({
     formType: reportType,
     enabled: autosaveEnabled,
