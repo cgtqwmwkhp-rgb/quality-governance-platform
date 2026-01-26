@@ -81,7 +81,7 @@ function loadPageRoute(pageId: string): string | null {
 // Test storage
 const buttonAuditResults: ButtonAuditResult[] = [];
 
-// Auth helper
+// Auth helper - navigates to base URL first to establish origin for localStorage
 async function setupAuth(page: Page, pageId: string): Promise<boolean> {
   // Determine auth type from page registry
   const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
@@ -98,6 +98,10 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
   const authType = pageEntry?.auth || 'anon';
   
   if (authType === 'anon') return true;
+  
+  // Navigate to base URL first to establish origin (localStorage blocked on about:blank)
+  const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
   
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     await page.evaluate((token) => {

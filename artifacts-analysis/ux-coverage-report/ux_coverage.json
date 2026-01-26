@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "timestamp": "2026-01-26T10:08:41.006Z",
-  "score": 70,
+  "timestamp": "2026-01-26T10:29:42.763Z",
+  "score": 80,
   "status": "HOLD",
   "readiness": {
     "staging": false,
@@ -10,12 +10,12 @@
   },
   "summary": {
     "total_passed": 0,
-    "total_failed": 6,
+    "total_failed": 3,
     "total_skipped": 0,
-    "p0_failures": 4,
-    "p1_failures": 3,
+    "p0_failures": 2,
+    "p1_failures": 2,
     "p2_failures": 0,
-    "dead_ends_count": 3
+    "dead_ends_count": 2
   },
   "thresholds": {
     "staging_ready": {
@@ -36,7 +36,7 @@
   "audits": {
     "page": {
       "passed": 0,
-      "failed": 2,
+      "failed": 1,
       "skipped": 0
     },
     "link": {
@@ -47,15 +47,15 @@
     },
     "button": {
       "passed": 0,
-      "failed": 2,
+      "failed": 1,
       "skipped": 0,
       "noop_count": 0
     },
     "workflow": {
       "passed": 0,
-      "failed": 2,
+      "failed": 1,
       "skipped": 0,
-      "dead_ends": 2
+      "dead_ends": 1
     }
   },
   "failures": [
@@ -64,27 +64,13 @@
       "id": "policies",
       "route": "/policies",
       "criticality": "P1",
-      "error": "Test is skipped: Auth type jwt_admin not configured"
-    },
-    {
-      "type": "page",
-      "id": "policies",
-      "route": "/policies",
-      "criticality": "P1",
-      "error": "Test is skipped: Auth type jwt_admin not configured"
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     },
     {
       "type": "button",
       "id": "portal-home::navigate-to-report",
       "criticality": "P0",
-      "error": "Test is skipped: Auth not configured",
-      "noop": false
-    },
-    {
-      "type": "button",
-      "id": "portal-home::navigate-to-report",
-      "criticality": "P0",
-      "error": "Test is skipped: Auth not configured",
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano",
       "noop": false
     },
     {
@@ -94,16 +80,7 @@
       "criticality": "P0",
       "completed_steps": 0,
       "total_steps": 5,
-      "error": "Test is skipped: Auth type portal_sso not configured"
-    },
-    {
-      "type": "workflow",
-      "id": "portal-incident-report",
-      "name": "Employee Incident Report Submission",
-      "criticality": "P0",
-      "completed_steps": 0,
-      "total_steps": 5,
-      "error": "Test is skipped: Auth type portal_sso not configured"
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     }
   ],
   "dead_ends": [
@@ -111,19 +88,13 @@
       "source": "risks",
       "href": "/risks",
       "type": "broken_link",
-      "error": "Test is skipped: Auth type jwt_admin not configured"
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is de"
     },
     {
       "source": "portal-incident-report",
       "href": "step_undefined",
       "type": "stranded_workflow",
-      "error": "Test is skipped: Auth type portal_sso not configured"
-    },
-    {
-      "source": "portal-incident-report",
-      "href": "step_undefined",
-      "type": "stranded_workflow",
-      "error": "Test is skipped: Auth type portal_sso not configured"
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     }
   ]
 }

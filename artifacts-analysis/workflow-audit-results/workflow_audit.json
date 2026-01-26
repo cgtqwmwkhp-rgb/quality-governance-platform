@@ -1,18 +1,14 @@
 {
   "audit_type": "workflow",
-  "timestamp": "2026-01-26T10:06:36.158Z",
-  "total_workflows": 2,
+  "timestamp": "2026-01-26T10:27:02.961Z",
+  "total_workflows": 1,
   "passed": 0,
-  "failed": 2,
+  "failed": 1,
   "skipped": 0,
   "dead_ends": [
     {
       "workflowId": "portal-incident-report",
-      "error": "Test is skipped: Auth type portal_sso not configured"
-    },
-    {
-      "workflowId": "portal-incident-report",
-      "error": "Test is skipped: Auth type portal_sso not configured"
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     }
   ],
   "results": [
@@ -23,30 +19,14 @@
       "result": "FAIL",
       "total_steps": 5,
       "completed_steps": 0,
-      "total_duration_ms": 33,
+      "total_duration_ms": 38,
       "terminal_state_reached": false,
       "apis_called": [],
       "expected_apis": [
         "POST /api/v1/employee-portal/reports"
       ],
       "step_results": [],
-      "error_message": "Test is skipped: Auth type portal_sso not configured"
-    },
-    {
-      "workflowId": "portal-incident-report",
-      "name": "Employee Incident Report Submission",
-      "criticality": "P0",
-      "result": "FAIL",
-      "total_steps": 5,
-      "completed_steps": 0,
-      "total_duration_ms": 33,
-      "terminal_state_reached": false,
-      "apis_called": [],
-      "expected_apis": [
-        "POST /api/v1/employee-portal/reports"
-      ],
-      "step_results": [],
-      "error_message": "Test is skipped: Auth type portal_sso not configured"
+      "error_message": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     }
   ]
 }

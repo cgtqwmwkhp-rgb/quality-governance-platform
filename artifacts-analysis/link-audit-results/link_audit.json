@@ -1,6 +1,6 @@
 {
   "audit_type": "link",
-  "timestamp": "2026-01-26T10:08:17.637Z",
+  "timestamp": "2026-01-26T10:29:25.171Z",
   "total_pages_audited": 1,
   "total_links": 0,
   "total_valid": 0,
@@ -19,7 +19,7 @@
           "href": "/risks",
           "status": "dead",
           "source_page": "risks",
-          "error": "Test is skipped: Auth type jwt_admin not configured"
+          "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is de"
         }
       ]
     }
@@ -28,7 +28,7 @@
     {
       "source": "risks",
       "href": "/risks",
-      "error": "Test is skipped: Auth type jwt_admin not configured"
+      "error": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is de"
     }
   ]
 }

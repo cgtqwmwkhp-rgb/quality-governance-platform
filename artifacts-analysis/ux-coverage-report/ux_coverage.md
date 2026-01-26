@@ -1,7 +1,7 @@
 # UX Functional Coverage Report
 
-**Generated:** 2026-01-26T10:08:41.006Z
-**Score:** 70/100
+**Generated:** 2026-01-26T10:29:42.763Z
+**Score:** 80/100
 **Status:** HOLD
 
 ## Summary
@@ -9,12 +9,12 @@
 | Metric | Value |
 |--------|-------|
 | Total Passed | 0 |
-| Total Failed | 6 |
+| Total Failed | 3 |
 | Total Skipped | 0 |
-| P0 Failures | 4 |
-| P1 Failures | 3 |
+| P0 Failures | 2 |
+| P1 Failures | 2 |
 | P2 Failures | 0 |
-| Dead Ends | 3 |
+| Dead Ends | 2 |
 
 ## Readiness
 
@@ -29,7 +29,7 @@
 ### Page Load Audit
 
 - Passed: 0
-- Failed: 2
+- Failed: 1
 - Skipped: 0
 
 ### Link Audit
@@ -42,27 +42,24 @@
 ### Button Wiring Audit
 
 - Passed: 0
-- Failed: 2
+- Failed: 1
 - Skipped: 0
 - Noop Buttons: 0
 
 ### Workflow Audit
 
 - Passed: 0
-- Failed: 2
+- Failed: 1
 - Skipped: 0
-- Dead Ends: 2
+- Dead Ends: 1
 
 ## Failures
 
 | Type | ID | Criticality | Error |
 |------|----|--------------| ----- |
-| page | policies | P1 | Test is skipped: Auth type jwt_admin not configure |
-| page | policies | P1 | Test is skipped: Auth type jwt_admin not configure |
-| button | portal-home::navigate-to-report | P0 | Test is skipped: Auth not configured |
-| button | portal-home::navigate-to-report | P0 | Test is skipped: Auth not configured |
-| workflow | portal-incident-report | P0 | Test is skipped: Auth type portal_sso not configur |
-| workflow | portal-incident-report | P0 | Test is skipped: Auth type portal_sso not configur |
+| page | policies | P1 | page.evaluate: SecurityError: Failed to read the ' |
+| button | portal-home::navigate-to-report | P0 | page.evaluate: SecurityError: Failed to read the ' |
+| workflow | portal-incident-report | P0 | page.evaluate: SecurityError: Failed to read the ' |
 
 ## Thresholds
 

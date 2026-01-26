@@ -1,7 +1,7 @@
 # UX Dead End Map
 
-**Generated:** 2026-01-26T10:08:41.006Z
-**Total Dead Ends:** 3
+**Generated:** 2026-01-26T10:29:42.763Z
+**Total Dead Ends:** 2
 
 ## Dead Ends by Type
 
@@ -9,14 +9,13 @@
 
 | Source | Target | Error |
 |--------|--------|-------|
-| risks | /risks | Test is skipped: Auth type jwt_admin not configure |
+| risks | /risks | page.evaluate: SecurityError: Failed to read the ' |
 
-### STRANDED WORKFLOW (2)
+### STRANDED WORKFLOW (1)
 
 | Source | Target | Error |
 |--------|--------|-------|
-| portal-incident-report | step_undefined | Test is skipped: Auth type portal_sso not configur |
-| portal-incident-report | step_undefined | Test is skipped: Auth type portal_sso not configur |
+| portal-incident-report | step_undefined | page.evaluate: SecurityError: Failed to read the ' |
 
 ---
 

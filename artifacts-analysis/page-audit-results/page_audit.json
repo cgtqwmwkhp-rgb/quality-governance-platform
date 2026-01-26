@@ -1,9 +1,9 @@
 {
   "audit_type": "page_load",
-  "timestamp": "2026-01-26T10:08:27.315Z",
-  "total_pages": 2,
+  "timestamp": "2026-01-26T10:29:31.871Z",
+  "total_pages": 1,
   "passed": 0,
-  "failed": 2,
+  "failed": 1,
   "skipped": 0,
   "results": [
     {
@@ -15,18 +15,7 @@
       "timing_bucket": "timeout",
       "console_errors": [],
       "empty_state_verified": null,
-      "error_message": "Test is skipped: Auth type jwt_admin not configured"
-    },
-    {
-      "pageId": "policies",
-      "route": "/policies",
-      "criticality": "P1",
-      "result": "FAIL",
-      "load_time_ms": 0,
-      "timing_bucket": "timeout",
-      "console_errors": [],
-      "empty_state_verified": null,
-      "error_message": "Test is skipped: Auth type jwt_admin not configured"
+      "error_message": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     }
   ]
 }

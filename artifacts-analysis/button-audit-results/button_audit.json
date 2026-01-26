@@ -1,9 +1,9 @@
 {
   "audit_type": "button_wiring",
-  "timestamp": "2026-01-26T10:06:31.265Z",
-  "total_buttons": 2,
+  "timestamp": "2026-01-26T10:27:19.928Z",
+  "total_buttons": 1,
   "passed": 0,
-  "failed": 2,
+  "failed": 1,
   "skipped": 0,
   "noop_buttons": 0,
   "results": [
@@ -16,18 +16,7 @@
       "found": false,
       "clicked": false,
       "outcome_observed": false,
-      "error_message": "Test is skipped: Auth not configured"
-    },
-    {
-      "pageId": "portal-home",
-      "actionId": "navigate-to-report",
-      "selector": "[data-testid='portal-report-btn']",
-      "criticality": "P0",
-      "result": "FAIL",
-      "found": false,
-      "clicked": false,
-      "outcome_observed": false,
-      "error_message": "Test is skipped: Auth not configured"
+      "error_message": "page.evaluate: SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<ano"
     }
   ]
 }

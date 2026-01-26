@@ -61,8 +61,13 @@ function loadPages(): PageEntry[] {
 const linkAuditResults: LinkAuditResult[] = [];
 
 // Auth helper (same as page-audit)
+// Auth helper - navigates to base URL first to establish origin for localStorage
 async function setupAuth(page: Page, authType: string): Promise<boolean> {
   if (authType === 'anon') return true;
+  
+  // Navigate to base URL first to establish origin (localStorage blocked on about:blank)
+  const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
   
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     await page.evaluate((token) => {
