@@ -62,9 +62,32 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager for startup and shutdown events."""
+    import time
+
+    logger = logging.getLogger(__name__)
+
     # Startup
     if settings.is_development:
         await init_db()
+
+    # Pre-warm OpenAPI schema generation for fast first request
+    # This avoids cold-start latency when /openapi.json is first accessed
+    # FastAPI caches the schema internally after first generation
+    openapi_start = time.perf_counter()
+    try:
+        _ = app.openapi()  # Triggers schema generation and caching
+        openapi_duration_ms = (time.perf_counter() - openapi_start) * 1000
+        logger.info(
+            "OpenAPI schema pre-warmed at startup",
+            extra={"openapi_warmup_ms": round(openapi_duration_ms, 2)},
+        )
+    except Exception as e:
+        # Non-fatal: log warning but don't block startup
+        logger.warning(
+            f"OpenAPI pre-warm failed (non-fatal): {e}",
+            extra={"error": str(e)},
+        )
+
     yield
     # Shutdown
     await close_db()

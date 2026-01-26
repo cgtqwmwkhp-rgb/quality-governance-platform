@@ -643,18 +643,26 @@ jobs:
           fi
           
           # Phase 4: OpenAPI latency measurement (non-blocking)
+          # Note: OpenAPI schema is pre-warmed at app startup (Deploy Proof v3)
+          # Increased timeout to 30s for cold-start scenarios
           echo ""
           echo "### Phase 4: OpenAPI Latency Measurement"
+          OPENAPI_TIMEOUT=30
           OPENAPI_START=$(date +%s%3N)
-          OPENAPI_STATUS=$(get_http_status "${APP_URL}/openapi.json" 15)
+          OPENAPI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time $OPENAPI_TIMEOUT "${APP_URL}/openapi.json" 2>/dev/null || echo "000")
           OPENAPI_END=$(date +%s%3N)
           OPENAPI_LATENCY=$((OPENAPI_END - OPENAPI_START))
           
           if [ "$OPENAPI_STATUS" = "200" ]; then
-            echo "✅ OpenAPI accessible (${OPENAPI_LATENCY}ms)"
-            OPENAPI_RESULT="PASS"
+            if [ $OPENAPI_LATENCY -lt 5000 ]; then
+              echo "✅ OpenAPI fast response (${OPENAPI_LATENCY}ms < 5s target)"
+              OPENAPI_RESULT="PASS"
+            else
+              echo "⚠️ OpenAPI slow but accessible (${OPENAPI_LATENCY}ms >= 5s)"
+              OPENAPI_RESULT="SLOW"
+            fi
           elif [ "$OPENAPI_STATUS" = "000" ]; then
-            echo "⚠️ OpenAPI timed out after ${OPENAPI_LATENCY}ms"
+            echo "⚠️ OpenAPI timed out after ${OPENAPI_LATENCY}ms (>${OPENAPI_TIMEOUT}s)"
             OPENAPI_RESULT="TIMEOUT"
           else
             echo "⚠️ OpenAPI returned HTTP $OPENAPI_STATUS (${OPENAPI_LATENCY}ms)"
