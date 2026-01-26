@@ -175,8 +175,8 @@ class InvestigationService:
                 )
 
             if target_section not in data["sections"]:
-                data["sections"][target_section] = {}  # type: ignore[index]  # TYPE-IGNORE: Dict indexing
-            data["sections"][target_section][target_field] = source_value  # type: ignore[index]  # TYPE-IGNORE: Dict indexing
+                data["sections"][target_section] = {}  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
+            data["sections"][target_section][target_field] = source_value  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
 
         # Section 1: Incident/Event Details (common mapping)
         if source_type == AssignedEntityType.NEAR_MISS:
@@ -363,7 +363,7 @@ class InvestigationService:
         # Process sections with redaction
         source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
         for section_id, section_data in source_data.get("sections", {}).items():
-            content["sections"][section_id] = {}  # type: ignore[index]  # TYPE-IGNORE: Dict indexing
+            content["sections"][section_id] = {}  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
 
             if isinstance(section_data, dict):
                 for field_id, field_value in section_data.items():
@@ -407,7 +407,7 @@ class InvestigationService:
                                 }
                             )
 
-                    content["sections"][section_id][field_id] = field_value  # type: ignore[index]  # TYPE-IGNORE: Dict indexing
+                    content["sections"][section_id][field_id] = field_value  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
 
         # Process evidence assets based on visibility rules
         for asset in evidence_assets:
