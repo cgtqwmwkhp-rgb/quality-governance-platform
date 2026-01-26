@@ -340,16 +340,16 @@ class TestAPIEndpointValidation:
     """Test Stage 2 API endpoints exist and validate correctly."""
 
     async def test_from_record_endpoint_exists(self, client: AsyncClient):
-        """Test /investigations/from-record endpoint exists."""
+        """Test /investigations/from-record endpoint exists and accepts JSON body."""
         response = await client.post(
             "/api/v1/investigations/from-record",
-            params={
+            json={
                 "source_type": "near_miss",
                 "source_id": 1,
                 "title": "Test Investigation",
             },
         )
-        # Should get 401 (auth required), not 404 (endpoint not found)
+        # Should get 401 (auth required), not 404 (endpoint not found) or 405 (method not allowed)
         assert response.status_code == 401
 
     async def test_autosave_endpoint_exists(self, client: AsyncClient):
