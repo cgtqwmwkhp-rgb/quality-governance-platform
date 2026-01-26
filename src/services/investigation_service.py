@@ -135,8 +135,8 @@ class InvestigationService:
         Returns:
             Tuple of (investigation_data, mapping_log, suggested_level)
         """
-        data = {"sections": {}}
-        mapping_log = []
+        data: Dict[str, Any] = {"sections": {}}
+        mapping_log: List[Dict[str, Any]] = []
         level = InvestigationLevel.MEDIUM  # Default
 
         def map_field(
@@ -175,8 +175,8 @@ class InvestigationService:
                 )
 
             if target_section not in data["sections"]:
-                data["sections"][target_section] = {}
-            data["sections"][target_section][target_field] = source_value
+                data["sections"][target_section] = {}  # type: ignore[index]
+            data["sections"][target_section][target_field] = source_value  # type: ignore[index]
 
         # Section 1: Incident/Event Details (common mapping)
         if source_type == AssignedEntityType.NEAR_MISS:
@@ -342,18 +342,28 @@ class InvestigationService:
         # (They are not in investigation.data, so nothing to do here)
 
         # Copy investigation data
-        content = {
+        status_val = (
+            investigation.status.value
+            if hasattr(investigation.status, "value")
+            else str(investigation.status) if investigation.status else "unknown"
+        )
+        level_val = (
+            investigation.level.value
+            if hasattr(investigation.level, "value")
+            else str(investigation.level) if investigation.level else "medium"
+        )
+        content: Dict[str, Any] = {
             "investigation_reference": investigation.reference_number,
             "title": investigation.title,
-            "status": investigation.status.value if investigation.status else "unknown",
-            "level": investigation.level.value if investigation.level else "medium",
+            "status": status_val,
+            "level": level_val,
             "sections": {},
         }
 
         # Process sections with redaction
-        source_data = investigation.data or {}
+        source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
         for section_id, section_data in source_data.get("sections", {}).items():
-            content["sections"][section_id] = {}
+            content["sections"][section_id] = {}  # type: ignore[index]
 
             if isinstance(section_data, dict):
                 for field_id, field_value in section_data.items():
@@ -397,7 +407,7 @@ class InvestigationService:
                                 }
                             )
 
-                    content["sections"][section_id][field_id] = field_value
+                    content["sections"][section_id][field_id] = field_value  # type: ignore[index]
 
         # Process evidence assets based on visibility rules
         for asset in evidence_assets:

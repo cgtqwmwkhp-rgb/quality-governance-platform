@@ -547,8 +547,8 @@ async def autosave_investigation(
     old_data = investigation.data
 
     # Update data and increment version
-    investigation.data = data
-    investigation.version += 1
+    investigation.data = data  # type: ignore[assignment]
+    investigation.version += 1  # type: ignore[assignment]
     investigation.updated_by_id = current_user.id
 
     # Create revision event
@@ -706,11 +706,11 @@ async def approve_investigation(
     old_status = investigation.status
 
     if approved:
-        investigation.status = InvestigationStatus.COMPLETED
-        investigation.approved_at = datetime.now(timezone.utc)
-        investigation.approved_by_id = current_user.id
-        investigation.completed_at = datetime.now(timezone.utc)
-        investigation.rejection_reason = None
+        investigation.status = InvestigationStatus.COMPLETED  # type: ignore[assignment]
+        investigation.approved_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+        investigation.approved_by_id = current_user.id  # type: ignore[assignment]
+        investigation.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+        investigation.rejection_reason = None  # type: ignore[assignment]
         event_type = "APPROVED"
     else:
         if not rejection_reason:
