@@ -1,0 +1,300 @@
+name: UX Functional Coverage Gate
+
+on:
+  workflow_run:
+    workflows: ["Deploy to Azure Staging"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: 'Application URL to test'
+        required: false
+        default: ''
+
+concurrency:
+  group: ux-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Only run if staging deployment succeeded
+  check-trigger:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      app_url: ${{ steps.check.outputs.app_url }}
+    steps:
+      - name: Check trigger conditions
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "app_url=${{ github.event.inputs.app_url || 'https://app-qgp-staging.azurewebsites.net' }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "app_url=https://app-qgp-staging.azurewebsites.net" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping: staging deployment did not succeed"
+          fi
+
+  # Page Load Audit
+  page-audit:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tests/ux-coverage/package.json
+
+      - name: Install dependencies
+        working-directory: tests/ux-coverage
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run Page Audit
+        working-directory: tests/ux-coverage
+        env:
+          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
+          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+        run: npx playwright test tests/page-audit.spec.ts --reporter=list
+        continue-on-error: true
+
+      - name: Upload Page Audit Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-audit-results
+          path: tests/ux-coverage/results/page_audit.json
+          retention-days: 30
+
+  # Link Audit
+  link-audit:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tests/ux-coverage/package.json
+
+      - name: Install dependencies
+        working-directory: tests/ux-coverage
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run Link Audit
+        working-directory: tests/ux-coverage
+        env:
+          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
+          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+        run: npx playwright test tests/link-audit.spec.ts --reporter=list
+        continue-on-error: true
+
+      - name: Upload Link Audit Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: link-audit-results
+          path: tests/ux-coverage/results/link_audit.json
+          retention-days: 30
+
+  # Button Wiring Audit
+  button-audit:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tests/ux-coverage/package.json
+
+      - name: Install dependencies
+        working-directory: tests/ux-coverage
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run Button Audit
+        working-directory: tests/ux-coverage
+        env:
+          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
+          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+        run: npx playwright test tests/button-audit.spec.ts --reporter=list
+        continue-on-error: true
+
+      - name: Upload Button Audit Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: button-audit-results
+          path: tests/ux-coverage/results/button_audit.json
+          retention-days: 30
+
+  # Workflow Audit (P0 Critical Paths)
+  workflow-audit:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tests/ux-coverage/package.json
+
+      - name: Install dependencies
+        working-directory: tests/ux-coverage
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run Workflow Audit
+        working-directory: tests/ux-coverage
+        env:
+          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          ADMIN_TEST_TOKEN: ${{ secrets.UX_TEST_ADMIN_TOKEN }}
+          PORTAL_TEST_TOKEN: ${{ secrets.UX_TEST_PORTAL_TOKEN }}
+          TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
+        run: npx playwright test tests/workflow-audit.spec.ts --reporter=list
+        continue-on-error: true
+
+      - name: Upload Workflow Audit Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-audit-results
+          path: tests/ux-coverage/results/workflow_audit.json
+          retention-days: 30
+
+  # Aggregate Results and Enforce Gate
+  aggregate-and-gate:
+    runs-on: ubuntu-latest
+    needs: [check-trigger, page-audit, link-audit, button-audit, workflow-audit]
+    if: always() && needs.check-trigger.outputs.should_run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download all audit results
+        uses: actions/download-artifact@v4
+        with:
+          path: audit-results
+
+      - name: Prepare results directory
+        run: |
+          mkdir -p tests/ux-coverage/results
+          cp audit-results/page-audit-results/page_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[]}' > tests/ux-coverage/results/page_audit.json
+          cp audit-results/link-audit-results/link_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[],"dead_end_map":[]}' > tests/ux-coverage/results/link_audit.json
+          cp audit-results/button-audit-results/button_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[]}' > tests/ux-coverage/results/button_audit.json
+          cp audit-results/workflow-audit-results/workflow_audit.json tests/ux-coverage/results/ 2>/dev/null || echo '{"results":[],"dead_ends":[]}' > tests/ux-coverage/results/workflow_audit.json
+
+      - name: Run Aggregation
+        id: aggregate
+        run: |
+          mkdir -p artifacts
+          node scripts/governance/ux-coverage-aggregate.cjs || echo "aggregate_failed=true" >> $GITHUB_OUTPUT
+        env:
+          RESULTS_DIR: tests/ux-coverage/results
+          OUTPUT_DIR: artifacts
+
+      - name: Upload UX Coverage Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-coverage-report
+          path: |
+            artifacts/ux_coverage.json
+            artifacts/ux_coverage.md
+            artifacts/ux_dead_end_map.md
+          retention-days: 30
+
+      - name: Read Coverage Summary
+        id: coverage
+        run: |
+          if [ -f artifacts/ux_coverage.json ]; then
+            SCORE=$(jq -r '.score' artifacts/ux_coverage.json)
+            STATUS=$(jq -r '.status' artifacts/ux_coverage.json)
+            P0_FAILS=$(jq -r '.summary.p0_failures' artifacts/ux_coverage.json)
+            P1_FAILS=$(jq -r '.summary.p1_failures' artifacts/ux_coverage.json)
+            DEAD_ENDS=$(jq -r '.summary.dead_ends_count' artifacts/ux_coverage.json)
+            echo "score=$SCORE" >> $GITHUB_OUTPUT
+            echo "status=$STATUS" >> $GITHUB_OUTPUT
+            echo "p0_fails=$P0_FAILS" >> $GITHUB_OUTPUT
+            echo "p1_fails=$P1_FAILS" >> $GITHUB_OUTPUT
+            echo "dead_ends=$DEAD_ENDS" >> $GITHUB_OUTPUT
+          else
+            echo "score=0" >> $GITHUB_OUTPUT
+            echo "status=HOLD" >> $GITHUB_OUTPUT
+            echo "p0_fails=-1" >> $GITHUB_OUTPUT
+            echo "p1_fails=-1" >> $GITHUB_OUTPUT
+            echo "dead_ends=-1" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Summary
+        run: |
+          echo "## UX Functional Coverage Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Score | ${{ steps.coverage.outputs.score }}/100 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.coverage.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| P0 Failures | ${{ steps.coverage.outputs.p0_fails }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| P1 Failures | ${{ steps.coverage.outputs.p1_fails }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dead Ends | ${{ steps.coverage.outputs.dead_ends }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.coverage.outputs.status }}" = "GO" ]; then
+            echo "✅ **PASS**: Ready for production" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.coverage.outputs.status }}" = "CANARY" ]; then
+            echo "⚠️ **CANARY**: Ready for canary deployment only" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.coverage.outputs.status }}" = "STAGING" ]; then
+            echo "⚠️ **STAGING**: Ready for staging only" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **HOLD**: Deployment blocked" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Enforce Gate (Fail on P0)
+        if: steps.coverage.outputs.p0_fails != '0'
+        run: |
+          echo "❌ Gate FAILED: ${{ steps.coverage.outputs.p0_fails }} P0 failures detected"
+          echo "See ux_coverage.md artifact for details"
+          exit 1
+
+      - name: Enforce Gate (Fail on HOLD)
+        if: steps.coverage.outputs.status == 'HOLD' && steps.coverage.outputs.p0_fails == '0'
+        run: |
+          echo "⚠️ Gate HOLD: Score ${{ steps.coverage.outputs.score }} below threshold"
+          echo "See ux_coverage.md artifact for details"
+          exit 1

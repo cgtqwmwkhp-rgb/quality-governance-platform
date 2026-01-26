@@ -1,0 +1,269 @@
+# Button/Action Registry for UX Functional Coverage Gate
+# Critical buttons and their expected outcomes
+# Uses data-testid selectors for stability
+
+version: "1.0"
+last_updated: "2026-01-26"
+
+# ==============================================================================
+# PORTAL ACTIONS (P0 Critical - Employee Self-Service)
+# ==============================================================================
+portal_actions:
+  # Portal Home Navigation
+  - pageId: portal-home
+    actionId: navigate-to-report
+    selector: "[data-testid='portal-report-btn']"
+    fallback_selector: "a[href='/portal/report'], button:has-text('Report')"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /portal/report
+    disabled_reason: null
+    description: "Navigate to report selection"
+
+  - pageId: portal-home
+    actionId: navigate-to-track
+    selector: "[data-testid='portal-track-btn']"
+    fallback_selector: "a[href='/portal/track'], button:has-text('Track')"
+    criticality: P1
+    expected_outcome: navigation
+    expected_route: /portal/track
+    disabled_reason: null
+    description: "Navigate to track reports"
+
+  # Report Type Selection
+  - pageId: portal-report
+    actionId: select-incident
+    selector: "[data-testid='report-incident-card']"
+    fallback_selector: "a[href='/portal/report/incident']"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /portal/report/incident
+    disabled_reason: null
+    description: "Select incident report type"
+
+  - pageId: portal-report
+    actionId: select-near-miss
+    selector: "[data-testid='report-near-miss-card']"
+    fallback_selector: "a[href='/portal/report/near-miss']"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /portal/report/near-miss
+    disabled_reason: null
+    description: "Select near-miss report type"
+
+  - pageId: portal-report
+    actionId: select-complaint
+    selector: "[data-testid='report-complaint-card']"
+    fallback_selector: "a[href='/portal/report/complaint']"
+    criticality: P1
+    expected_outcome: navigation
+    expected_route: /portal/report/complaint
+    disabled_reason: null
+    description: "Select complaint report type"
+
+  - pageId: portal-report
+    actionId: select-rta
+    selector: "[data-testid='report-rta-card']"
+    fallback_selector: "a[href='/portal/report/rta']"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /portal/report/rta
+    disabled_reason: null
+    description: "Select RTA report type"
+
+  # Form Submissions
+  - pageId: portal-report-incident
+    actionId: submit-incident-form
+    selector: "[data-testid='submit-report-btn']"
+    fallback_selector: "button[type='submit'], button:has-text('Submit')"
+    criticality: P0
+    expected_outcome: network_call
+    expected_api: POST /api/v1/employee-portal/reports
+    disabled_reason: "Form validation incomplete"
+    description: "Submit incident report"
+
+  - pageId: portal-report-near-miss
+    actionId: submit-near-miss-form
+    selector: "[data-testid='submit-report-btn']"
+    fallback_selector: "button[type='submit'], button:has-text('Submit')"
+    criticality: P0
+    expected_outcome: network_call
+    expected_api: POST /api/v1/employee-portal/reports
+    disabled_reason: "Form validation incomplete"
+    description: "Submit near-miss report"
+
+  - pageId: portal-report-rta
+    actionId: submit-rta-form
+    selector: "[data-testid='submit-rta-btn']"
+    fallback_selector: "button[type='submit'], button:has-text('Submit')"
+    criticality: P0
+    expected_outcome: network_call
+    expected_api: POST /api/v1/employee-portal/reports
+    disabled_reason: "Form validation incomplete"
+    description: "Submit RTA report"
+
+# ==============================================================================
+# ADMIN DASHBOARD ACTIONS (P0/P1 Critical)
+# ==============================================================================
+admin_actions:
+  # Login
+  - pageId: login
+    actionId: submit-login
+    selector: "[data-testid='login-submit-btn']"
+    fallback_selector: "button[type='submit'], button:has-text('Login')"
+    criticality: P0
+    expected_outcome: network_call
+    expected_api: POST /api/v1/auth/login
+    disabled_reason: "Credentials incomplete"
+    description: "Submit login form"
+
+  # Dashboard Navigation
+  - pageId: dashboard
+    actionId: nav-to-incidents
+    selector: "[data-testid='nav-incidents']"
+    fallback_selector: "a[href='/incidents']"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /incidents
+    disabled_reason: null
+    description: "Navigate to incidents"
+
+  - pageId: dashboard
+    actionId: nav-to-rtas
+    selector: "[data-testid='nav-rtas']"
+    fallback_selector: "a[href='/rtas']"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /rtas
+    disabled_reason: null
+    description: "Navigate to RTAs"
+
+  # Incident List Actions
+  - pageId: incidents-list
+    actionId: create-new-incident
+    selector: "[data-testid='create-incident-btn']"
+    fallback_selector: "button:has-text('New Incident'), button:has-text('Create')"
+    criticality: P0
+    expected_outcome: ui_state
+    expected_state: "Modal or form appears"
+    disabled_reason: null
+    description: "Open create incident form"
+
+  - pageId: incidents-list
+    actionId: view-incident-detail
+    selector: "[data-testid='incident-row-link']"
+    fallback_selector: "tr[data-testid*='incident'] a, table tbody tr:first-child a"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /incidents/:id
+    disabled_reason: null
+    description: "View incident details"
+
+  # RTA List Actions  
+  - pageId: rtas-list
+    actionId: create-new-rta
+    selector: "[data-testid='create-rta-btn']"
+    fallback_selector: "button:has-text('New RTA'), button:has-text('Create')"
+    criticality: P0
+    expected_outcome: ui_state
+    expected_state: "Modal or form appears"
+    disabled_reason: null
+    description: "Open create RTA form"
+
+  # Audit Actions
+  - pageId: audits
+    actionId: create-new-audit
+    selector: "[data-testid='create-audit-btn']"
+    fallback_selector: "button:has-text('New Audit'), button:has-text('Create')"
+    criticality: P1
+    expected_outcome: ui_state
+    expected_state: "Modal or form appears"
+    disabled_reason: null
+    description: "Open create audit form"
+
+  - pageId: audit-templates
+    actionId: create-new-template
+    selector: "[data-testid='create-template-btn']"
+    fallback_selector: "button:has-text('New Template'), a[href='/audit-templates/new']"
+    criticality: P1
+    expected_outcome: navigation
+    expected_route: /audit-templates/new
+    disabled_reason: null
+    description: "Create new audit template"
+
+  # User Management
+  - pageId: users
+    actionId: invite-user
+    selector: "[data-testid='invite-user-btn']"
+    fallback_selector: "button:has-text('Invite'), button:has-text('Add User')"
+    criticality: P1
+    expected_outcome: ui_state
+    expected_state: "Invite modal appears"
+    disabled_reason: null
+    description: "Invite new user"
+
+  # Document Management
+  - pageId: documents
+    actionId: upload-document
+    selector: "[data-testid='upload-document-btn']"
+    fallback_selector: "button:has-text('Upload'), input[type='file']"
+    criticality: P1
+    expected_outcome: ui_state
+    expected_state: "Upload dialog or file picker"
+    disabled_reason: null
+    description: "Upload document"
+
+  # Global Search
+  - pageId: search
+    actionId: execute-search
+    selector: "[data-testid='search-submit-btn']"
+    fallback_selector: "button[type='submit'], input[type='search'] + button"
+    criticality: P1
+    expected_outcome: network_call
+    expected_api: GET /api/v1/search
+    disabled_reason: "Search query empty"
+    description: "Execute global search"
+
+  # Logout
+  - pageId: dashboard
+    actionId: logout
+    selector: "[data-testid='logout-btn']"
+    fallback_selector: "button:has-text('Logout'), button:has-text('Sign Out')"
+    criticality: P0
+    expected_outcome: navigation
+    expected_route: /login
+    disabled_reason: null
+    description: "Logout from system"
+
+# ==============================================================================
+# ADMIN CONFIGURATION ACTIONS (P1/P2)
+# ==============================================================================
+admin_config_actions:
+  - pageId: admin-forms
+    actionId: create-form-template
+    selector: "[data-testid='create-form-btn']"
+    fallback_selector: "a[href='/admin/forms/new'], button:has-text('New Form')"
+    criticality: P1
+    expected_outcome: navigation
+    expected_route: /admin/forms/new
+    disabled_reason: null
+    description: "Create new form template"
+
+  - pageId: admin-settings
+    actionId: save-settings
+    selector: "[data-testid='save-settings-btn']"
+    fallback_selector: "button[type='submit'], button:has-text('Save')"
+    criticality: P2
+    expected_outcome: network_call
+    expected_api: PUT /api/v1/admin/settings
+    disabled_reason: null
+    description: "Save system settings"
+
+# ==============================================================================
+# SUMMARY
+# ==============================================================================
+summary:
+  total_actions: 25
+  p0_actions: 14
+  p1_actions: 9
+  p2_actions: 2
