@@ -119,17 +119,22 @@ p0_workflows:
       - POST /api/v1/employee-portal/reports
     max_duration_seconds: 45
 
-  # Admin Login Flow
+  # Admin Login Flow (LOGIN_UX_CONTRACT.md compliant)
   - workflowId: admin-login
     name: "Admin Staff Login"
     description: "Staff member logs into admin dashboard"
     criticality: P0
     auth_type: none
+    contract: LOGIN_UX_CONTRACT.md
     steps:
       - stepId: 1
         action: "Navigate to login"
         route: /login
-        exit_criteria: "Login form visible"
+        exit_criteria: "Login form visible in idle state"
+        selectors:
+          - "[data-testid='email-input']"
+          - "[data-testid='password-input']"
+          - "[data-testid='submit-button']"
         
       - stepId: 2
         action: "Enter credentials"
@@ -142,16 +147,46 @@ p0_workflows:
         
       - stepId: 3
         action: "Submit login"
-        selector: "[data-testid='login-submit-btn']"
-        exit_criteria: "Redirect to dashboard"
+        selector: "[data-testid='submit-button']"
+        exit_criteria: "Redirect to dashboard OR bounded error shown"
         expected_api: POST /api/v1/auth/login
         
     success_terminal_state: "Dashboard visible with user logged in"
-    recovery_path: "Error message with retry option"
+    error_terminal_states:
+      - error_code: UNAUTHORIZED
+        ui_element: "[data-testid='login-error'][data-error-code='UNAUTHORIZED']"
+        message: "Incorrect email or password"
+      - error_code: TIMEOUT
+        ui_element: "[data-testid='login-error'][data-error-code='TIMEOUT']"
+        message: "Request timed out"
+      - error_code: UNAVAILABLE
+        ui_element: "[data-testid='login-error'][data-error-code='UNAVAILABLE']"
+        message: "Service temporarily unavailable"
+      - error_code: SERVER_ERROR
+        ui_element: "[data-testid='login-error'][data-error-code='SERVER_ERROR']"
+        message: "Something went wrong"
+      - error_code: NETWORK_ERROR
+        ui_element: "[data-testid='login-error'][data-error-code='NETWORK_ERROR']"
+        message: "Unable to connect"
+    recovery_actions:
+      - action: retry
+        selector: "[data-testid='retry-button']"
+        applies_to: [TIMEOUT, UNAVAILABLE, SERVER_ERROR, NETWORK_ERROR]
+      - action: clear_session
+        selector: "[data-testid='clear-session-button']"
+        applies_to: [TIMEOUT, UNAVAILABLE, SERVER_ERROR, NETWORK_ERROR]
+    invariants:
+      - no_infinite_spinner: "Spinner must clear within 15 seconds"
+      - terminal_state_required: "Request ends in success OR bounded error"
+      - button_re_enabled: "Submit button enabled after error"
     expected_apis:
       - POST /api/v1/auth/login
       - GET /api/v1/users/me
     max_duration_seconds: 15
+    performance_thresholds:
+      p95_staging_seconds: 5
+      p95_prod_seconds: 7
+      hard_timeout_seconds: 15
 
   # Admin Incident View
   - workflowId: admin-view-incident

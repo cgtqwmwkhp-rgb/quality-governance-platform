@@ -1,38 +1,122 @@
-import { useState } from 'react'
-import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2, RefreshCw, Trash2 } from 'lucide-react'
-import { authApi, getApiErrorMessage } from '../api/client'
+import { useState, useEffect, useRef } from 'react'
+import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2, RefreshCw, Trash2, Clock } from 'lucide-react'
+import { 
+  authApi, 
+  classifyLoginError, 
+  LOGIN_ERROR_MESSAGES, 
+  getDurationBucket,
+  type LoginErrorCode,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { clearTokens } from '../utils/auth'
+import { 
+  trackLoginCompleted, 
+  trackLoginErrorShown, 
+  trackLoginRecoveryAction,
+  trackLoginSlowWarning 
+} from '../services/telemetry'
+
+// ============ Login State Machine (LOGIN_UX_CONTRACT.md) ============
+type LoginState =
+  | 'idle'
+  | 'submitting'
+  | 'spinner_visible'
+  | 'slow_warning'
+  | 'error_timeout'
+  | 'error_unauthorized'
+  | 'error_unavailable'
+  | 'error_server'
+  | 'error_network'
+  | 'error_unknown'
+  | 'success';
+
+// Timing constants (from contract)
+const SPINNER_DELAY_MS = 250;      // Don't show spinner for fast requests
+const SLOW_WARNING_MS = 3000;      // Show "Still working..." after 3s
+const REQUEST_TIMEOUT_MS = 15000;  // Hard timeout
 
 interface LoginProps {
   onLogin: (token: string) => void
 }
 
+// Telemetry wrappers (uses centralized service)
+function emitLoginTelemetry(
+  result: 'success' | 'error',
+  durationMs: number,
+  errorCode?: LoginErrorCode
+): void {
+  const durationBucket = getDurationBucket(durationMs);
+  trackLoginCompleted(result, durationBucket, errorCode);
+  
+  // Also track error shown if applicable
+  if (result === 'error' && errorCode) {
+    trackLoginErrorShown(errorCode);
+  }
+}
+
 export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [showRetry, setShowRetry] = useState(false)
+  const [loginState, setLoginState] = useState<LoginState>('idle')
+  const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null)
+  
+  // Refs for timing
+  const requestStartRef = useRef<number>(0)
+  const spinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const slowWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (spinnerTimerRef.current) clearTimeout(spinnerTimerRef.current)
+      if (slowWarningTimerRef.current) clearTimeout(slowWarningTimerRef.current)
+    }
+  }, [])
 
   // Clear session data (for stuck states)
   const handleClearSession = () => {
+    trackLoginRecoveryAction('clear_session')
     clearTokens()
     localStorage.removeItem('user')
     sessionStorage.clear()
-    setError('')
-    setShowRetry(false)
     // Reload to reset all state
     window.location.reload()
   }
 
+  const handleRetry = () => {
+    trackLoginRecoveryAction('retry')
+    setLoginState('idle')
+    setErrorCode(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
-    setLoading(true)
+    
+    // Clear any previous errors
+    setErrorCode(null)
+    setLoginState('submitting')
+    requestStartRef.current = Date.now()
+    
+    // Set up spinner delay (don't show spinner for fast requests)
+    spinnerTimerRef.current = setTimeout(() => {
+      setLoginState(current => 
+        current === 'submitting' ? 'spinner_visible' : current
+      )
+    }, SPINNER_DELAY_MS)
+    
+    // Set up slow warning
+    slowWarningTimerRef.current = setTimeout(() => {
+      setLoginState(current => {
+        if (current === 'submitting' || current === 'spinner_visible') {
+          trackLoginSlowWarning()
+          return 'slow_warning'
+        }
+        return current
+      })
+    }, SLOW_WARNING_MS)
 
     try {
       // Demo login bypass - allows access without backend
@@ -48,13 +132,13 @@ export default function Login({ onLogin }: LoginProps) {
       
       if (isDemoLogin) {
         // Generate a demo token (JWT-like structure for demo purposes)
-        const getUserName = (email: string) => {
+        const getUserName = (userEmail: string) => {
           const names: Record<string, string> = {
             'admin@plantexpand.com': 'Admin User',
             'demo@plantexpand.com': 'Demo User',
             'jamie.uncle@plantexpand.com': 'Jamie Uncle',
           }
-          return names[email.toLowerCase()] || 'User'
+          return names[userEmail.toLowerCase()] || 'User'
         }
         const demoPayload = {
           sub: email,
@@ -64,27 +148,56 @@ export default function Login({ onLogin }: LoginProps) {
           exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
         }
         const demoToken = `demo.${btoa(JSON.stringify(demoPayload))}.signature`
+        
+        const durationMs = Date.now() - requestStartRef.current
+        emitLoginTelemetry('success', durationMs)
+        
+        setLoginState('success')
         onLogin(demoToken)
         return
       }
       
       // Try real API login
       const response = await authApi.login({ email, password })
-      onLogin(response.data.access_token)
-    } catch (err: any) {
-      // Use the centralized error message extractor
-      const errorMessage = getApiErrorMessage(err)
-      setError(errorMessage)
       
-      // Show retry button for timeout or network errors
-      if (err.isTimeout || !err.response) {
-        setShowRetry(true)
-      }
+      const durationMs = Date.now() - requestStartRef.current
+      emitLoginTelemetry('success', durationMs)
+      
+      setLoginState('success')
+      onLogin(response.data.access_token)
+      
+    } catch (err: unknown) {
+      // Classify error into bounded code
+      const code = classifyLoginError(err)
+      const durationMs = Date.now() - requestStartRef.current
+      
+      emitLoginTelemetry('error', durationMs, code)
+      
+      setErrorCode(code)
+      setLoginState(`error_${code.toLowerCase()}` as LoginState)
+      
     } finally {
-      // CRITICAL: Always clear loading state to prevent infinite spinner
-      setLoading(false)
+      // CRITICAL: Always clear timers to prevent state leaks
+      if (spinnerTimerRef.current) {
+        clearTimeout(spinnerTimerRef.current)
+        spinnerTimerRef.current = null
+      }
+      if (slowWarningTimerRef.current) {
+        clearTimeout(slowWarningTimerRef.current)
+        slowWarningTimerRef.current = null
+      }
     }
   }
+
+  // Derived state
+  const isLoading = ['submitting', 'spinner_visible', 'slow_warning'].includes(loginState)
+  const showSpinner = ['spinner_visible', 'slow_warning'].includes(loginState)
+  const showSlowWarning = loginState === 'slow_warning'
+  const isError = loginState.startsWith('error_')
+  const showRecoveryActions = errorCode && errorCode !== 'UNAUTHORIZED'
+  
+  // Get error message from bounded list
+  const errorMessage = errorCode ? LOGIN_ERROR_MESSAGES[errorCode] : null
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative">
@@ -112,20 +225,26 @@ export default function Login({ onLogin }: LoginProps) {
         {/* Login form */}
         <Card className="p-8">
           <form onSubmit={handleSubmit}>
-            {error && (
-              <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {/* Error display (bounded) */}
+            {isError && errorMessage && (
+              <div 
+                className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+                data-testid="login-error"
+                data-error-code={errorCode}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <AlertCircle size={18} />
-                  {error}
+                  <span data-testid="error-message">{errorMessage}</span>
                 </div>
-                {showRetry && (
-                  <div className="flex gap-2 mt-3">
+                {showRecoveryActions && (
+                  <div className="flex gap-2 mt-3" data-testid="recovery-actions">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => { setError(''); setShowRetry(false); }}
+                      onClick={handleRetry}
                       className="text-xs"
+                      data-testid="retry-button"
                     >
                       <RefreshCw size={14} className="mr-1" />
                       Try Again
@@ -136,12 +255,24 @@ export default function Login({ onLogin }: LoginProps) {
                       size="sm"
                       onClick={handleClearSession}
                       className="text-xs"
+                      data-testid="clear-session-button"
                     >
                       <Trash2 size={14} className="mr-1" />
                       Clear Session
                     </Button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Slow warning */}
+            {showSlowWarning && (
+              <div 
+                className="mb-6 p-4 rounded-xl bg-warning/10 border border-warning/20 text-warning-foreground text-sm flex items-center gap-3"
+                data-testid="slow-warning"
+              >
+                <Clock size={18} className="text-warning" />
+                <span>Still working... This is taking longer than usual.</span>
               </div>
             )}
 
@@ -156,7 +287,9 @@ export default function Login({ onLogin }: LoginProps) {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@company.com"
                     required
+                    disabled={isLoading}
                     className="pl-10"
+                    data-testid="email-input"
                   />
                 </div>
               </div>
@@ -171,7 +304,9 @@ export default function Login({ onLogin }: LoginProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
+                    disabled={isLoading}
                     className="pl-10"
+                    data-testid="password-input"
                   />
                 </div>
               </div>
@@ -179,12 +314,14 @@ export default function Login({ onLogin }: LoginProps) {
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={isLoading}
               className="mt-6 w-full"
               size="lg"
+              data-testid="submit-button"
+              data-loading={isLoading}
             >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+              {showSpinner ? (
+                <Loader2 className="w-5 h-5 animate-spin" data-testid="spinner" />
               ) : (
                 <>
                   Sign In

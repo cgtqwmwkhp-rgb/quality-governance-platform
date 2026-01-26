@@ -71,45 +71,45 @@ METRICS_DIR = Path(os.getenv("METRICS_DIR", str(_DEFAULT_METRICS_DIR)))
 
 class TelemetryEvent(BaseModel):
     """Single telemetry event from frontend."""
-
+    
     name: str = Field(..., description="Event name (must be allowlisted)")
     timestamp: str = Field(..., description="ISO timestamp")
     sessionId: str = Field(..., description="Anonymous session ID")
     dimensions: dict = Field(default_factory=dict, description="Event dimensions")
-
+    
     @validator("name")
     def validate_event_name(cls, v):
         if v not in ALLOWED_EVENTS:
             raise ValueError(f"Event name '{v}' not in allowlist")
         return v
-
+    
     @validator("dimensions")
     def validate_dimensions(cls, v):
         # Only allow known dimension keys
         for key in v.keys():
             if key not in ALLOWED_DIMENSIONS:
                 raise ValueError(f"Dimension key '{key}' not in allowlist")
-
+        
         # Validate formType values
         if "formType" in v and v["formType"] not in ALLOWED_FORM_TYPES:
             raise ValueError(f"formType '{v['formType']}' not in allowlist")
-
+        
         # Validate environment values
         if "environment" in v and v["environment"] not in ALLOWED_ENVIRONMENTS:
             raise ValueError(f"environment '{v['environment']}' not in allowlist")
-
+        
         return v
 
 
 class TelemetryBatch(BaseModel):
     """Batch of telemetry events."""
-
+    
     events: List[TelemetryEvent] = Field(..., min_items=1, max_items=100)
 
 
 class MetricsAggregation(BaseModel):
     """Aggregated metrics for evaluator consumption."""
-
+    
     experimentId: str
     collectionStart: str
     collectionEnd: str
@@ -151,21 +151,21 @@ def save_metrics_file(metrics: dict) -> None:
 def aggregate_event(event: TelemetryEvent) -> None:
     """Aggregate a single event into metrics file."""
     metrics = load_metrics_file()
-
+    
     # Update collection window
     if not metrics["collectionStart"]:
         metrics["collectionStart"] = event.timestamp
     metrics["collectionEnd"] = event.timestamp
-
+    
     # Count events by name
     if event.name not in metrics["events"]:
         metrics["events"][event.name] = 0
     metrics["events"][event.name] += 1
-
+    
     # Count primary sample event (exp001_form_submitted)
     if event.name == "exp001_form_submitted":
         metrics["samples"] += 1
-
+    
     # Track dimension distributions
     for dim_key, dim_value in event.dimensions.items():
         if dim_key not in metrics["dimensions"]:
@@ -174,34 +174,34 @@ def aggregate_event(event: TelemetryEvent) -> None:
         if dim_str not in metrics["dimensions"][dim_key]:
             metrics["dimensions"][dim_key][dim_str] = 0
         metrics["dimensions"][dim_key][dim_str] += 1
-
+    
     # Calculate derived metrics when we have samples
     if metrics["samples"] >= 10:
         form_opened = metrics["events"].get("exp001_form_opened", 0)
         form_submitted = metrics["events"].get("exp001_form_submitted", 0)
         form_abandoned = metrics["events"].get("exp001_form_abandoned", 0)
         draft_recovered = metrics["events"].get("exp001_draft_recovered", 0)
-
+        
         # Abandonment rate
         if form_opened > 0:
             abandonment_rate = form_abandoned / form_opened
         else:
             abandonment_rate = 0
-
+        
         # Draft recovery usage (among sessions with drafts)
         has_draft_true = metrics["dimensions"].get("hasDraft", {}).get("true", 0)
         if has_draft_true > 0:
             draft_recovery_usage = draft_recovered / has_draft_true
         else:
             draft_recovery_usage = 0
-
+        
         metrics["metrics"] = {
             "abandonmentRate": round(abandonment_rate, 4),
             "draftRecoveryUsage": round(draft_recovery_usage, 4),
             "completionTime": 0,  # Would need timing data
             "errorRate": 0,  # Would need error counts
         }
-
+    
     save_metrics_file(metrics)
 
 
@@ -214,7 +214,7 @@ def aggregate_event(event: TelemetryEvent) -> None:
 async def receive_event(event: TelemetryEvent):
     """
     Receive a single telemetry event.
-
+    
     Events are:
     1. Validated against allowlists (no PII)
     2. Logged to structured logger
@@ -228,12 +228,12 @@ async def receive_event(event: TelemetryEvent):
             "session_id": event.sessionId,
             "dimensions": event.dimensions,
             "timestamp": event.timestamp,
-        },
+        }
     )
-
+    
     # Aggregate to local file
     aggregate_event(event)
-
+    
     return {"status": "ok"}
 
 
@@ -250,10 +250,10 @@ async def receive_events_batch(batch: TelemetryBatch):
                 "session_id": event.sessionId,
                 "dimensions": event.dimensions,
                 "timestamp": event.timestamp,
-            },
+            }
         )
         aggregate_event(event)
-
+    
     return {"status": "ok", "count": len(batch.events)}
 
 
@@ -261,12 +261,12 @@ async def receive_events_batch(batch: TelemetryBatch):
 async def get_metrics(experiment_id: str):
     """
     Get aggregated metrics for an experiment.
-
+    
     Used by the evaluator to check current sample count and metrics.
     """
     if experiment_id != "EXP_001":
         raise HTTPException(status_code=404, detail="Experiment not found")
-
+    
     metrics = load_metrics_file()
     return metrics
 
@@ -278,9 +278,9 @@ async def reset_metrics(experiment_id: str):
     """
     if experiment_id != "EXP_001":
         raise HTTPException(status_code=404, detail="Experiment not found")
-
+    
     metrics_path = METRICS_DIR / "experiment_metrics_EXP_001.json"
     if metrics_path.exists():
         metrics_path.unlink()
-
+    
     return {"status": "reset"}

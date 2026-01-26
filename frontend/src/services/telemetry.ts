@@ -273,6 +273,65 @@ export function trackExp001FormAbandoned(
 }
 
 // ============================================================================
+// Login Telemetry (LOGIN_UX_CONTRACT.md)
+// ============================================================================
+
+// Bounded types for login telemetry
+export type LoginErrorCode =
+  | 'TIMEOUT'
+  | 'UNAUTHORIZED'
+  | 'UNAVAILABLE'
+  | 'SERVER_ERROR'
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN';
+
+export type DurationBucket = 'fast' | 'normal' | 'slow' | 'very_slow' | 'timeout';
+
+interface LoginEventDimensions {
+  result: 'success' | 'error';
+  durationBucket: DurationBucket;
+  errorCode?: LoginErrorCode;
+}
+
+/**
+ * Track login attempt completion (bounded, non-PII)
+ */
+export function trackLoginCompleted(
+  result: 'success' | 'error',
+  durationBucket: DurationBucket,
+  errorCode?: LoginErrorCode
+): void {
+  const dimensions: LoginEventDimensions = {
+    result,
+    durationBucket,
+    ...(errorCode && { errorCode }),
+  };
+  
+  trackExpEvent('login_completed', dimensions);
+}
+
+/**
+ * Track login error shown to user
+ */
+export function trackLoginErrorShown(errorCode: LoginErrorCode): void {
+  trackExpEvent('login_error_shown', { errorCode });
+}
+
+/**
+ * Track login recovery action taken
+ */
+export function trackLoginRecoveryAction(action: 'retry' | 'clear_session'): void {
+  trackExpEvent('login_recovery_action', { action });
+}
+
+/**
+ * Track slow warning shown
+ */
+export function trackLoginSlowWarning(): void {
+  trackExpEvent('login_slow_warning', {});
+}
+
+// ============================================================================
 // Initialize
 // ============================================================================
 

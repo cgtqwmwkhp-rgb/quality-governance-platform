@@ -162,6 +162,56 @@ if (signals.ux.p0_failures > 0) {
 }
 ```
 
+## Login Reliability Gate (P0)
+
+Login is a P0 workflow with a dedicated contract: `LOGIN_UX_CONTRACT.md`
+
+### Login-Specific Requirements
+
+| Invariant | Requirement | Gate Behavior |
+|-----------|-------------|---------------|
+| No infinite spinner | Spinner clears within 15s | HOLD if violated |
+| Terminal state | Request ends in success OR bounded error | HOLD if violated |
+| Button re-enabled | Submit button enabled after error | HOLD if violated |
+| Bounded error codes | Only TIMEOUT, UNAUTHORIZED, UNAVAILABLE, SERVER_ERROR, NETWORK_ERROR, UNKNOWN | HOLD if unknown code |
+
+### Login Error Codes (Bounded)
+
+| Code | HTTP Status | User Message |
+|------|-------------|--------------|
+| TIMEOUT | N/A | Request timed out. Please try again. |
+| UNAUTHORIZED | 401 | Incorrect email or password. |
+| UNAVAILABLE | 502, 503 | Service temporarily unavailable. |
+| SERVER_ERROR | 5xx | Something went wrong. Please try again. |
+| NETWORK_ERROR | N/A | Unable to connect. Please check your connection. |
+| UNKNOWN | Other | An unexpected error occurred. |
+
+### Login Performance Thresholds
+
+| Environment | P95 Target | Hard Limit |
+|-------------|------------|------------|
+| Staging | <5s | 15s |
+| Production | <7s | 15s |
+
+### Login Telemetry Events
+
+All login telemetry is bounded and non-PII:
+
+```typescript
+// login_completed event
+{
+  result: 'success' | 'error',
+  durationBucket: 'fast' | 'normal' | 'slow' | 'very_slow' | 'timeout',
+  errorCode?: LoginErrorCode  // Only if error
+}
+
+// login_error_shown event
+{ errorCode: LoginErrorCode }
+
+// login_recovery_action event
+{ action: 'retry' | 'clear_session' }
+```
+
 ## Remediation Workflow
 
 When the gate fails:

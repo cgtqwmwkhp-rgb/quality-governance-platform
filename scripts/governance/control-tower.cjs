@@ -48,6 +48,7 @@ function aggregate() {
     deploy_proof: { status: 'UNKNOWN', overall: null },
     ux_coverage: { status: 'UNKNOWN', score: null, p0_fails: null },
     staging_reachability: { status: 'UNKNOWN', reason: null },
+    login_reliability: { status: 'UNKNOWN', contract: null, error_codes: null },
   };
   
   const holdReasons = [];
@@ -136,6 +137,36 @@ function aggregate() {
   } else {
     console.log('🔐 Deploy Proof: NOT AVAILABLE');
     signals.deploy_proof.status = 'NOT_RUN';
+  }
+  
+  // Load Login Reliability signal (LOGIN_UX_CONTRACT.md compliance)
+  const loginReliability = loadArtifact('login_reliability.json');
+  if (loginReliability) {
+    signals.login_reliability = {
+      status: loginReliability.contract_compliant ? 'PASS' : 'FAIL',
+      contract: 'LOGIN_UX_CONTRACT.md',
+      error_codes: loginReliability.error_codes || [],
+      invariants_passed: loginReliability.invariants_passed || false,
+      infinite_spinner_detected: loginReliability.infinite_spinner_detected || false,
+      p95_latency_ms: loginReliability.p95_latency_ms || null,
+    };
+    
+    // P0: Login reliability is critical
+    if (!loginReliability.contract_compliant) {
+      overallStatus = 'HOLD';
+      holdReasons.push('Login reliability: contract violation');
+    }
+    
+    if (loginReliability.infinite_spinner_detected) {
+      overallStatus = 'HOLD';
+      holdReasons.push('Login reliability: infinite spinner detected');
+    }
+    
+    console.log(`🔐 Login Reliability: ${signals.login_reliability.status}`);
+  } else {
+    // Infer from UX coverage login workflow results
+    console.log('🔐 Login Reliability: INFERRED (from UX coverage)');
+    signals.login_reliability.status = 'INFERRED';
   }
   
   // Load CI summary (if available from gate-summary artifact)
