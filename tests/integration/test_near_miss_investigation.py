@@ -9,6 +9,7 @@ Stage 0.5 Blocker Remediation:
 
 import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 
 
 @pytest.mark.asyncio
@@ -32,19 +33,30 @@ class TestNearMissInvestigationValidation:
         assert response.status_code == 401
 
     async def test_invalid_entity_type_rejected(self, client: AsyncClient):
-        """Test that invalid entity types are rejected with 422."""
+        """Test that invalid entity types are rejected.
+
+        Note: Without authentication, the request will get 401 before validation.
+        This test verifies that the schema itself rejects invalid types by
+        testing the Pydantic schema directly.
+        """
+        # In FastAPI, auth (CurrentUser dependency) runs before body validation,
+        # so unauthenticated requests get 401 regardless of payload validity.
+        # We verify schema validation in unit tests instead.
+        from src.api.schemas.investigation import InvestigationRunCreate
+
         data = {
             "template_id": 1,
             "assigned_entity_type": "invalid_type",  # Not a valid type
             "assigned_entity_id": 1,
             "title": "Invalid Entity Type Test",
         }
-        response = await client.post("/api/v1/investigations/", json=data)
 
-        # Should get 422 validation error for invalid entity type
-        assert response.status_code == 422
-        body = response.json()
-        assert "detail" in body
+        # Verify the schema rejects invalid entity type
+        with pytest.raises(ValidationError) as exc_info:
+            InvestigationRunCreate(**data)
+
+        errors = exc_info.value.errors()
+        assert any("assigned_entity_type" in str(e) for e in errors)
 
     async def test_valid_entity_types_list(self, client: AsyncClient):
         """Test that all expected entity types are in the valid list."""
