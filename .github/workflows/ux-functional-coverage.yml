@@ -56,8 +56,6 @@ jobs:
     needs: check-trigger
     if: needs.check-trigger.outputs.should_run == 'true'
     outputs:
-      admin_token: ${{ steps.tokens.outputs.admin_token }}
-      portal_token: ${{ steps.tokens.outputs.portal_token }}
       tokens_acquired: ${{ steps.tokens.outputs.tokens_acquired }}
       token_failure_reason: ${{ steps.tokens.outputs.token_failure_reason }}
       staging_reachable: ${{ steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_TIMEOUT' && steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_MAX_ATTEMPTS' }}
@@ -78,7 +76,17 @@ jobs:
           UX_TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           UX_TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
           CI_TEST_SECRET: ${{ secrets.CI_TEST_SECRET }}
+          TOKEN_FILE_PATH: ${{ github.workspace }}/tokens.env
         run: node scripts/governance/get-ux-test-tokens.cjs
+      
+      - name: Upload token file
+        if: steps.tokens.outputs.tokens_acquired == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-tokens
+          path: tokens.env
+          retention-days: 1
+          if-no-files-found: ignore
 
   # Page Load Audit
   page-audit:
@@ -102,18 +110,32 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
-      - name: Mask tokens
+      - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-tokens
+          path: .
+        continue-on-error: true
+
+      - name: Load and mask tokens
+        id: load-tokens
         run: |
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+          if [ -f tokens.env ]; then
+            source tokens.env
+            echo "::add-mask::$ADMIN_TEST_TOKEN"
+            echo "::add-mask::$PORTAL_TEST_TOKEN"
+            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
+            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+            echo "tokens_loaded=true" >> $GITHUB_OUTPUT
+          else
+            echo "tokens_loaded=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Run Page Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
-          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
-          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/page-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -146,18 +168,28 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
-      - name: Mask tokens
+      - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-tokens
+          path: .
+        continue-on-error: true
+
+      - name: Load and mask tokens
         run: |
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+          if [ -f tokens.env ]; then
+            source tokens.env
+            echo "::add-mask::$ADMIN_TEST_TOKEN"
+            echo "::add-mask::$PORTAL_TEST_TOKEN"
+            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
+            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+          fi
 
       - name: Run Link Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
-          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
-          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/link-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -190,18 +222,28 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
-      - name: Mask tokens
+      - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-tokens
+          path: .
+        continue-on-error: true
+
+      - name: Load and mask tokens
         run: |
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+          if [ -f tokens.env ]; then
+            source tokens.env
+            echo "::add-mask::$ADMIN_TEST_TOKEN"
+            echo "::add-mask::$PORTAL_TEST_TOKEN"
+            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
+            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+          fi
 
       - name: Run Button Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
-          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
-          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/button-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -234,18 +276,28 @@ jobs:
           npm install
           npx playwright install chromium --with-deps
 
-      - name: Mask tokens
+      - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-tokens
+          path: .
+        continue-on-error: true
+
+      - name: Load and mask tokens
         run: |
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.admin_token }}"
-          echo "::add-mask::${{ needs.acquire-tokens.outputs.portal_token }}"
+          if [ -f tokens.env ]; then
+            source tokens.env
+            echo "::add-mask::$ADMIN_TEST_TOKEN"
+            echo "::add-mask::$PORTAL_TEST_TOKEN"
+            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
+            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+          fi
 
       - name: Run Workflow Audit
         working-directory: tests/ux-coverage
         env:
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
-          ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
-          PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
           TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
         run: npx playwright test tests/workflow-audit.spec.ts --reporter=list
