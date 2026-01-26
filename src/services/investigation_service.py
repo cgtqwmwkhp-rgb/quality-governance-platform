@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.investigation import (
     AssignedEntityType,
     CustomerPackAudience,
@@ -24,7 +25,6 @@ from src.domain.models.investigation import (
     InvestigationStatus,
     InvestigationTemplate,
 )
-from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 
 
 class MappingReasonCode:
