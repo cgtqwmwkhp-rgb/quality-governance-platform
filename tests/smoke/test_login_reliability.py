@@ -9,17 +9,14 @@ Enforces LOGIN_UX_CONTRACT.md backend requirements:
 NO-PII: Tests use generic test credentials only.
 """
 
-import pytest
-import httpx
-import time
 import os
+import time
 
+import httpx
+import pytest
 
 # Use production URL by default (reachable in CI), can be overridden
-API_BASE_URL = os.environ.get(
-    "API_BASE_URL", 
-    "https://app-qgp-prod.azurewebsites.net"
-)
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://app-qgp-prod.azurewebsites.net")
 
 
 def is_api_reachable() -> bool:
@@ -32,10 +29,7 @@ def is_api_reachable() -> bool:
 
 
 # Skip all tests in this module if API is not reachable
-pytestmark = pytest.mark.skipif(
-    not is_api_reachable(),
-    reason=f"API not reachable at {API_BASE_URL}"
-)
+pytestmark = pytest.mark.skipif(not is_api_reachable(), reason=f"API not reachable at {API_BASE_URL}")
 
 # Performance thresholds from LOGIN_UX_CONTRACT.md
 P95_STAGING_THRESHOLD_S = 5.0
@@ -54,20 +48,19 @@ class TestLoginReliability:
     def test_login_invalid_credentials_returns_401(self, client):
         """Invalid credentials should return 401, not hang."""
         start = time.time()
-        
+
         response = client.post(
-            "/api/v1/auth/login",
-            json={"email": "invalid@test.example", "password": "wrongpassword123"}
+            "/api/v1/auth/login", json={"email": "invalid@test.example", "password": "wrongpassword123"}
         )
-        
+
         elapsed = time.time() - start
-        
+
         # Must respond within hard timeout (with margin)
         assert elapsed < HARD_TIMEOUT_S, f"Login took {elapsed:.1f}s - exceeds hard timeout!"
-        
+
         # Must return 401 for invalid credentials
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
-        
+
         # Response must have error structure
         data = response.json()
         has_message = "message" in data or "detail" in data or "error" in data
@@ -75,41 +68,35 @@ class TestLoginReliability:
 
     def test_login_empty_credentials_returns_422(self, client):
         """Empty credentials should return 422 validation error."""
-        response = client.post(
-            "/api/v1/auth/login",
-            json={"email": "", "password": ""}
-        )
-        
+        response = client.post("/api/v1/auth/login", json={"email": "", "password": ""})
+
         # 422 for validation error
         assert response.status_code in [400, 422], f"Expected 400/422, got {response.status_code}"
 
     def test_login_malformed_json_returns_422(self, client):
         """Malformed JSON should return 422, not crash."""
         response = client.post(
-            "/api/v1/auth/login",
-            content="not valid json",
-            headers={"Content-Type": "application/json"}
+            "/api/v1/auth/login", content="not valid json", headers={"Content-Type": "application/json"}
         )
-        
+
         assert response.status_code in [400, 422], f"Expected 400/422, got {response.status_code}"
 
     def test_login_endpoint_responds_under_threshold(self, client):
         """Login endpoint must respond within P95 threshold."""
         start = time.time()
-        
+
         try:
             response = client.post(
-                "/api/v1/auth/login",
-                json={"email": "timing-test@example.com", "password": "test123"}
+                "/api/v1/auth/login", json={"email": "timing-test@example.com", "password": "test123"}
             )
             elapsed = time.time() - start
         except httpx.TimeoutException:
             elapsed = time.time() - start
             pytest.fail(f"Login timed out after {elapsed:.1f}s")
-        
+
         # Use staging threshold (more lenient for CI)
         threshold = P95_STAGING_THRESHOLD_S
-        
+
         # Note: We allow some margin for cold start
         # If consistently failing, this is a P0 performance issue
         if elapsed > threshold:
@@ -124,7 +111,7 @@ class TestLoginReliability:
             start = time.time()
             response = client.get(endpoint)
             elapsed = time.time() - start
-            
+
             assert response.status_code == 200, f"{endpoint} returned {response.status_code}"
             assert elapsed < 2, f"{endpoint} took {elapsed:.1f}s - too slow!"
 
@@ -138,33 +125,27 @@ class TestLoginErrorCodes:
 
     def test_401_response_has_proper_structure(self, client):
         """401 response should have bounded error structure."""
-        response = client.post(
-            "/api/v1/auth/login",
-            json={"email": "test@example.com", "password": "wrong"}
-        )
-        
+        response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": "wrong"})
+
         assert response.status_code == 401
-        
+
         data = response.json()
-        
+
         # Must have one of these fields for client error classification
-        assert any(k in data for k in ["message", "detail", "error_code"]), \
-            f"Response missing error message field: {data}"
-        
+        assert any(
+            k in data for k in ["message", "detail", "error_code"]
+        ), f"Response missing error message field: {data}"
+
         # Must NOT contain PII
         response_str = str(data).lower()
-        assert "password" not in response_str or "incorrect" in response_str, \
-            "Response should not echo password"
+        assert "password" not in response_str or "incorrect" in response_str, "Response should not echo password"
 
     def test_missing_fields_returns_422(self, client):
         """Missing required fields should return 422 with details."""
-        response = client.post(
-            "/api/v1/auth/login",
-            json={}  # Missing email and password
-        )
-        
+        response = client.post("/api/v1/auth/login", json={})  # Missing email and password
+
         assert response.status_code == 422
-        
+
         # Should have validation details
         data = response.json()
         assert "detail" in data or "message" in data
@@ -181,11 +162,8 @@ class TestLoginPerformanceBuckets:
         """Fast responses (<1s) should be achievable."""
         # This test just verifies the endpoint is reachable
         # Actual bucket classification is client-side
-        response = client.post(
-            "/api/v1/auth/login",
-            json={"email": "test@example.com", "password": "test"}
-        )
-        
+        response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": "test"})
+
         # Should get a response (any status is fine for this test)
         assert response.status_code in [200, 401, 422, 500, 502, 503]
 
@@ -200,30 +178,22 @@ class TestLoginNoPII:
     def test_error_response_no_email_echo(self, client):
         """Error responses should not echo the email address."""
         test_email = "unique-test-12345@example.com"
-        
-        response = client.post(
-            "/api/v1/auth/login",
-            json={"email": test_email, "password": "wrong"}
-        )
-        
+
+        response = client.post("/api/v1/auth/login", json={"email": test_email, "password": "wrong"})
+
         # Email should not appear in response body
         response_text = response.text.lower()
-        assert test_email.lower() not in response_text, \
-            f"Response echoed email address: {response.text[:200]}"
+        assert test_email.lower() not in response_text, f"Response echoed email address: {response.text[:200]}"
 
     def test_error_response_no_password_echo(self, client):
         """Error responses should not echo the password."""
         test_password = "SuperSecretTestPassword123!"
-        
-        response = client.post(
-            "/api/v1/auth/login",
-            json={"email": "test@example.com", "password": test_password}
-        )
-        
+
+        response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": test_password})
+
         # Password should never appear in response
         response_text = response.text
-        assert test_password not in response_text, \
-            "Response echoed password!"
+        assert test_password not in response_text, "Response echoed password!"
 
 
 if __name__ == "__main__":

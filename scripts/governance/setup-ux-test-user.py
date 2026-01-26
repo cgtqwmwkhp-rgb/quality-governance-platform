@@ -22,104 +22,99 @@ Options:
     --create        Create or update the user
 """
 
-import os
-import sys
 import argparse
 import hashlib
 import logging
+import os
+import sys
 from datetime import datetime
 
 # Configure logging - never log sensitive data
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def mask_email(email: str) -> str:
     """Mask email for logging (show only first 2 chars and domain)."""
-    if not email or '@' not in email:
-        return '<invalid>'
-    local, domain = email.rsplit('@', 1)
-    masked_local = local[:2] + '***' if len(local) > 2 else '***'
+    if not email or "@" not in email:
+        return "<invalid>"
+    local, domain = email.rsplit("@", 1)
+    masked_local = local[:2] + "***" if len(local) > 2 else "***"
     return f"{masked_local}@{domain}"
 
 
 def check_environment():
     """Verify we're running in staging environment."""
-    app_env = os.environ.get('APP_ENV', '').lower()
-    
-    if app_env != 'staging':
+    app_env = os.environ.get("APP_ENV", "").lower()
+
+    if app_env != "staging":
         logger.error(f"❌ Refusing to run: APP_ENV={app_env}, expected 'staging'")
         logger.error("This script only runs in staging to prevent accidental production changes.")
         sys.exit(1)
-    
+
     logger.info("✅ Environment check passed: staging")
 
 
 def get_credentials():
     """Get test user credentials from environment."""
-    email = os.environ.get('UX_TEST_USER_EMAIL')
-    password = os.environ.get('UX_TEST_USER_PASSWORD')
-    
+    email = os.environ.get("UX_TEST_USER_EMAIL")
+    password = os.environ.get("UX_TEST_USER_PASSWORD")
+
     if not email:
         logger.error("❌ UX_TEST_USER_EMAIL not set")
         sys.exit(1)
-    
+
     if not password:
         logger.error("❌ UX_TEST_USER_PASSWORD not set")
         sys.exit(1)
-    
+
     logger.info(f"📧 User email: {mask_email(email)}")
     logger.info("🔐 Password: <set>")
-    
+
     return email, password
 
 
 def verify_user_via_api(base_url: str, email: str, password: str) -> bool:
     """Verify user can authenticate via API."""
-    import urllib.request
-    import urllib.error
     import json
-    
+    import urllib.error
+    import urllib.request
+
     login_url = f"{base_url}/api/v1/auth/login"
-    
+
     logger.info(f"🔄 Testing authentication at {login_url}...")
-    
-    data = json.dumps({'email': email, 'password': password}).encode('utf-8')
-    
+
+    data = json.dumps({"email": email, "password": password}).encode("utf-8")
+
     try:
         req = urllib.request.Request(
             login_url,
             data=data,
-            headers={
-                'Content-Type': 'application/json',
-                'User-Agent': 'ux-test-user-setup/1.0'
-            },
-            method='POST'
+            headers={"Content-Type": "application/json", "User-Agent": "ux-test-user-setup/1.0"},
+            method="POST",
         )
-        
+
         with urllib.request.urlopen(req, timeout=30) as response:
             if response.status == 200:
-                result = json.loads(response.read().decode('utf-8'))
-                if 'access_token' in result:
+                result = json.loads(response.read().decode("utf-8"))
+                if "access_token" in result:
                     logger.info("✅ Authentication successful, token received")
-                    
+
                     # Verify token via whoami
-                    token = result['access_token']
+                    token = result["access_token"]
                     whoami_url = f"{base_url}/api/v1/auth/whoami"
                     whoami_req = urllib.request.Request(
-                        whoami_url,
-                        headers={
-                            'Authorization': f'Bearer {token}',
-                            'User-Agent': 'ux-test-user-setup/1.0'
-                        }
+                        whoami_url, headers={"Authorization": f"Bearer {token}", "User-Agent": "ux-test-user-setup/1.0"}
                     )
-                    
+
                     with urllib.request.urlopen(whoami_req, timeout=10) as whoami_resp:
                         if whoami_resp.status == 200:
-                            whoami_data = json.loads(whoami_resp.read().decode('utf-8'))
-                            logger.info(f"✅ Token verified: user_id={whoami_data.get('user_id')}, is_active={whoami_data.get('is_active')}")
+                            whoami_data = json.loads(whoami_resp.read().decode("utf-8"))
+                            logger.info(
+                                f"✅ Token verified: user_id={whoami_data.get('user_id')}, is_active={whoami_data.get('is_active')}"
+                            )
                             return True
-                    
+
                     return True
                 else:
                     logger.error("❌ Login succeeded but no token in response")
@@ -127,7 +122,7 @@ def verify_user_via_api(base_url: str, email: str, password: str) -> bool:
             else:
                 logger.error(f"❌ Unexpected response: HTTP {response.status}")
                 return False
-                
+
     except urllib.error.HTTPError as e:
         if e.code == 401:
             logger.error("❌ Authentication failed: Invalid credentials")
@@ -174,24 +169,24 @@ def create_user_instructions(email: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Setup UX Test User for Staging')
-    parser.add_argument('--verify-only', action='store_true', help='Only verify authentication')
-    parser.add_argument('--create', action='store_true', help='Create or update user')
+    parser = argparse.ArgumentParser(description="Setup UX Test User for Staging")
+    parser.add_argument("--verify-only", action="store_true", help="Only verify authentication")
+    parser.add_argument("--create", action="store_true", help="Create or update user")
     args = parser.parse_args()
-    
+
     logger.info("🔧 UX Test User Setup")
     logger.info("=" * 50)
-    
+
     # Safety check
     check_environment()
-    
+
     # Get credentials
     email, password = get_credentials()
-    
+
     # Get staging URL
-    staging_url = os.environ.get('APP_URL', 'https://app-qgp-staging.azurewebsites.net')
+    staging_url = os.environ.get("APP_URL", "https://app-qgp-staging.azurewebsites.net")
     logger.info(f"🌐 Staging URL: {staging_url}")
-    
+
     # Verify authentication
     if verify_user_via_api(staging_url, email, password):
         logger.info("")
@@ -214,5 +209,5 @@ def main():
             sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
