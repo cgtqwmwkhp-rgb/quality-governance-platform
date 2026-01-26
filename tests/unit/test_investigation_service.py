@@ -62,7 +62,11 @@ def test_severity_level_mapping():
 
 def test_customer_pack_redaction_external():
     """Test EXTERNAL_CUSTOMER packs redact identity fields."""
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -119,7 +123,11 @@ def test_customer_pack_redaction_external():
 
 def test_customer_pack_internal_preserves_identities():
     """Test INTERNAL_CUSTOMER packs preserve identity fields."""
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -158,7 +166,11 @@ def test_customer_pack_internal_preserves_identities():
 def test_evidence_visibility_matrix():
     """Test evidence asset visibility rules."""
     from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -211,10 +223,11 @@ def test_evidence_visibility_matrix():
 
     # Test EXTERNAL_ALLOWED - in both
     asset_external = MockAsset(EvidenceVisibility.EXTERNAL_ALLOWED)
-    for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
-        _, _, assets = InvestigationService.generate_customer_pack(
-            investigation, audience, [asset_external], 1
-        )
+    for audience in [
+        CustomerPackAudience.INTERNAL_CUSTOMER,
+        CustomerPackAudience.EXTERNAL_CUSTOMER,
+    ]:
+        _, _, assets = InvestigationService.generate_customer_pack(investigation, audience, [asset_external], 1)
         assert assets[0]["included"] is True
         print(f"✓ EXTERNAL_ALLOWED included in {audience.value} pack")
 
@@ -223,7 +236,11 @@ def test_evidence_visibility_matrix():
 
 def test_pack_excludes_comments_and_revisions():
     """Test customer packs never include comments or revision history."""
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -235,10 +252,11 @@ def test_pack_excludes_comments_and_revisions():
 
     investigation = MockInvestigation()
 
-    for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
-        content, _, _ = InvestigationService.generate_customer_pack(
-            investigation, audience, [], 1
-        )
+    for audience in [
+        CustomerPackAudience.INTERNAL_CUSTOMER,
+        CustomerPackAudience.EXTERNAL_CUSTOMER,
+    ]:
+        content, _, _ = InvestigationService.generate_customer_pack(investigation, audience, [], 1)
         assert "comments" not in content, f"comments in {audience.value} pack"
         assert "revision_events" not in content, f"revision_events in {audience.value} pack"
         assert "revision_history" not in content, f"revision_history in {audience.value} pack"

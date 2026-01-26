@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 # === Minimal reproductions of domain models for testing ===
 
+
 class InvestigationLevel(str, enum.Enum):
     LOW = "low"
     MEDIUM = "medium"
@@ -41,6 +42,7 @@ class EvidenceAssetType(str, enum.Enum):
 
 
 # === Reason codes (from contracts) ===
+
 
 class MappingReasonCode:
     SUCCESS = "SUCCESS"
@@ -80,10 +82,20 @@ COMPLAINT_PRIORITY_MAP = {
 # === Customer pack generation logic ===
 
 IDENTITY_FIELDS = [
-    "reporter_name", "reporter_email", "driver_name", "driver_email",
-    "complainant_name", "complainant_email", "investigator_name",
-    "reviewer_name", "approver_name", "persons_involved", "witnesses",
-    "witness_names", "first_responder", "responsible_person",
+    "reporter_name",
+    "reporter_email",
+    "driver_name",
+    "driver_email",
+    "complainant_name",
+    "complainant_email",
+    "investigator_name",
+    "reviewer_name",
+    "approver_name",
+    "persons_involved",
+    "witnesses",
+    "witness_names",
+    "first_responder",
+    "responsible_person",
 ]
 
 
@@ -122,11 +134,13 @@ def generate_customer_pack(
                         else:
                             field_value = "[Redacted]"
                         redacted = True
-                        redaction_log.append({
-                            "field_path": f"{section_id}.{field_id}",
-                            "redaction_type": "IDENTITY_REDACTION",
-                            "original_type": type(original_value).__name__,
-                        })
+                        redaction_log.append(
+                            {
+                                "field_path": f"{section_id}.{field_id}",
+                                "redaction_type": "IDENTITY_REDACTION",
+                                "original_type": type(original_value).__name__,
+                            }
+                        )
 
                 content["sections"][section_id][field_id] = field_value
 
@@ -144,24 +158,38 @@ def generate_customer_pack(
                 can_include = True
             else:
                 exclusion_reason = "INTERNAL_CUSTOMER_ONLY"
-        elif visibility in (EvidenceVisibility.EXTERNAL_ALLOWED, EvidenceVisibility.PUBLIC):
+        elif visibility in (
+            EvidenceVisibility.EXTERNAL_ALLOWED,
+            EvidenceVisibility.PUBLIC,
+        ):
             can_include = True
 
-        included_assets.append({
-            "asset_id": asset.get("id"),
-            "included": can_include,
-            "exclusion_reason": exclusion_reason,
-        })
+        included_assets.append(
+            {
+                "asset_id": asset.get("id"),
+                "included": can_include,
+                "exclusion_reason": exclusion_reason,
+            }
+        )
 
     return content, redaction_log, included_assets
 
 
 # === TESTS ===
 
+
 def test_mapping_reason_codes():
     """Test all required mapping reason codes are defined."""
     print("Testing Mapping Reason Codes...")
-    expected = ["SUCCESS", "SOURCE_MISSING_FIELD", "TYPE_MISMATCH", "NOT_APPLICABLE", "EMPTY_VALUE", "REDACTED_PII", "MAPPING_ERROR"]
+    expected = [
+        "SUCCESS",
+        "SOURCE_MISSING_FIELD",
+        "TYPE_MISMATCH",
+        "NOT_APPLICABLE",
+        "EMPTY_VALUE",
+        "REDACTED_PII",
+        "MAPPING_ERROR",
+    ]
 
     for code in expected:
         assert hasattr(MappingReasonCode, code), f"Missing: {code}"
@@ -220,12 +248,10 @@ def test_external_pack_redaction():
                     "location": "123 Main St",
                 }
             }
-        }
+        },
     }
 
-    content, redaction_log, _ = generate_customer_pack(
-        investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, []
-    )
+    content, redaction_log, _ = generate_customer_pack(investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [])
 
     section = content["sections"]["section_1"]
 
@@ -266,12 +292,10 @@ def test_internal_pack_preserves_identities():
                     "reporter_email": "john@example.com",
                 }
             }
-        }
+        },
     }
 
-    content, redaction_log, _ = generate_customer_pack(
-        investigation, CustomerPackAudience.INTERNAL_CUSTOMER, []
-    )
+    content, redaction_log, _ = generate_customer_pack(investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [])
 
     section = content["sections"]["section_1"]
     assert section["reporter_name"] == "John Smith", "Name should be preserved"
@@ -292,7 +316,7 @@ def test_evidence_visibility_matrix():
         "title": "Test",
         "status": "completed",
         "level": "low",
-        "data": {"sections": {}}
+        "data": {"sections": {}},
     }
 
     # INTERNAL_ONLY - excluded from ALL packs
@@ -337,10 +361,13 @@ def test_pack_excludes_internal_data():
         "title": "Test",
         "status": "completed",
         "level": "low",
-        "data": {"sections": {"test": {"field": "value"}}}
+        "data": {"sections": {"test": {"field": "value"}}},
     }
 
-    for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
+    for audience in [
+        CustomerPackAudience.INTERNAL_CUSTOMER,
+        CustomerPackAudience.EXTERNAL_CUSTOMER,
+    ]:
         content, _, _ = generate_customer_pack(investigation, audience, [])
         assert "comments" not in content, f"comments in {audience.value}"
         assert "revision_events" not in content, f"revision_events in {audience.value}"
