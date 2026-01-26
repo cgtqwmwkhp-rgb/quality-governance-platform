@@ -25,25 +25,26 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
-      app_url: ${{ steps.check.outputs.app_url }}
+      use_custom_url: ${{ steps.check.outputs.use_custom_url }}
+      custom_url: ${{ steps.check.outputs.custom_url }}
     steps:
       - name: Check trigger conditions
         id: check
-        env:
-          AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
         run: |
-          # Use AZURE_WEBAPP_NAME secret if set, otherwise default
-          STAGING_URL="${AZURE_WEBAPP_NAME:+https://${AZURE_WEBAPP_NAME}.azurewebsites.net}"
-          STAGING_URL="${STAGING_URL:-https://app-qgp-staging.azurewebsites.net}"
-          
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
-            # Use provided URL or staging URL
-            APP_URL="${{ github.event.inputs.app_url }}"
-            echo "app_url=${APP_URL:-${STAGING_URL}}" >> $GITHUB_OUTPUT
+            # Check if custom URL was provided
+            if [ -n "${{ github.event.inputs.app_url }}" ]; then
+              echo "use_custom_url=true" >> $GITHUB_OUTPUT
+              echo "custom_url=${{ github.event.inputs.app_url }}" >> $GITHUB_OUTPUT
+            else
+              echo "use_custom_url=false" >> $GITHUB_OUTPUT
+              echo "custom_url=" >> $GITHUB_OUTPUT
+            fi
           elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "app_url=${STAGING_URL}" >> $GITHUB_OUTPUT
+            echo "use_custom_url=false" >> $GITHUB_OUTPUT
+            echo "custom_url=" >> $GITHUB_OUTPUT
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
             echo "⏭️ Skipping: staging deployment did not succeed"
@@ -70,7 +71,7 @@ jobs:
       - name: Acquire test tokens
         id: tokens
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           UX_TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           UX_TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
           CI_TEST_SECRET: ${{ secrets.CI_TEST_SECRET }}
@@ -107,7 +108,7 @@ jobs:
       - name: Run Page Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
           PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/page-audit.spec.ts --reporter=list
@@ -151,7 +152,7 @@ jobs:
       - name: Run Link Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
           PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/link-audit.spec.ts --reporter=list
@@ -195,7 +196,7 @@ jobs:
       - name: Run Button Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
           PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
         run: npx playwright test tests/button-audit.spec.ts --reporter=list
@@ -239,7 +240,7 @@ jobs:
       - name: Run Workflow Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.app_url }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           ADMIN_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.admin_token }}
           PORTAL_TEST_TOKEN: ${{ needs.acquire-tokens.outputs.portal_token }}
           TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
