@@ -141,6 +141,9 @@ async function ensureTestUser() {
     }
     
     console.log(`⚠️  Unexpected response: HTTP ${response.status}`);
+    // Log response body for debugging (first 200 chars)
+    const bodyPreview = response.body ? response.body.substring(0, 200) : '<empty>';
+    console.log(`   Response: ${bodyPreview}`);
     return true; // Continue anyway
     
   } catch (error) {
@@ -196,6 +199,9 @@ async function acquireToken() {
     }
     
     console.log(`❌ Unexpected response: HTTP ${response.status}`);
+    // Log response body for debugging (first 200 chars, sanitized)
+    const bodyPreview = response.body ? response.body.substring(0, 200) : '<empty>';
+    console.log(`   Response: ${bodyPreview}`);
     return null;
     
   } catch (error) {
