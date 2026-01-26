@@ -1,0 +1,273 @@
+name: Azure SWA Environment Cleanup
+
+# NOTE: PR close cleanup is handled by azure-static-web-apps-purple-water-03205fa03.yml
+# This workflow handles scheduled/manual cleanup only (no secrets in PR context)
+
+on:
+  # Nightly cleanup at 02:00 UTC
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Manual trigger with explicit confirmation required
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "CONFIRM" to execute cleanup (default: dry-run only)'
+        required: false
+        default: ''
+        type: string
+      target_env:
+        description: 'Specific environment to delete (optional, leave empty for all stale)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  SWA_APP_NAME: purple-water-03205fa03
+  RESOURCE_GROUP: rg-qgp-prod
+  # Production environment name - NEVER DELETE
+  PRODUCTION_ENV_NAME: default
+  # Safety switch - set to 'true' to disable ALL deletions
+  DISABLE_CLEANUP: 'false'
+
+jobs:
+  scheduled_cleanup:
+    runs-on: ubuntu-latest
+    name: Scheduled Environment Cleanup
+    outputs:
+      cleanup_report: ${{ steps.cleanup.outputs.report }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Check Safety Switch
+        if: env.DISABLE_CLEANUP == 'true'
+        run: |
+          echo "⚠️ DISABLE_CLEANUP=true - Cleanup is disabled."
+          echo "No environments will be deleted."
+          echo "To re-enable, set DISABLE_CLEANUP=false in workflow env."
+          exit 0
+      
+      - name: Determine Execution Mode
+        id: mode
+        run: |
+          CONFIRM="${{ github.event.inputs.confirm }}"
+          if [ "$CONFIRM" == "CONFIRM" ]; then
+            echo "mode=execute" >> $GITHUB_OUTPUT
+            echo "🚀 EXECUTE MODE: Changes will be applied"
+          else
+            echo "mode=dry-run" >> $GITHUB_OUTPUT
+            echo "🔍 DRY-RUN MODE: No changes will be made"
+            echo ""
+            echo "To execute cleanup, trigger manually with confirm='CONFIRM'"
+          fi
+      
+      - name: Setup GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+        continue-on-error: true
+      
+      - name: Get Open PR Numbers
+        id: open_prs
+        run: |
+          OPEN_PRS=$(gh pr list --state open --json number --jq '.[].number' | tr '\n' ' ')
+          echo "open_prs=$OPEN_PRS" >> $GITHUB_OUTPUT
+          echo "📋 Open PRs: ${OPEN_PRS:-none}"
+      
+      - name: List Current Environments
+        id: list_envs
+        run: |
+          echo "📋 Current Azure SWA environments:"
+          az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --output table
+          
+          # Get all environment names
+          ALL_ENVS=$(az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[].name" \
+            --output tsv)
+          echo "all_envs=$ALL_ENVS" >> $GITHUB_OUTPUT
+          
+          # Get non-production environments
+          NON_PROD_ENVS=$(az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[?name!='${{ env.PRODUCTION_ENV_NAME }}'].name" \
+            --output tsv)
+          echo "non_prod_envs=$NON_PROD_ENVS" >> $GITHUB_OUTPUT
+      
+      - name: Verify Production Protection
+        run: |
+          ALL_ENVS="${{ steps.list_envs.outputs.all_envs }}"
+          
+          # Verify production exists
+          if echo "$ALL_ENVS" | grep -q "^$PRODUCTION_ENV_NAME$"; then
+            echo "✅ Production environment '$PRODUCTION_ENV_NAME' identified and protected"
+          else
+            echo "⚠️ WARNING: Production environment '$PRODUCTION_ENV_NAME' not found in list"
+            echo "Environments found: $ALL_ENVS"
+            echo "Proceeding with caution..."
+          fi
+      
+      - name: Identify Stale Environments
+        id: stale
+        run: |
+          OPEN_PRS="${{ steps.open_prs.outputs.open_prs }}"
+          NON_PROD_ENVS="${{ steps.list_envs.outputs.non_prod_envs }}"
+          TARGET_ENV="${{ github.event.inputs.target_env }}"
+          
+          STALE=""
+          REPORT="env_name,detected_source,action,reason\n"
+          
+          echo ""
+          echo "🔍 Analyzing environments..."
+          echo "==========================================="
+          
+          for env in $NON_PROD_ENVS; do
+            # Skip non-numeric environment names for safety
+            if ! [[ "$env" =~ ^[0-9]+$ ]]; then
+              echo "⚠️ Skipping non-numeric env: $env (unknown source)"
+              REPORT="${REPORT}${env},unknown,skip,non-numeric-name\n"
+              continue
+            fi
+            
+            # If target specified, only process that one
+            if [ -n "$TARGET_ENV" ] && [ "$env" != "$TARGET_ENV" ]; then
+              continue
+            fi
+            
+            # Check if this environment corresponds to an open PR
+            if echo "$OPEN_PRS" | grep -q "\b$env\b"; then
+              echo "✓ Keep: $env (PR is open)"
+              REPORT="${REPORT}${env},pr-${env},skip,pr-open\n"
+            else
+              echo "✗ Stale: $env (PR closed or merged)"
+              STALE="$STALE $env"
+              REPORT="${REPORT}${env},pr-${env},delete,pr-closed\n"
+            fi
+          done
+          
+          echo "==========================================="
+          echo ""
+          
+          STALE=$(echo "$STALE" | xargs)  # Trim whitespace
+          echo "stale_envs=$STALE" >> $GITHUB_OUTPUT
+          echo "report=$REPORT" >> $GITHUB_OUTPUT
+          
+          if [ -n "$STALE" ]; then
+            echo "🧹 Stale environments to clean: $STALE"
+          else
+            echo "✅ No stale environments found"
+          fi
+      
+      - name: Cleanup Environments
+        id: cleanup
+        run: |
+          MODE="${{ steps.mode.outputs.mode }}"
+          STALE="${{ steps.stale.outputs.stale_envs }}"
+          REPORT="${{ steps.stale.outputs.report }}"
+          
+          if [ -z "$STALE" ]; then
+            echo "✅ No environments to clean up"
+            echo "report=$REPORT" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo ""
+          echo "==========================================="
+          echo "MODE: $MODE"
+          echo "==========================================="
+          
+          for env in $STALE; do
+            # CRITICAL SAFETY: Never delete production
+            if [ "$env" == "$PRODUCTION_ENV_NAME" ]; then
+              echo "❌ CRITICAL: Attempted to delete production! Aborting."
+              exit 1
+            fi
+            
+            if [ "$MODE" == "dry-run" ]; then
+              echo "🔍 [DRY-RUN] Would delete: $env"
+            else
+              echo "🧹 Deleting: $env"
+              if az staticwebapp environment delete \
+                --name "$SWA_APP_NAME" \
+                --resource-group "$RESOURCE_GROUP" \
+                --environment-name "$env" \
+                --yes 2>/dev/null; then
+                echo "  ✅ Deleted: $env"
+                REPORT=$(echo -e "$REPORT" | sed "s/${env},.*,delete,/${env},pr-${env},deleted,/")
+              else
+                echo "  ⚠️ Failed or not found: $env"
+                REPORT=$(echo -e "$REPORT" | sed "s/${env},.*,delete,/${env},pr-${env},failed,/")
+              fi
+            fi
+          done
+          
+          echo "report=$REPORT" >> $GITHUB_OUTPUT
+      
+      - name: Final Environment List
+        run: |
+          echo ""
+          echo "📋 Final environment state:"
+          az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --output table
+          
+          COUNT=$(az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "length(@)" \
+            --output tsv)
+          echo ""
+          echo "✅ Total environments: $COUNT"
+      
+      - name: Generate Cleanup Report
+        run: |
+          REPORT="${{ steps.cleanup.outputs.report }}"
+          MODE="${{ steps.mode.outputs.mode }}"
+          
+          mkdir -p artifacts
+          
+          echo "# SWA Environment Cleanup Report" > artifacts/cleanup-report.md
+          echo "" >> artifacts/cleanup-report.md
+          echo "**Date**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> artifacts/cleanup-report.md
+          echo "**Mode**: $MODE" >> artifacts/cleanup-report.md
+          echo "**App**: $SWA_APP_NAME" >> artifacts/cleanup-report.md
+          echo "" >> artifacts/cleanup-report.md
+          echo "## Actions" >> artifacts/cleanup-report.md
+          echo "" >> artifacts/cleanup-report.md
+          echo "| Environment | Source | Action | Result |" >> artifacts/cleanup-report.md
+          echo "|-------------|--------|--------|--------|" >> artifacts/cleanup-report.md
+          echo -e "$REPORT" | tail -n +2 | while IFS=, read -r env source action reason; do
+            [ -n "$env" ] && echo "| $env | $source | $action | $reason |" >> artifacts/cleanup-report.md
+          done
+          
+          echo "" >> artifacts/cleanup-report.md
+          echo "## Final State" >> artifacts/cleanup-report.md
+          echo "\`\`\`" >> artifacts/cleanup-report.md
+          az staticwebapp environment list \
+            --name "$SWA_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --output table >> artifacts/cleanup-report.md 2>/dev/null || echo "Could not list environments" >> artifacts/cleanup-report.md
+          echo "\`\`\`" >> artifacts/cleanup-report.md
+          
+          # Also create CSV for machine parsing
+          echo -e "$REPORT" > artifacts/cleanup-report.csv
+          
+          cat artifacts/cleanup-report.md
+      
+      - name: Upload Cleanup Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: swa-cleanup-report-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 30
