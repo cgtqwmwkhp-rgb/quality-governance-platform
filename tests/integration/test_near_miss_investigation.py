@@ -66,9 +66,7 @@ class TestNearMissInvestigationValidation:
             response = await client.post("/api/v1/investigations/", json=data)
 
             # Should NOT get 422 validation error
-            assert response.status_code != 422, (
-                f"Entity type '{entity_type}' was rejected as invalid"
-            )
+            assert response.status_code != 422, f"Entity type '{entity_type}' was rejected as invalid"
 
 
 @pytest.mark.asyncio

@@ -12,8 +12,9 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text
-from sqlalchemy import JSON
+from sqlalchemy import JSON, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import AuditTrailMixin, TimestampMixin
@@ -69,7 +70,7 @@ class EvidenceRetentionPolicy(str, enum.Enum):
 
 class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
     """Evidence Asset model for unified attachment management.
-    
+
     Stores metadata about evidence assets uploaded to the platform.
     Actual file content is stored in blob storage; this table stores
     the storage key and metadata.
@@ -152,17 +153,11 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
         nullable=False,
         default=EvidenceRetentionPolicy.STANDARD,
     )
-    retention_expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    retention_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft delete
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    deleted_by_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Indexes for common queries
     __table_args__ = (
@@ -184,10 +179,10 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     def can_include_in_customer_pack(self, audience: str) -> bool:
         """Check if asset can be included in a customer pack for given audience.
-        
+
         Args:
             audience: 'internal_customer' or 'external_customer'
-            
+
         Returns:
             True if asset can be included (may still need redaction)
         """

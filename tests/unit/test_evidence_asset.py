@@ -141,7 +141,7 @@ class TestEvidenceAssetSchemaValidation:
         }
         with pytest.raises(ValidationError) as exc_info:
             EvidenceAssetCreate(**data)
-        
+
         errors = exc_info.value.errors()
         assert any("asset_type" in str(e) for e in errors)
 
@@ -156,7 +156,7 @@ class TestEvidenceAssetSchemaValidation:
         }
         with pytest.raises(ValidationError) as exc_info:
             EvidenceAssetCreate(**data)
-        
+
         errors = exc_info.value.errors()
         assert any("source_module" in str(e) for e in errors)
 
@@ -172,7 +172,7 @@ class TestEvidenceAssetSchemaValidation:
         }
         with pytest.raises(ValidationError) as exc_info:
             EvidenceAssetCreate(**data)
-        
+
         errors = exc_info.value.errors()
         assert any("visibility" in str(e) for e in errors)
 
@@ -266,7 +266,7 @@ class TestInvestigationSchemaValidation:
         }
         with pytest.raises(ValidationError) as exc_info:
             InvestigationRunCreate(**data)
-        
+
         errors = exc_info.value.errors()
         assert any("assigned_entity_type" in str(e) for e in errors)
 

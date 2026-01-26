@@ -38,17 +38,13 @@ class EvidenceAssetBase(BaseModel):
     latitude: Optional[float] = Field(None, ge=-90, le=90, description="GPS latitude")
     longitude: Optional[float] = Field(None, ge=-180, le=180, description="GPS longitude")
     location_description: Optional[str] = Field(None, max_length=500, description="Location description")
-    render_hint: Optional[str] = Field(
-        None, max_length=50, description="Render hint (thumbnail, embed, link, gallery)"
-    )
+    render_hint: Optional[str] = Field(None, max_length=50, description="Render hint (thumbnail, embed, link, gallery)")
     visibility: str = Field(
         default="internal_customer",
         description="Visibility for customer packs (internal_only, internal_customer, external_allowed, public)",
     )
     contains_pii: bool = Field(default=False, description="Whether asset contains PII (faces, plates, etc.)")
-    redaction_required: bool = Field(
-        default=False, description="Whether asset needs redaction before external sharing"
-    )
+    redaction_required: bool = Field(default=False, description="Whether asset needs redaction before external sharing")
     retention_policy: str = Field(default="standard", description="Retention policy")
     metadata_json: Optional[Dict[str, Any]] = Field(None, description="Extended metadata")
 
