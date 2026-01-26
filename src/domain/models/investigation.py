@@ -269,8 +269,8 @@ class InvestigationRevisionEvent(Base, TimestampMixin):
     # Who made the change
     actor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
 
-    # Additional context
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Additional context (named event_metadata to avoid SQLAlchemy reserved name)
+    event_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Relationships
     investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="revision_events")

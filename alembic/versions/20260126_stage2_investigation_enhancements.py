@@ -142,7 +142,7 @@ def upgrade() -> None:
         sa.Column("new_value", sa.JSON(), nullable=True),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("actor_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("metadata", sa.JSON(), nullable=True),
+        sa.Column("event_metadata", sa.JSON(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

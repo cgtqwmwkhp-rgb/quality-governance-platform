@@ -62,11 +62,7 @@ def test_severity_level_mapping():
 
 def test_customer_pack_redaction_external():
     """Test EXTERNAL_CUSTOMER packs redact identity fields."""
-    from src.domain.models.investigation import (
-        CustomerPackAudience,
-        InvestigationLevel,
-        InvestigationStatus,
-    )
+    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -123,11 +119,7 @@ def test_customer_pack_redaction_external():
 
 def test_customer_pack_internal_preserves_identities():
     """Test INTERNAL_CUSTOMER packs preserve identity fields."""
-    from src.domain.models.investigation import (
-        CustomerPackAudience,
-        InvestigationLevel,
-        InvestigationStatus,
-    )
+    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -166,11 +158,7 @@ def test_customer_pack_internal_preserves_identities():
 def test_evidence_visibility_matrix():
     """Test evidence asset visibility rules."""
     from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
-    from src.domain.models.investigation import (
-        CustomerPackAudience,
-        InvestigationLevel,
-        InvestigationStatus,
-    )
+    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -236,11 +224,7 @@ def test_evidence_visibility_matrix():
 
 def test_pack_excludes_comments_and_revisions():
     """Test customer packs never include comments or revision history."""
-    from src.domain.models.investigation import (
-        CustomerPackAudience,
-        InvestigationLevel,
-        InvestigationStatus,
-    )
+    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
     from src.services.investigation_service import InvestigationService
 
     class MockInvestigation:
