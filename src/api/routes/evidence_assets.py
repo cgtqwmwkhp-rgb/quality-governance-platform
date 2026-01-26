@@ -25,6 +25,7 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUpdate,
     EvidenceAssetUploadResponse,
 )
+from src.core.config import settings
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -648,7 +649,3 @@ async def download_file_direct(
         headers["Content-Disposition"] = cd
 
     return Response(content=content, media_type=content_type, headers=headers)
-
-
-# Import settings at module level for download endpoint
-from src.core.config import settings
