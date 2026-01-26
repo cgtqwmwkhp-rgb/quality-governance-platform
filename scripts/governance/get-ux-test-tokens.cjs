@@ -4,7 +4,7 @@
  * UX Test Token Acquisition Script
  * 
  * Acquires auth tokens for UX coverage testing in CI.
- * Tokens are obtained via the standard login endpoint.
+ * First ensures test user exists (staging only), then obtains tokens via login.
  * 
  * Security:
  * - Credentials read from environment (GitHub secrets)
@@ -20,6 +20,9 @@
  *   - UX_TEST_USER_PASSWORD
  *   - APP_URL (staging URL)
  * 
+ * Optional env vars:
+ *   - CI_TEST_SECRET (for ensuring test user exists)
+ * 
  * Outputs (to $GITHUB_OUTPUT):
  *   - admin_token
  *   - portal_token
@@ -33,6 +36,7 @@ const fs = require('fs');
 const APP_URL = process.env.APP_URL || 'https://app-qgp-staging.azurewebsites.net';
 const TEST_EMAIL = process.env.UX_TEST_USER_EMAIL;
 const TEST_PASSWORD = process.env.UX_TEST_USER_PASSWORD;
+const CI_TEST_SECRET = process.env.CI_TEST_SECRET;
 const GITHUB_OUTPUT = process.env.GITHUB_OUTPUT;
 
 // Validate required env vars
@@ -78,6 +82,72 @@ function makeRequest(url, options, body) {
     }
     req.end();
   });
+}
+
+// Ensure test user exists (staging only)
+async function ensureTestUser() {
+  if (!CI_TEST_SECRET) {
+    console.log('ℹ️  CI_TEST_SECRET not set - skipping user provisioning');
+    console.log('   User must already exist in staging database');
+    return true;
+  }
+  
+  const ensureUrl = `${APP_URL}/api/v1/testing/ensure-test-user`;
+  
+  console.log(`🔧 Ensuring test user exists...`);
+  
+  const body = JSON.stringify({
+    email: TEST_EMAIL,
+    password: TEST_PASSWORD,
+    first_name: 'UX',
+    last_name: 'TestRunner',
+    roles: ['user', 'employee', 'admin', 'viewer'],
+  });
+  
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+      'X-CI-Secret': CI_TEST_SECRET,
+      'User-Agent': 'ux-coverage-ci/1.0',
+    },
+  };
+  
+  try {
+    const response = await makeRequest(ensureUrl, options, body);
+    
+    if (response.status === 200 || response.status === 201) {
+      const data = JSON.parse(response.body);
+      console.log(`✅ Test user ready (ID: ${data.user_id}, created: ${data.created})`);
+      return true;
+    }
+    
+    if (response.status === 403) {
+      console.log('ℹ️  Testing endpoint not available (not staging env)');
+      console.log('   User must already exist in database');
+      return true; // Continue anyway - user might already exist
+    }
+    
+    if (response.status === 401) {
+      console.log('⚠️  Invalid CI_TEST_SECRET');
+      return false;
+    }
+    
+    if (response.status === 503) {
+      console.log('ℹ️  Testing endpoint not configured');
+      console.log('   User must already exist in database');
+      return true;
+    }
+    
+    console.log(`⚠️  Unexpected response: HTTP ${response.status}`);
+    return true; // Continue anyway
+    
+  } catch (error) {
+    console.log(`⚠️  Could not reach testing endpoint: ${error.message}`);
+    console.log('   User must already exist in database');
+    return true; // Continue anyway - user might already exist
+  }
 }
 
 // Acquire token via login endpoint
@@ -165,8 +235,21 @@ async function main() {
     process.exit(0); // Don't fail the job
   }
   
+  // First, ensure the test user exists
+  console.log('\n🔧 Phase 1: Ensure test user exists');
+  const userReady = await ensureTestUser();
+  if (!userReady) {
+    console.log('\n⚠️  Could not ensure test user');
+    if (GITHUB_OUTPUT) {
+      fs.appendFileSync(GITHUB_OUTPUT, 'admin_token=\n');
+      fs.appendFileSync(GITHUB_OUTPUT, 'portal_token=\n');
+      fs.appendFileSync(GITHUB_OUTPUT, 'tokens_acquired=false\n');
+    }
+    process.exit(0);
+  }
+  
   // Acquire admin token
-  console.log('\n📋 Acquiring admin token...');
+  console.log('\n📋 Phase 2: Acquiring admin token...');
   const adminToken = await acquireToken();
   
   if (adminToken) {

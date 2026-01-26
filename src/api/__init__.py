@@ -38,6 +38,7 @@ from src.api.routes import (
     signatures,
     standards,
     tenants,
+    testing,
     users,
     uvdb,
     workflow,
@@ -102,5 +103,7 @@ router.include_router(executive_dashboard.router, tags=["Executive Dashboard"])
 router.include_router(rca_tools.router, tags=["RCA Tools"])
 # Auditor Competence Management
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
+# CI Testing Endpoints (Staging Only)
+router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 
 __all__ = ["router"]

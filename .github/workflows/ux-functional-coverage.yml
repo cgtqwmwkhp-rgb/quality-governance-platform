@@ -65,6 +65,7 @@ jobs:
           APP_URL: ${{ needs.check-trigger.outputs.app_url }}
           UX_TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           UX_TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
+          CI_TEST_SECRET: ${{ secrets.CI_TEST_SECRET }}
         run: node scripts/governance/get-ux-test-tokens.cjs
 
   # Page Load Audit
