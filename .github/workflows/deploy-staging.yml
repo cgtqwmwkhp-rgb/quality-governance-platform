@@ -230,6 +230,7 @@ jobs:
               WEBSITES_PORT="8000" \
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
+              CI_TEST_SECRET="${{ secrets.CI_TEST_SECRET }}" \
             --output none
           
           echo "   ✅ Application settings configured"
