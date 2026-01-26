@@ -329,9 +329,7 @@ async def request_password_reset(
             logger.error(f"Failed to send password reset email: {e}")
 
     # Always return success to prevent email enumeration
-    return {
-        "message": "If an account with that email exists, a password reset link has been sent."
-    }
+    return {"message": "If an account with that email exists, a password reset link has been sent."}
 
 
 @router.post("/password-reset/confirm")
