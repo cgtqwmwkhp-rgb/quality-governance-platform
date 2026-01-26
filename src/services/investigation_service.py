@@ -342,16 +342,20 @@ class InvestigationService:
         # (They are not in investigation.data, so nothing to do here)
 
         # Copy investigation data
-        status_val = (
-            investigation.status.value
-            if hasattr(investigation.status, "value")
-            else str(investigation.status) if investigation.status else "unknown"
-        )
-        level_val = (
-            investigation.level.value
-            if hasattr(investigation.level, "value")
-            else str(investigation.level) if investigation.level else "medium"
-        )
+        # Get status and level values with proper None handling
+        if investigation.status is not None and hasattr(investigation.status, "value"):
+            status_val = investigation.status.value
+        elif investigation.status is not None:
+            status_val = str(investigation.status)
+        else:
+            status_val = "unknown"
+
+        if investigation.level is not None and hasattr(investigation.level, "value"):
+            level_val = investigation.level.value
+        elif investigation.level is not None:
+            level_val = str(investigation.level)
+        else:
+            level_val = "medium"
         content: Dict[str, Any] = {
             "investigation_reference": investigation.reference_number,
             "title": investigation.title,
