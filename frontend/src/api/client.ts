@@ -574,7 +574,7 @@ export interface Control {
 // ============ Action Types ============
 export interface Action {
   id: number
-  reference_number: string
+  reference_number?: string
   title: string
   description: string
   action_type: string
@@ -584,6 +584,8 @@ export interface Action {
   completed_at?: string
   source_type: string
   source_id: number
+  owner_id?: number
+  owner_email?: string
   created_at: string
 }
 

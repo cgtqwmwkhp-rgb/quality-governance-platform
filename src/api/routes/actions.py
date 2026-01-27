@@ -45,7 +45,9 @@ class ActionUpdate(BaseModel):
     description: Optional[str] = None
     action_type: Optional[str] = None
     priority: Optional[str] = None
-    status: Optional[str] = Field(None, description="One of: open, in_progress, pending_verification, completed, cancelled")
+    status: Optional[str] = Field(
+        None, description="One of: open, in_progress, pending_verification, completed, cancelled"
+    )
     due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
     completion_notes: Optional[str] = Field(None, description="Notes on completion")
