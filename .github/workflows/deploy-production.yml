@@ -563,6 +563,35 @@ jobs:
             echo "| Total Time | - | ${TOTAL_ELAPSED}s |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Deterministic SHA verification with stability gate
+        id: stability_gate
+        run: |
+          # Deterministic verification: polls until SHA matches with N consecutive confirmations
+          # This prevents false failures from Azure App Service container swap latency
+          # Added to production for parity with staging (PR #93 fix)
+          
+          APP_HOST=$(az webapp show \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query defaultHostName -o tsv)
+          APP_URL="https://${APP_HOST}"
+          
+          echo "APP_HOST=$APP_HOST" >> "$GITHUB_ENV"
+          
+          # Run deterministic verification script
+          # - Polls /api/v1/meta/version until build_sha matches expected
+          # - Requires 3 consecutive matching responses (stability gate)
+          # - Bounded retries with exponential backoff
+          # - Total timeout: 10 minutes
+          ./scripts/verify_deploy_deterministic.sh \
+            --url "$APP_URL" \
+            --expected-sha "${{ github.sha }}" \
+            --environment "production" \
+            --output "/tmp/stability_gate_evidence.json" \
+            --stability 3 \
+            --max-attempts 30 \
+            --timeout 600
+
       - name: Deploy Proof v2 - Deterministic verification with bounded retries
         id: deploy_proof
         run: |
@@ -923,13 +952,27 @@ jobs:
           echo ""
           echo "✅ Deploy Proof v2 PASSED - deployment verified"
 
+      - name: Capture stability gate evidence
+        if: always()
+        run: |
+          # Copy stability gate evidence to docs/evidence for artifact upload
+          if [ -f /tmp/stability_gate_evidence.json ]; then
+            mkdir -p docs/evidence
+            cp /tmp/stability_gate_evidence.json "docs/evidence/stability_gate_${{ github.run_id }}.json"
+            echo "✅ Stability gate evidence copied"
+          else
+            echo "⚠️ Stability gate evidence not found"
+          fi
+
       - name: Upload deploy proof artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: deploy-proof-${{ github.run_id }}
           path: |
             docs/evidence/deploy_proof_${{ github.run_id }}.json
             docs/evidence/deploy_proof_${{ github.run_id }}.md
+            docs/evidence/stability_gate_${{ github.run_id }}.json
           retention-days: 90
 
       - name: Verify deployment - Security checks (Stage 4)
