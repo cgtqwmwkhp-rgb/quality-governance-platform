@@ -131,10 +131,10 @@ function App() {
           {/* Level 2: Report Type Selection */}
           <Route path="report" element={<PortalReport />} />
           
-          {/* Level 3: Report Forms - Dynamic versions */}
-          <Route path="report/incident" element={<PortalDynamicForm />} />
-          <Route path="report/near-miss" element={<PortalDynamicForm />} />
-          <Route path="report/complaint" element={<PortalDynamicForm />} />
+          {/* Level 3: Report Forms - Dynamic versions with key to force remount on route change */}
+          <Route path="report/incident" element={<PortalDynamicForm key="incident" />} />
+          <Route path="report/near-miss" element={<PortalDynamicForm key="near-miss" />} />
+          <Route path="report/complaint" element={<PortalDynamicForm key="complaint" />} />
           <Route path="report/rta" element={<PortalRTAForm />} />
           
           {/* Legacy static forms (fallback) */}
