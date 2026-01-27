@@ -8,16 +8,17 @@ These tests verify that:
 Reference: ADR-0001 quality gates, ADR-0002 fail-fast config validation
 """
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 from httpx import AsyncClient
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.incident import Incident
-from src.domain.models.rta import RoadTrafficCollision
-from src.domain.models.near_miss import NearMiss
 from src.domain.models.complaint import Complaint
+from src.domain.models.incident import Incident
+from src.domain.models.near_miss import NearMiss
+from src.domain.models.rta import RoadTrafficCollision
 
 
 class TestPortalRoutingCorrectness:
