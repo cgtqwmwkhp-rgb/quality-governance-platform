@@ -212,6 +212,9 @@ async def submit_quick_report(
             # CRITICAL: Set reporter info for My Reports identity linkage
             reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             reporter_email=report.reporter_email if not report.is_anonymous else None,
+            # AUDIT: Track portal form source for routing traceability
+            source_form_id="portal_incident_v1",
+            source_type="portal",
         )
 
         db.add(incident)
@@ -247,6 +250,9 @@ async def submit_quick_report(
             complainant_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             complainant_email=report.reporter_email if not report.is_anonymous else None,
             complainant_phone=report.reporter_phone if not report.is_anonymous else None,
+            # AUDIT: Track portal form source for routing traceability
+            source_form_id="portal_complaint_v1",
+            source_type="portal",
         )
 
         db.add(complaint)
@@ -292,6 +298,8 @@ async def submit_quick_report(
             reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             driver_name=report.reporter_name if not report.is_anonymous else "Anonymous",
+            # AUDIT: Track portal form source for routing traceability
+            source_form_id="portal_rta_v1",
         )
 
         db.add(rta)
@@ -336,6 +344,8 @@ async def submit_quick_report(
             potential_severity=report.severity.lower(),
             status="REPORTED",
             priority=priority,
+            # AUDIT: Track portal form source for routing traceability
+            source_form_id="portal_near_miss_v1",
         )
 
         db.add(near_miss)

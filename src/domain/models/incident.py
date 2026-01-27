@@ -120,6 +120,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api
     source_email_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
+    # Portal form source tracking (for audit traceability)
+    source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_incident_v1
+
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
