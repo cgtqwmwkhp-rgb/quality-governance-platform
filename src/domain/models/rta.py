@@ -126,6 +126,9 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     # Risk linkage
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Portal form source tracking (for audit traceability)
+    source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_rta_v1
+
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

@@ -57,6 +57,9 @@ class NearMiss(Base):
     # Attachments (JSON array of file URLs)
     attachments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Portal form source tracking (for audit traceability)
+    source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_near_miss_v1
+
     # Status workflow
     status: Mapped[str] = mapped_column(String(50), default="REPORTED", nullable=False)
     # REPORTED -> UNDER_REVIEW -> ACTION_REQUIRED -> IN_PROGRESS -> CLOSED
