@@ -73,23 +73,22 @@ class TestUVDBStaticEndpoints:
         assert response1.json() == response2.json(), "Response should be deterministic"
 
 
-class TestPlanetMarkRouteExistence:
-    """Tests that Planet Mark database-dependent routes exist (route check only)."""
+class TestAPIContentType:
+    """Tests that API endpoints return proper content types."""
 
-    def test_planet_mark_dashboard_route_exists(self, client):
-        """GET /api/v1/planet-mark/dashboard route should be registered."""
-        response = client.get("/api/v1/planet-mark/dashboard")
-        # Endpoint exists if we get anything other than 404/405
-        # Auth (401/403) or server error (500) confirms route exists
-        assert response.status_code != 404, "Dashboard route should be registered"
-        assert response.status_code != 405, "Dashboard should accept GET"
+    def test_planet_mark_iso_mapping_json_content_type(self, client):
+        """Planet Mark ISO mapping should return application/json."""
+        response = client.get("/api/v1/planet-mark/iso14001-mapping")
+        content_type = response.headers.get("content-type", "")
+        assert "application/json" in content_type
+
+    def test_uvdb_protocol_json_content_type(self, client):
+        """UVDB protocol should return application/json."""
+        response = client.get("/api/v1/uvdb/protocol")
+        content_type = response.headers.get("content-type", "")
+        assert "application/json" in content_type
 
 
-class TestUVDBRouteExistence:
-    """Tests that UVDB database-dependent routes exist (route check only)."""
-
-    def test_uvdb_audits_route_exists(self, client):
-        """GET /api/v1/uvdb/audits route should be registered."""
-        response = client.get("/api/v1/uvdb/audits")
-        assert response.status_code != 404, "Audits route should be registered"
-        assert response.status_code != 405, "Audits should accept GET"
+# Note: Database-dependent endpoints (dashboard, audits, years) are tested
+# via E2E tests with proper async test client configuration.
+# Static endpoints tested above verify route registration and response format.
