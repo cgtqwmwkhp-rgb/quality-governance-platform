@@ -537,8 +537,8 @@ async def create_improvement_action(
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
-    count_stmt = select(func.count()).select_from(ImprovementAction).where(
-        ImprovementAction.reporting_year_id == year_id
+    count_stmt = (
+        select(func.count()).select_from(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
     )
     count_result = await db.execute(count_stmt)
     count = count_result.scalar() or 0

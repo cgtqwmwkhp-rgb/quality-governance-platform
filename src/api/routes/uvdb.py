@@ -830,9 +830,7 @@ async def get_uvdb_dashboard(
     total_audits = count_result.scalar() or 0
 
     # Active audits count
-    active_stmt = select(func.count()).select_from(UVDBAudit).where(
-        UVDBAudit.status.in_(["scheduled", "in_progress"])
-    )
+    active_stmt = select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
     active_result = await db.execute(active_stmt)
     active_audits = active_result.scalar() or 0
 
