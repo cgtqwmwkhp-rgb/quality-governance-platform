@@ -253,10 +253,15 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
+          STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
           
           # Validate secrets
           if [ -z "$DB_URL" ]; then
             echo "❌ ERROR: Failed to retrieve DATABASE_URL from Key Vault"
+            exit 1
+          fi
+          if [ -z "$STORAGE_CONN" ]; then
+            echo "❌ ERROR: Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
             exit 1
           fi
           echo "✅ Successfully retrieved secrets from Key Vault"
@@ -278,6 +283,7 @@ jobs:
               DATABASE_URL="$DB_URL" \
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
+              AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
             --memory 1
