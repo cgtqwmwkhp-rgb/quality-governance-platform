@@ -204,12 +204,7 @@ class TestFrontendBackendIntegration:
         if response.status_code == 401:
             data = response.json()
             # Should have error structure
-            has_error = (
-                "detail" in data
-                or "message" in data
-                or "error" in data
-                or "error_code" in data
-            )
+            has_error = "detail" in data or "message" in data or "error" in data or "error_code" in data
             assert has_error, "401 response should have error message"
 
     def test_cors_headers_present(self, client):
