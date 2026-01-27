@@ -13,7 +13,6 @@ Tests are designed to verify route contracts, not full backend functionality.
 
 import pytest
 
-
 # Skip entire module - backend routes need fixes (AsyncSession.query errors)
 # These tests verify route contracts exist but backend implementations have bugs
 pytestmark = pytest.mark.skip(
