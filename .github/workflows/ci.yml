@@ -41,6 +41,9 @@ jobs:
       - name: Type check with mypy
         run: mypy src/ --config-file pyproject.toml
 
+      - name: Mock Data Eradication Gate
+        run: python3 scripts/check_mock_data.py --repo-root .
+
   workflow-lint:
     name: Workflow Lint (actionlint)
     runs-on: ubuntu-latest

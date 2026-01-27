@@ -38,6 +38,21 @@ class ActionCreate(ActionBase):
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
 
 
+class ActionUpdate(BaseModel):
+    """Schema for updating an action. All fields are optional."""
+
+    title: Optional[str] = Field(None, max_length=300)
+    description: Optional[str] = None
+    action_type: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = Field(
+        None, description="One of: open, in_progress, pending_verification, completed, cancelled"
+    )
+    due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
+    assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
+    completion_notes: Optional[str] = Field(None, description="Notes on completion")
+
+
 class ActionResponse(BaseModel):
     """Response schema for actions."""
 
@@ -291,3 +306,113 @@ async def get_action(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Action not found",
     )
+
+
+@router.patch("/{action_id}", response_model=ActionResponse)
+async def update_action(  # noqa: C901 - complexity justified by unified action types
+    action_id: int,
+    action_data: ActionUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+    source_type: str = Query(..., description="Type of source: incident, rta, or complaint"),
+) -> ActionResponse:
+    """Update an existing action by ID.
+
+    Supports partial updates - only provided fields will be updated.
+    Returns 404 if action not found, 400 for validation errors.
+    """
+    src_type = source_type.lower()
+
+    # Bounded error class: validate source_type
+    if src_type not in ("incident", "rta", "complaint"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', or 'complaint'",
+        )
+
+    # Bounded error class: validate status if provided
+    valid_statuses = {"open", "in_progress", "pending_verification", "completed", "cancelled"}
+    if action_data.status and action_data.status.lower() not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status: {action_data.status}. Must be one of: {', '.join(sorted(valid_statuses))}",
+        )
+
+    # Bounded error class: validate priority if provided
+    valid_priorities = {"low", "medium", "high", "critical"}
+    if action_data.priority and action_data.priority.lower() not in valid_priorities:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid priority: {action_data.priority}. Must be one of: {', '.join(sorted(valid_priorities))}",
+        )
+
+    # Find the action by type
+    action: Optional[Union[IncidentAction, RTAAction, ComplaintAction]] = None
+    source_id: int = 0
+
+    if src_type == "incident":
+        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
+        action = cast(Optional[IncidentAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.incident_id
+    elif src_type == "rta":
+        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
+        action = cast(Optional[RTAAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.rta_id
+    elif src_type == "complaint":
+        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
+        action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.complaint_id
+
+    if not action:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Action not found",
+        )
+
+    # Apply updates - only update fields that were provided
+    if action_data.title is not None:
+        action.title = action_data.title
+    if action_data.description is not None:
+        action.description = action_data.description
+    if action_data.action_type is not None:
+        action.action_type = action_data.action_type
+    if action_data.priority is not None:
+        action.priority = action_data.priority.lower()
+    if action_data.status is not None:
+        # Convert string to ActionStatus enum
+        status_value = action_data.status.lower()
+        action.status = ActionStatus(status_value)
+        # Set completed_at if status changed to completed
+        if status_value == "completed" and not action.completed_at:
+            action.completed_at = datetime.utcnow()
+        # Clear completed_at if status changed away from completed
+        elif status_value != "completed":
+            action.completed_at = None
+
+    if action_data.due_date is not None:
+        try:
+            action.due_date = datetime.fromisoformat(action_data.due_date.replace("Z", "+00:00"))
+        except ValueError:
+            for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
+                try:
+                    action.due_date = datetime.strptime(action_data.due_date, fmt)
+                    break
+                except ValueError:
+                    continue
+
+    if action_data.assigned_to_email is not None:
+        result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+        user = result.scalar_one_or_none()
+        if user:
+            action.owner_id = user.id
+
+    if action_data.completion_notes is not None:
+        action.completion_notes = action_data.completion_notes
+
+    await db.commit()
+    await db.refresh(action)
+
+    return _action_to_response(action, src_type, source_id)
