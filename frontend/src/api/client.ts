@@ -782,6 +782,220 @@ export const actionsApi = {
     api.patch<Action>(`/api/v1/actions/${id}?source_type=${source_type}`, data),
 }
 
+// ============ Planet Mark Types ============
+
+export interface CarbonReportingYear {
+  id: number
+  year: number
+  baseline_year: boolean
+  total_emissions_tco2e: number
+  scope1_emissions: number
+  scope2_emissions: number
+  scope3_emissions: number
+  reduction_target_pct?: number
+  status: 'draft' | 'in_progress' | 'submitted' | 'verified'
+  certification_status?: string
+  created_at: string
+}
+
+export interface EmissionSource {
+  id: number
+  year_id: number
+  scope: 1 | 2 | 3
+  category: string
+  source_name: string
+  quantity: number
+  unit: string
+  emission_factor: number
+  calculated_tco2e: number
+}
+
+export interface ImprovementAction {
+  id: number
+  year_id: number
+  title: string
+  description: string
+  target_reduction_tco2e: number
+  status: 'planned' | 'in_progress' | 'completed' | 'cancelled'
+  due_date?: string
+}
+
+export interface Scope3Category {
+  category_number: number
+  category_name: string
+  emissions_tco2e: number
+  percentage: number
+  data_quality: 'high' | 'medium' | 'low'
+}
+
+export interface CarbonDashboard {
+  current_year: number
+  total_emissions: number
+  reduction_vs_baseline: number
+  scope1_pct: number
+  scope2_pct: number
+  scope3_pct: number
+  certification_status: string
+  years: CarbonReportingYear[]
+}
+
+/**
+ * Planet Mark Carbon Management API client.
+ * Endpoints: /api/v1/planet-mark/*
+ */
+export const planetMarkApi = {
+  /**
+   * Get carbon management dashboard summary.
+   */
+  getDashboard: () =>
+    api.get<CarbonDashboard>('/api/v1/planet-mark/dashboard'),
+
+  /**
+   * List all carbon reporting years.
+   */
+  listYears: () =>
+    api.get<CarbonReportingYear[]>('/api/v1/planet-mark/years'),
+
+  /**
+   * Get detailed data for a specific reporting year.
+   */
+  getYear: (yearId: number) =>
+    api.get<CarbonReportingYear>(`/api/v1/planet-mark/years/${yearId}`),
+
+  /**
+   * List emission sources for a year.
+   */
+  listSources: (yearId: number) =>
+    api.get<EmissionSource[]>(`/api/v1/planet-mark/years/${yearId}/sources`),
+
+  /**
+   * Get Scope 3 category breakdown for a year.
+   */
+  getScope3: (yearId: number) =>
+    api.get<Scope3Category[]>(`/api/v1/planet-mark/years/${yearId}/scope3`),
+
+  /**
+   * List improvement actions for a year.
+   */
+  listActions: (yearId: number) =>
+    api.get<ImprovementAction[]>(`/api/v1/planet-mark/years/${yearId}/actions`),
+
+  /**
+   * Get certification status for a year.
+   */
+  getCertification: (yearId: number) =>
+    api.get<{ status: string; evidence_checklist: Record<string, boolean> }>(
+      `/api/v1/planet-mark/years/${yearId}/certification`
+    ),
+}
+
+// ============ UVDB Achilles Types ============
+
+export interface UVDBSection {
+  section_number: number
+  title: string
+  description: string
+  question_count: number
+  weight: number
+}
+
+export interface UVDBQuestion {
+  id: number
+  section_number: number
+  question_number: string
+  question_text: string
+  question_type: 'yes_no' | 'text' | 'numeric' | 'date' | 'file'
+  is_mandatory: boolean
+  guidance?: string
+}
+
+export interface UVDBAudit {
+  id: number
+  reference_number: string
+  audit_year: number
+  status: 'draft' | 'in_progress' | 'submitted' | 'verified'
+  percentage_score?: number
+  total_questions: number
+  answered_questions: number
+  created_at: string
+  submitted_at?: string
+}
+
+export interface UVDBAuditResponse {
+  id: number
+  audit_id: number
+  question_id: number
+  response_value: string
+  evidence_file_id?: number
+  notes?: string
+}
+
+export interface UVDBDashboard {
+  current_audit?: UVDBAudit
+  historical_scores: { year: number; score: number }[]
+  section_scores: { section: string; score: number }[]
+  total_audits: number
+  average_score: number
+}
+
+/**
+ * UVDB Achilles Audit API client.
+ * Endpoints: /api/v1/uvdb/*
+ */
+export const uvdbApi = {
+  /**
+   * Get UVDB dashboard summary.
+   */
+  getDashboard: () =>
+    api.get<UVDBDashboard>('/api/v1/uvdb/dashboard'),
+
+  /**
+   * Get complete UVDB B2 protocol structure.
+   */
+  getProtocol: () =>
+    api.get<{ sections: UVDBSection[]; total_questions: number }>('/api/v1/uvdb/protocol'),
+
+  /**
+   * List all UVDB sections.
+   */
+  listSections: () =>
+    api.get<UVDBSection[]>('/api/v1/uvdb/sections'),
+
+  /**
+   * Get questions for a specific section.
+   */
+  getSectionQuestions: (sectionNumber: number) =>
+    api.get<UVDBQuestion[]>(`/api/v1/uvdb/sections/${sectionNumber}/questions`),
+
+  /**
+   * List UVDB audits.
+   */
+  listAudits: (page = 1, size = 10) =>
+    api.get<PaginatedResponse<UVDBAudit>>(`/api/v1/uvdb/audits?page=${page}&size=${size}`),
+
+  /**
+   * Get a specific audit by ID.
+   */
+  getAudit: (auditId: number) =>
+    api.get<UVDBAudit>(`/api/v1/uvdb/audits/${auditId}`),
+
+  /**
+   * Get responses for an audit.
+   */
+  getAuditResponses: (auditId: number) =>
+    api.get<UVDBAuditResponse[]>(`/api/v1/uvdb/audits/${auditId}/responses`),
+
+  /**
+   * Get ISO cross-mapping for UVDB sections.
+   */
+  getISOMapping: () =>
+    api.get<{ mappings: { uvdb_section: string; iso_clauses: string[] }[] }>(
+      '/api/v1/uvdb/iso-mapping'
+    ),
+}
+
+// ============ User API ============
+
 // User type for search results
 export interface UserSearchResult {
   id: number
