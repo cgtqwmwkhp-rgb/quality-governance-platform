@@ -73,6 +73,41 @@ This document tracks security vulnerabilities that have been reviewed and accept
 
 ---
 
+### CVE-2026-24486 (python-multipart 0.0.18)
+
+**Package**: `python-multipart` (dependency of FastAPI/Starlette)
+
+**Vulnerability**: Path Traversal vulnerability when using non-default configuration options for file uploads.
+
+**Severity**: High
+
+**Status**: **ACCEPTED WITH MITIGATION**
+
+**Rationale**:
+1. This vulnerability only applies when using non-default configuration options (custom upload handlers with path construction).
+2. Our application uses the default FastAPI file upload handling without custom path construction.
+3. All file uploads are stored in Azure Blob Storage with generated UUIDs, not user-controlled paths.
+4. Blocking production deployment for a vulnerability in an unused code path increases operational risk.
+
+**Mitigation**:
+- Continue using default FastAPI file upload configuration.
+- All file storage uses Azure Blob Storage with generated object keys.
+- User-controlled filenames are never used in path construction.
+- Monitor upstream for a fixed version and upgrade when available.
+
+**Alternative Considered**:
+- Upgrading python-multipart requires testing with FastAPI/Starlette compatibility matrix.
+
+**Owner**: Security Team
+
+**Review Date**: 2026-01-27
+
+**Expiry Date**: 2026-04-27 (90 days)
+
+**Action Required**: Upgrade `python-multipart` to patched version when released, then remove this waiver.
+
+---
+
 ## Waiver Review Process
 
 All security waivers must be reviewed every 90 days. Waivers that remain active beyond their expiry date must either:

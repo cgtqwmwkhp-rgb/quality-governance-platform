@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Car, Search, Loader2 } from 'lucide-react'
+import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { rtasApi, RTA, RTACreate } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '../components/ui/Dialog'
 import {
   Select,
@@ -27,6 +28,7 @@ export default function RTAs() {
   const navigate = useNavigate()
   const [rtas, setRtas] = useState<RTA[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<{ message: string; code?: string; requestId?: string } | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -48,12 +50,49 @@ export default function RTAs() {
   }, [])
 
   const loadRtas = async () => {
+    setLoading(true)
+    setError(null)
+
+    // Create abort controller for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+    }, 15000) // 15 second timeout
+
     try {
       const response = await rtasApi.list(1, 50)
       setRtas(response.data.items)
-    } catch (err) {
+      setError(null)
+    } catch (err: any) {
       console.error('Failed to load RTAs:', err)
+      
+      // Extract error details for display
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.name === 'AbortError'
+      const status = err.response?.status
+      const requestId = err.response?.data?.request_id || err.response?.headers?.['x-request-id']
+      
+      if (isTimeout) {
+        setError({
+          message: 'Request timed out. The server took too long to respond.',
+          code: 'TIMEOUT',
+          requestId,
+        })
+      } else if (!err.response) {
+        setError({
+          message: 'Network error. Please check your connection.',
+          code: 'NETWORK_ERROR',
+          requestId,
+        })
+      } else {
+        setError({
+          message: err.response?.data?.message || err.response?.data?.detail?.message || 'Failed to load RTAs. Please try again.',
+          code: status ? `HTTP_${status}` : 'UNKNOWN',
+          requestId,
+        })
+      }
+      setRtas([])
     } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
     }
   }
@@ -120,6 +159,30 @@ export default function RTAs() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+          <AlertCircle className="w-8 h-8 text-destructive" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-lg font-semibold text-foreground mb-1">Failed to Load RTAs</h2>
+          <p className="text-muted-foreground max-w-md">{error.message}</p>
+          {error.code && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Error code: {error.code}
+              {error.requestId && ` | Request ID: ${error.requestId}`}
+            </p>
+          )}
+        </div>
+        <Button onClick={loadRtas} variant="outline">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Retry
+        </Button>
       </div>
     )
   }
@@ -220,6 +283,9 @@ export default function RTAs() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Report Road Traffic Collision</DialogTitle>
+            <DialogDescription>
+              Record details of a road traffic collision or near miss incident for investigation and follow-up.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>

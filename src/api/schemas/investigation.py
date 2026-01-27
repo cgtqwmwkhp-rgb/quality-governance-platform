@@ -172,3 +172,49 @@ class InvestigationRunListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# === Stage 2.1: From-Record Schemas ===
+
+
+class CreateFromRecordRequest(BaseModel):
+    """Request schema for creating investigation from source record."""
+
+    source_type: str = Field(
+        ..., description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+    )
+    source_id: int = Field(..., gt=0, description="Source record ID")
+    title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
+    template_id: int = Field(default=1, description="Template ID (default: v2.1)")
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, v: str) -> str:
+        """Validate source type is valid."""
+        valid_types = {e.value for e in AssignedEntityType}
+        if v not in valid_types:
+            raise ValueError(f"Invalid source type: {v}. Must be one of {valid_types}")
+        return v
+
+
+class SourceRecordItem(BaseModel):
+    """Single source record for dropdown selection."""
+
+    source_id: int = Field(..., description="Source record ID")
+    display_label: str = Field(..., description="Display label for dropdown")
+    reference_number: str = Field(..., description="Record reference number")
+    status: str = Field(..., description="Record status")
+    created_at: datetime = Field(..., description="Record creation date")
+    investigation_id: Optional[int] = Field(None, description="Linked investigation ID if exists")
+    investigation_reference: Optional[str] = Field(None, description="Investigation reference if exists")
+
+
+class SourceRecordsResponse(BaseModel):
+    """Response for source records listing."""
+
+    items: List[SourceRecordItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    source_type: str

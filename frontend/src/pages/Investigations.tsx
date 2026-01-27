@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2 } from 'lucide-react'
-import { investigationsApi, actionsApi, Investigation, getApiErrorMessage } from '../api/client'
+import { useEffect, useState, useCallback } from 'react'
+import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -64,7 +65,7 @@ export const LEVEL_BADGES: Record<string, { label: string; className: string }> 
   high: { label: 'HIGH', className: 'bg-red-100 text-red-800' },
 }
 
-// Create Investigation Modal Component
+// Create Investigation Modal Component with Dropdown Selector
 function CreateInvestigationModal({
   open,
   onOpenChange,
@@ -74,60 +75,140 @@ function CreateInvestigationModal({
   onOpenChange: (open: boolean) => void
   onCreated: () => void
 }) {
-  // State for multi-step flow (step) and preview (future enhancement)
-  // Using void to acknowledge intentionally unused values for future UI
-  const [step, setStep] = useState<'select' | 'confirm'>('select')
+  const navigate = useNavigate()
   const [sourceType, setSourceType] = useState('')
-  const [sourceId, setSourceId] = useState('')
+  const [selectedRecord, setSelectedRecord] = useState<SourceRecordItem | null>(null)
   const [title, setTitle] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
-  const [preview, setPreview] = useState<any>(null)
-  // Acknowledge unused state values (will be used in future multi-step UI)
-  void step; void preview;
+  const [existingInvestigation, setExistingInvestigation] = useState<{ id: number; reference: string } | null>(null)
+
+  // Source records state
+  const [sourceRecords, setSourceRecords] = useState<SourceRecordItem[]>([])
+  const [loadingRecords, setLoadingRecords] = useState(false)
+  const [recordsError, setRecordsError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchDebounce, setSearchDebounce] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const resetForm = () => {
-    setStep('select')
     setSourceType('')
-    setSourceId('')
+    setSelectedRecord(null)
     setTitle('')
     setError('')
-    setPreview(null)
+    setExistingInvestigation(null)
+    setSourceRecords([])
+    setSearchQuery('')
+    setRecordsError('')
+  }
+
+  // Load source records when type changes
+  const loadSourceRecords = useCallback(async (type: string, query?: string) => {
+    if (!type) {
+      setSourceRecords([])
+      return
+    }
+
+    setLoadingRecords(true)
+    setRecordsError('')
+
+    try {
+      const response = await investigationsApi.listSourceRecords(type, {
+        q: query,
+        page: 1,
+        size: 50,
+      })
+      setSourceRecords(response.data.items)
+    } catch (err) {
+      console.error('Failed to load source records:', err)
+      setRecordsError('Failed to load records. Please try again.')
+      setSourceRecords([])
+    } finally {
+      setLoadingRecords(false)
+    }
+  }, [])
+
+  // Handle source type change
+  const handleSourceTypeChange = (type: string) => {
+    setSourceType(type)
+    setSelectedRecord(null)
+    setSearchQuery('')
+    setError('')
+    setExistingInvestigation(null)
+    loadSourceRecords(type)
+  }
+
+  // Handle search with debounce
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query)
+    if (searchDebounce) clearTimeout(searchDebounce)
+    setSearchDebounce(
+      setTimeout(() => {
+        loadSourceRecords(sourceType, query)
+      }, 300)
+    )
+  }
+
+  // Handle record selection
+  const handleRecordSelect = (record: SourceRecordItem) => {
+    if (record.investigation_id) {
+      // Already investigated - show link to existing
+      setExistingInvestigation({
+        id: record.investigation_id,
+        reference: record.investigation_reference || `INV-${record.investigation_id}`,
+      })
+      setSelectedRecord(null)
+      return
+    }
+    setExistingInvestigation(null)
+    setSelectedRecord(record)
+    // Auto-generate title from record
+    if (!title) {
+      setTitle(`Investigation - ${record.reference_number}`)
+    }
   }
 
   const handleCreate = async () => {
-    if (!sourceType || !sourceId || !title.trim()) {
-      setError('Please fill in all required fields')
+    if (!sourceType || !selectedRecord || !title.trim()) {
+      setError('Please select a source record and provide a title')
       return
     }
 
     setCreating(true)
     setError('')
+    setExistingInvestigation(null)
 
     try {
-      const response = await fetch(
-        `/api/v1/investigations/from-record?source_type=${sourceType}&source_id=${sourceId}&title=${encodeURIComponent(title.trim())}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail?.message || 'Failed to create investigation')
-      }
-
-      const created = await response.json()
-      setPreview(created)
+      await investigationsApi.createFromRecord({
+        source_type: sourceType as any,
+        source_id: selectedRecord.source_id,
+        title: title.trim(),
+      })
       onCreated()
       resetForm()
     } catch (err: any) {
-      setError(err.message || 'Failed to create investigation')
+      // Safe error handling - check for 409 Conflict (already exists)
+      if (err.response?.status === 409) {
+        const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
+        if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
+          setExistingInvestigation({
+            id: errorData.details.existing_investigation_id,
+            reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
+          })
+          setError('An investigation already exists for this record.')
+          return
+        }
+      }
+      // Generic error handling
+      setError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleOpenExisting = () => {
+    if (existingInvestigation) {
+      onOpenChange(false)
+      navigate(`/investigations/${existingInvestigation.id}`)
     }
   }
 
@@ -136,19 +217,18 @@ function CreateInvestigationModal({
       if (!isOpen) resetForm()
       onOpenChange(isOpen)
     }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FlaskConical className="w-5 h-5" />
             Create Investigation from Record
           </DialogTitle>
           <DialogDescription>
-            Create a new investigation by linking it to an existing Near Miss, Complaint, RTA, or Incident record.
-            Fields will be automatically prefilled from the source record.
+            Create a new investigation by selecting an existing record. Records that already have an investigation are marked.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto max-h-[60vh]">
           {/* Source Type Selection */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
@@ -161,7 +241,7 @@ function CreateInvestigationModal({
                   <button
                     key={type.value}
                     type="button"
-                    onClick={() => setSourceType(type.value)}
+                    onClick={() => handleSourceTypeChange(type.value)}
                     className={cn(
                       'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors',
                       sourceType === type.value
@@ -177,47 +257,147 @@ function CreateInvestigationModal({
             </div>
           </div>
 
-          {/* Source ID Input */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              Source Record ID *
-            </label>
-            <Input
-              type="number"
-              value={sourceId}
-              onChange={(e) => setSourceId(e.target.value)}
-              placeholder="Enter the record ID (e.g., 123)"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter the ID of the {sourceType ? SOURCE_TYPES.find(t => t.value === sourceType)?.label : 'record'} you want to investigate
-            </p>
-          </div>
+          {/* Source Record Selector (replaces free-text ID) */}
+          {sourceType && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Select Source Record *
+              </label>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Search by reference or title..."
+                  className="pl-9"
+                />
+                {loadingRecords && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+                )}
+              </div>
+
+              {/* Records list */}
+              <div className="border rounded-lg max-h-48 overflow-y-auto">
+                {recordsError ? (
+                  <div className="p-4 text-center text-destructive text-sm">
+                    {recordsError}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => loadSourceRecords(sourceType, searchQuery)}
+                      className="ml-2"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Retry
+                    </Button>
+                  </div>
+                ) : loadingRecords ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <Loader2 className="w-5 h-5 mx-auto animate-spin" />
+                  </div>
+                ) : sourceRecords.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    No records found
+                  </div>
+                ) : (
+                  sourceRecords.map((record) => {
+                    const isAlreadyInvestigated = !!record.investigation_id
+                    const isSelected = selectedRecord?.source_id === record.source_id
+                    return (
+                      <button
+                        key={record.source_id}
+                        type="button"
+                        onClick={() => handleRecordSelect(record)}
+                        className={cn(
+                          'w-full flex items-center justify-between p-3 border-b last:border-b-0 text-left transition-colors',
+                          isSelected && 'bg-primary/5 border-primary',
+                          isAlreadyInvestigated
+                            ? 'bg-muted/50 cursor-not-allowed opacity-70'
+                            : 'hover:bg-surface'
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-primary">
+                              {record.reference_number}
+                            </span>
+                            <span className={cn(
+                              'px-1.5 py-0.5 text-xs rounded',
+                              record.status === 'closed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                            )}>
+                              {record.status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-foreground truncate mt-0.5">
+                            {record.display_label}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Created: {new Date(record.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        {isAlreadyInvestigated && (
+                          <div className="flex items-center gap-1 ml-2 text-warning">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="text-xs whitespace-nowrap">Investigated</span>
+                          </div>
+                        )}
+                        {isSelected && !isAlreadyInvestigated && (
+                          <CheckCircle className="w-4 h-4 text-primary ml-2" />
+                        )}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              {selectedRecord && (
+                <p className="text-xs text-primary mt-1">
+                  Selected: {selectedRecord.reference_number}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Investigation Title */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              Investigation Title *
-            </label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Investigation into vehicle collision on A1"
-            />
-          </div>
+          {selectedRecord && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Investigation Title *
+              </label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., Investigation into vehicle collision on A1"
+              />
+            </div>
+          )}
 
           {/* Info Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <h4 className="text-sm font-medium text-blue-900 mb-1">Deterministic Prefill</h4>
-            <p className="text-xs text-blue-700">
-              The investigation will be pre-populated with data from the source record using Mapping Contract v1.
-              The investigation level (LOW/MEDIUM/HIGH) will be determined by the source severity.
-            </p>
-          </div>
+          {selectedRecord && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <h4 className="text-sm font-medium text-blue-900 mb-1">Deterministic Prefill</h4>
+              <p className="text-xs text-blue-700">
+                The investigation will be pre-populated with data from the source record using Mapping Contract v1.
+                The investigation level (LOW/MEDIUM/HIGH) will be determined by the source severity.
+              </p>
+            </div>
+          )}
 
-          {/* Error Message */}
+          {/* Error Message with existing investigation link */}
           {error && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
               <p className="text-sm text-destructive">{error}</p>
+              {existingInvestigation && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={handleOpenExisting}
+                  className="mt-2 p-0 h-auto text-primary"
+                >
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  Open existing investigation ({existingInvestigation.reference})
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -228,7 +408,7 @@ function CreateInvestigationModal({
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={creating || !sourceType || !sourceId || !title.trim()}
+            disabled={creating || !sourceType || !selectedRecord || !title.trim()}
           >
             {creating ? (
               <>
@@ -558,6 +738,10 @@ export default function Investigations() {
               <DialogHeader>
                 <span className="font-mono text-sm text-primary">{selectedInvestigation.reference_number}</span>
                 <DialogTitle>{selectedInvestigation.title}</DialogTitle>
+                <DialogDescription>
+                  Root cause investigation for {selectedInvestigation.assigned_entity_type.replace(/_/g, ' ')} record.
+                  Status: {selectedInvestigation.status.replace(/_/g, ' ')}.
+                </DialogDescription>
               </DialogHeader>
               <div className="overflow-y-auto max-h-[calc(90vh-120px)] space-y-6 py-4">
                 {/* 5 Whys Analysis */}

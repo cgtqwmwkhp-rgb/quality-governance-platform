@@ -16,8 +16,9 @@ import {
   Pencil,
   Save,
   X,
+  ExternalLink,
 } from 'lucide-react'
-import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage } from '../api/client'
+import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -29,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '../components/ui/Dialog'
 import {
   Select,
@@ -141,17 +143,22 @@ export default function IncidentDetail() {
     setIsEditing(false)
   }
 
+  const [investigationError, setInvestigationError] = useState('')
+  const [existingInvestigation, setExistingInvestigation] = useState<{ id: number; reference: string } | null>(null)
+
   const handleCreateInvestigation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!incident) return
     setCreating(true)
+    setInvestigationError('')
+    setExistingInvestigation(null)
+    
     try {
-      await investigationsApi.create({
-        template_id: 1,
-        assigned_entity_type: 'reporting_incident',
-        assigned_entity_id: incident.id,
+      // Use from-record endpoint with proper JSON body
+      await investigationsApi.createFromRecord({
+        source_type: 'reporting_incident',
+        source_id: incident.id,
         title: investigationForm.title || `Investigation - ${incident.reference_number}`,
-        description: `${investigationForm.description || ''}\n\nInvestigation Type: ${investigationForm.investigation_type}\nLead Investigator: ${investigationForm.lead_investigator || 'TBD'}`,
       })
       setShowInvestigationModal(false)
       setInvestigationForm({
@@ -161,8 +168,22 @@ export default function IncidentDetail() {
         lead_investigator: '',
       })
       navigate('/investigations')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create investigation:', err)
+      
+      // Check for 409 Conflict (already exists)
+      if (err.response?.status === 409) {
+        const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
+        if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
+          setExistingInvestigation({
+            id: errorData.details.existing_investigation_id,
+            reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
+          })
+          setInvestigationError('An investigation already exists for this incident.')
+          return
+        }
+      }
+      setInvestigationError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }
@@ -565,13 +586,23 @@ export default function IncidentDetail() {
       </div>
 
       {/* Create Investigation Modal */}
-      <Dialog open={showInvestigationModal} onOpenChange={setShowInvestigationModal}>
+      <Dialog open={showInvestigationModal} onOpenChange={(open) => {
+        setShowInvestigationModal(open)
+        if (!open) {
+          setInvestigationError('')
+          setExistingInvestigation(null)
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
               Start Investigation
             </DialogTitle>
+            <DialogDescription>
+              Create a root cause investigation for incident {incident.reference_number}.
+              Data will be prefilled from the incident record.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
@@ -620,6 +651,29 @@ export default function IncidentDetail() {
                 rows={4}
               />
             </div>
+
+            {/* Error Message with existing investigation link */}
+            {investigationError && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+                <p className="text-sm text-destructive">{investigationError}</p>
+                {existingInvestigation && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    onClick={() => {
+                      setShowInvestigationModal(false)
+                      navigate(`/investigations/${existingInvestigation.id}`)
+                    }}
+                    className="mt-2 p-0 h-auto text-primary"
+                  >
+                    <ExternalLink className="w-3 h-3 mr-1" />
+                    Open existing investigation ({existingInvestigation.reference})
+                  </Button>
+                )}
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
                 Cancel
@@ -640,6 +694,9 @@ export default function IncidentDetail() {
               <ClipboardList className="w-5 h-5 text-primary" />
               Add Action
             </DialogTitle>
+            <DialogDescription>
+              Create a corrective or follow-up action for this incident.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
