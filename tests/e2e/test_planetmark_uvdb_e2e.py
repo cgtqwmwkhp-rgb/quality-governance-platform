@@ -5,14 +5,14 @@ These tests validate that:
 1. PlanetMark API endpoints return data (backend works)
 2. UVDB API endpoints return data (backend works)
 3. Frontend pages can be served (integration with backend)
+4. Deterministic ordering is enforced
 
 Test ID: E2E-PLANETMARK-UVDB-001
 
 Run with:
     pytest tests/e2e/test_planetmark_uvdb_e2e.py -v
 
-Note: Some backend endpoints have AsyncSession.query issues.
-Tests skip endpoints with known backend bugs.
+Note: Backend routes now use SQLAlchemy 2.0 async patterns (select + execute).
 """
 
 import os
@@ -21,14 +21,6 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
-
-# Skip entire module - backend routes need fixes
-# Frontend wiring is tested via TypeScript build + mock gate
-pytestmark = pytest.mark.skip(
-    reason="Planet Mark/UVDB endpoints have backend AsyncSession.query issues. "
-    "Frontend wiring verified via TypeScript build and mock gate."
-)
 
 
 @pytest.fixture(scope="module")
@@ -204,7 +196,12 @@ class TestFrontendBackendIntegration:
         if response.status_code == 401:
             data = response.json()
             # Should have error structure
-            has_error = "detail" in data or "message" in data or "error" in data or "error_code" in data
+            has_error = (
+                "detail" in data
+                or "message" in data
+                or "error" in data
+                or "error_code" in data
+            )
             assert has_error, "401 response should have error message"
 
     def test_cors_headers_present(self, client):
