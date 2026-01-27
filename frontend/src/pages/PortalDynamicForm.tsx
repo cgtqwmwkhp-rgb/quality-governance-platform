@@ -239,6 +239,60 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
       },
     ],
   },
+  // RTA fallback - note: RTA should normally use PortalRTAForm, but this provides
+  // a safety net if PortalDynamicForm is somehow rendered for an RTA route
+  rta: {
+    id: 4,
+    name: 'Road Traffic Collision',
+    slug: 'rta',
+    description: 'Report a road traffic collision',
+    form_type: 'rta',
+    version: 1,
+    is_active: true,
+    is_published: true,
+    icon: 'Car',
+    color: '#9333ea',
+    allow_drafts: true,
+    allow_attachments: true,
+    require_signature: false,
+    auto_assign_reference: true,
+    reference_prefix: 'RTA',
+    notify_on_submit: true,
+    steps: [
+      {
+        id: 1,
+        name: 'Contract Details',
+        description: 'Which contract does this relate to?',
+        order: 0,
+        fields: [
+          { id: 1, name: 'contract', label: 'Select Contract', field_type: 'select', order: 0, is_required: true, width: 'full' },
+        ],
+      },
+      {
+        id: 2,
+        name: 'Collision Details',
+        description: 'Where and when did the collision occur?',
+        order: 1,
+        fields: [
+          { id: 2, name: 'location', label: 'Location', field_type: 'location', order: 0, is_required: true, width: 'full' },
+          { id: 3, name: 'incident_date', label: 'Date', field_type: 'date', order: 1, is_required: true, width: 'half' },
+          { id: 4, name: 'incident_time', label: 'Time', field_type: 'time', order: 2, is_required: true, width: 'half' },
+          { id: 5, name: 'vehicle_reg', label: 'Vehicle Registration', field_type: 'text', order: 3, is_required: true, width: 'full', placeholder: 'e.g. AB12 CDE' },
+        ],
+      },
+      {
+        id: 3,
+        name: 'What Happened',
+        description: 'Describe the collision',
+        order: 2,
+        fields: [
+          { id: 6, name: 'description', label: 'Description', field_type: 'textarea', order: 0, is_required: true, width: 'full', placeholder: 'Describe what happened...' },
+          { id: 7, name: 'third_party_involved', label: 'Third Party Involved?', field_type: 'toggle', order: 1, is_required: true, width: 'full', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          { id: 8, name: 'photos', label: 'Upload Photos', field_type: 'image', order: 2, is_required: false, width: 'full' },
+        ],
+      },
+    ],
+  },
 };
 
 const FALLBACK_CONTRACTS: Contract[] = [
@@ -306,6 +360,13 @@ export default function PortalDynamicForm() {
   const { user } = usePortalAuth();
   const formType = getFormTypeFromPath(location.pathname);
   const config = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident;
+
+  // Debug logging for form type resolution - helps diagnose routing issues
+  // RTA should normally route to PortalRTAForm, not PortalDynamicForm
+  if (formType === 'rta') {
+    console.warn('[PortalDynamicForm] Unexpected formType "rta" detected. pathname:', location.pathname);
+    console.warn('[PortalDynamicForm] RTA reports should use PortalRTAForm. Using fallback template.');
+  }
 
   const [template, setTemplate] = useState<FormTemplate | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
