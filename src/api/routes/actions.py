@@ -309,7 +309,7 @@ async def get_action(
 
 
 @router.patch("/{action_id}", response_model=ActionResponse)
-async def update_action(
+async def update_action(  # noqa: C901 - complexity justified by unified action types
     action_id: int,
     action_data: ActionUpdate,
     db: DbSession,

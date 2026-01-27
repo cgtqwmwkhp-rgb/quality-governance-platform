@@ -201,7 +201,7 @@ export default function Actions() {
 
   const filteredActions = actions.filter(action => {
     if (searchTerm && !action.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !action.reference_number.toLowerCase().includes(searchTerm.toLowerCase())) {
+        !(action.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()))) {
       return false
     }
     if (filterStatus !== 'all' && action.status !== filterStatus) {
@@ -380,7 +380,7 @@ export default function Actions() {
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <span className="font-mono text-sm text-primary">{action.reference_number}</span>
+                          <span className="font-mono text-sm text-primary">{action.reference_number || `ACT-${action.id}`}</span>
                           <Badge variant={getPriorityVariant(action.priority) as any}>
                             {action.priority}
                           </Badge>

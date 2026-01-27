@@ -3,15 +3,15 @@
 Test ID: MOCK-GATE-001
 """
 
-# Import the scanner module
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
+# Import the scanner module - path manipulation required for scripts/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
-from check_mock_data import PATTERNS, Violation, scan_file
+from check_mock_data import PATTERNS, Violation, scan_file  # noqa: E402
 
 
 class TestMockGatePatterns:
