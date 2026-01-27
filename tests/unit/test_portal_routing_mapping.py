@@ -42,49 +42,48 @@ class TestPortalRoutingMappingContract:
         """Verify all expected portal types are in the mapping."""
         expected_types = {"incident", "complaint", "rta", "near_miss"}
         actual_types = set(self.CANONICAL_MAPPING.keys())
-        
+
         missing = expected_types - actual_types
         assert not missing, f"Missing portal types in mapping: {missing}"
-        
+
         extra = actual_types - expected_types
         assert not extra, f"Unexpected portal types in mapping: {extra}"
 
     def test_each_type_has_unique_table(self):
         """Verify each portal type maps to a unique database table."""
         tables = [v["table"] for v in self.CANONICAL_MAPPING.values()]
-        assert len(tables) == len(set(tables)), \
-            f"Duplicate table mappings detected: {tables}"
+        assert len(tables) == len(set(tables)), f"Duplicate table mappings detected: {tables}"
 
     def test_each_type_has_unique_ref_prefix(self):
         """Verify each portal type has a unique reference number prefix."""
         prefixes = [v["ref_prefix"] for v in self.CANONICAL_MAPPING.values()]
-        assert len(prefixes) == len(set(prefixes)), \
-            f"Duplicate reference prefixes detected: {prefixes}"
+        assert len(prefixes) == len(set(prefixes)), f"Duplicate reference prefixes detected: {prefixes}"
 
     def test_each_type_has_unique_source_form_id(self):
         """Verify each portal type has a unique source_form_id for audit."""
         form_ids = [v["source_form_id"] for v in self.CANONICAL_MAPPING.values()]
-        assert len(form_ids) == len(set(form_ids)), \
-            f"Duplicate source_form_ids detected: {form_ids}"
+        assert len(form_ids) == len(set(form_ids)), f"Duplicate source_form_ids detected: {form_ids}"
 
     def test_ref_prefix_format(self):
         """Verify reference prefixes follow expected format."""
         for portal_type, mapping in self.CANONICAL_MAPPING.items():
             prefix = mapping["ref_prefix"]
-            assert prefix.endswith("-"), \
-                f"{portal_type}: ref_prefix should end with '-', got: {prefix}"
-            assert prefix.isupper() or prefix[:-1].isupper(), \
-                f"{portal_type}: ref_prefix should be uppercase, got: {prefix}"
+            assert prefix.endswith("-"), f"{portal_type}: ref_prefix should end with '-', got: {prefix}"
+            assert (
+                prefix.isupper() or prefix[:-1].isupper()
+            ), f"{portal_type}: ref_prefix should be uppercase, got: {prefix}"
 
     def test_source_form_id_format(self):
         """Verify source_form_id follows expected format (portal_<type>_v<version>)."""
         import re
+
         pattern = r"^portal_[a-z_]+_v\d+$"
-        
+
         for portal_type, mapping in self.CANONICAL_MAPPING.items():
             form_id = mapping["source_form_id"]
-            assert re.match(pattern, form_id), \
-                f"{portal_type}: source_form_id should match pattern 'portal_<type>_v<n>', got: {form_id}"
+            assert re.match(
+                pattern, form_id
+            ), f"{portal_type}: source_form_id should match pattern 'portal_<type>_v<n>', got: {form_id}"
 
 
 class TestPortalAPIRoutingContract:
@@ -99,19 +98,21 @@ class TestPortalAPIRoutingContract:
         actual = set(self.VALID_REPORT_TYPES)
         assert actual == expected, f"Valid report types mismatch"
 
-    @pytest.mark.parametrize("invalid_type", [
-        "unknown",
-        "rta_incident", 
-        "INCIDENT",  # Case sensitive
-        "Incident",
-        "near-miss",  # Hyphen not underscore
-        "nearmiss",  # No separator
-        "",  # Empty
-    ])
+    @pytest.mark.parametrize(
+        "invalid_type",
+        [
+            "unknown",
+            "rta_incident",
+            "INCIDENT",  # Case sensitive
+            "Incident",
+            "near-miss",  # Hyphen not underscore
+            "nearmiss",  # No separator
+            "",  # Empty
+        ],
+    )
     def test_invalid_report_types_documented(self, invalid_type):
         """Document types that should be rejected."""
-        assert invalid_type not in self.VALID_REPORT_TYPES, \
-            f"'{invalid_type}' should not be in valid types"
+        assert invalid_type not in self.VALID_REPORT_TYPES, f"'{invalid_type}' should not be in valid types"
 
 
 class TestDashboardIsolationContract:
@@ -152,28 +153,26 @@ class TestDashboardIsolationContract:
         all_returns = []
         for endpoint, contract in self.DASHBOARD_API_CONTRACT.items():
             all_returns.extend(contract["returns_types"])
-        
-        assert len(all_returns) == len(set(all_returns)), \
-            f"Overlapping types in dashboard contracts: {all_returns}"
+
+        assert len(all_returns) == len(set(all_returns)), f"Overlapping types in dashboard contracts: {all_returns}"
 
     def test_each_type_excluded_from_other_dashboards(self):
         """Verify each type is explicitly excluded from non-owning dashboards."""
         for endpoint, contract in self.DASHBOARD_API_CONTRACT.items():
             # Types this dashboard returns
             returns = set(contract["returns_types"])
-            
+
             # Types this dashboard excludes
             excludes = set(contract["excludes_types"])
-            
+
             # No overlap between returns and excludes
             overlap = returns & excludes
             assert not overlap, f"{endpoint}: returns and excludes overlap: {overlap}"
-            
+
             # Returns + excludes should cover all types
             all_types = {"incident", "rta", "near_miss", "complaint"}
             covered = returns | excludes
-            assert covered == all_types, \
-                f"{endpoint}: not all types covered by returns+excludes: {all_types - covered}"
+            assert covered == all_types, f"{endpoint}: not all types covered by returns+excludes: {all_types - covered}"
 
 
 class TestReferencePrefixAssignment:
@@ -181,7 +180,7 @@ class TestReferencePrefixAssignment:
 
     PREFIX_MODEL_MAP = {
         "INC-": "Incident",
-        "COMP-": "Complaint", 
+        "COMP-": "Complaint",
         "RTA-": "RoadTrafficCollision",
         "NM-": "NearMiss",
     }
@@ -190,7 +189,7 @@ class TestReferencePrefixAssignment:
         """Verify all models have assigned prefixes."""
         expected_models = {"Incident", "Complaint", "RoadTrafficCollision", "NearMiss"}
         actual_models = set(self.PREFIX_MODEL_MAP.values())
-        
+
         missing = expected_models - actual_models
         assert not missing, f"Models missing prefix assignments: {missing}"
 
@@ -198,10 +197,11 @@ class TestReferencePrefixAssignment:
         """Document expected reference number format."""
         # Format: PREFIX-YYYY-NNNN
         import re
+
         pattern = r"^[A-Z]{2,4}-\d{4}-\d{4}$"
-        
+
         example_refs = ["INC-2026-0001", "RTA-2026-0123", "NM-2026-9999", "COMP-2026-0042"]
-        
+
         for ref in example_refs:
             assert re.match(pattern, ref), f"Reference format invalid: {ref}"
 
@@ -215,11 +215,11 @@ class TestFailFastOnInvalidInput:
         # The integration test verifies the actual implementation
         expected_behavior = {
             "unknown_type": "reject_with_400",
-            "empty_type": "reject_with_400", 
+            "empty_type": "reject_with_400",
             "null_type": "reject_with_validation_error",
             "wrong_case": "reject_with_400",
         }
-        
+
         # All should result in rejection
         for scenario, expected in expected_behavior.items():
             assert "reject" in expected, f"{scenario} should be rejected"
@@ -227,11 +227,11 @@ class TestFailFastOnInvalidInput:
     def test_bounded_enum_requirement(self):
         """Document: report_type should be treated as bounded enum."""
         valid_values = {"incident", "complaint", "rta", "near_miss"}
-        
+
         # Must be lowercase
         for v in valid_values:
             assert v == v.lower(), f"Value should be lowercase: {v}"
-        
+
         # Must use underscore for multi-word
         assert "near_miss" in valid_values, "Multi-word should use underscore"
         assert "near-miss" not in valid_values, "Hyphen should not be accepted"
