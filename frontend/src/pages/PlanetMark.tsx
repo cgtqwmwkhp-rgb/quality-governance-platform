@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Leaf,
   BarChart3,
@@ -24,7 +24,9 @@ import {
   Briefcase,
   Home,
   Globe,
+  XCircle,
 } from 'lucide-react'
+import { planetMarkApi, ErrorClass, createApiError } from '../api/client'
 
 interface ReportingYear {
   id: number
@@ -61,86 +63,145 @@ interface Scope3Category {
   percentage: number
 }
 
+// Bounded error state for deterministic UX
+type LoadState = 'idle' | 'loading' | 'success' | 'error'
+
 export default function PlanetMark() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'>('dashboard')
   const [years, setYears] = useState<ReportingYear[]>([])
   const [currentYear, setCurrentYear] = useState<ReportingYear | null>(null)
   const [actions, setActions] = useState<ImprovementAction[]>([])
   const [scope3Categories, setScope3Categories] = useState<Scope3Category[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadState, setLoadState] = useState<LoadState>('idle')
+  const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+
+  // Transform API response to component types
+  const transformYear = (apiYear: { 
+    id: number; 
+    year: number; 
+    baseline_year: boolean; 
+    total_emissions_tco2e: number; 
+    scope1_emissions: number; 
+    scope2_emissions: number; 
+    scope3_emissions: number; 
+    status: string; 
+    certification_status?: string;
+  }): ReportingYear => ({
+    id: apiYear.id,
+    year_label: `YE${apiYear.year}`,
+    year_number: apiYear.year - 2023, // Convert to year number from 2024 baseline
+    total_emissions: apiYear.total_emissions_tco2e,
+    emissions_per_fte: apiYear.total_emissions_tco2e / 68.6, // FTE fixed for now
+    fte: 68.6,
+    scope_1: apiYear.scope1_emissions,
+    scope_2: apiYear.scope2_emissions,
+    scope_3: apiYear.scope3_emissions,
+    data_quality: 11, // Default until API provides
+    certification_status: apiYear.certification_status || apiYear.status,
+    is_baseline: apiYear.baseline_year,
+  })
+
+  const transformAction = (apiAction: {
+    id: number;
+    title: string;
+    description: string;
+    target_reduction_tco2e: number;
+    status: string;
+    due_date?: string;
+  }, index: number): ImprovementAction => ({
+    id: apiAction.id,
+    action_id: `ACT-${String(index + 1).padStart(3, '0')}`,
+    action_title: apiAction.title,
+    owner: 'TBD', // API may not provide owner
+    deadline: apiAction.due_date || '',
+    scheduled_month: apiAction.due_date ? new Date(apiAction.due_date).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : '',
+    status: apiAction.status,
+    progress_percent: apiAction.status === 'completed' ? 100 : apiAction.status === 'in_progress' ? 50 : 0,
+    is_overdue: apiAction.due_date ? new Date(apiAction.due_date) < new Date() && apiAction.status !== 'completed' : false,
+  })
+
+  const transformScope3 = (apiScope3: {
+    category_number: number;
+    category_name: string;
+    emissions_tco2e: number;
+    percentage: number;
+    data_quality: string;
+  }): Scope3Category => ({
+    number: apiScope3.category_number,
+    name: apiScope3.category_name,
+    is_measured: apiScope3.emissions_tco2e > 0,
+    total_co2e: apiScope3.emissions_tco2e,
+    percentage: apiScope3.percentage,
+  })
+
+  const loadData = useCallback(async (isRetry = false) => {
+    if (isRetry && retryCount >= 1) {
+      // Max 1 retry for transient errors
+      return
+    }
+
+    setLoadState('loading')
+    setErrorClass(null)
+
+    try {
+      // Fetch dashboard data from API
+      const dashboardResponse = await planetMarkApi.getDashboard()
+      const dashboard = dashboardResponse.data
+
+      // Transform years data
+      const transformedYears = dashboard.years.map(transformYear)
+      // Sort by year descending for deterministic ordering
+      transformedYears.sort((a, b) => b.year_number - a.year_number)
+      
+      setYears(transformedYears)
+      setCurrentYear(transformedYears[0] || null)
+
+      // Try to load actions for current year if available
+      if (transformedYears.length > 0) {
+        try {
+          const actionsResponse = await planetMarkApi.listActions(transformedYears[0].id)
+          const transformedActions = actionsResponse.data.map(transformAction)
+          // Sort by deadline for deterministic ordering
+          transformedActions.sort((a, b) => a.deadline.localeCompare(b.deadline))
+          setActions(transformedActions)
+        } catch {
+          // Actions endpoint may not exist yet, use empty array
+          setActions([])
+        }
+
+        try {
+          const scope3Response = await planetMarkApi.getScope3(transformedYears[0].id)
+          const transformedScope3 = scope3Response.data.map(transformScope3)
+          // Sort by category number for deterministic ordering
+          transformedScope3.sort((a, b) => a.number - b.number)
+          setScope3Categories(transformedScope3)
+        } catch {
+          // Scope3 endpoint may not exist yet, use empty array
+          setScope3Categories([])
+        }
+      }
+
+      setLoadState('success')
+      setRetryCount(0)
+    } catch (err) {
+      const apiError = createApiError(err)
+      setErrorClass(apiError.error_class)
+      
+      // Auto-retry once for transient network errors
+      if (!isRetry && (apiError.error_class === ErrorClass.NETWORK_ERROR || apiError.error_class === ErrorClass.SERVER_ERROR)) {
+        setRetryCount(prev => prev + 1)
+        loadData(true)
+        return
+      }
+      
+      setLoadState('error')
+    }
+  }, [retryCount])
 
   useEffect(() => {
-    // Simulated data based on Plantexpand documents
-    setTimeout(() => {
-      const yearsData: ReportingYear[] = [
-        {
-          id: 2,
-          year_label: 'YE2025',
-          year_number: 2,
-          total_emissions: 278.5,
-          emissions_per_fte: 4.06,
-          fte: 68.6,
-          scope_1: 256.2,
-          scope_2: 18.4,
-          scope_3: 3.9,
-          data_quality: 11,
-          certification_status: 'in_progress',
-          is_baseline: false,
-        },
-        {
-          id: 1,
-          year_label: 'YE2024',
-          year_number: 1,
-          total_emissions: 293.2,
-          emissions_per_fte: 4.27,
-          fte: 68.6,
-          scope_1: 260.0,
-          scope_2: 20.0,
-          scope_3: 13.2,
-          data_quality: 9,
-          certification_status: 'certified',
-          is_baseline: true,
-        },
-      ]
-      setYears(yearsData)
-      setCurrentYear(yearsData[0])
-
-      setActions([
-        { id: 1, action_id: 'ACT-001', action_title: 'Launch Net-Zero Taskforce & publish baseline dashboard', owner: 'CEO', deadline: '2025-07-31', scheduled_month: 'Jul 25', status: 'completed', progress_percent: 100, is_overdue: false },
-        { id: 2, action_id: 'ACT-002', action_title: 'Complete fuel-card audit (100% fleet coverage)', owner: 'Finance', deadline: '2025-08-31', scheduled_month: 'Aug 25', status: 'completed', progress_percent: 100, is_overdue: false },
-        { id: 3, action_id: 'ACT-003', action_title: 'Fit GPS trackers to 100% of fleet', owner: 'Technical Director', deadline: '2025-09-30', scheduled_month: 'Sep 25', status: 'completed', progress_percent: 100, is_overdue: false },
-        { id: 4, action_id: 'ACT-004', action_title: 'Optimize building heating: smart thermostats & night setback', owner: 'Facilities', deadline: '2025-10-31', scheduled_month: 'Oct 25', status: 'in_progress', progress_percent: 65, is_overdue: false },
-        { id: 5, action_id: 'ACT-005', action_title: 'Issue eco-driving literature & driver league table', owner: 'H&S Lead', deadline: '2025-11-30', scheduled_month: 'Nov 25', status: 'in_progress', progress_percent: 30, is_overdue: false },
-        { id: 6, action_id: 'ACT-006', action_title: 'Install smart electricity meters', owner: 'Facilities', deadline: '2025-12-31', scheduled_month: 'Dec 25', status: 'planned', progress_percent: 0, is_overdue: false },
-        { id: 7, action_id: 'ACT-007', action_title: 'Analyze tracker data & refine routes', owner: 'Technical Director', deadline: '2026-01-31', scheduled_month: 'Jan 26', status: 'planned', progress_percent: 0, is_overdue: false },
-        { id: 8, action_id: 'ACT-008', action_title: 'Draft low-carbon purchasing policy', owner: 'Finance', deadline: '2026-02-28', scheduled_month: 'Feb 26', status: 'planned', progress_percent: 0, is_overdue: false },
-        { id: 9, action_id: 'ACT-009', action_title: 'Engage top 10 suppliers for Scope 3 data', owner: 'Finance', deadline: '2026-03-31', scheduled_month: 'Mar 26', status: 'planned', progress_percent: 0, is_overdue: false },
-        { id: 10, action_id: 'ACT-010', action_title: 'Run company-wide sustainability workshop', owner: 'HR', deadline: '2026-04-30', scheduled_month: 'Apr 26', status: 'planned', progress_percent: 0, is_overdue: false },
-        { id: 11, action_id: 'ACT-011', action_title: 'Verify YTD emissions & agree FY26 target', owner: 'Finance', deadline: '2026-05-31', scheduled_month: 'May 26', status: 'planned', progress_percent: 0, is_overdue: false },
-        { id: 12, action_id: 'ACT-012', action_title: 'Submit evidence pack to Planet Mark', owner: 'Data Lead', deadline: '2026-06-30', scheduled_month: 'Jun 26', status: 'planned', progress_percent: 0, is_overdue: false },
-      ])
-
-      setScope3Categories([
-        { number: 1, name: 'Purchased goods and services', is_measured: true, total_co2e: 1.2, percentage: 30.8 },
-        { number: 2, name: 'Capital goods', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 3, name: 'Fuel and energy-related activities', is_measured: true, total_co2e: 0.8, percentage: 20.5 },
-        { number: 4, name: 'Upstream transportation', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 5, name: 'Waste generated', is_measured: true, total_co2e: 0.5, percentage: 12.8 },
-        { number: 6, name: 'Business travel', is_measured: true, total_co2e: 0.3, percentage: 7.7 },
-        { number: 7, name: 'Employee commuting', is_measured: true, total_co2e: 1.1, percentage: 28.2 },
-        { number: 8, name: 'Upstream leased assets', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 9, name: 'Downstream transportation', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 10, name: 'Processing of sold products', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 11, name: 'Use of sold products', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 12, name: 'End-of-life treatment', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 13, name: 'Downstream leased assets', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 14, name: 'Franchises', is_measured: false, total_co2e: 0, percentage: 0 },
-        { number: 15, name: 'Investments', is_measured: false, total_co2e: 0, percentage: 0 },
-      ])
-
-      setLoading(false)
-    }, 500)
-  }, [])
+    loadData()
+  }, [loadData])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -263,11 +324,50 @@ export default function PlanetMark() {
         })}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+      {/* Loading State */}
+      {loadState === 'loading' && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
+          <p className="text-muted-foreground">Loading carbon data...</p>
         </div>
-      ) : (
+      )}
+
+      {/* Error State */}
+      {loadState === 'error' && (
+        <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
+          <XCircle className="w-12 h-12 text-destructive mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Failed to Load Data</h3>
+          <p className="text-muted-foreground mb-4">
+            {errorClass === ErrorClass.NETWORK_ERROR && 'Network connection failed. Please check your connection.'}
+            {errorClass === ErrorClass.SERVER_ERROR && 'Server error occurred. Please try again later.'}
+            {errorClass === ErrorClass.AUTH_ERROR && 'Authentication required. Please log in.'}
+            {errorClass === ErrorClass.NOT_FOUND && 'Carbon data not found.'}
+            {(errorClass === ErrorClass.UNKNOWN || !errorClass) && 'An unexpected error occurred.'}
+          </p>
+          <button
+            onClick={() => { setRetryCount(0); loadData(); }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {loadState === 'success' && years.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
+          <Leaf className="w-12 h-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">No Carbon Data Yet</h3>
+          <p className="text-muted-foreground mb-4">Start tracking your carbon emissions by adding your first reporting year.</p>
+          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />
+            Add Reporting Year
+          </button>
+        </div>
+      )}
+
+      {loadState === 'success' && years.length > 0 && (
         <>
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && currentYear && (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Shield,
   Leaf,
@@ -22,7 +22,9 @@ import {
   ClipboardList,
   ExternalLink,
   Link2,
+  XCircle,
 } from 'lucide-react'
+import { uvdbApi, ErrorClass, createApiError } from '../api/client'
 
 interface UVDBSection {
   number: string
@@ -43,39 +45,122 @@ interface UVDBAudit {
   lead_auditor: string | null
 }
 
+// Bounded error state for deterministic UX
+type LoadState = 'idle' | 'loading' | 'success' | 'error'
+
 export default function UVDBAudits() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>('dashboard')
   const [sections, setSections] = useState<UVDBSection[]>([])
   const [audits, setAudits] = useState<UVDBAudit[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadState, setLoadState] = useState<LoadState>('idle')
+  const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+
+  // Transform API section to component type
+  const transformSection = (apiSection: {
+    section_number: number;
+    title: string;
+    description: string;
+    question_count: number;
+    weight: number;
+  }): UVDBSection => ({
+    number: String(apiSection.section_number),
+    title: apiSection.title,
+    max_score: apiSection.weight,
+    question_count: apiSection.question_count,
+    iso_mapping: {}, // Will be populated from ISO mapping endpoint if available
+  })
+
+  // Transform API audit to component type
+  const transformAudit = (apiAudit: {
+    id: number;
+    reference_number: string;
+    audit_year: number;
+    status: string;
+    percentage_score?: number;
+    total_questions: number;
+    answered_questions: number;
+    created_at: string;
+    submitted_at?: string;
+  }): UVDBAudit => ({
+    id: apiAudit.id,
+    audit_reference: apiAudit.reference_number,
+    company_name: 'Plantexpand Limited', // Default company
+    audit_type: 'B2',
+    audit_date: apiAudit.submitted_at || null,
+    status: apiAudit.status,
+    percentage_score: apiAudit.percentage_score || null,
+    lead_auditor: null,
+  })
+
+  const loadData = useCallback(async (isRetry = false) => {
+    if (isRetry && retryCount >= 1) {
+      // Max 1 retry for transient errors
+      return
+    }
+
+    setLoadState('loading')
+    setErrorClass(null)
+
+    try {
+      // Fetch sections from API
+      const sectionsResponse = await uvdbApi.listSections()
+      const transformedSections = sectionsResponse.data.map(transformSection)
+      // Sort by section number for deterministic ordering
+      transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
+      setSections(transformedSections)
+
+      // Fetch audits from API
+      const auditsResponse = await uvdbApi.listAudits(1, 50)
+      const transformedAudits = auditsResponse.data.items.map(transformAudit)
+      // Sort by id descending for deterministic ordering (most recent first)
+      transformedAudits.sort((a, b) => b.id - a.id)
+      setAudits(transformedAudits)
+
+      // Try to get ISO mapping to enrich sections
+      try {
+        const mappingResponse = await uvdbApi.getISOMapping()
+        const mappings = mappingResponse.data.mappings
+        // Enrich sections with ISO mapping
+        const enrichedSections = transformedSections.map(section => {
+          const mapping = mappings.find(m => m.uvdb_section === section.number)
+          if (mapping) {
+            const isoMapping: Record<string, string> = {}
+            mapping.iso_clauses.forEach(clause => {
+              const [isoStandard, isoClause] = clause.split(':')
+              if (isoStandard && isoClause) {
+                isoMapping[isoStandard] = isoClause
+              }
+            })
+            return { ...section, iso_mapping: isoMapping }
+          }
+          return section
+        })
+        setSections(enrichedSections)
+      } catch {
+        // ISO mapping endpoint may not exist, sections still usable
+      }
+
+      setLoadState('success')
+      setRetryCount(0)
+    } catch (err) {
+      const apiError = createApiError(err)
+      setErrorClass(apiError.error_class)
+      
+      // Auto-retry once for transient network errors
+      if (!isRetry && (apiError.error_class === ErrorClass.NETWORK_ERROR || apiError.error_class === ErrorClass.SERVER_ERROR)) {
+        setRetryCount(prev => prev + 1)
+        loadData(true)
+        return
+      }
+      
+      setLoadState('error')
+    }
+  }, [retryCount])
 
   useEffect(() => {
-    // Simulated data load
-    setTimeout(() => {
-      setSections([
-        { number: '1', title: 'System Assurance and Compliance', max_score: 21, question_count: 5, iso_mapping: { '9001': '4-5', '14001': '4-5', '45001': '4-5' } },
-        { number: '2', title: 'Quality Control and Assurance', max_score: 21, question_count: 5, iso_mapping: { '9001': '7-8', '27001': '7.5' } },
-        { number: '3', title: 'Health and Safety Leadership', max_score: 18, question_count: 5, iso_mapping: { '45001': '5' } },
-        { number: '4', title: 'Health and Safety Management', max_score: 21, question_count: 7, iso_mapping: { '45001': '6-8' } },
-        { number: '5', title: 'Health and Safety Arrangements', max_score: 21, question_count: 7, iso_mapping: { '45001': '8' } },
-        { number: '6', title: 'Occupational Health', max_score: 15, question_count: 5, iso_mapping: { '45001': '8.1.2' } },
-        { number: '7', title: 'Safety Critical Personnel', max_score: 15, question_count: 5, iso_mapping: { '45001': '7.2' } },
-        { number: '8', title: 'Environmental Leadership', max_score: 15, question_count: 4, iso_mapping: { '14001': '5' } },
-        { number: '9', title: 'Environmental Management', max_score: 21, question_count: 7, iso_mapping: { '14001': '6-8' } },
-        { number: '10', title: 'Environmental Arrangements', max_score: 15, question_count: 5, iso_mapping: { '14001': '8' } },
-        { number: '11', title: 'Waste Management', max_score: 12, question_count: 4, iso_mapping: { '14001': '8.1' } },
-        { number: '12', title: 'Selection and Management of Sub-contractors', max_score: 12, question_count: 2, iso_mapping: { '9001': '8.4', '45001': '8.1.4' } },
-        { number: '13', title: 'Sourcing of Goods and Products', max_score: 12, question_count: 4, iso_mapping: { '9001': '8.4' } },
-        { number: '14', title: 'Use of Work Equipment, Vehicles and Machines', max_score: 6, question_count: 1, iso_mapping: { '45001': '8.1' } },
-        { number: '15', title: 'Key Performance Indicators', max_score: 0, question_count: 14, iso_mapping: { '45001': '9.1', '14001': '9.1' } },
-      ])
-      setAudits([
-        { id: 1, audit_reference: 'UVDB-2025-0001', company_name: 'Plantexpand Limited', audit_type: 'B2', audit_date: '2025-09-15', status: 'completed', percentage_score: 94, lead_auditor: 'John Smith' },
-        { id: 2, audit_reference: 'UVDB-2026-0001', company_name: 'Plantexpand Limited', audit_type: 'B2', audit_date: '2026-03-15', status: 'scheduled', percentage_score: null, lead_auditor: 'External Auditor' },
-      ])
-      setLoading(false)
-    }, 500)
-  }, [])
+    loadData()
+  }, [loadData])
 
   const totalMaxScore = sections.reduce((sum, s) => sum + s.max_score, 0)
 
@@ -204,11 +289,50 @@ export default function UVDBAudits() {
         })}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-yellow-400 animate-spin" />
+      {/* Loading State */}
+      {loadState === 'loading' && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <RefreshCw className="w-8 h-8 text-warning animate-spin mb-4" />
+          <p className="text-muted-foreground">Loading UVDB data...</p>
         </div>
-      ) : (
+      )}
+
+      {/* Error State */}
+      {loadState === 'error' && (
+        <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
+          <XCircle className="w-12 h-12 text-destructive mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Failed to Load Data</h3>
+          <p className="text-muted-foreground mb-4">
+            {errorClass === ErrorClass.NETWORK_ERROR && 'Network connection failed. Please check your connection.'}
+            {errorClass === ErrorClass.SERVER_ERROR && 'Server error occurred. Please try again later.'}
+            {errorClass === ErrorClass.AUTH_ERROR && 'Authentication required. Please log in.'}
+            {errorClass === ErrorClass.NOT_FOUND && 'UVDB data not found.'}
+            {(errorClass === ErrorClass.UNKNOWN || !errorClass) && 'An unexpected error occurred.'}
+          </p>
+          <button
+            onClick={() => { setRetryCount(0); loadData(); }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {loadState === 'success' && sections.length === 0 && audits.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
+          <Award className="w-12 h-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">No UVDB Data Yet</h3>
+          <p className="text-muted-foreground mb-4">Start your UVDB qualification journey by creating a new audit.</p>
+          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />
+            New Audit
+          </button>
+        </div>
+      )}
+
+      {loadState === 'success' && (sections.length > 0 || audits.length > 0) && (
         <>
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (

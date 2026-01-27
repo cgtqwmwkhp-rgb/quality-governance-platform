@@ -79,6 +79,77 @@ export function classifyLoginError(error: unknown): LoginErrorCode {
   return 'UNKNOWN';
 }
 
+// ============ Bounded Error Classes for API Responses ============
+// Universal error classification for all API calls
+
+export enum ErrorClass {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  AUTH_ERROR = 'AUTH_ERROR',
+  NOT_FOUND = 'NOT_FOUND',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  SERVER_ERROR = 'SERVER_ERROR',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export interface ApiError extends Error {
+  error_class: ErrorClass
+  status_code?: number
+  detail?: string
+}
+
+/**
+ * Classify any error into a bounded ErrorClass.
+ * Used for deterministic UX states.
+ */
+export function classifyError(error: unknown): ErrorClass {
+  if (!axios.isAxiosError(error)) {
+    return ErrorClass.UNKNOWN
+  }
+
+  const axiosError = error as AxiosError
+
+  // Network error (no response)
+  if (!axiosError.response) {
+    if (axiosError.code === 'ECONNABORTED' || axiosError.message?.includes('timeout')) {
+      return ErrorClass.NETWORK_ERROR
+    }
+    return ErrorClass.NETWORK_ERROR
+  }
+
+  const status = axiosError.response.status
+
+  if (status === 400 || status === 422) {
+    return ErrorClass.VALIDATION_ERROR
+  }
+  if (status === 401 || status === 403) {
+    return ErrorClass.AUTH_ERROR
+  }
+  if (status === 404) {
+    return ErrorClass.NOT_FOUND
+  }
+  if (status >= 500) {
+    return ErrorClass.SERVER_ERROR
+  }
+
+  return ErrorClass.UNKNOWN
+}
+
+/**
+ * Create a typed ApiError from any caught error.
+ */
+export function createApiError(error: unknown): ApiError {
+  const errorClass = classifyError(error)
+  const apiError = new Error('API Error') as ApiError
+  apiError.error_class = errorClass
+
+  if (axios.isAxiosError(error) && error.response) {
+    apiError.status_code = error.response.status
+    apiError.detail = error.response.data?.detail || error.response.data?.message || error.message
+  }
+
+  return apiError
+}
+
 const api = axios.create({
   baseURL: HTTPS_API_BASE,
   timeout: REQUEST_TIMEOUT_MS,
