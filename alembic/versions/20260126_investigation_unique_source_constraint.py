@@ -26,9 +26,21 @@ def upgrade() -> None:
     duplicate investigations for the same source record. This enforces the business
     rule that each source record can have at most one investigation.
 
+    First removes any duplicate records, keeping only the most recently created one.
     The constraint is implemented as a unique index rather than a unique constraint
     because PostgreSQL handles them equivalently and indexes are more flexible.
     """
+    # First, remove duplicate records keeping only the most recently created one
+    # This uses a CTE to identify duplicates and delete all but the newest per source
+    op.execute("""
+        DELETE FROM investigation_runs
+        WHERE id NOT IN (
+            SELECT DISTINCT ON (assigned_entity_type, assigned_entity_id) id
+            FROM investigation_runs
+            ORDER BY assigned_entity_type, assigned_entity_id, created_at DESC NULLS LAST, id DESC
+        )
+    """)
+
     # Create unique index to prevent duplicate investigations for same source
     op.create_index(
         "uq_investigation_runs_source",
