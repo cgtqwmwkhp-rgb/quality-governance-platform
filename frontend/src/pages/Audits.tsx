@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2 } from 'lucide-react'
-import { auditsApi, AuditRun, AuditFinding } from '../api/client'
+import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText } from 'lucide-react'
+import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
@@ -10,10 +10,19 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '../components/ui/Dialog'
 import { cn } from "../helpers/utils"
 
 type ViewMode = 'kanban' | 'list' | 'findings'
+
+// Form state for creating a new audit
+interface CreateAuditForm {
+  template_id: number | null
+  title: string
+  location: string
+  scheduled_date: string
+}
 
 const KANBAN_COLUMNS = [
   { id: 'scheduled', label: 'Scheduled', variant: 'info' as const, icon: Calendar },
@@ -22,13 +31,27 @@ const KANBAN_COLUMNS = [
   { id: 'completed', label: 'Completed', variant: 'success' as const, icon: CheckCircle2 },
 ]
 
+const INITIAL_FORM_STATE: CreateAuditForm = {
+  template_id: null,
+  title: '',
+  location: '',
+  scheduled_date: new Date().toISOString().split('T')[0], // Default to today
+}
+
 export default function Audits() {
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
+  const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState<CreateAuditForm>(INITIAL_FORM_STATE)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -36,18 +59,78 @@ export default function Audits() {
 
   const loadData = async () => {
     try {
-      const [auditsRes, findingsRes] = await Promise.all([
+      const [auditsRes, findingsRes, templatesRes] = await Promise.all([
         auditsApi.listRuns(1, 100),
         auditsApi.listFindings(1, 100),
+        auditsApi.listTemplates(1, 100),
       ])
       setAudits(auditsRes.data.items || [])
       setFindings(findingsRes.data.items || [])
+      // Only show published templates
+      setTemplates((templatesRes.data.items || []).filter(t => t.is_published))
     } catch (err) {
       console.error('Failed to load audits:', err)
       setAudits([])
       setFindings([])
+      setTemplates([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleOpenModal = () => {
+    setFormData(INITIAL_FORM_STATE)
+    setFormError(null)
+    setSuccessMessage(null)
+    setShowModal(true)
+  }
+
+  const handleCloseModal = () => {
+    setShowModal(false)
+    setFormData(INITIAL_FORM_STATE)
+    setFormError(null)
+  }
+
+  const handleSubmitAudit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError(null)
+    
+    // Validation
+    if (!formData.template_id) {
+      setFormError('Please select an audit template')
+      return
+    }
+    
+    setIsSubmitting(true)
+    
+    try {
+      const payload: AuditRunCreate = {
+        template_id: formData.template_id,
+        title: formData.title || undefined,
+        location: formData.location || undefined,
+        scheduled_date: formData.scheduled_date || undefined,
+      }
+      
+      const response = await auditsApi.createRun(payload)
+      
+      // Success - show message and refresh list
+      setSuccessMessage(`Audit scheduled successfully! Reference: ${response.data.reference_number}`)
+      
+      // Refresh the audit list
+      await loadData()
+      
+      // Close modal after short delay to show success
+      setTimeout(() => {
+        handleCloseModal()
+        setSuccessMessage(null)
+      }, 2000)
+      
+    } catch (err: any) {
+      console.error('Failed to create audit:', err)
+      const errorMessage = err.response?.data?.detail || 'Failed to schedule audit. Please try again.'
+      setFormError(errorMessage)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -129,7 +212,7 @@ export default function Audits() {
               </button>
             ))}
           </div>
-          <Button onClick={() => setShowModal(true)}>
+          <Button onClick={handleOpenModal}>
             <Plus size={20} />
             New Audit
           </Button>
@@ -369,17 +452,160 @@ export default function Audits() {
         </div>
       )}
 
-      {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent>
+      {/* Create Audit Modal */}
+      <Dialog open={showModal} onOpenChange={handleCloseModal}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Schedule New Audit</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardCheck className="w-5 h-5 text-primary" />
+              Schedule New Audit
+            </DialogTitle>
           </DialogHeader>
-          <div className="py-8 text-center">
-            <p className="text-muted-foreground">
-              Audit scheduling coming soon. Use the API to create audits.
-            </p>
-          </div>
+          
+          {successMessage ? (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-success" />
+              </div>
+              <p className="text-lg font-semibold text-foreground mb-2">Audit Scheduled!</p>
+              <p className="text-muted-foreground">{successMessage}</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmitAudit} className="space-y-5">
+              {/* Template Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Audit Template <span className="text-destructive">*</span>
+                </label>
+                {templates.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
+                    <p className="text-sm text-warning">
+                      No published templates available. Please create and publish a template first.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-2 max-h-48 overflow-y-auto">
+                    {templates.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ 
+                          ...prev, 
+                          template_id: template.id,
+                          title: prev.title || template.name
+                        }))}
+                        className={cn(
+                          "flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
+                          formData.template_id === template.id
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                            : "border-border hover:border-primary/50 hover:bg-surface"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                          formData.template_id === template.id
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-surface text-muted-foreground"
+                        )}>
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{template.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {template.category || template.audit_type} • {template.reference_number}
+                          </p>
+                        </div>
+                        {formData.template_id === template.id && (
+                          <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Title */}
+              <div className="space-y-2">
+                <label htmlFor="audit-title" className="text-sm font-medium text-foreground">
+                  Audit Title
+                </label>
+                <Input
+                  id="audit-title"
+                  type="text"
+                  placeholder="e.g., Q1 2026 Safety Inspection - Site A"
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  maxLength={300}
+                />
+                <p className="text-xs text-muted-foreground">Optional. Defaults to template name.</p>
+              </div>
+
+              {/* Location */}
+              <div className="space-y-2">
+                <label htmlFor="audit-location" className="text-sm font-medium text-foreground">
+                  Location
+                </label>
+                <Input
+                  id="audit-location"
+                  type="text"
+                  placeholder="e.g., Warehouse B, Office Floor 3"
+                  value={formData.location}
+                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                  maxLength={200}
+                />
+              </div>
+
+              {/* Scheduled Date */}
+              <div className="space-y-2">
+                <label htmlFor="audit-date" className="text-sm font-medium text-foreground">
+                  Scheduled Date
+                </label>
+                <Input
+                  id="audit-date"
+                  type="date"
+                  value={formData.scheduled_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_date: e.target.value }))}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+
+              {/* Error Message */}
+              {formError && (
+                <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive">{formError}</p>
+                </div>
+              )}
+
+              {/* Footer */}
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseModal}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || templates.length === 0 || !formData.template_id}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Scheduling...
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4" />
+                      Schedule Audit
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
