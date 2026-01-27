@@ -279,7 +279,7 @@ async def get_reporting_year(
     # Get emission sources
     stmt = select(EmissionSource).where(EmissionSource.reporting_year_id == year_id)
     result = await db.execute(stmt)
-    sources = result.scalars().all()
+    sources: list[EmissionSource] = list(result.scalars().all())
 
     # Calculate scope breakdowns
     scope1_sources = [s for s in sources if s.scope == "scope_1"]
@@ -600,10 +600,10 @@ async def get_data_quality_assessment(
 
     stmt = select(EmissionSource).where(EmissionSource.reporting_year_id == year_id)
     result = await db.execute(stmt)
-    sources = result.scalars().all()
+    sources: list[EmissionSource] = list(result.scalars().all())
 
     # Calculate quality by scope
-    def calc_scope_quality(scope_sources):
+    def calc_scope_quality(scope_sources: list[EmissionSource]) -> dict:
         if not scope_sources:
             return {"score": 0, "actual_pct": 0, "recommendations": ["No data recorded"]}
 
@@ -796,10 +796,10 @@ async def get_certification_status(
 
     stmt = select(CarbonEvidence).where(CarbonEvidence.reporting_year_id == year_id)
     result = await db.execute(stmt)
-    evidence = result.scalars().all()
+    evidence: list[CarbonEvidence] = list(result.scalars().all())
     stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
     result = await db.execute(stmt)
-    actions = result.scalars().all()
+    actions: list[ImprovementAction] = list(result.scalars().all())
 
     # Evidence checklist
     required_evidence = [
@@ -896,7 +896,7 @@ async def get_carbon_dashboard(
     # Action summary
     stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == current_year.id)
     result = await db.execute(stmt)
-    actions = result.scalars().all()
+    actions: list[ImprovementAction] = list(result.scalars().all())
 
     overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]
 
@@ -1023,7 +1023,7 @@ async def _recalculate_year_totals(db: AsyncSession, year: CarbonReportingYear) 
     """Recalculate total emissions for a reporting year"""
     stmt = select(EmissionSource).where(EmissionSource.reporting_year_id == year.id)
     result = await db.execute(stmt)
-    sources = result.scalars().all()
+    sources: list[EmissionSource] = list(result.scalars().all())
 
     scope1 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_1")
     scope2 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_2")
@@ -1048,7 +1048,7 @@ async def _recalculate_year_totals(db: AsyncSession, year: CarbonReportingYear) 
     year.overall_data_quality = (year.scope_1_data_quality + year.scope_2_data_quality + year.scope_3_data_quality) // 3
 
 
-def _calc_avg_quality(sources: list) -> int:
+def _calc_avg_quality(sources: list[EmissionSource]) -> int:
     """Calculate average data quality score"""
     if not sources:
         return 0
