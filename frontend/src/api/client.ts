@@ -671,6 +671,24 @@ export const auditsApi = {
     api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
 }
 
+/**
+ * Investigation update payload - all fields optional for partial updates.
+ */
+export interface InvestigationUpdate {
+  title?: string
+  status?: string
+  data?: Record<string, unknown>
+  notes?: string
+}
+
+/**
+ * Autosave payload with version for optimistic locking.
+ */
+export interface InvestigationAutosave {
+  data: Record<string, unknown>
+  version: number
+}
+
 export const investigationsApi = {
   list: (page = 1, size = 10) => 
     api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?page=${page}&size=${size}`),
@@ -678,6 +696,18 @@ export const investigationsApi = {
     api.post<Investigation>('/api/v1/investigations/', data),
   get: (id: number) => 
     api.get<Investigation>(`/api/v1/investigations/${id}`),
+  /**
+   * Update investigation with partial data.
+   * Returns updated investigation on success.
+   */
+  update: (id: number, data: InvestigationUpdate) =>
+    api.patch<Investigation>(`/api/v1/investigations/${id}`, data),
+  /**
+   * Autosave investigation with version-based optimistic locking.
+   * Returns 409 CONFLICT if version mismatch (stale data).
+   */
+  autosave: (id: number, data: InvestigationAutosave) =>
+    api.patch<Investigation>(`/api/v1/investigations/${id}/autosave`, data),
   /**
    * Create investigation from source record using proper JSON body.
    * Returns 201 on success, 404 if source not found, 409 if already investigated.
@@ -711,15 +741,43 @@ export const standardsApi = {
     api.get<Control[]>(`/api/v1/clauses/${clauseId}/controls/`),
 }
 
+/**
+ * Action update payload - all fields optional for partial updates.
+ */
+export interface ActionUpdate {
+  title?: string
+  description?: string
+  action_type?: string
+  priority?: string
+  status?: string
+  due_date?: string
+  assigned_to_email?: string
+  completion_notes?: string
+}
+
 export const actionsApi = {
-  list: (page = 1, size = 10, status?: string) => 
-    api.get<PaginatedResponse<Action>>(`/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ''}`),
+  /**
+   * List all actions with pagination and optional filters.
+   * Actions are returned sorted by created_at descending for stable ordering.
+   */
+  list: (page = 1, size = 10, status?: string, source_type?: string) => 
+    api.get<PaginatedResponse<Action>>(`/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ''}${source_type ? `&source_type=${source_type}` : ''}`),
+  /**
+   * Create a new action linked to a source entity.
+   */
   create: (data: ActionCreate) => 
     api.post<Action>('/api/v1/actions/', data),
-  get: (id: number) => 
-    api.get<Action>(`/api/v1/actions/${id}`),
-  update: (id: number, data: Partial<Action>) => 
-    api.patch<Action>(`/api/v1/actions/${id}`, data),
+  /**
+   * Get a single action by ID. Requires source_type.
+   */
+  get: (id: number, source_type: string) => 
+    api.get<Action>(`/api/v1/actions/${id}?source_type=${source_type}`),
+  /**
+   * Update an action with partial data. Requires source_type.
+   * Returns 404 if not found, 400 for validation errors.
+   */
+  update: (id: number, source_type: string, data: ActionUpdate) => 
+    api.patch<Action>(`/api/v1/actions/${id}?source_type=${source_type}`, data),
 }
 
 // User type for search results

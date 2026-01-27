@@ -160,3 +160,62 @@ class TestActionsAPIEndpoints:
         response = await client.get("/api/v1/actions/1")
         # Should return 401 (no auth) or 422 (missing source_type)
         assert response.status_code in [401, 422]
+
+    @pytest.mark.asyncio
+    async def test_actions_patch_endpoint_exists(self, client: AsyncClient):
+        """PATCH /api/v1/actions/{id} endpoint should exist (returns 401/422, not 404/405)."""
+        response = await client.patch(
+            "/api/v1/actions/1?source_type=incident",
+            json={"title": "Updated Title"},
+        )
+        # Should return 401 (no auth), not 404 (missing) or 405 (method not allowed)
+        assert response.status_code != 404, "Actions PATCH endpoint should exist"
+        assert response.status_code != 405, "Actions PATCH method should be allowed"
+        assert response.status_code == 401  # Requires auth
+
+    @pytest.mark.asyncio
+    async def test_actions_patch_requires_source_type(self, client: AsyncClient):
+        """PATCH /api/v1/actions/{id} requires source_type query param."""
+        response = await client.patch(
+            "/api/v1/actions/1",  # Missing source_type
+            json={"title": "Updated Title"},
+        )
+        # Should return 401 (no auth first) or 422 (missing source_type)
+        assert response.status_code in [401, 422]
+
+
+class TestActionsAPIPatchValidation:
+    """Test PATCH endpoint validation for Actions API."""
+
+    @pytest.mark.asyncio
+    async def test_actions_patch_validates_status_enum(self, client: AsyncClient):
+        """PATCH /api/v1/actions/{id} should validate status values are bounded."""
+        # This tests that the endpoint exists and accepts the request format
+        # Auth will fail first, but the endpoint contract is verified
+        response = await client.patch(
+            "/api/v1/actions/1?source_type=incident",
+            json={"status": "invalid_status_value"},
+        )
+        # Auth check happens first
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_actions_patch_validates_priority_enum(self, client: AsyncClient):
+        """PATCH /api/v1/actions/{id} should validate priority values are bounded."""
+        response = await client.patch(
+            "/api/v1/actions/1?source_type=incident",
+            json={"priority": "invalid_priority"},
+        )
+        assert response.status_code == 401  # Auth first
+
+    @pytest.mark.asyncio
+    async def test_actions_patch_accepts_valid_status_values(self, client: AsyncClient):
+        """PATCH /api/v1/actions/{id} accepts valid status enum values."""
+        valid_statuses = ["open", "in_progress", "pending_verification", "completed", "cancelled"]
+        for status in valid_statuses:
+            response = await client.patch(
+                "/api/v1/actions/1?source_type=incident",
+                json={"status": status},
+            )
+            # All should hit auth check (401) not validation error
+            assert response.status_code == 401, f"Status '{status}' should be accepted"

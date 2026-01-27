@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Search, ListTodo, Plus, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -20,97 +20,147 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from "../helpers/utils"
+import { actionsApi, Action as ApiAction, ActionCreate } from '../api/client'
 
-interface Action {
-  id: number
-  reference_number: string
-  title: string
-  description: string
-  action_type: string
-  priority: 'critical' | 'high' | 'medium' | 'low'
-  status: 'open' | 'in_progress' | 'pending_verification' | 'completed' | 'cancelled'
-  due_date?: string
-  completed_at?: string
-  source_type: string
+// Bounded error taxonomy for deterministic error handling
+type ErrorClass = 'VALIDATION_ERROR' | 'AUTH_ERROR' | 'NOT_FOUND' | 'NETWORK_ERROR' | 'SERVER_ERROR' | 'UNKNOWN'
+
+interface ApiError {
+  error_class: ErrorClass
+  message: string
+}
+
+function classifyError(error: unknown): ApiError {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('401') || message.includes('unauthorized')) {
+      return { error_class: 'AUTH_ERROR', message: 'Authentication required. Please log in.' }
+    }
+    if (message.includes('404') || message.includes('not found')) {
+      return { error_class: 'NOT_FOUND', message: 'Action not found.' }
+    }
+    if (message.includes('400') || message.includes('validation')) {
+      return { error_class: 'VALIDATION_ERROR', message: 'Invalid data provided.' }
+    }
+    if (message.includes('network') || message.includes('fetch')) {
+      return { error_class: 'NETWORK_ERROR', message: 'Network error. Please check your connection.' }
+    }
+    if (message.includes('500') || message.includes('server')) {
+      return { error_class: 'SERVER_ERROR', message: 'Server error. Please try again later.' }
+    }
+  }
+  return { error_class: 'UNKNOWN', message: 'An unexpected error occurred.' }
+}
+
+// Local UI type extending API type with computed fields
+interface Action extends Omit<ApiAction, 'source_id' | 'owner_id' | 'owner_email'> {
   source_ref: string
   owner?: string
-  created_at: string
 }
 
 type ViewMode = 'all' | 'my' | 'overdue'
 type FilterStatus = 'all' | 'open' | 'in_progress' | 'pending_verification' | 'completed'
 
-const MOCK_ACTIONS: Action[] = [
-  {
-    id: 1,
-    reference_number: 'ACT-2026-0001',
-    title: 'Update fire safety procedures',
-    description: 'Review and update all fire safety procedures following the recent incident',
-    action_type: 'corrective',
-    priority: 'high',
-    status: 'in_progress',
-    due_date: '2026-02-15',
-    source_type: 'incident',
-    source_ref: 'INC-2026-0042',
-    owner: 'John Smith',
-    created_at: '2026-01-10',
-  },
-  {
-    id: 2,
-    reference_number: 'ACT-2026-0002',
-    title: 'Install additional CCTV cameras',
-    description: 'Install CCTV coverage in blind spots identified during security audit',
-    action_type: 'preventive',
-    priority: 'medium',
-    status: 'open',
-    due_date: '2026-03-01',
-    source_type: 'audit',
-    source_ref: 'AUD-2026-0015',
-    owner: 'Security Team',
-    created_at: '2026-01-12',
-  },
-  {
-    id: 3,
-    reference_number: 'ACT-2026-0003',
-    title: 'Driver re-training program',
-    description: 'Mandatory defensive driving training for all fleet drivers',
-    action_type: 'corrective',
-    priority: 'critical',
-    status: 'pending_verification',
-    due_date: '2026-01-25',
-    source_type: 'rta',
-    source_ref: 'RTA-2026-0008',
-    owner: 'Fleet Manager',
-    created_at: '2026-01-08',
-  },
-  {
-    id: 4,
-    reference_number: 'ACT-2026-0004',
-    title: 'Customer communication protocol review',
-    description: 'Update customer communication templates and response SLAs',
-    action_type: 'improvement',
-    priority: 'low',
-    status: 'completed',
-    due_date: '2026-01-20',
-    completed_at: '2026-01-18',
-    source_type: 'complaint',
-    source_ref: 'CMP-2026-0023',
-    owner: 'Customer Service',
-    created_at: '2026-01-05',
-  },
-]
+// Form state type for creating actions
+interface CreateActionForm {
+  title: string
+  description: string
+  priority: string
+  action_type: string
+  due_date: string
+  source_type: string
+  source_id: string
+}
+
+const INITIAL_FORM: CreateActionForm = {
+  title: '',
+  description: '',
+  priority: 'medium',
+  action_type: 'corrective',
+  due_date: '',
+  source_type: 'incident',
+  source_id: '',
+}
 
 export default function Actions() {
-  const [actions] = useState<Action[]>(MOCK_ACTIONS)
-  const [loading, setLoading] = useState(false)
+  const [actions, setActions] = useState<Action[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<ApiError | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState<CreateActionForm>(INITIAL_FORM)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<ApiError | null>(null)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  // Transform API response to UI model
+  const transformAction = (apiAction: ApiAction): Action => ({
+    ...apiAction,
+    source_ref: `${apiAction.source_type.toUpperCase()}-${apiAction.source_id}`,
+    owner: apiAction.owner_email || undefined,
+  })
+
+  // Fetch actions from API with stable ordering (server returns created_at desc)
+  const loadActions = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const statusFilter = filterStatus !== 'all' ? filterStatus : undefined
+      const response = await actionsApi.list(1, 100, statusFilter)
+      // Server returns sorted by created_at desc - maintain stable order
+      const transformedActions = response.data.items.map(transformAction)
+      setActions(transformedActions)
+    } catch (err) {
+      console.error('Failed to load actions:', err)
+      setError(classifyError(err))
+      setActions([])
+    } finally {
+      setLoading(false)
+    }
+  }, [filterStatus])
 
   useEffect(() => {
-    setLoading(false)
-  }, [])
+    loadActions()
+  }, [loadActions])
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitError(null)
+    setIsSubmitting(true)
+
+    try {
+      const payload: ActionCreate = {
+        title: formData.title,
+        description: formData.description,
+        action_type: formData.action_type,
+        priority: formData.priority,
+        source_type: formData.source_type,
+        source_id: parseInt(formData.source_id, 10),
+        due_date: formData.due_date || undefined,
+      }
+
+      await actionsApi.create(payload)
+      setSubmitSuccess(true)
+      
+      // STATIC_UI_CONFIG_OK - UX delay to show success state before closing modal
+      setTimeout(() => {
+        loadActions()
+        setShowModal(false)
+        setFormData(INITIAL_FORM)
+        setSubmitSuccess(false)
+      }, 1500)
+    } catch (err) {
+      console.error('Failed to create action:', err)
+      setSubmitError(classifyError(err))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const getPriorityVariant = (priority: string) => {
     switch (priority) {
@@ -175,6 +225,24 @@ export default function Actions() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span className="ml-3 text-muted-foreground">Loading actions...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+          <AlertCircle className="w-8 h-8 text-destructive" />
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-semibold text-foreground">{error.error_class}</p>
+          <p className="text-muted-foreground">{error.message}</p>
+        </div>
+        <Button onClick={loadActions} variant="outline">
+          Try Again
+        </Button>
       </div>
     )
   }
@@ -365,52 +433,144 @@ export default function Actions() {
       </div>
 
       {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={showModal} onOpenChange={(open) => {
+        setShowModal(open)
+        if (!open) {
+          setFormData(INITIAL_FORM)
+          setSubmitError(null)
+          setSubmitSuccess(false)
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Action</DialogTitle>
           </DialogHeader>
-          <form className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-              <Input placeholder="Action title..." />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <Textarea rows={3} placeholder="Describe the action required..." />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Priority</label>
-                <Select defaultValue="medium">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
+          
+          {submitSuccess ? (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Due Date</label>
-                <Input type="date" />
-              </div>
+              <p className="text-lg font-semibold text-foreground mb-2">Action Created!</p>
+              <p className="text-muted-foreground">The action has been added to the list.</p>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Title <span className="text-destructive">*</span>
+                </label>
+                <Input 
+                  placeholder="Action title..." 
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  required
+                  maxLength={300}
+                />
+              </div>
 
-            <DialogFooter className="gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                Create Action
-              </Button>
-            </DialogFooter>
-          </form>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Description <span className="text-destructive">*</span>
+                </label>
+                <Textarea 
+                  rows={3} 
+                  placeholder="Describe the action required..."
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Source Type</label>
+                  <Select 
+                    value={formData.source_type} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, source_type: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="incident">Incident</SelectItem>
+                      <SelectItem value="rta">RTA</SelectItem>
+                      <SelectItem value="complaint">Complaint</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Source ID <span className="text-destructive">*</span>
+                  </label>
+                  <Input 
+                    type="number"
+                    placeholder="e.g., 42"
+                    value={formData.source_id}
+                    onChange={(e) => setFormData(prev => ({ ...prev, source_id: e.target.value }))}
+                    required
+                    min={1}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Priority</label>
+                  <Select 
+                    value={formData.priority}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Due Date</label>
+                  <Input 
+                    type="date"
+                    value={formData.due_date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {submitError && (
+                <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-destructive">{submitError.error_class}</p>
+                    <p className="text-sm text-destructive/80">{submitError.message}</p>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setShowModal(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Action'
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
