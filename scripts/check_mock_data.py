@@ -58,13 +58,20 @@ PATTERNS = [
 
 # Files to scan (exact paths relative to repo root)
 # Scope is expanded as modules are fixed:
-# - PR1: Actions.tsx (fixed)
-# - PR2: PlanetMark.tsx, UVDBAudits.tsx (to be fixed)
-# - PR3: Standards.tsx, ComplianceEvidence.tsx (to be fixed)
+# - PR1: Actions.tsx (fixed) ✅
+# - PR2: PlanetMark.tsx, UVDBAudits.tsx (clients added, frontend pending)
+# - PR3: Standards.tsx, ComplianceEvidence.tsx (pending)
+#
+# PR2 Stage 0 proof (run manually to verify gate detects mocks):
+# $ python3 scripts/check_mock_data.py --extra-files \
+#     frontend/src/pages/PlanetMark.tsx \
+#     frontend/src/pages/UVDBAudits.tsx
+# Expected: [FAIL] 2 violations (setTimeout simulations)
+#
 SCOPED_FILES = [
-    # PR1 scope - API-backed and mock-free
+    # PR1 scope - API-backed and mock-free ✅
     "frontend/src/pages/Actions.tsx",
-    # PR2 scope - uncomment when fixed
+    # PR2 scope - uncomment when frontend is fixed
     # "frontend/src/pages/PlanetMark.tsx",
     # "frontend/src/pages/UVDBAudits.tsx",
     # PR3 scope - uncomment when fixed
