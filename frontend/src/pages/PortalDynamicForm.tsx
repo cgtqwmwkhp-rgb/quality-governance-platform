@@ -20,6 +20,11 @@ import { API_BASE_URL } from '../config/apiBase';
 import type { FormTemplate, Contract, LookupOption } from '../services/api';
 import type { DynamicFormData } from '../components/DynamicForm';
 
+// Props for explicit form type (preferred over URL parsing)
+interface PortalDynamicFormProps {
+  formType?: 'incident' | 'near-miss' | 'complaint' | 'rta';
+}
+
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
   report_type: 'incident' | 'complaint' | 'rta' | 'near_miss';
@@ -354,18 +359,28 @@ const FORM_TYPE_CONFIG: Record<string, { title: string; icon: string; color: str
   },
 };
 
-export default function PortalDynamicForm() {
+export default function PortalDynamicForm({ formType: propFormType }: PortalDynamicFormProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = usePortalAuth();
-  const formType = getFormTypeFromPath(location.pathname);
+  
+  // Use prop formType if provided (preferred), otherwise fall back to URL parsing
+  const derivedFormType = getFormTypeFromPath(location.pathname);
+  const formType = propFormType || derivedFormType;
   const config = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident;
 
-  // Debug logging for form type resolution - helps diagnose routing issues
-  // RTA should normally route to PortalRTAForm, not PortalDynamicForm
+  // Debug logging for form type resolution
+  console.log('[PortalDynamicForm] Route debug:', {
+    propFormType,
+    derivedFormType,
+    finalFormType: formType,
+    pathname: location.pathname,
+    configTitle: config.title
+  });
+
+  // Warn if RTA is detected (should use PortalRTAForm instead)
   if (formType === 'rta') {
-    console.warn('[PortalDynamicForm] Unexpected formType "rta" detected. pathname:', location.pathname);
-    console.warn('[PortalDynamicForm] RTA reports should use PortalRTAForm. Using fallback template.');
+    console.warn('[PortalDynamicForm] Unexpected formType "rta" detected. RTA should use PortalRTAForm.');
   }
 
   const [template, setTemplate] = useState<FormTemplate | null>(null);
