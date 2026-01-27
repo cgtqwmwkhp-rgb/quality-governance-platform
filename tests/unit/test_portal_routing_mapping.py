@@ -96,7 +96,7 @@ class TestPortalAPIRoutingContract:
         """Document all valid report types."""
         expected = {"incident", "complaint", "rta", "near_miss"}
         actual = set(self.VALID_REPORT_TYPES)
-        assert actual == expected, f"Valid report types mismatch"
+        assert actual == expected, "Valid report types mismatch"
 
     @pytest.mark.parametrize(
         "invalid_type",
