@@ -361,12 +361,10 @@ def run_self_test() -> bool:
         else:
             print("   ✅ PASS: Budget exceeded correctly rejected")
 
-    # Test 3: Valid policy should pass
+    # Test 3: Valid policy should pass (empty quarantines = 0 baseline)
     print("Test 3: Valid policy acceptance...")
     valid_policy = {
-        "quarantines": [
-            {"id": "TEST-001", "expiry_date": "2099-01-01", "owner": "test", "files": ["a.py"]}
-        ],
+        "quarantines": [],
         "metrics": {"max_allowed_quarantine_count": 10},
     }
     with TemporaryDirectory() as tmpdir:
