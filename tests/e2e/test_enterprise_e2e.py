@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-
 # ============================================================================
 # E2E: Complete Incident Management Lifecycle
 # ============================================================================
