@@ -16,6 +16,7 @@ from src.api import router as api_router
 from src.api.exceptions import http_exception_handler, validation_exception_handler
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
+from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
 
 
@@ -143,6 +144,10 @@ def create_application() -> FastAPI:
 
     # Add Request State Middleware (must be first for request_id propagation)
     app.add_middleware(RequestStateMiddleware)
+
+    # Add UAT Safety Middleware (production read-only mode)
+    # Must be early in stack to block writes before they reach handlers
+    app.add_middleware(UATSafetyMiddleware)
 
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
