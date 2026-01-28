@@ -25,7 +25,7 @@ class TestComplianceScoreFormula:
         total = 4
         implemented = 4
         partial = 0
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 100
 
@@ -35,7 +35,7 @@ class TestComplianceScoreFormula:
         total = 4
         implemented = 2
         partial = 1
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 62
 
@@ -44,7 +44,7 @@ class TestComplianceScoreFormula:
         total = 4
         implemented = 0
         partial = 4
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 50
 
@@ -53,7 +53,7 @@ class TestComplianceScoreFormula:
         total = 4
         implemented = 0
         partial = 0
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 0
 
@@ -62,7 +62,7 @@ class TestComplianceScoreFormula:
         total = 1
         implemented = 1
         partial = 0
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 100
 
@@ -71,7 +71,7 @@ class TestComplianceScoreFormula:
         total = 1
         implemented = 0
         partial = 1
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 50
 
@@ -81,7 +81,7 @@ class TestComplianceScoreFormula:
         total = 3
         implemented = 1
         partial = 1
-        
+
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 50
 
@@ -90,7 +90,7 @@ class TestComplianceScoreFormula:
         total = 100
         implemented = 70
         partial = 20
-        
+
         # (70 + 10) / 100 * 100 = 80
         score = round((implemented + 0.5 * partial) / total * 100)
         assert score == 80
@@ -111,7 +111,7 @@ class TestComplianceScoreResponseSchema:
             compliance_percentage=80,
             setup_required=False,
         )
-        
+
         assert response.standard_id == 1
         assert response.standard_code == "ISO9001"
         assert response.total_controls == 10
@@ -130,7 +130,7 @@ class TestComplianceScoreResponseSchema:
             compliance_percentage=0,
             setup_required=True,
         )
-        
+
         assert response.total_controls == 0
         assert response.setup_required is True
         assert response.compliance_percentage == 0
@@ -147,9 +147,9 @@ class TestComplianceScoreResponseSchema:
             compliance_percentage=70,
             setup_required=False,
         )
-        
+
         data = response.model_dump()
-        
+
         expected_keys = {
             "standard_id",
             "standard_code",
@@ -160,7 +160,7 @@ class TestComplianceScoreResponseSchema:
             "compliance_percentage",
             "setup_required",
         }
-        
+
         assert set(data.keys()) == expected_keys
 
 
@@ -179,7 +179,7 @@ class TestControlListItemSchema:
             is_applicable=True,
             is_active=True,
         )
-        
+
         assert item.control_number == "5.1.1"
         assert item.clause_number == "5.1"
         assert item.implementation_status == "implemented"
@@ -198,7 +198,7 @@ class TestControlListItemSchema:
             is_applicable=True,
             is_active=True,
         )
-        
+
         assert item.implementation_status is None
 
     def test_schema_serialization_keys(self):
@@ -213,9 +213,9 @@ class TestControlListItemSchema:
             is_applicable=True,
             is_active=True,
         )
-        
+
         data = item.model_dump()
-        
+
         expected_keys = {
             "id",
             "control_number",
@@ -226,7 +226,7 @@ class TestControlListItemSchema:
             "is_applicable",
             "is_active",
         }
-        
+
         assert set(data.keys()) == expected_keys
 
 
@@ -239,7 +239,7 @@ class TestComplianceScoreDeterminism:
             total = 10
             implemented = 6
             partial = 3
-            
+
             score = round((implemented + 0.5 * partial) / total * 100)
             assert score == 75
 
@@ -247,14 +247,14 @@ class TestComplianceScoreDeterminism:
         """Formula has no side effects or randomness."""
         inputs = [
             (10, 5, 3),  # 65%
-            (8, 4, 2),   # 62%
+            (8, 4, 2),  # 62%
             (100, 80, 10),  # 85%
-            (1, 1, 0),   # 100%
-            (1, 0, 1),   # 50%
+            (1, 1, 0),  # 100%
+            (1, 0, 1),  # 50%
         ]
-        
+
         expected = [65, 62, 85, 100, 50]
-        
+
         for (total, impl, part), exp in zip(inputs, expected):
             score = round((impl + 0.5 * part) / total * 100)
             assert score == exp
