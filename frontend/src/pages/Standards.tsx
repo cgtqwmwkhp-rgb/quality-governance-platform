@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2 } from 'lucide-react'
-import { standardsApi, Standard, Clause } from '../api/client'
+import { standardsApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -22,6 +22,8 @@ export default function Standards() {
   const [standards, setStandards] = useState<Standard[]>([])
   const [selectedStandard, setSelectedStandard] = useState<Standard | null>(null)
   const [clauses, setClauses] = useState<Clause[]>([])
+  const [controls, setControls] = useState<ControlListItem[]>([])
+  const [complianceScores, setComplianceScores] = useState<Record<number, ComplianceScore>>({})
   const [loading, setLoading] = useState(true)
   const [loadingClauses, setLoadingClauses] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -34,7 +36,32 @@ export default function Standards() {
   const loadStandards = async () => {
     try {
       const response = await standardsApi.list(1, 50)
-      setStandards(response.data.items || [])
+      const loadedStandards = response.data.items || []
+      setStandards(loadedStandards)
+      
+      // Load compliance scores for all standards
+      const scores: Record<number, ComplianceScore> = {}
+      await Promise.all(
+        loadedStandards.map(async (standard) => {
+          try {
+            const scoreResponse = await standardsApi.getComplianceScore(standard.id)
+            scores[standard.id] = scoreResponse.data
+          } catch (err) {
+            // If compliance score fails, set setup_required
+            scores[standard.id] = {
+              standard_id: standard.id,
+              standard_code: standard.code,
+              total_controls: 0,
+              implemented_count: 0,
+              partial_count: 0,
+              not_implemented_count: 0,
+              compliance_percentage: 0,
+              setup_required: true,
+            }
+          }
+        })
+      )
+      setComplianceScores(scores)
     } catch (err) {
       console.error('Failed to load standards:', err)
       setStandards([])
@@ -47,11 +74,16 @@ export default function Standards() {
     setLoadingClauses(true)
     setSelectedStandard(standard)
     try {
-      const response = await standardsApi.get(standard.id)
-      setClauses(response.data.clauses || [])
+      const [clauseResponse, controlResponse] = await Promise.all([
+        standardsApi.get(standard.id),
+        standardsApi.getControls(standard.id),
+      ])
+      setClauses(clauseResponse.data.clauses || [])
+      setControls(controlResponse.data || [])
     } catch (err) {
-      console.error('Failed to load clauses:', err)
+      console.error('Failed to load clauses/controls:', err)
       setClauses([])
+      setControls([])
     } finally {
       setLoadingClauses(false)
     }
@@ -61,12 +93,19 @@ export default function Standards() {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  // Mock compliance data for demo
-  const mockCompliance: Record<string, number> = {
-    'ISO9001': 87,
-    'ISO14001': 72,
-    'ISO27001': 94,
-    'ISO45001': 81,
+  // Helper to get clause status from controls
+  const getClauseStatus = (clauseId: number): string => {
+    const clauseControls = controls.filter(c => c.clause_id === clauseId)
+    if (clauseControls.length === 0) return 'not_implemented'
+    
+    const hasNotImplemented = clauseControls.some(
+      c => !c.implementation_status || c.implementation_status === 'not_implemented' || c.implementation_status === 'planned'
+    )
+    const hasPartial = clauseControls.some(c => c.implementation_status === 'partial')
+    
+    if (hasNotImplemented) return 'not_implemented'
+    if (hasPartial) return 'partial'
+    return 'implemented'
   }
 
   const filteredStandards = standards.filter(
@@ -119,7 +158,9 @@ export default function Standards() {
               </Card>
             ) : (
               filteredStandards.map((standard) => {
-                const compliance = mockCompliance[standard.code] || 0
+                const scoreData = complianceScores[standard.id]
+                const compliance = scoreData?.compliance_percentage ?? 0
+                const setupRequired = scoreData?.setup_required ?? true
                 const isSelected = selectedStandard?.id === standard.id
                 
                 return (
@@ -154,22 +195,27 @@ export default function Standards() {
                     <div className="mt-4">
                       <div className="flex items-center justify-between text-xs mb-2">
                         <span className="text-muted-foreground">Compliance</span>
-                        <span className={cn(
-                          "font-bold",
-                          compliance >= 90 ? "text-success" :
-                          compliance >= 70 ? "text-warning" : "text-destructive"
-                        )}>
-                          {compliance}%
-                        </span>
+                        {setupRequired ? (
+                          <span className="text-muted-foreground italic">Setup Required</span>
+                        ) : (
+                          <span className={cn(
+                            "font-bold",
+                            compliance >= 90 ? "text-success" :
+                            compliance >= 70 ? "text-warning" : "text-destructive"
+                          )}>
+                            {compliance}%
+                          </span>
+                        )}
                       </div>
                       <div className="h-2 bg-surface rounded-full overflow-hidden">
                         <div 
                           className={cn(
                             "h-full transition-all duration-500 rounded-full",
+                            setupRequired ? "bg-muted" :
                             compliance >= 90 ? "bg-success" :
                             compliance >= 70 ? "bg-warning" : "bg-destructive"
                           )}
-                          style={{ width: `${compliance}%` }}
+                          style={{ width: setupRequired ? '0%' : `${compliance}%` }}
                         />
                       </div>
                     </div>
@@ -220,13 +266,15 @@ export default function Standards() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {topLevelClauses.map((clause, index) => {
+                    {topLevelClauses.map((clause) => {
                       const isExpanded = expanded[clause.id]
-                      const subClauses = clauses.filter(c => c.level === 2)
-                      const hasChildren = subClauses.length > 0
+                      // Fix: Filter sub-clauses by parent_clause_id, not just level
+                      const subClauses = clauses.filter(c => c.parent_clause_id === clause.id)
+                      const clauseControls = controls.filter(c => c.clause_id === clause.id)
+                      const hasChildren = subClauses.length > 0 || clauseControls.length > 0
                       
-                      // Mock implementation status
-                      const mockStatus = ['implemented', 'partial', 'planned', 'not_implemented'][index % 4]
+                      // Real implementation status computed from controls
+                      const clauseStatus = getClauseStatus(clause.id)
                       
                       return (
                         <div key={clause.id}>
@@ -249,16 +297,13 @@ export default function Standards() {
                             
                             <div className={cn(
                               "w-8 h-8 rounded-lg flex items-center justify-center",
-                              mockStatus === 'implemented' ? 'bg-success/10' :
-                              mockStatus === 'partial' ? 'bg-warning/10' :
-                              mockStatus === 'planned' ? 'bg-info/10' : 'bg-destructive/10'
+                              clauseStatus === 'implemented' ? 'bg-success/10' :
+                              clauseStatus === 'partial' ? 'bg-warning/10' : 'bg-destructive/10'
                             )}>
-                              {mockStatus === 'implemented' ? (
+                              {clauseStatus === 'implemented' ? (
                                 <CheckCircle2 className="w-4 h-4 text-success" />
-                              ) : mockStatus === 'partial' ? (
+                              ) : clauseStatus === 'partial' ? (
                                 <Circle className="w-4 h-4 text-warning" />
-                              ) : mockStatus === 'planned' ? (
-                                <Circle className="w-4 h-4 text-info" />
                               ) : (
                                 <AlertCircle className="w-4 h-4 text-destructive" />
                               )}
@@ -272,25 +317,49 @@ export default function Standards() {
                             </div>
 
                             <Badge variant={
-                              mockStatus === 'implemented' ? 'resolved' :
-                              mockStatus === 'partial' ? 'in-progress' :
-                              mockStatus === 'planned' ? 'submitted' : 'destructive'
+                              clauseStatus === 'implemented' ? 'resolved' :
+                              clauseStatus === 'partial' ? 'in-progress' : 'destructive'
                             }>
-                              {mockStatus.replace('_', ' ')}
+                              {clauseStatus.replace('_', ' ')}
                             </Badge>
                           </div>
 
-                          {/* Sub-clauses */}
+                          {/* Sub-clauses and Controls */}
                           {isExpanded && hasChildren && (
                             <div className="ml-8 pl-4 border-l-2 border-border space-y-1 mt-2">
-                              {subClauses.slice(0, 5).map((subClause) => (
+                              {/* Sub-clauses */}
+                              {subClauses.map((subClause) => (
                                 <div 
-                                  key={subClause.id}
+                                  key={`clause-${subClause.id}`}
                                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
                                 >
-                                  <Shield className="w-4 h-4 text-muted-foreground" />
+                                  <BookOpen className="w-4 h-4 text-muted-foreground" />
                                   <span className="font-mono text-xs text-primary">{subClause.clause_number}</span>
                                   <span className="text-sm text-foreground truncate">{subClause.title}</span>
+                                </div>
+                              ))}
+                              {/* Controls */}
+                              {clauseControls.map((control) => (
+                                <div 
+                                  key={`control-${control.id}`}
+                                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
+                                >
+                                  <Shield className={cn(
+                                    "w-4 h-4",
+                                    control.implementation_status === 'implemented' ? 'text-success' :
+                                    control.implementation_status === 'partial' ? 'text-warning' : 'text-muted-foreground'
+                                  )} />
+                                  <span className="font-mono text-xs text-primary">{control.control_number}</span>
+                                  <span className="text-sm text-foreground truncate flex-1">{control.title}</span>
+                                  <Badge 
+                                    variant={
+                                      control.implementation_status === 'implemented' ? 'resolved' :
+                                      control.implementation_status === 'partial' ? 'in-progress' : 'destructive'
+                                    }
+                                    className="text-[10px]"
+                                  >
+                                    {control.implementation_status?.replace('_', ' ') || 'not set'}
+                                  </Badge>
                                 </div>
                               ))}
                             </div>
