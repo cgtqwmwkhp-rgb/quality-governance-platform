@@ -212,6 +212,11 @@ ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     # High-frequency endpoints - higher limits
     "/api/notifications/": RateLimitConfig(requests_per_minute=120, burst_limit=30),
     "/api/realtime/": RateLimitConfig(requests_per_minute=300, burst_limit=50),
+    # Dashboard endpoints - read-only, cacheable, higher limits
+    "/api/v1/planet-mark/dashboard": RateLimitConfig(requests_per_minute=120, burst_limit=30),
+    "/api/v1/uvdb/dashboard": RateLimitConfig(requests_per_minute=120, burst_limit=30),
+    # Telemetry - fire-and-forget, needs high limits for batch events
+    "/api/v1/telemetry/": RateLimitConfig(requests_per_minute=300, burst_limit=100),
 }
 
 
@@ -234,6 +239,11 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     """
     # Skip rate limiting for health checks
     if request.url.path in ["/health", "/api/health", "/ready"]:
+        return await call_next(request)
+
+    # Skip rate limiting for CORS preflight requests (OPTIONS)
+    # These must pass through to CORSMiddleware without interference
+    if request.method == "OPTIONS":
         return await call_next(request)
 
     limiter = get_rate_limiter()

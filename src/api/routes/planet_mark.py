@@ -875,8 +875,8 @@ async def get_carbon_dashboard(
             "scope_3": {"value": current_year.scope_3_total, "label": "Value Chain"},
         },
         "data_quality": {
-            "scope_1_2": current_year.scope_1_data_quality + current_year.scope_2_data_quality,
-            "scope_3": current_year.scope_3_data_quality,
+            "scope_1_2": (current_year.scope_1_data_quality or 0) + (current_year.scope_2_data_quality or 0),
+            "scope_3": current_year.scope_3_data_quality or 0,
             "target": 12,
         },
         "certification": {
