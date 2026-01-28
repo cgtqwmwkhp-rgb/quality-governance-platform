@@ -18,23 +18,23 @@ settings:
   enforce_expiry: true
   block_on_expiry: true
 
-# Quarantine entries
-quarantines:
-  # GOVPLAT-001: FULLY RESOLVED in Phase 5
-  # Root cause: API path mismatch (/api/workflows/* vs /api/v1/workflows/*) + sync client
-  # Fix: Converted tests to async_client + correct /api/v1/* paths
-  # Files resolved:
-  # - tests/smoke/test_phase3_phase4_smoke.py (22 tests)
-  # - tests/e2e/test_workflows.py (30 tests)
-  # - tests/e2e/test_compliance_automation.py (27 tests)
-  # Total resolved: 79 tests
-
-  # GOVPLAT-002: FULLY RESOLVED in Phase 4 Wave 3
-  # All E2E API contract mismatches have been fixed:
-  # - Wave 1: test_portal_e2e.py (10 tests)
-  # - Wave 2: test_full_workflow.py (15 tests)
-  # - Wave 3: test_enterprise_e2e.py (32 tests) + auth seeding
-  # Total resolved: 57 tests
+# Quarantine entries (ALL RESOLVED - empty list)
+quarantines: []
+# GOVPLAT-001: FULLY RESOLVED in Phase 5
+# Root cause: API path mismatch (/api/workflows/* vs /api/v1/workflows/*) + sync client
+# Fix: Converted tests to async_client + correct /api/v1/* paths
+# Files resolved:
+# - tests/smoke/test_phase3_phase4_smoke.py (22 tests)
+# - tests/e2e/test_workflows.py (30 tests)
+# - tests/e2e/test_compliance_automation.py (27 tests)
+# Total resolved: 79 tests
+#
+# GOVPLAT-002: FULLY RESOLVED in Phase 4 Wave 3
+# All E2E API contract mismatches have been fixed:
+# - Wave 1: test_portal_e2e.py (10 tests)
+# - Wave 2: test_full_workflow.py (15 tests)
+# - Wave 3: test_enterprise_e2e.py (32 tests) + auth seeding
+# Total resolved: 57 tests
 
 # =============================================================================
 # RESOLVED QUARANTINES (Phase 3 Async Architecture Fix - PR #104)
