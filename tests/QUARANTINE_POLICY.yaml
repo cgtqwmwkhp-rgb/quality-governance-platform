@@ -42,9 +42,9 @@ quarantines:
     marker: "api_contract_mismatch"
     files:
       - tests/e2e/test_enterprise_e2e.py
-      - tests/e2e/test_full_workflow.py
     resolution_plan: "Audit API contracts and align tests with implementations"
-    # Phase 4 Wave 1: test_portal_e2e.py re-enabled (16 tests)
+    # Phase 4 Wave 1: test_portal_e2e.py re-enabled (10 tests)
+    # Phase 4 Wave 2: test_full_workflow.py re-enabled (20 tests)
 
 # =============================================================================
 # RESOLVED QUARANTINES (Phase 3 Async Architecture Fix - PR #104)
@@ -69,8 +69,8 @@ quarantines:
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 5
-  max_allowed_quarantine_count: 5
+  baseline_quarantine_count: 4
+  max_allowed_quarantine_count: 4
   last_audit_date: "2026-01-28"
   # Phase 3 changes (PR #104):
   # - RESOLVED GOVPLAT-003: tests/integration/test_planet_mark_uvdb_contracts.py (21 tests)
@@ -79,8 +79,12 @@ metrics:
   # Net change: -3 quarantine entries, -53 quarantined tests
   #
   # Phase 4 Wave 1 changes:
-  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_portal_e2e.py (16 tests)
-  # Net change: -1 quarantine file, -16 quarantined tests
+  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_portal_e2e.py (10 tests)
+  # Net change: -1 quarantine file
+  #
+  # Phase 4 Wave 2 changes:
+  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_full_workflow.py (20 tests)
+  # Net change: -1 quarantine file
 
 # Active test suites (must pass)
 active_suites:

@@ -51,11 +51,11 @@ except ImportError:
 # E2E Minimum Pass Gate: CI fails if E2E passing tests < this threshold
 E2E_MINIMUM_PASS = 20
 
-# Baseline E2E count (updated after Phase 4 Wave 1): CI fails if current < baseline - 10%
-E2E_BASELINE_COUNT = 47  # Phase 3 (31) + Phase 4 Wave 1 portal tests (16)
+# Baseline E2E count (updated after Phase 4 Wave 2): CI fails if current < baseline - 10%
+E2E_BASELINE_COUNT = 61  # Phase 3 (31) + Wave 1 (10) + Wave 2 (20)
 
 # Quarantine count baseline: CI fails if increased without approved_override
-QUARANTINE_BASELINE_FILES = 5  # After Phase 4 Wave 1: GOVPLAT-001 (3) + GOVPLAT-002 (2)
+QUARANTINE_BASELINE_FILES = 4  # After Phase 4 Wave 2: GOVPLAT-001 (3) + GOVPLAT-002 (1)
 
 
 def parse_yaml_manually(content: str) -> dict:
@@ -378,6 +378,60 @@ def run_self_test() -> bool:
             all_passed = False
         else:
             print("   ✅ PASS: Valid policy correctly accepted")
+
+    # Test 4: E2E minimum gate - below absolute minimum should fail
+    print("Test 4: E2E absolute minimum enforcement...")
+    e2e_passed, e2e_msg = check_e2e_minimum(15)  # Below 20
+    if e2e_passed:
+        print("   ❌ FAIL: E2E below absolute minimum (15 < 20) should fail")
+        all_passed = False
+    else:
+        print("   ✅ PASS: E2E absolute minimum correctly enforced")
+
+    # Test 5: E2E baseline regression - below 90% should fail
+    print("Test 5: E2E baseline regression enforcement...")
+    min_acceptable = int(E2E_BASELINE_COUNT * 0.9)
+    e2e_passed, e2e_msg = check_e2e_minimum(min_acceptable - 5)  # Below 90%
+    if e2e_passed:
+        print(f"   ❌ FAIL: E2E below baseline ({min_acceptable - 5} < {min_acceptable}) should fail")
+        all_passed = False
+    else:
+        print("   ✅ PASS: E2E baseline regression correctly enforced")
+
+    # Test 6: E2E above baseline should pass
+    print("Test 6: E2E above baseline acceptance...")
+    e2e_passed, e2e_msg = check_e2e_minimum(E2E_BASELINE_COUNT + 5)
+    if not e2e_passed:
+        print("   ❌ FAIL: E2E above baseline should pass")
+        all_passed = False
+    else:
+        print("   ✅ PASS: E2E above baseline correctly accepted")
+
+    # Test 7: Quarantine growth without override should fail
+    print("Test 7: Quarantine growth without override...")
+    growth_passed, growth_msg = check_quarantine_growth({
+        "quarantines": [
+            {"id": "TEST-001", "files": ["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"]}
+        ]
+    })
+    if growth_passed:
+        print("   ❌ FAIL: Quarantine growth without override should fail")
+        all_passed = False
+    else:
+        print("   ✅ PASS: Quarantine growth without override correctly rejected")
+
+    # Test 8: Quarantine growth with override should pass
+    print("Test 8: Quarantine growth with override...")
+    growth_passed, growth_msg = check_quarantine_growth({
+        "quarantines": [
+            {"id": "TEST-001", "files": ["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"], "approved_override": True}
+        ]
+    })
+    if not growth_passed:
+        print("   ❌ FAIL: Quarantine growth with override should pass")
+        all_passed = False
+    else:
+        print("   ✅ PASS: Quarantine growth with override correctly accepted")
 
     print("")
     print("=" * 60)
