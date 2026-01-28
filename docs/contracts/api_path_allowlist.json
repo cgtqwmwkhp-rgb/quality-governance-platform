@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "description": "Allowlist for API paths that are exceptions to the /api/v1/ requirement",
+  "allowed_paths": [],
+  "notes": [
+    "Health endpoints (/healthz, /readyz) are automatically allowed",
+    "All versioned paths (/api/v1/, /api/v2/, etc.) are automatically allowed",
+    "Add paths here ONLY if they are legacy endpoints with documented migration plans"
+  ],
+  "last_updated": "2026-01-28",
+  "updated_by": "governance-automation"
+}

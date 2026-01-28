@@ -1,0 +1,11 @@
+{
+  "baseline_pass_count": 127,
+  "baseline_skip_count": 20,
+  "baseline_total_count": 147,
+  "baseline_commit_sha": "CI-21437758309",
+  "baseline_date": "2026-01-28",
+  "baseline_notes": "Phase 5 completion - 127 passed, 20 skipped, 0 quarantined",
+  "version": "1.0.0",
+  "min_acceptable_percentage": 90,
+  "override": null
+}
