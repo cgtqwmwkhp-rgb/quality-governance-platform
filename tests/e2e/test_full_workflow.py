@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-
 # ============================================================================
 # E2E Test: Complete Incident Lifecycle (Portal-based, no auth required)
 # ============================================================================
