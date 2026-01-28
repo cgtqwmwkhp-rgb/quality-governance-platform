@@ -51,11 +51,11 @@ except ImportError:
 # E2E Minimum Pass Gate: CI fails if E2E passing tests < this threshold
 E2E_MINIMUM_PASS = 20
 
-# Baseline E2E count (updated after Phase 4 Wave 3): CI fails if current < baseline - 10%
-E2E_BASELINE_COUNT = 80  # Phase 3 (31) + Wave 1 (10) + Wave 2 (15) + Wave 3 (32) - overlaps
+# Baseline E2E count (updated after Phase 5): CI fails if current < baseline - 10%
+E2E_BASELINE_COUNT = 140  # Phase 4 (80) + Phase 5 GOVPLAT-001 resolved (79 tests)
 
 # Quarantine count baseline: CI fails if increased without approved_override
-QUARANTINE_BASELINE_FILES = 3  # After Phase 4 Wave 3: only GOVPLAT-001 (3 files) remains
+QUARANTINE_BASELINE_FILES = 0  # After Phase 5: ALL QUARANTINES CLEARED
 
 
 def parse_yaml_manually(content: str) -> dict:

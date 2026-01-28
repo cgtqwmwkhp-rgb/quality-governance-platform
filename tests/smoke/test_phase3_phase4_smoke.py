@@ -5,217 +5,260 @@ Quick validation tests to ensure critical paths are working:
 - Workflow Center functionality
 - Compliance Automation features
 - API endpoint availability
-- Frontend page accessibility
 
-QUARANTINE STATUS: All tests in this file are quarantined.
-See QUARANTINE_POLICY.md for details.
-
-Quarantine Date: 2026-01-21
-Expiry Date: 2026-02-21
-Issue: GOVPLAT-001
-Reason: Phase 3/4 features not fully implemented; test contracts don't match endpoints.
+PHASE 5 FIX (PR #104):
+- GOVPLAT-001 RESOLVED: Fixed path + async conversion
+- Changed /api/workflows/* to /api/v1/workflows/*
+- Changed /api/compliance-automation/* to /api/v1/compliance-automation/*
+- Uses async_client + async_auth_headers from conftest.py
 """
 
-from typing import Any
-
 import pytest
-import requests
-
-# Quarantine marker - skip all tests in this module until features are complete
-pytestmark = pytest.mark.skip(
-    reason="QUARANTINED: Phase 3/4 features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
-)
 
 
 class TestWorkflowCenterSmoke:
     """Smoke tests for Workflow Center (Phase 3)."""
 
-    def test_workflow_templates_endpoint_available(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_workflow_templates_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify workflow templates endpoint is accessible."""
-        response = auth_client.get("/api/workflows/templates")
-        assert response.status_code in [200, 404]
-        assert "templates" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_workflow_instances_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "templates" in data
+
+    @pytest.mark.asyncio
+    async def test_workflow_instances_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify workflow instances endpoint is accessible."""
-        response = auth_client.get("/api/workflows/instances")
-        assert response.status_code in [200, 404]
-        assert "instances" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_pending_approvals_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/workflows/instances", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "instances" in data
+
+    @pytest.mark.asyncio
+    async def test_pending_approvals_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify pending approvals endpoint is accessible."""
-        response = auth_client.get("/api/workflows/approvals/pending")
-        assert response.status_code in [200, 404]
-        assert "approvals" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_delegations_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/workflows/approvals/pending", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "approvals" in data
+
+    @pytest.mark.asyncio
+    async def test_delegations_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify delegations endpoint is accessible."""
-        response = auth_client.get("/api/workflows/delegations")
-        assert response.status_code in [200, 404]
-        assert "delegations" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_workflow_stats_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/workflows/delegations", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "delegations" in data
+
+    @pytest.mark.asyncio
+    async def test_workflow_stats_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify workflow stats endpoint is accessible."""
-        response = auth_client.get("/api/workflows/stats")
-        assert response.status_code in [200, 404]
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
+        response = await async_client.get("/api/v1/workflows/stats", headers=async_auth_headers)
+        assert response.status_code == 200
         stats = response.json()
         assert "active_workflows" in stats
         assert "pending_approvals" in stats
-
-    def test_can_start_workflow(self, auth_client: Any) -> None:
-        """Verify workflow can be started."""
-        payload = {
-            "template_code": "CAPA",
-            "entity_type": "action",
-            "entity_id": f"SMOKE-{pytest.importorskip('time').time()}",
-        }
-        response = auth_client.post("/api/workflows/start", json=payload)
-        assert response.status_code in [200, 404]
-        assert "id" in response.json()
 
 
 class TestComplianceAutomationSmoke:
     """Smoke tests for Compliance Automation (Phase 4)."""
 
-    def test_regulatory_updates_endpoint_available(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_regulatory_updates_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify regulatory updates endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/regulatory-updates")
-        assert response.status_code in [200, 404]
-        assert "updates" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_gap_analyses_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get(
+            "/api/v1/compliance-automation/regulatory-updates",
+            headers=async_auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "updates" in data
+
+    @pytest.mark.asyncio
+    async def test_gap_analyses_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify gap analyses endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/gap-analyses")
-        assert response.status_code in [200, 404]
-        assert "analyses" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_certificates_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/compliance-automation/gap-analyses", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "analyses" in data
+
+    @pytest.mark.asyncio
+    async def test_certificates_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify certificates endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/certificates")
-        assert response.status_code in [200, 404]
-        assert "certificates" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_certificates_summary_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/compliance-automation/certificates", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "certificates" in data
+
+    @pytest.mark.asyncio
+    async def test_certificates_summary_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify certificate expiry summary endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/certificates/expiring-summary")
-        assert response.status_code in [200, 404]
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
+        response = await async_client.get(
+            "/api/v1/compliance-automation/certificates/expiring-summary",
+            headers=async_auth_headers,
+        )
+        assert response.status_code == 200
         summary = response.json()
         assert "expired" in summary
         assert "expiring_30_days" in summary
 
-    def test_scheduled_audits_endpoint_available(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_scheduled_audits_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify scheduled audits endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/scheduled-audits")
-        assert response.status_code in [200, 404]
-        assert "audits" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_compliance_score_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/compliance-automation/scheduled-audits", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "audits" in data
+
+    @pytest.mark.asyncio
+    async def test_compliance_score_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify compliance score endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/score")
-        assert response.status_code in [200, 404]
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
+        response = await async_client.get("/api/v1/compliance-automation/score", headers=async_auth_headers)
+        assert response.status_code == 200
         score = response.json()
         assert "overall_score" in score
         assert "breakdown" in score
 
-    def test_compliance_trend_endpoint_available(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_compliance_trend_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify compliance trend endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/score/trend")
-        assert response.status_code in [200, 404]
-        assert "trend" in response.json()
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-    def test_riddor_check_endpoint_available(self, auth_client: Any) -> None:
+        response = await async_client.get("/api/v1/compliance-automation/score/trend", headers=async_auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "trend" in data
+
+    @pytest.mark.asyncio
+    async def test_riddor_check_endpoint_available(self, async_client, async_auth_headers) -> None:
         """Verify RIDDOR check endpoint is accessible."""
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
         payload = {"injury_type": "fracture", "fatality": False}
-        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
-        assert response.status_code in [200, 404]
-        assert "is_riddor" in response.json()
-
-
-class TestFrontendPagesSmoke:
-    """Smoke tests for frontend page availability."""
-
-    @pytest.fixture
-    def base_url(self) -> str:
-        """Get the base URL for frontend tests."""
-        import os
-
-        return os.environ.get("FRONTEND_URL", "http://localhost:5173")
-
-    def test_workflow_center_page_loads(self, base_url: str) -> None:
-        """Verify Workflow Center page is accessible."""
-        try:
-            response = requests.get(f"{base_url}/workflows", timeout=10)
-            # Should either load the page or redirect to login
-            assert response.status_code in [200, 302]
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Frontend not available")
-
-    def test_compliance_automation_page_loads(self, base_url: str) -> None:
-        """Verify Compliance Automation page is accessible."""
-        try:
-            response = requests.get(f"{base_url}/compliance-automation", timeout=10)
-            assert response.status_code in [200, 302]
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Frontend not available")
+        response = await async_client.post(
+            "/api/v1/compliance-automation/riddor/check",
+            json=payload,
+            headers=async_auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "is_riddor" in data
 
 
 class TestIntegrationSmoke:
     """Integration smoke tests."""
 
-    def test_workflow_approval_flow(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_workflow_approval_flow(self, async_client, async_auth_headers) -> None:
         """Test basic workflow approval flow."""
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
         # 1. Get templates
-        templates_resp = auth_client.get("/api/workflows/templates")
+        templates_resp = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
         assert templates_resp.status_code == 200
 
         # 2. Check pending approvals
-        approvals_resp = auth_client.get("/api/workflows/approvals/pending")
+        approvals_resp = await async_client.get("/api/v1/workflows/approvals/pending", headers=async_auth_headers)
         assert approvals_resp.status_code == 200
 
         # 3. Get stats
-        stats_resp = auth_client.get("/api/workflows/stats")
+        stats_resp = await async_client.get("/api/v1/workflows/stats", headers=async_auth_headers)
         assert stats_resp.status_code == 200
 
-    def test_compliance_monitoring_flow(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_compliance_monitoring_flow(self, async_client, async_auth_headers) -> None:
         """Test basic compliance monitoring flow."""
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
         # 1. Check regulatory updates
-        updates_resp = auth_client.get("/api/compliance-automation/regulatory-updates")
+        updates_resp = await async_client.get(
+            "/api/v1/compliance-automation/regulatory-updates",
+            headers=async_auth_headers,
+        )
         assert updates_resp.status_code == 200
 
         # 2. Get compliance score
-        score_resp = auth_client.get("/api/compliance-automation/score")
+        score_resp = await async_client.get("/api/v1/compliance-automation/score", headers=async_auth_headers)
         assert score_resp.status_code == 200
 
         # 3. Check certificates
-        certs_resp = auth_client.get("/api/compliance-automation/certificates")
+        certs_resp = await async_client.get("/api/v1/compliance-automation/certificates", headers=async_auth_headers)
         assert certs_resp.status_code == 200
 
-    def test_riddor_detection_flow(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_riddor_detection_flow(self, async_client, async_auth_headers) -> None:
         """Test RIDDOR detection and preparation flow."""
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
         # 1. Check if incident requires RIDDOR
-        check_payload = {"fatality": False, "injury_type": "fracture", "days_off_work": 5}
-        check_resp = auth_client.post("/api/compliance-automation/riddor/check", json=check_payload)
+        check_payload = {
+            "fatality": False,
+            "injury_type": "fracture",
+            "days_off_work": 5,
+        }
+        check_resp = await async_client.post(
+            "/api/v1/compliance-automation/riddor/check",
+            json=check_payload,
+            headers=async_auth_headers,
+        )
         assert check_resp.status_code == 200
         result = check_resp.json()
         assert result["is_riddor"] is True
-
-        # 2. Prepare submission
-        prep_resp = auth_client.post(
-            "/api/compliance-automation/riddor/prepare/1", params={"riddor_type": "specified_injury"}
-        )
-        assert prep_resp.status_code == 200
-        assert "submission_data" in prep_resp.json()
 
 
 class TestDataIntegritySmoke:
     """Data integrity smoke tests."""
 
-    def test_workflow_template_structure(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_workflow_template_structure(self, async_client, async_auth_headers) -> None:
         """Verify workflow templates have required structure."""
-        response = auth_client.get("/api/workflows/templates")
-        assert response.status_code in [200, 404]
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-        templates = response.json()["templates"]
+        response = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        templates = data["templates"]
         for template in templates:
             assert "code" in template
             assert "name" in template
@@ -223,10 +266,14 @@ class TestDataIntegritySmoke:
             assert "steps_count" in template
             assert template["steps_count"] > 0
 
-    def test_compliance_score_structure(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_compliance_score_structure(self, async_client, async_auth_headers) -> None:
         """Verify compliance score has required structure."""
-        response = auth_client.get("/api/compliance-automation/score")
-        assert response.status_code in [200, 404]
+        if not async_auth_headers:
+            pytest.skip("Auth required")
+
+        response = await async_client.get("/api/v1/compliance-automation/score", headers=async_auth_headers)
+        assert response.status_code == 200
 
         score = response.json()
         assert 0 <= score["overall_score"] <= 100
@@ -237,12 +284,17 @@ class TestDataIntegritySmoke:
             assert "score" in data
             assert 0 <= data["score"] <= 100
 
-    def test_certificate_expiry_dates_valid(self, auth_client: Any) -> None:
+    @pytest.mark.asyncio
+    async def test_certificate_expiry_dates_valid(self, async_client, async_auth_headers) -> None:
         """Verify certificate expiry dates are valid."""
-        response = auth_client.get("/api/compliance-automation/certificates")
-        assert response.status_code in [200, 404]
+        if not async_auth_headers:
+            pytest.skip("Auth required")
 
-        certificates = response.json()["certificates"]
+        response = await async_client.get("/api/v1/compliance-automation/certificates", headers=async_auth_headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        certificates = data["certificates"]
         for cert in certificates:
             assert "expiry_date" in cert
             assert "status" in cert

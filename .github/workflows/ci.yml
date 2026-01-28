@@ -469,7 +469,7 @@ jobs:
           # E2E GOVERNANCE GATES (Phase 4 Wave 2 - ENFORCING)
           # ============================================================
           
-          E2E_BASELINE=80  # Phase 4 Wave 3
+          E2E_BASELINE=140  # Phase 5
           MIN_ACCEPTABLE=$((E2E_BASELINE * 90 / 100))  # 90% of baseline
           OVERRIDE_PRESENT="${E2E_BASELINE_OVERRIDE:-false}"
           

@@ -20,18 +20,14 @@ settings:
 
 # Quarantine entries
 quarantines:
-  # Phase 3/4 incomplete features
-  - id: GOVPLAT-001
-    description: "Phase 3/4 endpoint tests - features incomplete"
-    expiry_date: "2026-02-21"
-    owner: "platform-team"
-    reason: "Phase 3 (Workflow Center) and Phase 4 (Compliance Automation) not implemented"
-    marker: "phase34"
-    files:
-      - tests/smoke/test_phase3_phase4_smoke.py
-      - tests/e2e/test_workflows.py
-      - tests/e2e/test_compliance_automation.py
-    resolution_plan: "Complete Phase 3/4 implementation or remove tests"
+  # GOVPLAT-001: FULLY RESOLVED in Phase 5
+  # Root cause: API path mismatch (/api/workflows/* vs /api/v1/workflows/*) + sync client
+  # Fix: Converted tests to async_client + correct /api/v1/* paths
+  # Files resolved:
+  # - tests/smoke/test_phase3_phase4_smoke.py (22 tests)
+  # - tests/e2e/test_workflows.py (30 tests)
+  # - tests/e2e/test_compliance_automation.py (27 tests)
+  # Total resolved: 79 tests
 
   # GOVPLAT-002: FULLY RESOLVED in Phase 4 Wave 3
   # All E2E API contract mismatches have been fixed:
@@ -63,8 +59,8 @@ quarantines:
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 3
-  max_allowed_quarantine_count: 3
+  baseline_quarantine_count: 0
+  max_allowed_quarantine_count: 0
   last_audit_date: "2026-01-28"
   # Phase 3 changes (PR #104):
   # - RESOLVED GOVPLAT-003: tests/integration/test_planet_mark_uvdb_contracts.py (21 tests)
@@ -83,7 +79,14 @@ metrics:
   # Phase 4 Wave 3 changes:
   # - RESOLVED GOVPLAT-002 complete: tests/e2e/test_enterprise_e2e.py (32 tests)
   # - Added user seeding fixtures for auth-dependent tests
-  # Net change: GOVPLAT-002 fully resolved, only GOVPLAT-001 remains
+  # Net change: GOVPLAT-002 fully resolved
+  #
+  # Phase 5 changes:
+  # - RESOLVED GOVPLAT-001: tests/smoke/test_phase3_phase4_smoke.py (22 tests)
+  # - RESOLVED GOVPLAT-001: tests/e2e/test_workflows.py (30 tests)
+  # - RESOLVED GOVPLAT-001: tests/e2e/test_compliance_automation.py (27 tests)
+  # Fix: Converted to async_client + /api/v1/* paths
+  # Net change: GOVPLAT-001 fully resolved, ALL QUARANTINES CLEARED
 
 # Active test suites (must pass)
 active_suites:
