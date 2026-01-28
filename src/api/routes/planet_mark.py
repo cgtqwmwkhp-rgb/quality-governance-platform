@@ -833,8 +833,24 @@ async def get_certification_status(
 async def get_carbon_dashboard(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Get Planet Mark carbon management dashboard"""
-    years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
+    """Get Planet Mark carbon management dashboard.
+
+    Returns a bounded, deterministic response structure.
+    Gracefully handles missing data with setup_required flag.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
+    except Exception as e:
+        logger.warning(f"Database query failed for CarbonReportingYear: {type(e).__name__}")
+        return {
+            "message": "Database unavailable",
+            "setup_required": True,
+            "error_class": "DATABASE_UNAVAILABLE",
+        }
 
     if not years:
         return {
@@ -843,30 +859,40 @@ async def get_carbon_dashboard(
         }
 
     current_year = years[0]
-    baseline = db.query(CarbonReportingYear).filter(CarbonReportingYear.is_baseline_year == True).first()
 
-    # Calculate year-on-year change
+    # Calculate year-on-year change (null-safe)
     yoy_change = None
     if len(years) >= 2:
         prev_year = years[1]
         if prev_year.emissions_per_fte and current_year.emissions_per_fte:
-            yoy_change = (
-                (current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte
-            ) * 100
+            try:
+                yoy_change = (
+                    (current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte
+                ) * 100
+            except (ZeroDivisionError, TypeError):
+                yoy_change = None
 
-    # Action summary
-    actions = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == current_year.id).all()
+    # Action summary (null-safe query)
+    try:
+        actions = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == current_year.id).all()
+    except Exception as e:
+        logger.warning(f"Failed to load ImprovementActions: {type(e).__name__}")
+        actions = []
 
-    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]
+    # Overdue calculation with null-safe time_bound check
+    now = datetime.utcnow()
+    overdue_actions = [
+        a for a in actions if a.status != "completed" and a.time_bound is not None and a.time_bound < now
+    ]
 
     return {
         "current_year": {
             "id": current_year.id,
-            "label": current_year.year_label,
+            "label": current_year.year_label or f"Year {current_year.id}",
             "total_emissions": current_year.total_emissions,
             "emissions_per_fte": current_year.emissions_per_fte,
             "fte": current_year.average_fte,
-            "yoy_change_percent": round(yoy_change, 1) if yoy_change else None,
+            "yoy_change_percent": round(yoy_change, 1) if yoy_change is not None else None,
             "on_track": yoy_change is not None and yoy_change <= -5,
         },
         "emissions_breakdown": {
@@ -893,7 +919,8 @@ async def get_carbon_dashboard(
             "target_per_fte": current_year.target_emissions_per_fte,
         },
         "historical_years": [
-            {"label": y.year_label, "total": y.total_emissions, "per_fte": y.emissions_per_fte} for y in years
+            {"label": y.year_label or f"Year {y.id}", "total": y.total_emissions, "per_fte": y.emissions_per_fte}
+            for y in years
         ],
     }
 
