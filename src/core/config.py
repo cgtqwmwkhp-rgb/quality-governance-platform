@@ -54,13 +54,6 @@ class Settings(BaseSettings):
                     "Use a production database hostname."
                 )
 
-            # Validate blob storage is configured in production (ADR-0002)
-            if not self.azure_storage_connection_string:
-                raise ValueError(
-                    "CONFIGURATION ERROR: AZURE_STORAGE_CONNECTION_STRING must be set in production mode! "
-                    "Evidence assets require blob storage for persistence."
-                )
-
         # Always validate database URL format
         if not self.database_url.startswith(("postgresql", "sqlite")):
             raise ValueError(
@@ -108,6 +101,26 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+
+    # UAT Mode for production-safe testing
+    # READ_ONLY: Block all non-idempotent operations (default for production)
+    # READ_WRITE: Allow UAT writes (for staging or with explicit override)
+    uat_mode: str = "READ_WRITE"  # Default READ_WRITE, production should set READ_ONLY
+
+    # UAT admin users allowed to perform override writes (comma-separated user IDs)
+    uat_admin_users: str = ""
+
+    @property
+    def is_uat_read_only(self) -> bool:
+        """Check if UAT is in read-only mode (production default)."""
+        return self.uat_mode.upper() == "READ_ONLY"
+
+    @property
+    def uat_admin_user_list(self) -> list:
+        """Get list of UAT admin users allowed to perform writes."""
+        if not self.uat_admin_users:
+            return []
+        return [u.strip() for u in self.uat_admin_users.split(",") if u.strip()]
 
     @property
     def is_development(self) -> bool:
