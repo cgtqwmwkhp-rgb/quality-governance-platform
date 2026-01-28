@@ -256,6 +256,61 @@ compliance_percentage = round((implemented + 0.5 * partial) / total * 100)
 
 If `total_controls == 0`: `compliance_percentage = 0` and `setup_required = true`
 
+#### Evidence Capture (Authenticated)
+
+When capturing UAT evidence for production, record the following:
+
+**1. Standards List Response Keys:**
+```json
+{
+  "items": [...],
+  "total": <int>,
+  "page": <int>,
+  "page_size": <int>
+}
+```
+
+**2. Compliance Score Response Keys:**
+```json
+{
+  "standard_id": <int>,
+  "standard_code": "<string>",
+  "total_controls": <int>,
+  "implemented_count": <int>,
+  "partial_count": <int>,
+  "not_implemented_count": <int>,
+  "compliance_percentage": <int 0-100>,
+  "setup_required": <bool>
+}
+```
+
+**3. Controls List Response Keys (each item):**
+```json
+{
+  "id": <int>,
+  "control_number": "<string>",
+  "title": "<string>",
+  "clause_id": <int>,
+  "clause_number": "<string>",
+  "implementation_status": "<null|implemented|partial|not_implemented>",
+  "is_applicable": <bool>,
+  "is_active": <bool>
+}
+```
+
+**4. Evidence Record Template:**
+```
+Date: 2026-01-28
+Build SHA: d624b2b280556830c9270d3417fe5d49fc90f563
+Tester: [REDACTED]
+Token: [REDACTED - UAT_ADMIN_TOKEN]
+
+GET /api/v1/standards → HTTP 200, items count: N
+GET /api/v1/standards/{id}/compliance-score → HTTP 200, compliance_percentage: X%
+GET /api/v1/standards/{id}/controls (call 1) → HTTP 200, count: M
+GET /api/v1/standards/{id}/controls (call 2) → HTTP 200, count: M, ordering: IDENTICAL
+```
+
 ---
 
 ### 1. Incident Lifecycle (Read-Only)
