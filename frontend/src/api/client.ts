@@ -547,6 +547,100 @@ export interface AuditRunCreate {
   due_date?: string
 }
 
+export interface AuditRunUpdate {
+  title?: string
+  location?: string
+  status?: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
+  scheduled_date?: string
+  due_date?: string
+  assigned_to_id?: number
+}
+
+export interface AuditTemplateDetail {
+  id: number
+  name: string
+  description?: string
+  category?: string
+  version: number
+  is_published: boolean
+  is_active: boolean
+  passing_score?: number
+  sections: AuditSection[]
+  questions: AuditQuestion[]
+  created_at: string
+}
+
+export interface AuditSection {
+  id: number
+  template_id: number
+  name: string
+  description?: string
+  sort_order: number
+  is_active: boolean
+}
+
+export interface AuditQuestion {
+  id: number
+  template_id: number
+  section_id?: number
+  question_text: string
+  question_type: 'yes_no' | 'score' | 'text' | 'multi_choice'
+  required: boolean
+  max_score?: number
+  options?: string[]
+  sort_order: number
+  is_active: boolean
+}
+
+export interface AuditResponse {
+  id: number
+  run_id: number
+  question_id: number
+  response_value?: string
+  score?: number
+  max_score?: number
+  notes?: string
+  created_at: string
+}
+
+export interface AuditResponseCreate {
+  question_id: number
+  response_value?: string
+  score?: number
+  max_score?: number
+  notes?: string
+}
+
+export interface AuditResponseUpdate {
+  response_value?: string
+  score?: number
+  notes?: string
+}
+
+export interface AuditFindingCreate {
+  title: string
+  description?: string
+  severity: 'critical' | 'major' | 'minor' | 'observation'
+  question_id?: number
+  clause_ids?: number[]
+  control_ids?: number[]
+  risk_ids?: number[]
+  recommended_action?: string
+  due_date?: string
+}
+
+export interface AuditFindingUpdate {
+  title?: string
+  description?: string
+  severity?: 'critical' | 'major' | 'minor' | 'observation'
+  status?: 'open' | 'in_progress' | 'resolved' | 'verified' | 'closed'
+  recommended_action?: string
+  corrective_action?: string
+  verified_by_id?: number
+  verified_at?: string
+  due_date?: string
+}
+
 // ============ Investigation Types ============
 export interface Investigation {
   id: number
@@ -755,16 +849,41 @@ export const risksApi = {
 }
 
 export const auditsApi = {
-  listRuns: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs/?page=${page}&size=${size}`),
-  listTemplates: (page = 1, size = 10) => 
+  // Templates
+  listTemplates: (page = 1, size = 10) =>
     api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?page=${page}&size=${size}`),
-  listFindings: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<AuditFinding>>(`/api/v1/audits/findings/?page=${page}&size=${size}`),
-  createRun: (data: AuditRunCreate) => 
+  getTemplate: (id: number) =>
+    api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
+
+  // Runs
+  listRuns: (page = 1, size = 10) =>
+    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs/?page=${page}&size=${size}`),
+  createRun: (data: AuditRunCreate) =>
     api.post<AuditRun>('/api/v1/audits/runs/', data),
-  getRun: (id: number) => 
+  getRun: (id: number) =>
     api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
+  updateRun: (id: number, data: AuditRunUpdate) =>
+    api.patch<AuditRun>(`/api/v1/audits/runs/${id}`, data),
+  startRun: (id: number) =>
+    api.post<AuditRun>(`/api/v1/audits/runs/${id}/start`),
+  completeRun: (id: number) =>
+    api.post<AuditRun>(`/api/v1/audits/runs/${id}/complete`),
+
+  // Responses (recording answers to questions)
+  createResponse: (runId: number, data: AuditResponseCreate) =>
+    api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data),
+  updateResponse: (responseId: number, data: AuditResponseUpdate) =>
+    api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data),
+
+  // Findings
+  listFindings: (page = 1, size = 10, runId?: number) =>
+    api.get<PaginatedResponse<AuditFinding>>(
+      `/api/v1/audits/findings/?page=${page}&size=${size}${runId ? `&run_id=${runId}` : ''}`
+    ),
+  createFinding: (runId: number, data: AuditFindingCreate) =>
+    api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
+  updateFinding: (findingId: number, data: AuditFindingUpdate) =>
+    api.patch<AuditFinding>(`/api/v1/audits/findings/${findingId}`, data),
 }
 
 /**
