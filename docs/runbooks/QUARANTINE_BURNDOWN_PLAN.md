@@ -1,22 +1,35 @@
 # Quarantine Burn-down Plan
 
-## Current State (2026-01-28)
+## Current State (Post-Wave 1, 2026-01-28)
 
-| Metric | Value |
-|--------|-------|
-| Quarantined files (tracked) | 8 |
-| Quarantined files (untracked) | 2 |
-| Total quarantined tests | 183 |
-| Next expiry | 2026-02-21 (24 days) |
+| Metric | Value | Change |
+|--------|-------|--------|
+| Quarantined files (tracked) | 9 | +1 (was untracked) |
+| Quarantined files (untracked) | 0 | -2 (1 deleted, 1 tracked) |
+| Total quarantined tests | 183 | No change |
+| Next expiry | 2026-02-21 (24 days) | - |
 
-## Burn-down Targets
+## Wave 1 Outcome
 
-| Week | Target Reduction | Cumulative Target | Method |
-|------|------------------|-------------------|--------|
-| Week 1 | -35 tests | 148 remaining | Wave 1: async fixes, delete stubs |
-| Week 2 | -30 tests | 118 remaining | Wave 2: contract alignment |
-| Week 3 | -30 tests | 88 remaining | Wave 3: missing feature tests |
-| Week 4 | -30 tests | 58 remaining | Wave 4: final push |
+Wave 1 achieved **governance improvement** but no test reduction:
+- ✅ Deleted empty stub file (governance cleanup)
+- ✅ Added GOVPLAT-005 (previously untracked → now tracked)
+- ❌ Test re-enablement blocked by async event loop conflict
+
+**Key Finding**: All 9 quarantined files suffer from the same root cause:
+```
+RuntimeError: Task got Future attached to a different loop
+```
+This requires Phase 3 Async Test Architecture Fix before any tests can be re-enabled.
+
+## Revised Burn-down Targets
+
+| Phase | Target Reduction | Cumulative Target | Method |
+|-------|------------------|-------------------|--------|
+| Phase 3 | -53 tests | 130 remaining | Async test architecture fix (GOVPLAT-003/004/005) |
+| Wave 2 | -30 tests | 100 remaining | Contract alignment (GOVPLAT-002 partial) |
+| Wave 3 | -30 tests | 70 remaining | More contract fixes |
+| Wave 4 | -70 tests | 0 remaining | Feature completion (GOVPLAT-001) |
 
 **Target**: Reduce from 183 to <60 tests by expiry date (2026-02-21).
 
