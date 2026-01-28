@@ -33,18 +33,12 @@ quarantines:
       - tests/e2e/test_compliance_automation.py
     resolution_plan: "Complete Phase 3/4 implementation or remove tests"
 
-  # E2E API contract mismatch
-  - id: GOVPLAT-002
-    description: "E2E tests with API contract mismatch"
-    expiry_date: "2026-02-21"
-    owner: "platform-team"
-    reason: "Tests expect endpoints that return 404 or have different contracts"
-    marker: "api_contract_mismatch"
-    files:
-      - tests/e2e/test_enterprise_e2e.py
-    resolution_plan: "Audit API contracts and align tests with implementations"
-    # Phase 4 Wave 1: test_portal_e2e.py re-enabled (10 tests)
-    # Phase 4 Wave 2: test_full_workflow.py re-enabled (20 tests)
+  # GOVPLAT-002: FULLY RESOLVED in Phase 4 Wave 3
+  # All E2E API contract mismatches have been fixed:
+  # - Wave 1: test_portal_e2e.py (10 tests)
+  # - Wave 2: test_full_workflow.py (15 tests)
+  # - Wave 3: test_enterprise_e2e.py (32 tests) + auth seeding
+  # Total resolved: 57 tests
 
 # =============================================================================
 # RESOLVED QUARANTINES (Phase 3 Async Architecture Fix - PR #104)
@@ -69,8 +63,8 @@ quarantines:
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 4
-  max_allowed_quarantine_count: 4
+  baseline_quarantine_count: 3
+  max_allowed_quarantine_count: 3
   last_audit_date: "2026-01-28"
   # Phase 3 changes (PR #104):
   # - RESOLVED GOVPLAT-003: tests/integration/test_planet_mark_uvdb_contracts.py (21 tests)
@@ -83,8 +77,13 @@ metrics:
   # Net change: -1 quarantine file
   #
   # Phase 4 Wave 2 changes:
-  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_full_workflow.py (20 tests)
+  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_full_workflow.py (15 tests)
   # Net change: -1 quarantine file
+  #
+  # Phase 4 Wave 3 changes:
+  # - RESOLVED GOVPLAT-002 complete: tests/e2e/test_enterprise_e2e.py (32 tests)
+  # - Added user seeding fixtures for auth-dependent tests
+  # Net change: GOVPLAT-002 fully resolved, only GOVPLAT-001 remains
 
 # Active test suites (must pass)
 active_suites:
