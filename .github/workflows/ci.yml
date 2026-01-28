@@ -459,9 +459,9 @@ jobs:
           
           echo ""
           echo "=== E2E BASELINE CHECK ==="
-          echo "E2E Passed: $E2E_PASSED"
-          echo "E2E Skipped: $E2E_SKIPPED"
-          echo "E2E Baseline: 31 (Phase 3)"
+          echo "E2E Passed: ${E2E_PASSED:-0}"
+          echo "E2E Skipped: ${E2E_SKIPPED:-0}"
+          echo "E2E Baseline: 47 (Phase 4)"
           echo "E2E Minimum: 20"
           echo ""
           
@@ -484,7 +484,7 @@ jobs:
           echo "✅ E2E tests completed: ${E2E_PASSED:-0} passed, ${E2E_SKIPPED:-0} skipped"
           
           # Propagate original pytest exit code
-          exit $PYTEST_EXIT_CODE
+          exit "${PYTEST_EXIT_CODE}"
 
       - name: Upload E2E Test Results
         uses: actions/upload-artifact@v4
