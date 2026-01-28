@@ -219,6 +219,9 @@ async def receive_event(event: TelemetryEvent):
     1. Validated against allowlists (no PII)
     2. Logged to structured logger
     3. Aggregated to local file for evaluator
+
+    This endpoint is fault-tolerant: file I/O errors are logged but do not
+    return 500 to avoid blocking client telemetry.
     """
     # Log to structured logger (goes to Azure Log Analytics)
     logger.info(
@@ -231,8 +234,12 @@ async def receive_event(event: TelemetryEvent):
         },
     )
 
-    # Aggregate to local file
-    aggregate_event(event)
+    # Aggregate to local file (fault-tolerant)
+    try:
+        aggregate_event(event)
+    except Exception as e:
+        # Log but don't fail - telemetry should never block clients
+        logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 
     return {"status": "ok"}
 
@@ -241,7 +248,11 @@ async def receive_event(event: TelemetryEvent):
 async def receive_events_batch(batch: TelemetryBatch):
     """
     Receive a batch of telemetry events (for offline buffer flush).
+
+    This endpoint is fault-tolerant: file I/O errors are logged but do not
+    return 500 to avoid blocking client telemetry.
     """
+    processed = 0
     for event in batch.events:
         logger.info(
             f"TELEMETRY_EVENT: {event.name}",
@@ -252,9 +263,14 @@ async def receive_events_batch(batch: TelemetryBatch):
                 "timestamp": event.timestamp,
             },
         )
-        aggregate_event(event)
+        try:
+            aggregate_event(event)
+            processed += 1
+        except Exception as e:
+            # Log but don't fail - telemetry should never block clients
+            logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 
-    return {"status": "ok", "count": len(batch.events)}
+    return {"status": "ok", "count": processed}
 
 
 @router.get("/metrics/{experiment_id}")
