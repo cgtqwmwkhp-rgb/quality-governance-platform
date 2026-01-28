@@ -93,8 +93,8 @@ async def test_app(event_loop):
     avoiding the "different loop" error.
     """
     # Import here to ensure engine is created in test event loop
-    from src.infrastructure.database import engine, init_db
     from src.main import create_application
+    from src.infrastructure.database import engine, init_db
 
     app = create_application()
 
@@ -165,10 +165,10 @@ async def async_db_session():
 async def session_db(test_app):
     """
     Session-scoped database session for seeding operations.
-
+    
     Unlike async_db_session (function-scoped with rollback), this session
     commits changes that persist across all tests in the session.
-
+    
     Must depend on test_app to ensure DB is initialized first.
     """
     from src.infrastructure.database import async_session_maker
@@ -182,21 +182,21 @@ async def session_db(test_app):
 async def seeded_users(session_db):
     """
     Seed test users into the database (idempotent).
-
+    
     Creates or updates:
     - testuser@plantexpand.com (regular user)
     - admin@plantexpand.com (superuser)
-
+    
     This fixture is idempotent: safe to run multiple times.
     Users are created if missing, or flags are corrected if they exist.
-
+    
     Returns dict with user emails (NOT passwords or tokens).
     """
     from sqlalchemy import select
-
+    
     from src.core.security import get_password_hash
     from src.domain.models.user import User
-
+    
     users_config = [
         {
             "email": "testuser@plantexpand.com",
@@ -215,16 +215,18 @@ async def seeded_users(session_db):
             "is_active": True,
         },
     ]
-
+    
     seeded = {}
-
+    
     for config in users_config:
         email = config["email"]
-
+        
         # Check if user exists
-        result = await session_db.execute(select(User).where(User.email == email))
+        result = await session_db.execute(
+            select(User).where(User.email == email)
+        )
         user = result.scalar_one_or_none()
-
+        
         if user is None:
             # Create new user
             user = User(
@@ -242,14 +244,14 @@ async def seeded_users(session_db):
                 user.is_superuser = config["is_superuser"]
             if user.is_active != config["is_active"]:
                 user.is_active = config["is_active"]
-
+        
         seeded[email] = {"email": email, "is_superuser": config["is_superuser"]}
-
+    
     await session_db.commit()
-
+    
     # Log seeding summary (no secrets)
     print(f"\n[SEED] Seeded {len(seeded)} test users: {list(seeded.keys())}")
-
+    
     return seeded
 
 
@@ -299,7 +301,7 @@ def module_client(app):
 async def async_auth_token(async_client, seeded_users, test_config) -> Optional[str]:
     """
     Get authentication token for test user via real login.
-
+    
     Depends on seeded_users to ensure user exists in DB.
     Uses the correct endpoint path (/api/v1/auth/login) and schema (email, not username).
     """
@@ -310,11 +312,11 @@ async def async_auth_token(async_client, seeded_users, test_config) -> Optional[
             "password": test_config.TEST_USER_PASSWORD,
         },
     )
-
+    
     if response.status_code != 200:
         print(f"[AUTH] Login failed for test user: status={response.status_code}")
         return None
-
+    
     token = response.json().get("access_token")
     if token:
         print("[AUTH] Test user login successful")
@@ -325,7 +327,7 @@ async def async_auth_token(async_client, seeded_users, test_config) -> Optional[
 async def async_auth_headers(async_auth_token) -> dict:
     """
     Get authenticated headers for regular test user.
-
+    
     Returns {"Authorization": "Bearer <token>"} or {} if login failed.
     Token value is NOT logged.
     """
@@ -338,7 +340,7 @@ async def async_auth_headers(async_auth_token) -> dict:
 async def async_admin_token(async_client, seeded_users, test_config) -> Optional[str]:
     """
     Get authentication token for admin user via real login.
-
+    
     Depends on seeded_users to ensure admin user exists in DB with is_superuser=True.
     """
     response = await async_client.post(
@@ -348,11 +350,11 @@ async def async_admin_token(async_client, seeded_users, test_config) -> Optional
             "password": test_config.ADMIN_USER_PASSWORD,
         },
     )
-
+    
     if response.status_code != 200:
         print(f"[AUTH] Login failed for admin user: status={response.status_code}")
         return None
-
+    
     token = response.json().get("access_token")
     if token:
         print("[AUTH] Admin user login successful")
@@ -363,7 +365,7 @@ async def async_admin_token(async_client, seeded_users, test_config) -> Optional
 async def async_admin_headers(async_admin_token) -> dict:
     """
     Get authenticated headers for admin user (superuser).
-
+    
     Returns {"Authorization": "Bearer <token>"} or {} if login failed.
     Token value is NOT logged.
     """

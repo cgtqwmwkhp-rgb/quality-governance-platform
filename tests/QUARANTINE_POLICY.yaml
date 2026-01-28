@@ -24,7 +24,7 @@ quarantines: []
 # Root cause: API path mismatch (/api/workflows/* vs /api/v1/workflows/*) + sync client
 # Fix: Converted tests to async_client + correct /api/v1/* paths
 # Files resolved:
-# - tests/smoke/test_phase3_phase4_smoke.py (22 tests)
+# - tests/e2e/test_phase3_phase4_smoke.py (22 tests, moved from tests/smoke/)
 # - tests/e2e/test_workflows.py (30 tests)
 # - tests/e2e/test_compliance_automation.py (27 tests)
 # Total resolved: 79 tests

@@ -23,12 +23,16 @@ class TestWorkflowTemplates:
     """Test workflow template operations."""
 
     @pytest.mark.asyncio
-    async def test_list_workflow_templates(self, async_client, async_auth_headers) -> None:
+    async def test_list_workflow_templates(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test listing available workflow templates."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/templates", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -44,12 +48,16 @@ class TestWorkflowTemplates:
         assert "CAPA" in template_codes
 
     @pytest.mark.asyncio
-    async def test_get_workflow_template_details(self, async_client, async_auth_headers) -> None:
+    async def test_get_workflow_template_details(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test getting detailed template information."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/templates/RIDDOR", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/templates/RIDDOR", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         template = response.json()
@@ -58,12 +66,16 @@ class TestWorkflowTemplates:
         assert "steps" in template
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_template(self, async_client, async_auth_headers) -> None:
+    async def test_get_nonexistent_template(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test getting a template that doesn't exist."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/templates/NONEXISTENT", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/templates/NONEXISTENT", headers=async_auth_headers
+        )
         assert response.status_code == 404
 
 
@@ -84,7 +96,9 @@ class TestWorkflowInstances:
             "priority": "high",
         }
 
-        response = await async_client.post("/api/v1/workflows/start", json=payload, headers=async_auth_headers)
+        response = await async_client.post(
+            "/api/v1/workflows/start", json=payload, headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         instance = response.json()
@@ -93,7 +107,9 @@ class TestWorkflowInstances:
         assert instance["status"] in ["in_progress", "awaiting_approval", "pending"]
 
     @pytest.mark.asyncio
-    async def test_start_workflow_invalid_template(self, async_client, async_auth_headers) -> None:
+    async def test_start_workflow_invalid_template(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test starting workflow with invalid template."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -104,16 +120,22 @@ class TestWorkflowInstances:
             "entity_id": "ACT-TEST-002",
         }
 
-        response = await async_client.post("/api/v1/workflows/start", json=payload, headers=async_auth_headers)
+        response = await async_client.post(
+            "/api/v1/workflows/start", json=payload, headers=async_auth_headers
+        )
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_list_workflow_instances(self, async_client, async_auth_headers) -> None:
+    async def test_list_workflow_instances(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test listing workflow instances."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/instances", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/instances", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -121,12 +143,16 @@ class TestWorkflowInstances:
         assert "total" in data
 
     @pytest.mark.asyncio
-    async def test_filter_workflow_instances_by_status(self, async_client, async_auth_headers) -> None:
+    async def test_filter_workflow_instances_by_status(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test filtering workflows by status."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/instances?status=in_progress", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/instances?status=in_progress", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -134,12 +160,16 @@ class TestWorkflowInstances:
             assert instance["status"] == "in_progress"
 
     @pytest.mark.asyncio
-    async def test_get_workflow_instance_details(self, async_client, async_auth_headers) -> None:
+    async def test_get_workflow_instance_details(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test getting workflow instance details."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/instances/WF-20260119001", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/instances/WF-20260119001", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         instance = response.json()
@@ -152,12 +182,16 @@ class TestApprovals:
     """Test approval management."""
 
     @pytest.mark.asyncio
-    async def test_get_pending_approvals(self, async_client, async_auth_headers) -> None:
+    async def test_get_pending_approvals(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test getting pending approvals for current user."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/approvals/pending", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/approvals/pending", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -183,7 +217,9 @@ class TestApprovals:
         assert result["status"] == "approved"
 
     @pytest.mark.asyncio
-    async def test_reject_request_requires_reason(self, async_client, async_auth_headers) -> None:
+    async def test_reject_request_requires_reason(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test that rejection requires a reason."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -198,7 +234,9 @@ class TestApprovals:
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_reject_request_with_reason(self, async_client, async_auth_headers) -> None:
+    async def test_reject_request_with_reason(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test rejecting a request with valid reason."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -247,7 +285,9 @@ class TestDelegation:
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/delegations", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/delegations", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -266,7 +306,9 @@ class TestDelegation:
             "reason": "Annual leave",
         }
 
-        response = await async_client.post("/api/v1/workflows/delegations", json=payload, headers=async_auth_headers)
+        response = await async_client.post(
+            "/api/v1/workflows/delegations", json=payload, headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         result = response.json()
@@ -280,7 +322,9 @@ class TestDelegation:
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.delete("/api/v1/workflows/delegations/DEL-001", headers=async_auth_headers)
+        response = await async_client.delete(
+            "/api/v1/workflows/delegations/DEL-001", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         result = response.json()
@@ -291,12 +335,16 @@ class TestEscalation:
     """Test escalation features."""
 
     @pytest.mark.asyncio
-    async def test_get_pending_escalations(self, async_client, async_auth_headers) -> None:
+    async def test_get_pending_escalations(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test getting workflows pending escalation."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/escalations/pending", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/escalations/pending", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -334,7 +382,9 @@ class TestWorkflowStats:
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/stats", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/stats", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         stats = response.json()

@@ -20,56 +20,76 @@ class TestWorkflowCenterSmoke:
     """Smoke tests for Workflow Center (Phase 3)."""
 
     @pytest.mark.asyncio
-    async def test_workflow_templates_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_workflow_templates_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify workflow templates endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/templates", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "templates" in data
 
     @pytest.mark.asyncio
-    async def test_workflow_instances_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_workflow_instances_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify workflow instances endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/instances", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/instances", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "instances" in data
 
     @pytest.mark.asyncio
-    async def test_pending_approvals_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_pending_approvals_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify pending approvals endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/approvals/pending", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/approvals/pending", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "approvals" in data
 
     @pytest.mark.asyncio
-    async def test_delegations_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_delegations_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify delegations endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/delegations", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/delegations", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "delegations" in data
 
     @pytest.mark.asyncio
-    async def test_workflow_stats_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_workflow_stats_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify workflow stats endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/stats", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/stats", headers=async_auth_headers
+        )
         assert response.status_code == 200
         stats = response.json()
         assert "active_workflows" in stats
@@ -80,7 +100,9 @@ class TestComplianceAutomationSmoke:
     """Smoke tests for Compliance Automation (Phase 4)."""
 
     @pytest.mark.asyncio
-    async def test_regulatory_updates_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_regulatory_updates_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify regulatory updates endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -94,29 +116,39 @@ class TestComplianceAutomationSmoke:
         assert "updates" in data
 
     @pytest.mark.asyncio
-    async def test_gap_analyses_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_gap_analyses_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify gap analyses endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/gap-analyses", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/gap-analyses", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "analyses" in data
 
     @pytest.mark.asyncio
-    async def test_certificates_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_certificates_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify certificates endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/certificates", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/certificates", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "certificates" in data
 
     @pytest.mark.asyncio
-    async def test_certificates_summary_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_certificates_summary_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify certificate expiry summary endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -131,41 +163,55 @@ class TestComplianceAutomationSmoke:
         assert "expiring_30_days" in summary
 
     @pytest.mark.asyncio
-    async def test_scheduled_audits_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_scheduled_audits_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify scheduled audits endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/scheduled-audits", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/scheduled-audits", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "audits" in data
 
     @pytest.mark.asyncio
-    async def test_compliance_score_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_compliance_score_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify compliance score endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/score", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/score", headers=async_auth_headers
+        )
         assert response.status_code == 200
         score = response.json()
         assert "overall_score" in score
         assert "breakdown" in score
 
     @pytest.mark.asyncio
-    async def test_compliance_trend_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_compliance_trend_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify compliance trend endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/score/trend", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/score/trend", headers=async_auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "trend" in data
 
     @pytest.mark.asyncio
-    async def test_riddor_check_endpoint_available(self, async_client, async_auth_headers) -> None:
+    async def test_riddor_check_endpoint_available(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify RIDDOR check endpoint is accessible."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -185,25 +231,35 @@ class TestIntegrationSmoke:
     """Integration smoke tests."""
 
     @pytest.mark.asyncio
-    async def test_workflow_approval_flow(self, async_client, async_auth_headers) -> None:
+    async def test_workflow_approval_flow(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test basic workflow approval flow."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
         # 1. Get templates
-        templates_resp = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
+        templates_resp = await async_client.get(
+            "/api/v1/workflows/templates", headers=async_auth_headers
+        )
         assert templates_resp.status_code == 200
 
         # 2. Check pending approvals
-        approvals_resp = await async_client.get("/api/v1/workflows/approvals/pending", headers=async_auth_headers)
+        approvals_resp = await async_client.get(
+            "/api/v1/workflows/approvals/pending", headers=async_auth_headers
+        )
         assert approvals_resp.status_code == 200
 
         # 3. Get stats
-        stats_resp = await async_client.get("/api/v1/workflows/stats", headers=async_auth_headers)
+        stats_resp = await async_client.get(
+            "/api/v1/workflows/stats", headers=async_auth_headers
+        )
         assert stats_resp.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_compliance_monitoring_flow(self, async_client, async_auth_headers) -> None:
+    async def test_compliance_monitoring_flow(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test basic compliance monitoring flow."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -216,15 +272,21 @@ class TestIntegrationSmoke:
         assert updates_resp.status_code == 200
 
         # 2. Get compliance score
-        score_resp = await async_client.get("/api/v1/compliance-automation/score", headers=async_auth_headers)
+        score_resp = await async_client.get(
+            "/api/v1/compliance-automation/score", headers=async_auth_headers
+        )
         assert score_resp.status_code == 200
 
         # 3. Check certificates
-        certs_resp = await async_client.get("/api/v1/compliance-automation/certificates", headers=async_auth_headers)
+        certs_resp = await async_client.get(
+            "/api/v1/compliance-automation/certificates", headers=async_auth_headers
+        )
         assert certs_resp.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_riddor_detection_flow(self, async_client, async_auth_headers) -> None:
+    async def test_riddor_detection_flow(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Test RIDDOR detection and preparation flow."""
         if not async_auth_headers:
             pytest.skip("Auth required")
@@ -249,12 +311,16 @@ class TestDataIntegritySmoke:
     """Data integrity smoke tests."""
 
     @pytest.mark.asyncio
-    async def test_workflow_template_structure(self, async_client, async_auth_headers) -> None:
+    async def test_workflow_template_structure(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify workflow templates have required structure."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/workflows/templates", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/workflows/templates", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -267,12 +333,16 @@ class TestDataIntegritySmoke:
             assert template["steps_count"] > 0
 
     @pytest.mark.asyncio
-    async def test_compliance_score_structure(self, async_client, async_auth_headers) -> None:
+    async def test_compliance_score_structure(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify compliance score has required structure."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/score", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/score", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         score = response.json()
@@ -285,12 +355,16 @@ class TestDataIntegritySmoke:
             assert 0 <= data["score"] <= 100
 
     @pytest.mark.asyncio
-    async def test_certificate_expiry_dates_valid(self, async_client, async_auth_headers) -> None:
+    async def test_certificate_expiry_dates_valid(
+        self, async_client, async_auth_headers
+    ) -> None:
         """Verify certificate expiry dates are valid."""
         if not async_auth_headers:
             pytest.skip("Auth required")
 
-        response = await async_client.get("/api/v1/compliance-automation/certificates", headers=async_auth_headers)
+        response = await async_client.get(
+            "/api/v1/compliance-automation/certificates", headers=async_auth_headers
+        )
         assert response.status_code == 200
 
         data = response.json()
