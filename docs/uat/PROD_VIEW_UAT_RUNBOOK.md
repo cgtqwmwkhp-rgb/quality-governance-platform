@@ -174,6 +174,90 @@ Use these test accounts for UAT (non-PII, test-only):
 
 ## Workflow Test Scripts
 
+### 0. Standards + ISO Compliance (Read-Only)
+
+The Standards module displays compliance scores and controls from real API data.
+
+```bash
+# 1. List all standards
+curl -s "https://${PROD_URL}/api/v1/standards/?page=1&page_size=10" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '{
+    total: .total,
+    standards: [.items[] | {id, code, name, is_active}]
+  }'
+
+# Expected: 200 with list of standards (ISO9001, ISO14001, etc.)
+```
+
+```bash
+# 2. Get compliance score for a standard
+STANDARD_ID=1
+curl -s "https://${PROD_URL}/api/v1/standards/${STANDARD_ID}/compliance-score" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '{
+    standard_code,
+    total_controls,
+    implemented_count,
+    partial_count,
+    not_implemented_count,
+    compliance_percentage,
+    setup_required
+  }'
+
+# Expected: 200 with compliance score response
+# If setup_required=true, no controls are configured yet
+```
+
+```bash
+# 3. Get controls for a standard (verify deterministic ordering)
+STANDARD_ID=1
+
+# First call
+curl -s "https://${PROD_URL}/api/v1/standards/${STANDARD_ID}/controls" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '[.[] | .control_number]' > /tmp/controls_call1.json
+
+# Second call
+curl -s "https://${PROD_URL}/api/v1/standards/${STANDARD_ID}/controls" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '[.[] | .control_number]' > /tmp/controls_call2.json
+
+# Verify ordering is stable
+diff /tmp/controls_call1.json /tmp/controls_call2.json && echo "PASS: Ordering stable" || echo "FAIL: Ordering not deterministic"
+
+# Expected: Ordering is identical across calls
+```
+
+```bash
+# 4. Get standard detail with clauses
+STANDARD_ID=1
+curl -s "https://${PROD_URL}/api/v1/standards/${STANDARD_ID}" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '{
+    code,
+    name,
+    clause_count: (.clauses | length),
+    clauses: [.clauses[:3][] | {clause_number, title}]
+  }'
+
+# Expected: 200 with standard details and clauses
+```
+
+#### UI Verification (Production View)
+
+1. Navigate to `/standards` in the production UI
+2. Verify: List shows standards with compliance % (not hardcoded mocks)
+3. Click a standard to expand
+4. Verify: Clauses are displayed with status badges (implemented/partial/not_implemented)
+5. Verify: Controls are displayed under clauses with implementation_status
+6. Verify: "Setup Required" shown if standard has no controls
+
+#### Expected Compliance Score Formula
+
+```
+compliance_percentage = round((implemented + 0.5 * partial) / total * 100)
+```
+
+If `total_controls == 0`: `compliance_percentage = 0` and `setup_required = true`
+
+---
+
 ### 1. Incident Lifecycle (Read-Only)
 
 ```bash
