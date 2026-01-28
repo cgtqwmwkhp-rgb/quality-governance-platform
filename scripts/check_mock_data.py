@@ -61,6 +61,7 @@ PATTERNS = [
 # - PR1: Actions.tsx (fixed) ✅
 # - PR2: PlanetMark.tsx, UVDBAudits.tsx (fixed) ✅
 # - PR3: Standards.tsx (fixed) ✅
+# - PR4: Audits.tsx (fixed) ✅
 # - Pending: ComplianceEvidence.tsx
 SCOPED_FILES = [
     # PR1 scope - API-backed and mock-free ✅
@@ -70,6 +71,8 @@ SCOPED_FILES = [
     "frontend/src/pages/UVDBAudits.tsx",
     # PR3 scope - API-backed and mock-free ✅
     "frontend/src/pages/Standards.tsx",
+    # PR4 scope - API-backed and mock-free ✅
+    "frontend/src/pages/Audits.tsx",
     # Pending - uncomment when fixed
     # "frontend/src/pages/ComplianceEvidence.tsx",
 ]

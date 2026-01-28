@@ -119,7 +119,7 @@ export default function Audits() {
       // Refresh the audit list
       await loadData()
       
-      // Close modal after short delay to show success
+      // Close modal after short delay to show success (STATIC_UI_CONFIG_OK: UX delay, not mock)
       setTimeout(() => {
         handleCloseModal()
         setSuccessMessage(null)
