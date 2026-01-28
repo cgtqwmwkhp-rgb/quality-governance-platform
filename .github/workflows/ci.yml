@@ -466,22 +466,22 @@ jobs:
           echo ""
           
           # Check minimum pass threshold
-          if [ "$E2E_PASSED" -lt 20 ]; then
+          if [ "${E2E_PASSED:-0}" -lt 20 ]; then
             echo "❌ E2E MINIMUM PASS GATE FAILED"
-            echo "   Passed ($E2E_PASSED) < Minimum (20)"
+            echo "   Passed (${E2E_PASSED:-0}) < Minimum (20)"
             echo "   Tests may have regressed or been incorrectly skipped."
             exit 1
           fi
           
           # Check baseline regression (10% tolerance)
           MIN_ACCEPTABLE=27  # 90% of 31
-          if [ "$E2E_PASSED" -lt "$MIN_ACCEPTABLE" ]; then
+          if [ "${E2E_PASSED:-0}" -lt "${MIN_ACCEPTABLE}" ]; then
             echo "⚠️ E2E BASELINE REGRESSION WARNING"
-            echo "   Passed ($E2E_PASSED) < 90% of baseline (31)"
-            echo "   Minimum acceptable: $MIN_ACCEPTABLE"
+            echo "   Passed (${E2E_PASSED:-0}) < 90% of baseline (31)"
+            echo "   Minimum acceptable: ${MIN_ACCEPTABLE}"
           fi
           
-          echo "✅ E2E tests completed: $E2E_PASSED passed, $E2E_SKIPPED skipped"
+          echo "✅ E2E tests completed: ${E2E_PASSED:-0} passed, ${E2E_SKIPPED:-0} skipped"
           
           # Propagate original pytest exit code
           exit $PYTEST_EXIT_CODE
