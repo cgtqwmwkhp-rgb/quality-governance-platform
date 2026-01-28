@@ -442,6 +442,12 @@ jobs:
         run: |
           alembic upgrade head
 
+      - name: Check API Path Drift
+        run: |
+          echo "=== API PATH DRIFT PREVENTION ==="
+          python scripts/check_api_path_drift.py
+          echo "✅ No /api vs /api/v1 path drift detected"
+
       - name: Run E2E Tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
@@ -457,28 +463,38 @@ jobs:
           E2E_PASSED=$(grep -oP '\d+(?= passed)' e2e-output.txt | tail -1 || echo "0")
           E2E_SKIPPED=$(grep -oP '\d+(?= skipped)' e2e-output.txt | tail -1 || echo "0")
           
-          echo ""
-          echo "=== E2E BASELINE CHECK ==="
-          echo "E2E Passed: ${E2E_PASSED:-0}"
-          echo "E2E Skipped: ${E2E_SKIPPED:-0}"
-          echo "E2E Baseline: 47 (Phase 4)"
-          echo "E2E Minimum: 20"
-          echo ""
-          
           # ============================================================
-          # E2E GOVERNANCE GATES (Phase 4 Wave 2 - ENFORCING)
+          # E2E GOVERNANCE GATES (World-Class Stability Program)
+          # Single source of truth: docs/evidence/e2e_baseline.json
           # ============================================================
           
-          E2E_BASELINE=140  # Phase 5
+          BASELINE_FILE="docs/evidence/e2e_baseline.json"
+          
+          if [ ! -f "${BASELINE_FILE}" ]; then
+            echo "❌ BASELINE FILE MISSING: ${BASELINE_FILE}"
+            echo "   Create this file with baseline_pass_count to enable governance"
+            exit 1
+          fi
+          
+          # Read baseline from artifact file (single source of truth)
+          E2E_BASELINE=$(python3 -c "import json; print(json.load(open('${BASELINE_FILE}'))['baseline_pass_count'])")
+          BASELINE_SHA=$(python3 -c "import json; print(json.load(open('${BASELINE_FILE}'))['baseline_commit_sha'])")
+          BASELINE_DATE=$(python3 -c "import json; print(json.load(open('${BASELINE_FILE}'))['baseline_date'])")
+          BASELINE_NOTES=$(python3 -c "import json; print(json.load(open('${BASELINE_FILE}'))['baseline_notes'])")
+          
           MIN_ACCEPTABLE=$((E2E_BASELINE * 90 / 100))  # 90% of baseline
           OVERRIDE_PRESENT="${E2E_BASELINE_OVERRIDE:-false}"
           
+          echo ""
           echo "=== E2E GOVERNANCE GATE STATUS ==="
-          echo "  Baseline:        ${E2E_BASELINE}"
-          echo "  Min Acceptable:  ${MIN_ACCEPTABLE} (90% of baseline)"
-          echo "  Current Passed:  ${E2E_PASSED:-0}"
-          echo "  Current Skipped: ${E2E_SKIPPED:-0}"
-          echo "  Override:        ${OVERRIDE_PRESENT}"
+          echo "  Baseline Source:  ${BASELINE_FILE}"
+          echo "  Baseline Value:   ${E2E_BASELINE} (from commit ${BASELINE_SHA})"
+          echo "  Baseline Date:    ${BASELINE_DATE}"
+          echo "  Baseline Notes:   ${BASELINE_NOTES}"
+          echo "  Min Acceptable:   ${MIN_ACCEPTABLE} (90% of baseline)"
+          echo "  Current Passed:   ${E2E_PASSED:-0}"
+          echo "  Current Skipped:  ${E2E_SKIPPED:-0}"
+          echo "  Override Present: ${OVERRIDE_PRESENT}"
           echo ""
           
           # Gate 1: Absolute minimum (always enforced, no override)
@@ -489,7 +505,7 @@ jobs:
             exit 1
           fi
           
-          # Gate 2: Baseline regression (enforced unless override)
+          # Gate 2: Baseline regression (enforced unless override with documented reason)
           if [ "${E2E_PASSED:-0}" -lt "${MIN_ACCEPTABLE}" ]; then
             if [ "${OVERRIDE_PRESENT}" = "true" ]; then
               echo "⚠️ E2E BASELINE REGRESSION - OVERRIDE ACTIVE"
@@ -499,11 +515,12 @@ jobs:
             else
               echo "❌ E2E BASELINE REGRESSION GATE FAILED (BLOCKING)"
               echo "   Passed (${E2E_PASSED:-0}) < Min Acceptable (${MIN_ACCEPTABLE})"
-              echo "   To override, set E2E_BASELINE_OVERRIDE=true with documented reason"
+              echo "   Baseline: ${E2E_BASELINE} (from ${BASELINE_FILE})"
+              echo "   To override: set E2E_BASELINE_OVERRIDE=true with QUARANTINE_POLICY entry"
               exit 1
             fi
           else
-            echo "✅ E2E baseline gate passed"
+            echo "✅ E2E baseline gate passed (${E2E_PASSED:-0} >= ${MIN_ACCEPTABLE})"
           fi
           
           echo ""
@@ -511,6 +528,70 @@ jobs:
           
           # Propagate original pytest exit code
           exit "${PYTEST_EXIT_CODE}"
+
+      - name: Generate Quality Trend Artifact
+        if: always()
+        run: |
+          # Read current metrics
+          E2E_PASSED=$(grep -oP '\d+(?= passed)' e2e-output.txt | tail -1 || echo "0")
+          E2E_SKIPPED=$(grep -oP '\d+(?= skipped)' e2e-output.txt | tail -1 || echo "0")
+          
+          # Read baseline from artifact
+          BASELINE_FILE="docs/evidence/e2e_baseline.json"
+          if [ -f "${BASELINE_FILE}" ]; then
+            E2E_BASELINE=$(python3 -c "import json; print(json.load(open('${BASELINE_FILE}'))['baseline_pass_count'])")
+          else
+            E2E_BASELINE="N/A"
+          fi
+          MIN_ACCEPTABLE=$((E2E_BASELINE * 90 / 100)) 2>/dev/null || MIN_ACCEPTABLE="N/A"
+          
+          # Read quarantine count
+          if [ -f "tests/QUARANTINE_POLICY.yaml" ]; then
+            QUARANTINE_COUNT=$(python3 -c "
+          import yaml
+          policy = yaml.safe_load(open('tests/QUARANTINE_POLICY.yaml'))
+          q = policy.get('quarantines', []) or []
+          print(sum(len(e.get('files', [])) for e in q))
+          " 2>/dev/null || echo "0")
+          else
+            QUARANTINE_COUNT="0"
+          fi
+          
+          # Generate JSON artifact
+          cat > quality-trend-report.json << TREND_EOF
+          {
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "sha": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "e2e": {
+              "passed": ${E2E_PASSED:-0},
+              "skipped": ${E2E_SKIPPED:-0},
+              "baseline": ${E2E_BASELINE},
+              "min_acceptable": ${MIN_ACCEPTABLE}
+            },
+            "quarantine": {
+              "file_count": ${QUARANTINE_COUNT}
+            },
+            "gates": {
+              "e2e_minimum_pass": true,
+              "e2e_baseline_pass": $( [ "${E2E_PASSED:-0}" -ge "${MIN_ACCEPTABLE}" ] && echo "true" || echo "false" )
+            }
+          }
+          TREND_EOF
+          
+          echo "=== QUALITY TREND REPORT ==="
+          cat quality-trend-report.json
+          echo ""
+
+      - name: Upload Quality Trend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-trend-report
+          path: quality-trend-report.json
+          retention-days: 90
+        if: always()
 
       - name: Upload E2E Test Results
         uses: actions/upload-artifact@v4

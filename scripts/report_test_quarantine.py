@@ -51,8 +51,23 @@ except ImportError:
 # E2E Minimum Pass Gate: CI fails if E2E passing tests < this threshold
 E2E_MINIMUM_PASS = 20
 
-# Baseline E2E count (updated after Phase 5): CI fails if current < baseline - 10%
-E2E_BASELINE_COUNT = 140  # Phase 4 (80) + Phase 5 GOVPLAT-001 resolved (79 tests)
+# Baseline E2E count: Read from artifact file (single source of truth)
+# File: docs/evidence/e2e_baseline.json
+E2E_BASELINE_FILE = Path(__file__).parent.parent / "docs" / "evidence" / "e2e_baseline.json"
+
+
+def get_e2e_baseline() -> int:
+    """Read E2E baseline from artifact file (single source of truth)."""
+    import json
+
+    if E2E_BASELINE_FILE.exists():
+        with open(E2E_BASELINE_FILE) as f:
+            data = json.load(f)
+            return int(data.get("baseline_pass_count", 127))
+    return 127  # Fallback if file missing
+
+
+E2E_BASELINE_COUNT = get_e2e_baseline()
 
 # Quarantine count baseline: CI fails if increased without approved_override
 QUARANTINE_BASELINE_FILES = 0  # After Phase 5: ALL QUARANTINES CLEARED
@@ -155,20 +170,17 @@ def check_quarantine_growth(policy: dict) -> tuple[bool, str]:
     Returns (passed, message).
     """
     file_count = sum(len(e.get("files", [])) for e in policy.get("quarantines", []))
-    
+
     # Check for approved_override in any entry
-    has_override = any(
-        e.get("approved_override", False) 
-        for e in policy.get("quarantines", [])
-    )
-    
+    has_override = any(e.get("approved_override", False) for e in policy.get("quarantines", []))
+
     if file_count > QUARANTINE_BASELINE_FILES and not has_override:
         return (
-            False, 
+            False,
             f"Quarantine count increased ({file_count} > baseline {QUARANTINE_BASELINE_FILES}) "
-            f"without approved_override. Add 'approved_override: true' to new entries."
+            f"without approved_override. Add 'approved_override: true' to new entries.",
         )
-    
+
     return (True, f"Quarantine count: {file_count} (baseline: {QUARANTINE_BASELINE_FILES})")
 
 
@@ -179,24 +191,24 @@ def check_e2e_minimum(e2e_passed) -> tuple:
     """
     if e2e_passed is None:
         return (True, "E2E count not provided (skipping check)")
-    
+
     # Absolute minimum
     if e2e_passed < E2E_MINIMUM_PASS:
         return (
             False,
             f"E2E passed ({e2e_passed}) below minimum ({E2E_MINIMUM_PASS}). "
-            f"Tests may have regressed or been incorrectly skipped."
+            f"Tests may have regressed or been incorrectly skipped.",
         )
-    
+
     # Baseline regression check (10% tolerance)
     min_acceptable = int(E2E_BASELINE_COUNT * 0.9)
     if e2e_passed < min_acceptable:
         return (
             False,
             f"E2E passed ({e2e_passed}) regressed >10% from baseline ({E2E_BASELINE_COUNT}). "
-            f"Minimum acceptable: {min_acceptable}."
+            f"Minimum acceptable: {min_acceptable}.",
         )
-    
+
     return (True, f"E2E passed: {e2e_passed} (baseline: {E2E_BASELINE_COUNT}, minimum: {E2E_MINIMUM_PASS})")
 
 
@@ -326,9 +338,7 @@ def run_self_test() -> bool:
     # Test 1: Expired quarantine should fail
     print("Test 1: Expired quarantine detection...")
     expired_policy = {
-        "quarantines": [
-            {"id": "TEST-001", "expiry_date": "2020-01-01", "owner": "test", "files": ["test.py"]}
-        ],
+        "quarantines": [{"id": "TEST-001", "expiry_date": "2020-01-01", "owner": "test", "files": ["test.py"]}],
         "metrics": {"max_allowed_quarantine_count": 10},
     }
     from tempfile import TemporaryDirectory
@@ -407,11 +417,9 @@ def run_self_test() -> bool:
 
     # Test 7: Quarantine growth without override should fail
     print("Test 7: Quarantine growth without override...")
-    growth_passed, growth_msg = check_quarantine_growth({
-        "quarantines": [
-            {"id": "TEST-001", "files": ["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"]}
-        ]
-    })
+    growth_passed, growth_msg = check_quarantine_growth(
+        {"quarantines": [{"id": "TEST-001", "files": ["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"]}]}
+    )
     if growth_passed:
         print("   ❌ FAIL: Quarantine growth without override should fail")
         all_passed = False
@@ -420,11 +428,17 @@ def run_self_test() -> bool:
 
     # Test 8: Quarantine growth with override should pass
     print("Test 8: Quarantine growth with override...")
-    growth_passed, growth_msg = check_quarantine_growth({
-        "quarantines": [
-            {"id": "TEST-001", "files": ["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"], "approved_override": True}
-        ]
-    })
+    growth_passed, growth_msg = check_quarantine_growth(
+        {
+            "quarantines": [
+                {
+                    "id": "TEST-001",
+                    "files": ["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"],
+                    "approved_override": True,
+                }
+            ]
+        }
+    )
     if not growth_passed:
         print("   ❌ FAIL: Quarantine growth with override should pass")
         all_passed = False

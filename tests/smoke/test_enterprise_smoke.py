@@ -60,7 +60,7 @@ def client():
 def auth_token(client) -> Optional[str]:
     """Get authentication token."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={
             "username": SmokeTestConfig.TEST_USER,
             "password": SmokeTestConfig.TEST_PASS,
@@ -83,7 +83,7 @@ def auth_headers(auth_token) -> dict:
 def admin_token(client) -> Optional[str]:
     """Get admin authentication token."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={
             "username": SmokeTestConfig.ADMIN_USER,
             "password": SmokeTestConfig.ADMIN_PASS,
@@ -147,7 +147,7 @@ class TestAuthSmoke:
     def test_login_endpoint_available(self, client):
         """✓ Login endpoint must be available."""
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={"email": "test@example.com", "password": "test"},
         )
         # Should return 401 for bad credentials, not 500
@@ -165,7 +165,7 @@ class TestAuthSmoke:
 
     def test_protected_endpoint_requires_auth(self, client):
         """✓ Protected endpoints must require authentication."""
-        response = client.get("/api/users/")
+        response = client.get("/api/v1/users/")
         # 401 = requires auth, 404 = route not in test config (both acceptable)
         assert response.status_code in [401, 404], f"Protected endpoint accessible without auth: {response.status_code}"
 
@@ -173,7 +173,7 @@ class TestAuthSmoke:
         """✓ Authenticated requests must succeed."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/users/", headers=auth_headers)
+        response = client.get("/api/v1/users/", headers=auth_headers)
         # 200 = success, 404 = route not in test config
         assert response.status_code in [200, 404], f"Authenticated request failed: {response.status_code}"
 
@@ -190,7 +190,7 @@ class TestIncidentsSmoke:
         """✓ Incidents list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/incidents", headers=auth_headers)
+        response = client.get("/api/v1/incidents", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data or isinstance(data, list)
@@ -200,7 +200,7 @@ class TestIncidentsSmoke:
         if not auth_headers:
             pytest.skip("Auth not available")
         response = client.get(
-            "/api/incidents?page=1&per_page=10",
+            "/api/v1/incidents?page=1&per_page=10",
             headers=auth_headers,
         )
         assert response.status_code == 200
@@ -213,21 +213,21 @@ class TestAuditsSmoke:
         """✓ Audit templates endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/audit-templates", headers=auth_headers)
+        response = client.get("/api/v1/audit-templates", headers=auth_headers)
         assert response.status_code == 200
 
     def test_audit_runs_endpoint(self, client, auth_headers):
         """✓ Audit runs endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/audits/runs", headers=auth_headers)
+        response = client.get("/api/v1/audits/runs", headers=auth_headers)
         assert response.status_code == 200
 
     def test_audit_findings_endpoint(self, client, auth_headers):
         """✓ Audit findings endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/audits/findings", headers=auth_headers)
+        response = client.get("/api/v1/audits/findings", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -238,7 +238,7 @@ class TestRisksSmoke:
         """✓ Risks list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/risks", headers=auth_headers)
+        response = client.get("/api/v1/risks", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -249,7 +249,7 @@ class TestComplianceSmoke:
         """✓ Standards endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/standards", headers=auth_headers)
+        response = client.get("/api/v1/standards", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -260,14 +260,14 @@ class TestDocumentsSmoke:
         """✓ Documents list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/documents", headers=auth_headers)
+        response = client.get("/api/v1/documents", headers=auth_headers)
         assert response.status_code == 200
 
     def test_policies_list_endpoint(self, client, auth_headers):
         """✓ Policies list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/policies", headers=auth_headers)
+        response = client.get("/api/v1/policies", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -281,14 +281,14 @@ class TestPortalSmoke:
 
     def test_portal_stats_public(self, client):
         """✓ Portal stats are publicly accessible."""
-        response = client.get("/api/portal/stats")
+        response = client.get("/api/v1/portal/stats")
         # 200 = success, 404 = route not configured in test environment
         assert response.status_code in [200, 404], f"Portal stats error: {response.status_code}"
 
     def test_portal_report_submission(self, client):
         """✓ Portal can submit reports."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/report",
             json={
                 "report_type": "incident",
                 "title": "Smoke Test Incident",
@@ -309,7 +309,7 @@ class TestPortalSmoke:
         """✓ Portal tracking endpoint available."""
         # First submit a report
         submit = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/report",
             json={
                 "report_type": "incident",
                 "title": "Tracking Smoke Test",
@@ -325,7 +325,7 @@ class TestPortalSmoke:
 
             if ref and code:
                 track = client.get(
-                    f"/api/portal/track/{ref}",
+                    f"/api/v1/portal/track/{ref}",
                     params={"tracking_code": code},
                 )
                 # Should return status (may be 404 if not in DB)
@@ -344,21 +344,21 @@ class TestISOComplianceSmoke:
         """✓ ISO 27001 ISMS endpoints work."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/iso27001/assets", headers=auth_headers)
+        response = client.get("/api/v1/iso27001/assets", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_uvdb_endpoints(self, client, auth_headers):
         """✓ UVDB Achilles endpoints work."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/uvdb/sections", headers=auth_headers)
+        response = client.get("/api/v1/uvdb/sections", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_planet_mark_endpoints(self, client, auth_headers):
         """✓ Planet Mark endpoints work."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/planet-mark/years", headers=auth_headers)
+        response = client.get("/api/v1/planet-mark/years", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -369,7 +369,7 @@ class TestWorkflowSmoke:
         """✓ Workflows endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/workflows/templates", headers=auth_headers)
+        response = client.get("/api/v1/workflows/templates", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -380,7 +380,7 @@ class TestRiskRegisterSmoke:
         """✓ Risk register heat map works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/risk-register/heat-map", headers=auth_headers)
+        response = client.get("/api/v1/risk-register/heat-map", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -396,7 +396,7 @@ class TestAnalyticsSmoke:
         """✓ Analytics summary endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/analytics/summary", headers=auth_headers)
+        response = client.get("/api/v1/analytics/summary", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -412,7 +412,7 @@ class TestUserManagementSmoke:
         """✓ Current user endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/users/me", headers=auth_headers)
+        response = client.get("/api/v1/users/me", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "email" in data or "id" in data
@@ -421,7 +421,7 @@ class TestUserManagementSmoke:
         """✓ User list available for admin."""
         if not admin_headers:
             pytest.skip("Admin auth not available")
-        response = client.get("/api/users", headers=admin_headers)
+        response = client.get("/api/v1/users", headers=admin_headers)
         assert response.status_code in [200, 403]
 
 
@@ -435,7 +435,7 @@ class TestRateLimitingSmoke:
 
     def test_rate_limit_headers_present(self, client):
         """✓ Rate limit headers are present."""
-        response = client.get("/api/portal/stats")
+        response = client.get("/api/v1/portal/stats")
         # Check for rate limit headers
         # Note: May not be present if middleware not registered
         # 404 acceptable if route not configured in test environment
@@ -454,7 +454,7 @@ class TestNotificationSmoke:
         """✓ Notification subscription endpoint available."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/notifications/preferences", headers=auth_headers)
+        response = client.get("/api/v1/notifications/preferences", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -475,7 +475,7 @@ class TestSecuritySmoke:
     def test_invalid_token_rejected(self, client):
         """✓ Invalid tokens are rejected."""
         response = client.get(
-            "/api/users/",
+            "/api/v1/users/",
             headers={"Authorization": "Bearer invalid.token.here"},
         )
         # 404 acceptable if route not configured
@@ -488,7 +488,7 @@ class TestSecuritySmoke:
 
         # Try SQL injection in query param
         response = client.get(
-            "/api/incidents?search='; DROP TABLE incidents; --",
+            "/api/v1/incidents?search='; DROP TABLE incidents; --",
             headers=auth_headers,
         )
         # Should not cause 500 error
@@ -512,7 +512,7 @@ class TestDataIntegritySmoke:
 
         # Create
         create_response = client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json={
                 "title": unique_title,
                 "description": "Smoke test incident for data integrity.",
@@ -529,7 +529,7 @@ class TestDataIntegritySmoke:
             if incident_id:
                 # Read back
                 read_response = client.get(
-                    f"/api/incidents/{incident_id}",
+                    f"/api/v1/incidents/{incident_id}",
                     headers=auth_headers,
                 )
 
@@ -554,9 +554,9 @@ class TestPerformanceSmoke:
         import time
 
         endpoints = [
-            "/api/incidents?page=1&per_page=10",
-            "/api/audits/runs?page=1&per_page=10",
-            "/api/risks?page=1&per_page=10",
+            "/api/v1/incidents?page=1&per_page=10",
+            "/api/v1/audits/runs?page=1&per_page=10",
+            "/api/v1/risks?page=1&per_page=10",
         ]
 
         for endpoint in endpoints:
