@@ -13,33 +13,13 @@ Per PR #103 requirements:
 - Consistent error handling (bounded errors)
 - No timing flakiness
 
-QUARANTINED: [GOVPLAT-003]
-Reason: Async event loop conflict between httpx.AsyncClient and the app's
-SQLAlchemy asyncpg pool. The app binds its DB pool to an event loop at init
-time, but pytest-asyncio runs tests in its own loop, causing:
-"Task got Future attached to a different loop"
-
-Resolution: Create a proper async_client fixture that initializes the app
-within the test's event loop, or use a fresh engine per test session.
-Owner: platform-team
-Expiry: 2026-02-21
-See: docs/runbooks/TEST_QUARANTINE_POLICY.md
+PHASE 3 FIX (PR #104):
+- GOVPLAT-003 RESOLVED: Now uses the blessed async_client fixture
+  from conftest.py which ensures the DB engine is created in the
+  test event loop.
 """
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from src.main import app
-
-# Quarantine: async event loop conflict with DB pool
-pytestmark = [
-    pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-003]: Async event loop conflict - "
-        "DB pool bound to different loop. Owner: platform-team. Expiry: 2026-02-21. "
-        "See docs/runbooks/TEST_QUARANTINE_POLICY.md"
-    ),
-]
-
 
 # ============ Planet Mark Integration Tests ============
 
@@ -48,11 +28,9 @@ class TestPlanetMarkStaticEndpoints:
     """Tests for Planet Mark endpoints that return static/default data."""
 
     @pytest.mark.asyncio
-    async def test_dashboard_returns_setup_required_when_empty(self):
+    async def test_dashboard_returns_setup_required_when_empty(self, async_client):
         """Dashboard returns setup_required when no reporting years exist."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/dashboard")
+        response = await async_client.get("/api/v1/planet-mark/dashboard")
 
         assert response.status_code == 200
         data = response.json()
@@ -61,11 +39,9 @@ class TestPlanetMarkStaticEndpoints:
         assert "setup_required" in data or "current_year" in data
 
     @pytest.mark.asyncio
-    async def test_years_list_returns_valid_structure(self):
+    async def test_years_list_returns_valid_structure(self, async_client):
         """Years list returns valid response structure."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/years")
+        response = await async_client.get("/api/v1/planet-mark/years")
 
         assert response.status_code == 200
         data = response.json()
@@ -77,11 +53,9 @@ class TestPlanetMarkStaticEndpoints:
         assert isinstance(data["total"], int)
 
     @pytest.mark.asyncio
-    async def test_iso14001_mapping_returns_static_data(self):
+    async def test_iso14001_mapping_returns_static_data(self, async_client):
         """ISO 14001 mapping returns static cross-mapping data."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/iso14001-mapping")
+        response = await async_client.get("/api/v1/planet-mark/iso14001-mapping")
 
         assert response.status_code == 200
         data = response.json()
@@ -101,11 +75,9 @@ class TestPlanetMarkStaticEndpoints:
             assert "iso14001_clause" in mapping
 
     @pytest.mark.asyncio
-    async def test_scope3_returns_default_categories_for_nonexistent_year(self):
+    async def test_scope3_returns_default_categories_for_nonexistent_year(self, async_client):
         """Scope 3 endpoint returns default categories for non-existent year."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/years/99999/scope3")
+        response = await async_client.get("/api/v1/planet-mark/years/99999/scope3")
 
         assert response.status_code == 200
         data = response.json()
@@ -116,11 +88,9 @@ class TestPlanetMarkStaticEndpoints:
         assert data["measured_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_year_not_found_returns_404(self):
+    async def test_year_not_found_returns_404(self, async_client):
         """Non-existent year returns 404 with proper error structure."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/years/99999")
+        response = await async_client.get("/api/v1/planet-mark/years/99999")
 
         assert response.status_code == 404
         data = response.json()
@@ -131,11 +101,9 @@ class TestPlanetMarkOrdering:
     """Tests for Planet Mark ordering guarantees."""
 
     @pytest.mark.asyncio
-    async def test_years_ordered_by_year_number_desc(self):
+    async def test_years_ordered_by_year_number_desc(self, async_client):
         """Years list is ordered by year_number descending."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/years")
+        response = await async_client.get("/api/v1/planet-mark/years")
 
         assert response.status_code == 200
         data = response.json()
@@ -157,11 +125,9 @@ class TestUVDBStaticEndpoints:
     """Tests for UVDB endpoints that return static/deterministic data."""
 
     @pytest.mark.asyncio
-    async def test_protocol_returns_structure(self):
+    async def test_protocol_returns_structure(self, async_client):
         """Protocol endpoint returns complete UVDB B2 protocol structure."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/protocol")
+        response = await async_client.get("/api/v1/uvdb/protocol")
 
         assert response.status_code == 200
         data = response.json()
@@ -174,11 +140,9 @@ class TestUVDBStaticEndpoints:
         assert "scoring" in data
 
     @pytest.mark.asyncio
-    async def test_sections_returns_all_sections(self):
+    async def test_sections_returns_all_sections(self, async_client):
         """Sections endpoint returns all UVDB B2 sections."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/sections")
+        response = await async_client.get("/api/v1/uvdb/sections")
 
         assert response.status_code == 200
         data = response.json()
@@ -200,23 +164,19 @@ class TestUVDBStaticEndpoints:
             assert "question_count" in section
 
     @pytest.mark.asyncio
-    async def test_sections_stable_ordering(self):
+    async def test_sections_stable_ordering(self, async_client):
         """Sections list has stable ordering (by section number)."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            # Make two requests
-            response1 = await ac.get("/api/v1/uvdb/sections")
-            response2 = await ac.get("/api/v1/uvdb/sections")
+        # Make two requests
+        response1 = await async_client.get("/api/v1/uvdb/sections")
+        response2 = await async_client.get("/api/v1/uvdb/sections")
 
         # Both should return identical data
         assert response1.json() == response2.json()
 
     @pytest.mark.asyncio
-    async def test_iso_mapping_returns_cross_mapping(self):
+    async def test_iso_mapping_returns_cross_mapping(self, async_client):
         """ISO mapping endpoint returns cross-mapping between UVDB and ISO standards."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/iso-mapping")
+        response = await async_client.get("/api/v1/uvdb/iso-mapping")
 
         assert response.status_code == 200
         data = response.json()
@@ -231,11 +191,9 @@ class TestUVDBStaticEndpoints:
         assert data["total_mappings"] >= 1
 
     @pytest.mark.asyncio
-    async def test_section_questions_returns_questions(self):
+    async def test_section_questions_returns_questions(self, async_client):
         """Section questions endpoint returns questions for valid section."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/sections/1/questions")
+        response = await async_client.get("/api/v1/uvdb/sections/1/questions")
 
         assert response.status_code == 200
         data = response.json()
@@ -247,22 +205,18 @@ class TestUVDBStaticEndpoints:
         assert "questions" in data
 
     @pytest.mark.asyncio
-    async def test_section_not_found_returns_404(self):
+    async def test_section_not_found_returns_404(self, async_client):
         """Non-existent section returns 404."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/sections/999/questions")
+        response = await async_client.get("/api/v1/uvdb/sections/999/questions")
 
         assert response.status_code == 404
         data = response.json()
         assert "detail" in data
 
     @pytest.mark.asyncio
-    async def test_audits_list_returns_valid_structure(self):
+    async def test_audits_list_returns_valid_structure(self, async_client):
         """Audits list returns valid response structure."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/audits")
+        response = await async_client.get("/api/v1/uvdb/audits")
 
         assert response.status_code == 200
         data = response.json()
@@ -274,11 +228,9 @@ class TestUVDBStaticEndpoints:
         assert isinstance(data["total"], int)
 
     @pytest.mark.asyncio
-    async def test_audits_pagination_params(self):
+    async def test_audits_pagination_params(self, async_client):
         """Audits endpoint respects pagination parameters."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/audits?skip=0&limit=10")
+        response = await async_client.get("/api/v1/uvdb/audits?skip=0&limit=10")
 
         assert response.status_code == 200
         data = response.json()
@@ -287,11 +239,9 @@ class TestUVDBStaticEndpoints:
         assert len(data["audits"]) <= 10
 
     @pytest.mark.asyncio
-    async def test_dashboard_returns_summary(self):
+    async def test_dashboard_returns_summary(self, async_client):
         """Dashboard endpoint returns summary statistics."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/dashboard")
+        response = await async_client.get("/api/v1/uvdb/dashboard")
 
         assert response.status_code == 200
         data = response.json()
@@ -308,11 +258,9 @@ class TestUVDBStaticEndpoints:
         assert "completed_audits" in summary
 
     @pytest.mark.asyncio
-    async def test_audit_not_found_returns_404(self):
+    async def test_audit_not_found_returns_404(self, async_client):
         """Non-existent audit returns 404."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/audits/99999")
+        response = await async_client.get("/api/v1/uvdb/audits/99999")
 
         assert response.status_code == 404
         data = response.json()
@@ -323,11 +271,9 @@ class TestUVDBOrdering:
     """Tests for UVDB ordering guarantees."""
 
     @pytest.mark.asyncio
-    async def test_audits_ordered_by_date_desc(self):
+    async def test_audits_ordered_by_date_desc(self, async_client):
         """Audits list is ordered by audit_date descending."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/audits")
+        response = await async_client.get("/api/v1/uvdb/audits")
 
         assert response.status_code == 200
         data = response.json()
@@ -357,33 +303,29 @@ class TestErrorResponseConsistency:
     """
 
     @pytest.mark.asyncio
-    async def test_404_has_error_envelope(self):
+    async def test_404_has_error_envelope(self, async_client):
         """404 responses include error envelope with message."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            # Test a 404 scenario
-            response = await ac.get("/api/v1/uvdb/audits/99999")
+        # Test a 404 scenario
+        response = await async_client.get("/api/v1/uvdb/audits/99999")
 
-            if response.status_code == 404:
-                data = response.json()
-                # Accept either FastAPI default (detail) or custom envelope (message)
-                has_error_info = "detail" in data or "message" in data
-                assert has_error_info, f"404 response missing error info: {data}"
+        if response.status_code == 404:
+            data = response.json()
+            # Accept either FastAPI default (detail) or custom envelope (message)
+            has_error_info = "detail" in data or "message" in data
+            assert has_error_info, f"404 response missing error info: {data}"
 
     @pytest.mark.asyncio
-    async def test_validation_error_format(self):
+    async def test_validation_error_format(self, async_client):
         """Validation errors have consistent format."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            # Invalid pagination params
-            response = await ac.get("/api/v1/uvdb/audits?limit=1000")
+        # Invalid pagination params
+        response = await async_client.get("/api/v1/uvdb/audits?limit=1000")
 
-            # Should be 422 for validation error
-            if response.status_code == 422:
-                data = response.json()
-                # Accept either FastAPI default (detail) or custom envelope (message/details)
-                has_error_info = "detail" in data or "message" in data or "details" in data
-                assert has_error_info, f"Validation error missing error info: {data}"
+        # Should be 422 for validation error
+        if response.status_code == 422:
+            data = response.json()
+            # Accept either FastAPI default (detail) or custom envelope (message/details)
+            has_error_info = "detail" in data or "message" in data or "details" in data
+            assert has_error_info, f"Validation error missing error info: {data}"
 
 
 # ============ Content-Type Verification ============
@@ -393,17 +335,13 @@ class TestContentTypes:
     """Tests for correct Content-Type headers."""
 
     @pytest.mark.asyncio
-    async def test_json_content_type_planet_mark(self):
+    async def test_json_content_type_planet_mark(self, async_client):
         """Planet Mark API responses return application/json."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/planet-mark/years")
-            assert "application/json" in response.headers.get("content-type", "")
+        response = await async_client.get("/api/v1/planet-mark/years")
+        assert "application/json" in response.headers.get("content-type", "")
 
     @pytest.mark.asyncio
-    async def test_json_content_type_uvdb(self):
+    async def test_json_content_type_uvdb(self, async_client):
         """UVDB API responses return application/json."""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/v1/uvdb/sections")
-            assert "application/json" in response.headers.get("content-type", "")
+        response = await async_client.get("/api/v1/uvdb/sections")
+        assert "application/json" in response.headers.get("content-type", "")

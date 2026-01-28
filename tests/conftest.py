@@ -6,13 +6,22 @@ This module provides shared fixtures for all test suites:
 - E2E tests
 - Integration tests
 - Unit tests
+
+PHASE 3 ASYNC HARNESS (PR #104):
+Provides a "blessed" async test harness that solves the event loop conflict:
+- Session-scoped event loop for all async tests
+- Test-specific database engine created within the test event loop
+- httpx.AsyncClient with ASGITransport for true async testing
 """
 
+import asyncio
 import os
 import sys
-from typing import Any, Generator, Optional
+from typing import Any, AsyncGenerator, Generator, Optional
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -45,7 +54,108 @@ class TestConfig:
 
 
 # ============================================================================
-# Core Fixtures
+# PHASE 3 ASYNC HARNESS - Session-scoped Event Loop
+# ============================================================================
+# This is the "blessed" async test harness that solves GOVPLAT-003/004/005.
+# All async tests share this single event loop, ensuring the DB pool
+# is created and used within the same loop.
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """
+    Create a session-scoped event loop for all async tests.
+
+    This is the CRITICAL fix for the "Task got Future attached to a different loop" error.
+    By using a session-scoped loop, the database engine's connection pool is created
+    in the same loop that all tests use.
+
+    Note: pytest-asyncio 0.21+ recommends event_loop_policy fixture, but
+    for compatibility we use this explicit approach.
+    """
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+    loop.close()
+
+
+# ============================================================================
+# PHASE 3 ASYNC HARNESS - Test App Factory
+# ============================================================================
+
+
+@pytest_asyncio.fixture(scope="session")
+async def test_app(event_loop):
+    """
+    Create the FastAPI application within the test event loop.
+
+    This ensures the database engine is created in the test event loop,
+    avoiding the "different loop" error.
+    """
+    # Import here to ensure engine is created in test event loop
+    from src.infrastructure.database import engine, init_db
+    from src.main import create_application
+
+    app = create_application()
+
+    # Initialize database tables (for test isolation)
+    await init_db()
+
+    yield app
+
+    # Cleanup: dispose engine connections
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def async_client(test_app) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Create an async HTTP client for testing the ASGI app.
+
+    This is the "blessed" way to test async FastAPI apps:
+    - Uses httpx.AsyncClient with ASGITransport
+    - Runs in the same event loop as the database
+    - Supports async context managers properly
+    """
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture(scope="function")
+async def async_client_function(test_app) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Function-scoped async client for tests that need isolation.
+    """
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+# ============================================================================
+# PHASE 3 ASYNC HARNESS - Database Session for Tests
+# ============================================================================
+
+
+@pytest_asyncio.fixture(scope="function")
+async def async_db_session():
+    """
+    Provide an async database session for tests that need direct DB access.
+
+    Uses transaction rollback for test isolation.
+    """
+    from src.infrastructure.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            yield session
+        finally:
+            await session.rollback()
+            await session.close()
+
+
+# ============================================================================
+# Core Fixtures (Legacy - kept for backwards compatibility)
 # ============================================================================
 
 
@@ -57,7 +167,7 @@ def test_config() -> TestConfig:
 
 @pytest.fixture(scope="session")
 def app():
-    """Create FastAPI application instance."""
+    """Create FastAPI application instance (legacy sync fixture)."""
     from src.main import app as fastapi_app
 
     return fastapi_app
@@ -65,7 +175,7 @@ def app():
 
 @pytest.fixture(scope="session")
 def client(app):
-    """Create test client for the application."""
+    """Create test client for the application (legacy sync fixture)."""
     from fastapi.testclient import TestClient
 
     return TestClient(app)
@@ -73,7 +183,7 @@ def client(app):
 
 @pytest.fixture(scope="module")
 def module_client(app):
-    """Module-scoped test client."""
+    """Module-scoped test client (legacy sync fixture)."""
     from fastapi.testclient import TestClient
 
     return TestClient(app)
