@@ -256,3 +256,332 @@ class TestStandardsAPI:
         )
 
         assert response.status_code == 403
+
+
+class TestComplianceScoreAPI:
+    """Test suite for compliance score and controls aggregation endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_compliance_score_zero_controls(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        auth_headers: dict,
+    ):
+        """Test compliance score returns setup_required=true when no controls."""
+        standard = Standard(
+            code="ISO-EMPTY",
+            name="ISO Empty",
+            full_name="Empty Standard",
+            version="2024",
+            is_active=True,
+        )
+        test_session.add(standard)
+        await test_session.commit()
+        await test_session.refresh(standard)
+
+        response = await client.get(
+            f"/api/v1/standards/{standard.id}/compliance-score",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["standard_id"] == standard.id
+        assert data["standard_code"] == "ISO-EMPTY"
+        assert data["total_controls"] == 0
+        assert data["implemented_count"] == 0
+        assert data["partial_count"] == 0
+        assert data["not_implemented_count"] == 0
+        assert data["compliance_percentage"] == 0
+        assert data["setup_required"] is True
+
+    @pytest.mark.asyncio
+    async def test_compliance_score_calculation(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        auth_headers: dict,
+    ):
+        """Test compliance score calculation with mixed statuses."""
+        standard = Standard(
+            code="ISO-COMP",
+            name="ISO Compliance",
+            full_name="Compliance Test Standard",
+            version="2024",
+            is_active=True,
+        )
+        test_session.add(standard)
+        await test_session.commit()
+        await test_session.refresh(standard)
+
+        clause = Clause(
+            standard_id=standard.id,
+            clause_number="5.1",
+            title="Test Clause",
+            sort_order=1,
+        )
+        test_session.add(clause)
+        await test_session.commit()
+        await test_session.refresh(clause)
+
+        # Add 4 controls: 2 implemented, 1 partial, 1 not_implemented
+        controls = [
+            Control(
+                clause_id=clause.id,
+                control_number="5.1.1",
+                title="Implemented Control 1",
+                implementation_status="implemented",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause.id,
+                control_number="5.1.2",
+                title="Implemented Control 2",
+                implementation_status="implemented",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause.id,
+                control_number="5.1.3",
+                title="Partial Control",
+                implementation_status="partial",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause.id,
+                control_number="5.1.4",
+                title="Not Implemented Control",
+                implementation_status="not_implemented",
+                is_applicable=True,
+            ),
+        ]
+        for ctrl in controls:
+            test_session.add(ctrl)
+        await test_session.commit()
+
+        response = await client.get(
+            f"/api/v1/standards/{standard.id}/compliance-score",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_controls"] == 4
+        assert data["implemented_count"] == 2
+        assert data["partial_count"] == 1
+        assert data["not_implemented_count"] == 1
+        # (2 + 0.5*1) / 4 * 100 = 2.5/4 * 100 = 62.5 => 62 (rounded)
+        assert data["compliance_percentage"] == 62
+        assert data["setup_required"] is False
+
+    @pytest.mark.asyncio
+    async def test_compliance_score_excludes_non_applicable(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        auth_headers: dict,
+    ):
+        """Test compliance score excludes non-applicable controls."""
+        standard = Standard(
+            code="ISO-NA",
+            name="ISO NA",
+            full_name="Non-Applicable Test",
+            version="2024",
+            is_active=True,
+        )
+        test_session.add(standard)
+        await test_session.commit()
+        await test_session.refresh(standard)
+
+        clause = Clause(
+            standard_id=standard.id,
+            clause_number="6.1",
+            title="Test Clause",
+            sort_order=1,
+        )
+        test_session.add(clause)
+        await test_session.commit()
+        await test_session.refresh(clause)
+
+        controls = [
+            Control(
+                clause_id=clause.id,
+                control_number="6.1.1",
+                title="Applicable Implemented",
+                implementation_status="implemented",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause.id,
+                control_number="6.1.2",
+                title="Non-Applicable Control",
+                implementation_status="not_implemented",
+                is_applicable=False,  # Should be excluded
+            ),
+        ]
+        for ctrl in controls:
+            test_session.add(ctrl)
+        await test_session.commit()
+
+        response = await client.get(
+            f"/api/v1/standards/{standard.id}/compliance-score",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_controls"] == 1  # Only applicable control
+        assert data["implemented_count"] == 1
+        assert data["compliance_percentage"] == 100
+
+    @pytest.mark.asyncio
+    async def test_compliance_score_not_found(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        """Test compliance score returns 404 for non-existent standard."""
+        response = await client.get(
+            "/api/v1/standards/99999/compliance-score",
+            headers=auth_headers,
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_list_controls_deterministic_order(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        auth_headers: dict,
+    ):
+        """Test controls list ordering is deterministic across calls."""
+        standard = Standard(
+            code="ISO-ORD",
+            name="ISO Order",
+            full_name="Order Test Standard",
+            version="2024",
+            is_active=True,
+        )
+        test_session.add(standard)
+        await test_session.commit()
+        await test_session.refresh(standard)
+
+        # Add clauses with different sort orders
+        clause1 = Clause(
+            standard_id=standard.id,
+            clause_number="4.2",
+            title="Second Clause",
+            sort_order=2,
+        )
+        clause2 = Clause(
+            standard_id=standard.id,
+            clause_number="4.1",
+            title="First Clause",
+            sort_order=1,
+        )
+        test_session.add(clause1)
+        test_session.add(clause2)
+        await test_session.commit()
+        await test_session.refresh(clause1)
+        await test_session.refresh(clause2)
+
+        # Add controls in non-sorted order
+        controls = [
+            Control(clause_id=clause1.id, control_number="4.2.2", title="C4", is_applicable=True),
+            Control(clause_id=clause2.id, control_number="4.1.1", title="C1", is_applicable=True),
+            Control(clause_id=clause1.id, control_number="4.2.1", title="C3", is_applicable=True),
+            Control(clause_id=clause2.id, control_number="4.1.2", title="C2", is_applicable=True),
+        ]
+        for ctrl in controls:
+            test_session.add(ctrl)
+        await test_session.commit()
+
+        # Make two requests and verify ordering is stable
+        response1 = await client.get(
+            f"/api/v1/standards/{standard.id}/controls",
+            headers=auth_headers,
+        )
+        response2 = await client.get(
+            f"/api/v1/standards/{standard.id}/controls",
+            headers=auth_headers,
+        )
+
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+
+        data1 = response1.json()
+        data2 = response2.json()
+
+        # Both responses should be identical
+        assert len(data1) == 4
+        assert data1 == data2
+
+        # Verify order: clause sort_order, then clause_number, then control_number
+        control_numbers = [c["control_number"] for c in data1]
+        assert control_numbers == ["4.1.1", "4.1.2", "4.2.1", "4.2.2"]
+
+    @pytest.mark.asyncio
+    async def test_list_controls_with_status(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        auth_headers: dict,
+    ):
+        """Test controls list returns implementation status."""
+        standard = Standard(
+            code="ISO-STAT",
+            name="ISO Status",
+            full_name="Status Test Standard",
+            version="2024",
+            is_active=True,
+        )
+        test_session.add(standard)
+        await test_session.commit()
+        await test_session.refresh(standard)
+
+        clause = Clause(
+            standard_id=standard.id,
+            clause_number="7.1",
+            title="Test Clause",
+            sort_order=1,
+        )
+        test_session.add(clause)
+        await test_session.commit()
+        await test_session.refresh(clause)
+
+        control = Control(
+            clause_id=clause.id,
+            control_number="7.1.1",
+            title="Test Control",
+            implementation_status="partial",
+            is_applicable=True,
+        )
+        test_session.add(control)
+        await test_session.commit()
+
+        response = await client.get(
+            f"/api/v1/standards/{standard.id}/controls",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["control_number"] == "7.1.1"
+        assert data[0]["clause_number"] == "7.1"
+        assert data[0]["implementation_status"] == "partial"
+        assert data[0]["is_applicable"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_controls_not_found(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        """Test controls list returns 404 for non-existent standard."""
+        response = await client.get(
+            "/api/v1/standards/99999/controls",
+            headers=auth_headers,
+        )
+        assert response.status_code == 404

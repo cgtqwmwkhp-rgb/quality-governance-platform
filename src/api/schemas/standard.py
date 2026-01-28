@@ -146,3 +146,31 @@ class StandardListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class ComplianceScoreResponse(BaseModel):
+    """Schema for compliance score response."""
+
+    standard_id: int
+    standard_code: str
+    total_controls: int
+    implemented_count: int
+    partial_count: int
+    not_implemented_count: int
+    compliance_percentage: int
+    setup_required: bool
+
+
+class ControlListItem(BaseModel):
+    """Schema for control list item (flat view for aggregation)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    clause_id: int
+    clause_number: str
+    control_number: str
+    title: str
+    implementation_status: Optional[str] = None
+    is_applicable: bool
+    is_active: bool
