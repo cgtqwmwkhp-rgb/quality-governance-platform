@@ -63,12 +63,13 @@ class UATWriteBlockedResponse:
 
 def _is_path_always_allowed(path: str) -> bool:
     """Check if path is in the always-allowed list."""
-    # Exact match
+    # Exact match first
     if path in ALWAYS_ALLOWED_PATHS:
         return True
-    # Check if path starts with any allowed prefix
+    # Check if path starts with any allowed prefix (but only for multi-segment paths)
+    # Exclude "/" from prefix matching to avoid matching all paths
     for allowed in ALWAYS_ALLOWED_PATHS:
-        if path.startswith(allowed):
+        if allowed != "/" and len(allowed) > 1 and path.startswith(allowed):
             return True
     return False
 
