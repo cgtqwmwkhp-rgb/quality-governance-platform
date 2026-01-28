@@ -172,15 +172,15 @@ async def get_compliance_score(
         )
 
     # Get all applicable, active controls for this standard
-    query = (
+    control_query = (
         select(Control)
         .join(Clause, Control.clause_id == Clause.id)
         .where(Clause.standard_id == standard_id)
         .where(Control.is_active == True)
         .where(Control.is_applicable == True)
     )
-    result = await db.execute(query)
-    controls = result.scalars().all()
+    control_result = await db.execute(control_query)
+    controls: list[Control] = list(control_result.scalars().all())
 
     total_controls = len(controls)
 
