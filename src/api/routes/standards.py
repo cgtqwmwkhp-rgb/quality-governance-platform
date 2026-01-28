@@ -11,7 +11,9 @@ from src.api.schemas.standard import (
     ClauseCreate,
     ClauseResponse,
     ClauseUpdate,
+    ComplianceScoreResponse,
     ControlCreate,
+    ControlListItem,
     ControlResponse,
     ControlUpdate,
     StandardCreate,
@@ -141,6 +143,128 @@ async def update_standard(
     await db.refresh(standard)
 
     return StandardResponse.model_validate(standard)
+
+
+@router.get("/{standard_id}/compliance-score", response_model=ComplianceScoreResponse)
+async def get_compliance_score(
+    standard_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> ComplianceScoreResponse:
+    """
+    Get compliance score for a standard.
+
+    Calculates compliance based on control implementation status:
+    - implemented: 100% weight
+    - partial: 50% weight
+    - planned/not_implemented/NULL: 0% weight
+
+    Returns setup_required=true if no applicable controls exist.
+    """
+    # Verify standard exists
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    standard = result.scalar_one_or_none()
+
+    if not standard:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    # Get all applicable, active controls for this standard
+    control_query = (
+        select(Control)
+        .join(Clause, Control.clause_id == Clause.id)
+        .where(Clause.standard_id == standard_id)
+        .where(Control.is_active == True)
+        .where(Control.is_applicable == True)
+    )
+    control_result = await db.execute(control_query)
+    controls: list[Control] = list(control_result.scalars().all())
+
+    total_controls = len(controls)
+
+    if total_controls == 0:
+        return ComplianceScoreResponse(
+            standard_id=standard_id,
+            standard_code=standard.code,
+            total_controls=0,
+            implemented_count=0,
+            partial_count=0,
+            not_implemented_count=0,
+            compliance_percentage=0,
+            setup_required=True,
+        )
+
+    # Count by status
+    implemented_count = sum(1 for c in controls if c.implementation_status == "implemented")
+    partial_count = sum(1 for c in controls if c.implementation_status == "partial")
+    not_implemented_count = total_controls - implemented_count - partial_count
+
+    # Calculate percentage: implemented=100%, partial=50%, others=0%
+    compliance_percentage = round((implemented_count + 0.5 * partial_count) / total_controls * 100)
+
+    return ComplianceScoreResponse(
+        standard_id=standard_id,
+        standard_code=standard.code,
+        total_controls=total_controls,
+        implemented_count=implemented_count,
+        partial_count=partial_count,
+        not_implemented_count=not_implemented_count,
+        compliance_percentage=compliance_percentage,
+        setup_required=False,
+    )
+
+
+@router.get("/{standard_id}/controls", response_model=list[ControlListItem])
+async def list_standard_controls(
+    standard_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> list[ControlListItem]:
+    """
+    List all controls for a standard (flat view).
+
+    Returns controls with clause reference, ordered deterministically by:
+    clause.sort_order, clause.clause_number, control.control_number, control.id
+    """
+    # Verify standard exists
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    # Get all controls with clause info, deterministically ordered
+    query = (
+        select(Control, Clause.clause_number, Clause.sort_order)
+        .join(Clause, Control.clause_id == Clause.id)
+        .where(Clause.standard_id == standard_id)
+        .where(Control.is_active == True)
+        .order_by(
+            Clause.sort_order,
+            Clause.clause_number,
+            Control.control_number,
+            Control.id,  # Tie-breaker for determinism
+        )
+    )
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        ControlListItem(
+            id=control.id,
+            clause_id=control.clause_id,
+            clause_number=clause_number,
+            control_number=control.control_number,
+            title=control.title,
+            implementation_status=control.implementation_status,
+            is_applicable=control.is_applicable,
+            is_active=control.is_active,
+        )
+        for control, clause_number, _ in rows
+    ]
 
 
 # ============== Clause Endpoints ==============
