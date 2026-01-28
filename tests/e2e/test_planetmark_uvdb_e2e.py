@@ -19,6 +19,7 @@ PHASE 3 FIX (PR #104):
 
 import pytest
 
+
 # ============================================================================
 # Planet Mark E2E Tests
 # ============================================================================
@@ -206,9 +207,10 @@ class TestBoundedErrorResponses:
         assert response.status_code == 404
 
         data = response.json()
-        # Should have detail key
-        assert "detail" in data
-        assert "not found" in data["detail"].lower()
+        # Accept both FastAPI default (detail) and custom envelope (message)
+        assert "detail" in data or "message" in data
+        error_text = data.get("detail", data.get("message", "")).lower()
+        assert "not found" in error_text
 
 
 if __name__ == "__main__":

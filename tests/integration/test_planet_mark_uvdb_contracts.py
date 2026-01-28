@@ -21,6 +21,7 @@ PHASE 3 FIX (PR #104):
 
 import pytest
 
+
 # ============ Planet Mark Integration Tests ============
 
 
@@ -94,7 +95,8 @@ class TestPlanetMarkStaticEndpoints:
 
         assert response.status_code == 404
         data = response.json()
-        assert "detail" in data
+        # Accept both FastAPI default (detail) and custom envelope (message)
+        assert "detail" in data or "message" in data
 
 
 class TestPlanetMarkOrdering:
@@ -211,7 +213,8 @@ class TestUVDBStaticEndpoints:
 
         assert response.status_code == 404
         data = response.json()
-        assert "detail" in data
+        # Accept both FastAPI default (detail) and custom envelope (message)
+        assert "detail" in data or "message" in data
 
     @pytest.mark.asyncio
     async def test_audits_list_returns_valid_structure(self, async_client):
@@ -264,7 +267,8 @@ class TestUVDBStaticEndpoints:
 
         assert response.status_code == 404
         data = response.json()
-        assert "detail" in data
+        # Accept both FastAPI default (detail) and custom envelope (message)
+        assert "detail" in data or "message" in data
 
 
 class TestUVDBOrdering:
