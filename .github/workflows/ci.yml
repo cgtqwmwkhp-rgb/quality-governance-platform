@@ -474,6 +474,8 @@ jobs:
           echo "✅ E2E tests completed"
 
       - name: Validate baseline gate (BLOCKING)
+        env:
+          MIN_ACCEPTABLE: ${{ steps.baseline.outputs.min_acceptable }}
         run: |
           echo ""
           echo "========================================================================"
@@ -502,16 +504,16 @@ jobs:
             fi
             
             echo "Current passed: $PASSED"
-            echo "Min acceptable: ${{ steps.baseline.outputs.min_acceptable }}"
+            echo "Min acceptable: $MIN_ACCEPTABLE"
             
-            if [ "$PASSED" -ge "${{ steps.baseline.outputs.min_acceptable }}" ]; then
+            if [ "$PASSED" -ge "$MIN_ACCEPTABLE" ]; then
               echo ""
               echo "✅ BASELINE GATE PASSED"
-              echo "   $PASSED >= ${{ steps.baseline.outputs.min_acceptable }} (min acceptable)"
+              echo "   $PASSED >= $MIN_ACCEPTABLE (min acceptable)"
             else
               echo ""
               echo "❌ BASELINE GATE FAILED - REGRESSION DETECTED"
-              echo "   $PASSED < ${{ steps.baseline.outputs.min_acceptable }} (min acceptable)"
+              echo "   $PASSED < $MIN_ACCEPTABLE (min acceptable)"
               exit 1
             fi
           else
