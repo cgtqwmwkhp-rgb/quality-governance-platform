@@ -164,6 +164,13 @@ jobs:
         run: |
           python3 scripts/validate_quarantine.py
 
+      - name: Enforce quarantine policy (BLOCKING)
+        run: |
+          echo "=== QUARANTINE POLICY ENFORCEMENT (BLOCKING) ==="
+          python3 scripts/report_test_quarantine.py
+          echo ""
+          echo "✅ Quarantine policy enforcement passed"
+
       - name: Run integration tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test

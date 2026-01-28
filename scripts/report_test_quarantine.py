@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+"""
+Test Quarantine CI Reporter (ENFORCING)
+
+This script is a BLOCKING CI gate that enforces quarantine policy governance.
+
+Produces a summary of quarantined tests for CI output including:
+1. Quarantine policy validation status
+2. List of quarantined tests with issue IDs
+3. Expiry warnings
+4. Enforcement of "no plain skip" rule
+
+Usage:
+    python scripts/report_test_quarantine.py
+    python scripts/report_test_quarantine.py --self-test  # Verify enforcement works
+
+Exit codes:
+    0: All checks passed - policy compliant
+    1: Policy violations found - BUILD MUST FAIL
+
+ENFORCEMENT RULES:
+    - Expired quarantines → FAIL
+    - Budget exceeded → FAIL
+    - Plain skips without QUARANTINED annotation → FAIL
+    - Invalid expiry dates → FAIL
+"""
+
+import re
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+# Try to import yaml, fall back to manual parsing if not available
+try:
+    import yaml
+
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
+
+def parse_yaml_manually(content: str) -> dict:
+    """Simple YAML parser for basic structure when pyyaml not available."""
+    result = {"quarantines": [], "metrics": {}, "settings": {}}
+    current_quarantine = None
+    in_files = False
+
+    for line in content.split("\n"):
+        stripped = line.strip()
+
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if stripped.startswith("- id:"):
+            if current_quarantine:
+                result["quarantines"].append(current_quarantine)
+            current_quarantine = {"id": stripped.split(":")[1].strip().strip('"'), "files": []}
+            in_files = False
+        elif current_quarantine:
+            if stripped.startswith("expiry_date:"):
+                current_quarantine["expiry_date"] = stripped.split(":", 1)[1].strip().strip('"')
+            elif stripped.startswith("owner:"):
+                current_quarantine["owner"] = stripped.split(":", 1)[1].strip().strip('"')
+            elif stripped.startswith("description:"):
+                current_quarantine["description"] = stripped.split(":", 1)[1].strip().strip('"')
+            elif stripped.startswith("files:"):
+                in_files = True
+            elif in_files and stripped.startswith("-"):
+                current_quarantine["files"].append(stripped[1:].strip())
+            elif stripped.startswith("resolution_plan:"):
+                in_files = False
+
+        if stripped.startswith("baseline_quarantine_count:"):
+            result["metrics"]["baseline_quarantine_count"] = int(stripped.split(":")[1].strip())
+        elif stripped.startswith("max_allowed_quarantine_count:"):
+            result["metrics"]["max_allowed_quarantine_count"] = int(stripped.split(":")[1].strip())
+
+    if current_quarantine:
+        result["quarantines"].append(current_quarantine)
+
+    return result
+
+
+def load_policy(policy_path: Path) -> dict:
+    """Load quarantine policy from YAML file."""
+    content = policy_path.read_text()
+    if HAS_YAML:
+        return yaml.safe_load(content)
+    else:
+        return parse_yaml_manually(content)
+
+
+def find_plain_skips(repo_root: Path) -> list[dict]:
+    """Find test files with plain @pytest.mark.skip without issue ID."""
+    violations = []
+    tests_dir = repo_root / "tests"
+
+    # Pattern for valid quarantine skip
+    valid_pattern = re.compile(
+        r'@pytest\.mark\.skip\s*\(\s*reason\s*=\s*["\'].*?QUARANTINED\s*\[.*?\]',
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    # Pattern for any skip
+    skip_pattern = re.compile(r"@pytest\.mark\.skip", re.IGNORECASE)
+
+    for test_file in tests_dir.rglob("*.py"):
+        content = test_file.read_text()
+
+        # Find all skip markers
+        skip_matches = list(skip_pattern.finditer(content))
+
+        for match in skip_matches:
+            # Get context around the skip (next 200 chars)
+            start = match.start()
+            context = content[start : start + 200]
+
+            # Check if it's a valid quarantine skip
+            if not valid_pattern.match(context):
+                # Get line number
+                line_num = content[:start].count("\n") + 1
+                violations.append(
+                    {
+                        "file": str(test_file.relative_to(repo_root)),
+                        "line": line_num,
+                        "context": context[:80].replace("\n", " "),
+                    }
+                )
+
+    return violations
+
+
+def generate_report(policy: dict, repo_root: Path) -> tuple[bool, str]:
+    """Generate quarantine report and return (passed, report_text)."""
+    lines = []
+    errors = []
+    warnings = []
+    today = date.today()
+
+    lines.append("=" * 60)
+    lines.append("TEST QUARANTINE REPORT")
+    lines.append("=" * 60)
+    lines.append("")
+
+    # 1. Check expiry dates
+    lines.append("📅 Expiry Status:")
+    expired_count = 0
+    for entry in policy.get("quarantines", []):
+        expiry_str = entry.get("expiry_date", "")
+        if expiry_str:
+            try:
+                expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                days_left = (expiry - today).days
+                if days_left < 0:
+                    lines.append(f"   ❌ {entry['id']}: EXPIRED {abs(days_left)} days ago")
+                    expired_count += 1
+                    errors.append(f"{entry['id']} expired on {expiry_str}")
+                elif days_left <= 7:
+                    lines.append(f"   ⚠️  {entry['id']}: Expires in {days_left} days")
+                    warnings.append(f"{entry['id']} expires in {days_left} days")
+                else:
+                    lines.append(f"   ✅ {entry['id']}: {days_left} days remaining")
+            except ValueError:
+                lines.append(f"   ❌ {entry['id']}: Invalid date format")
+                errors.append(f"{entry['id']} has invalid expiry date")
+    lines.append("")
+
+    # 2. Check quarantine budget
+    metrics = policy.get("metrics", {})
+    max_allowed = metrics.get("max_allowed_quarantine_count", 0)
+    file_count = sum(len(e.get("files", [])) for e in policy.get("quarantines", []))
+
+    lines.append("📊 Quarantine Budget:")
+    if file_count > max_allowed:
+        lines.append(f"   ❌ Over budget: {file_count}/{max_allowed} files")
+        errors.append(f"Quarantine count ({file_count}) exceeds max ({max_allowed})")
+    else:
+        lines.append(f"   ✅ Within budget: {file_count}/{max_allowed} files")
+    lines.append("")
+
+    # 3. Check for plain skips
+    lines.append("🔍 Plain Skip Violations:")
+    violations = find_plain_skips(repo_root)
+    if violations:
+        for v in violations[:10]:  # Show first 10
+            lines.append(f"   ❌ {v['file']}:{v['line']} - Missing QUARANTINED annotation")
+            errors.append(f"Plain skip at {v['file']}:{v['line']}")
+        if len(violations) > 10:
+            lines.append(f"   ... and {len(violations) - 10} more violations")
+    else:
+        lines.append("   ✅ No plain skips found (all skips properly annotated)")
+    lines.append("")
+
+    # 4. List quarantined tests
+    lines.append("📋 Quarantined Tests:")
+    for entry in policy.get("quarantines", []):
+        file_count = len(entry.get("files", []))
+        lines.append(f"   - {entry['id']}: {entry.get('description', 'No description')}")
+        lines.append(f"     Files: {file_count}, Owner: {entry.get('owner', 'unassigned')}")
+        lines.append(f"     Expires: {entry.get('expiry_date', 'unknown')}")
+    lines.append("")
+
+    # 5. Summary
+    lines.append("=" * 60)
+    if errors:
+        lines.append("❌ QUARANTINE POLICY: FAILED")
+        lines.append("")
+        lines.append("Errors that must be fixed:")
+        for e in errors:
+            lines.append(f"  - {e}")
+    else:
+        lines.append("✅ QUARANTINE POLICY: PASSED")
+        if warnings:
+            lines.append("")
+            lines.append("Warnings:")
+            for w in warnings:
+                lines.append(f"  - {w}")
+    lines.append("=" * 60)
+
+    return (len(errors) == 0, "\n".join(lines))
+
+
+def run_self_test() -> bool:
+    """
+    Self-test to verify the enforcement logic works correctly.
+    Returns True if all self-tests pass.
+    """
+    print("=" * 60)
+    print("QUARANTINE ENFORCEMENT SELF-TEST")
+    print("=" * 60)
+    print("")
+
+    all_passed = True
+
+    # Test 1: Expired quarantine should fail
+    print("Test 1: Expired quarantine detection...")
+    expired_policy = {
+        "quarantines": [
+            {"id": "TEST-001", "expiry_date": "2020-01-01", "owner": "test", "files": ["test.py"]}
+        ],
+        "metrics": {"max_allowed_quarantine_count": 10},
+    }
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        (tmp_path / "tests").mkdir()
+        passed, _ = generate_report(expired_policy, tmp_path)
+        if passed:
+            print("   ❌ FAIL: Should have detected expired quarantine")
+            all_passed = False
+        else:
+            print("   ✅ PASS: Expired quarantine correctly rejected")
+
+    # Test 2: Over budget should fail
+    print("Test 2: Budget exceeded detection...")
+    over_budget_policy = {
+        "quarantines": [
+            {"id": "TEST-001", "expiry_date": "2099-01-01", "owner": "test", "files": ["a.py", "b.py", "c.py"]}
+        ],
+        "metrics": {"max_allowed_quarantine_count": 2},
+    }
+    with TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        (tmp_path / "tests").mkdir()
+        passed, _ = generate_report(over_budget_policy, tmp_path)
+        if passed:
+            print("   ❌ FAIL: Should have detected budget exceeded")
+            all_passed = False
+        else:
+            print("   ✅ PASS: Budget exceeded correctly rejected")
+
+    # Test 3: Valid policy should pass
+    print("Test 3: Valid policy acceptance...")
+    valid_policy = {
+        "quarantines": [
+            {"id": "TEST-001", "expiry_date": "2099-01-01", "owner": "test", "files": ["a.py"]}
+        ],
+        "metrics": {"max_allowed_quarantine_count": 10},
+    }
+    with TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        (tmp_path / "tests").mkdir()
+        passed, _ = generate_report(valid_policy, tmp_path)
+        if not passed:
+            print("   ❌ FAIL: Valid policy should have passed")
+            all_passed = False
+        else:
+            print("   ✅ PASS: Valid policy correctly accepted")
+
+    print("")
+    print("=" * 60)
+    if all_passed:
+        print("✅ ALL SELF-TESTS PASSED - Enforcement logic verified")
+    else:
+        print("❌ SELF-TESTS FAILED - Enforcement logic has bugs")
+    print("=" * 60)
+
+    return all_passed
+
+
+def main():
+    # Check for self-test mode
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+        passed = run_self_test()
+        sys.exit(0 if passed else 1)
+
+    repo_root = Path(__file__).parent.parent
+    policy_path = repo_root / "tests" / "QUARANTINE_POLICY.yaml"
+
+    # Check policy file exists
+    if not policy_path.exists():
+        print("=" * 60)
+        print("TEST QUARANTINE REPORT (ENFORCING)")
+        print("=" * 60)
+        print("")
+        print(f"⚠️  Policy file not found: {policy_path}")
+        print("   Quarantine enforcement skipped (no policy defined)")
+        print("=" * 60)
+        sys.exit(0)  # Don't fail if no policy file
+
+    policy = load_policy(policy_path)
+    passed, report = generate_report(policy, repo_root)
+
+    print(report)
+
+    if not passed:
+        print("")
+        print("🚨 CI BUILD FAILURE: Quarantine policy violations detected")
+        print("   Fix the above errors before this PR can be merged.")
+        print("")
+
+    sys.exit(0 if passed else 1)
+
+
+if __name__ == "__main__":
+    main()
