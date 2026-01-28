@@ -628,6 +628,7 @@ export interface Clause {
   clause_number: string
   title: string
   description?: string
+  parent_clause_id?: number | null
   level: number
   is_active: boolean
 }
@@ -640,6 +641,28 @@ export interface Control {
   description?: string
   implementation_status?: string
   is_applicable: boolean
+}
+
+export interface ControlListItem {
+  id: number
+  clause_id: number
+  clause_number: string
+  control_number: string
+  title: string
+  implementation_status?: string
+  is_applicable: boolean
+  is_active: boolean
+}
+
+export interface ComplianceScore {
+  standard_id: number
+  standard_code: string
+  total_controls: number
+  implemented_count: number
+  partial_count: number
+  not_implemented_count: number
+  compliance_percentage: number
+  setup_required: boolean
 }
 
 // ============ Action Types ============
@@ -810,8 +833,10 @@ export const standardsApi = {
     api.get<Standard & { clauses: Clause[] }>(`/api/v1/standards/${id}`),
   getClauses: (standardId: number) => 
     api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses/`),
-  getControls: (clauseId: number) => 
-    api.get<Control[]>(`/api/v1/clauses/${clauseId}/controls/`),
+  getControls: (standardId: number) => 
+    api.get<ControlListItem[]>(`/api/v1/standards/${standardId}/controls`),
+  getComplianceScore: (standardId: number) => 
+    api.get<ComplianceScore>(`/api/v1/standards/${standardId}/compliance-score`),
 }
 
 /**
