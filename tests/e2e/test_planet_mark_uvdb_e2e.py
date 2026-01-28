@@ -72,7 +72,9 @@ class TestPlanetMarkDashboardFlow:
 
         if years_data["years"]:
             year_id = years_data["years"][0]["id"]
-            scope3_response = await async_client.get(f"/api/v1/planet-mark/years/{year_id}/scope3")
+            scope3_response = await async_client.get(
+                f"/api/v1/planet-mark/years/{year_id}/scope3"
+            )
             assert scope3_response.status_code == 200
             scope3_data = scope3_response.json()
             assert "categories" in scope3_data
@@ -105,7 +107,9 @@ class TestPlanetMarkDataQualityFlow:
 
         if years_data["years"]:
             year_id = years_data["years"][0]["id"]
-            response = await async_client.get(f"/api/v1/planet-mark/years/{year_id}/data-quality")
+            response = await async_client.get(
+                f"/api/v1/planet-mark/years/{year_id}/data-quality"
+            )
             assert response.status_code == 200
             data = response.json()
             assert "overall_score" in data
@@ -137,7 +141,9 @@ class TestUVDBProtocolExplorationFlow:
         # Step 3: Get questions for first section
         if sections_data["sections"]:
             section_num = sections_data["sections"][0]["number"]
-            questions_response = await async_client.get(f"/api/v1/uvdb/sections/{section_num}/questions")
+            questions_response = await async_client.get(
+                f"/api/v1/uvdb/sections/{section_num}/questions"
+            )
             assert questions_response.status_code == 200
             questions_data = questions_response.json()
             assert "questions" in questions_data
@@ -204,7 +210,9 @@ class TestDeterministicRendering:
 
         # All responses should be identical
         for i in range(1, len(responses)):
-            assert responses[0] == responses[i], f"Response {i} differs from first response - not deterministic"
+            assert responses[0] == responses[i], (
+                f"Response {i} differs from first response - not deterministic"
+            )
 
     @pytest.mark.asyncio
     async def test_audits_list_is_deterministic(self, async_client):
@@ -217,7 +225,9 @@ class TestDeterministicRendering:
 
         # All responses should be identical
         for i in range(1, len(responses)):
-            assert responses[0] == responses[i], f"Response {i} differs from first response - not deterministic"
+            assert responses[0] == responses[i], (
+                f"Response {i} differs from first response - not deterministic"
+            )
 
     @pytest.mark.asyncio
     async def test_years_list_is_deterministic(self, async_client):
@@ -230,7 +240,9 @@ class TestDeterministicRendering:
 
         # All responses should be identical
         for i in range(1, len(responses)):
-            assert responses[0] == responses[i], f"Response {i} differs from first response - not deterministic"
+            assert responses[0] == responses[i], (
+                f"Response {i} differs from first response - not deterministic"
+            )
 
 
 class TestErrorStateBoundedResponses:
@@ -262,5 +274,6 @@ class TestErrorStateBoundedResponses:
 
         if response.status_code == 422:
             data = response.json()
-            assert "detail" in data
-            # Should indicate what was wrong
+            # Accept both FastAPI default (detail) and custom envelope (message/details)
+            has_error_info = "detail" in data or "message" in data or "details" in data
+            assert has_error_info, f"Validation error missing error info: {data}"
