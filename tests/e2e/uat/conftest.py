@@ -20,7 +20,7 @@ import pytest
 # Add scripts to path for seed data access
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "scripts" / "uat"))
 
-from seed_data import UATSeedGenerator, generate_deterministic_uuid
+from seed_data import UATSeedGenerator, generate_deterministic_uuid  # noqa: E402
 
 # =============================================================================
 # UAT TEST CONFIGURATION

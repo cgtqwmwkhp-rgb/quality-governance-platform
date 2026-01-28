@@ -446,15 +446,15 @@ jobs:
           
           if [ ! -f "$BASELINE_FILE" ]; then
             echo "⚠️ Baseline file not found - using defaults"
-            echo "baseline_pass_count=127" >> $GITHUB_OUTPUT
-            echo "min_acceptable=114" >> $GITHUB_OUTPUT
+            echo "baseline_pass_count=127" >> "$GITHUB_OUTPUT"
+            echo "min_acceptable=114" >> "$GITHUB_OUTPUT"
           else
             BASELINE_PASS=$(jq -r '.baseline_pass_count' "$BASELINE_FILE")
             MIN_PCT=$(jq -r '.min_acceptable_percentage' "$BASELINE_FILE")
             MIN_ACCEPTABLE=$((BASELINE_PASS * MIN_PCT / 100))
             
-            echo "baseline_pass_count=$BASELINE_PASS" >> $GITHUB_OUTPUT
-            echo "min_acceptable=$MIN_ACCEPTABLE" >> $GITHUB_OUTPUT
+            echo "baseline_pass_count=$BASELINE_PASS" >> "$GITHUB_OUTPUT"
+            echo "min_acceptable=$MIN_ACCEPTABLE" >> "$GITHUB_OUTPUT"
             
             echo "📋 Baseline Values (from artifact file):"
             echo "   Pass Count: $BASELINE_PASS"

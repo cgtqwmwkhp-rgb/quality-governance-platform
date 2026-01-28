@@ -22,7 +22,7 @@ from unittest.mock import patch
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
-from validate_baseline_gate import (
+from validate_baseline_gate import (  # noqa: E402
     BaselineConfig,
     Override,
     compute_min_acceptable,
