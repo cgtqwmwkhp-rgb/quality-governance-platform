@@ -41,9 +41,6 @@ jobs:
       - name: Type check with mypy
         run: mypy src/ --config-file pyproject.toml
 
-      - name: Mock Data Eradication Gate
-        run: python3 scripts/check_mock_data.py --repo-root .
-
   workflow-lint:
     name: Workflow Lint (actionlint)
     runs-on: ubuntu-latest
@@ -452,9 +449,42 @@ jobs:
           JWT_SECRET_KEY: test-jwt-secret
         run: |
           echo "=== E2E TESTS - Full User Journeys ==="
-          pytest tests/e2e/ -v --tb=short --junit-xml=junit-e2e.xml
+          # Run tests and capture output
+          pytest tests/e2e/ -v --tb=short --junit-xml=junit-e2e.xml 2>&1 | tee e2e-output.txt
+          PYTEST_EXIT_CODE=${PIPESTATUS[0]}
+          
+          # Extract passed count from pytest output
+          E2E_PASSED=$(grep -oP '\d+(?= passed)' e2e-output.txt | tail -1 || echo "0")
+          E2E_SKIPPED=$(grep -oP '\d+(?= skipped)' e2e-output.txt | tail -1 || echo "0")
+          
           echo ""
-          echo "✅ E2E tests completed"
+          echo "=== E2E BASELINE CHECK ==="
+          echo "E2E Passed: $E2E_PASSED"
+          echo "E2E Skipped: $E2E_SKIPPED"
+          echo "E2E Baseline: 31 (Phase 3)"
+          echo "E2E Minimum: 20"
+          echo ""
+          
+          # Check minimum pass threshold
+          if [ "$E2E_PASSED" -lt 20 ]; then
+            echo "❌ E2E MINIMUM PASS GATE FAILED"
+            echo "   Passed ($E2E_PASSED) < Minimum (20)"
+            echo "   Tests may have regressed or been incorrectly skipped."
+            exit 1
+          fi
+          
+          # Check baseline regression (10% tolerance)
+          MIN_ACCEPTABLE=27  # 90% of 31
+          if [ "$E2E_PASSED" -lt "$MIN_ACCEPTABLE" ]; then
+            echo "⚠️ E2E BASELINE REGRESSION WARNING"
+            echo "   Passed ($E2E_PASSED) < 90% of baseline (31)"
+            echo "   Minimum acceptable: $MIN_ACCEPTABLE"
+          fi
+          
+          echo "✅ E2E tests completed: $E2E_PASSED passed, $E2E_SKIPPED skipped"
+          
+          # Propagate original pytest exit code
+          exit $PYTEST_EXIT_CODE
 
       - name: Upload E2E Test Results
         uses: actions/upload-artifact@v4

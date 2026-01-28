@@ -124,11 +124,33 @@ The following rollback strategies are **STRICTLY PROHIBITED**:
 
 | ❌ Prohibited | Reason |
 |---------------|--------|
-| Re-add skip markers | Hides real failures, violates quarantine governance |
+| Re-add skip markers without policy entry | Any skip MUST have corresponding QUARANTINE_POLICY.yaml entry |
 | Revert async correctness fixes | Reintroduces known runtime bugs (AsyncSession.query) |
 | Delete tests as rollback | Tests are guardrails; removing them weakens safety |
 | Comment out test assertions | Same as deleting - hides failures |
 | Weaken CI gates | Undermines entire governance framework |
+| Feature-flag the async harness | The session-scoped event loop harness is the blessed standard |
+| Disable or bypass async_client fixture | Required for all async API tests |
+
+### Emergency Re-Quarantine Process
+
+If tests MUST be temporarily disabled:
+
+1. **Create QUARANTINE_POLICY.yaml entry FIRST** with:
+   - `issue_id`: New tracking ID (e.g., `EMERGENCY-001`)
+   - `owner`: Person responsible
+   - `expiry_date`: Max 7 days for emergencies
+   - `reason`: Clear explanation
+   - `approved_override: true` (required to increase quarantine count)
+
+2. **Then add skip marker** referencing the issue:
+   ```python
+   pytestmark = pytest.mark.skip(
+       reason="QUARANTINED [EMERGENCY-001]: Brief reason. Owner: name. Expiry: YYYY-MM-DD"
+   )
+   ```
+
+3. **CI will fail** if skip added without policy entry
 
 ### Safe Rollback Strategies
 

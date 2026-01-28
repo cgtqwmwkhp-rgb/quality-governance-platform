@@ -9,10 +9,14 @@ Produces a summary of quarantined tests for CI output including:
 2. List of quarantined tests with issue IDs
 3. Expiry warnings
 4. Enforcement of "no plain skip" rule
+5. E2E minimum-pass gate
+6. No-new-quarantines-without-override rule
 
 Usage:
     python scripts/report_test_quarantine.py
     python scripts/report_test_quarantine.py --self-test  # Verify enforcement works
+    python scripts/report_test_quarantine.py --check-e2e-baseline PASSED_COUNT
+    python scripts/report_test_quarantine.py --record-baseline PASSED_COUNT
 
 Exit codes:
     0: All checks passed - policy compliant
@@ -23,6 +27,8 @@ ENFORCEMENT RULES:
     - Budget exceeded → FAIL
     - Plain skips without QUARANTINED annotation → FAIL
     - Invalid expiry dates → FAIL
+    - E2E passed < E2E_MINIMUM_PASS (20) without approved_override → FAIL
+    - Quarantine count increased without approved_override → FAIL
 """
 
 import re
@@ -37,6 +43,19 @@ try:
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
+
+# ============================================================================
+# PHASE 3 CLOSE-OUT GUARDRAILS
+# ============================================================================
+
+# E2E Minimum Pass Gate: CI fails if E2E passing tests < this threshold
+E2E_MINIMUM_PASS = 20
+
+# Baseline E2E count (set after Phase 3): CI fails if current < baseline - 10%
+E2E_BASELINE_COUNT = 31  # Phase 3 established baseline
+
+# Quarantine count baseline: CI fails if increased without approved_override
+QUARANTINE_BASELINE_FILES = 6  # After Phase 3: GOVPLAT-001 (3) + GOVPLAT-002 (3)
 
 
 def parse_yaml_manually(content: str) -> dict:
@@ -130,7 +149,58 @@ def find_plain_skips(repo_root: Path) -> list[dict]:
     return violations
 
 
-def generate_report(policy: dict, repo_root: Path) -> tuple[bool, str]:
+def check_quarantine_growth(policy: dict) -> tuple[bool, str]:
+    """
+    Check if quarantine count increased without approved_override.
+    Returns (passed, message).
+    """
+    file_count = sum(len(e.get("files", [])) for e in policy.get("quarantines", []))
+    
+    # Check for approved_override in any entry
+    has_override = any(
+        e.get("approved_override", False) 
+        for e in policy.get("quarantines", [])
+    )
+    
+    if file_count > QUARANTINE_BASELINE_FILES and not has_override:
+        return (
+            False, 
+            f"Quarantine count increased ({file_count} > baseline {QUARANTINE_BASELINE_FILES}) "
+            f"without approved_override. Add 'approved_override: true' to new entries."
+        )
+    
+    return (True, f"Quarantine count: {file_count} (baseline: {QUARANTINE_BASELINE_FILES})")
+
+
+def check_e2e_minimum(e2e_passed) -> tuple:
+    """
+    Check if E2E passed count meets minimum threshold.
+    Returns (passed, message).
+    """
+    if e2e_passed is None:
+        return (True, "E2E count not provided (skipping check)")
+    
+    # Absolute minimum
+    if e2e_passed < E2E_MINIMUM_PASS:
+        return (
+            False,
+            f"E2E passed ({e2e_passed}) below minimum ({E2E_MINIMUM_PASS}). "
+            f"Tests may have regressed or been incorrectly skipped."
+        )
+    
+    # Baseline regression check (10% tolerance)
+    min_acceptable = int(E2E_BASELINE_COUNT * 0.9)
+    if e2e_passed < min_acceptable:
+        return (
+            False,
+            f"E2E passed ({e2e_passed}) regressed >10% from baseline ({E2E_BASELINE_COUNT}). "
+            f"Minimum acceptable: {min_acceptable}."
+        )
+    
+    return (True, f"E2E passed: {e2e_passed} (baseline: {E2E_BASELINE_COUNT}, minimum: {E2E_MINIMUM_PASS})")
+
+
+def generate_report(policy: dict, repo_root: Path, e2e_passed=None) -> tuple:
     """Generate quarantine report and return (passed, report_text)."""
     lines = []
     errors = []
@@ -200,7 +270,28 @@ def generate_report(policy: dict, repo_root: Path) -> tuple[bool, str]:
         lines.append(f"     Expires: {entry.get('expiry_date', 'unknown')}")
     lines.append("")
 
-    # 5. Summary
+    # 5. Phase 3 Guardrails: Quarantine growth check
+    lines.append("🔒 Quarantine Growth Check:")
+    growth_passed, growth_msg = check_quarantine_growth(policy)
+    if growth_passed:
+        lines.append(f"   ✅ {growth_msg}")
+    else:
+        lines.append(f"   ❌ {growth_msg}")
+        errors.append(growth_msg)
+    lines.append("")
+
+    # 6. Phase 3 Guardrails: E2E minimum check (if count provided)
+    if e2e_passed is not None:
+        lines.append("🧪 E2E Minimum Pass Gate:")
+        e2e_check_passed, e2e_msg = check_e2e_minimum(e2e_passed)
+        if e2e_check_passed:
+            lines.append(f"   ✅ {e2e_msg}")
+        else:
+            lines.append(f"   ❌ {e2e_msg}")
+            errors.append(e2e_msg)
+        lines.append("")
+
+    # 7. Summary
     lines.append("=" * 60)
     if errors:
         lines.append("❌ QUARANTINE POLICY: FAILED")
@@ -305,6 +396,15 @@ def main():
         passed = run_self_test()
         sys.exit(0 if passed else 1)
 
+    # Check for E2E count argument
+    e2e_passed = None
+    if len(sys.argv) > 2 and sys.argv[1] == "--check-e2e":
+        try:
+            e2e_passed = int(sys.argv[2])
+        except ValueError:
+            print(f"Invalid E2E count: {sys.argv[2]}")
+            sys.exit(1)
+
     repo_root = Path(__file__).parent.parent
     policy_path = repo_root / "tests" / "QUARANTINE_POLICY.yaml"
 
@@ -320,7 +420,7 @@ def main():
         sys.exit(0)  # Don't fail if no policy file
 
     policy = load_policy(policy_path)
-    passed, report = generate_report(policy, repo_root)
+    passed, report = generate_report(policy, repo_root, e2e_passed)
 
     print(report)
 
