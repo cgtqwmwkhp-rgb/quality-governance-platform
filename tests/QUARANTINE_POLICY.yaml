@@ -46,11 +46,33 @@ quarantines:
       - tests/e2e/test_full_workflow.py
     resolution_plan: "Audit API contracts and align tests with implementations"
 
+  # Async event loop conflict with DB pool
+  - id: GOVPLAT-003
+    description: "Planet Mark/UVDB contract tests - async event loop conflict"
+    expiry_date: "2026-02-21"
+    owner: "platform-team"
+    reason: "httpx.AsyncClient creates separate event loop from app's DB pool"
+    marker: "async_loop_conflict"
+    files:
+      - tests/integration/test_planet_mark_uvdb_contracts.py
+    resolution_plan: "Create async_client fixture that initializes app in test loop"
+
+  # E2E async event loop conflict
+  - id: GOVPLAT-004
+    description: "Planet Mark/UVDB E2E tests - async event loop conflict"
+    expiry_date: "2026-02-21"
+    owner: "platform-team"
+    reason: "Same async loop conflict as integration tests"
+    marker: "async_loop_conflict"
+    files:
+      - tests/e2e/test_planet_mark_uvdb_e2e.py
+    resolution_plan: "Create async_client fixture that initializes app in test loop"
+
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 6
-  max_allowed_quarantine_count: 6
-  last_audit_date: "2026-01-21"
+  baseline_quarantine_count: 8
+  max_allowed_quarantine_count: 8
+  last_audit_date: "2026-01-28"
 
 # Active test suites (must pass)
 active_suites:
