@@ -91,12 +91,18 @@ class Settings(BaseSettings):
     email_username: str = ""
     email_password: str = ""
 
-    # CORS - includes Azure Static Web Apps and local development
-    # Note: Azure Static Web Apps domains are handled via allow_origin_regex in main.py
+    # CORS - explicit allowlist for production safety
+    # Production SWA origins must be listed explicitly (no wildcards)
+    # Regex in main.py serves as fallback for staging/preview environments
     cors_origins: List[str] = [
+        # Local development
         "http://localhost:3000",
         "http://localhost:8080",
         "http://localhost:5173",
+        # Production Azure Static Web App
+        "https://purple-water-03205fa03.6.azurestaticapps.net",
+        # Staging Azure Static Web App (if different)
+        # Add staging origin here when deployed
     ]
 
     # Logging

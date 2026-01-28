@@ -155,14 +155,32 @@ def create_application() -> FastAPI:
     # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
     app.add_middleware(RateLimitMiddleware)
 
-    # Configure CORS
+    # Configure CORS - explicit allowlist + regex for staging/preview
+    # Production origins are explicit in cors_origins for security
+    # Regex pattern for staging/preview Azure SWA deployments
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_origin_regex=r"https://.*\.azurestaticapps\.net",
+        allow_origin_regex=r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$",
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Request-Id",
+            "X-UAT-Write-Enable",
+            "X-UAT-Issue-Id",
+            "X-UAT-Owner",
+            "X-UAT-Expiry",
+        ],
+        expose_headers=[
+            "X-Request-Id",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+            "Retry-After",
+        ],
+        max_age=86400,  # Cache preflight for 24 hours
     )
 
     # Register exception handlers
