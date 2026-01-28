@@ -23,12 +23,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-# Skip entire module - backend routes need fixes
-# Frontend wiring is tested via TypeScript build + mock gate
-pytestmark = pytest.mark.skip(
-    reason="Planet Mark/UVDB endpoints have backend AsyncSession.query issues. "
-    "Frontend wiring verified via TypeScript build and mock gate."
-)
+# Re-enabled in PR #104 Wave 1 - AsyncSession.query issues fixed in PR #103/104
+# This file uses sync TestClient which works with async backend
 
 
 @pytest.fixture(scope="module")
