@@ -1,0 +1,11 @@
+{
+  "baseline_pass_count": 43,
+  "baseline_skip_count": 0,
+  "baseline_total_count": 43,
+  "baseline_commit_sha": "bade39f",
+  "baseline_date": "2026-01-28",
+  "baseline_notes": "World-Class Stability Program initial baseline - tests/e2e/ directory",
+  "version": "1.0.0",
+  "min_acceptable_percentage": 90,
+  "override": null
+}
