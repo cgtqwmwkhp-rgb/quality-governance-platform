@@ -18,7 +18,6 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 
-
 # ============ Planet Mark E2E Tests ============
 
 
@@ -145,9 +144,7 @@ class TestUVDBProtocolExplorationFlow:
             # Step 3: Get questions for first section
             if sections_data["sections"]:
                 section_num = sections_data["sections"][0]["number"]
-                questions_response = await ac.get(
-                    f"/api/v1/uvdb/sections/{section_num}/questions"
-                )
+                questions_response = await ac.get(f"/api/v1/uvdb/sections/{section_num}/questions")
                 assert questions_response.status_code == 200
                 questions_data = questions_response.json()
                 assert "questions" in questions_data
@@ -222,9 +219,7 @@ class TestDeterministicRendering:
 
             # All responses should be identical
             for i in range(1, len(responses)):
-                assert responses[0] == responses[i], (
-                    f"Response {i} differs from first response - not deterministic"
-                )
+                assert responses[0] == responses[i], f"Response {i} differs from first response - not deterministic"
 
     @pytest.mark.asyncio
     async def test_audits_list_is_deterministic(self):
@@ -239,9 +234,7 @@ class TestDeterministicRendering:
 
             # All responses should be identical
             for i in range(1, len(responses)):
-                assert responses[0] == responses[i], (
-                    f"Response {i} differs from first response - not deterministic"
-                )
+                assert responses[0] == responses[i], f"Response {i} differs from first response - not deterministic"
 
     @pytest.mark.asyncio
     async def test_years_list_is_deterministic(self):
@@ -256,9 +249,7 @@ class TestDeterministicRendering:
 
             # All responses should be identical
             for i in range(1, len(responses)):
-                assert responses[0] == responses[i], (
-                    f"Response {i} differs from first response - not deterministic"
-                )
+                assert responses[0] == responses[i], f"Response {i} differs from first response - not deterministic"
 
 
 class TestErrorStateBoundedResponses:

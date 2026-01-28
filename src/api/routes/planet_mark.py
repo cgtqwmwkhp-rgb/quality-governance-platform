@@ -209,10 +209,7 @@ async def list_reporting_years(
 ) -> dict[str, Any]:
     """List all carbon reporting years with comparison"""
     # Deterministic ordering: year_number desc + id desc as tie-breaker
-    stmt = select(CarbonReportingYear).order_by(
-        desc(CarbonReportingYear.year_number),
-        desc(CarbonReportingYear.id)
-    )
+    stmt = select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number), desc(CarbonReportingYear.id))
     result = await db.execute(stmt)
     years: list[CarbonReportingYear] = list(result.scalars().all())
 
@@ -544,8 +541,8 @@ async def create_improvement_action(
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
     # Count existing actions
-    count_stmt = select(func.count()).select_from(ImprovementAction).where(
-        ImprovementAction.reporting_year_id == year_id
+    count_stmt = (
+        select(func.count()).select_from(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
     )
     count_result = await db.execute(count_stmt)
     count = count_result.scalar() or 0
@@ -573,8 +570,7 @@ async def update_action_status(
 ) -> dict[str, Any]:
     """Update improvement action status"""
     stmt = select(ImprovementAction).where(
-        ImprovementAction.id == action_id,
-        ImprovementAction.reporting_year_id == year_id
+        ImprovementAction.id == action_id, ImprovementAction.reporting_year_id == year_id
     )
     result = await db.execute(stmt)
     action = result.scalars().first()
@@ -879,10 +875,11 @@ async def get_carbon_dashboard(
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
     # Deterministic ordering: year_number desc + id desc as tie-breaker, limit 3
-    stmt = select(CarbonReportingYear).order_by(
-        desc(CarbonReportingYear.year_number),
-        desc(CarbonReportingYear.id)
-    ).limit(3)
+    stmt = (
+        select(CarbonReportingYear)
+        .order_by(desc(CarbonReportingYear.year_number), desc(CarbonReportingYear.id))
+        .limit(3)
+    )
     result = await db.execute(stmt)
     years: list[CarbonReportingYear] = list(result.scalars().all())
 

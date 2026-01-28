@@ -691,9 +691,9 @@ async def get_audit_responses(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    stmt_responses = select(UVDBAuditResponse).where(
-        UVDBAuditResponse.audit_id == audit_id
-    ).order_by(UVDBAuditResponse.id)
+    stmt_responses = (
+        select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id).order_by(UVDBAuditResponse.id)
+    )
     result_responses = await db.execute(stmt_responses)
     responses: list[UVDBAuditResponse] = list(result_responses.scalars().all())
 
@@ -754,9 +754,11 @@ async def get_audit_kpis(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
-    stmt = select(UVDBKPIRecord).where(
-        UVDBKPIRecord.audit_id == audit_id
-    ).order_by(desc(UVDBKPIRecord.year), desc(UVDBKPIRecord.id))
+    stmt = (
+        select(UVDBKPIRecord)
+        .where(UVDBKPIRecord.audit_id == audit_id)
+        .order_by(desc(UVDBKPIRecord.year), desc(UVDBKPIRecord.id))
+    )
     result = await db.execute(stmt)
     kpis: list[UVDBKPIRecord] = list(result.scalars().all())
 
@@ -835,23 +837,18 @@ async def get_uvdb_dashboard(
     total_audits = total_result.scalar() or 0
 
     # Count active audits
-    active_stmt = select(func.count()).select_from(UVDBAudit).where(
-        UVDBAudit.status.in_(["scheduled", "in_progress"])
-    )
+    active_stmt = select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
     active_result = await db.execute(active_stmt)
     active_audits = active_result.scalar() or 0
 
     # Count completed audits
-    completed_stmt = select(func.count()).select_from(UVDBAudit).where(
-        UVDBAudit.status == "completed"
-    )
+    completed_stmt = select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status == "completed")
     completed_result = await db.execute(completed_stmt)
     completed_audits = completed_result.scalar() or 0
 
     # Average score of completed audits
     completed_with_score_stmt = select(UVDBAudit).where(
-        UVDBAudit.status == "completed",
-        UVDBAudit.percentage_score.isnot(None)
+        UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)
     )
     completed_with_score_result = await db.execute(completed_with_score_stmt)
     completed: list[UVDBAudit] = list(completed_with_score_result.scalars().all())

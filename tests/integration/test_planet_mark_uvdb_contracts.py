@@ -19,7 +19,6 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 
-
 # ============ Planet Mark Integration Tests ============
 
 
@@ -384,6 +383,6 @@ class TestContentTypes:
 
             for endpoint in endpoints:
                 response = await ac.get(endpoint)
-                assert "application/json" in response.headers.get("content-type", ""), (
-                    f"Endpoint {endpoint} should return application/json"
-                )
+                assert "application/json" in response.headers.get(
+                    "content-type", ""
+                ), f"Endpoint {endpoint} should return application/json"

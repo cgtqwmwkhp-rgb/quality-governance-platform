@@ -94,9 +94,9 @@ class TestQuarantineEnforcementIntegration:
         )
 
         # Current policy should pass
-        assert result.returncode == 0, (
-            f"Current quarantine policy failed enforcement:\n{result.stdout}\n{result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Current quarantine policy failed enforcement:\n{result.stdout}\n{result.stderr}"
         assert "QUARANTINE POLICY: PASSED" in result.stdout
 
     def test_script_exits_nonzero_on_failure_mode(self):
