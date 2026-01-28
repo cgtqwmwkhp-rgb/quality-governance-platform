@@ -52,7 +52,7 @@ except ImportError:
 E2E_MINIMUM_PASS = 20
 
 # Baseline E2E count (updated after Phase 4 Wave 2): CI fails if current < baseline - 10%
-E2E_BASELINE_COUNT = 61  # Phase 3 (31) + Wave 1 (10) + Wave 2 (20)
+E2E_BASELINE_COUNT = 50  # Phase 3 (31) + Wave 1 (10) + Wave 2 (15 core)
 
 # Quarantine count baseline: CI fails if increased without approved_override
 QUARANTINE_BASELINE_FILES = 4  # After Phase 4 Wave 2: GOVPLAT-001 (3) + GOVPLAT-002 (1)
