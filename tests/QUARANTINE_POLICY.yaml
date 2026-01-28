@@ -10,7 +10,7 @@
 # 4. Quarantine count must not increase without explicit policy update
 
 version: "1.0"
-last_updated: "2026-01-21"
+last_updated: "2026-01-28"
 
 # Global settings
 settings:
@@ -18,42 +18,79 @@ settings:
   enforce_expiry: true
   block_on_expiry: true
 
-# Quarantine entries
-quarantines:
-  # Phase 3/4 incomplete features
-  - id: GOVPLAT-001
-    description: "Phase 3/4 endpoint tests - features incomplete"
-    expiry_date: "2026-02-21"
-    owner: "platform-team"
-    reason: "Phase 3 (Workflow Center) and Phase 4 (Compliance Automation) not implemented"
-    marker: "phase34"
-    files:
-      - tests/smoke/test_phase3_phase4_smoke.py
-      - tests/e2e/test_workflows.py
-      - tests/e2e/test_compliance_automation.py
-    resolution_plan: "Complete Phase 3/4 implementation or remove tests"
+# Quarantine entries (ALL RESOLVED - empty list)
+quarantines: []
+# GOVPLAT-001: FULLY RESOLVED in Phase 5
+# Root cause: API path mismatch (/api/workflows/* vs /api/v1/workflows/*) + sync client
+# Fix: Converted tests to async_client + correct /api/v1/* paths
+# Files resolved:
+# - tests/e2e/test_phase3_phase4_smoke.py (22 tests, moved from tests/smoke/)
+# - tests/e2e/test_workflows.py (30 tests)
+# - tests/e2e/test_compliance_automation.py (27 tests)
+# Total resolved: 79 tests
+#
+# GOVPLAT-002: FULLY RESOLVED in Phase 4 Wave 3
+# All E2E API contract mismatches have been fixed:
+# - Wave 1: test_portal_e2e.py (10 tests)
+# - Wave 2: test_full_workflow.py (15 tests)
+# - Wave 3: test_enterprise_e2e.py (32 tests) + auth seeding
+# Total resolved: 57 tests
 
-  # E2E API contract mismatch
-  - id: GOVPLAT-002
-    description: "E2E tests with API contract mismatch"
-    expiry_date: "2026-02-21"
-    owner: "platform-team"
-    reason: "Tests expect endpoints that return 404 or have different contracts"
-    marker: "api_contract_mismatch"
-    files:
-      - tests/e2e/test_portal_e2e.py
-      - tests/e2e/test_enterprise_e2e.py
-      - tests/e2e/test_full_workflow.py
-    resolution_plan: "Audit API contracts and align tests with implementations"
+# =============================================================================
+# RESOLVED QUARANTINES (Phase 3 Async Architecture Fix - PR #104)
+# =============================================================================
+# The following quarantines were resolved by implementing the blessed async
+# test harness in tests/conftest.py:
+#
+# GOVPLAT-003: RESOLVED 2026-01-28
+#   - tests/integration/test_planet_mark_uvdb_contracts.py (21 tests)
+#   - Fix: Uses async_client fixture from conftest.py
+#
+# GOVPLAT-004: RESOLVED 2026-01-28
+#   - tests/e2e/test_planet_mark_uvdb_e2e.py (14 tests)
+#   - Fix: Uses async_client fixture from conftest.py
+#
+# GOVPLAT-005: RESOLVED 2026-01-28
+#   - tests/e2e/test_planetmark_uvdb_e2e.py (18 tests)
+#   - Fix: Converted to async and uses async_client fixture from conftest.py
+#
+# Total tests re-enabled: 53
+# =============================================================================
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 6
-  max_allowed_quarantine_count: 6
-  last_audit_date: "2026-01-21"
+  baseline_quarantine_count: 0
+  max_allowed_quarantine_count: 0
+  last_audit_date: "2026-01-28"
+  # Phase 3 changes (PR #104):
+  # - RESOLVED GOVPLAT-003: tests/integration/test_planet_mark_uvdb_contracts.py (21 tests)
+  # - RESOLVED GOVPLAT-004: tests/e2e/test_planet_mark_uvdb_e2e.py (14 tests)
+  # - RESOLVED GOVPLAT-005: tests/e2e/test_planetmark_uvdb_e2e.py (18 tests)
+  # Net change: -3 quarantine entries, -53 quarantined tests
+  #
+  # Phase 4 Wave 1 changes:
+  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_portal_e2e.py (10 tests)
+  # Net change: -1 quarantine file
+  #
+  # Phase 4 Wave 2 changes:
+  # - RESOLVED GOVPLAT-002 partial: tests/e2e/test_full_workflow.py (15 tests)
+  # Net change: -1 quarantine file
+  #
+  # Phase 4 Wave 3 changes:
+  # - RESOLVED GOVPLAT-002 complete: tests/e2e/test_enterprise_e2e.py (32 tests)
+  # - Added user seeding fixtures for auth-dependent tests
+  # Net change: GOVPLAT-002 fully resolved
+  #
+  # Phase 5 changes:
+  # - RESOLVED GOVPLAT-001: tests/smoke/test_phase3_phase4_smoke.py (22 tests)
+  # - RESOLVED GOVPLAT-001: tests/e2e/test_workflows.py (30 tests)
+  # - RESOLVED GOVPLAT-001: tests/e2e/test_compliance_automation.py (27 tests)
+  # Fix: Converted to async_client + /api/v1/* paths
+  # Net change: GOVPLAT-001 fully resolved, ALL QUARANTINES CLEARED
 
 # Active test suites (must pass)
 active_suites:
   - tests/unit/
   - tests/integration/
+  - tests/e2e/
   - tests/smoke/test_enterprise_smoke.py

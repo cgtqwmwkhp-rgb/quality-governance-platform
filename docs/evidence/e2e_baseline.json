@@ -1,0 +1,8 @@
+{
+  "baseline_pass_count": 127,
+  "baseline_commit_sha": "63a4266",
+  "baseline_date": "2026-01-28",
+  "baseline_notes": "Phase 5 - All quarantines cleared. Actual E2E: 127 passed, 20 skipped.",
+  "last_updated_by": "governance-automation",
+  "update_reason": "World-Class Stability Program - truthful baseline from CI run 21437758309"
+}
