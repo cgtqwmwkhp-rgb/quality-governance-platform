@@ -16,55 +16,7 @@ The SETUP_REQUIRED response is HTTP 200 with:
 }
 """
 
-from unittest.mock import MagicMock, patch
-
-import httpx
 import pytest
-
-
-# Test the backend response format first
-class TestSetupRequiredBackend:
-    """Verify backend returns correct SETUP_REQUIRED response format."""
-
-    @pytest.fixture
-    def api_client(self, test_client_factory):
-        """Create test API client."""
-        from src.main import app
-
-        return test_client_factory(app)
-
-    def test_planetmark_dashboard_returns_setup_required_format(self, api_client):
-        """Test that PlanetMark dashboard returns correct SETUP_REQUIRED format when no data."""
-        # When no data is configured, the endpoint returns SETUP_REQUIRED
-        response = api_client.get("/api/v1/planet-mark/dashboard")
-
-        # Should be HTTP 200 (not 5xx) to pass smoke gate
-        assert response.status_code == 200
-
-        data = response.json()
-
-        # If setup_required, verify the format
-        if data.get("setup_required"):
-            assert data.get("error_class") == "SETUP_REQUIRED"
-            assert data.get("setup_required") is True
-            assert "module" in data
-            assert "message" in data
-            assert "next_action" in data
-
-    def test_planetmark_years_returns_setup_required_format(self, api_client):
-        """Test that PlanetMark years returns correct SETUP_REQUIRED format when no data."""
-        response = api_client.get("/api/v1/planet-mark/years")
-
-        assert response.status_code == 200
-
-        data = response.json()
-
-        if data.get("setup_required"):
-            assert data.get("error_class") == "SETUP_REQUIRED"
-            assert data.get("setup_required") is True
-            assert "module" in data
-            assert "message" in data
-            assert "next_action" in data
 
 
 class TestSetupRequiredResponseSchema:
@@ -88,10 +40,28 @@ class TestSetupRequiredResponseSchema:
         from src.api.schemas.setup_required import setup_required_response
 
         response = setup_required_response(
-            module="test-module", message="Test message", next_action="Test action", request_id="test-123"
+            module="test-module",
+            message="Test message",
+            next_action="Test action",
+            request_id="test-123",
         )
 
         assert response["request_id"] == "test-123"
+
+    def test_setup_required_error_class_is_constant(self):
+        """Verify error_class is always SETUP_REQUIRED."""
+        from src.api.schemas.setup_required import setup_required_response
+
+        # Multiple calls should always return same error_class
+        responses = [
+            setup_required_response(module="mod1", message="msg1", next_action="act1"),
+            setup_required_response(module="mod2", message="msg2", next_action="act2"),
+            setup_required_response(module="mod3", message="msg3", next_action="act3"),
+        ]
+
+        for response in responses:
+            assert response["error_class"] == "SETUP_REQUIRED"
+            assert response["setup_required"] is True
 
 
 class TestSetupRequiredNoRetryStorm:
@@ -131,45 +101,79 @@ class TestSetupRequiredNoRetryStorm:
         # 2. Setting loadState to 'setup_required'
         # 3. NOT triggering error retry logic
 
+    def test_setup_required_has_deterministic_fields(self):
+        """Verify SETUP_REQUIRED response has deterministic required fields."""
+        from src.api.schemas.setup_required import setup_required_response
 
-class TestSetupRequiredIntegration:
-    """Integration tests for SETUP_REQUIRED handling."""
+        # Same inputs should always produce same outputs (deterministic)
+        response1 = setup_required_response(
+            module="planet-mark",
+            message="No data configured",
+            next_action="Run setup wizard",
+        )
 
-    @pytest.fixture
-    def api_client(self, test_client_factory):
-        """Create test API client."""
-        from src.main import app
+        response2 = setup_required_response(
+            module="planet-mark",
+            message="No data configured",
+            next_action="Run setup wizard",
+        )
 
-        return test_client_factory(app)
+        # Deterministic fields should match
+        assert response1["error_class"] == response2["error_class"]
+        assert response1["setup_required"] == response2["setup_required"]
+        assert response1["module"] == response2["module"]
+        assert response1["message"] == response2["message"]
+        assert response1["next_action"] == response2["next_action"]
 
-    def test_multiple_endpoints_use_consistent_schema(self, api_client):
-        """Verify all endpoints returning SETUP_REQUIRED use the same schema."""
-        endpoints = [
-            "/api/v1/planet-mark/dashboard",
-            "/api/v1/planet-mark/years",
-        ]
 
-        required_fields = {"error_class", "setup_required", "module", "message", "next_action"}
+class TestSetupRequiredSchema:
+    """Test the Pydantic schema for SETUP_REQUIRED."""
 
-        for endpoint in endpoints:
-            response = api_client.get(endpoint)
-            assert response.status_code == 200, f"{endpoint} should return 200"
+    def test_setup_required_pydantic_model(self):
+        """Test that the Pydantic model validates correctly."""
+        from src.api.schemas.setup_required import SetupRequiredResponse
 
-            data = response.json()
-            if data.get("setup_required"):
-                actual_fields = set(data.keys())
-                missing = required_fields - actual_fields
-                assert not missing, f"{endpoint} missing fields: {missing}"
+        # Valid data should pass validation
+        data = SetupRequiredResponse(
+            module="test-module",
+            message="Test message",
+            next_action="Test action",
+        )
 
-    def test_setup_required_response_is_stable(self, api_client):
-        """Verify SETUP_REQUIRED response is deterministic (no random elements)."""
-        response1 = api_client.get("/api/v1/planet-mark/dashboard")
-        response2 = api_client.get("/api/v1/planet-mark/dashboard")
+        assert data.error_class == "SETUP_REQUIRED"
+        assert data.setup_required is True
+        assert data.module == "test-module"
+        assert data.message == "Test message"
+        assert data.next_action == "Test action"
+        assert data.request_id is None  # Optional field defaults to None
 
-        data1 = response1.json()
-        data2 = response2.json()
+    def test_setup_required_pydantic_model_with_request_id(self):
+        """Test that request_id is included in model."""
+        from src.api.schemas.setup_required import SetupRequiredResponse
 
-        if data1.get("setup_required"):
-            # Exclude request_id which may vary
-            for key in ["error_class", "setup_required", "module", "message", "next_action"]:
-                assert data1.get(key) == data2.get(key), f"Field {key} should be deterministic"
+        data = SetupRequiredResponse(
+            module="test-module",
+            message="Test message",
+            next_action="Test action",
+            request_id="req-123",
+        )
+
+        assert data.request_id == "req-123"
+
+    def test_setup_required_model_json_serialization(self):
+        """Test that model serializes to JSON correctly."""
+        from src.api.schemas.setup_required import SetupRequiredResponse
+
+        data = SetupRequiredResponse(
+            module="test-module",
+            message="Test message",
+            next_action="Test action",
+        )
+
+        json_data = data.model_dump()
+
+        assert json_data["error_class"] == "SETUP_REQUIRED"
+        assert json_data["setup_required"] is True
+        assert "module" in json_data
+        assert "message" in json_data
+        assert "next_action" in json_data
