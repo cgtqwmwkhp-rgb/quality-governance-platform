@@ -7,7 +7,7 @@
 ## Context
 
 The ETL Contract Probe has been configured to validate API contracts against Azure Container Apps (ACA) staging environment at:
-- URL: `https://qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io`
+- URL: `https://qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io`
 
 However, the current `deploy-staging.yml` workflow deploys to Azure App Service (Web App), not Azure Container Apps. The ACA Container App `qgp-staging` either does not exist or has no active revisions.
 
@@ -53,7 +53,7 @@ To achieve full ACA-only staging:
 
 | Resource | Name | Configuration |
 |----------|------|---------------|
-| Container App Environment | `icytree-89d41650` | Already exists |
+| Container App Environment | `qgp-staging-env` | Already exists |
 | Container App | `qgp-staging` | **NEEDS CREATION** |
 | Container Registry | (existing ACR) | Push access |
 | Managed Identity | System-assigned | Key Vault access |
@@ -64,7 +64,7 @@ To achieve full ACA-only staging:
 az containerapp create \
   --name qgp-staging \
   --resource-group rg-qgp-staging \
-  --environment icytree-89d41650 \
+  --environment qgp-staging-env \
   --image <acr>.azurecr.io/quality-governance-platform:latest \
   --target-port 8000 \
   --ingress external \
