@@ -841,10 +841,159 @@ jobs:
           retention-days: 30
         if: always()
 
+  etl-contract-probe:
+    name: ETL Contract Probe (Staging ACA)
+    runs-on: ubuntu-latest
+    # Run on all PRs - provides contract compliance signal
+    if: github.event_name == 'pull_request'
+    outputs:
+      outcome: ${{ steps.probe.outputs.outcome }}
+      reachable: ${{ steps.probe.outputs.reachable }}
+      platform: ${{ steps.probe.outputs.platform }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run ETL Contract Probe (ADVISORY mode)
+        id: probe
+        env:
+          QGP_API_TOKEN: ${{ secrets.QGP_STAGING_READ_TOKEN }}
+          PROBE_ENFORCEMENT_MODE: ADVISORY
+        run: |
+          echo "========================================================================"
+          echo "ETL CONTRACT PROBE - Azure Container Apps Staging"
+          echo "========================================================================"
+          echo ""
+          echo "Platform: Azure Container Apps (ACA)"
+          echo "Mode: ADVISORY (non-blocking for PRs)"
+          echo ""
+          echo "Outcomes:"
+          echo "  VERIFIED    = Staging reachable + all 6+ contract checks pass"
+          echo "  DEGRADED    = Staging reachable + critical pass, non-critical fail"
+          echo "  UNAVAILABLE = Staging unreachable (NOT validated)"
+          echo "  FAILED      = Staging reachable but critical checks failed"
+          echo ""
+          echo "Minimum Contract Surface (6 endpoints):"
+          echo "  1. /api/v1/meta/version (identity)"
+          echo "  2. /healthz (kubernetes health)"
+          echo "  3. /readyz (kubernetes readiness)"
+          echo "  4. /api/v1/incidents (auth enforcement)"
+          echo "  5. /api/v1/complaints/ (auth enforcement)"
+          echo "  6. /api/v1/rtas/ (auth enforcement)"
+          echo ""
+          
+          # Run the probe using ADVISORY mode for PRs
+          python3 -c "
+          import json
+          import os
+          import sys
+          sys.path.insert(0, '.')
+          
+          from scripts.etl.contract_probe import run_contract_probe, ProbeOutcome, EnforcementMode
+          
+          result = run_contract_probe('staging', EnforcementMode.ADVISORY)
+          
+          # Save full result
+          with open('probe-result.json', 'w') as f:
+              json.dump(result.to_dict(), f, indent=2)
+          
+          # Output for GitHub Actions
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+              with open(github_output, 'a') as f:
+                  f.write(f'outcome={result.outcome.value}\n')
+                  f.write(f'reachable={str(result.reachable).lower()}\n')
+                  f.write(f'platform={result.platform}\n')
+          
+          # In ADVISORY mode: only FAILED is blocking
+          # UNAVAILABLE and DEGRADED are non-blocking (but clearly NOT validated)
+          if result.outcome == ProbeOutcome.FAILED:
+              print('⚠️ Critical contract failures detected - will fail job')
+              sys.exit(1)
+          else:
+              sys.exit(0)
+          "
+
+      - name: Report Probe Outcome
+        if: always()
+        run: |
+          echo ""
+          echo "========================================================================"
+          echo "PROBE RESULT SUMMARY"
+          echo "========================================================================"
+          
+          if [ ! -f probe-result.json ]; then
+            echo "❌ No probe result file"
+            exit 0
+          fi
+          
+          OUTCOME=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('outcome', 'UNKNOWN'))")
+          REACHABLE=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('reachable', False))")
+          PLATFORM=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('platform', 'unknown'))")
+          BASE_URL=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('base_url', ''))")
+          MESSAGE=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('message', ''))")
+          ENDPOINTS_CHECKED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('endpoints_checked', 0))")
+          ENDPOINTS_PASSED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('endpoints_passed', 0))")
+          CRITICAL_FAILURES=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('critical_failures', 0))")
+          
+          echo "Platform:          $PLATFORM"
+          echo "Base URL:          $BASE_URL"
+          echo "Outcome:           $OUTCOME"
+          echo "Reachable:         $REACHABLE"
+          echo "Endpoints Checked: $ENDPOINTS_CHECKED"
+          echo "Endpoints Passed:  $ENDPOINTS_PASSED"
+          echo "Critical Failures: $CRITICAL_FAILURES"
+          echo ""
+          echo "Message: $MESSAGE"
+          echo ""
+          
+          case "$OUTCOME" in
+            "VERIFIED")
+              echo "✅ CONTRACT VERIFIED"
+              echo "   Staging ACA API is reachable and all $ENDPOINTS_CHECKED contract checks passed."
+              echo "   This is proof of contract compliance."
+              ;;
+            "DEGRADED")
+              echo "⚠️ CONTRACT DEGRADED"
+              echo "   Staging ACA API is reachable. Critical checks pass, some non-critical failed."
+              echo "   Non-blocking in ADVISORY mode."
+              ;;
+            "UNAVAILABLE")
+              echo "⚠️ NOT VALIDATED (staging unavailable)"
+              echo "   Staging ACA API is not reachable."
+              echo "   Contract compliance was NOT verified."
+              echo "   This does NOT constitute a pass - it means we could not check."
+              echo "   Non-blocking in ADVISORY mode for PRs."
+              ;;
+            "FAILED")
+              echo "❌ CONTRACT FAILED"
+              echo "   Staging ACA API is reachable but $CRITICAL_FAILURES critical contract checks failed."
+              echo "   This is a blocking failure even in ADVISORY mode."
+              ;;
+            *)
+              echo "❓ Unknown outcome: $OUTCOME"
+              ;;
+          esac
+
+      - name: Upload Probe Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: etl-contract-probe-${{ github.run_id }}
+          path: probe-result.json
+          retention-days: 30
+        if: always()
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
     needs: [code-quality, workflow-lint, smoke-gate-selftest, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, api-path-drift, quality-trend, openapi-contract-check]
+    # Note: etl-contract-probe is intentionally not in needs[] - it's informational for now
     
     steps:
       - name: Checkout code

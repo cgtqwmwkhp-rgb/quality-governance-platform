@@ -4,14 +4,43 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/public/**'
+      - 'frontend/index.html'
+      - 'frontend/package.json'
+      - 'frontend/vite.config.ts'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
 
 jobs:
+  # Check if frontend files changed (for PRs)
+  check_changes:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    name: Check Frontend Changes
+    outputs:
+      frontend_changed: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/src/**'
+              - 'frontend/public/**'
+              - 'frontend/index.html'
+              - 'frontend/package.json'
+              - 'frontend/vite.config.ts'
+
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    needs: [check_changes]
+    if: |
+      github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && github.event.action != 'closed' && needs.check_changes.outputs.frontend_changed == 'true')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:

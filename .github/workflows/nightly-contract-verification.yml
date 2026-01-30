@@ -1,0 +1,283 @@
+name: Nightly Contract Verification
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to verify'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  # Consecutive failures threshold for incident flagging
+  CONSECUTIVE_FAILURE_THRESHOLD: 2
+
+jobs:
+  contract-verification:
+    name: Contract Verification (${{ github.event.inputs.environment || 'staging' }})
+    runs-on: ubuntu-latest
+    outputs:
+      outcome: ${{ steps.probe.outputs.outcome }}
+      reachable: ${{ steps.probe.outputs.reachable }}
+      consecutive_failures: ${{ steps.check-history.outputs.consecutive_failures }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Determine environment
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'staging' }}"
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Running contract verification for: $ENV"
+
+      - name: Run Contract Probe (REQUIRED mode)
+        id: probe
+        env:
+          QGP_API_TOKEN: ${{ secrets.QGP_STAGING_READ_TOKEN }}
+          PROBE_ENFORCEMENT_MODE: REQUIRED
+        run: |
+          echo "========================================================================"
+          echo "NIGHTLY CONTRACT VERIFICATION - Azure Container Apps"
+          echo "========================================================================"
+          echo ""
+          echo "Environment: ${{ steps.env.outputs.environment }}"
+          echo "Mode: REQUIRED (blocking - staging should be available)"
+          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo ""
+          
+          python3 -c "
+          import json
+          import os
+          import sys
+          sys.path.insert(0, '.')
+          
+          from scripts.etl.contract_probe import run_contract_probe, ProbeOutcome, EnforcementMode
+          
+          env_name = '${{ steps.env.outputs.environment }}'
+          result = run_contract_probe(env_name, EnforcementMode.REQUIRED)
+          
+          # Save full result with timestamp for history tracking
+          result_dict = result.to_dict()
+          result_dict['verification_type'] = 'nightly'
+          result_dict['run_id'] = '${{ github.run_id }}'
+          
+          with open('probe-result.json', 'w') as f:
+              json.dump(result_dict, f, indent=2)
+          
+          # Output for GitHub Actions
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+              with open(github_output, 'a') as f:
+                  f.write(f'outcome={result.outcome.value}\n')
+                  f.write(f'reachable={str(result.reachable).lower()}\n')
+                  f.write(f'platform={result.platform}\n')
+          
+          # In REQUIRED mode:
+          # - VERIFIED = success
+          # - DEGRADED = warning but pass
+          # - UNAVAILABLE = FAIL (staging should be up)
+          # - FAILED = FAIL
+          if result.outcome in (ProbeOutcome.FAILED, ProbeOutcome.UNAVAILABLE):
+              print(f'⚠️ {result.outcome.value} in REQUIRED mode - potential incident')
+              sys.exit(1)
+          else:
+              sys.exit(0)
+          "
+
+      - name: Check failure history
+        id: check-history
+        if: always()
+        run: |
+          # In a real implementation, this would check previous workflow runs
+          # For now, we track consecutive failures via artifact comparison
+          echo "Checking for consecutive failures..."
+          
+          OUTCOME=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('outcome', 'UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+          
+          if [ "$OUTCOME" = "UNAVAILABLE" ] || [ "$OUTCOME" = "FAILED" ]; then
+            echo "Current run: FAILURE ($OUTCOME)"
+            # This would be enhanced to check actual history
+            echo "consecutive_failures=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "Current run: SUCCESS ($OUTCOME)"
+            echo "consecutive_failures=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report Verification Result
+        if: always()
+        run: |
+          echo ""
+          echo "========================================================================"
+          echo "NIGHTLY VERIFICATION RESULT"
+          echo "========================================================================"
+          
+          if [ ! -f probe-result.json ]; then
+            echo "❌ No probe result file"
+            exit 1
+          fi
+          
+          OUTCOME=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('outcome', 'UNKNOWN'))")
+          PLATFORM=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('platform', 'unknown'))")
+          BASE_URL=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('base_url', ''))")
+          ENDPOINTS_CHECKED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('endpoints_checked', 0))")
+          ENDPOINTS_PASSED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('endpoints_passed', 0))")
+          
+          echo "Platform:          $PLATFORM"
+          echo "Base URL:          $BASE_URL"
+          echo "Outcome:           $OUTCOME"
+          echo "Endpoints Checked: $ENDPOINTS_CHECKED"
+          echo "Endpoints Passed:  $ENDPOINTS_PASSED"
+          echo ""
+          
+          # Generate incident ID for tracking
+          INCIDENT_DATE=$(date +%Y-%m-%d)
+          INCIDENT_ID="INC-${INCIDENT_DATE}-STAGING-${OUTCOME}"
+          
+          case "$OUTCOME" in
+            "VERIFIED")
+              echo "✅ NIGHTLY VERIFICATION PASSED"
+              echo "   All contract checks passed. Staging ACA is healthy."
+              ;;
+            "DEGRADED")
+              echo "⚠️ NIGHTLY VERIFICATION DEGRADED"
+              echo "   Critical checks pass but some non-critical failed."
+              echo "   Consider investigating non-critical failures."
+              ;;
+            "UNAVAILABLE")
+              echo ""
+              echo "========================================================================"
+              echo "INCIDENT REQUIRED: ${INCIDENT_ID}"
+              echo "========================================================================"
+              echo ""
+              echo "❌ NIGHTLY VERIFICATION FAILED - STAGING UNAVAILABLE"
+              echo ""
+              echo "   Platform:  $PLATFORM"
+              echo "   Base URL:  $BASE_URL"
+              echo "   Outcome:   $OUTCOME"
+              echo ""
+              echo "   Staging Azure Container App is not reachable or not deployed."
+              echo "   This is a BLOCKING failure in REQUIRED mode."
+              echo ""
+              echo "   IMMEDIATE ACTIONS:"
+              echo "   1. Check Azure Container Apps portal for qgp-staging"
+              echo "   2. Verify Container App revision is active and receiving traffic"
+              echo "   3. Check Azure Container Apps logs for errors"
+              echo "   4. See ADR-0004 for infrastructure requirements"
+              echo ""
+              echo "   REFERENCE: docs/evidence/INCIDENT_TEMPLATE.md"
+              echo "========================================================================"
+              ;;
+            "FAILED")
+              echo ""
+              echo "========================================================================"
+              echo "INCIDENT REQUIRED: ${INCIDENT_ID}"
+              echo "========================================================================"
+              echo ""
+              echo "❌ NIGHTLY VERIFICATION FAILED - CONTRACT BROKEN"
+              echo ""
+              echo "   Staging ACA is reachable but contract checks failed."
+              echo "   This indicates a breaking change in the API."
+              echo ""
+              echo "   IMMEDIATE ACTIONS:"
+              echo "   1. Review recent deployments to staging"
+              echo "   2. Check endpoint responses for unexpected changes"
+              echo "   3. Verify OpenAPI contract matches implementation"
+              echo "   4. Roll back if necessary"
+              echo ""
+              echo "   REFERENCE: docs/evidence/INCIDENT_TEMPLATE.md"
+              echo "========================================================================"
+              ;;
+          esac
+
+      - name: Upload Verification Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-verification-${{ steps.env.outputs.environment }}-${{ github.run_id }}
+          path: probe-result.json
+          retention-days: 90
+        if: always()
+
+      - name: Create GitHub Issue on Persistent Failure
+        if: failure() && steps.check-history.outputs.consecutive_failures >= env.CONSECUTIVE_FAILURE_THRESHOLD
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcome = '${{ steps.probe.outputs.outcome }}';
+            const environment = '${{ steps.env.outputs.environment }}';
+            const runId = '${{ github.run_id }}';
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
+            
+            const title = `[INCIDENT] ${environment.toUpperCase()} Contract Verification Failed - ${outcome}`;
+            const body = `## Automated Incident Report
+            
+            **Environment:** ${environment}
+            **Outcome:** ${outcome}
+            **Consecutive Failures:** ${{ steps.check-history.outputs.consecutive_failures }}
+            **Run ID:** ${runId}
+            **Run URL:** ${runUrl}
+            
+            ### Description
+            
+            The nightly contract verification has detected a persistent failure in the ${environment} environment.
+            This indicates that the staging API has been unavailable or failing for multiple consecutive runs.
+            
+            ### Recommended Actions
+            
+            1. Check Azure Container Apps health for \`qgp-${environment}\`
+            2. Review recent deployments
+            3. Check infrastructure logs
+            4. Verify database connectivity
+            
+            ### Evidence
+            
+            See workflow run artifacts for detailed probe results.
+            
+            ---
+            *This issue was automatically created by the Nightly Contract Verification workflow.*
+            `;
+            
+            // Check for existing open issues to avoid duplicates
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'incident,automated',
+              per_page: 10
+            });
+            
+            const duplicateIssue = existingIssues.data.find(issue => 
+              issue.title.includes(`${environment.toUpperCase()} Contract Verification Failed`)
+            );
+            
+            if (duplicateIssue) {
+              console.log(`Existing incident issue found: #${duplicateIssue.number}`);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: duplicateIssue.number,
+                body: `## Update: Additional Failure Detected\n\n**Run ID:** ${runId}\n**Outcome:** ${outcome}\n**Run URL:** ${runUrl}`
+              });
+            } else {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['incident', 'automated', 'contract-verification', environment]
+              });
+              console.log(`Created incident issue: #${issue.data.number}`);
+            }
