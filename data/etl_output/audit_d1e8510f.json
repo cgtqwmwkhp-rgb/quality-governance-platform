@@ -1,0 +1,209 @@
+[
+  {
+    "timestamp": "2026-01-30T23:13:17.828211",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "incident",
+    "row_number": 1,
+    "source_hash": "2135e3e91a9e7c92",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "incident_type",
+        "severity",
+        "status",
+        "incident_date",
+        "location"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828256",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "incident",
+    "row_number": 2,
+    "source_hash": "149a0f622883b2fd",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "incident_type",
+        "severity",
+        "status",
+        "incident_date",
+        "location"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828282",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "incident",
+    "row_number": 3,
+    "source_hash": "5e6d09ff4a8d3c1e",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "incident_type",
+        "severity",
+        "status",
+        "incident_date",
+        "location"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828305",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "incident",
+    "row_number": 4,
+    "source_hash": "52e9c5de29c27118",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "incident_type",
+        "severity",
+        "status",
+        "incident_date",
+        "location"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828326",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "incident",
+    "row_number": 5,
+    "source_hash": "e30ece64f598f5cc",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "incident_type",
+        "severity",
+        "status",
+        "incident_date",
+        "location"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828774",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "complaint",
+    "row_number": 1,
+    "source_hash": "76f272067e7d0613",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "complainant_name",
+        "received_date",
+        "status"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828798",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "complaint",
+    "row_number": 2,
+    "source_hash": "4c220f7b587047ce",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "complainant_name",
+        "received_date",
+        "status"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.828819",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "complaint",
+    "row_number": 3,
+    "source_hash": "1f2009fa569ff7f6",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "description",
+        "complainant_name",
+        "received_date",
+        "status"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.829206",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "rta",
+    "row_number": 1,
+    "source_hash": "92f7ee3ac5880124",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "problem_statement",
+        "root_cause",
+        "corrective_actions",
+        "status"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.829224",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "rta",
+    "row_number": 2,
+    "source_hash": "5b385620502b64c2",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "problem_statement",
+        "root_cause",
+        "corrective_actions",
+        "status"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-01-30T23:13:17.829238",
+    "run_id": "d1e8510f",
+    "action": "dry_run_transform",
+    "entity_type": "rta",
+    "row_number": 3,
+    "source_hash": "0bca1ae352fa8943",
+    "details": {
+      "transformed_keys": [
+        "external_ref",
+        "title",
+        "problem_statement",
+        "root_cause",
+        "status"
+      ]
+    }
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "entity_type": "incident",
+  "source_file": "golden_sample_incidents.csv",
+  "timestamp": "2026-01-30T23:13:17.825550",
+  "summary": {
+    "total_records": 5,
+    "valid_records": 5,
+    "invalid_records": 0,
+    "success_rate": "100.0%"
+  },
+  "results": []
+}

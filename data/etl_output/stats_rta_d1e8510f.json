@@ -1,0 +1,13 @@
+{
+  "entity_type": "rta",
+  "run_id": "d1e8510f",
+  "start_time": "2026-01-30T23:13:17.829130",
+  "end_time": "2026-01-30T23:13:17.829243",
+  "duration_seconds": 0.0,
+  "total_records": 3,
+  "valid_records": 3,
+  "invalid_records": 0,
+  "imported_records": 0,
+  "skipped_records": 0,
+  "failed_records": 0
+}

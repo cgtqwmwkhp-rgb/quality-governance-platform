@@ -1,0 +1,13 @@
+{
+  "entity_type": "complaint",
+  "run_id": "d1e8510f",
+  "start_time": "2026-01-30T23:13:17.828677",
+  "end_time": "2026-01-30T23:13:17.828825",
+  "duration_seconds": 0.0,
+  "total_records": 3,
+  "valid_records": 3,
+  "invalid_records": 0,
+  "imported_records": 0,
+  "skipped_records": 0,
+  "failed_records": 0
+}

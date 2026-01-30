@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class ImportResult(Enum):
     """Result of an import operation."""
+
     CREATED = "created"
     SKIPPED_EXISTS = "skipped_exists"  # 409 CONFLICT
     SKIPPED_VALIDATION = "skipped_validation"
@@ -35,6 +36,7 @@ class ImportResult(Enum):
 @dataclass
 class ImportRecord:
     """Record of a single import attempt."""
+
     entity_type: str
     reference_number: str
     result: ImportResult
@@ -60,7 +62,7 @@ class ImportRecord:
 class ETLAPIClient:
     """
     Authenticated API client for ETL import operations.
-    
+
     Features:
     - JWT Bearer token authentication
     - Retry on 5xx and 429 with exponential backoff
@@ -81,10 +83,10 @@ class ETLAPIClient:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         self.initial_retry_delay = initial_retry_delay
-        
+
         # SSL context for HTTPS
         self.ssl_context = ssl.create_default_context()
-        
+
         # Track all operations
         self.import_records: List[ImportRecord] = []
 
@@ -107,12 +109,12 @@ class ETLAPIClient:
     ) -> Tuple[int, Optional[Dict[str, Any]], float]:
         """
         Make HTTP request with retry logic.
-        
+
         Returns: (status_code, response_data, response_time_ms)
         """
         url = f"{self.base_url}{endpoint}"
         headers = self._get_headers()
-        
+
         request_data = None
         if data:
             request_data = json.dumps(data).encode("utf-8")
@@ -126,7 +128,7 @@ class ETLAPIClient:
                     headers=headers,
                     method=method,
                 )
-                
+
                 with urllib.request.urlopen(
                     request,
                     timeout=self.timeout_seconds,
@@ -140,7 +142,7 @@ class ETLAPIClient:
             except urllib.error.HTTPError as e:
                 response_time = (time.time() - start_time) * 1000
                 status_code = e.code
-                
+
                 try:
                     error_body = json.loads(e.read().decode("utf-8"))
                 except Exception:
@@ -162,23 +164,23 @@ class ETLAPIClient:
                         try:
                             delay = float(retry_after)
                         except ValueError:
-                            delay = self.initial_retry_delay * (2 ** attempt)
+                            delay = self.initial_retry_delay * (2**attempt)
                     else:
-                        delay = self.initial_retry_delay * (2 ** attempt)
-                    
+                        delay = self.initial_retry_delay * (2**attempt)
+
                     logger.warning(
                         f"Request failed with {status_code}, retrying in {delay}s "
                         f"(attempt {attempt + 1}/{self.max_retries})"
                     )
                     time.sleep(delay)
                     continue
-                
+
                 return status_code, error_body, response_time
 
             except urllib.error.URLError as e:
                 response_time = (time.time() - start_time) * 1000
                 if attempt < self.max_retries:
-                    delay = self.initial_retry_delay * (2 ** attempt)
+                    delay = self.initial_retry_delay * (2**attempt)
                     logger.warning(f"Connection error, retrying in {delay}s: {e}")
                     time.sleep(delay)
                     continue
@@ -194,14 +196,14 @@ class ETLAPIClient:
     def create_incident(self, data: Dict[str, Any]) -> ImportRecord:
         """
         Create an incident via API.
-        
+
         Uses reference_number for idempotency:
         - 201: Created successfully
         - 409: Already exists (idempotent skip)
         - Other: Error
         """
         reference_number = data.get("reference_number", "UNKNOWN")
-        
+
         status_code, response, response_time = self._make_request(
             "POST",
             "/api/v1/incidents/",
@@ -241,7 +243,7 @@ class ETLAPIClient:
     def create_complaint(self, data: Dict[str, Any]) -> ImportRecord:
         """Create a complaint via API."""
         reference_number = data.get("reference_number", "UNKNOWN")
-        
+
         status_code, response, response_time = self._make_request(
             "POST",
             "/api/v1/complaints/",
@@ -276,7 +278,7 @@ class ETLAPIClient:
     def create_rta(self, data: Dict[str, Any]) -> ImportRecord:
         """Create an RTA via API."""
         reference_number = data.get("reference_number", "UNKNOWN")
-        
+
         status_code, response, response_time = self._make_request(
             "POST",
             "/api/v1/rtas/",
@@ -329,7 +331,7 @@ class ETLAPIClient:
             entity = record.entity_type
             if entity not in summary["by_entity"]:
                 summary["by_entity"][entity] = {"created": 0, "skipped": 0, "failed": 0}
-            
+
             if record.result == ImportResult.CREATED:
                 summary["by_entity"][entity]["created"] += 1
             elif record.result == ImportResult.SKIPPED_EXISTS:

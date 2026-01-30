@@ -10,12 +10,11 @@ Tests:
 """
 
 import json
-import unittest
-from unittest.mock import MagicMock, patch
-import urllib.error
-
 import sys
+import unittest
+import urllib.error
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -63,11 +62,13 @@ class TestETLAPIClient(unittest.TestCase):
             201, {"id": 123, "reference_number": "SAMPLE-INC-001"}
         )
 
-        result = self.client.create_incident({
-            "reference_number": "SAMPLE-INC-001",
-            "title": "Test Incident",
-            "description": "Test description",
-        })
+        result = self.client.create_incident(
+            {
+                "reference_number": "SAMPLE-INC-001",
+                "title": "Test Incident",
+                "description": "Test description",
+            }
+        )
 
         self.assertEqual(result.result, ImportResult.CREATED)
         self.assertEqual(result.status_code, 201)
@@ -81,10 +82,12 @@ class TestETLAPIClient(unittest.TestCase):
             409, {"detail": "Incident with reference number SAMPLE-INC-001 already exists"}
         )
 
-        result = self.client.create_incident({
-            "reference_number": "SAMPLE-INC-001",
-            "title": "Test Incident",
-        })
+        result = self.client.create_incident(
+            {
+                "reference_number": "SAMPLE-INC-001",
+                "title": "Test Incident",
+            }
+        )
 
         self.assertEqual(result.result, ImportResult.SKIPPED_EXISTS)
         self.assertEqual(result.status_code, 409)
@@ -93,14 +96,14 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_create_incident_auth_error(self, mock_urlopen):
         """Test auth error (401) - no retry."""
-        mock_urlopen.side_effect = self._mock_http_error(
-            401, {"detail": "Not authenticated"}
-        )
+        mock_urlopen.side_effect = self._mock_http_error(401, {"detail": "Not authenticated"})
 
-        result = self.client.create_incident({
-            "reference_number": "SAMPLE-INC-001",
-            "title": "Test Incident",
-        })
+        result = self.client.create_incident(
+            {
+                "reference_number": "SAMPLE-INC-001",
+                "title": "Test Incident",
+            }
+        )
 
         self.assertEqual(result.result, ImportResult.FAILED)
         self.assertEqual(result.status_code, 401)
@@ -113,15 +116,19 @@ class TestETLAPIClient(unittest.TestCase):
         # First call fails with 500, second succeeds
         mock_urlopen.side_effect = [
             self._mock_http_error(500, {"detail": "Internal error"}),
-            MagicMock(__enter__=MagicMock(return_value=self._mock_response(
-                201, {"id": 456, "reference_number": "SAMPLE-INC-002"}
-            ))),
+            MagicMock(
+                __enter__=MagicMock(
+                    return_value=self._mock_response(201, {"id": 456, "reference_number": "SAMPLE-INC-002"})
+                )
+            ),
         ]
 
-        result = self.client.create_incident({
-            "reference_number": "SAMPLE-INC-002",
-            "title": "Test Incident",
-        })
+        result = self.client.create_incident(
+            {
+                "reference_number": "SAMPLE-INC-002",
+                "title": "Test Incident",
+            }
+        )
 
         self.assertEqual(result.result, ImportResult.CREATED)
         self.assertEqual(mock_urlopen.call_count, 2)
@@ -129,22 +136,23 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_retry_on_429_with_retry_after(self, mock_urlopen):
         """Test retry on 429 with Retry-After header."""
-        error_429 = self._mock_http_error(
-            429, {"detail": "Rate limited"},
-            headers={"Retry-After": "0.01"}
-        )
-        
+        error_429 = self._mock_http_error(429, {"detail": "Rate limited"}, headers={"Retry-After": "0.01"})
+
         mock_urlopen.side_effect = [
             error_429,
-            MagicMock(__enter__=MagicMock(return_value=self._mock_response(
-                201, {"id": 789, "reference_number": "SAMPLE-INC-003"}
-            ))),
+            MagicMock(
+                __enter__=MagicMock(
+                    return_value=self._mock_response(201, {"id": 789, "reference_number": "SAMPLE-INC-003"})
+                )
+            ),
         ]
 
-        result = self.client.create_incident({
-            "reference_number": "SAMPLE-INC-003",
-            "title": "Test Incident",
-        })
+        result = self.client.create_incident(
+            {
+                "reference_number": "SAMPLE-INC-003",
+                "title": "Test Incident",
+            }
+        )
 
         self.assertEqual(result.result, ImportResult.CREATED)
         self.assertEqual(mock_urlopen.call_count, 2)
@@ -152,14 +160,14 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_no_retry_on_400_error(self, mock_urlopen):
         """Test no retry on 400 error (bad request)."""
-        mock_urlopen.side_effect = self._mock_http_error(
-            400, {"detail": "Validation error"}
-        )
+        mock_urlopen.side_effect = self._mock_http_error(400, {"detail": "Validation error"})
 
-        result = self.client.create_incident({
-            "reference_number": "SAMPLE-INC-004",
-            "title": "",  # Invalid
-        })
+        result = self.client.create_incident(
+            {
+                "reference_number": "SAMPLE-INC-004",
+                "title": "",  # Invalid
+            }
+        )
 
         self.assertEqual(result.result, ImportResult.FAILED)
         self.assertEqual(result.status_code, 400)
@@ -208,7 +216,7 @@ class TestETLAPIClient(unittest.TestCase):
     def test_auth_header_included(self):
         """Test that auth header is included in requests."""
         headers = self.client._get_headers()
-        
+
         self.assertIn("Authorization", headers)
         self.assertEqual(headers["Authorization"], "Bearer test-token")
         self.assertEqual(headers["Content-Type"], "application/json")

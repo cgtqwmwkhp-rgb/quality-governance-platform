@@ -277,7 +277,7 @@ class ETLPipeline:
     ) -> PipelineStats:
         """
         Run full import with API calls.
-        
+
         Idempotency: Uses reference_number (mapped from external_ref).
         - 201 Created: Record imported
         - 409 Conflict: Record already exists (skip)
@@ -328,7 +328,7 @@ class ETLPipeline:
             try:
                 # Transform record
                 transformed = self.transform_record(result.source_data, entity_type)
-                
+
                 # Map external_ref to reference_number for API
                 if "external_ref" in transformed:
                     transformed["reference_number"] = transformed.pop("external_ref")
@@ -338,6 +338,7 @@ class ETLPipeline:
                     # Ensure incident_date is present
                     if "incident_date" not in transformed:
                         from datetime import datetime as dt
+
                         transformed["incident_date"] = dt.utcnow().isoformat()
                     import_result = api_client.create_incident(transformed)
                 elif entity_type == EntityType.COMPLAINT:
@@ -406,22 +407,28 @@ class ETLPipeline:
 
         # Save outputs including import summary
         self._save_outputs(stats)
-        
+
         # Save import summary
         summary_path = self.config.output_directory / f"import_summary_{self.run_id}.json"
         with open(summary_path, "w") as f:
-            json.dump({
-                "run_id": self.run_id,
-                "entity_type": entity_type.value,
-                "stats": stats.to_dict(),
-                "api_summary": api_client.get_import_summary(),
-                "import_records": api_client.get_import_records(),
-            }, f, indent=2)
+            json.dump(
+                {
+                    "run_id": self.run_id,
+                    "entity_type": entity_type.value,
+                    "stats": stats.to_dict(),
+                    "api_summary": api_client.get_import_summary(),
+                    "import_records": api_client.get_import_records(),
+                },
+                f,
+                indent=2,
+            )
         logger.info(f"Import summary saved: {summary_path}")
 
         # Log summary
-        logger.info(f"Import complete: {stats.imported_records} created, "
-                   f"{stats.skipped_records} skipped, {stats.failed_records} failed")
+        logger.info(
+            f"Import complete: {stats.imported_records} created, "
+            f"{stats.skipped_records} skipped, {stats.failed_records} failed"
+        )
 
         return stats
 

@@ -1,0 +1,12 @@
+{
+  "entity_type": "rta",
+  "source_file": "golden_sample_rtas.csv",
+  "timestamp": "2026-01-30T23:13:17.826459",
+  "summary": {
+    "total_records": 3,
+    "valid_records": 3,
+    "invalid_records": 0,
+    "success_rate": "100.0%"
+  },
+  "results": []
+}
