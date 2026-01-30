@@ -641,11 +641,123 @@ jobs:
             echo "| API Docs | ✅ |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Post-deployment contract verification (REQUIRED mode - blocking)
+  contract-verification:
+    name: Contract Verification (REQUIRED)
+    runs-on: ubuntu-latest
+    needs: [build-and-deploy, smoke-tests]
+    if: needs.build-and-deploy.result == 'success' && needs.smoke-tests.result == 'success'
+    outputs:
+      outcome: ${{ steps.probe.outputs.outcome }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Contract Probe (REQUIRED mode)
+        id: probe
+        env:
+          QGP_API_TOKEN: ${{ secrets.QGP_STAGING_READ_TOKEN }}
+          PROBE_ENFORCEMENT_MODE: REQUIRED
+        run: |
+          echo "========================================================================"
+          echo "POST-DEPLOY CONTRACT VERIFICATION - Azure Container Apps"
+          echo "========================================================================"
+          echo ""
+          echo "Mode: REQUIRED (blocking - staging should be available after deploy)"
+          echo "Deployment ID: ${{ needs.build-and-deploy.outputs.deployment_id }}"
+          echo ""
+          
+          python3 -c "
+          import json
+          import os
+          import sys
+          sys.path.insert(0, '.')
+          
+          from scripts.etl.contract_probe import run_contract_probe, ProbeOutcome, EnforcementMode
+          
+          result = run_contract_probe('staging', EnforcementMode.REQUIRED)
+          
+          # Save result with deployment context
+          result_dict = result.to_dict()
+          result_dict['verification_type'] = 'post-deploy'
+          result_dict['deployment_id'] = '${{ needs.build-and-deploy.outputs.deployment_id }}'
+          
+          with open('probe-result.json', 'w') as f:
+              json.dump(result_dict, f, indent=2)
+          
+          # Output for GitHub Actions
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+              with open(github_output, 'a') as f:
+                  f.write(f'outcome={result.outcome.value}\n')
+          
+          # In REQUIRED mode after deploy:
+          # - VERIFIED = success
+          # - DEGRADED = pass with warning
+          # - UNAVAILABLE = FAIL (staging should be up after deploy)
+          # - FAILED = FAIL (contract broken)
+          if result.outcome in (ProbeOutcome.FAILED, ProbeOutcome.UNAVAILABLE):
+              print(f'❌ {result.outcome.value} - deployment verification failed')
+              sys.exit(1)
+          else:
+              print(f'✅ {result.outcome.value} - deployment verified')
+              sys.exit(0)
+          "
+
+      - name: Contract Verification Summary
+        if: always()
+        run: |
+          if [ ! -f probe-result.json ]; then
+            echo "❌ No probe result"
+            exit 0
+          fi
+          
+          OUTCOME=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('outcome', 'UNKNOWN'))")
+          PLATFORM=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('platform', 'unknown'))")
+          ENDPOINTS_CHECKED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('endpoints_checked', 0))")
+          ENDPOINTS_PASSED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('summary', {}).get('endpoints_passed', 0))")
+          
+          {
+            echo "## 🔍 Post-Deploy Contract Verification"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| **Platform** | $PLATFORM |"
+            echo "| **Outcome** | $OUTCOME |"
+            echo "| **Endpoints Checked** | $ENDPOINTS_CHECKED |"
+            echo "| **Endpoints Passed** | $ENDPOINTS_PASSED |"
+            echo ""
+            
+            if [ "$OUTCOME" = "VERIFIED" ]; then
+              echo "✅ **All contract checks passed** - Deployment verified"
+            elif [ "$OUTCOME" = "DEGRADED" ]; then
+              echo "⚠️ **Degraded** - Critical checks pass, some non-critical failed"
+            elif [ "$OUTCOME" = "UNAVAILABLE" ]; then
+              echo "❌ **Staging unavailable** - This should not happen after deploy"
+            else
+              echo "❌ **Contract checks failed** - API contract may be broken"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Contract Probe Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deploy-contract-probe-${{ github.run_id }}
+          path: probe-result.json
+          retention-days: 90
+        if: always()
+
   # Final notification
   notify:
     name: Deployment Notification
     runs-on: ubuntu-latest
-    needs: [build-and-deploy, smoke-tests]
+    needs: [build-and-deploy, smoke-tests, contract-verification]
     if: always()
     
     steps:
@@ -656,23 +768,37 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           
-          if [[ "${{ needs.build-and-deploy.result }}" == "success" && "${{ needs.smoke-tests.result }}" == "success" ]]; then
+          BUILD_RESULT="${{ needs.build-and-deploy.result }}"
+          SMOKE_RESULT="${{ needs.smoke-tests.result }}"
+          CONTRACT_RESULT="${{ needs.contract-verification.result }}"
+          CONTRACT_OUTCOME="${{ needs.contract-verification.outputs.outcome }}"
+          
+          if [[ "$BUILD_RESULT" == "success" && "$SMOKE_RESULT" == "success" && "$CONTRACT_RESULT" == "success" ]]; then
             {
               echo "### ✅ STAGING DEPLOYMENT SUCCESSFUL"
               echo ""
-              echo "The staging deployment completed successfully. Ready for production promotion."
+              echo "The staging deployment completed successfully with contract verification."
               echo ""
+              echo "| Stage | Result |"
+              echo "|-------|--------|"
+              echo "| Build & Deploy | ✅ $BUILD_RESULT |"
+              echo "| Smoke Tests | ✅ $SMOKE_RESULT |"
+              echo "| Contract Verification | ✅ $CONTRACT_OUTCOME |"
+              echo ""
+              echo "Ready for production promotion."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "🎉 Staging deployment successful!"
+            echo "🎉 Staging deployment successful with contract verification!"
             echo "   Deployment ID: ${{ needs.build-and-deploy.outputs.deployment_id }}"
+            echo "   Contract Outcome: $CONTRACT_OUTCOME"
           else
             {
               echo "### ❌ STAGING DEPLOYMENT FAILED"
               echo ""
               echo "| Stage | Result |"
               echo "|-------|--------|"
-              echo "| Build & Deploy | ${{ needs.build-and-deploy.result }} |"
-              echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |"
+              echo "| Build & Deploy | $BUILD_RESULT |"
+              echo "| Smoke Tests | $SMOKE_RESULT |"
+              echo "| Contract Verification | $CONTRACT_RESULT ($CONTRACT_OUTCOME) |"
               echo ""
             } >> "$GITHUB_STEP_SUMMARY"
             echo "❌ Staging deployment failed - check logs above"

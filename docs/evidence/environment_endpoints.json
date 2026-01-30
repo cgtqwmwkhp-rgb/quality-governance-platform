@@ -1,21 +1,38 @@
 {
   "$schema": "./environment_endpoints.schema.json",
   "_comment": "Single source of truth for environment API endpoints. Updated by deploy workflows.",
-  "_last_updated": "2026-01-30T20:30:00Z",
-  "_updated_by": "manual",
+  "_last_updated": "2026-01-30T21:45:00Z",
+  "_updated_by": "etl-contract-probe-hardening",
+  "_platform": "Azure Container Apps (ACA)",
   
   "environments": {
     "staging": {
-      "api_base_url": "https://app-qgp-staging.azurewebsites.net",
+      "platform": "azure-container-apps",
+      "container_app_name": "qgp-staging",
+      "container_environment": "icytree-89d41650",
+      "region": "uksouth",
+      "api_base_url": "https://qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io",
       "swa_url": "https://purple-water-03205fa03-staging.uksouth.azurestaticapps.net",
-      "health_endpoint": "/health",
+      "health_endpoints": {
+        "health": "/healthz",
+        "ready": "/readyz",
+        "live": "/health"
+      },
       "api_version": "v1",
       "deployed": true
     },
     "production": {
-      "api_base_url": "https://app-qgp-prod.azurewebsites.net",
+      "platform": "azure-container-apps",
+      "container_app_name": "qgp-prod",
+      "container_environment": "icytree-89d41650",
+      "region": "uksouth",
+      "api_base_url": "https://qgp-prod.icytree-89d41650.uksouth.azurecontainerapps.io",
       "swa_url": "https://purple-water-03205fa03.uksouth.azurestaticapps.net",
-      "health_endpoint": "/health",
+      "health_endpoints": {
+        "health": "/healthz",
+        "ready": "/readyz",
+        "live": "/health"
+      },
       "api_version": "v1",
       "deployed": true
     }
@@ -23,14 +40,64 @@
   
   "contract_probe": {
     "timeout_seconds": 30,
-    "required_endpoints": [
-      "/health",
-      "/api/v1/incidents",
-      "/api/v1/complaints/",
-      "/api/v1/rtas/"
-    ],
-    "required_response_keys": {
-      "paginated": ["items", "total", "page", "page_size"]
+    "min_endpoints_required": 6,
+    "endpoints": {
+      "identity": {
+        "path": "/api/v1/meta/version",
+        "method": "GET",
+        "auth_required": false,
+        "expected_status": 200,
+        "description": "API version/identity endpoint"
+      },
+      "healthz": {
+        "path": "/healthz",
+        "method": "GET",
+        "auth_required": false,
+        "expected_status": 200,
+        "description": "Kubernetes-style health check"
+      },
+      "readyz": {
+        "path": "/readyz",
+        "method": "GET",
+        "auth_required": false,
+        "expected_status": 200,
+        "description": "Kubernetes-style readiness check"
+      },
+      "incidents": {
+        "path": "/api/v1/incidents",
+        "method": "GET",
+        "auth_required": true,
+        "expected_status_without_auth": [401, 403],
+        "expected_status_with_auth": 200,
+        "paginated": true,
+        "required_response_keys": ["items", "total", "page", "page_size"],
+        "description": "Incidents list with auth enforcement"
+      },
+      "complaints": {
+        "path": "/api/v1/complaints/",
+        "method": "GET",
+        "auth_required": true,
+        "expected_status_without_auth": [401, 403],
+        "expected_status_with_auth": 200,
+        "paginated": true,
+        "required_response_keys": ["items", "total", "page", "page_size"],
+        "description": "Complaints list with auth enforcement"
+      },
+      "rtas": {
+        "path": "/api/v1/rtas/",
+        "method": "GET",
+        "auth_required": true,
+        "expected_status_without_auth": [401, 403],
+        "expected_status_with_auth": 200,
+        "paginated": true,
+        "required_response_keys": ["items", "total", "page", "page_size"],
+        "description": "RTAs list with auth enforcement"
+      }
+    },
+    "enforcement": {
+      "post_deploy_required": true,
+      "nightly_verification": true,
+      "consecutive_failures_for_incident": 2
     }
   }
 }
