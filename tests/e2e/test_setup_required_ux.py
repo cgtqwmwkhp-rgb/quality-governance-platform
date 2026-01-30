@@ -16,9 +16,10 @@ The SETUP_REQUIRED response is HTTP 200 with:
 }
 """
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 import httpx
-from unittest.mock import patch, MagicMock
+import pytest
 
 
 # Test the backend response format first
