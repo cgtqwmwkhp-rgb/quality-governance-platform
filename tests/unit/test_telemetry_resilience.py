@@ -65,12 +65,18 @@ class TestFrontendTelemetryContract:
         from src.api.routes.telemetry import ALLOWED_EVENTS
 
         expected_events = {
+            # EXP-001 form autosave events
             "exp001_form_opened",
             "exp001_draft_saved",
             "exp001_draft_recovered",
             "exp001_draft_discarded",
             "exp001_form_submitted",
             "exp001_form_abandoned",
+            # Login UX events (LOGIN_UX_CONTRACT.md)
+            "login_completed",
+            "login_error_shown",
+            "login_recovery_action",
+            "login_slow_warning",
         }
 
         assert expected_events == ALLOWED_EVENTS
@@ -80,6 +86,7 @@ class TestFrontendTelemetryContract:
         from src.api.routes.telemetry import ALLOWED_DIMENSIONS
 
         expected_dimensions = {
+            # EXP-001 form dimensions
             "formType",
             "flagEnabled",
             "hasDraft",
@@ -90,6 +97,11 @@ class TestFrontendTelemetryContract:
             "draftAgeSeconds",
             "error",
             "environment",
+            # Login UX dimensions (LOGIN_UX_CONTRACT.md)
+            "result",
+            "durationBucket",
+            "errorCode",
+            "action",
         }
 
         assert expected_dimensions == ALLOWED_DIMENSIONS
