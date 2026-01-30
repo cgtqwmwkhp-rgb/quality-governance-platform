@@ -1,0 +1,4 @@
+external_ref,title,problem_statement,root_cause,corrective_actions,status
+SAMPLE-RTA-001,Root Cause Analysis - Test A,Synthetic test data: Analysis of test scenario A. This is synthetic data for ETL validation.,Process documentation gap identified in test scenario,Updated documentation and training materials,approved
+SAMPLE-RTA-002,Root Cause Analysis - Test B,Synthetic test data: Analysis of test scenario B. Generated for testing purposes only.,Test environment configuration variance,Configuration baseline established,in_review
+SAMPLE-RTA-003,Root Cause Analysis - Test C,Synthetic test data: Analysis of test scenario C. Synthetic test record for validation.,Pending investigation - test data only,,draft

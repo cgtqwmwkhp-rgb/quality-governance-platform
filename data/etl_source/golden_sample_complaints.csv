@@ -1,0 +1,4 @@
+external_ref,title,description,complainant_name,received_date,status
+SAMPLE-COMP-001,Service Delay Feedback - Test Case A,Synthetic test data: Feedback regarding service delivery timeline. All details are synthetic for testing purposes.,Test User Alpha,2026-01-14,received
+SAMPLE-COMP-002,Quality Concern - Test Case B,Synthetic test data: Quality concern raised during testing phase. This is synthetic test data only.,Test User Beta,2026-01-16,acknowledged
+SAMPLE-COMP-003,Communication Feedback - Test Case C,Synthetic test data: Feedback on communication channels. Generated for ETL validation testing.,Test User Gamma,2026-01-18,investigating

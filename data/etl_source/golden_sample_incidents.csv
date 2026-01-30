@@ -1,0 +1,6 @@
+external_ref,title,description,incident_type,severity,status,incident_date,location
+SAMPLE-INC-001,Equipment Malfunction - Test Scenario A,Synthetic test data: A piece of equipment experienced a malfunction during routine operations. No personnel affected.,quality,medium,reported,2026-01-15,Test Site Alpha
+SAMPLE-INC-002,Safety Protocol Deviation - Test Scenario B,Synthetic test data: A minor deviation from safety protocols was identified during audit. Corrective action implemented.,safety,low,in_progress,2026-01-18,Test Site Beta
+SAMPLE-INC-003,Near Miss Event - Test Scenario C,Synthetic test data: A near miss event was reported. No injuries or damage occurred. Root cause analysis pending.,near_miss,high,reported,2026-01-20,Test Site Gamma
+SAMPLE-INC-004,Environmental Observation - Test Scenario D,Synthetic test data: An environmental observation was logged for tracking purposes. Routine monitoring continues.,environmental,low,closed,2026-01-10,Test Site Alpha
+SAMPLE-INC-005,Security Access Review - Test Scenario E,Synthetic test data: Routine security access review identified no anomalies. Documentation updated accordingly.,security,medium,closed,2026-01-08,Test Site Beta
