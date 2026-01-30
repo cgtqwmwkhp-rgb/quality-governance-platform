@@ -18,7 +18,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
-from sqlalchemy.exc import ProgrammingError, OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from src.api.dependencies.request_context import get_request_id
