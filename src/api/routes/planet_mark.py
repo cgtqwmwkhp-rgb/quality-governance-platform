@@ -14,11 +14,12 @@ Features:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
 from src.domain.models.planet_mark import (
     CarbonEvidence,
@@ -206,6 +207,7 @@ class UtilityReadingCreate(BaseModel):
 
 @router.get("/years", response_model=dict)
 async def list_reporting_years(
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List all carbon reporting years with comparison"""
@@ -217,6 +219,7 @@ async def list_reporting_years(
             module="planet-mark",
             message="Planet Mark module not initialized. Database migrations may need to be applied.",
             next_action="Run database migrations with: alembic upgrade head",
+            request_id=get_request_id(request),
         )
 
     return {
@@ -840,6 +843,7 @@ async def get_certification_status(
 
 @router.get("/dashboard", response_model=dict)
 async def get_carbon_dashboard(
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
@@ -851,6 +855,7 @@ async def get_carbon_dashboard(
             module="planet-mark",
             message="Planet Mark module not initialized. Database migrations may need to be applied.",
             next_action="Run database migrations with: alembic upgrade head",
+            request_id=get_request_id(request),
         )
 
     if not years:
@@ -858,6 +863,7 @@ async def get_carbon_dashboard(
             module="planet-mark",
             message="No carbon reporting years configured",
             next_action="Create a reporting year via POST /api/v1/planet-mark/years",
+            request_id=get_request_id(request),
         )
 
     current_year = years[0]
