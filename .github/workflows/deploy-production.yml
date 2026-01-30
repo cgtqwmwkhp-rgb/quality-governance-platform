@@ -1073,7 +1073,7 @@ jobs:
             -D - -o /dev/null 2>/dev/null || echo "CURL_FAILED")
           
           CORS_STATUS=$(echo "$CORS_HEADERS" | head -1 | grep -oE "[0-9]{3}" || echo "000")
-          CORS_ORIGIN=$(echo "$CORS_HEADERS" | grep -i "access-control-allow-origin" | cut -d: -f2- | tr -d '[:space:]' || echo "missing")
+          ACAO_HEADER=$(echo "$CORS_HEADERS" | grep -i "access-control-allow-origin" | cut -d: -f2- | tr -d '[:space:]' || echo "missing")
           
           if [ "$CORS_STATUS" = "200" ] || [ "$CORS_STATUS" = "204" ]; then
             echo "✅ CORS preflight: HTTP $CORS_STATUS"
@@ -1081,8 +1081,10 @@ jobs:
             echo "⚠️ CORS preflight: HTTP $CORS_STATUS (may still work for non-preflight)"
           fi
           
-          if echo "$CORS_HEADERS" | grep -qi "access-control-allow-origin"; then
-            echo "✅ Access-Control-Allow-Origin header present"
+          if [ "$ACAO_HEADER" != "missing" ] && [ "$ACAO_HEADER" = "$FRONTEND_ORIGIN" ]; then
+            echo "✅ Access-Control-Allow-Origin: $ACAO_HEADER (matches request origin)"
+          elif [ "$ACAO_HEADER" != "missing" ]; then
+            echo "⚠️ Access-Control-Allow-Origin: $ACAO_HEADER (present but different from $FRONTEND_ORIGIN)"
           else
             echo "⚠️ Access-Control-Allow-Origin header not found on OPTIONS"
           fi
