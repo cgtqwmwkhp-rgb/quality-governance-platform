@@ -20,8 +20,8 @@ env:
   IMAGE_NAME: quality-governance-platform
   # Azure Container Apps configuration (ADR-0004)
   ACA_NAME: qgp-staging
-  ACA_ENVIRONMENT: icytree-89d41650
-  ACA_FQDN: qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io
+  ACA_ENVIRONMENT: qgp-staging-env
+  ACA_FQDN: qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io
   # Health check configuration - enterprise grade
   HEALTH_CHECK_MAX_ATTEMPTS: 30
   HEALTH_CHECK_INTERVAL: 10

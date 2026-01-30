@@ -9,9 +9,9 @@
     "staging": {
       "platform": "azure-container-apps",
       "container_app_name": "qgp-staging",
-      "container_environment": "icytree-89d41650",
+      "container_environment": "qgp-staging-env",
       "region": "uksouth",
-      "api_base_url": "https://qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io",
+      "api_base_url": "https://qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io",
       "swa_url": "https://purple-water-03205fa03-staging.uksouth.azurestaticapps.net",
       "health_endpoints": {
         "health": "/healthz",
@@ -64,7 +64,7 @@
         "description": "Kubernetes-style readiness check"
       },
       "incidents": {
-        "path": "/api/v1/incidents",
+        "path": "/api/v1/incidents/",
         "method": "GET",
         "auth_required": true,
         "expected_status_without_auth": [401, 403],

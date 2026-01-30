@@ -2,7 +2,7 @@
 
 ## Status
 
-**IN PROGRESS** - Workflow updated, awaiting Container App provisioning
+**ACCEPTED** - ACA staging fully provisioned and verified (2026-01-30)
 
 ## Context
 
@@ -88,34 +88,66 @@ az containerapp create \
 - Full ACA-only staging achieved
 - Consistent platform between staging and production
 
-## Action Items
+## Completed Actions
 
-- [ ] **Provision Container App `qgp-staging`** - Run `scripts/infra/provision-aca-staging.sh`
-- [x] ~~Create `deploy-staging-aca.yml` workflow~~ - Updated `deploy-staging.yml` to use ACA
-- [x] ~~Update `environment_endpoints.json` to confirm ACA URL~~ - Done
-- [ ] Run contract probe to confirm `VERIFIED` outcome (after provisioning)
-- [ ] Deprecate App Service staging deployment (after ACA verified)
+- [x] **Provision Container App `qgp-staging`** - Provisioned 2026-01-30
+- [x] **Create ACA environment `qgp-staging-env`** - Provisioned 2026-01-30
+- [x] **Update `deploy-staging.yml` workflow** - Uses ACA, not App Service
+- [x] **Update `environment_endpoints.json`** - Points to ACA FQDN
+- [x] **Contract probe returns `VERIFIED`** - All 7 endpoints passed
+- [ ] Deprecate App Service staging deployment (optional cleanup)
 
-## Workflow Status
+## Infrastructure Details
 
-### Completed
+### Azure Container Apps
 
-1. **deploy-staging.yml** updated to use Azure Container Apps:
-   - `az containerapp update` replaces `azure/webapps-deploy`
-   - Health checks use ACA FQDN
-   - Secrets via Key Vault + managed identity
-   - REQUIRED contract probe post-deploy
+| Resource | Value |
+|----------|-------|
+| **Container App** | `qgp-staging` |
+| **Environment** | `qgp-staging-env` |
+| **Resource Group** | `rg-qgp-staging` |
+| **Region** | UK South |
+| **FQDN** | `qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io` |
+| **Static IP** | `20.49.128.134` |
 
-2. **Provisioning script** created: `scripts/infra/provision-aca-staging.sh`
+### Configuration
 
-### Pending
+| Setting | Value |
+|---------|-------|
+| **Target Port** | 8000 |
+| **Min Replicas** | 1 |
+| **Max Replicas** | 3 |
+| **CPU** | 0.5 |
+| **Memory** | 1.0Gi |
+| **Identity** | System-assigned managed identity |
+| **Registry** | `acrqgpplantexpand.azurecr.io` |
 
-1. **Run provisioning script** to create Container App:
-   ```bash
-   ./scripts/infra/provision-aca-staging.sh
-   ```
+### Secrets (from Key Vault `kv-qgp-staging`)
 
-2. **Verify deployment** triggers successfully on next push to main
+| ACA Secret | Key Vault Secret |
+|------------|------------------|
+| `database-url` | `DATABASE-URL` |
+| `secret-key` | `SECRET-KEY` |
+| `jwt-secret-key` | `JWT-SECRET-KEY` |
+
+## Contract Probe Verification
+
+```
+Outcome:           VERIFIED
+Reachable:         True
+Endpoints Checked: 7
+Endpoints Passed:  7
+Message:           Target staging VERIFIED. All 7 contract checks passed.
+
+Endpoint Details:
+  ✅ health_legacy:   200 (74ms)
+  ✅ identity:        200 (73ms)
+  ✅ healthz:         200 (69ms)
+  ✅ readyz:          200 (81ms)
+  ✅ incidents_auth:  401 (69ms) - auth enforced
+  ✅ complaints_auth: 401 (75ms) - auth enforced
+  ✅ rtas_auth:       401 (76ms) - auth enforced
+```
 
 ## Related Documents
 
