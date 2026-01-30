@@ -1,0 +1,11 @@
+{
+  "$schema": "./runtime_smoke_allowlist.schema.json",
+  "description": "Runtime smoke gate override allowlist. Entries allow specific endpoints to return non-200 status codes without failing the deploy. All entries must have an expiry date and will be rejected if expired. See schema for policy rules.",
+  "version": "1.1.0",
+  "policy_notes": {
+    "expiry_interpretation": "Expiry dates are interpreted as UTC. The check compares TODAY >= expiry_date to determine if expired.",
+    "status_503": "Service Unavailable - standard allowlist rules, no special restrictions",
+    "status_500": "Internal Server Error - STRICT POLICY: (1) reason MUST contain 'KNOWN_BUG_TEMPORARY', (2) expiry_date MUST be within 48 hours, (3) incident_doc REQUIRED pointing to docs/evidence/INC-*.md"
+  },
+  "entries": []
+}

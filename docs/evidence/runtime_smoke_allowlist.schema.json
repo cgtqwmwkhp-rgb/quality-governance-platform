@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Runtime Smoke Gate Allowlist Schema",
+  "description": "Schema for runtime smoke gate override entries. Allows specific endpoints to return non-200 status codes without failing the deploy.",
+  "type": "object",
+  "required": ["version", "entries"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["issue_id", "owner", "expiry_date", "reason", "endpoint", "allowed_status_codes"],
+        "properties": {
+          "issue_id": {
+            "type": "string",
+            "description": "GitHub issue or incident ID (e.g., INC-2026-01-30-CORS, #123)",
+            "pattern": "^(INC-|#)[A-Za-z0-9-]+$"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Email or GitHub username of the owner responsible for fixing"
+          },
+          "expiry_date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO 8601 date (YYYY-MM-DD) in UTC when this override expires. Expiry is checked at start of day UTC (inclusive). For status 500: MUST be within 48 hours of today."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Clear explanation of why this override is needed. For status 500: MUST contain 'KNOWN_BUG_TEMPORARY'."
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "API endpoint path (e.g., /api/v1/planet-mark/dashboard)"
+          },
+          "allowed_status_codes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 400,
+              "maximum": 599
+            },
+            "description": "HTTP status codes that are temporarily allowed (4xx/5xx only). Default recommended: [503]. Status 500 has strict policy requirements."
+          },
+          "incident_doc": {
+            "type": "string",
+            "description": "Path to incident document. REQUIRED when allowed_status_codes includes 500. Must match pattern: docs/evidence/INC-*.md",
+            "pattern": "^docs/evidence/INC-.*\\.md$"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "policy_notes": {
+      "description": "POLICY RULES enforced by runtime-smoke-gate.sh",
+      "rules": {
+        "status_503": {
+          "description": "Service Unavailable - standard allowlist rules apply",
+          "expiry": "No limit (but should be reasonable)",
+          "reason": "Any explanation",
+          "incident_doc": "Optional"
+        },
+        "status_500": {
+          "description": "Internal Server Error - STRICT policy",
+          "expiry": "MUST be within 48 hours of today (UTC)",
+          "reason": "MUST contain 'KNOWN_BUG_TEMPORARY'",
+          "incident_doc": "REQUIRED, must match pattern docs/evidence/INC-*.md"
+        }
+      }
+    }
+  }
+}
