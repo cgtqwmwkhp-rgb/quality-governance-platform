@@ -18,13 +18,11 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
 
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
-
-logger = logging.getLogger(__name__)
 from src.domain.models.planet_mark import (
     CarbonEvidence,
     CarbonReportingYear,
@@ -37,6 +35,8 @@ from src.domain.models.planet_mark import (
     UtilityMeterReading,
 )
 from src.infrastructure.database import get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
