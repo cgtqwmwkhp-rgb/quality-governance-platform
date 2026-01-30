@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
+from src.api.schemas.setup_required import setup_required_response
 from src.domain.models.planet_mark import (
     CarbonEvidence,
     CarbonReportingYear,
@@ -211,13 +212,12 @@ async def list_reporting_years(
     try:
         years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).all()
     except Exception:
-        # Table may not exist or migration not applied - return setup required
-        return {
-            "total": 0,
-            "years": [],
-            "setup_required": True,
-            "message": "Planet Mark module not initialized. Run migrations to enable.",
-        }
+        # Table may not exist or migration not applied - return standardized setup required
+        return setup_required_response(
+            module="planet-mark",
+            message="Planet Mark module not initialized. Database migrations may need to be applied.",
+            next_action="Run database migrations with: alembic upgrade head",
+        )
 
     return {
         "total": len(years),
@@ -846,17 +846,19 @@ async def get_carbon_dashboard(
     try:
         years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
     except Exception:
-        # Table may not exist or migration not applied - return setup required
-        return {
-            "message": "Planet Mark module not initialized. Run migrations to enable.",
-            "setup_required": True,
-        }
+        # Table may not exist or migration not applied - return standardized setup required
+        return setup_required_response(
+            module="planet-mark",
+            message="Planet Mark module not initialized. Database migrations may need to be applied.",
+            next_action="Run database migrations with: alembic upgrade head",
+        )
 
     if not years:
-        return {
-            "message": "No reporting years configured",
-            "setup_required": True,
-        }
+        return setup_required_response(
+            module="planet-mark",
+            message="No carbon reporting years configured",
+            next_action="Create a reporting year via POST /api/v1/planet-mark/years",
+        )
 
     current_year = years[0]
     baseline = db.query(CarbonReportingYear).filter(CarbonReportingYear.is_baseline_year == True).first()

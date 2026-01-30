@@ -1,0 +1,6 @@
+{
+  "$schema": "./runtime_smoke_allowlist.schema.json",
+  "description": "Runtime smoke gate override allowlist. Entries allow specific endpoints to return non-200 status codes without failing the deploy. All entries must have an expiry date and will be rejected if expired.",
+  "version": "1.0.0",
+  "entries": []
+}
