@@ -13,10 +13,15 @@ on:
 
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
-  AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+  # DEPRECATED: AZURE_WEBAPP_NAME - Migrated to Azure Container Apps per ADR-0004
+  # AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
   AZURE_RESOURCE_GROUP: rg-qgp-staging
   ENVIRONMENT_NAME: staging
   IMAGE_NAME: quality-governance-platform
+  # Azure Container Apps configuration (ADR-0004)
+  ACA_NAME: qgp-staging
+  ACA_ENVIRONMENT: icytree-89d41650
+  ACA_FQDN: qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io
   # Health check configuration - enterprise grade
   HEALTH_CHECK_MAX_ATTEMPTS: 30
   HEALTH_CHECK_INTERVAL: 10
@@ -58,20 +63,24 @@ jobs:
 
       - name: Environment guardrails
         run: |
-          if [ -z "$AZURE_RESOURCE_GROUP" ] || [ -z "$AZURE_WEBAPP_NAME" ] || [ -z "$ENVIRONMENT_NAME" ]; then
+          # Validate required environment variables for ACA deployment
+          if [ -z "$AZURE_RESOURCE_GROUP" ] || [ -z "$ACA_NAME" ] || [ -z "$ENVIRONMENT_NAME" ]; then
             echo "❌ Guardrail: required env vars missing"
+            echo "   AZURE_RESOURCE_GROUP: ${AZURE_RESOURCE_GROUP:-<missing>}"
+            echo "   ACA_NAME: ${ACA_NAME:-<missing>}"
+            echo "   ENVIRONMENT_NAME: ${ENVIRONMENT_NAME:-<missing>}"
             exit 1
           fi
           rg_lower=$(echo "$AZURE_RESOURCE_GROUP" | tr '[:upper:]' '[:lower:]')
-          app_lower=$(echo "$AZURE_WEBAPP_NAME" | tr '[:upper:]' '[:lower:]')
+          aca_lower=$(echo "$ACA_NAME" | tr '[:upper:]' '[:lower:]')
           env_lower=$(echo "$ENVIRONMENT_NAME" | tr '[:upper:]' '[:lower:]')
           if [ "$env_lower" = "production" ]; then
-            if echo "$rg_lower$app_lower" | grep -q "staging"; then
+            if echo "$rg_lower$aca_lower" | grep -q "staging"; then
               echo "❌ Guardrail: production cannot target staging resources"
               exit 1
             fi
           elif [ "$env_lower" = "staging" ]; then
-            if echo "$rg_lower$app_lower" | grep -q "prod"; then
+            if echo "$rg_lower$aca_lower" | grep -q "prod"; then
               echo "❌ Guardrail: staging cannot target production resources"
               exit 1
             fi
@@ -79,7 +88,7 @@ jobs:
             echo "❌ Guardrail: unknown environment '$ENVIRONMENT_NAME'"
             exit 1
           fi
-          echo "✅ Guardrail: environment targeting validated"
+          echo "✅ Guardrail: environment targeting validated (ACA: $ACA_NAME)"
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -156,92 +165,130 @@ jobs:
             echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          images: ${{ env.IMAGE_DIGEST_REF }}
-
-      - name: Configure App Service environment
+      # ==========================================================================
+      # AZURE CONTAINER APPS DEPLOYMENT (ADR-0004)
+      # Replaces App Service deployment for ACA-only staging
+      # ==========================================================================
+      
+      - name: Deploy to Azure Container Apps
+        id: aca_deploy
         run: |
-          echo "🔧 Configuring App Service with Key Vault references..."
+          echo "🚀 Deploying to Azure Container Apps..."
+          echo ""
+          echo "Target:"
+          echo "  Container App: ${{ env.ACA_NAME }}"
+          echo "  Resource Group: ${{ env.AZURE_RESOURCE_GROUP }}"
+          echo "  Image: ${{ env.IMAGE_DIGEST_REF }}"
+          echo ""
           
-          # Ensure managed identity is enabled
-          IDENTITY_ID=$(az webapp identity show \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group rg-qgp-staging \
-            --query principalId -o tsv 2>/dev/null || echo "")
+          # Update the container app with new image
+          az containerapp update \
+            --name "${{ env.ACA_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ env.IMAGE_DIGEST_REF }}" \
+            --set-env-vars \
+              BUILD_SHA="${{ github.sha }}" \
+              BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              APP_ENV="staging" \
+            --output none
           
-          if [ -z "$IDENTITY_ID" ]; then
-            echo "   📌 Enabling managed identity..."
-            az webapp identity assign \
-              --name "${{ env.AZURE_WEBAPP_NAME }}" \
-              --resource-group rg-qgp-staging \
-              --output none
-            
-            IDENTITY_ID=$(az webapp identity show \
-              --name "${{ env.AZURE_WEBAPP_NAME }}" \
-              --resource-group rg-qgp-staging \
-              --query principalId -o tsv)
-            
-            # Wait for identity propagation
-            sleep 30
-          fi
-          echo "   ✅ Managed identity: $IDENTITY_ID"
+          echo "✅ Container app updated with new image"
           
-          # Always ensure Key Vault access is configured
-          echo "   🔑 Ensuring Key Vault access..."
-          az keyvault set-policy \
-            --name kv-qgp-staging \
-            --object-id "$IDENTITY_ID" \
-            --secret-permissions get list \
-            --output none 2>/dev/null || echo "   ⚠️ Key Vault policy already set or cannot be updated"
+          # Get the latest revision
+          REVISION=$(az containerapp show \
+            --name "${{ env.ACA_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.latestRevisionName" -o tsv)
           
-          # Fetch secrets from Key Vault
-          echo "   🔐 Fetching secrets from Key Vault..."
+          echo "ACA_REVISION=$REVISION" >> "$GITHUB_ENV"
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "📋 Latest revision: $REVISION"
+
+      - name: Configure ACA secrets from Key Vault
+        run: |
+          echo "🔐 Configuring secrets from Key Vault..."
+          
+          # Fetch secrets from Key Vault (managed identity handles auth)
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
           
           if [ -z "$DB_URL" ]; then
-            echo "   ❌ Failed to retrieve DATABASE_URL from Key Vault"
+            echo "❌ Failed to retrieve DATABASE_URL from Key Vault"
             exit 1
           fi
-          echo "   ✅ Secrets retrieved successfully"
+          echo "✅ Secrets retrieved from Key Vault"
           
-          # Configure app settings with direct values
-          echo "   📝 Setting application configuration..."
-          az webapp config appsettings set \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group rg-qgp-staging \
-            --settings \
-              APP_ENV="staging" \
-              BUILD_SHA="${{ github.sha }}" \
-              BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              DATABASE_URL="$DB_URL" \
-              SECRET_KEY="$SECRET_KEY_VAL" \
-              JWT_SECRET_KEY="$JWT_SECRET_VAL" \
-              JWT_ALGORITHM="HS256" \
-              JWT_ACCESS_TOKEN_EXPIRE_MINUTES="30" \
-              JWT_REFRESH_TOKEN_EXPIRE_DAYS="7" \
-              LOG_LEVEL="INFO" \
-              CORS_ORIGINS='["https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"]' \
-              DATABASE_ECHO="false" \
-              WEBSITES_PORT="8000" \
-              AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
-              AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
-              CI_TEST_SECRET="${{ secrets.CI_TEST_SECRET }}" \
+          # Update ACA secrets (encrypted at rest)
+          az containerapp secret set \
+            --name "${{ env.ACA_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --secrets \
+              database-url="$DB_URL" \
+              secret-key="$SECRET_KEY_VAL" \
+              jwt-secret-key="$JWT_SECRET_VAL" \
             --output none
           
-          echo "   ✅ Application settings configured"
+          echo "✅ ACA secrets updated"
           
-          # Restart the app to apply new settings
-          echo "   🔄 Restarting application..."
-          az webapp restart \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group rg-qgp-staging
+          # Link secrets to environment variables
+          az containerapp update \
+            --name "${{ env.ACA_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --set-env-vars \
+              DATABASE_URL=secretref:database-url \
+              SECRET_KEY=secretref:secret-key \
+              JWT_SECRET_KEY=secretref:jwt-secret-key \
+              JWT_ALGORITHM=HS256 \
+              JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30 \
+              JWT_REFRESH_TOKEN_EXPIRE_DAYS=7 \
+              LOG_LEVEL=INFO \
+              CORS_ORIGINS='["https://${{ env.ACA_FQDN }}"]' \
+              AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
+              AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
+            --output none
           
-          echo "✅ App Service configuration complete"
+          echo "✅ Environment variables linked to secrets"
+
+      - name: Wait for ACA revision to be ready
+        run: |
+          echo "⏳ Waiting for new revision to be ready..."
+          
+          MAX_ATTEMPTS=30
+          INTERVAL=10
+          attempt=1
+          
+          while [ $attempt -le $MAX_ATTEMPTS ]; do
+            REVISION_STATUS=$(az containerapp revision show \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --revision "${{ env.ACA_REVISION }}" \
+              --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+            
+            echo "   Attempt $attempt/$MAX_ATTEMPTS: Revision state = $REVISION_STATUS"
+            
+            if [ "$REVISION_STATUS" = "Running" ]; then
+              echo "✅ Revision is running"
+              break
+            elif [ "$REVISION_STATUS" = "Failed" ]; then
+              echo "❌ Revision failed to start"
+              az containerapp revision show \
+                --name "${{ env.ACA_NAME }}" \
+                --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+                --revision "${{ env.ACA_REVISION }}" \
+                --query "properties.healthState" -o tsv
+              exit 1
+            fi
+            
+            attempt=$((attempt + 1))
+            sleep $INTERVAL
+          done
+          
+          if [ $attempt -gt $MAX_ATTEMPTS ]; then
+            echo "❌ Timeout waiting for revision to be ready"
+            exit 1
+          fi
 
       - name: Run database migrations
         run: |
@@ -318,14 +365,17 @@ jobs:
           az container delete --name $CONTAINER_NAME --resource-group rg-qgp-staging --yes
           echo "✅ Migrations completed successfully"
 
-      - name: Verify deployment with retry
+      - name: Verify ACA deployment with retry
         id: verify
         run: |
-          APP_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          # Use Azure Container Apps FQDN (ADR-0004)
+          APP_URL="https://${{ env.ACA_FQDN }}"
           MAX_ATTEMPTS=${{ env.HEALTH_CHECK_MAX_ATTEMPTS }}
           INTERVAL=${{ env.HEALTH_CHECK_INTERVAL }}
           
-          echo "🔍 Verifying deployment endpoint"
+          echo "🔍 Verifying ACA deployment endpoint"
+          echo "   Container App: ${{ env.ACA_NAME }}"
+          echo "   URL: $APP_URL"
           echo "   Max attempts: $MAX_ATTEMPTS"
           echo "   Interval: ${INTERVAL}s"
           echo "   Total timeout: $((MAX_ATTEMPTS * INTERVAL))s"
@@ -349,13 +399,13 @@ jobs:
                 echo "   ⏳ Attempt $attempt/$MAX_ATTEMPTS: Connection failed, retrying in ${INTERVAL}s..."
               else
                 echo "   ⏳ Attempt $attempt/$MAX_ATTEMPTS: HTTP $HTTP_STATUS, retrying in ${INTERVAL}s..."
-                # After 10 failed attempts, try to capture app logs for diagnostics
+                # After 10 failed attempts, try to capture ACA logs for diagnostics
                 if [ $attempt -eq 10 ]; then
-                  echo "   📋 Capturing diagnostic logs..."
-                  az webapp log download \
-                    --name "${{ env.AZURE_WEBAPP_NAME }}" \
-                    --resource-group rg-qgp-staging \
-                    --log-file /tmp/app_logs.zip 2>/dev/null || true
+                  echo "   📋 Capturing ACA diagnostic logs..."
+                  az containerapp logs show \
+                    --name "${{ env.ACA_NAME }}" \
+                    --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+                    --tail 50 2>/dev/null || true
                 fi
               fi
               
@@ -374,40 +424,38 @@ jobs:
           # Health check with retry
           if ! check_endpoint "$APP_URL/healthz" "Health"; then
             echo ""
-            echo "❌ DEPLOYMENT VERIFICATION FAILED"
+            echo "❌ ACA DEPLOYMENT VERIFICATION FAILED"
             echo "   Health endpoint did not respond with 200 after $MAX_ATTEMPTS attempts"
             echo ""
             echo "📋 Last response body:"
             cat /tmp/response.txt 2>/dev/null || echo "(empty)"
             echo ""
-            echo "📋 Checking App Service status..."
-            az webapp show \
-              --name "${{ env.AZURE_WEBAPP_NAME }}" \
-              --resource-group rg-qgp-staging \
-              --query "{state:state,usageState:usageState,availabilityState:availabilityState}" \
+            echo "📋 Checking Container App status..."
+            az containerapp show \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --query "{revision:properties.latestRevisionName,state:properties.runningStatus,replicas:properties.template.scale}" \
               -o json
             echo ""
-            echo "📋 Recent deployment logs:"
-            az webapp log show \
-              --name "${{ env.AZURE_WEBAPP_NAME }}" \
-              --resource-group rg-qgp-staging \
-              --output table 2>/dev/null || echo "(no logs available)"
+            echo "📋 Recent ACA logs:"
+            az containerapp logs show \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --tail 30 2>/dev/null || echo "(no logs available)"
             exit 1
           fi
           
           echo ""
-          echo "🎉 Deployment verification PASSED!"
+          echo "🎉 ACA Deployment verification PASSED!"
 
       - name: Deterministic SHA verification with stability gate
         id: sha_verify
         run: |
           # Deterministic verification: polls until SHA matches with N consecutive confirmations
-          # This prevents false failures from Azure App Service container swap latency
+          # This prevents false failures from ACA revision rollout latency
           
-          APP_HOST=$(az webapp show \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group rg-qgp-staging \
-            --query defaultHostName -o tsv)
+          # Use ACA FQDN directly (ADR-0004)
+          APP_HOST="${{ env.ACA_FQDN }}"
           APP_URL="https://${APP_HOST}"
           
           echo "APP_HOST=$APP_HOST" >> "$GITHUB_ENV"
@@ -429,13 +477,8 @@ jobs:
       - name: Capture runtime evidence
         if: always()
         run: |
-          APP_HOST="${{ env.APP_HOST }}"
-          if [ -z "$APP_HOST" ]; then
-            APP_HOST=$(az webapp show \
-              --name "${{ env.AZURE_WEBAPP_NAME }}" \
-              --resource-group rg-qgp-staging \
-              --query defaultHostName -o tsv)
-          fi
+          # Use ACA FQDN (ADR-0004)
+          APP_HOST="${{ env.ACA_FQDN }}"
           
           # Read verification result
           VERIFY_RESULT="UNKNOWN"
@@ -452,16 +495,21 @@ jobs:
             VERIFY_ELAPSED=$(python3 -c 'import json; print(json.load(open("/tmp/verification_evidence.json")).get("elapsed_seconds",0))' 2>/dev/null || echo "0")
           fi
           
-          # Get container image info (informational only - may be stale during swap)
-          RUNNING_IMAGE_RAW=$(az webapp config container show \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group rg-qgp-staging \
-            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
-          RUNNING_IMAGE="${RUNNING_IMAGE_RAW#DOCKER|}"
+          # Get ACA container image info
+          RUNNING_IMAGE=$(az containerapp show \
+            --name "${{ env.ACA_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.template.containers[0].image" -o tsv 2>/dev/null || echo "")
           RUNNING_IMAGE_SAFE="${RUNNING_IMAGE#*/}"
           if [ -z "$RUNNING_IMAGE_SAFE" ]; then
             RUNNING_IMAGE_SAFE="not reported"
           fi
+          
+          # Get ACA revision info
+          ACA_REVISION=$(az containerapp show \
+            --name "${{ env.ACA_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "unknown")
           
           # Generate evidence file
           HOST_HASH=$(APP_HOST="$APP_HOST" python3 -c 'import hashlib, os; host=os.environ.get("APP_HOST",""); print(hashlib.sha256(host.encode("utf-8")).hexdigest() if host else "")')
@@ -469,7 +517,13 @@ jobs:
           
           mkdir -p docs/evidence
           {
-            echo "## Deploy Evidence (staging)"
+            echo "## Deploy Evidence (staging - Azure Container Apps)"
+            echo ""
+            echo "### Platform"
+            echo "- platform: Azure Container Apps (ADR-0004)"
+            echo "- container_app: ${{ env.ACA_NAME }}"
+            echo "- revision: ${ACA_REVISION}"
+            echo "- fqdn: ${{ env.ACA_FQDN }}"
             echo ""
             echo "### Deterministic Verification"
             echo "- verification_result: ${VERIFY_RESULT}"
@@ -484,7 +538,7 @@ jobs:
             echo "- expected_tag: ${EXPECTED_TAG_SAFE}"
             echo "- expected_digest: ${EXPECTED_DIGEST}"
             echo ""
-            echo "### Container Info (informational)"
+            echo "### Container Info"
             echo "- running_image: ${RUNNING_IMAGE_SAFE}"
             echo "- host_sha256: ${HOST_HASH}"
             echo "- timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -557,8 +611,10 @@ jobs:
     steps:
       - name: Run smoke tests
         run: |
-          APP_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
-          echo "🧪 Running staging smoke tests"
+          # Use ACA URL (ADR-0004)
+          APP_URL="https://${{ env.ACA_FQDN }}"
+          echo "🧪 Running staging smoke tests (Azure Container Apps)"
+          echo "   Target: $APP_URL"
           
           TESTS_PASSED=0
           TESTS_FAILED=0
