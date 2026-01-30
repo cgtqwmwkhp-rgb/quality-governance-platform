@@ -1,6 +1,6 @@
 # Planet Mark Initial Data Seed Runbook
 
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Last Updated**: 2026-01-30  
 **Owner**: Release Governance Team
 
@@ -9,6 +9,34 @@
 ## Overview
 
 This runbook describes how to seed initial data for the Planet Mark carbon management module in production. The module requires at least one `CarbonReportingYear` record to display the dashboard instead of the `SetupRequiredPanel`.
+
+---
+
+## Quick Start: Automated Script (RECOMMENDED)
+
+For production seeding, use the automated script with built-in safeguards:
+
+```bash
+# 1. Set your admin token
+export PROD_TOKEN="your-admin-bearer-token"
+
+# 2. Run the seed script
+./scripts/ops/planet-mark-seed-production.sh
+```
+
+The script automatically:
+- ✅ Validates prerequisites
+- ✅ Checks idempotency (won't create duplicates)
+- ✅ Uses proper UAT override headers
+- ✅ Verifies dashboard success
+- ✅ Tests telemetry endpoints
+- ✅ Produces evidence pack with rollback instructions
+
+---
+
+## Manual Procedure
+
+If the automated script is not available, follow the manual steps below.
 
 ## Diagnosis
 
@@ -144,3 +172,4 @@ All seed operations are logged with:
 
 - [PROD_VIEW_UAT_RUNBOOK.md](./PROD_VIEW_UAT_RUNBOOK.md) - General UAT procedures
 - [Planet Mark API Routes](/src/api/routes/planet_mark.py) - Full API reference
+- [Automated Seed Script](/scripts/ops/planet-mark-seed-production.sh) - Production seed with safeguards
