@@ -100,6 +100,82 @@ When a write is blocked, you'll receive:
 
 ---
 
+## Module-Specific Read-Only UAT Flows
+
+### Audits Module (Read-Only)
+
+The Audits module supports browsing templates, runs, and findings in read-only mode.
+
+#### Step 1: Browse Audit Templates
+
+| Action | Endpoint | Expected Result |
+|--------|----------|-----------------|
+| List templates | `GET /api/v1/audits/templates` | Paginated list of templates |
+| View template | `GET /api/v1/audits/templates/{id}` | Template detail with sections/questions |
+
+```bash
+# List templates
+curl -s "https://${PROD_URL}/api/v1/audits/templates?page=1&size=10" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '.items | length'
+
+# Get template detail
+curl -s "https://${PROD_URL}/api/v1/audits/templates/1" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '.name, .sections | length'
+```
+
+#### Step 2: Browse Audit Runs
+
+| Action | Endpoint | Expected Result |
+|--------|----------|-----------------|
+| List runs | `GET /api/v1/audits/runs` | Paginated list of runs |
+| View run | `GET /api/v1/audits/runs/{id}` | Run detail with responses/findings |
+
+```bash
+# List runs
+curl -s "https://${PROD_URL}/api/v1/audits/runs?page=1&size=10" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '.items | length'
+
+# Get run detail
+curl -s "https://${PROD_URL}/api/v1/audits/runs/1" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '.status, .template_id'
+```
+
+#### Step 3: Browse Audit Findings
+
+| Action | Endpoint | Expected Result |
+|--------|----------|-----------------|
+| List findings | `GET /api/v1/audits/findings` | Paginated list of findings |
+| Filter by run | `GET /api/v1/audits/findings?run_id={id}` | Findings for specific run |
+
+```bash
+# List findings
+curl -s "https://${PROD_URL}/api/v1/audits/findings?page=1&size=10" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '.items | length'
+
+# Filter by run
+curl -s "https://${PROD_URL}/api/v1/audits/findings?run_id=1" \
+  -H "Authorization: Bearer ${TOKEN}" | jq '.total'
+```
+
+#### Audits Write Operations (Require Override)
+
+The following operations require UAT override headers:
+
+| Action | Method | Endpoint | Override Required |
+|--------|--------|----------|-------------------|
+| Create template | POST | `/templates` | ✅ Yes |
+| Update template | PATCH | `/templates/{id}` | ✅ Yes |
+| Delete template | DELETE | `/templates/{id}` | ✅ Yes |
+| Create run | POST | `/runs` | ✅ Yes |
+| Update run | PATCH | `/runs/{id}` | ✅ Yes |
+| Start/complete run | POST | `/runs/{id}/start` | ✅ Yes |
+| Create finding | POST | `/runs/{id}/findings` | ✅ Yes |
+| Update finding | PATCH | `/findings/{id}` | ✅ Yes |
+
+See [Write-Enabled UAT Procedure](#write-enabled-uat-procedure-controlled-override) for override instructions.
+
+---
+
 ## Write-Enabled UAT Procedure (Controlled Override)
 
 For UAT scenarios that require creating or modifying data, follow this procedure.
