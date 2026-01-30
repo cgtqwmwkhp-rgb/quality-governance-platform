@@ -147,8 +147,15 @@
 If smoke gate is failing but deploy is critical:
 1. Add temporary allowlist entry to `docs/evidence/runtime_smoke_allowlist.json`
 2. Commit with issue ID in message
-3. Set expiry_date to max 7 days
-4. Create follow-up issue immediately
+3. Set expiry_date appropriately:
+   - For status **503**: max 7 days
+   - For status **500**: max 48 hours (strict policy)
+4. For status **500**, you MUST also:
+   - Include `KNOWN_BUG_TEMPORARY` in the `reason` field
+   - Add `incident_doc` field pointing to `docs/evidence/INC-*.md`
+5. Create follow-up issue immediately
+
+**Expiry Interpretation**: Dates are UTC. Check is `TODAY > expiry_date` (expired if past).
 
 ---
 
