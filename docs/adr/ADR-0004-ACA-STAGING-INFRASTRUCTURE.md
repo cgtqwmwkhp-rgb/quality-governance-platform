@@ -2,7 +2,7 @@
 
 ## Status
 
-**PENDING** - Infrastructure not yet provisioned
+**IN PROGRESS** - Workflow updated, awaiting Container App provisioning
 
 ## Context
 
@@ -90,12 +90,32 @@ az containerapp create \
 
 ## Action Items
 
-- [ ] Provision Container App `qgp-staging` in Azure Portal or via IaC
-- [ ] Configure ingress and health probes
-- [ ] Create `deploy-staging-aca.yml` workflow
-- [ ] Update `environment_endpoints.json` to confirm ACA URL
-- [ ] Run contract probe to confirm `VERIFIED` outcome
-- [ ] Deprecate App Service staging deployment
+- [ ] **Provision Container App `qgp-staging`** - Run `scripts/infra/provision-aca-staging.sh`
+- [x] ~~Create `deploy-staging-aca.yml` workflow~~ - Updated `deploy-staging.yml` to use ACA
+- [x] ~~Update `environment_endpoints.json` to confirm ACA URL~~ - Done
+- [ ] Run contract probe to confirm `VERIFIED` outcome (after provisioning)
+- [ ] Deprecate App Service staging deployment (after ACA verified)
+
+## Workflow Status
+
+### Completed
+
+1. **deploy-staging.yml** updated to use Azure Container Apps:
+   - `az containerapp update` replaces `azure/webapps-deploy`
+   - Health checks use ACA FQDN
+   - Secrets via Key Vault + managed identity
+   - REQUIRED contract probe post-deploy
+
+2. **Provisioning script** created: `scripts/infra/provision-aca-staging.sh`
+
+### Pending
+
+1. **Run provisioning script** to create Container App:
+   ```bash
+   ./scripts/infra/provision-aca-staging.sh
+   ```
+
+2. **Verify deployment** triggers successfully on next push to main
 
 ## Related Documents
 
