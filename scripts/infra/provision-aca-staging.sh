@@ -19,7 +19,7 @@ set -euo pipefail
 # Configuration
 RESOURCE_GROUP="rg-qgp-staging"
 LOCATION="uksouth"
-ACA_ENVIRONMENT="icytree-89d41650"
+ACA_ENVIRONMENT="qgp-staging-env"
 CONTAINER_APP_NAME="qgp-staging"
 KEY_VAULT_NAME="kv-qgp-staging"
 TARGET_PORT=8000

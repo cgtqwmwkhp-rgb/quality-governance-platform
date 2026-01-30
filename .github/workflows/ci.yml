@@ -74,6 +74,56 @@ jobs:
           chmod +x ./scripts/governance/runtime-smoke-gate.sh
           ./scripts/governance/runtime-smoke-gate.sh --self-test
 
+
+
+  config-drift-guard:
+    name: Configuration Drift Guard
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for forbidden configuration strings
+        run: |
+          echo "=== Configuration Drift Guard ==="
+          echo "Checking for forbidden strings that indicate configuration drift..."
+          
+          # Forbidden string - legacy ACA environment reference
+          FORBIDDEN="icytree-89d41650"
+          
+          # Files to check
+          FILES=(
+            "scripts/etl/config.py"
+            "docs/evidence/environment_endpoints.json"
+            ".github/workflows/deploy-staging.yml"
+            "scripts/infra/provision-aca-staging.sh"
+          )
+          
+          DRIFT_FOUND=0
+          
+          for file in "${FILES[@]}"; do
+            if [ -f "$file" ]; then
+              if grep -q "$FORBIDDEN" "$file" 2>/dev/null; then
+                echo "❌ DRIFT DETECTED: '$FORBIDDEN' found in $file"
+                grep -n "$FORBIDDEN" "$file" | head -3
+                DRIFT_FOUND=1
+              fi
+            fi
+          done
+          
+          if [ "$DRIFT_FOUND" = "1" ]; then
+            echo ""
+            echo "❌ Configuration drift detected!"
+            echo "Please update the files to use correct values:"
+            echo "  - Staging ACA env: qgp-staging-env"
+            echo "  - Staging domain: ashymushroom-85447e68.uksouth.azurecontainerapps.io"
+            exit 1
+          fi
+          
+          echo "✅ No configuration drift detected"
+          echo "All configuration files use correct environment references"
+
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
     runs-on: ubuntu-latest

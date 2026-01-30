@@ -1,8 +1,8 @@
 {
   "$schema": "./environment_endpoints.schema.json",
   "_comment": "Single source of truth for environment API endpoints. Updated by deploy workflows.",
-  "_last_updated": "2026-01-30T21:45:00Z",
-  "_updated_by": "etl-contract-probe-hardening",
+  "_last_updated": "2026-01-30T23:05:00Z",
+  "_updated_by": "config-drift-elimination",
   "_platform": "Azure Container Apps (ACA)",
   
   "environments": {
@@ -22,11 +22,12 @@
       "deployed": true
     },
     "production": {
-      "platform": "azure-container-apps",
-      "container_app_name": "qgp-prod",
-      "container_environment": "icytree-89d41650",
+      "platform": "azure-app-service",
+      "_note": "Production ACA not yet provisioned - using App Service",
+      "container_app_name": null,
+      "container_environment": null,
       "region": "uksouth",
-      "api_base_url": "https://qgp-prod.icytree-89d41650.uksouth.azurecontainerapps.io",
+      "api_base_url": "https://app-qgp-prod.azurewebsites.net",
       "swa_url": "https://purple-water-03205fa03.uksouth.azurestaticapps.net",
       "health_endpoints": {
         "health": "/healthz",

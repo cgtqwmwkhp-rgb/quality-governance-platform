@@ -93,17 +93,22 @@ RTA_MAPPINGS = [
 ]
 
 
+# Environment configurations - SINGLE SOURCE OF TRUTH
+# Staging: qgp-staging-env (ashymushroom-85447e68.uksouth.azurecontainerapps.io)
+# Production: TBD - not yet provisioned
 ENVIRONMENT_CONFIGS = {
     Environment.DEVELOPMENT: APIConfig(
         base_url="http://localhost:8001",
         timeout_seconds=10,
     ),
     Environment.STAGING: APIConfig(
-        base_url="https://qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io",
+        base_url="https://qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io",
         timeout_seconds=30,
     ),
     Environment.PRODUCTION: APIConfig(
-        base_url="https://qgp-prod.icytree-89d41650.uksouth.azurecontainerapps.io",
+        # TODO: Update when qgp-prod ACA is provisioned
+        # Production ACA environment not yet created - using App Service URL
+        base_url="https://app-qgp-prod.azurewebsites.net",
         timeout_seconds=60,
         max_retries=5,
     ),
