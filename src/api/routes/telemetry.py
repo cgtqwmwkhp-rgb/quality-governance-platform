@@ -32,16 +32,23 @@ logger = logging.getLogger(__name__)
 
 # Allowlisted event names (bounded)
 ALLOWED_EVENTS = {
+    # EXP-001 form autosave events
     "exp001_form_opened",
     "exp001_draft_saved",
     "exp001_draft_recovered",
     "exp001_draft_discarded",
     "exp001_form_submitted",
     "exp001_form_abandoned",
+    # Login UX events (LOGIN_UX_CONTRACT.md)
+    "login_completed",
+    "login_error_shown",
+    "login_recovery_action",
+    "login_slow_warning",
 }
 
 # Allowlisted dimension keys (bounded)
 ALLOWED_DIMENSIONS = {
+    # EXP-001 form dimensions
     "formType",
     "flagEnabled",
     "hasDraft",
@@ -52,11 +59,29 @@ ALLOWED_DIMENSIONS = {
     "draftAgeSeconds",
     "error",
     "environment",
+    # Login UX dimensions (LOGIN_UX_CONTRACT.md)
+    "result",
+    "durationBucket",
+    "errorCode",
+    "action",
 }
 
 # Allowlisted dimension values for string fields
 ALLOWED_FORM_TYPES = {"incident", "near-miss", "complaint", "rta"}
 ALLOWED_ENVIRONMENTS = {"development", "staging", "production"}
+
+# Login UX dimension values (LOGIN_UX_CONTRACT.md)
+ALLOWED_LOGIN_RESULTS = {"success", "error"}
+ALLOWED_DURATION_BUCKETS = {"fast", "normal", "slow", "very_slow", "timeout"}
+ALLOWED_ERROR_CODES = {
+    "TIMEOUT",
+    "UNAUTHORIZED",
+    "UNAVAILABLE",
+    "SERVER_ERROR",
+    "NETWORK_ERROR",
+    "UNKNOWN",
+}
+ALLOWED_ACTIONS = {"retry", "clear_session"}
 
 # Local aggregation file (for evaluator)
 # Default to a subdirectory in the project rather than hardcoded /tmp
@@ -90,13 +115,26 @@ class TelemetryEvent(BaseModel):
             if key not in ALLOWED_DIMENSIONS:
                 raise ValueError(f"Dimension key '{key}' not in allowlist")
 
-        # Validate formType values
+        # Validate formType values (EXP-001)
         if "formType" in v and v["formType"] not in ALLOWED_FORM_TYPES:
             raise ValueError(f"formType '{v['formType']}' not in allowlist")
 
         # Validate environment values
         if "environment" in v and v["environment"] not in ALLOWED_ENVIRONMENTS:
             raise ValueError(f"environment '{v['environment']}' not in allowlist")
+
+        # Validate login UX dimension values (LOGIN_UX_CONTRACT.md)
+        if "result" in v and v["result"] not in ALLOWED_LOGIN_RESULTS:
+            raise ValueError(f"result '{v['result']}' not in allowlist")
+
+        if "durationBucket" in v and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS:
+            raise ValueError(f"durationBucket '{v['durationBucket']}' not in allowlist")
+
+        if "errorCode" in v and v["errorCode"] not in ALLOWED_ERROR_CODES:
+            raise ValueError(f"errorCode '{v['errorCode']}' not in allowlist")
+
+        if "action" in v and v["action"] not in ALLOWED_ACTIONS:
+            raise ValueError(f"action '{v['action']}' not in allowlist")
 
         return v
 
