@@ -88,8 +88,13 @@ export enum ErrorClass {
   NOT_FOUND = 'NOT_FOUND',
   NETWORK_ERROR = 'NETWORK_ERROR',
   SERVER_ERROR = 'SERVER_ERROR',
+  SETUP_REQUIRED = 'SETUP_REQUIRED',
   UNKNOWN = 'UNKNOWN',
 }
+
+// Re-export SetupRequired types for convenience
+export { isSetupRequired, SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
+export type { SetupRequiredResponse } from '../components/ui/SetupRequiredPanel'
 
 export interface ApiError extends Error {
   error_class: ErrorClass

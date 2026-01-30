@@ -26,7 +26,8 @@ import {
   Globe,
   XCircle,
 } from 'lucide-react'
-import { planetMarkApi, ErrorClass, createApiError } from '../api/client'
+import { planetMarkApi, ErrorClass, createApiError, isSetupRequired, SetupRequiredResponse } from '../api/client'
+import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface ReportingYear {
   id: number
@@ -64,7 +65,7 @@ interface Scope3Category {
 }
 
 // Bounded error state for deterministic UX
-type LoadState = 'idle' | 'loading' | 'success' | 'error'
+type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
 export default function PlanetMark() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'>('dashboard')
@@ -74,6 +75,7 @@ export default function PlanetMark() {
   const [scope3Categories, setScope3Categories] = useState<Scope3Category[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
+  const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
   // Transform API response to component types
@@ -143,11 +145,21 @@ export default function PlanetMark() {
 
     setLoadState('loading')
     setErrorClass(null)
+    setSetupRequired(null)
 
     try {
       // Fetch dashboard data from API
       const dashboardResponse = await planetMarkApi.getDashboard()
       const dashboard = dashboardResponse.data
+
+      // CRITICAL: Check for SETUP_REQUIRED response before processing
+      // This is returned as HTTP 200 but signals the module needs configuration
+      if (isSetupRequired(dashboard)) {
+        setSetupRequired(dashboard)
+        setLoadState('setup_required')
+        setRetryCount(0) // Reset retry count - this is a terminal state, not an error
+        return // Do NOT retry setup_required - it's a valid terminal state
+      }
 
       // Transform years data
       const transformedYears = dashboard.years.map(transformYear)
@@ -218,6 +230,35 @@ export default function PlanetMark() {
   const yoyChange = currentYear && years.length >= 2 
     ? ((currentYear.emissions_per_fte - years[1].emissions_per_fte) / years[1].emissions_per_fte * 100) 
     : null
+
+  // Handle SETUP_REQUIRED state with dedicated panel
+  if (loadState === 'setup_required' && setupRequired) {
+    return (
+      <div className="min-h-screen bg-background text-foreground p-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <Leaf className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Planet Mark Carbon</h1>
+              <p className="text-muted-foreground">Net-Zero Journey • GHG Protocol Aligned</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Setup Required Panel */}
+        <SetupRequiredPanel 
+          response={setupRequired} 
+          onRetry={() => {
+            setRetryCount(0)
+            loadData()
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
