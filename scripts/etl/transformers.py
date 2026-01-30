@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Optional
 
 class TransformError(Exception):
     """Raised when a transformation fails."""
+
     def __init__(self, field: str, value: Any, reason: str):
         self.field = field
         self.value = value
@@ -164,10 +165,10 @@ def sanitize_text(value: Any, max_length: Optional[int] = None) -> Optional[str]
         return None
 
     # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
 
     if max_length and len(text) > max_length:
-        text = text[:max_length - 3] + "..."
+        text = text[: max_length - 3] + "..."
 
     return text
 

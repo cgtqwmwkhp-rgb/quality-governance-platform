@@ -9,12 +9,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from .config import RiskScoringConfig, RiskLevel, get_ai_config
+from .config import RiskLevel, RiskScoringConfig, get_ai_config
 
 
 @dataclass
 class RiskFactor:
     """Individual risk factor."""
+
     name: str
     score: float
     weight: float
@@ -34,6 +35,7 @@ class RiskFactor:
 @dataclass
 class RiskAssessment:
     """Complete risk assessment."""
+
     entity_id: str
     entity_type: str
     total_score: float
@@ -57,7 +59,7 @@ class RiskAssessment:
 class RiskScorer:
     """
     Deterministic risk scoring engine.
-    
+
     Uses weighted multi-factor model:
     - Severity (40%)
     - Type (20%)

@@ -8,8 +8,8 @@ SECURITY NOTES:
 - All classifications are deterministic
 """
 
-import re
 import hashlib
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,6 +19,7 @@ from .config import ClassificationConfig, get_ai_config
 @dataclass
 class ClassificationResult:
     """Classification result."""
+
     category: str
     confidence: float
     keywords_matched: List[str]
@@ -36,6 +37,7 @@ class ClassificationResult:
 @dataclass
 class UrgencyResult:
     """Urgency detection result."""
+
     priority: str
     confidence: float
     indicators_found: List[str]
@@ -51,7 +53,7 @@ class UrgencyResult:
 class TextClassifier:
     """
     Text classification engine with security-first design.
-    
+
     SECURITY:
     - PII extraction is DISABLED by default
     - All outputs are sanitized
@@ -66,20 +68,17 @@ class TextClassifier:
         """Pre-compile regex patterns."""
         for category, keywords in self.config.complaint_categories.items():
             self._compiled_patterns[f"complaint_{category}"] = [
-                re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
-                for kw in keywords
+                re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in keywords
             ]
 
         for incident_type, keywords in self.config.incident_types.items():
             self._compiled_patterns[f"incident_{incident_type}"] = [
-                re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
-                for kw in keywords
+                re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in keywords
             ]
 
         for priority, keywords in self.config.urgency_indicators.items():
             self._compiled_patterns[f"urgency_{priority}"] = [
-                re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
-                for kw in keywords
+                re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in keywords
             ]
 
     def _normalize_text(self, text: str) -> str:
@@ -87,8 +86,8 @@ class TextClassifier:
         if not text:
             return ""
         text = text.lower()
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"[^\w\s]", " ", text)
         return text.strip()
 
     def _score_category(
@@ -103,7 +102,7 @@ class TextClassifier:
         for pattern in patterns:
             if pattern.search(text):
                 # Return keyword, not full pattern
-                keyword = pattern.pattern.replace(r'\b', '').replace('\\', '')
+                keyword = pattern.pattern.replace(r"\b", "").replace("\\", "")
                 matches.append(keyword)
 
         if not patterns:
@@ -217,14 +216,14 @@ class TextClassifier:
     ) -> Dict[str, List[str]]:
         """
         Extract entities with PII protection.
-        
+
         SECURITY: By default, PII (emails, phones) are SHA-256 hashed.
         Set hash_pii=False only for authorized internal use.
-        
+
         Args:
             text: Text to extract from
             hash_pii: If True, hash PII values (default: True)
-            
+
         Returns:
             Dictionary with entity types. PII values are hashed unless disabled.
         """
@@ -244,15 +243,15 @@ class TextClassifier:
         }
 
         # UK postcode pattern (not PII)
-        postcode_pattern = r'\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b'
+        postcode_pattern = r"\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b"
         entities["locations"] = re.findall(postcode_pattern, text, re.IGNORECASE)
 
         # Date patterns (not PII)
-        date_pattern = r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b'
+        date_pattern = r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"
         entities["dates"] = re.findall(date_pattern, text)
 
         # Reference numbers (not PII)
-        ref_pattern = r'\b(?:INC|COMP|RTA|POL|INV)-\d{4}-\d{4}\b'
+        ref_pattern = r"\b(?:INC|COMP|RTA|POL|INV)-\d{4}-\d{4}\b"
         entities["references"] = re.findall(ref_pattern, text, re.IGNORECASE)
 
         # NOTE: Email and phone extraction REMOVED for security

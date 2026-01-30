@@ -7,16 +7,16 @@ Unified interface for all AI capabilities.
 
 from typing import Any, Dict, Optional
 
-from .config import AIEngineConfig, get_ai_config
 from .classifier import TextClassifier
-from .risk_scorer import RiskScorer
 from .compliance import ComplianceChecker
+from .config import AIEngineConfig, get_ai_config
+from .risk_scorer import RiskScorer
 
 
 class GovernanceAIEngine:
     """
     Unified AI engine for governance automation.
-    
+
     Combines:
     - Text classification
     - Risk scoring

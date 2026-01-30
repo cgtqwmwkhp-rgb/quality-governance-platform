@@ -10,27 +10,25 @@ import csv
 import hashlib
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import uuid
 
-from .config import ETLConfig, EntityType, get_config
+from .config import EntityType, ETLConfig, get_config
 from .contract_probe import ContractProbe, run_contract_probe
-from .transformers import get_transformer, TransformError, sanitize_text
-from .validator import validate_records, ValidationReport
+from .transformers import TransformError, get_transformer, sanitize_text
+from .validator import ValidationReport, validate_records
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class AuditRecord:
     """Audit trail record."""
+
     timestamp: datetime
     run_id: str
     action: str
@@ -54,6 +52,7 @@ class AuditRecord:
 @dataclass
 class PipelineStats:
     """Pipeline execution statistics."""
+
     entity_type: str
     run_id: str
     start_time: datetime
@@ -88,7 +87,7 @@ class PipelineStats:
 class ETLPipeline:
     """
     Main ETL pipeline orchestrator.
-    
+
     Supports:
     - Contract validation before operations
     - Validate-only mode
@@ -118,21 +117,23 @@ class ETLPipeline:
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Add audit record."""
-        self.audit_records.append(AuditRecord(
-            timestamp=datetime.utcnow(),
-            run_id=self.run_id,
-            action=action,
-            entity_type=entity_type.value,
-            row_number=row_number,
-            source_hash=self._compute_hash(source_data),
-            details=details or {},
-        ))
+        self.audit_records.append(
+            AuditRecord(
+                timestamp=datetime.utcnow(),
+                run_id=self.run_id,
+                action=action,
+                entity_type=entity_type.value,
+                row_number=row_number,
+                source_hash=self._compute_hash(source_data),
+                details=details or {},
+            )
+        )
 
     def read_csv(self, file_path: Path) -> List[Dict[str, Any]]:
         """Read CSV file."""
         records = []
 
-        with open(file_path, 'r', encoding='utf-8-sig') as f:
+        with open(file_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 records.append(dict(row))
@@ -173,7 +174,7 @@ class ETLPipeline:
 
         # Save probe result
         probe_path = self.config.output_directory / f"contract_probe_{self.run_id}.json"
-        with open(probe_path, 'w') as f:
+        with open(probe_path, "w") as f:
             json.dump(probe_result.to_dict(), f, indent=2)
 
         logger.info(f"Contract probe saved: {probe_path}")
@@ -208,7 +209,7 @@ class ETLPipeline:
 
         # Save validation report
         report_path = self.config.output_directory / f"validation_{entity_type.value}_{self.run_id}.json"
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(report.to_dict(), f, indent=2)
 
         logger.info(f"Validation report saved: {report_path}")
@@ -272,12 +273,12 @@ class ETLPipeline:
         """Save stats and audit trail."""
         # Stats
         stats_path = self.config.output_directory / f"stats_{stats.entity_type}_{self.run_id}.json"
-        with open(stats_path, 'w') as f:
+        with open(stats_path, "w") as f:
             json.dump(stats.to_dict(), f, indent=2)
 
         # Audit trail
         audit_path = self.config.output_directory / f"audit_{self.run_id}.json"
-        with open(audit_path, 'w') as f:
+        with open(audit_path, "w") as f:
             json.dump([r.to_dict() for r in self.audit_records], f, indent=2)
 
         logger.info(f"Stats saved: {stats_path}")
@@ -325,4 +326,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

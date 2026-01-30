@@ -5,15 +5,16 @@ Stage 10: Data Foundation
 Environment-aware configuration with field mappings for all entity types.
 """
 
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
-import os
 
 
 class Environment(Enum):
     """Deployment environments."""
+
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
@@ -21,6 +22,7 @@ class Environment(Enum):
 
 class EntityType(Enum):
     """Governance entity types."""
+
     INCIDENT = "incident"
     COMPLAINT = "complaint"
     RTA = "rta"
@@ -29,6 +31,7 @@ class EntityType(Enum):
 @dataclass
 class APIConfig:
     """API connection configuration."""
+
     base_url: str
     api_version: str = "v1"
     timeout_seconds: int = 30
@@ -51,6 +54,7 @@ class APIConfig:
 @dataclass
 class FieldMapping:
     """Maps source column to target API field."""
+
     source_column: str
     target_field: str
     transformer: Optional[str] = None
@@ -109,6 +113,7 @@ ENVIRONMENT_CONFIGS = {
 @dataclass
 class ETLConfig:
     """Master ETL configuration."""
+
     environment: Environment
     api_config: APIConfig
     source_directory: Path
@@ -116,7 +121,7 @@ class ETLConfig:
     batch_size: int = 50
     dry_run: bool = False
     validate_only: bool = False
-    
+
     # Entity field mappings
     incident_mappings: List[FieldMapping] = field(default_factory=lambda: INCIDENT_MAPPINGS)
     complaint_mappings: List[FieldMapping] = field(default_factory=lambda: COMPLAINT_MAPPINGS)

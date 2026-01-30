@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 class ComplianceSeverity(Enum):
     """Compliance issue severity."""
+
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -24,6 +25,7 @@ class ComplianceSeverity(Enum):
 @dataclass
 class ComplianceViolation:
     """Single compliance violation."""
+
     rule_id: str
     rule_name: str
     severity: ComplianceSeverity
@@ -43,6 +45,7 @@ class ComplianceViolation:
 @dataclass
 class ComplianceCheckResult:
     """Compliance check result for an entity."""
+
     entity_id: str
     entity_type: str
     is_compliant: bool
@@ -255,7 +258,7 @@ RTA_RULES: List[Callable[[Dict[str, Any]], Optional[ComplianceViolation]]] = [
 class ComplianceChecker:
     """
     Compliance checker with fixed, auditable rules.
-    
+
     SECURITY: No eval() - all rules are pre-defined functions.
     """
 
@@ -277,9 +280,7 @@ class ComplianceChecker:
                 violations.append(violation)
 
         # Compliant if no ERROR violations
-        is_compliant = not any(
-            v.severity == ComplianceSeverity.ERROR for v in violations
-        )
+        is_compliant = not any(v.severity == ComplianceSeverity.ERROR for v in violations)
 
         return ComplianceCheckResult(
             entity_id=str(entity.get("id", "unknown")),
@@ -314,12 +315,14 @@ class ComplianceChecker:
         )
 
         for i, violation in enumerate(sorted_violations, 1):
-            plan.append({
-                "priority": i,
-                "rule_id": violation.rule_id,
-                "severity": violation.severity.value,
-                "issue": violation.message,
-                "action": violation.remediation,
-            })
+            plan.append(
+                {
+                    "priority": i,
+                    "rule_id": violation.rule_id,
+                    "severity": violation.severity.value,
+                    "issue": violation.message,
+                    "action": violation.remediation,
+                }
+            )
 
         return plan

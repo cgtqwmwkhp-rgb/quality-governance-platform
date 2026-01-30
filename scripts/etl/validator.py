@@ -6,17 +6,18 @@ Validates records against schema and business rules.
 Generates structured validation reports.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-import re
 
-from .config import FieldMapping, EntityType
+from .config import EntityType, FieldMapping
 
 
 class ValidationSeverity(Enum):
     """Validation issue severity."""
+
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -25,6 +26,7 @@ class ValidationSeverity(Enum):
 @dataclass
 class ValidationIssue:
     """Single validation issue."""
+
     severity: ValidationSeverity
     field: str
     message: str
@@ -44,6 +46,7 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """Validation result for a single record."""
+
     is_valid: bool
     row_number: int
     issues: List[ValidationIssue] = field(default_factory=list)
@@ -54,23 +57,27 @@ class ValidationResult:
         return sum(1 for i in self.issues if i.severity == ValidationSeverity.ERROR)
 
     def add_error(self, field_name: str, message: str, value: Any = None) -> None:
-        self.issues.append(ValidationIssue(
-            severity=ValidationSeverity.ERROR,
-            field=field_name,
-            message=message,
-            value=value,
-            row_number=self.row_number,
-        ))
+        self.issues.append(
+            ValidationIssue(
+                severity=ValidationSeverity.ERROR,
+                field=field_name,
+                message=message,
+                value=value,
+                row_number=self.row_number,
+            )
+        )
         self.is_valid = False
 
     def add_warning(self, field_name: str, message: str, value: Any = None) -> None:
-        self.issues.append(ValidationIssue(
-            severity=ValidationSeverity.WARNING,
-            field=field_name,
-            message=message,
-            value=value,
-            row_number=self.row_number,
-        ))
+        self.issues.append(
+            ValidationIssue(
+                severity=ValidationSeverity.WARNING,
+                field=field_name,
+                message=message,
+                value=value,
+                row_number=self.row_number,
+            )
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -84,6 +91,7 @@ class ValidationResult:
 @dataclass
 class ValidationReport:
     """Complete validation report."""
+
     entity_type: str
     source_file: str
     timestamp: datetime
@@ -187,8 +195,8 @@ def validate_records(
 def _is_valid_date(value: str) -> bool:
     """Check if string looks like a valid date."""
     patterns = [
-        r'^\d{4}-\d{2}-\d{2}$',
-        r'^\d{2}/\d{2}/\d{4}$',
-        r'^\d{2}-\d{2}-\d{4}$',
+        r"^\d{4}-\d{2}-\d{2}$",
+        r"^\d{2}/\d{2}/\d{4}$",
+        r"^\d{2}-\d{2}-\d{4}$",
     ]
     return any(re.match(p, value.strip()) for p in patterns)

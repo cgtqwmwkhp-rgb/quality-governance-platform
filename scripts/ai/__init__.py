@@ -8,29 +8,11 @@ SECURITY NOTES:
 - All outputs are deterministic and auditable
 """
 
-from .config import (
-    AIEngineConfig,
-    ClassificationConfig,
-    ComplianceConfig,
-    RiskScoringConfig,
-    RiskLevel,
-    get_ai_config,
-)
-from .classifier import (
-    ClassificationResult,
-    TextClassifier,
-    UrgencyResult,
-)
-from .risk_scorer import (
-    RiskAssessment,
-    RiskScorer,
-)
-from .compliance import (
-    ComplianceChecker,
-    ComplianceCheckResult,
-    ComplianceViolation,
-)
+from .classifier import ClassificationResult, TextClassifier, UrgencyResult
+from .compliance import ComplianceChecker, ComplianceCheckResult, ComplianceViolation
+from .config import AIEngineConfig, ClassificationConfig, ComplianceConfig, RiskLevel, RiskScoringConfig, get_ai_config
 from .engine import GovernanceAIEngine
+from .risk_scorer import RiskAssessment, RiskScorer
 
 __version__ = "1.0.0"
 __all__ = [
