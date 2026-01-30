@@ -143,6 +143,10 @@ jobs:
           echo "Endpoints Passed:  $ENDPOINTS_PASSED"
           echo ""
           
+          # Generate incident ID for tracking
+          INCIDENT_DATE=$(date +%Y-%m-%d)
+          INCIDENT_ID="INC-${INCIDENT_DATE}-STAGING-${OUTCOME}"
+          
           case "$OUTCOME" in
             "VERIFIED")
               echo "✅ NIGHTLY VERIFICATION PASSED"
@@ -154,18 +158,48 @@ jobs:
               echo "   Consider investigating non-critical failures."
               ;;
             "UNAVAILABLE")
+              echo ""
+              echo "========================================================================"
+              echo "INCIDENT REQUIRED: ${INCIDENT_ID}"
+              echo "========================================================================"
+              echo ""
               echo "❌ NIGHTLY VERIFICATION FAILED - STAGING UNAVAILABLE"
-              echo "   Staging ACA is not reachable."
+              echo ""
+              echo "   Platform:  $PLATFORM"
+              echo "   Base URL:  $BASE_URL"
+              echo "   Outcome:   $OUTCOME"
+              echo ""
+              echo "   Staging Azure Container App is not reachable or not deployed."
               echo "   This is a BLOCKING failure in REQUIRED mode."
               echo ""
-              echo "ACTION REQUIRED: Investigate staging availability"
+              echo "   IMMEDIATE ACTIONS:"
+              echo "   1. Check Azure Container Apps portal for qgp-staging"
+              echo "   2. Verify Container App revision is active and receiving traffic"
+              echo "   3. Check Azure Container Apps logs for errors"
+              echo "   4. See ADR-0004 for infrastructure requirements"
+              echo ""
+              echo "   REFERENCE: docs/evidence/INCIDENT_TEMPLATE.md"
+              echo "========================================================================"
               ;;
             "FAILED")
+              echo ""
+              echo "========================================================================"
+              echo "INCIDENT REQUIRED: ${INCIDENT_ID}"
+              echo "========================================================================"
+              echo ""
               echo "❌ NIGHTLY VERIFICATION FAILED - CONTRACT BROKEN"
+              echo ""
               echo "   Staging ACA is reachable but contract checks failed."
               echo "   This indicates a breaking change in the API."
               echo ""
-              echo "ACTION REQUIRED: Investigate API contract changes"
+              echo "   IMMEDIATE ACTIONS:"
+              echo "   1. Review recent deployments to staging"
+              echo "   2. Check endpoint responses for unexpected changes"
+              echo "   3. Verify OpenAPI contract matches implementation"
+              echo "   4. Roll back if necessary"
+              echo ""
+              echo "   REFERENCE: docs/evidence/INCIDENT_TEMPLATE.md"
+              echo "========================================================================"
               ;;
           esac
 

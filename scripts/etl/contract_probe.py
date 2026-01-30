@@ -294,17 +294,20 @@ class ContractProbe:
                 context=self._ssl_context,
             ) as response:
                 elapsed = (time.time() - start) * 1000
+                raw_body = response.read().decode("utf-8")
                 try:
-                    body = json.loads(response.read().decode("utf-8"))
+                    body = json.loads(raw_body)
                 except json.JSONDecodeError:
-                    body = {"raw": "non-json-response"}
+                    body = {"_raw": raw_body}
                 return response.status, body, elapsed
         except urllib.error.HTTPError as e:
             elapsed = (time.time() - start) * 1000
+            raw_body = e.read().decode("utf-8")
             try:
-                body = json.loads(e.read().decode("utf-8"))
+                body = json.loads(raw_body)
             except Exception:
-                body = {"error": str(e.reason)}
+                # Preserve raw response for ACA error detection
+                body = {"_raw": raw_body, "error": str(e.reason)}
             return e.code, body, elapsed
         except urllib.error.URLError as e:
             elapsed = (time.time() - start) * 1000
@@ -313,11 +316,17 @@ class ContractProbe:
             elapsed = (time.time() - start) * 1000
             return 0, {"error": str(e)}, elapsed
 
-    def check_reachable(self) -> Tuple[bool, EndpointProbeResult]:
+    def check_reachable(self) -> Tuple[bool, EndpointProbeResult, str]:
         """
         Check if the target is reachable using multiple endpoints.
 
-        Returns: (is_reachable: bool, health_result: EndpointProbeResult)
+        Returns: (is_reachable: bool, health_result: EndpointProbeResult, infra_state: str)
+
+        infra_state values:
+        - "APP_RUNNING": Application is responding
+        - "ACA_NOT_DEPLOYED": Azure Container App does not exist or is stopped
+        - "APP_NOT_FOUND": Got 404 but not Azure-specific error
+        - "UNREACHABLE": Connection failed
         """
         # Try multiple health endpoints in order of preference
         health_paths = ["/healthz", "/readyz", "/health", "/"]
@@ -337,9 +346,28 @@ class ContractProbe:
 
             # Consider reachable if we get any valid HTTP response
             if status > 0:
-                result.success = status in (200, 204, 401, 403, 404)
                 result.checks["http_response"] = True
-                return True, result
+
+                # Check for Azure Container Apps specific error
+                if status == 404:
+                    # Check if body contains Azure ACA error message
+                    # Look in both _raw field and stringified body
+                    body_str = body.get("_raw", "") if isinstance(body, dict) else str(body)
+                    if "Container App" in body_str and ("stopped" in body_str or "does not exist" in body_str):
+                        result.errors.append("Azure Container App is stopped or does not exist")
+                        return True, result, "ACA_NOT_DEPLOYED"
+
+                # Application is responding (even if 401/403/404)
+                if status in (200, 204):
+                    result.success = True
+                    return True, result, "APP_RUNNING"
+                elif status in (401, 403):
+                    result.success = True
+                    result.checks["auth_enforced"] = True
+                    return True, result, "APP_RUNNING"
+                else:
+                    # Other response - app might be running but route not found
+                    return True, result, "APP_NOT_FOUND"
 
         # All attempts failed - not reachable
         result = EndpointProbeResult(
@@ -351,7 +379,7 @@ class ContractProbe:
             response_time_ms=elapsed,
             errors=["Connection failed to all health endpoints"],
         )
-        return False, result
+        return False, result, "UNREACHABLE"
 
     def probe_endpoint(self, check: EndpointCheck) -> EndpointProbeResult:
         """Probe a single endpoint according to its configuration."""
@@ -437,8 +465,8 @@ class ContractProbe:
         - FAILED: Reachable but critical checks failed (mixed responses)
         - DEGRADED: Reachable, critical pass, non-critical failed
         """
-        # Step 1: Check reachability
-        is_reachable, reachability_result = self.check_reachable()
+        # Step 1: Check reachability and infrastructure state
+        is_reachable, reachability_result, infra_state = self.check_reachable()
 
         if not is_reachable:
             return ContractProbeResult(
@@ -452,7 +480,23 @@ class ContractProbe:
                 endpoints_checked=1,
                 endpoints_failed=1,
                 endpoints=[reachability_result],
-                message=f"Target {env_name} is UNREACHABLE. Contract NOT validated.",
+                message=f"Target {env_name} is UNREACHABLE (connection failed). Contract NOT validated.",
+            )
+
+        # Check for Azure Container Apps specific error
+        if infra_state == "ACA_NOT_DEPLOYED":
+            return ContractProbeResult(
+                target=env_name,
+                platform=platform,
+                base_url=self.base_url,
+                reachable=True,  # Ingress reachable
+                outcome=ProbeOutcome.UNAVAILABLE,
+                enforcement_mode=self.enforcement_mode,
+                timestamp=datetime.utcnow(),
+                endpoints_checked=1,
+                endpoints_failed=1,
+                endpoints=[reachability_result],
+                message=f"Target {env_name} CONTAINER APP NOT DEPLOYED. Azure reports: 'Container App is stopped or does not exist'. Contract NOT validated. See ADR-0004.",
             )
 
         # Step 2: Probe all endpoints in minimum contract set
