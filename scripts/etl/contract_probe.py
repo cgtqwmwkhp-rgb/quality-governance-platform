@@ -433,8 +433,8 @@ class ContractProbe:
 
         Returns ContractProbeResult with outcome:
         - VERIFIED: Reachable and all critical checks pass
-        - UNAVAILABLE: Not reachable (NOT validated)
-        - FAILED: Reachable but critical checks failed
+        - UNAVAILABLE: Not reachable OR app not deployed (all 404s)
+        - FAILED: Reachable but critical checks failed (mixed responses)
         - DEGRADED: Reachable, critical pass, non-critical failed
         """
         # Step 1: Check reachability
@@ -459,14 +459,22 @@ class ContractProbe:
         endpoints = []
         critical_failures = 0
         non_critical_failures = 0
+        all_404_count = 0
+        total_endpoints = 0
 
         # Add legacy health check first
         legacy_result = self.probe_endpoint(LEGACY_HEALTH_ENDPOINT)
         endpoints.append(legacy_result)
+        total_endpoints += 1
+        if legacy_result.status_code == 404:
+            all_404_count += 1
 
         for check in MINIMUM_CONTRACT_ENDPOINTS:
             result = self.probe_endpoint(check)
             endpoints.append(result)
+            total_endpoints += 1
+            if result.status_code == 404:
+                all_404_count += 1
             if not result.success:
                 if result.critical:
                     critical_failures += 1
@@ -476,6 +484,24 @@ class ContractProbe:
         # Step 3: Determine outcome
         endpoints_passed = sum(1 for e in endpoints if e.success)
         endpoints_failed = len(endpoints) - endpoints_passed
+
+        # Special case: ALL endpoints return 404
+        # This means infrastructure is up but app not deployed - treat as UNAVAILABLE
+        if all_404_count == total_endpoints:
+            return ContractProbeResult(
+                target=env_name,
+                platform=platform,
+                base_url=self.base_url,
+                reachable=True,  # Infrastructure reachable
+                outcome=ProbeOutcome.UNAVAILABLE,
+                enforcement_mode=self.enforcement_mode,
+                timestamp=datetime.utcnow(),
+                endpoints_checked=len(endpoints),
+                endpoints_passed=0,
+                endpoints_failed=len(endpoints),
+                endpoints=endpoints,
+                message=f"Target {env_name} infrastructure reachable but APP NOT DEPLOYED (all 404). Contract NOT validated.",
+            )
 
         if critical_failures > 0:
             outcome = ProbeOutcome.FAILED
