@@ -1,7 +1,7 @@
 {
   "$schema": "./environment_endpoints.schema.json",
   "_comment": "Single source of truth for environment API endpoints. Updated by deploy workflows.",
-  "_last_updated": "2026-01-30T22:58:00Z",
+  "_last_updated": "2026-01-30T23:05:00Z",
   "_updated_by": "config-drift-elimination",
   "_platform": "Azure Container Apps (ACA)",
   
@@ -100,10 +100,5 @@
       "nightly_verification": true,
       "consecutive_failures_for_incident": 2
     }
-  },
-  
-  "_forbidden_strings": [
-    "icytree-89d41650"
-  ],
-  "_forbidden_strings_note": "These strings indicate configuration drift and should not appear in staging config"
+  }
 }
