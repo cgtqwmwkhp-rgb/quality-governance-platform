@@ -11,16 +11,20 @@ Features:
 - ISO 14001 cross-mapping
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
+
+logger = logging.getLogger(__name__)
 from src.domain.models.planet_mark import (
     CarbonEvidence,
     CarbonReportingYear,
@@ -213,12 +217,31 @@ async def list_reporting_years(
     """List all carbon reporting years with comparison"""
     try:
         years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).all()
-    except Exception:
-        # Table may not exist or migration not applied - return standardized setup required
+    except (ProgrammingError, OperationalError) as e:
+        # Table doesn't exist or schema mismatch - log and return setup required
+        logger.warning(
+            "Planet Mark years query failed (likely missing table): %s",
+            str(e)[:200],
+            extra={"request_id": get_request_id(request)},
+        )
         return setup_required_response(
             module="planet-mark",
             message="Planet Mark module not initialized. Database migrations may need to be applied.",
             next_action="Run database migrations with: alembic upgrade head",
+            request_id=get_request_id(request),
+        )
+    except Exception as e:
+        # Unexpected error - log full details for debugging
+        logger.error(
+            "Planet Mark years query failed unexpectedly: %s: %s",
+            type(e).__name__,
+            str(e)[:500],
+            extra={"request_id": get_request_id(request)},
+        )
+        return setup_required_response(
+            module="planet-mark",
+            message=f"Planet Mark query failed: {type(e).__name__}. Check server logs.",
+            next_action="Review application logs for request_id and contact support.",
             request_id=get_request_id(request),
         )
 
@@ -849,12 +872,31 @@ async def get_carbon_dashboard(
     """Get Planet Mark carbon management dashboard"""
     try:
         years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
-    except Exception:
-        # Table may not exist or migration not applied - return standardized setup required
+    except (ProgrammingError, OperationalError) as e:
+        # Table doesn't exist or schema mismatch - log and return setup required
+        logger.warning(
+            "Planet Mark dashboard query failed (likely missing table): %s",
+            str(e)[:200],
+            extra={"request_id": get_request_id(request)},
+        )
         return setup_required_response(
             module="planet-mark",
             message="Planet Mark module not initialized. Database migrations may need to be applied.",
             next_action="Run database migrations with: alembic upgrade head",
+            request_id=get_request_id(request),
+        )
+    except Exception as e:
+        # Unexpected error - log full details for debugging
+        logger.error(
+            "Planet Mark dashboard query failed unexpectedly: %s: %s",
+            type(e).__name__,
+            str(e)[:500],
+            extra={"request_id": get_request_id(request)},
+        )
+        return setup_required_response(
+            module="planet-mark",
+            message=f"Planet Mark query failed: {type(e).__name__}. Check server logs.",
+            next_action="Review application logs for request_id and contact support.",
             request_id=get_request_id(request),
         )
 
