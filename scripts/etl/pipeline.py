@@ -337,9 +337,7 @@ class ETLPipeline:
                 if entity_type == EntityType.INCIDENT:
                     # Ensure incident_date is present
                     if "incident_date" not in transformed:
-                        from datetime import datetime as dt
-
-                        transformed["incident_date"] = dt.utcnow().isoformat()
+                        transformed["incident_date"] = datetime.utcnow().isoformat()
                     import_result = api_client.create_incident(transformed)
                 elif entity_type == EntityType.COMPLAINT:
                     import_result = api_client.create_complaint(transformed)
