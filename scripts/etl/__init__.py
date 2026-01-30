@@ -5,8 +5,13 @@ Stage 10: Data Foundation
 Contract-driven, idempotent ETL pipeline for governance data migration.
 """
 
-from .config import EntityType, Environment, ETLConfig, get_config
-from .contract_probe import ContractProbe, ProbeResult
+from .config import ETLConfig, EntityType, Environment, get_config
+from .contract_probe import (
+    ContractProbe,
+    ContractProbeResult,
+    ProbeOutcome,
+    run_contract_probe,
+)
 from .pipeline import ETLPipeline, PipelineStats
 from .transformers import TransformError, get_transformer
 from .validator import ValidationReport, ValidationResult, validate_records
@@ -18,7 +23,9 @@ __all__ = [
     "Environment",
     "get_config",
     "ContractProbe",
-    "ProbeResult",
+    "ContractProbeResult",
+    "ProbeOutcome",
+    "run_contract_probe",
     "TransformError",
     "get_transformer",
     "ValidationReport",

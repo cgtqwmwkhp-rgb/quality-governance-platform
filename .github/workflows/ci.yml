@@ -844,8 +844,11 @@ jobs:
   etl-contract-probe:
     name: ETL Contract Probe (Staging)
     runs-on: ubuntu-latest
-    # Only run on PRs that touch ETL-related files
+    # Run on all PRs - provides contract compliance signal
     if: github.event_name == 'pull_request'
+    outputs:
+      outcome: ${{ steps.probe.outputs.outcome }}
+      reachable: ${{ steps.probe.outputs.reachable }}
     
     steps:
       - name: Checkout code
@@ -856,120 +859,89 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install minimal dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # ETL modules use only stdlib - no external deps needed
-
       - name: Run ETL Contract Probe
         id: probe
         env:
-          # Read-only token for staging API
-          QGP_STAGING_TOKEN: ${{ secrets.QGP_STAGING_READ_TOKEN }}
-          ETL_ENVIRONMENT: staging
+          QGP_API_TOKEN: ${{ secrets.QGP_STAGING_READ_TOKEN }}
         run: |
-          echo "=== ETL Contract Probe (Read-Only) ==="
-          echo "Target: Staging API"
+          echo "=============================================="
+          echo "ETL CONTRACT PROBE - EXPLICIT OUTCOMES"
+          echo "=============================================="
+          echo ""
+          echo "Outcomes:"
+          echo "  VERIFIED    = Staging reachable + all checks pass"
+          echo "  UNAVAILABLE = Staging unreachable (NOT validated)"
+          echo "  FAILED      = Staging reachable but checks failed"
           echo ""
           
-          # Run contract probe
+          # Run the probe using the new explicit outcome system
           python3 -c "
           import json
           import sys
           sys.path.insert(0, '.')
           
-          from scripts.etl.contract_probe import ContractProbe
-          from scripts.etl.config import APIConfig
+          from scripts.etl.contract_probe import run_contract_probe, ProbeOutcome
           
-          # Staging config
-          config = APIConfig(
-              base_url='https://qgp-staging.icytree-89d41650.uksouth.azurecontainerapps.io',
-              timeout_seconds=30,
-          )
+          result = run_contract_probe('staging')
           
-          probe = ContractProbe(config)
-          
-          # Probe health endpoint (no auth required)
-          print('1. Probing /health...')
-          health = probe.probe_health()
-          print(f'   Status: {health.status_code}')
-          print(f'   Success: {health.success}')
-          
-          # Check if staging is reachable
-          if health.status_code == 0:
-              print('')
-              print('⚠️ Staging API not reachable - skipping auth-required endpoints')
-              print('This is expected if staging is not deployed')
-              result = {'health_reachable': False, 'skipped': True}
-          else:
-              print('')
-              print('2. Probing API contract structure...')
-              
-              # Probe endpoints (will return 401/403 without token, which is expected)
-              from scripts.etl.config import EntityType
-              
-              results = {}
-              for entity in EntityType:
-                  ep_result = probe.probe_endpoint(entity)
-                  results[entity.value] = {
-                      'status': ep_result.status_code,
-                      'success': ep_result.success,
-                      'checks': ep_result.checks,
-                  }
-                  print(f'   {entity.value}: {ep_result.status_code} (auth_enforced: {ep_result.checks.get(\"auth_enforcement\", \"N/A\")})')
-              
-              result = {
-                  'health_reachable': health.success,
-                  'endpoints_probed': len(results),
-                  'all_auth_enforced': all(r.get('checks', {}).get('auth_enforcement', False) for r in results.values()),
-              }
-          
-          print('')
-          print('=== Probe Result ===')
-          print(json.dumps(result, indent=2))
-          
-          # Save result
+          # Save full result
           with open('probe-result.json', 'w') as f:
-              json.dump(result, f, indent=2)
-          "
+              json.dump(result.to_dict(), f, indent=2)
           
-          echo ""
-          echo "✅ ETL contract probe completed"
+          # Output for GitHub Actions
+          print(f'::set-output name=outcome::{result.outcome.value}')
+          print(f'::set-output name=reachable::{str(result.reachable).lower()}')
+          
+          # Exit code based on outcome
+          if result.outcome == ProbeOutcome.FAILED:
+              sys.exit(1)
+          else:
+              sys.exit(0)
+          "
 
-      - name: Validate Probe Results
+      - name: Report Probe Outcome
+        if: always()
         run: |
-          echo "=== Validating Contract Probe Results ==="
+          echo ""
+          echo "=============================================="
+          echo "PROBE RESULT SUMMARY"
+          echo "=============================================="
           
           if [ ! -f probe-result.json ]; then
-            echo "❌ No probe result file found"
-            exit 1
-          fi
-          
-          # Check if probe was skipped due to staging being down
-          SKIPPED=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('skipped', False))")
-          
-          if [ "$SKIPPED" == "True" ]; then
-            echo "⚠️ Probe skipped - staging not reachable"
-            echo "This is non-blocking for tooling PRs"
+            echo "❌ No probe result file"
             exit 0
           fi
           
-          # Validate expected structure
-          python3 -c "
-          import json
-          import sys
+          OUTCOME=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('outcome', 'UNKNOWN'))")
+          REACHABLE=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('reachable', False))")
+          MESSAGE=$(python3 -c "import json; print(json.load(open('probe-result.json')).get('message', ''))")
           
-          with open('probe-result.json') as f:
-              result = json.load(f)
+          echo "Outcome:   $OUTCOME"
+          echo "Reachable: $REACHABLE"
+          echo "Message:   $MESSAGE"
+          echo ""
           
-          # For now, just verify the probe ran successfully
-          if result.get('health_reachable') or result.get('skipped'):
-              print('✅ Contract probe validation passed')
-              sys.exit(0)
-          else:
-              print('⚠️ Staging API health check failed - non-blocking for tooling PRs')
-              sys.exit(0)
-          "
+          case "$OUTCOME" in
+            "VERIFIED")
+              echo "✅ CONTRACT VERIFIED"
+              echo "   Staging API is reachable and all contract checks passed."
+              echo "   This is proof of contract compliance."
+              ;;
+            "UNAVAILABLE")
+              echo "⚠️ NOT VALIDATED (staging unavailable)"
+              echo "   Staging API is not reachable."
+              echo "   Contract compliance was NOT verified."
+              echo "   This does NOT constitute a pass - it means we could not check."
+              ;;
+            "FAILED")
+              echo "❌ CONTRACT FAILED"
+              echo "   Staging API is reachable but contract checks failed."
+              echo "   This is a blocking failure."
+              ;;
+            *)
+              echo "❓ Unknown outcome: $OUTCOME"
+              ;;
+          esac
 
       - name: Upload Probe Results
         uses: actions/upload-artifact@v4

@@ -1,0 +1,36 @@
+{
+  "$schema": "./environment_endpoints.schema.json",
+  "_comment": "Single source of truth for environment API endpoints. Updated by deploy workflows.",
+  "_last_updated": "2026-01-30T20:30:00Z",
+  "_updated_by": "manual",
+  
+  "environments": {
+    "staging": {
+      "api_base_url": "https://app-qgp-staging.azurewebsites.net",
+      "swa_url": "https://purple-water-03205fa03-staging.uksouth.azurestaticapps.net",
+      "health_endpoint": "/health",
+      "api_version": "v1",
+      "deployed": true
+    },
+    "production": {
+      "api_base_url": "https://app-qgp-prod.azurewebsites.net",
+      "swa_url": "https://purple-water-03205fa03.uksouth.azurestaticapps.net",
+      "health_endpoint": "/health",
+      "api_version": "v1",
+      "deployed": true
+    }
+  },
+  
+  "contract_probe": {
+    "timeout_seconds": 30,
+    "required_endpoints": [
+      "/health",
+      "/api/v1/incidents",
+      "/api/v1/complaints/",
+      "/api/v1/rtas/"
+    ],
+    "required_response_keys": {
+      "paginated": ["items", "total", "page", "page_size"]
+    }
+  }
+}
