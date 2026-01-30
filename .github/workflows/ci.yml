@@ -877,6 +877,7 @@ jobs:
           # Run the probe using the new explicit outcome system
           python3 -c "
           import json
+          import os
           import sys
           sys.path.insert(0, '.')
           
@@ -888,9 +889,12 @@ jobs:
           with open('probe-result.json', 'w') as f:
               json.dump(result.to_dict(), f, indent=2)
           
-          # Output for GitHub Actions
-          print(f'::set-output name=outcome::{result.outcome.value}')
-          print(f'::set-output name=reachable::{str(result.reachable).lower()}')
+          # Output for GitHub Actions (new format)
+          github_output = os.environ.get('GITHUB_OUTPUT', '')
+          if github_output:
+              with open(github_output, 'a') as f:
+                  f.write(f'outcome={result.outcome.value}\n')
+                  f.write(f'reachable={str(result.reachable).lower()}\n')
           
           # Exit code based on outcome
           if result.outcome == ProbeOutcome.FAILED:
