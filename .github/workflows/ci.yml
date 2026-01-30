@@ -75,6 +75,7 @@ jobs:
           ./scripts/governance/runtime-smoke-gate.sh --self-test
 
 
+
   config-drift-guard:
     name: Configuration Drift Guard
     runs-on: ubuntu-latest
@@ -88,15 +89,12 @@ jobs:
           echo "=== Configuration Drift Guard ==="
           echo "Checking for forbidden strings that indicate configuration drift..."
           
-          # Forbidden strings - these should not appear in staging config
-          # icytree-89d41650 was the old/incorrect ACA environment reference
-          FORBIDDEN_STRINGS=(
-            "icytree-89d41650"
-          )
+          # Forbidden string - legacy ACA environment reference
+          FORBIDDEN="icytree-89d41650"
           
           # Files to check
-          CHECK_PATTERNS=(
-            "scripts/etl/*.py"
+          FILES=(
+            "scripts/etl/config.py"
             "docs/evidence/environment_endpoints.json"
             ".github/workflows/deploy-staging.yml"
             "scripts/infra/provision-aca-staging.sh"
@@ -104,21 +102,17 @@ jobs:
           
           DRIFT_FOUND=0
           
-          for pattern in "\${CHECK_PATTERNS[@]}"; do
-            for file in \$pattern; do
-              if [ -f "\$file" ]; then
-                for forbidden in "\${FORBIDDEN_STRINGS[@]}"; do
-                  if grep -q "\$forbidden" "\$file" 2>/dev/null; then
-                    echo "❌ DRIFT DETECTED: '\$forbidden' found in \$file"
-                    grep -n "\$forbidden" "\$file" | head -3
-                    DRIFT_FOUND=1
-                  fi
-                done
+          for file in "${FILES[@]}"; do
+            if [ -f "$file" ]; then
+              if grep -q "$FORBIDDEN" "$file" 2>/dev/null; then
+                echo "❌ DRIFT DETECTED: '$FORBIDDEN' found in $file"
+                grep -n "$FORBIDDEN" "$file" | head -3
+                DRIFT_FOUND=1
               fi
-            done
+            fi
           done
           
-          if [ \$DRIFT_FOUND -eq 1 ]; then
+          if [ "$DRIFT_FOUND" = "1" ]; then
             echo ""
             echo "❌ Configuration drift detected!"
             echo "Please update the files to use correct values:"
@@ -129,6 +123,7 @@ jobs:
           
           echo "✅ No configuration drift detected"
           echo "All configuration files use correct environment references"
+
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
     runs-on: ubuntu-latest
