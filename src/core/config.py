@@ -99,7 +99,9 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8080",
         "http://localhost:5173",
-        # Production Azure Static Web App
+        # Production Azure Static Web App (custom domain style)
+        "https://app-qgp-prod.azurestaticapps.net",
+        # Production Azure Static Web App (auto-generated style)
         "https://purple-water-03205fa03.6.azurestaticapps.net",
         # Staging Azure Static Web App (if different)
         # Add staging origin here when deployed
