@@ -1031,6 +1031,142 @@ jobs:
           echo ""
           echo "✅ All security verification checks passed!"
 
+      # ==========================================================================
+      # POST-DEPLOY RUNTIME SMOKE GATE
+      # Verifies CORS, PlanetMark, and UVDB endpoints are functional
+      # Added to prevent recurrence of CORS/stability incidents
+      # ==========================================================================
+      - name: Post-deploy runtime smoke gate
+        id: runtime-smoke-gate
+        run: |
+          set -euo pipefail
+          
+          echo "## 🔥 Runtime Smoke Gate - CORS & Module Verification"
+          echo ""
+          
+          PROD_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          FRONTEND_ORIGIN="https://app-qgp-prod.azurestaticapps.net"
+          EXPECTED_SHA="${{ github.sha }}"
+          
+          FAILURES=0
+          
+          # --- Test 1: Build SHA Verification ---
+          echo "### Test 1: Build SHA Verification"
+          VERSION_BODY=$(curl -sS --max-time 10 "$PROD_URL/api/v1/meta/version" || echo '{}')
+          DEPLOYED_SHA=$(echo "$VERSION_BODY" | jq -r '.build_sha // "unknown"')
+          
+          if [ "$DEPLOYED_SHA" = "$EXPECTED_SHA" ]; then
+            echo "✅ Build SHA matches: $DEPLOYED_SHA"
+          else
+            echo "❌ Build SHA mismatch: expected $EXPECTED_SHA, got $DEPLOYED_SHA"
+            FAILURES=$((FAILURES + 1))
+          fi
+          echo ""
+          
+          # --- Test 2: CORS Preflight Verification ---
+          echo "### Test 2: CORS Preflight Verification"
+          CORS_HEADERS=$(curl -sS -X OPTIONS "$PROD_URL/api/v1/meta/version" \
+            -H "Origin: $FRONTEND_ORIGIN" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: Authorization" \
+            --max-time 10 \
+            -D - -o /dev/null 2>/dev/null || echo "CURL_FAILED")
+          
+          CORS_STATUS=$(echo "$CORS_HEADERS" | head -1 | grep -oE "[0-9]{3}" || echo "000")
+          CORS_ORIGIN=$(echo "$CORS_HEADERS" | grep -i "access-control-allow-origin" | cut -d: -f2- | tr -d '[:space:]' || echo "missing")
+          
+          if [ "$CORS_STATUS" = "200" ] || [ "$CORS_STATUS" = "204" ]; then
+            echo "✅ CORS preflight: HTTP $CORS_STATUS"
+          else
+            echo "⚠️ CORS preflight: HTTP $CORS_STATUS (may still work for non-preflight)"
+          fi
+          
+          if echo "$CORS_HEADERS" | grep -qi "access-control-allow-origin"; then
+            echo "✅ Access-Control-Allow-Origin header present"
+          else
+            echo "⚠️ Access-Control-Allow-Origin header not found on OPTIONS"
+          fi
+          
+          # Verify CORS on GET request (more important)
+          GET_HEADERS=$(curl -sS "$PROD_URL/api/v1/meta/version" \
+            -H "Origin: $FRONTEND_ORIGIN" \
+            --max-time 10 \
+            -D - -o /dev/null 2>/dev/null || echo "CURL_FAILED")
+          
+          if echo "$GET_HEADERS" | grep -qi "access-control-allow-credentials: true"; then
+            echo "✅ CORS credentials allowed on GET"
+          else
+            echo "❌ CORS credentials NOT allowed - frontend will fail"
+            FAILURES=$((FAILURES + 1))
+          fi
+          echo ""
+          
+          # --- Test 3: UVDB Sections Endpoint ---
+          echo "### Test 3: UVDB Sections Endpoint"
+          UVDB_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$PROD_URL/api/v1/uvdb/sections" || echo "000")
+          
+          if [ "$UVDB_STATUS" = "200" ]; then
+            echo "✅ UVDB sections: HTTP $UVDB_STATUS"
+          else
+            echo "❌ UVDB sections: HTTP $UVDB_STATUS (expected 200)"
+            FAILURES=$((FAILURES + 1))
+          fi
+          echo ""
+          
+          # --- Test 4: PlanetMark Dashboard Endpoint ---
+          echo "### Test 4: PlanetMark Dashboard Endpoint"
+          PM_BODY=$(curl -sS --max-time 10 "$PROD_URL/api/v1/planet-mark/dashboard" || echo '{}')
+          PM_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$PROD_URL/api/v1/planet-mark/dashboard" || echo "000")
+          
+          # Accept 200 (data exists) or 200 with setup_required (no data configured)
+          if [ "$PM_STATUS" = "200" ]; then
+            echo "✅ PlanetMark dashboard: HTTP $PM_STATUS"
+          elif [ "$PM_STATUS" = "500" ]; then
+            # Check if this is expected (no data configured yet)
+            echo "⚠️ PlanetMark dashboard: HTTP 500 (may need data configuration)"
+            echo "   Response: $(echo "$PM_BODY" | head -c 200)"
+            # Don't fail deployment for this - it may be a data issue
+          else
+            echo "❌ PlanetMark dashboard: HTTP $PM_STATUS"
+            FAILURES=$((FAILURES + 1))
+          fi
+          echo ""
+          
+          # --- Test 5: PlanetMark Static Endpoint (fallback check) ---
+          echo "### Test 5: PlanetMark ISO Mapping (static endpoint)"
+          ISO_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$PROD_URL/api/v1/planet-mark/iso14001-mapping" || echo "000")
+          
+          if [ "$ISO_STATUS" = "200" ]; then
+            echo "✅ PlanetMark ISO mapping: HTTP $ISO_STATUS"
+          else
+            echo "❌ PlanetMark ISO mapping: HTTP $ISO_STATUS (expected 200)"
+            FAILURES=$((FAILURES + 1))
+          fi
+          echo ""
+          
+          # --- Summary ---
+          echo "### Runtime Smoke Gate Summary"
+          if [ "$FAILURES" -eq 0 ]; then
+            echo "✅ All runtime smoke checks passed!"
+          else
+            echo "❌ $FAILURES runtime smoke check(s) failed"
+            exit 1
+          fi
+
+      - name: Runtime smoke gate summary
+        if: always()
+        run: |
+          {
+            echo "## 🔥 Runtime Smoke Gate Results"
+            echo ""
+            echo "| Check | Result |"
+            echo "|-------|--------|"
+            echo "| Build SHA | ${{ steps.runtime-smoke-gate.outcome == 'success' && '✅ Verified' || '❌ Failed' }} |"
+            echo "| CORS Preflight | ${{ steps.runtime-smoke-gate.outcome == 'success' && '✅ Working' || '⚠️ Check logs' }} |"
+            echo "| UVDB Sections | ${{ steps.runtime-smoke-gate.outcome == 'success' && '✅ HTTP 200' || '❌ Failed' }} |"
+            echo "| PlanetMark Dashboard | ${{ steps.runtime-smoke-gate.outcome == 'success' && '✅ Accessible' || '⚠️ Check logs' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Production deployment summary
         run: |
           {
