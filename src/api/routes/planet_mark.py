@@ -208,7 +208,16 @@ async def list_reporting_years(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List all carbon reporting years with comparison"""
-    years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).all()
+    try:
+        years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).all()
+    except Exception:
+        # Table may not exist or migration not applied - return setup required
+        return {
+            "total": 0,
+            "years": [],
+            "setup_required": True,
+            "message": "Planet Mark module not initialized. Run migrations to enable.",
+        }
 
     return {
         "total": len(years),
@@ -834,7 +843,14 @@ async def get_carbon_dashboard(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
-    years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
+    try:
+        years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
+    except Exception:
+        # Table may not exist or migration not applied - return setup required
+        return {
+            "message": "Planet Mark module not initialized. Run migrations to enable.",
+            "setup_required": True,
+        }
 
     if not years:
         return {
