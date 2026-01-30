@@ -5,8 +5,11 @@ on:
     branches:
       - main
     paths:
-      - 'frontend/**'
-      - '.github/workflows/azure-static-web-apps-*.yml'
+      - 'frontend/src/**'
+      - 'frontend/public/**'
+      - 'frontend/index.html'
+      - 'frontend/package.json'
+      - 'frontend/vite.config.ts'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
@@ -27,8 +30,11 @@ jobs:
         with:
           filters: |
             frontend:
-              - 'frontend/**'
-              - '.github/workflows/azure-static-web-apps-*.yml'
+              - 'frontend/src/**'
+              - 'frontend/public/**'
+              - 'frontend/index.html'
+              - 'frontend/package.json'
+              - 'frontend/vite.config.ts'
 
   build_and_deploy_job:
     needs: [check_changes]

@@ -1,14 +1,17 @@
 # Azure Static Web Apps Deployment Policy
 
 **Module**: CI/CD Governance  
-**Version**: 1.0  
-**Last Updated**: 2026-01-30
+**Version**: 1.1  
+**Last Updated**: 2026-01-30  
+**ADR Reference**: ADR-0003 (SWA Gating Exception)
 
 ---
 
 ## Overview
 
 Azure Static Web Apps (SWA) has a limit on staging/preview environments. This policy defines when SWA deployments are triggered and how to manage environment capacity.
+
+**GOVERNED EXCEPTION**: Build & Deploy Job may fail for PRs that do not modify frontend source code. This is non-blocking when all quality gates pass. See Section 5 for compensating controls.
 
 ---
 
