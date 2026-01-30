@@ -95,7 +95,59 @@ cat data/etl_output/audit_*.json | jq 'length'
 
 ---
 
-## 4. Golden Sample Test
+## 4. Full Import (STAGING ONLY)
+
+**When**: After validation and dry-run pass  
+**Why**: Import records to staging API
+
+⚠️ **SAFETY WARNING**: Import is only allowed for staging environment. Production imports are blocked at CLI level.
+
+### Prerequisites
+
+1. API token stored in Key Vault:
+   ```bash
+   az keyvault secret show --vault-name kv-qgp-staging --name ETL-SERVICE-TOKEN --query value -o tsv
+   ```
+
+2. Export token to environment:
+   ```bash
+   export QGP_API_TOKEN=$(az keyvault secret show --vault-name kv-qgp-staging --name ETL-SERVICE-TOKEN --query value -o tsv)
+   ```
+
+### Run Import
+
+```bash
+python scripts/etl/pipeline.py \
+  --environment staging \
+  --import \
+  --source data/etl_source/golden_sample_incidents.csv \
+  --entity-type incident \
+  --batch-size 50
+```
+
+### Idempotency
+
+The pipeline uses `reference_number` for idempotency:
+- **201 Created**: Record imported successfully
+- **409 Conflict**: Record already exists (skip)
+- **Other errors**: Logged and counted as failed
+
+### Review Import Results
+
+```bash
+# Check import summary
+cat data/etl_output/import_summary_*.json | jq '.stats'
+
+# Check individual records
+cat data/etl_output/import_summary_*.json | jq '.import_records | length'
+
+# Verify idempotency (second run should show 0 created)
+cat data/etl_output/import_summary_*.json | jq '.api_summary'
+```
+
+---
+
+## 5. Golden Sample Test
 
 **When**: First deployment to new environment  
 **Why**: Verify end-to-end pipeline with known good data
@@ -114,9 +166,26 @@ python scripts/etl/pipeline.py \
 - 0 validation errors
 - Deterministic output (same hash each run)
 
+### Idempotency Proof
+
+Run the golden sample import twice to prove idempotency:
+
+```bash
+# First run - creates records
+python scripts/etl/pipeline.py --environment staging --import \
+  --source data/etl_source/golden_sample_incidents.csv --entity-type incident
+
+# Second run - should skip all (409 Conflict)
+python scripts/etl/pipeline.py --environment staging --import \
+  --source data/etl_source/golden_sample_incidents.csv --entity-type incident
+
+# Verify second run has 0 created
+cat data/etl_output/import_summary_*.json | jq 'select(.stats.imported_records == 0)'
+```
+
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 ### Contract Probe Fails
 
