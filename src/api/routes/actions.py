@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.complaint import ComplaintAction
 from src.domain.models.incident import ActionStatus, IncidentAction
+from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus
 from src.domain.models.rta import RTAAction
 from src.domain.models.user import User
 
@@ -86,7 +87,7 @@ class ActionListResponse(BaseModel):
 
 
 def _action_to_response(
-    action: Union[IncidentAction, RTAAction, ComplaintAction],
+    action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction],
     source_type: str,
     source_id: int,
 ) -> ActionResponse:
@@ -161,6 +162,19 @@ async def list_actions(
         for comp_action in complaint_result.scalars().all():
             actions_list.append(_action_to_response(comp_action, "complaint", comp_action.complaint_id))
 
+    # Only query if source_type not specified or matches "investigation"
+    # This fixes the "Cannot add action" defect by including investigation actions
+    if not source_type or source_type == "investigation":
+        investigation_query = select(InvestigationAction).options(selectinload(InvestigationAction.investigation))
+        if status_filter:
+            investigation_query = investigation_query.where(InvestigationAction.status == status_filter)
+        if source_type == "investigation" and source_id:
+            investigation_query = investigation_query.where(InvestigationAction.investigation_id == source_id)
+
+        investigation_result = await db.execute(investigation_query)
+        for inv_action in investigation_result.scalars().all():
+            actions_list.append(_action_to_response(inv_action, "investigation", inv_action.investigation_id))
+
     # Sort by created_at descending
     actions_list.sort(key=lambda x: x.created_at, reverse=True)
 
@@ -212,8 +226,8 @@ async def create_action(
                 except ValueError:
                     continue
 
-    # Declare action variable that will hold one of the three action types
-    action: Union[IncidentAction, RTAAction, ComplaintAction]
+    # Declare action variable that will hold one of the four action types
+    action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]
 
     if src_type == "incident":
         action = IncidentAction(
@@ -248,10 +262,22 @@ async def create_action(
             owner_id=owner_id,
             status=ActionStatus.OPEN,
         )
+    elif src_type == "investigation":
+        # This branch fixes the "Cannot add action" defect
+        action = InvestigationAction(
+            investigation_id=src_id,
+            title=action_data.title,
+            description=action_data.description,
+            action_type=action_data.action_type,
+            priority=action_data.priority,
+            due_date=parsed_due_date,
+            owner_id=owner_id,
+            status=InvestigationActionStatus.OPEN,
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', or 'complaint'",
+            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
         )
 
     db.add(action)

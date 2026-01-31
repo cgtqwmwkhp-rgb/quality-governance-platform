@@ -219,3 +219,65 @@ class TestActionsAPIPatchValidation:
             )
             # All should hit auth check (401) not validation error
             assert response.status_code == 401, f"Status '{status}' should be accepted"
+
+
+class TestInvestigationActionsAPI:
+    """Test Actions API support for investigation source type.
+
+    This test class verifies the fix for the "Cannot add action" defect.
+    The defect was that the Actions API only supported incident, rta, and
+    complaint source types, but NOT investigation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_create_investigation_action_endpoint_accepts_source_type(self, client: AsyncClient):
+        """POST /api/v1/actions/ with source_type=investigation should be accepted.
+
+        The endpoint should accept 'investigation' as a valid source_type.
+        Auth check happens first (401), but the payload format is valid.
+        """
+        payload = {
+            "title": "Test Investigation Action",
+            "description": "Corrective action from investigation findings",
+            "source_type": "investigation",
+            "source_id": 1,
+            "priority": "high",
+            "action_type": "corrective",
+        }
+
+        response = await client.post("/api/v1/actions/", json=payload)
+
+        # Should get 401 (auth required), NOT 400 (invalid source_type)
+        assert (
+            response.status_code == 401
+        ), "investigation source_type should be accepted (got auth error, not validation error)"
+
+    @pytest.mark.asyncio
+    async def test_list_actions_with_investigation_filter(self, client: AsyncClient):
+        """GET /api/v1/actions/?source_type=investigation should be accepted."""
+        response = await client.get("/api/v1/actions/?source_type=investigation")
+
+        # Should get 401 (auth required), not 400/422 (invalid filter)
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_investigation_action_patch_endpoint(self, client: AsyncClient):
+        """PATCH /api/v1/actions/{id}?source_type=investigation should exist."""
+        response = await client.patch(
+            "/api/v1/actions/1?source_type=investigation",
+            json={"title": "Updated Investigation Action"},
+        )
+
+        # Should get 401 (auth required), not 404 (source_type not supported)
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_investigation_action_accepts_valid_statuses(self, client: AsyncClient):
+        """PATCH with investigation source_type accepts all valid status values."""
+        valid_statuses = ["open", "in_progress", "pending_verification", "completed", "cancelled"]
+        for status in valid_statuses:
+            response = await client.patch(
+                "/api/v1/actions/1?source_type=investigation",
+                json={"status": status},
+            )
+            assert response.status_code == 401, f"Investigation action status '{status}' should be accepted"
