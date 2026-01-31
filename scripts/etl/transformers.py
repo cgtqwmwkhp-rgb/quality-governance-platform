@@ -22,14 +22,20 @@ class TransformError(Exception):
 
 
 # Enum mappings aligned with OpenAPI contract
+# Valid incident_type values: injury, near_miss, hazard, property_damage, environmental, security, quality, other
 INCIDENT_TYPE_MAP = {
     "quality": "quality",
-    "safety": "safety",
+    "safety": "hazard",  # Map legacy "safety" to "hazard"
     "security": "security",
     "environmental": "environmental",
     "near miss": "near_miss",
     "nearmiss": "near_miss",
     "near-miss": "near_miss",
+    "near_miss": "near_miss",
+    "injury": "injury",
+    "hazard": "hazard",
+    "property_damage": "property_damage",
+    "property damage": "property_damage",
     "other": "other",
     "": "other",
 }
@@ -46,13 +52,18 @@ SEVERITY_MAP = {
     "": "medium",
 }
 
+# Valid incident status values: reported, under_investigation, pending_actions, actions_in_progress, pending_review, closed
 INCIDENT_STATUS_MAP = {
     "reported": "reported",
     "open": "reported",
     "new": "reported",
-    "in progress": "in_progress",
-    "in_progress": "in_progress",
-    "investigating": "in_progress",
+    "in progress": "actions_in_progress",
+    "in_progress": "actions_in_progress",
+    "investigating": "under_investigation",
+    "under_investigation": "under_investigation",
+    "pending_actions": "pending_actions",
+    "actions_in_progress": "actions_in_progress",
+    "pending_review": "pending_review",
     "closed": "closed",
     "resolved": "closed",
     "": "reported",

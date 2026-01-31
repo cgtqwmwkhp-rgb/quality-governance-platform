@@ -1,0 +1,82 @@
+{
+  "run_id": "6cd21f12",
+  "entity_type": "incident",
+  "stats": {
+    "entity_type": "incident",
+    "run_id": "6cd21f12",
+    "start_time": "2026-01-31T10:15:17.724563",
+    "end_time": "2026-01-31T10:15:18.476558",
+    "duration_seconds": 0.75,
+    "total_records": 5,
+    "valid_records": 5,
+    "invalid_records": 0,
+    "imported_records": 0,
+    "skipped_records": 0,
+    "failed_records": 5
+  },
+  "api_summary": {
+    "total": 5,
+    "created": 0,
+    "skipped_exists": 0,
+    "failed": 5,
+    "by_entity": {
+      "incident": {
+        "created": 0,
+        "skipped": 0,
+        "failed": 5
+      }
+    }
+  },
+  "import_records": [
+    {
+      "entity_type": "incident",
+      "reference_number": "SAMPLE-INC-001",
+      "result": "failed",
+      "status_code": 403,
+      "response_time_ms": 130.92,
+      "error_message": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': '8d4c859a-da55-475a-a0b6-8b0efcc61abb'}",
+      "api_id": null,
+      "timestamp": "2026-01-31T10:15:17.867175"
+    },
+    {
+      "entity_type": "incident",
+      "reference_number": "SAMPLE-INC-002",
+      "result": "failed",
+      "status_code": 422,
+      "response_time_ms": 104.19,
+      "error_message": "{'error_code': '422', 'message': 'Validation error', 'details': {'errors': [{'loc': ['body', 'incident_type'], 'msg': \"Input should be 'injury', 'near_miss', 'hazard', 'property_damage', 'environmental', 'security', 'quality' or 'other'\", 'type': 'enum'}, {'loc': ['body', 'status'], 'msg': \"Input should be 'reported', 'under_investigation', 'pending_actions', 'actions_in_progress', 'pending_review' or 'closed'\", 'type': 'enum'}]}, 'request_id': 'd1a23915-c807-4317-9066-7d44d5bafbc7'}",
+      "api_id": null,
+      "timestamp": "2026-01-31T10:15:17.971836"
+    },
+    {
+      "entity_type": "incident",
+      "reference_number": "SAMPLE-INC-003",
+      "result": "failed",
+      "status_code": 403,
+      "response_time_ms": 106.07,
+      "error_message": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': 'be71f865-67a1-4925-b062-1b0cd501bb4a'}",
+      "api_id": null,
+      "timestamp": "2026-01-31T10:15:18.078215"
+    },
+    {
+      "entity_type": "incident",
+      "reference_number": "SAMPLE-INC-004",
+      "result": "failed",
+      "status_code": 403,
+      "response_time_ms": 291.51,
+      "error_message": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': 'c6397e7b-8077-4134-87e6-aa022f177089'}",
+      "api_id": null,
+      "timestamp": "2026-01-31T10:15:18.370092"
+    },
+    {
+      "entity_type": "incident",
+      "reference_number": "SAMPLE-INC-005",
+      "result": "failed",
+      "status_code": 403,
+      "response_time_ms": 105.46,
+      "error_message": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': 'd53c316d-d7f1-4664-aa98-97f30eb75653'}",
+      "api_id": null,
+      "timestamp": "2026-01-31T10:15:18.476496"
+    }
+  ]
+}

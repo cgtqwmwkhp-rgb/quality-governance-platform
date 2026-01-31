@@ -1,0 +1,67 @@
+[
+  {
+    "timestamp": "2026-01-31T10:16:25.776670",
+    "run_id": "6767aa2c",
+    "action": "import_failed",
+    "entity_type": "incident",
+    "row_number": 1,
+    "source_hash": "2135e3e91a9e7c92",
+    "details": {
+      "reference_number": "SAMPLE-INC-001",
+      "status_code": 403,
+      "error": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': '023d6620-12fe-472c-85e4-f9e77bc53536'}"
+    }
+  },
+  {
+    "timestamp": "2026-01-31T10:16:25.953243",
+    "run_id": "6767aa2c",
+    "action": "import_failed",
+    "entity_type": "incident",
+    "row_number": 2,
+    "source_hash": "149a0f622883b2fd",
+    "details": {
+      "reference_number": "SAMPLE-INC-002",
+      "status_code": 403,
+      "error": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': '0eca918b-3bf3-453d-b2b6-4bea0a0643a2'}"
+    }
+  },
+  {
+    "timestamp": "2026-01-31T10:16:26.060346",
+    "run_id": "6767aa2c",
+    "action": "import_failed",
+    "entity_type": "incident",
+    "row_number": 3,
+    "source_hash": "5e6d09ff4a8d3c1e",
+    "details": {
+      "reference_number": "SAMPLE-INC-003",
+      "status_code": 403,
+      "error": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': '0ae92e0a-a64d-4a45-bc12-f481735342c1'}"
+    }
+  },
+  {
+    "timestamp": "2026-01-31T10:16:26.160990",
+    "run_id": "6767aa2c",
+    "action": "import_failed",
+    "entity_type": "incident",
+    "row_number": 4,
+    "source_hash": "52e9c5de29c27118",
+    "details": {
+      "reference_number": "SAMPLE-INC-004",
+      "status_code": 403,
+      "error": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': '38f1fb6f-d442-492e-8b53-e11e88e746f2'}"
+    }
+  },
+  {
+    "timestamp": "2026-01-31T10:16:26.339325",
+    "run_id": "6767aa2c",
+    "action": "import_failed",
+    "entity_type": "incident",
+    "row_number": 5,
+    "source_hash": "e30ece64f598f5cc",
+    "details": {
+      "reference_number": "SAMPLE-INC-005",
+      "status_code": 403,
+      "error": "{'error_code': '403', 'message': \"Permission 'incident:set_reference_number' required to set explicit reference number\", 'details': {}, 'request_id': '13058dd6-d873-4194-b014-6e47ffceeaa3'}"
+    }
+  }
+]

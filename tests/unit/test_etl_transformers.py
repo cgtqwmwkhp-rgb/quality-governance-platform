@@ -45,12 +45,12 @@ class TestMapIncidentType:
 
     def test_direct_match(self):
         """Direct match should work."""
-        assert map_incident_type("safety") == "safety"
+        assert map_incident_type("safety") == "hazard"  # Legacy "safety" maps to "hazard"
         assert map_incident_type("quality") == "quality"
 
     def test_case_insensitive(self):
         """Mapping should be case insensitive."""
-        assert map_incident_type("SAFETY") == "safety"
+        assert map_incident_type("SAFETY") == "hazard"  # Legacy "SAFETY" maps to "hazard"
         assert map_incident_type("Quality") == "quality"
 
     def test_near_miss_variants(self):
