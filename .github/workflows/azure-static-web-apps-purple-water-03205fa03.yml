@@ -1,7 +1,7 @@
 name: Azure Static Web Apps CI/CD
 
 # CHANGED: Removed PR preview deployments to avoid Azure SWA environment limit.
-# Frontend is only deployed on push to main. PR builds are validated by the CI workflow.
+# PRs get a build-only check; actual deployment only happens on push to main.
 on:
   push:
     branches:
@@ -13,10 +13,38 @@ on:
       - 'frontend/package.json'
       - 'frontend/vite.config.ts'
       - '.github/workflows/azure-static-web-apps-purple-water-03205fa03.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
 
 jobs:
+  # For PRs: build-only (no deployment) to satisfy branch protection
   build_and_deploy_job:
-    # Only deploy on push to main, not on PRs (avoids SWA environment limit)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build Frontend (PR validation only)
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://app-qgp-staging.azurewebsites.net
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_BUILD_TIME: ${{ github.event.pull_request.updated_at }}
+        run: npm run build
+      - name: Skip deployment (PR)
+        run: echo "Skipping SWA deployment for PR - will deploy on merge to main"
+
+  # For push to main: full build and deploy
+  deploy_to_production:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     name: Build and Deploy Job
