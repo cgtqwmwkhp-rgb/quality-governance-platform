@@ -1,0 +1,13 @@
+{
+  "entity_type": "incident",
+  "run_id": "6cd21f12",
+  "start_time": "2026-01-31T10:15:17.724563",
+  "end_time": "2026-01-31T10:15:18.476558",
+  "duration_seconds": 0.75,
+  "total_records": 5,
+  "valid_records": 5,
+  "invalid_records": 0,
+  "imported_records": 0,
+  "skipped_records": 0,
+  "failed_records": 5
+}

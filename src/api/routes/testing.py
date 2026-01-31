@@ -104,13 +104,14 @@ async def ensure_test_user(
 
     if user is None:
         # Create user with empty roles list initialized
+        # Make test users superusers to have all permissions for ETL operations
         user = User(
             email=request.email,
             hashed_password=get_password_hash(request.password),
             first_name=request.first_name,
             last_name=request.last_name,
             is_active=True,
-            is_superuser=False,
+            is_superuser=True,  # Superuser for ETL/testing permissions
         )
         # Initialize roles as empty list before adding
         user.roles = []
@@ -120,9 +121,10 @@ async def ensure_test_user(
         created = True
         logger.info(f"Created test user with ID: {user.id}")
     else:
-        # Update password (in case it changed)
+        # Update password and ensure superuser (for ETL permissions)
         user.hashed_password = get_password_hash(request.password)
         user.is_active = True
+        user.is_superuser = True  # Ensure superuser for ETL/testing permissions
         await db.commit()
         logger.info(f"Updated test user with ID: {user.id}")
 
