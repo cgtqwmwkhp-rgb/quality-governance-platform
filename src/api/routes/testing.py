@@ -6,11 +6,12 @@ They are disabled in production for security.
 
 import logging
 import os
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import DbSession
 from src.core.config import settings
@@ -95,14 +96,14 @@ async def ensure_test_user(
             detail="Invalid CI secret",
         )
 
-    # Check if user exists
-    result = await db.execute(select(User).where(User.email == request.email))
+    # Check if user exists - EAGER LOAD roles to avoid MissingGreenlet
+    result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     created = False
 
     if user is None:
-        # Create user
+        # Create user with empty roles list initialized
         user = User(
             email=request.email,
             hashed_password=get_password_hash(request.password),
@@ -111,6 +112,8 @@ async def ensure_test_user(
             is_active=True,
             is_superuser=False,
         )
+        # Initialize roles as empty list before adding
+        user.roles = []
         db.add(user)
         await db.commit()
         await db.refresh(user)
@@ -123,14 +126,19 @@ async def ensure_test_user(
         await db.commit()
         logger.info(f"Updated test user with ID: {user.id}")
 
-    # Assign roles
+    # Assign roles - use clear/extend to avoid lazy load trigger
     if request.roles:
-        result = await db.execute(select(Role).where(Role.name.in_(request.roles)))
-        roles = result.scalars().all()
-        user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-1
+        role_result = await db.execute(select(Role).where(Role.name.in_(request.roles)))
+        roles: List[Role] = list(role_result.scalars().all())  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-1
+        # Clear existing roles and add new ones
+        # roles relationship is already loaded via selectinload, so this is safe
+        user.roles.clear()
+        user.roles.extend(roles)
         await db.commit()
+        # Refresh to ensure roles are synchronized
+        await db.refresh(user, attribute_names=["roles"])
 
-    # Get role names for response
+    # Get role names for response - roles are now loaded
     role_names = [r.name for r in user.roles] if user.roles else []
 
     return TestUserResponse(
