@@ -31,13 +31,6 @@ const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   complaint: MessageSquare,
 }
 
-// Map entity types from investigation to action source types
-const ENTITY_TO_SOURCE_TYPE: Record<string, string> = {
-  reporting_incident: 'incident',
-  road_traffic_collision: 'rta',
-  complaint: 'complaint',
-}
-
 // Action type for display
 interface ActionItem {
   id: number
