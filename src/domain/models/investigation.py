@@ -187,6 +187,10 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     customer_packs: Mapped[List["InvestigationCustomerPack"]] = relationship(
         "InvestigationCustomerPack", back_populates="investigation", cascade="all, delete-orphan"
     )
+    # Actions relationship (fixes "Cannot add action" defect)
+    actions: Mapped[List["InvestigationAction"]] = relationship(
+        "InvestigationAction", back_populates="investigation", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return (
@@ -326,3 +330,66 @@ class InvestigationCustomerPack(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<InvestigationCustomerPack(id={self.id}, audience='{self.audience.value}')>"
+
+
+class InvestigationActionStatus(str, enum.Enum):
+    """Status of an investigation action."""
+
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    PENDING_VERIFICATION = "pending_verification"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
+    """Action model for corrective/preventive actions from investigations.
+
+    This model fixes the "Cannot add action" defect by providing
+    backend persistence for actions within investigations.
+
+    Actions are trackable work items that arise from investigation findings,
+    such as corrective actions, preventive measures, or improvements.
+    """
+
+    __tablename__ = "investigation_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    investigation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # Action details
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(50), default="corrective")  # corrective, preventive, improvement
+    priority: Mapped[str] = mapped_column(String(20), default="medium")  # critical, high, medium, low
+
+    # Assignment
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Status and dates
+    status: Mapped[InvestigationActionStatus] = mapped_column(
+        Enum(InvestigationActionStatus, native_enum=False), default=InvestigationActionStatus.OPEN
+    )
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Evidence
+    completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Effectiveness
+    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    effectiveness_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_effective: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    # Relationships
+    investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="actions")
+    owner = relationship("User", foreign_keys=[owner_id])
+    verified_by = relationship("User", foreign_keys=[verified_by_id])
+
+    def __repr__(self) -> str:
+        return f"<InvestigationAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"
