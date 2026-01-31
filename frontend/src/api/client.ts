@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios'
 import { getPlatformToken, isTokenExpired, clearTokens } from '../utils/auth'
-import { API_BASE_URL, CURRENT_ENVIRONMENT } from '../config/apiBase'
+import { API_BASE_URL } from '../config/apiBase'
 
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL;
