@@ -982,8 +982,8 @@ export const actionsApi = {
    * List all actions with pagination and optional filters.
    * Actions are returned sorted by created_at descending for stable ordering.
    */
-  list: (page = 1, size = 10, status?: string, source_type?: string) => 
-    api.get<PaginatedResponse<Action>>(`/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ''}${source_type ? `&source_type=${source_type}` : ''}`),
+  list: (page = 1, size = 10, status?: string, source_type?: string, source_id?: number) => 
+    api.get<PaginatedResponse<Action>>(`/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ''}${source_type ? `&source_type=${source_type}` : ''}${source_id ? `&source_id=${source_id}` : ''}`),
   /**
    * Create a new action linked to a source entity.
    */

@@ -1,5 +1,7 @@
 name: Azure Static Web Apps CI/CD
 
+# CHANGED: Removed PR preview deployments to avoid Azure SWA environment limit.
+# PRs get a build-only check; actual deployment only happens on push to main.
 on:
   push:
     branches:
@@ -10,37 +12,40 @@ on:
       - 'frontend/index.html'
       - 'frontend/package.json'
       - 'frontend/vite.config.ts'
+      - '.github/workflows/azure-static-web-apps-purple-water-03205fa03.yml'
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
     branches:
       - main
 
 jobs:
-  # Check if frontend files changed (for PRs)
-  check_changes:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    name: Check Frontend Changes
-    outputs:
-      frontend_changed: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'frontend/src/**'
-              - 'frontend/public/**'
-              - 'frontend/index.html'
-              - 'frontend/package.json'
-              - 'frontend/vite.config.ts'
-
+  # For PRs: build-only (no deployment) to satisfy branch protection
   build_and_deploy_job:
-    needs: [check_changes]
-    if: |
-      github.event_name == 'push' || 
-      (github.event_name == 'pull_request' && github.event.action != 'closed' && needs.check_changes.outputs.frontend_changed == 'true')
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build Frontend (PR validation only)
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://app-qgp-staging.azurewebsites.net
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_BUILD_TIME: ${{ github.event.pull_request.updated_at }}
+        run: npm run build
+      - name: Skip deployment (PR)
+        run: echo "Skipping SWA deployment for PR - will deploy on merge to main"
+
+  # For push to main: full build and deploy
+  deploy_to_production:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
@@ -100,14 +105,5 @@ jobs:
           app_location: "frontend/dist"
           skip_app_build: true
 
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PURPLE_WATER_03205FA03 }}
-          action: "close"
+  # NOTE: close_pull_request_job removed - no longer creating PR preview environments
+  # Frontend PRs are validated by CI workflow (Build Check job) and only deployed on merge to main
