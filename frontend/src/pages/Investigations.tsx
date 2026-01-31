@@ -442,6 +442,7 @@ export default function Investigations() {
   // Action modal state
   const [showActionModal, setShowActionModal] = useState(false)
   const [creatingAction, setCreatingAction] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [actionForm, setActionForm] = useState({
     title: '',
     description: '',
@@ -464,17 +465,11 @@ export default function Investigations() {
   }, [selectedInvestigation])
 
   const loadActionsForInvestigation = async (investigation: Investigation) => {
-    const sourceType = ENTITY_TO_SOURCE_TYPE[investigation.assigned_entity_type]
-    if (!sourceType) return
-    
     setLoadingActions(true)
     try {
-      const response = await actionsApi.list(1, 50)
-      // Filter actions for this entity
-      const filtered = (response.data.items || []).filter(
-        (a: any) => a.source_type === sourceType && a.source_id === investigation.assigned_entity_id
-      )
-      setInvestigationActions(filtered)
+      // Load actions with source_type=investigation filter
+      const response = await actionsApi.list(1, 50, undefined, 'investigation', investigation.id)
+      setInvestigationActions(response.data.items || [])
     } catch (err) {
       console.error('Failed to load actions:', err)
       setInvestigationActions([])
@@ -503,13 +498,11 @@ export default function Investigations() {
     e.preventDefault()
     if (!selectedInvestigation) return
     
-    const sourceType = ENTITY_TO_SOURCE_TYPE[selectedInvestigation.assigned_entity_type]
-    if (!sourceType) {
-      alert('Cannot create action: Unknown entity type')
-      return
-    }
-    
+    // Use 'investigation' as source_type and investigation.id as source_id
+    // This creates actions directly on the investigation (InvestigationAction),
+    // not on the underlying entity (IncidentAction/RTAAction/ComplaintAction)
     setCreatingAction(true)
+    setActionError(null)
     try {
       await actionsApi.create({
         title: actionForm.title,
@@ -517,8 +510,8 @@ export default function Investigations() {
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
         action_type: 'corrective',
-        source_type: sourceType,
-        source_id: selectedInvestigation.assigned_entity_id,
+        source_type: 'investigation',
+        source_id: selectedInvestigation.id,
         assigned_to_email: actionForm.assigned_to || undefined,
       })
       setShowActionModal(false)
@@ -533,7 +526,9 @@ export default function Investigations() {
       loadActionsForInvestigation(selectedInvestigation)
     } catch (err: any) {
       console.error('Failed to create action:', err)
-      alert(`Failed to create action: ${getApiErrorMessage(err)}`)
+      const errorMessage = getApiErrorMessage(err)
+      setActionError(errorMessage)
+      // Don't close modal on error - let user see and fix the issue
     } finally {
       setCreatingAction(false)
     }
@@ -924,8 +919,13 @@ export default function Investigations() {
                 rows={3}
               />
             </div>
+            {actionError && (
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                <strong>Error:</strong> {actionError}
+              </div>
+            )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
+              <Button type="button" variant="outline" onClick={() => { setShowActionModal(false); setActionError(null); }}>
                 Cancel
               </Button>
               <Button type="submit" disabled={creatingAction || !actionForm.title}>
