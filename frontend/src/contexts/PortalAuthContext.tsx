@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { API_BASE_URL } from '../config/apiBase';
 
 // Microsoft Entra ID (Azure AD) configuration
 const MSAL_CONFIG = {
@@ -7,8 +8,8 @@ const MSAL_CONFIG = {
   redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin + '/portal',
 };
 
-// API base URL for token exchange
-const API_BASE = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+// API base URL for token exchange (environment-aware)
+const API_BASE = API_BASE_URL;
 
 // Check if Azure AD is properly configured
 const isAzureConfigured = () => {

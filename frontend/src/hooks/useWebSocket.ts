@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { API_BASE_URL } from '../config/apiBase';
 
 interface WebSocketMessage {
   type: string;
@@ -84,7 +85,7 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
   // Get WebSocket URL
   const getWsUrl = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000';
+    const host = API_BASE_URL.replace(/^https?:\/\//, '');
     return `${protocol}//${host}/api/v1/realtime/ws/${userId || 0}`;
   }, [userId]);
 

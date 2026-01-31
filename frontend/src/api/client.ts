@@ -1,8 +1,9 @@
 import axios, { AxiosError } from 'axios'
 import { getPlatformToken, isTokenExpired, clearTokens } from '../utils/auth'
+import { API_BASE_URL, CURRENT_ENVIRONMENT } from '../config/apiBase'
 
-// HARDCODED HTTPS - bypassing any potential env var issues
-const HTTPS_API_BASE = 'https://app-qgp-prod.azurewebsites.net';
+// Use centralized API base URL from config (environment-aware)
+const HTTPS_API_BASE = API_BASE_URL;
 
 // Request timeout in milliseconds (15 seconds)
 // Prevents infinite spinner if backend hangs
