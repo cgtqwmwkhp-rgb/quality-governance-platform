@@ -248,9 +248,9 @@ class TestInvestigationActionsAPI:
         response = await client.post("/api/v1/actions/", json=payload)
 
         # Should get 401 (auth required), NOT 400 (invalid source_type)
-        assert response.status_code == 401, (
-            "investigation source_type should be accepted (got auth error, not validation error)"
-        )
+        assert (
+            response.status_code == 401
+        ), "investigation source_type should be accepted (got auth error, not validation error)"
 
     @pytest.mark.asyncio
     async def test_list_actions_with_investigation_filter(self, client: AsyncClient):

@@ -165,9 +165,7 @@ async def list_actions(
     # Only query if source_type not specified or matches "investigation"
     # This fixes the "Cannot add action" defect by including investigation actions
     if not source_type or source_type == "investigation":
-        investigation_query = select(InvestigationAction).options(
-            selectinload(InvestigationAction.investigation)
-        )
+        investigation_query = select(InvestigationAction).options(selectinload(InvestigationAction.investigation))
         if status_filter:
             investigation_query = investigation_query.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:
