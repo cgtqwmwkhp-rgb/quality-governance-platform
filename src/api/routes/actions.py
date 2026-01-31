@@ -5,7 +5,7 @@ from typing import Any, Optional, Union, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import literal, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -211,6 +211,27 @@ async def create_action(
     src_type = action_data.source_type.lower()
     src_id = action_data.source_id
 
+    # Generate reference number based on source type
+    year = datetime.now().year
+    if src_type == "incident":
+        count_result = await db.execute(select(func.count()).select_from(IncidentAction))
+        count = count_result.scalar() or 0
+        ref_number = f"INA-{year}-{count + 1:04d}"
+    elif src_type == "rta":
+        count_result = await db.execute(select(func.count()).select_from(RTAAction))
+        count = count_result.scalar() or 0
+        ref_number = f"RTAACT-{year}-{count + 1:04d}"
+    elif src_type == "complaint":
+        count_result = await db.execute(select(func.count()).select_from(ComplaintAction))
+        count = count_result.scalar() or 0
+        ref_number = f"CMA-{year}-{count + 1:04d}"
+    elif src_type == "investigation":
+        count_result = await db.execute(select(func.count()).select_from(InvestigationAction))
+        count = count_result.scalar() or 0
+        ref_number = f"INVACT-{year}-{count + 1:04d}"
+    else:
+        ref_number = f"ACT-{year}-0001"
+
     # Parse due_date string to datetime if provided
     parsed_due_date: Optional[datetime] = None
     if action_data.due_date:
@@ -239,6 +260,7 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
+            reference_number=ref_number,
         )
     elif src_type == "rta":
         action = RTAAction(
@@ -250,6 +272,7 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
+            reference_number=ref_number,
         )
     elif src_type == "complaint":
         action = ComplaintAction(
@@ -261,6 +284,7 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=ActionStatus.OPEN,
+            reference_number=ref_number,
         )
     elif src_type == "investigation":
         # This branch fixes the "Cannot add action" defect
@@ -273,6 +297,7 @@ async def create_action(
             due_date=parsed_due_date,
             owner_id=owner_id,
             status=InvestigationActionStatus.OPEN,
+            reference_number=ref_number,
         )
     else:
         raise HTTPException(
