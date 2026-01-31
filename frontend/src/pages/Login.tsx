@@ -7,6 +7,7 @@ import {
   getDurationBucket,
   type LoginErrorCode,
 } from '../api/client'
+import { API_BASE_URL } from '../config/apiBase'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
@@ -26,7 +27,7 @@ const AZURE_CONFIG = {
   redirectUri: window.location.origin + '/login',
 };
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+const API_BASE = API_BASE_URL;
 
 const isAzureConfigured = () => {
   return (

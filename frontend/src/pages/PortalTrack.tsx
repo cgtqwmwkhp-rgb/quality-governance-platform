@@ -24,6 +24,7 @@ import { Input } from '../components/ui/Input';
 import { cn } from '../helpers/utils';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import ReportChat from '../components/ReportChat';
+import { API_BASE_URL } from '../config/apiBase';
 
 // Types
 interface ReportSummary {
@@ -255,7 +256,7 @@ export default function PortalTrack() {
     
     try {
       // Use platform token for secure, server-side identity-based lookup
-      const apiBase = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+      const apiBase = API_BASE_URL;
       console.log('[PortalTrack] Loading my reports via secure endpoint');
       
       // Require platform token for my-reports (no email enumeration)

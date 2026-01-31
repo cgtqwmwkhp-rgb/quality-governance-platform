@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { API_BASE_URL } from '../config/apiBase';
 
 // Types for collaborative editing
 interface CollaboratorInfo {
@@ -115,7 +116,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000';
+    const host = API_BASE_URL.replace(/^https?:\/\//, '');
     const wsUrl = `${protocol}//${host}/api/v1/realtime/collab/${documentId}?userId=${userId}`;
 
     console.log(`[Collaboration] Connecting to ${wsUrl}`);

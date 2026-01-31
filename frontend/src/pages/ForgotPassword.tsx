@@ -5,8 +5,9 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
+import { API_BASE_URL } from '../config/apiBase'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://app-qgp-prod.azurewebsites.net';
+const API_BASE = API_BASE_URL;
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
