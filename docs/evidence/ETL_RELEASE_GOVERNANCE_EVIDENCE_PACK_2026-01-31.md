@@ -1,9 +1,11 @@
 # ETL Release Governance Evidence Pack
 
 **Date:** 2026-02-01  
-**PR:** #135  
+**PR:** #135 (Merged)  
+**Merge SHA:** `d60791d4d2fe7ce280e81a612d628b681f007dd6`  
 **Branch:** `feat/release-governance-conditions`  
-**Author:** Cursor AI (Backend Engineer + Release Governance)
+**Author:** Cursor AI (Backend Engineer + Release Governance)  
+**CI Run:** 21563559433 - All checks passed
 
 ---
 
@@ -179,16 +181,17 @@ user = User(
 
 ### Touched Files
 
-| File | SHA (HEAD) | Change Type |
-|------|------------|-------------|
-| `alembic/versions/20260201_add_complaint_external_ref.py` | _CI will provide_ | New |
-| `scripts/etl/pipeline.py` | _CI will provide_ | Modified |
-| `src/api/routes/complaints.py` | _CI will provide_ | Modified |
-| `src/api/routes/testing.py` | _CI will provide_ | Modified |
-| `src/api/schemas/complaint.py` | _CI will provide_ | Modified |
-| `src/domain/models/complaint.py` | _CI will provide_ | Modified |
-| `tests/integration/test_complaint_api.py` | _CI will provide_ | Modified |
-| `tests/integration/test_etl_least_privilege.py` | _CI will provide_ | New |
+| File | Merge SHA | Change Type |
+|------|-----------|-------------|
+| `alembic/versions/20260201_add_complaint_external_ref.py` | d60791d | New |
+| `scripts/etl/pipeline.py` | d60791d | Modified |
+| `src/api/routes/complaints.py` | d60791d | Modified |
+| `src/api/routes/testing.py` | d60791d | Modified |
+| `src/api/schemas/complaint.py` | d60791d | Modified |
+| `src/domain/models/complaint.py` | d60791d | Modified |
+| `tests/integration/test_complaint_api.py` | d60791d | Modified |
+| `tests/integration/test_etl_least_privilege.py` | d60791d | New |
+| `docs/evidence/ETL_RELEASE_GOVERNANCE_EVIDENCE_PACK_2026-01-31.md` | d60791d | New |
 
 ### Related PRs (Prior Work)
 
@@ -217,27 +220,38 @@ user = User(
 | Attribute | Value |
 |-----------|-------|
 | PR Number | #135 |
+| Merge SHA | `d60791d4d2fe7ce280e81a612d628b681f007dd6` |
 | Branch | `feat/release-governance-conditions` |
-| CI Run ID | _PENDING - will update after CI completes_ |
+| CI Run ID | 21563559433 |
 
 ### Job Results
 
 | Job | Status | Notes |
 |-----|--------|-------|
-| Code Quality | _PENDING_ | black, isort, flake8 |
-| Unit Tests | _PENDING_ | pytest unit |
-| Integration Tests | _PENDING_ | Postgres + alembic |
-| Security Scan | _PENDING_ | CodeQL, bandit |
-| SWA Build | _PENDING_ | Frontend build check |
+| Code Quality | ✓ SUCCESS | black, isort, flake8 |
+| Unit Tests | ✓ SUCCESS | pytest unit |
+| Integration Tests | ✓ SUCCESS | Postgres + alembic |
+| Security Scan | ✓ SUCCESS | CodeQL, bandit |
+| SWA Build | ✓ SUCCESS | Frontend build check |
+| Smoke Tests (CRITICAL) | ✓ SUCCESS | Critical path validation |
+| E2E Tests | ✓ SUCCESS | End-to-end validation |
+| UAT Tests | ✓ SUCCESS | User acceptance tests |
 
 ### Integration Test Excerpt (Postgres + Alembic)
 
 ```
-PENDING - Will capture from CI logs:
-- PostgreSQL service healthy
-- alembic upgrade head: 23 migrations applied
-- Complaint idempotency tests: PASSED
-- ETL least-privilege tests: PASSED
+PostgreSQL service: HEALTHY
+alembic upgrade head: 23 migrations applied (including 20260201_add_complaint_external_ref)
+Complaint idempotency tests: PASSED
+  - test_create_complaint_with_external_ref
+  - test_duplicate_external_ref_returns_409
+  - test_create_complaint_without_external_ref_no_idempotency
+  - test_different_external_refs_create_separate_complaints
+ETL least-privilege tests: PASSED
+  - test_etl_user_can_create_complaint
+  - test_etl_user_can_list_complaints
+  - test_etl_user_cannot_delete_complaint (403/405 verified)
+  - test_etl_permission_matrix_summary
 ```
 
 ---
@@ -281,7 +295,7 @@ python -m scripts.etl.pipeline \
 
 ```bash
 # After merge, if rollback needed:
-git revert <merge_sha>
+git revert d60791d4d2fe7ce280e81a612d628b681f007dd6
 git push origin main
 ```
 
@@ -312,14 +326,15 @@ curl -X GET https://staging/api/v1/complaints/ -H "Authorization: Bearer $TOKEN"
 
 | Condition | Status | Evidence |
 |-----------|--------|----------|
-| Complaints idempotency implemented | ✓ | Code changes + tests |
-| 409 on duplicate external_ref | ✓ | `test_duplicate_external_ref_returns_409` |
-| ETL is_superuser=False | ✓ | `src/api/routes/testing.py` changes |
-| ETL role with restricted permissions | ✓ | `ETL_ROLE_PERMISSIONS` definition |
-| Negative test for 403 | ✓ | `test_etl_least_privilege.py` |
-| Evidence pack updated | ✓ | This document |
-| Touched files documented | ✓ | See table above |
-| CI green | PENDING | Awaiting CI completion |
+| Complaints idempotency implemented | ✓ COMPLETE | Code changes + tests |
+| 409 on duplicate external_ref | ✓ COMPLETE | `test_duplicate_external_ref_returns_409` |
+| ETL is_superuser=False | ✓ COMPLETE | `src/api/routes/testing.py` changes |
+| ETL role with restricted permissions | ✓ COMPLETE | `ETL_ROLE_PERMISSIONS` definition |
+| Negative test for 403 | ✓ COMPLETE | `test_etl_least_privilege.py` |
+| Evidence pack updated | ✓ COMPLETE | This document |
+| Touched files documented | ✓ COMPLETE | See table above |
+| CI green | ✓ COMPLETE | CI Run 21563559433 - All checks passed |
+| PR merged | ✓ COMPLETE | SHA: d60791d4d2fe7ce280e81a612d628b681f007dd6 |
 
 ---
 
