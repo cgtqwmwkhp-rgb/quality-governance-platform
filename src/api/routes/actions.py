@@ -1,4 +1,4 @@
-"""Unified Actions API routes for incidents, RTAs, and complaints."""
+"""Unified Actions API routes for incidents, RTAs, complaints, and investigations."""
 
 from datetime import datetime
 from typing import Any, Optional, Union, cast
@@ -6,13 +6,14 @@ from typing import Any, Optional, Union, cast
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, literal, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.models.complaint import ComplaintAction
-from src.domain.models.incident import ActionStatus, IncidentAction
-from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus
-from src.domain.models.rta import RTAAction
+from src.domain.models.complaint import Complaint, ComplaintAction
+from src.domain.models.incident import ActionStatus, Incident, IncidentAction
+from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
+from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 
 router = APIRouter()
@@ -194,12 +195,50 @@ async def list_actions(
 
 
 @router.post("/", response_model=ActionResponse, status_code=status.HTTP_201_CREATED)
-async def create_action(
+async def create_action(  # noqa: C901 - complexity justified by multi-entity support
     action_data: ActionCreate,
     db: DbSession,
     current_user: CurrentUser,
 ) -> ActionResponse:
-    """Create a new action for an incident, RTA, or complaint."""
+    """Create a new action for an incident, RTA, complaint, or investigation."""
+    src_type = action_data.source_type.lower()
+    src_id = action_data.source_id
+
+    # Validate that the source entity exists
+    if src_type == "incident":
+        result = await db.execute(select(Incident).where(Incident.id == src_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Incident with id {src_id} not found",
+            )
+    elif src_type == "rta":
+        result = await db.execute(select(RoadTrafficCollision).where(RoadTrafficCollision.id == src_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"RTA with id {src_id} not found",
+            )
+    elif src_type == "complaint":
+        result = await db.execute(select(Complaint).where(Complaint.id == src_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Complaint with id {src_id} not found",
+            )
+    elif src_type == "investigation":
+        result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == src_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Investigation with id {src_id} not found",
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+        )
+
     # Find owner by email if provided
     owner_id: Optional[int] = None
     if action_data.assigned_to_email:
@@ -207,9 +246,6 @@ async def create_action(
         user = result.scalar_one_or_none()
         if user:
             owner_id = user.id
-
-    src_type = action_data.source_type.lower()
-    src_id = action_data.source_id
 
     # Generate reference number based on source type
     year = datetime.now().year
@@ -305,9 +341,34 @@ async def create_action(
             detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
         )
 
-    db.add(action)
-    await db.commit()
-    await db.refresh(action)
+    try:
+        db.add(action)
+        await db.commit()
+        await db.refresh(action)
+    except IntegrityError as e:
+        await db.rollback()
+        error_msg = str(e.orig) if hasattr(e, "orig") else str(e)
+        if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Source entity {src_type} with id {src_id} not found or was deleted",
+            )
+        elif "unique" in error_msg.lower() or "duplicate" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An action with this reference number already exists",
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error while creating action: {error_msg[:200]}",
+            )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error creating action: {str(e)[:200]}",
+        )
 
     return ActionResponse(
         id=action.id,
