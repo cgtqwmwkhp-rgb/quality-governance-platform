@@ -329,9 +329,8 @@ class ETLPipeline:
                 # Transform record
                 transformed = self.transform_record(result.source_data, entity_type)
 
-                # Map external_ref to reference_number for API
-                if "external_ref" in transformed:
-                    transformed["reference_number"] = transformed.pop("external_ref")
+                # Keep external_ref for idempotency (API now supports it directly)
+                # Do NOT map to reference_number - API generates reference_number internally
 
                 # Add required fields that may be missing
                 if entity_type == EntityType.INCIDENT:

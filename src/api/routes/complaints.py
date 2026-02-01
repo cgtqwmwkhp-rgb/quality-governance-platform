@@ -26,7 +26,28 @@ async def create_complaint(
     Create a new complaint.
 
     Requires authentication.
+
+    Idempotency:
+    - If external_ref is provided and already exists, returns 409 Conflict
+    - This enables ETL/external systems to safely retry imports
     """
+    # Check for duplicate external_ref (idempotency check)
+    external_ref = complaint_in.external_ref
+    if external_ref:
+        existing_query = select(Complaint).where(Complaint.external_ref == external_ref)
+        existing_result = await db.execute(existing_query)
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "DUPLICATE_EXTERNAL_REF",
+                    "message": f"Complaint with external_ref '{external_ref}' already exists",
+                    "existing_id": existing.id,
+                    "existing_reference_number": existing.reference_number,
+                },
+            )
+
     # Generate reference number: COMP-YYYY-NNNN
     year = datetime.now().year
     count_query = select(func.count()).select_from(Complaint)

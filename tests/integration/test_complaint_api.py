@@ -112,3 +112,119 @@ async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, 
     event = result.scalars().all()[-1]  # Get latest
     assert event.payload["new_status"] == ComplaintStatus.RESOLVED
     assert event.payload["old_status"] == ComplaintStatus.RECEIVED
+
+
+# ============================================================================
+# Complaint Idempotency Tests (Release Governance Condition #1)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_complaint_with_external_ref(client: AsyncClient, auth_headers: dict, test_session):
+    """Test creating a complaint with external_ref for idempotency."""
+    data = {
+        "title": "ETL Imported Complaint",
+        "description": "Complaint imported from external system.",
+        "complaint_type": ComplaintType.SERVICE,
+        "received_date": datetime.now().isoformat(),
+        "complainant_name": "External System",
+        "external_ref": "EXT-COMP-001",
+    }
+    response = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    assert response.status_code == 201
+    content = response.json()
+    assert content["external_ref"] == "EXT-COMP-001"
+    assert content["reference_number"].startswith("COMP-")
+
+
+@pytest.mark.asyncio
+async def test_duplicate_external_ref_returns_409(client: AsyncClient, auth_headers: dict, test_session):
+    """Test that duplicate external_ref returns 409 Conflict (idempotency)."""
+    external_ref = "EXT-COMP-DUP-001"
+    data = {
+        "title": "First Complaint",
+        "description": "This is the first complaint with this external_ref.",
+        "complaint_type": ComplaintType.PRODUCT,
+        "received_date": datetime.now().isoformat(),
+        "complainant_name": "First Submitter",
+        "external_ref": external_ref,
+    }
+
+    # First request: should succeed
+    response1 = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    assert response1.status_code == 201
+    first_id = response1.json()["id"]
+
+    # Second request with same external_ref: should return 409
+    data2 = {
+        "title": "Second Complaint (duplicate)",
+        "description": "This should fail due to duplicate external_ref.",
+        "complaint_type": ComplaintType.SERVICE,
+        "received_date": datetime.now().isoformat(),
+        "complainant_name": "Second Submitter",
+        "external_ref": external_ref,  # Same external_ref
+    }
+    response2 = await client.post("/api/v1/complaints/", json=data2, headers=auth_headers)
+    assert response2.status_code == 409
+
+    # Verify error response contains expected fields
+    error_detail = response2.json()["detail"]
+    assert error_detail["code"] == "DUPLICATE_EXTERNAL_REF"
+    assert error_detail["existing_id"] == first_id
+    assert external_ref in error_detail["message"]
+
+
+@pytest.mark.asyncio
+async def test_create_complaint_without_external_ref_no_idempotency(
+    client: AsyncClient, auth_headers: dict, test_session
+):
+    """Test that complaints without external_ref can be created multiple times."""
+    data = {
+        "title": "Manual Complaint",
+        "description": "No external_ref - manual entry.",
+        "complaint_type": ComplaintType.OTHER,
+        "received_date": datetime.now().isoformat(),
+        "complainant_name": "Manual User",
+        # No external_ref
+    }
+
+    # First request
+    response1 = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    assert response1.status_code == 201
+
+    # Second request with same data but no external_ref: should also succeed
+    # (no idempotency check without external_ref)
+    response2 = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    assert response2.status_code == 201
+
+    # Verify two different complaints were created
+    assert response1.json()["id"] != response2.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_different_external_refs_create_separate_complaints(
+    client: AsyncClient, auth_headers: dict, test_session
+):
+    """Test that different external_refs create separate complaints."""
+    base_data = {
+        "title": "ETL Complaint",
+        "description": "Imported from external system.",
+        "complaint_type": ComplaintType.BILLING,
+        "received_date": datetime.now().isoformat(),
+        "complainant_name": "External System",
+    }
+
+    # Create first complaint
+    data1 = {**base_data, "external_ref": "EXT-UNIQUE-001"}
+    response1 = await client.post("/api/v1/complaints/", json=data1, headers=auth_headers)
+    assert response1.status_code == 201
+
+    # Create second complaint with different external_ref
+    data2 = {**base_data, "external_ref": "EXT-UNIQUE-002"}
+    response2 = await client.post("/api/v1/complaints/", json=data2, headers=auth_headers)
+    assert response2.status_code == 201
+
+    # Verify they have different IDs
+    assert response1.json()["id"] != response2.json()["id"]
+    assert response1.json()["external_ref"] == "EXT-UNIQUE-001"
+    assert response2.json()["external_ref"] == "EXT-UNIQUE-002"

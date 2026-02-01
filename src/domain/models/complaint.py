@@ -57,6 +57,10 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Idempotency key for ETL/external systems
+    # When provided, enforces uniqueness to prevent duplicate imports
+    external_ref: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, unique=True, index=True)
+
     # Complaint identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
