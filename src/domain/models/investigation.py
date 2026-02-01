@@ -369,8 +369,11 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
     owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Status and dates
+    # Use native_enum=False to store as VARCHAR instead of PostgreSQL ENUM.
+    # This must match migration 20260202_fix_action_status_type which converts the column.
     status: Mapped[InvestigationActionStatus] = mapped_column(
-        Enum(InvestigationActionStatus, native_enum=False), default=InvestigationActionStatus.OPEN
+        Enum(InvestigationActionStatus, native_enum=False, create_constraint=False),
+        default=InvestigationActionStatus.OPEN,
     )
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
