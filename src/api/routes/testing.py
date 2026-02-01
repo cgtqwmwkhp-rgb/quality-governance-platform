@@ -106,7 +106,7 @@ async def _ensure_etl_role_exists(db: DbSession) -> Role:
         if set(current_perms) != set(ETL_ROLE_PERMISSIONS["permissions"]):
             etl_role.permissions = json.dumps(ETL_ROLE_PERMISSIONS["permissions"])
             await db.commit()
-            logger.info(f"Updated etl_user role permissions")
+            logger.info("Updated etl_user role permissions")
 
     return etl_role
 
