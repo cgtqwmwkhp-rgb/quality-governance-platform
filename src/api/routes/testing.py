@@ -30,7 +30,11 @@ class TestUserRequest(BaseModel):
     password: str
     first_name: str = "UX"
     last_name: str = "TestRunner"
-    roles: list[str] = ["user", "employee", "admin", "viewer"]
+    # Default roles for ETL: includes etl_user role with restricted permissions
+    # Removed admin role - ETL should use least-privilege
+    roles: list[str] = ["user", "employee", "viewer", "etl_user"]
+    # is_superuser is intentionally NOT exposed - ETL users are least-privilege
+    is_superuser: bool = False
 
 
 class TestUserResponse(BaseModel):
@@ -47,6 +51,64 @@ def is_staging_env() -> bool:
     """Check if running in staging environment."""
     app_env = os.environ.get("APP_ENV", settings.app_env).lower()
     return app_env == "staging"
+
+
+# ETL Role Permission Matrix (ADR-0001/ADR-0002 compliant)
+# This defines the minimum permissions required for ETL operations
+ETL_ROLE_PERMISSIONS = {
+    "name": "etl_user",
+    "description": "ETL/Data Import user with restricted permissions",
+    "permissions": [
+        "complaint:create",  # Create complaints via ETL
+        "complaint:read",  # Read complaints for validation
+        "incident:create",  # Create incidents via ETL
+        "incident:read",  # Read incidents for validation
+        "rta:create",  # Create RTAs via ETL
+        "rta:read",  # Read RTAs for validation
+        # Note: Does NOT include:
+        # - *:delete (no deletion of records)
+        # - *:admin (no admin operations)
+        # - user:* (no user management)
+        # - role:* (no role management)
+        # - investigation:* (investigations managed manually)
+        # - action:* (actions managed manually)
+    ],
+}
+
+
+async def _ensure_etl_role_exists(db: DbSession) -> Role:
+    """
+    Ensure the etl_user role exists with correct permissions.
+
+    This is called during test user creation to ensure the role exists.
+    The role has restricted permissions following least-privilege principle.
+    """
+    import json
+
+    result = await db.execute(select(Role).where(Role.name == "etl_user"))
+    etl_role = result.scalar_one_or_none()
+
+    if etl_role is None:
+        # Create the role with defined permissions
+        etl_role = Role(
+            name=ETL_ROLE_PERMISSIONS["name"],
+            description=ETL_ROLE_PERMISSIONS["description"],
+            permissions=json.dumps(ETL_ROLE_PERMISSIONS["permissions"]),
+            is_system_role=True,
+        )
+        db.add(etl_role)
+        await db.commit()
+        await db.refresh(etl_role)
+        logger.info(f"Created etl_user role with ID: {etl_role.id}")
+    else:
+        # Update permissions if role exists but permissions differ
+        current_perms = json.loads(etl_role.permissions) if etl_role.permissions else []
+        if set(current_perms) != set(ETL_ROLE_PERMISSIONS["permissions"]):
+            etl_role.permissions = json.dumps(ETL_ROLE_PERMISSIONS["permissions"])
+            await db.commit()
+            logger.info("Updated etl_user role permissions")
+
+    return etl_role
 
 
 @router.post("/ensure-test-user", response_model=TestUserResponse)
@@ -104,14 +166,14 @@ async def ensure_test_user(
 
     if user is None:
         # Create user with empty roles list initialized
-        # Make test users superusers to have all permissions for ETL operations
+        # SECURITY: ETL users are NOT superusers - use least-privilege via roles
         user = User(
             email=request.email,
             hashed_password=get_password_hash(request.password),
             first_name=request.first_name,
             last_name=request.last_name,
             is_active=True,
-            is_superuser=True,  # Superuser for ETL/testing permissions
+            is_superuser=request.is_superuser,  # Default: False for least-privilege
         )
         # Initialize roles as empty list before adding
         user.roles = []
@@ -119,17 +181,21 @@ async def ensure_test_user(
         await db.commit()
         await db.refresh(user)
         created = True
-        logger.info(f"Created test user with ID: {user.id}")
+        logger.info(f"Created test user with ID: {user.id} (is_superuser={request.is_superuser})")
     else:
-        # Update password and ensure superuser (for ETL permissions)
+        # Update password but do NOT change is_superuser flag
         user.hashed_password = get_password_hash(request.password)
         user.is_active = True
-        user.is_superuser = True  # Ensure superuser for ETL/testing permissions
+        # Note: is_superuser is NOT updated - existing users keep their privilege level
         await db.commit()
         logger.info(f"Updated test user with ID: {user.id}")
 
     # Assign roles - use clear/extend to avoid lazy load trigger
     if request.roles:
+        # Ensure etl_user role exists with correct permissions
+        if "etl_user" in request.roles:
+            await _ensure_etl_role_exists(db)
+
         role_result = await db.execute(select(Role).where(Role.name.in_(request.roles)))
         roles: List[Role] = list(role_result.scalars().all())  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-1
         # Clear existing roles and add new ones

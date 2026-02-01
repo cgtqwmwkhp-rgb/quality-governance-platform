@@ -38,9 +38,18 @@ class ComplaintBase(BaseModel):
 
 
 class ComplaintCreate(ComplaintBase):
-    """Schema for creating a complaint."""
+    """Schema for creating a complaint.
 
-    pass
+    Optional external_ref field enables idempotent imports:
+    - If external_ref is provided and already exists, API returns 409 Conflict
+    - If external_ref is None, complaint is created without idempotency check
+    """
+
+    external_ref: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Optional external reference for idempotent imports. Must be unique.",
+    )
 
 
 class ComplaintUpdate(BaseModel):
@@ -72,6 +81,7 @@ class ComplaintResponse(ComplaintBase):
 
     id: int
     reference_number: str
+    external_ref: Optional[str] = None
     status: ComplaintStatus
     created_at: datetime
     updated_at: datetime
