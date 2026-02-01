@@ -1,5 +1,6 @@
 """Unified Actions API routes for incidents, RTAs, complaints, and investigations."""
 
+import logging
 from datetime import datetime
 from typing import Any, Optional, Union, cast
 
@@ -15,6 +16,8 @@ from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -204,6 +207,13 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     src_type = action_data.source_type.lower()
     src_id = action_data.source_id
 
+    # Diagnostic logging for 500 error investigation
+    logger.info(
+        f"create_action called: source_type={src_type}, source_id={src_id}, "
+        f"title={action_data.title[:50] if action_data.title else 'None'}, "
+        f"user_id={current_user.id}"
+    )
+
     # Validate that the source entity exists
     if src_type == "incident":
         result = await db.execute(select(Incident).where(Incident.id == src_id))
@@ -227,12 +237,16 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 detail=f"Complaint with id {src_id} not found",
             )
     elif src_type == "investigation":
+        logger.info(f"Validating investigation exists: id={src_id}")
         result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == src_id))
-        if not result.scalar_one_or_none():
+        investigation = result.scalar_one_or_none()
+        if not investigation:
+            logger.warning(f"Investigation not found: id={src_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Investigation with id {src_id} not found",
             )
+        logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -342,12 +356,17 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         )
 
     try:
+        logger.info(f"Adding action to session: ref_number={ref_number}, status={action.status}")
         db.add(action)
+        logger.info("Committing action to database...")
         await db.commit()
+        logger.info("Action committed successfully, refreshing...")
         await db.refresh(action)
+        logger.info(f"Action created successfully: id={action.id}, ref={action.reference_number}")
     except IntegrityError as e:
         await db.rollback()
         error_msg = str(e.orig) if hasattr(e, "orig") else str(e)
+        logger.error(f"IntegrityError creating action: {error_msg}")
         if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -365,9 +384,11 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             )
     except Exception as e:
         await db.rollback()
+        # Log the FULL exception with traceback for diagnosis
+        logger.exception(f"Unexpected exception creating action: type={type(e).__name__}, msg={str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error creating action: {str(e)[:200]}",
+            detail=f"Unexpected error creating action: {type(e).__name__}: {str(e)[:200]}",
         )
 
     return ActionResponse(
