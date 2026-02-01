@@ -70,10 +70,12 @@ class ActionResponse(BaseModel):
     status: str
     due_date: Optional[str] = None
     completed_at: Optional[str] = None
+    completion_notes: Optional[str] = None
     source_type: str
     source_id: int
     owner_id: Optional[int] = None
     owner_email: Optional[str] = None
+    assigned_to_email: Optional[str] = None
     created_at: str
 
     class Config:

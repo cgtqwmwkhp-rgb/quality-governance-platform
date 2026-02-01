@@ -776,10 +776,12 @@ export interface Action {
   status: 'open' | 'in_progress' | 'pending_verification' | 'completed' | 'cancelled'
   due_date?: string
   completed_at?: string
+  completion_notes?: string
   source_type: string
   source_id: number
   owner_id?: number
   owner_email?: string
+  assigned_to_email?: string
   created_at: string
 }
 

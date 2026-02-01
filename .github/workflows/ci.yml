@@ -15,6 +15,61 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Trojan Source Detection (Bidi/Invisible Unicode)
+        run: |
+          echo "=== Trojan Source Detection ==="
+          echo "Scanning for hidden/bidirectional Unicode characters..."
+          
+          # Create detection script
+          python3 << 'EOF'
+          import os
+          import sys
+
+          # Bidi and invisible control character codepoints (Trojan Source risk)
+          DANGEROUS_CHARS = set([
+              0x202A, 0x202B, 0x202C, 0x202D, 0x202E,  # LRE, RLE, PDF, LRO, RLO
+              0x2066, 0x2067, 0x2068, 0x2069,  # LRI, RLI, FSI, PDI
+              0x200B, 0x200C, 0x200D, 0x200E, 0x200F,  # ZWSP, ZWNJ, ZWJ, LRM, RLM
+              0xFEFF,  # BOM/ZWNBSP
+          ])
+
+          SCAN_DIRS = ['src', 'frontend/src', 'scripts', 'tests']
+          EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx', '.sh', '.yml', '.yaml'}
+
+          findings = []
+          for scan_dir in SCAN_DIRS:
+              if not os.path.exists(scan_dir):
+                  continue
+              for root, dirs, files in os.walk(scan_dir):
+                  # Skip node_modules and other common excludes
+                  dirs[:] = [d for d in dirs if d not in ['node_modules', '__pycache__', '.git', 'dist', 'build']]
+                  for fname in files:
+                      ext = os.path.splitext(fname)[1]
+                      if ext not in EXTENSIONS:
+                          continue
+                      fpath = os.path.join(root, fname)
+                      try:
+                          with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+                              for line_no, line in enumerate(f, 1):
+                                  for col, char in enumerate(line, 1):
+                                      cp = ord(char)
+                                      if cp in DANGEROUS_CHARS:
+                                          findings.append(f"{fpath}:{line_no}:{col} U+{cp:04X}")
+                      except Exception as e:
+                          pass  # Skip unreadable files
+
+          if findings:
+              print("❌ TROJAN SOURCE RISK: Hidden/bidi Unicode characters found!")
+              for f in findings[:50]:  # Limit output
+                  print(f"  {f}")
+              if len(findings) > 50:
+                  print(f"  ... and {len(findings) - 50} more")
+              sys.exit(1)
+          else:
+              print("✅ No hidden/bidirectional Unicode characters found")
+              sys.exit(0)
+          EOF
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
