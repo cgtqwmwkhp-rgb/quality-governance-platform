@@ -40,7 +40,22 @@ interface ActionItem {
   status: string
   due_date?: string
   owner_email?: string
+  reference_number?: string
+  created_at?: string
+  completed_at?: string
+  completion_notes?: string
+  source_type?: string
+  source_id?: number
 }
+
+// Status options for action update
+const ACTION_STATUS_OPTIONS = [
+  { value: 'open', label: 'Open', className: 'bg-warning/10 text-warning' },
+  { value: 'in_progress', label: 'In Progress', className: 'bg-info/10 text-info' },
+  { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800' },
+  { value: 'completed', label: 'Completed', className: 'bg-success/10 text-success' },
+  { value: 'cancelled', label: 'Cancelled', className: 'bg-muted text-muted-foreground' },
+]
 
 // Source type options for investigation creation
 const SOURCE_TYPES = [
@@ -443,6 +458,12 @@ export default function Investigations() {
     due_date: '',
     assigned_to: '',
   })
+  
+  // Action detail modal state
+  const [selectedAction, setSelectedAction] = useState<ActionItem | null>(null)
+  const [showActionDetailModal, setShowActionDetailModal] = useState(false)
+  const [updatingAction, setUpdatingAction] = useState(false)
+  const [actionUpdateError, setActionUpdateError] = useState<string | null>(null)
 
   useEffect(() => {
     loadInvestigations()
@@ -529,6 +550,42 @@ export default function Investigations() {
 
   const handleAssigneeChange = (email: string) => {
     setActionForm({ ...actionForm, assigned_to: email })
+  }
+
+  // Open action detail modal
+  const handleOpenAction = (action: ActionItem) => {
+    setSelectedAction(action)
+    setShowActionDetailModal(true)
+    setActionUpdateError(null)
+  }
+
+  // Update action status
+  const handleUpdateActionStatus = async (newStatus: string, completionNotes?: string) => {
+    if (!selectedAction || !selectedInvestigation) return
+    
+    setUpdatingAction(true)
+    setActionUpdateError(null)
+    try {
+      await actionsApi.update(selectedAction.id, 'investigation', {
+        status: newStatus,
+        completion_notes: newStatus === 'completed' ? completionNotes : undefined,
+      })
+      // Reload actions to show updated status
+      await loadActionsForInvestigation(selectedInvestigation)
+      // Update selected action locally
+      setSelectedAction(prev => prev ? { ...prev, status: newStatus, completion_notes: completionNotes } : null)
+    } catch (err: any) {
+      console.error('Failed to update action:', err)
+      const errorMessage = getApiErrorMessage(err)
+      setActionUpdateError(errorMessage)
+    } finally {
+      setUpdatingAction(false)
+    }
+  }
+
+  // Mark action as complete
+  const handleCompleteAction = async (completionNotes: string) => {
+    await handleUpdateActionStatus('completed', completionNotes)
   }
 
   const getEntityIcon = (type: string) => {
@@ -779,10 +836,17 @@ export default function Investigations() {
                   ) : investigationActions.length > 0 ? (
                     <div className="space-y-3 mb-4">
                       {investigationActions.map((action) => (
-                        <Card key={action.id} className="p-4">
+                        <Card 
+                          key={action.id} 
+                          className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
+                          onClick={() => handleOpenAction(action)}
+                        >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-foreground">{action.title}</h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-foreground">{action.title}</h4>
+                                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                              </div>
                               <p className="text-sm text-muted-foreground line-clamp-2">{action.description}</p>
                               {action.owner_email && (
                                 <p className="text-xs text-muted-foreground mt-1">
@@ -795,9 +859,11 @@ export default function Investigations() {
                                 "px-2 py-0.5 text-xs font-medium rounded",
                                 action.status === 'open' && "bg-warning/10 text-warning",
                                 action.status === 'in_progress' && "bg-info/10 text-info",
+                                action.status === 'pending_verification' && "bg-purple-100 text-purple-800",
                                 action.status === 'completed' && "bg-success/10 text-success",
+                                action.status === 'cancelled' && "bg-muted text-muted-foreground",
                               )}>
-                                {action.status.replace('_', ' ')}
+                                {action.status.replace(/_/g, ' ')}
                               </span>
                               <span className={cn(
                                 "px-2 py-0.5 text-xs font-medium rounded",
@@ -926,6 +992,124 @@ export default function Investigations() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Action Detail Modal */}
+      <Dialog open={showActionDetailModal} onOpenChange={setShowActionDetailModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Action Details</DialogTitle>
+            <DialogDescription>
+              {selectedAction?.reference_number || `Action #${selectedAction?.id}`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedAction && (
+            <div className="space-y-4">
+              {/* Title and Description */}
+              <div>
+                <h3 className="font-semibold text-lg text-foreground">{selectedAction.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{selectedAction.description}</p>
+              </div>
+
+              {/* Status and Priority */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Status</label>
+                  <span className={cn(
+                    "inline-block px-3 py-1 text-sm font-medium rounded",
+                    selectedAction.status === 'open' && "bg-warning/10 text-warning",
+                    selectedAction.status === 'in_progress' && "bg-info/10 text-info",
+                    selectedAction.status === 'pending_verification' && "bg-purple-100 text-purple-800",
+                    selectedAction.status === 'completed' && "bg-success/10 text-success",
+                    selectedAction.status === 'cancelled' && "bg-muted text-muted-foreground",
+                  )}>
+                    {selectedAction.status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Priority</label>
+                  <span className={cn(
+                    "inline-block px-3 py-1 text-sm font-medium rounded",
+                    selectedAction.priority === 'critical' && "bg-destructive/10 text-destructive",
+                    selectedAction.priority === 'high' && "bg-warning/10 text-warning",
+                    selectedAction.priority === 'medium' && "bg-info/10 text-info",
+                    selectedAction.priority === 'low' && "bg-muted text-muted-foreground",
+                  )}>
+                    {selectedAction.priority}
+                  </span>
+                </div>
+              </div>
+
+              {/* Assignee and Due Date */}
+              <div className="flex gap-4">
+                {selectedAction.owner_email && (
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Assigned To</label>
+                    <span className="text-sm text-foreground">{selectedAction.owner_email}</span>
+                  </div>
+                )}
+                {selectedAction.due_date && (
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Due Date</label>
+                    <span className="text-sm text-foreground">{new Date(selectedAction.due_date).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Completion Notes */}
+              {selectedAction.completion_notes && (
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Completion Notes</label>
+                  <p className="text-sm text-foreground bg-muted/50 p-2 rounded">{selectedAction.completion_notes}</p>
+                </div>
+              )}
+
+              {/* Status Update Section */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-foreground mb-2">Update Status</label>
+                <div className="flex flex-wrap gap-2">
+                  {ACTION_STATUS_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={selectedAction.status === option.value ? "default" : "outline"}
+                      size="sm"
+                      disabled={updatingAction || selectedAction.status === option.value}
+                      onClick={() => {
+                        if (option.value === 'completed') {
+                          // Prompt for completion notes
+                          const notes = window.prompt('Enter completion notes (optional):')
+                          handleCompleteAction(notes || '')
+                        } else {
+                          handleUpdateActionStatus(option.value)
+                        }
+                      }}
+                    >
+                      {updatingAction && selectedAction.status !== option.value ? (
+                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                      ) : null}
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {actionUpdateError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                  <strong>Error:</strong> {actionUpdateError}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowActionDetailModal(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

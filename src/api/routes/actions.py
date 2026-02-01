@@ -414,7 +414,7 @@ async def get_action(
     action_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    source_type: str = Query(..., description="Type of source: incident, rta, or complaint"),
+    source_type: str = Query(..., description="Type of source: incident, rta, complaint, or investigation"),
 ) -> ActionResponse:
     """Get a specific action by ID."""
     src_type = source_type.lower()
@@ -434,6 +434,11 @@ async def get_action(
         complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
         if complaint_action:
             return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id)
+    elif src_type == "investigation":
+        result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
+        investigation_action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
+        if investigation_action:
+            return _action_to_response(investigation_action, "investigation", investigation_action.investigation_id)
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -447,7 +452,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     action_data: ActionUpdate,
     db: DbSession,
     current_user: CurrentUser,
-    source_type: str = Query(..., description="Type of source: incident, rta, or complaint"),
+    source_type: str = Query(..., description="Type of source: incident, rta, complaint, or investigation"),
 ) -> ActionResponse:
     """Update an existing action by ID.
 
@@ -457,10 +462,10 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     src_type = source_type.lower()
 
     # Bounded error class: validate source_type
-    if src_type not in ("incident", "rta", "complaint"):
+    if src_type not in ("incident", "rta", "complaint", "investigation"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', or 'complaint'",
+            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
         )
 
     # Bounded error class: validate status if provided
@@ -480,7 +485,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         )
 
     # Find the action by type
-    action: Optional[Union[IncidentAction, RTAAction, ComplaintAction]] = None
+    action: Optional[Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]] = None
     source_id: int = 0
 
     if src_type == "incident":
@@ -498,6 +503,11 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
         if action:
             source_id = action.complaint_id
+    elif src_type == "investigation":
+        result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
+        action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.investigation_id
 
     if not action:
         raise HTTPException(
@@ -515,9 +525,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if action_data.priority is not None:
         action.priority = action_data.priority.lower()
     if action_data.status is not None:
-        # Convert string to ActionStatus enum
+        # Convert string to appropriate status enum based on source type
         status_value = action_data.status.lower()
-        action.status = ActionStatus(status_value)
+        if src_type == "investigation":
+            action.status = InvestigationActionStatus(status_value)
+        else:
+            action.status = ActionStatus(status_value)
         # Set completed_at if status changed to completed
         if status_value == "completed" and not action.completed_at:
             action.completed_at = datetime.utcnow()
