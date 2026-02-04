@@ -71,6 +71,8 @@ import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 
+import { API_BASE_URL } from './config/apiBase'
+
 // Declare build version globals injected by Vite
 declare const __BUILD_VERSION__: string
 declare const __BUILD_TIME__: string
@@ -83,14 +85,15 @@ function logVersionInfo() {
   console.group('[QGP] Application Version Info')
   console.log('Frontend SHA:', frontendVersion)
   console.log('Frontend Build:', frontendBuildTime)
+  console.log('API Base URL:', API_BASE_URL)
   
-  // Fetch backend version
-  fetch('/api/v1/meta/version', { method: 'GET' })
+  // Fetch backend version using the correct API base URL
+  fetch(`${API_BASE_URL}/api/v1/meta/version`, { method: 'GET' })
     .then(res => res.ok ? res.json() : Promise.reject(res.status))
     .then(data => {
       console.log('Backend SHA:', data.build_sha || 'unknown')
       console.log('Backend Build:', data.build_time || 'unknown')
-      console.log('Environment:', data.environment || 'unknown')
+      console.log('Backend Environment:', data.environment || 'unknown')
       console.groupEnd()
     })
     .catch(err => {
