@@ -787,7 +787,7 @@ async def add_comment(
 
     Comments are INTERNAL ONLY - never included in customer packs.
     Can be attached to specific sections/fields and support threading.
-
+    
     Request body:
         - body: Comment content (required)
         - section_id: Section to attach to (optional)
@@ -852,9 +852,9 @@ async def add_comment(
         event_type="COMMENT_ADDED",
         actor_id=current_user.id,
         metadata={
-            "section_id": section_id,
-            "field_id": field_id,
-            "is_reply": parent_comment_id is not None,
+            "section_id": request_body.section_id,
+            "field_id": request_body.field_id,
+            "is_reply": request_body.parent_comment_id is not None,
         },
     )
 
