@@ -3,14 +3,22 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright Configuration for Quality Governance Platform
  * 
- * Artifact Configuration:
- * - Screenshots: Always on failure, optionally on success for key tests
- * - Traces: On first retry (for debugging failures)
- * - Video: On first retry (helps reproduce issues)
+ * IMPORTANT: This config is designed for machine-verifiable CI gates.
  * 
- * CI Integration:
- * - Uploads playwright-report/, screenshots/, traces/ as artifacts
- * - Used by staging UI verification job for release evidence
+ * Reporters (ALWAYS generated - not conditional):
+ * - HTML: Human-readable report at playwright-report/index.html
+ * - JSON: Machine-readable at playwright-report/results.json
+ * - JUnit: CI integration at playwright-report/junit.xml
+ * - List: Console output for live feedback
+ * 
+ * Artifacts:
+ * - Screenshots: On failure only
+ * - Traces: On first retry (for debugging)
+ * - Video: On first retry (for debugging)
+ * 
+ * Output Paths (STABLE for CI artifact upload):
+ * - playwright-report/       HTML report + JSON + JUnit
+ * - test-results/            Screenshots, videos, traces
  */
 export default defineConfig({
   testDir: './tests/e2e',
@@ -19,15 +27,16 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   
-  // Output directories for artifacts
+  // Output directories for artifacts (stable paths)
   outputDir: './test-results',
   
+  // ALWAYS emit all reporters for machine-verifiable results
+  // Not conditional - ensures consistent behavior in all environments
   reporter: [
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['list'],
     ['json', { outputFile: 'playwright-report/results.json' }],
-    // JUnit for CI integration
-    ...(process.env.CI ? [['junit', { outputFile: 'playwright-report/junit.xml' }] as const] : []),
+    ['junit', { outputFile: 'playwright-report/junit.xml' }],
+    ['list'],
   ],
   
   use: {
