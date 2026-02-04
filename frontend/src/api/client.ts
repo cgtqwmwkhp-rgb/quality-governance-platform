@@ -912,9 +912,73 @@ export interface InvestigationAutosave {
   version: number
 }
 
+// ============ Investigation Stage 1 API Types ============
+
+export interface TimelineEvent {
+  id: number
+  created_at: string
+  event_type: string
+  field_path?: string
+  old_value?: string
+  new_value?: string
+  actor_id?: number
+  event_metadata?: Record<string, unknown>
+}
+
+export interface TimelineResponse {
+  items: TimelineEvent[]
+  total: number
+  page: number
+  page_size: number
+  investigation_id: number
+}
+
+export interface InvestigationComment {
+  id: number
+  created_at: string
+  author_id: number
+  body: string
+  metadata?: Record<string, unknown>
+}
+
+export interface CommentsResponse {
+  items: InvestigationComment[]
+  total: number
+  page: number
+  page_size: number
+  investigation_id: number
+}
+
+export interface CustomerPackSummary {
+  id: number
+  created_at: string
+  pack_uuid: string
+  audience: string
+  checksum_sha256?: string
+  generated_by_id?: number
+}
+
+export interface PacksResponse {
+  items: CustomerPackSummary[]
+  total: number
+  page: number
+  page_size: number
+  investigation_id: number
+}
+
+export interface ClosureValidation {
+  status: 'OK' | 'BLOCKED'
+  reason_codes: string[]
+  missing_fields: string[]
+  checked_at_utc: string
+}
+
 export const investigationsApi = {
-  list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?page=${page}&size=${size}`),
+  list: (page = 1, size = 10, status?: string) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) })
+    if (status) params.set('status', status)
+    return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
+  },
   create: (data: InvestigationCreate) => 
     api.post<Investigation>('/api/v1/investigations/', data),
   get: (id: number) => 
@@ -951,6 +1015,61 @@ export const investigationsApi = {
     if (options?.size) params.set('size', String(options.size))
     return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
   },
+  
+  // ============ Stage 1 Endpoints ============
+  
+  /**
+   * Get timeline events for an investigation.
+   * Ordered by created_at DESC, id DESC.
+   */
+  getTimeline: (id: number, options?: { page?: number; page_size?: number; type?: string }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    if (options?.type) params.set('type', options.type)
+    return api.get<TimelineResponse>(`/api/v1/investigations/${id}/timeline?${params}`)
+  },
+  
+  /**
+   * Get comments for an investigation.
+   * Ordered by created_at DESC, id DESC.
+   */
+  getComments: (id: number, options?: { page?: number; page_size?: number }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    return api.get<CommentsResponse>(`/api/v1/investigations/${id}/comments?${params}`)
+  },
+  
+  /**
+   * Add a comment to an investigation.
+   */
+  addComment: (id: number, body: string) =>
+    api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, { body }),
+  
+  /**
+   * Get customer pack summaries for an investigation.
+   * Does NOT include full content for security.
+   */
+  getPacks: (id: number, options?: { page?: number; page_size?: number }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    return api.get<PacksResponse>(`/api/v1/investigations/${id}/packs?${params}`)
+  },
+  
+  /**
+   * Generate a new customer pack for an investigation.
+   */
+  generatePack: (id: number, audience: string) =>
+    api.post<CustomerPackSummary>(`/api/v1/investigations/${id}/customer-pack`, { audience }),
+  
+  /**
+   * Get closure validation status for an investigation.
+   * Returns OK or BLOCKED with reason codes.
+   */
+  getClosureValidation: (id: number) =>
+    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),
 }
 
 export const standardsApi = {
@@ -1232,6 +1351,178 @@ export const usersApi = {
     api.get<UserSearchResult[]>(`/api/v1/users/search/?q=${encodeURIComponent(query)}`),
   list: (page = 1, size = 50) =>
     api.get<PaginatedResponse<UserSearchResult>>(`/api/v1/users/?page=${page}&size=${size}`),
+}
+
+// ============ Evidence Assets API ============
+
+export interface EvidenceAsset {
+  id: number
+  storage_key: string
+  original_filename?: string
+  content_type: string
+  file_size_bytes?: number
+  checksum_sha256?: string
+  asset_type: string
+  source_module: string
+  source_id: number
+  linked_investigation_id?: number
+  title?: string
+  description?: string
+  captured_at?: string
+  captured_by_role?: string
+  latitude?: number
+  longitude?: number
+  location_description?: string
+  render_hint?: string
+  thumbnail_storage_key?: string
+  metadata_json?: Record<string, unknown>
+  visibility: string
+  contains_pii: boolean
+  redaction_required: boolean
+  retention_policy: string
+  retention_expires_at?: string
+  created_at: string
+  updated_at: string
+  created_by_id?: number
+  updated_by_id?: number
+}
+
+export interface EvidenceAssetListResponse {
+  items: EvidenceAsset[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export interface EvidenceAssetUploadResponse {
+  id: number
+  storage_key: string
+  original_filename: string
+  content_type: string
+  file_size_bytes: number
+  upload_url?: string
+  message: string
+}
+
+export interface SignedUrlResponse {
+  asset_id: number
+  signed_url: string
+  expires_in_seconds: number
+  content_type: string
+  filename?: string
+}
+
+export const evidenceAssetsApi = {
+  /**
+   * List evidence assets with filtering.
+   * For investigations: source_module=investigation, source_id=investigation_id
+   */
+  list: (options?: {
+    page?: number
+    page_size?: number
+    source_module?: string
+    source_id?: number
+    asset_type?: string
+    linked_investigation_id?: number
+  }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    if (options?.source_module) params.set('source_module', options.source_module)
+    if (options?.source_id) params.set('source_id', String(options.source_id))
+    if (options?.asset_type) params.set('asset_type', options.asset_type)
+    if (options?.linked_investigation_id) params.set('linked_investigation_id', String(options.linked_investigation_id))
+    return api.get<EvidenceAssetListResponse>(`/api/v1/evidence-assets/?${params}`)
+  },
+
+  /**
+   * Get a single evidence asset by ID.
+   */
+  get: (assetId: number) =>
+    api.get<EvidenceAsset>(`/api/v1/evidence-assets/${assetId}`),
+
+  /**
+   * Upload a new evidence asset.
+   * Uses multipart/form-data for file upload.
+   */
+  upload: (file: File, data: {
+    source_module: string
+    source_id: number
+    title?: string
+    description?: string
+    visibility?: string
+    contains_pii?: boolean
+    redaction_required?: boolean
+  }) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('source_module', data.source_module)
+    formData.append('source_id', String(data.source_id))
+    if (data.title) formData.append('title', data.title)
+    if (data.description) formData.append('description', data.description)
+    if (data.visibility) formData.append('visibility', data.visibility)
+    if (data.contains_pii !== undefined) formData.append('contains_pii', String(data.contains_pii))
+    if (data.redaction_required !== undefined) formData.append('redaction_required', String(data.redaction_required))
+    
+    return api.post<EvidenceAssetUploadResponse>('/api/v1/evidence-assets/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
+  /**
+   * Link an evidence asset to an investigation.
+   */
+  linkToInvestigation: (assetId: number, investigationId: number) =>
+    api.post<EvidenceAsset>(`/api/v1/evidence-assets/${assetId}/link-investigation?investigation_id=${investigationId}`),
+
+  /**
+   * Delete (soft delete) an evidence asset.
+   */
+  delete: (assetId: number) =>
+    api.delete(`/api/v1/evidence-assets/${assetId}`),
+
+  /**
+   * Get a signed download URL for an evidence asset.
+   */
+  getSignedUrl: (assetId: number, expiresIn?: number) => {
+    const params = new URLSearchParams()
+    if (expiresIn) params.set('expires_in', String(expiresIn))
+    return api.get<SignedUrlResponse>(`/api/v1/evidence-assets/${assetId}/signed-url?${params}`)
+  },
+}
+
+// ============ Report/Pack Capability Check ============
+
+/**
+ * Check if pack generation is available for an investigation.
+ * Returns capability info for deterministic UI behavior.
+ */
+export interface PackCapability {
+  canGenerate: boolean
+  reason?: string
+  lastError?: string
+}
+
+export async function checkPackCapability(investigationId: number): Promise<PackCapability> {
+  try {
+    // Try to hit the endpoint with a dry-run or just check if it returns 404/501
+    // For now, we'll just try to get packs list - if that works, generation should too
+    await investigationsApi.getPacks(investigationId, { page: 1, page_size: 1 })
+    return { canGenerate: true }
+  } catch (err: unknown) {
+    const error = err as { response?: { status?: number } }
+    if (error.response?.status === 404) {
+      return { canGenerate: false, reason: 'Investigation not found or pack generation not available' }
+    }
+    if (error.response?.status === 501) {
+      return { canGenerate: false, reason: 'Pack generation is not implemented in this environment' }
+    }
+    if (error.response?.status === 403) {
+      return { canGenerate: false, reason: 'You do not have permission to generate packs' }
+    }
+    return { canGenerate: true } // Assume available, will fail on actual generate
+  }
 }
 
 export default api
