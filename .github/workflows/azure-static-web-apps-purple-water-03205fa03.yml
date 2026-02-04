@@ -1,8 +1,33 @@
 name: Azure Static Web Apps CI/CD
 
-# CHANGED: Removed PR preview deployments to avoid Azure SWA environment limit.
-# PRs get a build-only check; actual deployment only happens on push to main.
-# IMPORTANT: Production promotion is GATED on staging_ui_verification success.
+# =============================================================================
+# WORKFLOW OVERVIEW
+# =============================================================================
+# This workflow deploys the frontend to Azure Static Web Apps with a staging-first
+# discipline. Production promotion is GATED on staging_ui_verification success.
+#
+# PR Behavior:
+#   - Build-only validation (no deployment) to satisfy branch protection
+#   - Actual deployment only happens on push to main
+#
+# Push to Main Behavior:
+#   1. deploy_to_staging: Build and deploy to SWA
+#   2. staging_ui_verification: Run Playwright E2E tests (HARD GATE)
+#   3. production_promotion_gate: Only runs if staging verification passes
+#
+# =============================================================================
+# VITE_API_URL RATIONALE (INTENTIONAL)
+# =============================================================================
+# The staging SWA build uses VITE_API_URL pointing to the PRODUCTION backend.
+# This is INTENTIONAL because:
+#   1. Azure SWA is a single-environment deployment (no separate staging backend)
+#   2. The SWA serves as a "staging" environment for the FRONTEND only
+#   3. E2E tests are READ-ONLY verification (no write operations)
+#   4. This allows testing the frontend against the real production API
+#
+# If a true staging backend is provisioned in the future, update VITE_API_URL
+# to https://app-qgp-staging.azurewebsites.net
+# =============================================================================
 on:
   push:
     branches:
@@ -133,6 +158,7 @@ jobs:
     outputs:
       test_status: ${{ steps.playwright_gate.outputs.test_status }}
       failure_type: ${{ steps.playwright_gate.outputs.failure_type }}
+      exit_code: ${{ steps.playwright_gate.outputs.exit_code }}
       passed_count: ${{ steps.playwright_gate.outputs.passed_count }}
       failed_count: ${{ steps.playwright_gate.outputs.failed_count }}
       skipped_count: ${{ steps.playwright_gate.outputs.skipped_count }}
@@ -229,19 +255,26 @@ jobs:
           echo "playwright_exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           echo "Playwright exit code: $EXIT_CODE"
       
-      - name: Parse Playwright Results (Deterministic)
+      - name: Parse Playwright Results (Audit-Grade Deterministic)
         id: playwright_gate
         working-directory: frontend
         run: |
           # ============================================================================
-          # DETERMINISTIC GATE PARSING
+          # AUDIT-GRADE DETERMINISTIC GATE PARSING
           # 
-          # Failure Classification:
-          # - TEST_FAILURE: Tests ran but some failed (results.json exists, failed > 0)
-          # - INFRA_FAILURE: Runner/config crash (no results.json, non-zero exit code)
-          # - PASSED: All tests passed (results.json exists, failed == 0)
-          # 
-          # This ensures the gate status is NEVER "unknown" - it's always classifiable.
+          # PASSED requires ALL of:
+          #   1. results.json exists
+          #   2. junit.xml exists
+          #   3. TOTAL > 0 (at least one test executed)
+          #   4. FAILED == 0
+          #   5. PLAYWRIGHT_EXIT_CODE == 0
+          #
+          # Failure Classifications (mutually exclusive, in priority order):
+          #   - NO_TESTS: Results exist but TOTAL == 0 (no tests executed)
+          #   - INFRA_FAILURE: Missing results OR exit code != 0 OR missing junit
+          #   - TEST_FAILURE: FAILED > 0 (tests ran but assertions failed)
+          #
+          # This ensures the gate status is NEVER ambiguous.
           # ============================================================================
           
           PLAYWRIGHT_EXIT_CODE="${{ steps.playwright_run.outputs.playwright_exit_code }}"
@@ -257,14 +290,19 @@ jobs:
           [ -f "$RESULTS_FILE" ] && RESULTS_EXIST="true"
           [ -f "$JUNIT_FILE" ] && JUNIT_EXIST="true"
           
-          echo "### Result Files" >> $GITHUB_STEP_SUMMARY
+          echo "### Preconditions" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| File | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| results.json | $( [ "$RESULTS_EXIST" = "true" ] && echo "✅ Found" || echo "❌ Missing" ) |" >> $GITHUB_STEP_SUMMARY
-          echo "| junit.xml | $( [ "$JUNIT_EXIST" = "true" ] && echo "✅ Found" || echo "❌ Missing" ) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Exit Code | $PLAYWRIGHT_EXIT_CODE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Required |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| results.json exists | $( [ "$RESULTS_EXIST" = "true" ] && echo "✅" || echo "❌" ) | Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| junit.xml exists | $( [ "$JUNIT_EXIST" = "true" ] && echo "✅" || echo "❌" ) | Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Exit Code == 0 | $( [ "$PLAYWRIGHT_EXIT_CODE" = "0" ] && echo "✅" || echo "❌ ($PLAYWRIGHT_EXIT_CODE)" ) | Yes |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Initialize outputs
+          echo "exit_code=$PLAYWRIGHT_EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "results_exist=$RESULTS_EXIST" >> $GITHUB_OUTPUT
+          echo "junit_exist=$JUNIT_EXIST" >> $GITHUB_OUTPUT
           
           # Parse results if available
           if [ "$RESULTS_EXIST" = "true" ]; then
@@ -272,36 +310,60 @@ jobs:
             FAILED=$(jq -r '.stats.unexpected // 0' "$RESULTS_FILE")
             SKIPPED=$(jq -r '.stats.skipped // 0' "$RESULTS_FILE")
             FLAKY=$(jq -r '.stats.flaky // 0' "$RESULTS_FILE")
-            TOTAL=$((PASSED + FAILED + SKIPPED + FLAKY))
             
-            # Ensure numeric values
+            # Ensure numeric values (handle null/empty)
             PASSED=${PASSED:-0}
             FAILED=${FAILED:-0}
             SKIPPED=${SKIPPED:-0}
             FLAKY=${FLAKY:-0}
             
+            # Validate numeric
+            [[ "$PASSED" =~ ^[0-9]+$ ]] || PASSED=0
+            [[ "$FAILED" =~ ^[0-9]+$ ]] || FAILED=0
+            [[ "$SKIPPED" =~ ^[0-9]+$ ]] || SKIPPED=0
+            [[ "$FLAKY" =~ ^[0-9]+$ ]] || FLAKY=0
+            
+            TOTAL=$((PASSED + FAILED + SKIPPED + FLAKY))
+            
             echo "### Test Counts" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
-            echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
-            echo "| 🔄 Flaky | $FLAKY |" >> $GITHUB_STEP_SUMMARY
+            echo "| Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Flaky | $FLAKY |" >> $GITHUB_STEP_SUMMARY
             echo "| **Total** | $TOTAL |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            # Set outputs
+            # Set count outputs
             echo "passed_count=$PASSED" >> $GITHUB_OUTPUT
             echo "failed_count=$FAILED" >> $GITHUB_OUTPUT
             echo "skipped_count=$SKIPPED" >> $GITHUB_OUTPUT
             echo "flaky_count=$FLAKY" >> $GITHUB_OUTPUT
             echo "total_count=$TOTAL" >> $GITHUB_OUTPUT
-            echo "results_exist=true" >> $GITHUB_OUTPUT
-            echo "junit_exist=$JUNIT_EXIST" >> $GITHUB_OUTPUT
             
-            # Classify failure type
-            if [ "$FAILED" -gt 0 ]; then
+            # ================================================================
+            # CLASSIFICATION LOGIC (Priority Order)
+            # ================================================================
+            
+            # 1. NO_TESTS: Results exist but no tests executed
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "test_status=no_tests" >> $GITHUB_OUTPUT
+              echo "failure_type=NO_TESTS" >> $GITHUB_OUTPUT
+              echo "### ❌ GATE STATUS: NO_TESTS" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> **No tests executed (TOTAL == 0).** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Failure Type:** NO_TESTS" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Possible causes:" >> $GITHUB_STEP_SUMMARY
+              echo "- Test filter excluded all tests" >> $GITHUB_STEP_SUMMARY
+              echo "- Test files not found by Playwright" >> $GITHUB_STEP_SUMMARY
+              echo "- Configuration issue in playwright.config.ts" >> $GITHUB_STEP_SUMMARY
+            
+            # 2. TEST_FAILURE: Tests ran but some failed
+            elif [ "$FAILED" -gt 0 ]; then
               echo "test_status=test_failure" >> $GITHUB_OUTPUT
               echo "failure_type=TEST_FAILURE" >> $GITHUB_OUTPUT
               echo "### ❌ GATE STATUS: TEST_FAILURE" >> $GITHUB_STEP_SUMMARY
@@ -309,28 +371,49 @@ jobs:
               echo "> **$FAILED test(s) failed.** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "**Failure Type:** TEST_FAILURE (tests ran but assertions failed)" >> $GITHUB_STEP_SUMMARY
+            
+            # 3. INFRA_FAILURE: Missing junit.xml OR non-zero exit code
+            elif [ "$JUNIT_EXIST" != "true" ] || [ "$PLAYWRIGHT_EXIT_CODE" != "0" ]; then
+              echo "test_status=infra_failure" >> $GITHUB_OUTPUT
+              echo "failure_type=INFRA_FAILURE" >> $GITHUB_OUTPUT
+              echo "### ❌ GATE STATUS: INFRA_FAILURE" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              if [ "$JUNIT_EXIST" != "true" ]; then
+                echo "> **junit.xml missing.** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
+              else
+                echo "> **Playwright exit code != 0 ($PLAYWRIGHT_EXIT_CODE).** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
+              fi
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Failure Type:** INFRA_FAILURE" >> $GITHUB_STEP_SUMMARY
+            
+            # 4. PASSED: All conditions met
             else
               echo "test_status=passed" >> $GITHUB_OUTPUT
               echo "failure_type=NONE" >> $GITHUB_OUTPUT
               echo "### ✅ GATE STATUS: PASSED" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "> All $PASSED test(s) passed. Production promotion is ALLOWED." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**All preconditions met:**" >> $GITHUB_STEP_SUMMARY
+              echo "- results.json exists: ✅" >> $GITHUB_STEP_SUMMARY
+              echo "- junit.xml exists: ✅" >> $GITHUB_STEP_SUMMARY
+              echo "- TOTAL > 0: ✅ ($TOTAL)" >> $GITHUB_STEP_SUMMARY
+              echo "- FAILED == 0: ✅" >> $GITHUB_STEP_SUMMARY
+              echo "- EXIT_CODE == 0: ✅" >> $GITHUB_STEP_SUMMARY
             fi
           else
-            # No results file - this is an infrastructure failure
+            # No results file - INFRA_FAILURE
             echo "passed_count=0" >> $GITHUB_OUTPUT
             echo "failed_count=0" >> $GITHUB_OUTPUT
             echo "skipped_count=0" >> $GITHUB_OUTPUT
             echo "flaky_count=0" >> $GITHUB_OUTPUT
             echo "total_count=0" >> $GITHUB_OUTPUT
-            echo "results_exist=false" >> $GITHUB_OUTPUT
-            echo "junit_exist=$JUNIT_EXIST" >> $GITHUB_OUTPUT
             echo "test_status=infra_failure" >> $GITHUB_OUTPUT
             echo "failure_type=INFRA_FAILURE" >> $GITHUB_OUTPUT
             
             echo "### ❌ GATE STATUS: INFRA_FAILURE" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "> **No test results found.** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
+            echo "> **No test results found (results.json missing).** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Failure Type:** INFRA_FAILURE (runner/config crash - tests did not complete)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -407,16 +490,26 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🚦 Production Gating" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚦 Production Gating (Audit-Grade)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Gate | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Test Status** | \`${{ steps.playwright_gate.outputs.test_status }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Failure Type** | \`${{ steps.playwright_gate.outputs.failure_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Exit Code** | ${{ steps.playwright_gate.outputs.exit_code }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Passed** | ${{ steps.playwright_gate.outputs.passed_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Failed** | ${{ steps.playwright_gate.outputs.failed_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Skipped** | ${{ steps.playwright_gate.outputs.skipped_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Total** | ${{ steps.playwright_gate.outputs.total_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **results.json** | ${{ steps.playwright_gate.outputs.results_exist }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **junit.xml** | ${{ steps.playwright_gate.outputs.junit_exist }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### PASSED Requires ALL:" >> $GITHUB_STEP_SUMMARY
+          echo "- results.json exists" >> $GITHUB_STEP_SUMMARY
+          echo "- junit.xml exists" >> $GITHUB_STEP_SUMMARY
+          echo "- TOTAL > 0" >> $GITHUB_STEP_SUMMARY
+          echo "- FAILED == 0" >> $GITHUB_STEP_SUMMARY
+          echo "- EXIT_CODE == 0" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Production promotion gated on staging_ui_verification: YES**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -425,19 +518,27 @@ jobs:
       - name: Fail job if tests failed (HARD GATE)
         if: steps.playwright_gate.outputs.test_status != 'passed'
         run: |
-          echo "❌ Staging UI Verification FAILED - blocking production promotion"
+          echo "============================================================"
+          echo "❌ STAGING UI VERIFICATION FAILED"
+          echo "============================================================"
           echo ""
-          echo "Gate Status Details:"
-          echo "  Test Status: ${{ steps.playwright_gate.outputs.test_status }}"
-          echo "  Failure Type: ${{ steps.playwright_gate.outputs.failure_type }}"
+          echo "Gate Status: ${{ steps.playwright_gate.outputs.test_status }}"
+          echo "Failure Type: ${{ steps.playwright_gate.outputs.failure_type }}"
+          echo ""
+          echo "Preconditions:"
+          echo "  results.json exists: ${{ steps.playwright_gate.outputs.results_exist }}"
+          echo "  junit.xml exists: ${{ steps.playwright_gate.outputs.junit_exist }}"
+          echo "  Exit Code: ${{ steps.playwright_gate.outputs.exit_code }}"
+          echo ""
+          echo "Test Counts:"
           echo "  Passed: ${{ steps.playwright_gate.outputs.passed_count }}"
           echo "  Failed: ${{ steps.playwright_gate.outputs.failed_count }}"
           echo "  Skipped: ${{ steps.playwright_gate.outputs.skipped_count }}"
           echo "  Total: ${{ steps.playwright_gate.outputs.total_count }}"
           echo ""
-          echo "Results exist: ${{ steps.playwright_gate.outputs.results_exist }}"
-          echo "JUnit exists: ${{ steps.playwright_gate.outputs.junit_exist }}"
-          echo ""
+          echo "============================================================"
+          echo "Production promotion is BLOCKED."
+          echo "============================================================"
           exit 1
 
   # ============================================================================
@@ -463,23 +564,32 @@ jobs:
           echo "| Staging UI Verification | ✅ PASSED |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Verification Results (Audit-Grade)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Test Status** | \`${{ needs.staging_ui_verification.outputs.test_status }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Failure Type** | \`${{ needs.staging_ui_verification.outputs.failure_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Exit Code | ${{ needs.staging_ui_verification.outputs.exit_code }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests Passed | ${{ needs.staging_ui_verification.outputs.passed_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests Failed | ${{ needs.staging_ui_verification.outputs.failed_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests Skipped | ${{ needs.staging_ui_verification.outputs.skipped_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests Total | ${{ needs.staging_ui_verification.outputs.total_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy SHA | \`${{ needs.deploy_to_staging.outputs.deploy_sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Results File | ${{ needs.staging_ui_verification.outputs.results_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| JUnit File | ${{ needs.staging_ui_verification.outputs.junit_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| results.json | ${{ needs.staging_ui_verification.outputs.results_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| junit.xml | ${{ needs.staging_ui_verification.outputs.junit_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "## ✅ PRODUCTION PROMOTION APPROVED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All staging gates passed. This SHA is approved for production deployment." >> $GITHUB_STEP_SUMMARY
+          echo "All audit-grade preconditions met:" >> $GITHUB_STEP_SUMMARY
+          echo "- results.json exists: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- junit.xml exists: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- TOTAL > 0: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- FAILED == 0: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- EXIT_CODE == 0: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This SHA is approved for production deployment." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
