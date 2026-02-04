@@ -71,6 +71,34 @@ import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 
+// Declare build version globals injected by Vite
+declare const __BUILD_VERSION__: string
+declare const __BUILD_TIME__: string
+
+// Log versions on app startup for UAT debugging
+function logVersionInfo() {
+  const frontendVersion = typeof __BUILD_VERSION__ !== 'undefined' ? __BUILD_VERSION__ : 'dev'
+  const frontendBuildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'local'
+  
+  console.group('[QGP] Application Version Info')
+  console.log('Frontend SHA:', frontendVersion)
+  console.log('Frontend Build:', frontendBuildTime)
+  
+  // Fetch backend version
+  fetch('/api/v1/meta/version', { method: 'GET' })
+    .then(res => res.ok ? res.json() : Promise.reject(res.status))
+    .then(data => {
+      console.log('Backend SHA:', data.build_sha || 'unknown')
+      console.log('Backend Build:', data.build_time || 'unknown')
+      console.log('Environment:', data.environment || 'unknown')
+      console.groupEnd()
+    })
+    .catch(err => {
+      console.log('Backend Version: unavailable (', err, ')')
+      console.groupEnd()
+    })
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -79,6 +107,9 @@ function App() {
     const token = localStorage.getItem('access_token')
     setIsAuthenticated(!!token)
     setIsLoading(false)
+    
+    // Log version info on app mount (for UAT debugging)
+    logVersionInfo()
   }, [])
 
   const handleLogin = (token: string) => {
