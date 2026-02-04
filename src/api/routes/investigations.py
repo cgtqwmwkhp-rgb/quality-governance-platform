@@ -1103,9 +1103,7 @@ async def get_investigation_timeline(
         )
 
     # Build query for timeline events
-    query = select(InvestigationRevisionEvent).where(
-        InvestigationRevisionEvent.investigation_id == investigation_id
-    )
+    query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
 
     # Apply event_type filter if provided
     if event_type:
@@ -1182,9 +1180,7 @@ async def get_investigation_comments(
         )
 
     # Build query for comments
-    query = select(InvestigationComment).where(
-        InvestigationComment.investigation_id == investigation_id
-    )
+    query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
 
     # Exclude soft-deleted by default
     if not include_deleted:
@@ -1258,9 +1254,7 @@ async def get_investigation_packs(
         )
 
     # Build query for packs
-    query = select(InvestigationCustomerPack).where(
-        InvestigationCustomerPack.investigation_id == investigation_id
-    )
+    query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -1352,9 +1346,7 @@ async def validate_investigation_closure(
     missing_fields: List[str] = []
 
     # Get template
-    template_query = select(InvestigationTemplate).where(
-        InvestigationTemplate.id == investigation.template_id
-    )
+    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation.template_id)
     template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
 
