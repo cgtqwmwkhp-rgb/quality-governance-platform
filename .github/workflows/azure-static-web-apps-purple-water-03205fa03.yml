@@ -2,6 +2,7 @@ name: Azure Static Web Apps CI/CD
 
 # CHANGED: Removed PR preview deployments to avoid Azure SWA environment limit.
 # PRs get a build-only check; actual deployment only happens on push to main.
+# IMPORTANT: Production promotion is GATED on staging_ui_verification success.
 on:
   push:
     branches:
@@ -48,11 +49,14 @@ jobs:
       - name: Skip deployment (PR)
         run: echo "Skipping SWA deployment for PR - will deploy on merge to main"
 
-  # For push to main: full build and deploy
-  deploy_to_production:
+  # ============================================================================
+  # STAGING DEPLOYMENT
+  # Deploys to Azure Static Web App (staging environment)
+  # ============================================================================
+  deploy_to_staging:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    name: Build and Deploy Job
+    name: Deploy to Staging
     outputs:
       deploy_sha: ${{ github.sha }}
       deploy_time: ${{ steps.set_version.outputs.build_time }}
@@ -106,7 +110,7 @@ jobs:
         run: |
           node scripts/check-no-http-api.cjs
       
-      - name: Deploy
+      - name: Deploy to Staging SWA
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -116,13 +120,20 @@ jobs:
           app_location: "frontend/dist"
           skip_app_build: true
 
-  # Staging UI Verification Job
-  # Runs Playwright against deployed staging SWA to verify UI renders correctly
+  # ============================================================================
+  # STAGING UI VERIFICATION (HARD GATE)
+  # Runs Playwright against deployed staging SWA to verify UI renders correctly.
+  # CRITICAL: This job MUST pass for production promotion to proceed.
+  # ============================================================================
   staging_ui_verification:
     if: github.event_name == 'push'
-    needs: deploy_to_production
+    needs: deploy_to_staging
     runs-on: ubuntu-latest
-    name: Staging UI Verification
+    name: Staging UI Verification (GATE)
+    outputs:
+      test_status: ${{ steps.playwright_gate.outputs.test_status }}
+      passed_count: ${{ steps.playwright_gate.outputs.passed_count }}
+      failed_count: ${{ steps.playwright_gate.outputs.failed_count }}
     steps:
       - uses: actions/checkout@v3
       
@@ -162,17 +173,22 @@ jobs:
             exit 1
           fi
       
-      - name: Capture Staging Evidence - Routes
+      - name: Capture Staging Evidence - Header
         id: evidence
         run: |
-          echo "## Staging UI Evidence" >> $GITHUB_STEP_SUMMARY
+          echo "# 🎯 Staging UI Verification Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Staging URL:** ${{ env.STAGING_SWA_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Deploy SHA:** ${{ needs.deploy_to_production.outputs.deploy_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Deploy Time:** ${{ needs.deploy_to_production.outputs.deploy_time }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Staging URL** | ${{ env.STAGING_SWA_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deploy SHA** | \`${{ needs.deploy_to_staging.outputs.deploy_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deploy Time** | ${{ needs.deploy_to_staging.outputs.deploy_time }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow Run** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### Route Accessibility" >> $GITHUB_STEP_SUMMARY
+          echo "## Route Accessibility" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           ROUTES=(
@@ -193,54 +209,81 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
       
       - name: Run Playwright E2E Tests against Staging
+        id: playwright_run
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: ${{ env.STAGING_SWA_URL }}
           CI: true
         run: |
           echo "🎭 Running Playwright E2E tests against staging..."
-          npx playwright test --reporter=html,list,json || true
-        continue-on-error: true
+          # Run tests and capture exit code
+          npx playwright test --reporter=html,list,json,junit 2>&1 || echo "PLAYWRIGHT_EXIT_CODE=$?" >> $GITHUB_ENV
       
-      - name: Check Playwright Test Results
-        id: playwright_check
+      - name: Evaluate Playwright Results and Gate
+        id: playwright_gate
         working-directory: frontend
         run: |
+          echo "## Playwright Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
           if [ -f playwright-report/results.json ]; then
             PASSED=$(jq '.stats.expected // 0' playwright-report/results.json)
             FAILED=$(jq '.stats.unexpected // 0' playwright-report/results.json)
             SKIPPED=$(jq '.stats.skipped // 0' playwright-report/results.json)
+            TOTAL=$((PASSED + FAILED + SKIPPED))
             
-            echo "### Playwright Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Total** | $TOTAL |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Passed: $PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "- ❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "- ⏭️ Skipped: $SKIPPED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Set outputs for downstream jobs
+            echo "passed_count=$PASSED" >> $GITHUB_OUTPUT
+            echo "failed_count=$FAILED" >> $GITHUB_OUTPUT
             
             if [ "$FAILED" -gt 0 ]; then
               echo "test_status=failed" >> $GITHUB_OUTPUT
-              echo "⚠️ Some tests failed - check artifacts for details" >> $GITHUB_STEP_SUMMARY
+              echo "### ❌ GATE STATUS: FAILED" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> **$FAILED test(s) failed.** Production promotion is BLOCKED." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Check the \`playwright-report-staging\` artifact for failure details." >> $GITHUB_STEP_SUMMARY
             else
               echo "test_status=passed" >> $GITHUB_OUTPUT
-              echo "✅ All Playwright tests passed!" >> $GITHUB_STEP_SUMMARY
+              echo "### ✅ GATE STATUS: PASSED" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> All $PASSED test(s) passed. Production promotion is ALLOWED." >> $GITHUB_STEP_SUMMARY
             fi
           else
-            echo "### Playwright Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ GATE STATUS: UNKNOWN" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ No results.json found - tests may not have run" >> $GITHUB_STEP_SUMMARY
+            echo "> No results.json found - tests may not have run correctly." >> $GITHUB_STEP_SUMMARY
             echo "test_status=unknown" >> $GITHUB_OUTPUT
+            echo "passed_count=0" >> $GITHUB_OUTPUT
+            echo "failed_count=0" >> $GITHUB_OUTPUT
           fi
       
-      - name: Upload Playwright Report
+      - name: Upload Playwright HTML Report (Audit Artifact)
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report-staging
           path: frontend/playwright-report/
-          retention-days: 30
+          retention-days: 90
       
-      - name: Upload Playwright Test Results
+      - name: Upload Playwright JUnit Report (Machine-Readable)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-junit-staging
+          path: frontend/playwright-report/junit.xml
+          retention-days: 90
+          if-no-files-found: ignore
+      
+      - name: Upload Playwright Test Results (Screenshots/Videos)
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -257,17 +300,78 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
       
-      - name: Generate Evidence Summary
+      - name: Generate Evidence Summary Footer
+        if: always()
         run: |
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- 📊 **playwright-report-staging**: HTML report with test details" >> $GITHUB_STEP_SUMMARY
-          echo "- 📁 **playwright-test-results-staging**: Screenshots and videos" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔍 **playwright-traces-staging**: Playwright traces for debugging" >> $GITHUB_STEP_SUMMARY
+          echo "## Audit Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Description | Retention |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`playwright-report-staging\` | HTML report with test details | 90 days |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`playwright-junit-staging\` | Machine-readable JUnit XML | 90 days |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`playwright-test-results-staging\` | Screenshots and videos | 30 days |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`playwright-traces-staging\` | Traces for debugging | 30 days |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚦 Production Gating" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Production promotion gated on staging_ui_verification: YES**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "_Staging UI Verification completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)_" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Fail job if tests failed (HARD GATE)
+        if: steps.playwright_gate.outputs.test_status == 'failed' || steps.playwright_gate.outputs.test_status == 'unknown'
+        run: |
+          echo "❌ Staging UI Verification FAILED - blocking production promotion"
+          echo "Test status: ${{ steps.playwright_gate.outputs.test_status }}"
+          echo "Failed count: ${{ steps.playwright_gate.outputs.failed_count }}"
+          exit 1
+
+  # ============================================================================
+  # PRODUCTION PROMOTION GATE
+  # This job only runs if BOTH deploy_to_staging AND staging_ui_verification succeed.
+  # CRITICAL: This enforces the staging-first release discipline.
+  # ============================================================================
+  production_promotion_gate:
+    if: github.event_name == 'push'
+    needs: [deploy_to_staging, staging_ui_verification]
+    runs-on: ubuntu-latest
+    name: Production Promotion Gate
+    steps:
+      - name: Verify Staging UI Verification Passed
+        run: |
+          echo "# 🚀 Production Promotion Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Gate Dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy to Staging | ✅ PASSED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging UI Verification | ✅ PASSED |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests Passed | ${{ needs.staging_ui_verification.outputs.passed_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests Failed | ${{ needs.staging_ui_verification.outputs.failed_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy SHA | \`${{ needs.deploy_to_staging.outputs.deploy_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## ✅ PRODUCTION PROMOTION APPROVED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All staging gates passed. This SHA is approved for production deployment." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Production promotion gated on staging_ui_verification: YES**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Gate passed at $(date -u +%Y-%m-%dT%H:%M:%SZ)_" >> $GITHUB_STEP_SUMMARY
 
   # NOTE: close_pull_request_job removed - no longer creating PR preview environments
   # Frontend PRs are validated by CI workflow (Build Check job) and only deployed on merge to main
