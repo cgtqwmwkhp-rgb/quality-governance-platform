@@ -212,7 +212,7 @@ jobs:
       - name: Skip Playwright Install (INFRA_FAILURE Simulation)
         if: ${{ github.event.inputs.simulate_infra_failure == 'true' }}
         run: |
-          echo "⚠️ VALIDATION MODE: Simulating INFRA_FAILURE by skipping Playwright install"
+          echo "⚠ VALIDATION MODE: Simulating INFRA_FAILURE by skipping Playwright install"
           echo "This will cause tests to fail with missing browser error."
       
       - name: Wait for SWA deployment to propagate
@@ -288,7 +288,7 @@ jobs:
           # Run tests and capture exit code explicitly
           set +e
           if [ "$SIMULATE_NO_TESTS" = "true" ]; then
-            echo "⚠️ VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
+            echo "⚠ VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
             npx playwright test --grep="NONEXISTENT_TEST_PATTERN_12345" 2>&1
           else
             npx playwright test 2>&1
@@ -297,6 +297,55 @@ jobs:
           set -e
           echo "playwright_exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           echo "Playwright exit code: $EXIT_CODE"
+      
+      # ========================================================================
+      # VALIDATION MODE: Inject deterministic conditions for classification testing
+      # This step ONLY runs on workflow_dispatch with validation inputs
+      # It CANNOT affect normal push-to-main deployments
+      # ========================================================================
+      - name: Inject Validation Mode Conditions
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: frontend
+        run: |
+          SIMULATE_NO_TESTS="${{ github.event.inputs.simulate_no_tests }}"
+          SIMULATE_INFRA_FAILURE="${{ github.event.inputs.simulate_infra_failure }}"
+          
+          if [ "$SIMULATE_INFRA_FAILURE" = "true" ]; then
+            echo "========================================"
+            echo "VALIDATION MODE: Simulating INFRA_FAILURE"
+            echo "========================================"
+            echo "Removing results.json and junit.xml to trigger INFRA_FAILURE classification"
+            rm -f playwright-report/results.json
+            rm -f playwright-report/junit.xml
+            echo "Files removed. INFRA_FAILURE classification should trigger."
+          fi
+          
+          if [ "$SIMULATE_NO_TESTS" = "true" ]; then
+            echo "========================================"
+            echo "VALIDATION MODE: Simulating NO_TESTS"
+            echo "========================================"
+            echo "Injecting empty results to trigger NO_TESTS classification"
+            # Create a valid results.json with zero tests
+            cat > playwright-report/results.json << 'EOFRESULTS'
+          {
+            "config": {},
+            "suites": [],
+            "stats": {
+              "expected": 0,
+              "unexpected": 0,
+              "skipped": 0,
+              "flaky": 0
+            }
+          }
+          EOFRESULTS
+            # Create a valid empty junit.xml
+            cat > playwright-report/junit.xml << 'EOFJUNIT'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites name="" tests="0" failures="0" errors="0" time="0">
+          </testsuites>
+          EOFJUNIT
+            echo "Empty results injected. NO_TESTS classification should trigger."
+          fi
       
       - name: Parse Playwright Results (Audit-Grade Deterministic)
         id: playwright_gate
@@ -526,8 +575,8 @@ jobs:
           echo "| Artifact | Description | Retention | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| \`playwright-report-staging\` | HTML report with test details | 90 days | Always |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`playwright-junit-staging\` | Machine-readable JUnit XML | 90 days | ${{ steps.playwright_gate.outputs.junit_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`playwright-json-staging\` | Machine-readable JSON results | 90 days | ${{ steps.playwright_gate.outputs.results_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`playwright-junit-staging\` | Machine-readable JUnit XML | 90 days | ${{ steps.playwright_gate.outputs.junit_exist == 'true' && '✅' || '⚠' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`playwright-json-staging\` | Machine-readable JSON results | 90 days | ${{ steps.playwright_gate.outputs.results_exist == 'true' && '✅' || '⚠' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| \`playwright-test-results-staging\` | Screenshots and videos | 30 days | On failure |" >> $GITHUB_STEP_SUMMARY
           echo "| \`playwright-traces-staging\` | Traces for debugging | 30 days | On failure |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -620,8 +669,8 @@ jobs:
           echo "| Tests Skipped | ${{ needs.staging_ui_verification.outputs.skipped_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests Total | ${{ needs.staging_ui_verification.outputs.total_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy SHA | \`${{ needs.deploy_to_staging.outputs.deploy_sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| results.json | ${{ needs.staging_ui_verification.outputs.results_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| junit.xml | ${{ needs.staging_ui_verification.outputs.junit_exist == 'true' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| results.json | ${{ needs.staging_ui_verification.outputs.results_exist == 'true' && '✅' || '⚠' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| junit.xml | ${{ needs.staging_ui_verification.outputs.junit_exist == 'true' && '✅' || '⚠' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "## ✅ PRODUCTION PROMOTION APPROVED" >> $GITHUB_STEP_SUMMARY
