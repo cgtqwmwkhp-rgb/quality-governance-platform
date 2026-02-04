@@ -33,7 +33,7 @@ jobs:
               0xFEFF,  # BOM/ZWNBSP
           ])
 
-          SCAN_DIRS = ['src', 'frontend/src', 'scripts', 'tests']
+          SCAN_DIRS = ['src', 'frontend/src', 'scripts', 'tests', '.github/workflows']
           EXTENSIONS = {'.py', '.ts', '.tsx', '.js', '.jsx', '.sh', '.yml', '.yaml'}
 
           findings = []

@@ -28,6 +28,14 @@ name: Azure Static Web Apps CI/CD
 # If a true staging backend is provisioned in the future, update VITE_API_URL
 # to https://app-qgp-staging.azurewebsites.net
 # =============================================================================
+# VALIDATION MODE (Manual Testing)
+# =============================================================================
+# Use workflow_dispatch with inputs to test classification paths:
+#   - simulate_no_tests: true  -> NO_TESTS classification
+#   - simulate_infra_failure: true -> INFRA_FAILURE classification
+#
+# CRITICAL: Validation mode NEVER runs production_promotion_gate.
+# =============================================================================
 on:
   push:
     branches:
@@ -45,6 +53,23 @@ on:
     types: [opened, synchronize, reopened]
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      simulate_no_tests:
+        description: 'Simulate NO_TESTS classification (run with filter that matches nothing)'
+        required: false
+        type: boolean
+        default: false
+      simulate_infra_failure:
+        description: 'Simulate INFRA_FAILURE classification (skip Playwright install)'
+        required: false
+        type: boolean
+        default: false
+      validation_mode:
+        description: 'Enable validation mode (blocks production promotion)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   STAGING_SWA_URL: https://purple-water-03205fa03.6.azurestaticapps.net
@@ -178,8 +203,15 @@ jobs:
         run: npm ci
       
       - name: Install Playwright Browsers
+        if: ${{ github.event.inputs.simulate_infra_failure != 'true' }}
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      
+      - name: Skip Playwright Install (INFRA_FAILURE Simulation)
+        if: ${{ github.event.inputs.simulate_infra_failure == 'true' }}
+        run: |
+          echo "⚠️ VALIDATION MODE: Simulating INFRA_FAILURE by skipping Playwright install"
+          echo "This will cause tests to fail with missing browser error."
       
       - name: Wait for SWA deployment to propagate
         run: |
@@ -247,9 +279,18 @@ jobs:
           CI: true
         run: |
           echo "🎭 Running Playwright E2E tests against staging..."
+          
+          # Validation mode handling
+          SIMULATE_NO_TESTS="${{ github.event.inputs.simulate_no_tests }}"
+          
           # Run tests and capture exit code explicitly
           set +e
-          npx playwright test 2>&1
+          if [ "$SIMULATE_NO_TESTS" = "true" ]; then
+            echo "⚠️ VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
+            npx playwright test --grep="NONEXISTENT_TEST_PATTERN_12345" 2>&1
+          else
+            npx playwright test 2>&1
+          fi
           EXIT_CODE=$?
           set -e
           echo "playwright_exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
@@ -545,9 +586,10 @@ jobs:
   # PRODUCTION PROMOTION GATE
   # This job only runs if BOTH deploy_to_staging AND staging_ui_verification succeed.
   # CRITICAL: This enforces the staging-first release discipline.
+  # SECURITY: Validation mode (workflow_dispatch) NEVER runs this job.
   # ============================================================================
   production_promotion_gate:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.event.inputs.validation_mode != 'true'
     needs: [deploy_to_staging, staging_ui_verification]
     runs-on: ubuntu-latest
     name: Production Promotion Gate
