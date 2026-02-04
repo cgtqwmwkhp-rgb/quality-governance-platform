@@ -14,31 +14,48 @@ import sys
 import os
 from pathlib import Path
 
-# Bidi and hidden Unicode characters that could be used for attacks
-BIDI_CHARS = {
+# Dangerous characters that are TRUE security risks (Trojan Source)
+# CVE-2021-42574, CVE-2021-42694
+DANGEROUS_CHARS = {
+    # Zero-width characters
     0x200B: 'ZERO WIDTH SPACE',
     0x200C: 'ZERO WIDTH NON-JOINER',
     0x200D: 'ZERO WIDTH JOINER',
     0x200E: 'LEFT-TO-RIGHT MARK',
     0x200F: 'RIGHT-TO-LEFT MARK',
-    0x2028: 'LINE SEPARATOR',
-    0x2029: 'PARAGRAPH SEPARATOR',
+    # Bidirectional control characters
     0x202A: 'LEFT-TO-RIGHT EMBEDDING',
     0x202B: 'RIGHT-TO-LEFT EMBEDDING',
     0x202C: 'POP DIRECTIONAL FORMATTING',
     0x202D: 'LEFT-TO-RIGHT OVERRIDE',
     0x202E: 'RIGHT-TO-LEFT OVERRIDE',
+    0x2066: 'LEFT-TO-RIGHT ISOLATE',
+    0x2067: 'RIGHT-TO-LEFT ISOLATE',
+    0x2068: 'FIRST STRONG ISOLATE',
+    0x2069: 'POP DIRECTIONAL ISOLATE',
+    # Special separators
+    0x2028: 'LINE SEPARATOR',
+    0x2029: 'PARAGRAPH SEPARATOR',
+    # Invisible formatting
     0x2060: 'WORD JOINER',
     0x2061: 'FUNCTION APPLICATION',
     0x2062: 'INVISIBLE TIMES',
     0x2063: 'INVISIBLE SEPARATOR',
     0x2064: 'INVISIBLE PLUS',
-    0x2066: 'LEFT-TO-RIGHT ISOLATE',
-    0x2067: 'RIGHT-TO-LEFT ISOLATE',
-    0x2068: 'FIRST STRONG ISOLATE',
-    0x2069: 'POP DIRECTIONAL ISOLATE',
+    # BOM
     0xFEFF: 'BYTE ORDER MARK (BOM)',
 }
+
+# Variation selectors - GitHub flags these but they're harmless emoji markers
+# These are NOT included in DANGEROUS_CHARS because they're not security risks
+VARIATION_SELECTORS = {
+    0xFE0F: 'VARIATION SELECTOR-16 (emoji)',
+    0xFE0E: 'VARIATION SELECTOR-15 (text)',
+}
+
+# Combined for backward compatibility
+BIDI_CHARS = DANGEROUS_CHARS
+HIDDEN_CHARS = {**DANGEROUS_CHARS, **VARIATION_SELECTORS}
 
 
 def check_file(filepath: Path) -> list:
@@ -54,14 +71,14 @@ def check_file(filepath: Path) -> list:
     
     for i, char in enumerate(content):
         code = ord(char)
-        if code in BIDI_CHARS:
+        if code in DANGEROUS_CHARS:
             line_num = content[:i].count('\n') + 1
             col = i - content.rfind('\n', 0, i)
             findings.append({
                 'line': line_num,
                 'col': col,
                 'code': hex(code),
-                'name': BIDI_CHARS[code],
+                'name': DANGEROUS_CHARS[code],
                 'file': str(filepath)
             })
     
