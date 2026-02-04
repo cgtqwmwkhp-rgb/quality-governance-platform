@@ -61,14 +61,14 @@ jobs:
                           pass  # Skip unreadable files
 
           if findings:
-              print("❌ TROJAN SOURCE RISK: Hidden/bidi Unicode characters found!")
+              print("[FAIL] TROJAN SOURCE RISK: Hidden/bidi Unicode characters found!")
               for f in findings[:50]:  # Limit output
                   print(f"  {f}")
               if len(findings) > 50:
                   print(f"  ... and {len(findings) - 50} more")
               sys.exit(1)
           else:
-              print("✅ No hidden/bidirectional Unicode characters found")
+              print("[OK] No hidden/bidirectional Unicode characters found")
               sys.exit(0)
           EOF
 
@@ -162,7 +162,7 @@ jobs:
           for file in "${FILES[@]}"; do
             if [ -f "$file" ]; then
               if grep -q "$FORBIDDEN" "$file" 2>/dev/null; then
-                echo "❌ DRIFT DETECTED: '$FORBIDDEN' found in $file"
+                echo "[FAIL] DRIFT DETECTED: '$FORBIDDEN' found in $file"
                 grep -n "$FORBIDDEN" "$file" | head -3
                 DRIFT_FOUND=1
               fi
@@ -171,14 +171,14 @@ jobs:
           
           if [ "$DRIFT_FOUND" = "1" ]; then
             echo ""
-            echo "❌ Configuration drift detected!"
+            echo "[FAIL] Configuration drift detected!"
             echo "Please update the files to use correct values:"
             echo "  - Staging ACA env: qgp-staging-env"
             echo "  - Staging domain: ashymushroom-85447e68.uksouth.azurecontainerapps.io"
             exit 1
           fi
           
-          echo "✅ No configuration drift detected"
+          echo "[OK] No configuration drift detected"
           echo "All configuration files use correct environment references"
 
   config-failfast-proof:
@@ -204,7 +204,7 @@ jobs:
           echo "=== ADR-0002 Fail-Fast Proof (BLOCKING) ==="
           pytest tests/test_config_failfast.py -v
           echo ""
-          echo "✅ Fail-fast proof passed: Production mode fails fast for unsafe config"
+          echo "[OK] Fail-fast proof passed: Production mode fails fast for unsafe config"
 
   unit-tests:
     name: Unit Tests
@@ -282,7 +282,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
           alembic upgrade head
-          echo "✅ Migrations applied successfully using Postgres context"
+          echo "[OK] Migrations applied successfully using Postgres context"
 
       - name: Validate quarantine policy
         run: |
@@ -340,7 +340,7 @@ jobs:
           echo "=== Bandit: Security Linting (BLOCKING on High) ==="
           bandit -r src/ -ll -f screen
           echo ""
-          echo "✅ Bandit passed: No High severity issues found"
+          echo "[OK] Bandit passed: No High severity issues found"
 
   build-check:
     name: Build Check
@@ -366,7 +366,7 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
         run: |
-          python -c "from src.main import app; print('✅ Application imports successfully')"
+          python -c "from src.main import app; print('[OK] Application imports successfully')"
 
   ci-security-covenant:
     name: CI Security Covenant (Stage 2.0)
@@ -386,7 +386,7 @@ jobs:
           echo "=== Stage 2.0: CI Security Covenant Validation (BLOCKING) ==="
           python3 scripts/validate_ci_security_covenant.py
           echo ""
-          echo "✅ CI security covenant validation passed"
+          echo "[OK] CI security covenant validation passed"
 
   smoke-tests:
     name: Smoke Tests (CRITICAL)
@@ -437,7 +437,7 @@ jobs:
           echo "=== SMOKE TESTS - CRITICAL (BLOCKING) ==="
           pytest tests/smoke/ -v --tb=short -x --junit-xml=junit-smoke.xml
           echo ""
-          echo "✅ Smoke tests passed: Core functionality verified"
+          echo "[OK] Smoke tests passed: Core functionality verified"
 
       - name: Generate Deploy-Proof Evidence (Stage 4)
         env:
@@ -459,9 +459,9 @@ jobs:
           echo "Current DB revision: $CURRENT_REV" | tee -a deploy-proof.txt
           
           if echo "$CURRENT_REV" | grep -q "$EXPECTED_HEAD"; then
-            echo "✅ Migration proof: PASS - DB at expected head" | tee -a deploy-proof.txt
+            echo "[OK] Migration proof: PASS - DB at expected head" | tee -a deploy-proof.txt
           else
-            echo "⚠️ Migration proof: CHECK - Verify revision alignment" | tee -a deploy-proof.txt
+            echo "[WARN] Migration proof: CHECK - Verify revision alignment" | tee -a deploy-proof.txt
           fi
           echo "" | tee -a deploy-proof.txt
           
@@ -477,27 +477,27 @@ jobs:
           HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8765/healthz || echo "000")
           echo "Health check (/healthz): $HEALTH_STATUS" | tee -a deploy-proof.txt
           if [ "$HEALTH_STATUS" = "200" ]; then
-            echo "✅ Health check: PASS" | tee -a deploy-proof.txt
+            echo "[OK] Health check: PASS" | tee -a deploy-proof.txt
           else
-            echo "❌ Health check: FAIL" | tee -a deploy-proof.txt
+            echo "[FAIL] Health check: FAIL" | tee -a deploy-proof.txt
           fi
           
           # Auth required check
           AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8765/api/v1/incidents/ || echo "000")
           echo "Auth required (/api/v1/incidents/): $AUTH_STATUS" | tee -a deploy-proof.txt
           if [ "$AUTH_STATUS" = "401" ]; then
-            echo "✅ Auth enforcement: PASS" | tee -a deploy-proof.txt
+            echo "[OK] Auth enforcement: PASS" | tee -a deploy-proof.txt
           else
-            echo "❌ Auth enforcement: FAIL (expected 401)" | tee -a deploy-proof.txt
+            echo "[FAIL] Auth enforcement: FAIL (expected 401)" | tee -a deploy-proof.txt
           fi
           
           # Rate limit headers check
           RATE_HEADERS=$(curl -sI http://127.0.0.1:8765/api/v1/incidents/ 2>&1 | grep -i "x-ratelimit" || echo "none")
           echo "Rate limit headers: $RATE_HEADERS" | tee -a deploy-proof.txt
           if echo "$RATE_HEADERS" | grep -qi "x-ratelimit"; then
-            echo "✅ Rate limiting: PASS" | tee -a deploy-proof.txt
+            echo "[OK] Rate limiting: PASS" | tee -a deploy-proof.txt
           else
-            echo "⚠️ Rate limiting: CHECK (headers may be absent in test)" | tee -a deploy-proof.txt
+            echo "[WARN] Rate limiting: CHECK (headers may be absent in test)" | tee -a deploy-proof.txt
           fi
           
           # Stop app
@@ -569,7 +569,7 @@ jobs:
           BASELINE_FILE="docs/evidence/e2e_baseline.json"
           
           if [ ! -f "$BASELINE_FILE" ]; then
-            echo "⚠️ Baseline file not found - using defaults"
+            echo "[WARN] Baseline file not found - using defaults"
             echo "baseline_pass_count=127" >> "$GITHUB_OUTPUT"
             echo "min_acceptable=114" >> "$GITHUB_OUTPUT"
           else
@@ -580,7 +580,7 @@ jobs:
             echo "baseline_pass_count=$BASELINE_PASS" >> "$GITHUB_OUTPUT"
             echo "min_acceptable=$MIN_ACCEPTABLE" >> "$GITHUB_OUTPUT"
             
-            echo "📋 Baseline Values (from artifact file):"
+            echo "[INFO] Baseline Values (from artifact file):"
             echo "   Pass Count: $BASELINE_PASS"
             echo "   Min Acceptable: $MIN_ACCEPTABLE"
             cat "$BASELINE_FILE"
@@ -595,7 +595,7 @@ jobs:
           echo "=== E2E TESTS - Full User Journeys ==="
           pytest tests/e2e/ -v --tb=short --junit-xml=junit-e2e.xml
           echo ""
-          echo "✅ E2E tests completed"
+          echo "[OK] E2E tests completed"
 
       - name: Validate baseline gate (BLOCKING)
         env:
@@ -632,16 +632,16 @@ jobs:
             
             if [ "$PASSED" -ge "$MIN_ACCEPTABLE" ]; then
               echo ""
-              echo "✅ BASELINE GATE PASSED"
+              echo "[OK] BASELINE GATE PASSED"
               echo "   $PASSED >= $MIN_ACCEPTABLE (min acceptable)"
             else
               echo ""
-              echo "❌ BASELINE GATE FAILED - REGRESSION DETECTED"
+              echo "[FAIL] BASELINE GATE FAILED - REGRESSION DETECTED"
               echo "   $PASSED < $MIN_ACCEPTABLE (min acceptable)"
               exit 1
             fi
           else
-            echo "⚠️ Baseline file not found - gate check skipped (first run)"
+            echo "[WARN] Baseline file not found - gate check skipped (first run)"
           fi
           echo "========================================================================"
 
@@ -740,10 +740,10 @@ jobs:
             echo "--- Stability Run $i/3 ---"
             if pytest "${FLAKY_TESTS[@]}" -v --tb=line 2>&1 | tail -5; then
               PASS_COUNT=$((PASS_COUNT + 1))
-              echo "✅ Run $i: PASS"
+              echo "[OK] Run $i: PASS"
             else
               FAIL_COUNT=$((FAIL_COUNT + 1))
-              echo "❌ Run $i: FAIL"
+              echo "[FAIL] Run $i: FAIL"
             fi
             echo ""
           done
@@ -753,11 +753,11 @@ jobs:
           echo "Failed: $FAIL_COUNT/3"
           
           if [ $PASS_COUNT -eq 3 ]; then
-            echo "✅ Stability guard: PASS - No flakiness detected"
+            echo "[OK] Stability guard: PASS - No flakiness detected"
           elif [ $PASS_COUNT -ge 2 ]; then
-            echo "⚠️ Stability guard: WARN - Some flakiness detected ($FAIL_COUNT/3 failed)"
+            echo "[WARN] Stability guard: WARN - Some flakiness detected ($FAIL_COUNT/3 failed)"
           else
-            echo "❌ Stability guard: FAIL - Significant flakiness ($FAIL_COUNT/3 failed)"
+            echo "[FAIL] Stability guard: FAIL - Significant flakiness ($FAIL_COUNT/3 failed)"
           fi
 
       - name: Generate UAT Summary
@@ -822,7 +822,7 @@ jobs:
               echo '{"violations_count": 0, "violations": []}' > api_path_drift_report.json
             }
           echo ""
-          echo "✅ API path drift check completed"
+          echo "[OK] API path drift check completed"
 
       - name: Upload drift report
         uses: actions/upload-artifact@v4
@@ -1021,7 +1021,7 @@ jobs:
           # In ADVISORY mode: only FAILED is blocking
           # UNAVAILABLE and DEGRADED are non-blocking (but clearly NOT validated)
           if result.outcome == ProbeOutcome.FAILED:
-              print('⚠️ Critical contract failures detected - will fail job')
+              print('[WARN] Critical contract failures detected - will fail job')
               sys.exit(1)
           else:
               sys.exit(0)
@@ -1036,7 +1036,7 @@ jobs:
           echo "========================================================================"
           
           if [ ! -f probe-result.json ]; then
-            echo "❌ No probe result file"
+            echo "[FAIL] No probe result file"
             exit 0
           fi
           
@@ -1062,29 +1062,29 @@ jobs:
           
           case "$OUTCOME" in
             "VERIFIED")
-              echo "✅ CONTRACT VERIFIED"
+              echo "[OK] CONTRACT VERIFIED"
               echo "   Staging ACA API is reachable and all $ENDPOINTS_CHECKED contract checks passed."
               echo "   This is proof of contract compliance."
               ;;
             "DEGRADED")
-              echo "⚠️ CONTRACT DEGRADED"
+              echo "[WARN] CONTRACT DEGRADED"
               echo "   Staging ACA API is reachable. Critical checks pass, some non-critical failed."
               echo "   Non-blocking in ADVISORY mode."
               ;;
             "UNAVAILABLE")
-              echo "⚠️ NOT VALIDATED (staging unavailable)"
+              echo "[WARN] NOT VALIDATED (staging unavailable)"
               echo "   Staging ACA API is not reachable."
               echo "   Contract compliance was NOT verified."
               echo "   This does NOT constitute a pass - it means we could not check."
               echo "   Non-blocking in ADVISORY mode for PRs."
               ;;
             "FAILED")
-              echo "❌ CONTRACT FAILED"
+              echo "[FAIL] CONTRACT FAILED"
               echo "   Staging ACA API is reachable but $CRITICAL_FAILURES critical contract checks failed."
               echo "   This is a blocking failure even in ADVISORY mode."
               ;;
             *)
-              echo "❓ Unknown outcome: $OUTCOME"
+              echo "[?] Unknown outcome: $OUTCOME"
               ;;
           esac
 
@@ -1120,5 +1120,5 @@ jobs:
 
       - name: All checks passed
         run: |
-          echo "✅ All CI checks passed successfully!"
+          echo "[OK] All CI checks passed successfully!"
           echo "The code is ready to be merged."
