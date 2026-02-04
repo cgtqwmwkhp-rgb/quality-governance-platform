@@ -222,32 +222,50 @@ jobs:
           echo "✅ Secrets retrieved from Key Vault"
           
           # Update ACA secrets (encrypted at rest)
-          # Build secrets list dynamically (storage is optional)
-          SECRETS_LIST="database-url=$DB_URL secret-key=$SECRET_KEY_VAL jwt-secret-key=$JWT_SECRET_VAL"
-          if [ -n "$STORAGE_CONN" ]; then
-            SECRETS_LIST="$SECRETS_LIST azure-storage-conn=$STORAGE_CONN"
-          fi
-          
           az containerapp secret set \
             --name "${{ env.ACA_NAME }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --secrets $SECRETS_LIST \
+            --secrets \
+              "database-url=$DB_URL" \
+              "secret-key=$SECRET_KEY_VAL" \
+              "jwt-secret-key=$JWT_SECRET_VAL" \
             --output none
+          
+          # Add storage secret if available
+          if [ -n "$STORAGE_CONN" ]; then
+            az containerapp secret set \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --secrets "azure-storage-conn=$STORAGE_CONN" \
+              --output none
+          fi
           
           echo "✅ ACA secrets updated"
           
           # Link secrets to environment variables
-          # Build env vars list dynamically (storage is optional)
-          ENV_VARS="DATABASE_URL=secretref:database-url SECRET_KEY=secretref:secret-key JWT_SECRET_KEY=secretref:jwt-secret-key JWT_ALGORITHM=HS256 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30 JWT_REFRESH_TOKEN_EXPIRE_DAYS=7 LOG_LEVEL=INFO AZURE_CLIENT_ID=${{ secrets.AZURE_AD_CLIENT_ID }} AZURE_TENANT_ID=${{ secrets.AZURE_AD_TENANT_ID }}"
-          if [ -n "$STORAGE_CONN" ]; then
-            ENV_VARS="$ENV_VARS AZURE_STORAGE_CONNECTION_STRING=secretref:azure-storage-conn"
-          fi
-          
           az containerapp update \
             --name "${{ env.ACA_NAME }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --set-env-vars $ENV_VARS \
+            --set-env-vars \
+              DATABASE_URL=secretref:database-url \
+              SECRET_KEY=secretref:secret-key \
+              JWT_SECRET_KEY=secretref:jwt-secret-key \
+              JWT_ALGORITHM=HS256 \
+              JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30 \
+              JWT_REFRESH_TOKEN_EXPIRE_DAYS=7 \
+              LOG_LEVEL=INFO \
+              AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
+              AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
             --output none
+          
+          # Add storage env var if secret exists
+          if [ -n "$STORAGE_CONN" ]; then
+            az containerapp update \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --set-env-vars AZURE_STORAGE_CONNECTION_STRING=secretref:azure-storage-conn \
+              --output none
+          fi
           
           echo "✅ Environment variables linked to secrets"
 
