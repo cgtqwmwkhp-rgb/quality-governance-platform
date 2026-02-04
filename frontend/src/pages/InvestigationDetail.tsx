@@ -751,10 +751,13 @@ export default function InvestigationDetail() {
                   <div className="space-y-3">
                     {comments.slice(0, 3).map(comment => (
                       <div key={comment.id} className="p-3 bg-surface rounded-lg">
-                        <p className="text-sm text-foreground">{comment.body}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(comment.created_at).toLocaleString()}
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {comment.content}
                         </p>
+                        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                          <span>User #{comment.author_id}</span>
+                          <span>{new Date(comment.created_at).toLocaleString()}</span>
+                        </div>
                       </div>
                     ))}
                   </div>

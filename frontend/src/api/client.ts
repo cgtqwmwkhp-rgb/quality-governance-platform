@@ -937,8 +937,10 @@ export interface InvestigationComment {
   id: number
   created_at: string
   author_id: number
-  body: string
-  metadata?: Record<string, unknown>
+  content: string  // Note content (backend field name)
+  section_id?: string
+  field_id?: string
+  parent_comment_id?: number
 }
 
 export interface CommentsResponse {
