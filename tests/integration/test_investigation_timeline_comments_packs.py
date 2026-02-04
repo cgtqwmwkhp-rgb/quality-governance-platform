@@ -15,9 +15,10 @@ Security Tests (PR #142 Hardening):
 - Users can only access investigations they are assigned to (returns 404 for unauthorized)
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 from httpx import AsyncClient
-from unittest.mock import MagicMock
 
 
 @pytest.mark.asyncio
