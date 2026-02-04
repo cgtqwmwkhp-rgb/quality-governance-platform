@@ -252,7 +252,7 @@ class TimelineListResponse(BaseModel):
 
 class CommentCreateRequest(BaseModel):
     """Request schema for adding a comment to an investigation.
-    
+
     Accepts 'body' field to match frontend API contract.
     """
 
