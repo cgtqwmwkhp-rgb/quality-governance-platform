@@ -66,7 +66,7 @@ def check_file(filepath: Path) -> list:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
-        print(f"  ⚠️  Could not read {filepath}: {e}")
+        print(f"  [WARN]  Could not read {filepath}: {e}")
         return findings
     
     for i, char in enumerate(content):
@@ -96,7 +96,7 @@ def main():
     all_findings = []
     files_checked = 0
     
-    print("🔍 Checking workflow files for bidi/hidden Unicode characters...")
+    print("[CHECK] Checking workflow files for bidi/hidden Unicode characters...")
     print()
     
     for filepath in workflow_dir.glob('*.yml'):
@@ -105,11 +105,11 @@ def main():
         
         if findings:
             all_findings.extend(findings)
-            print(f"❌ {filepath}: {len(findings)} hidden character(s) found")
+            print(f"[FAIL] {filepath}: {len(findings)} hidden character(s) found")
             for f in findings:
                 print(f"   Line {f['line']}, Col {f['col']}: {f['code']} ({f['name']})")
         else:
-            print(f"✅ {filepath}: clean")
+            print(f"[OK] {filepath}: clean")
     
     for filepath in workflow_dir.glob('*.yaml'):
         files_checked += 1
@@ -117,11 +117,11 @@ def main():
         
         if findings:
             all_findings.extend(findings)
-            print(f"❌ {filepath}: {len(findings)} hidden character(s) found")
+            print(f"[FAIL] {filepath}: {len(findings)} hidden character(s) found")
             for f in findings:
                 print(f"   Line {f['line']}, Col {f['col']}: {f['code']} ({f['name']})")
         else:
-            print(f"✅ {filepath}: clean")
+            print(f"[OK] {filepath}: clean")
     
     print()
     print(f"Files checked: {files_checked}")
@@ -129,13 +129,13 @@ def main():
     
     if all_findings:
         print()
-        print("⛔ SECURITY RISK: Hidden/bidirectional Unicode characters detected!")
+        print("[BLOCK] SECURITY RISK: Hidden/bidirectional Unicode characters detected!")
         print("These characters can be used for 'Trojan Source' attacks.")
         print("Remove them before merging.")
         sys.exit(1)
     else:
         print()
-        print("✅ No hidden/bidirectional Unicode characters found.")
+        print("[OK] No hidden/bidirectional Unicode characters found.")
         sys.exit(0)
 
 
