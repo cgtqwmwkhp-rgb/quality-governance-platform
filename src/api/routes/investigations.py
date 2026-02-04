@@ -1376,7 +1376,7 @@ async def validate_investigation_closure(
         reason_codes.append(ClosureReasonCode.LEVEL_NOT_SET)
 
     # Get investigation data
-    data: dict = investigation.data or {}
+    data: dict = dict(investigation.data) if investigation.data else {}
 
     # Get required sections based on level
     # LOW: sections 1-3, MEDIUM: sections 1-4, HIGH: sections 1-6
@@ -1388,7 +1388,7 @@ async def validate_investigation_closure(
     max_sections = level_section_counts.get(level_str or "high", 6)
 
     # Validate template structure
-    structure: dict = template.structure or {}
+    structure: dict = dict(template.structure) if template.structure else {}
     sections = structure.get("sections", [])
 
     for i, section in enumerate(sections):
