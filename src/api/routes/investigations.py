@@ -1350,6 +1350,17 @@ async def validate_investigation_closure(
     template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
 
+    # Helper to get level as string value
+    def get_level_str(level: object) -> str | None:
+        if level is None:
+            return None
+        # Handle both enum and string values
+        if hasattr(level, "value"):
+            return str(level.value)
+        return str(level)
+
+    level_str = get_level_str(investigation.level)
+
     if not template:
         return ClosureValidationResponse(
             status="BLOCKED",
@@ -1357,7 +1368,7 @@ async def validate_investigation_closure(
             missing_fields=[],
             checked_at_utc=checked_at,
             investigation_id=investigation_id,
-            investigation_level=investigation.level.value if investigation.level else None,
+            investigation_level=level_str,
         )
 
     # Check if level is set (required for section gating)
@@ -1365,7 +1376,7 @@ async def validate_investigation_closure(
         reason_codes.append(ClosureReasonCode.LEVEL_NOT_SET)
 
     # Get investigation data
-    data = investigation.data or {}
+    data: dict = investigation.data or {}
 
     # Get required sections based on level
     # LOW: sections 1-3, MEDIUM: sections 1-4, HIGH: sections 1-6
@@ -1374,11 +1385,10 @@ async def validate_investigation_closure(
         "medium": 4,
         "high": 6,
     }
-    level_value = investigation.level.value if investigation.level else "high"
-    max_sections = level_section_counts.get(level_value, 6)
+    max_sections = level_section_counts.get(level_str or "high", 6)
 
     # Validate template structure
-    structure = template.structure or {}
+    structure: dict = template.structure or {}
     sections = structure.get("sections", [])
 
     for i, section in enumerate(sections):
@@ -1434,5 +1444,5 @@ async def validate_investigation_closure(
         missing_fields=missing_fields,
         checked_at_utc=checked_at,
         investigation_id=investigation_id,
-        investigation_level=investigation.level.value if investigation.level else None,
+        investigation_level=level_str,
     )
