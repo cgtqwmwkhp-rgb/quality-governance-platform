@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:staging": "playwright test tests/e2e/staging-verification.spec.ts",
+    "test:e2e:all": "playwright test --reporter=html,list,json"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",

@@ -12,11 +12,16 @@ on:
       - 'frontend/index.html'
       - 'frontend/package.json'
       - 'frontend/vite.config.ts'
+      - 'frontend/playwright.config.ts'
+      - 'frontend/tests/e2e/**'
       - '.github/workflows/azure-static-web-apps-purple-water-03205fa03.yml'
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
       - main
+
+env:
+  STAGING_SWA_URL: https://purple-water-03205fa03.6.azurestaticapps.net
 
 jobs:
   # For PRs: build-only (no deployment) to satisfy branch protection
@@ -48,6 +53,9 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+    outputs:
+      deploy_sha: ${{ github.sha }}
+      deploy_time: ${{ steps.set_version.outputs.build_time }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -74,9 +82,12 @@ jobs:
           echo "Updated SW cache version to: qgp-v2.0.0-${SHA}-${TIMESTAMP}"
       
       - name: Set build version metadata
+        id: set_version
         run: |
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           echo "VITE_BUILD_SHA=${{ github.sha }}" >> $GITHUB_ENV
-          echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+          echo "VITE_BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
       
       - name: Build Frontend
         working-directory: frontend
@@ -104,6 +115,159 @@ jobs:
           action: "upload"
           app_location: "frontend/dist"
           skip_app_build: true
+
+  # Staging UI Verification Job
+  # Runs Playwright against deployed staging SWA to verify UI renders correctly
+  staging_ui_verification:
+    if: github.event_name == 'push'
+    needs: deploy_to_production
+    runs-on: ubuntu-latest
+    name: Staging UI Verification
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Dependencies
+        working-directory: frontend
+        run: npm ci
+      
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      
+      - name: Wait for SWA deployment to propagate
+        run: |
+          echo "Waiting 30s for SWA deployment to propagate..."
+          sleep 30
+      
+      - name: Verify Staging SWA is accessible
+        run: |
+          echo "🔍 Verifying staging SWA is accessible..."
+          for i in {1..5}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.STAGING_SWA_URL }}/")
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Staging SWA is accessible (HTTP $HTTP_STATUS)"
+              break
+            fi
+            echo "⏳ Attempt $i: HTTP $HTTP_STATUS, retrying in 10s..."
+            sleep 10
+          done
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Staging SWA not accessible after 5 attempts"
+            exit 1
+          fi
+      
+      - name: Capture Staging Evidence - Routes
+        id: evidence
+        run: |
+          echo "## Staging UI Evidence" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Staging URL:** ${{ env.STAGING_SWA_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deploy SHA:** ${{ needs.deploy_to_production.outputs.deploy_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deploy Time:** ${{ needs.deploy_to_production.outputs.deploy_time }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Route Accessibility" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          ROUTES=(
+            "/"
+            "/investigations"
+            "/audits"
+            "/planet-mark"
+          )
+          
+          for route in "${ROUTES[@]}"; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.STAGING_SWA_URL }}${route}")
+            if [ "$STATUS" = "200" ]; then
+              echo "- ✅ \`${route}\`: HTTP $STATUS" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ❌ \`${route}\`: HTTP $STATUS" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Run Playwright E2E Tests against Staging
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.STAGING_SWA_URL }}
+          CI: true
+        run: |
+          echo "🎭 Running Playwright E2E tests against staging..."
+          npx playwright test --reporter=html,list,json || true
+        continue-on-error: true
+      
+      - name: Check Playwright Test Results
+        id: playwright_check
+        working-directory: frontend
+        run: |
+          if [ -f playwright-report/results.json ]; then
+            PASSED=$(jq '.stats.expected // 0' playwright-report/results.json)
+            FAILED=$(jq '.stats.unexpected // 0' playwright-report/results.json)
+            SKIPPED=$(jq '.stats.skipped // 0' playwright-report/results.json)
+            
+            echo "### Playwright Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Passed: $PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "- ⏭️ Skipped: $SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$FAILED" -gt 0 ]; then
+              echo "test_status=failed" >> $GITHUB_OUTPUT
+              echo "⚠️ Some tests failed - check artifacts for details" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "test_status=passed" >> $GITHUB_OUTPUT
+              echo "✅ All Playwright tests passed!" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### Playwright Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No results.json found - tests may not have run" >> $GITHUB_STEP_SUMMARY
+            echo "test_status=unknown" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-staging
+          path: frontend/playwright-report/
+          retention-days: 30
+      
+      - name: Upload Playwright Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-test-results-staging
+          path: frontend/test-results/
+          retention-days: 30
+      
+      - name: Upload Playwright Traces
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-traces-staging
+          path: frontend/test-results/**/*.zip
+          retention-days: 30
+          if-no-files-found: ignore
+      
+      - name: Generate Evidence Summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 **playwright-report-staging**: HTML report with test details" >> $GITHUB_STEP_SUMMARY
+          echo "- 📁 **playwright-test-results-staging**: Screenshots and videos" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 **playwright-traces-staging**: Playwright traces for debugging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "_Staging UI Verification completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)_" >> $GITHUB_STEP_SUMMARY
 
   # NOTE: close_pull_request_job removed - no longer creating PR preview environments
   # Frontend PRs are validated by CI workflow (Build Check job) and only deployed on merge to main
