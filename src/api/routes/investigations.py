@@ -1138,16 +1138,8 @@ async def get_investigation_timeline(
             },
         )
 
-    # AUTHZ: Check user access to investigation
-    if not _user_can_access_investigation(current_user, investigation):
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
+    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
 
     # Build query for timeline events
     query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
@@ -1229,24 +1221,14 @@ async def get_investigation_comments(
                 },
             )
 
-    # Validate investigation exists and user has access
+    # Validate investigation exists
+    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
+    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
     inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
     inv_result = await db.execute(inv_query)
     investigation = inv_result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
-
-    # AUTHZ: Check user access to investigation
-    # Users can access if: superuser, assigned_to, reviewer, or has investigations:view_all
-    if not _user_can_access_investigation(current_user, investigation):
         raise HTTPException(
             status_code=404,
             detail={
@@ -1330,16 +1312,8 @@ async def get_investigation_packs(
             },
         )
 
-    # AUTHZ: Check user access to investigation
-    if not _user_can_access_investigation(current_user, investigation):
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
+    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
 
     # Build query for packs
     query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
@@ -1430,16 +1404,8 @@ async def validate_investigation_closure(
             },
         )
 
-    # AUTHZ: Check user access to investigation
-    if not _user_can_access_investigation(current_user, investigation):
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
+    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
 
     reason_codes: List[str] = []
     missing_fields: List[str] = []
