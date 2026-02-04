@@ -6,9 +6,12 @@
  * 
  * CRITICAL: These tests assert actual rendered content, not just HTTP 200.
  * Failures here should BLOCK production deployment.
+ * 
+ * SECURITY: These tests use the read-only guard to ensure no write requests
+ * are made to the production API during staging verification.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/read-only-guard';
 
 // Use environment variable for staging URL
 const STAGING_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
