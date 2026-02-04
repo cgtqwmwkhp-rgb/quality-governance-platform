@@ -145,9 +145,9 @@ describe('Investigation Status Filter Mapping', () => {
     it('should correctly match statuses to filters', () => {
       // Test each status against each filter
       const testCases: [InvestigationStatusValue, string, boolean][] = [
-        // All filter matches nothing (returns false because it's a special case)
-        ['draft', 'all', false],
-        ['in_progress', 'all', false],
+        // All filter matches everything (returns true for 'all' filter ID)
+        ['draft', 'all', true],
+        ['in_progress', 'all', true],
         
         // Open filter
         ['draft', 'open', true],

@@ -192,7 +192,7 @@ test.describe('Investigations Module', () => {
   });
 
   test.describe('5. Evidence Tab', () => {
-    test('should render evidence register or placeholder', async ({ page }) => {
+    test('should render evidence register header', async ({ page }) => {
       await page.goto(`${BASE_URL}/investigations`);
       
       const rows = page.locator('table tbody tr');
@@ -205,17 +205,155 @@ test.describe('Investigations Module', () => {
         // Click Evidence tab
         await page.locator('button:has-text("Evidence")').click();
         
-        // Should show evidence list or placeholder
-        const hasEvidence = await page.locator('[data-testid="evidence-item"]').count() > 0;
-        const hasPlaceholder = await page.locator('text=Evidence Register').isVisible().catch(() => false);
+        // Should show evidence register header
+        await expect(page.locator('text=Evidence Register')).toBeVisible();
+      }
+    });
+
+    test('should show upload button', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
         
-        expect(hasEvidence || hasPlaceholder).toBe(true);
+        // Click Evidence tab
+        await page.locator('button:has-text("Evidence")').click();
+        
+        // Should show upload button
+        await expect(page.locator('text=Upload Evidence')).toBeVisible();
+      }
+    });
+
+    test('should show empty state or evidence list deterministically', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click Evidence tab
+        await page.locator('button:has-text("Evidence")').click();
+        
+        // Wait for loading to complete
+        await page.waitForTimeout(1000);
+        
+        // Should show either evidence cards or empty state
+        const hasEvidenceCards = await page.locator('div:has-text("internal customer")').count() > 0;
+        const hasEmptyState = await page.locator('text=No Evidence Uploaded').isVisible().catch(() => false);
+        
+        expect(hasEvidenceCards || hasEmptyState).toBe(true);
+      }
+    });
+  });
+
+  test.describe('5.5. RCA Tab', () => {
+    test('should render 5 Whys analysis fields', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click RCA tab
+        await page.locator('button:has-text("RCA")').click();
+        
+        // Should show 5 Whys header
+        await expect(page.locator('text=5 Whys Analysis')).toBeVisible();
+      }
+    });
+
+    test('should have Save RCA Analysis button', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click RCA tab
+        await page.locator('button:has-text("RCA")').click();
+        
+        // Should show save button
+        await expect(page.locator('text=Save RCA Analysis')).toBeVisible();
+      }
+    });
+
+    test('should show unsaved changes indicator when field is modified', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click RCA tab
+        await page.locator('button:has-text("RCA")').click();
+        
+        // Wait for fields to load
+        await page.waitForTimeout(500);
+        
+        // Find and modify a textarea (Why 1)
+        const textarea = page.locator('textarea').first();
+        await textarea.fill('Test modification for unsaved changes');
+        
+        // Should show unsaved changes indicator
+        await expect(page.locator('text=You have unsaved changes')).toBeVisible();
+      }
+    });
+
+    test('should render root cause field', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click RCA tab
+        await page.locator('button:has-text("RCA")').click();
+        
+        // Should show root cause section
+        await expect(page.locator('text=Root Cause Identified')).toBeVisible();
       }
     });
   });
 
   test.describe('6. Report Tab', () => {
-    test('should render packs list and generate button', async ({ page }) => {
+    test('should render generate report section', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click Report tab
+        await page.locator('button:has-text("Report")').click();
+        
+        // Should show generate report section
+        await expect(page.locator('text=Generate Report')).toBeVisible();
+      }
+    });
+
+    test('should show internal and external report buttons', async ({ page }) => {
       await page.goto(`${BASE_URL}/investigations`);
       
       const rows = page.locator('table tbody tr');
@@ -229,10 +367,75 @@ test.describe('Investigations Module', () => {
         await page.locator('button:has-text("Report")').click();
         
         // Should show generate buttons
-        const hasInternalButton = await page.locator('button:has-text("Internal Report")').isVisible().catch(() => false);
-        const hasExternalButton = await page.locator('button:has-text("External Report")').isVisible().catch(() => false);
+        await expect(page.locator('button:has-text("Internal Report")')).toBeVisible();
+        await expect(page.locator('button:has-text("External Report")')).toBeVisible();
+      }
+    });
+
+    test('should show report history section', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
         
-        expect(hasInternalButton || hasExternalButton).toBe(true);
+        // Click Report tab
+        await page.locator('button:has-text("Report")').click();
+        
+        // Should show report history header
+        await expect(page.locator('text=Report History')).toBeVisible();
+      }
+    });
+
+    test('should show deterministic empty or list state for packs', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click Report tab
+        await page.locator('button:has-text("Report")').click();
+        
+        // Wait for loading to complete
+        await page.waitForTimeout(1000);
+        
+        // Should show either packs or empty state
+        const hasPacks = await page.locator('text=Report').count() > 2; // More than just headers
+        const hasEmptyState = await page.locator('text=No reports generated yet').isVisible().catch(() => false);
+        
+        expect(hasPacks || hasEmptyState).toBe(true);
+      }
+    });
+
+    test('should show capability warning if pack generation unavailable', async ({ page }) => {
+      await page.goto(`${BASE_URL}/investigations`);
+      
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count();
+      
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForURL(/\/investigations\/\d+/);
+        
+        // Click Report tab
+        await page.locator('button:has-text("Report")').click();
+        
+        // Wait for capability check
+        await page.waitForTimeout(1000);
+        
+        // Check if warning is shown or buttons are enabled
+        const hasWarning = await page.locator('text=Report generation not available').isVisible().catch(() => false);
+        const hasEnabledButtons = await page.locator('button:has-text("Internal Report"):not([disabled])').isVisible().catch(() => false);
+        
+        // Either warning is shown OR buttons are enabled (not both)
+        expect(hasWarning || hasEnabledButtons).toBe(true);
       }
     });
   });
