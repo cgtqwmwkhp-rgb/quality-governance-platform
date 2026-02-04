@@ -912,9 +912,73 @@ export interface InvestigationAutosave {
   version: number
 }
 
+// ============ Investigation Stage 1 API Types ============
+
+export interface TimelineEvent {
+  id: number
+  created_at: string
+  event_type: string
+  field_path?: string
+  old_value?: string
+  new_value?: string
+  actor_id?: number
+  event_metadata?: Record<string, unknown>
+}
+
+export interface TimelineResponse {
+  items: TimelineEvent[]
+  total: number
+  page: number
+  page_size: number
+  investigation_id: number
+}
+
+export interface InvestigationComment {
+  id: number
+  created_at: string
+  author_id: number
+  body: string
+  metadata?: Record<string, unknown>
+}
+
+export interface CommentsResponse {
+  items: InvestigationComment[]
+  total: number
+  page: number
+  page_size: number
+  investigation_id: number
+}
+
+export interface CustomerPackSummary {
+  id: number
+  created_at: string
+  pack_uuid: string
+  audience: string
+  checksum_sha256?: string
+  generated_by_id?: number
+}
+
+export interface PacksResponse {
+  items: CustomerPackSummary[]
+  total: number
+  page: number
+  page_size: number
+  investigation_id: number
+}
+
+export interface ClosureValidation {
+  status: 'OK' | 'BLOCKED'
+  reason_codes: string[]
+  missing_fields: string[]
+  checked_at_utc: string
+}
+
 export const investigationsApi = {
-  list: (page = 1, size = 10) => 
-    api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?page=${page}&size=${size}`),
+  list: (page = 1, size = 10, status?: string) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) })
+    if (status) params.set('status', status)
+    return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
+  },
   create: (data: InvestigationCreate) => 
     api.post<Investigation>('/api/v1/investigations/', data),
   get: (id: number) => 
@@ -951,6 +1015,61 @@ export const investigationsApi = {
     if (options?.size) params.set('size', String(options.size))
     return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
   },
+  
+  // ============ Stage 1 Endpoints ============
+  
+  /**
+   * Get timeline events for an investigation.
+   * Ordered by created_at DESC, id DESC.
+   */
+  getTimeline: (id: number, options?: { page?: number; page_size?: number; type?: string }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    if (options?.type) params.set('type', options.type)
+    return api.get<TimelineResponse>(`/api/v1/investigations/${id}/timeline?${params}`)
+  },
+  
+  /**
+   * Get comments for an investigation.
+   * Ordered by created_at DESC, id DESC.
+   */
+  getComments: (id: number, options?: { page?: number; page_size?: number }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    return api.get<CommentsResponse>(`/api/v1/investigations/${id}/comments?${params}`)
+  },
+  
+  /**
+   * Add a comment to an investigation.
+   */
+  addComment: (id: number, body: string) =>
+    api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, { body }),
+  
+  /**
+   * Get customer pack summaries for an investigation.
+   * Does NOT include full content for security.
+   */
+  getPacks: (id: number, options?: { page?: number; page_size?: number }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    return api.get<PacksResponse>(`/api/v1/investigations/${id}/packs?${params}`)
+  },
+  
+  /**
+   * Generate a new customer pack for an investigation.
+   */
+  generatePack: (id: number, audience: string) =>
+    api.post<CustomerPackSummary>(`/api/v1/investigations/${id}/customer-pack`, { audience }),
+  
+  /**
+   * Get closure validation status for an investigation.
+   * Returns OK or BLOCKED with reason codes.
+   */
+  getClosureValidation: (id: number) =>
+    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),
 }
 
 export const standardsApi = {

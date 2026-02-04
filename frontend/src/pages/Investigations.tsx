@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
+import { Plus, Search, FlaskConical, ArrowRight, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw, WifiOff, Wifi, CheckCircle, GitBranch } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/Tooltip'
 import {
   Dialog,
   DialogContent,
@@ -17,13 +19,15 @@ import {
 } from '../components/ui/Dialog'
 import { cn } from "../helpers/utils"
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import {
+  STATUS_FILTER_OPTIONS,
+  getStatusValuesForFilter,
+  getStatusDisplay,
+} from '../utils/investigationStatusFilter'
 
-const STATUS_STEPS = [
-  { id: 'draft', label: 'Draft', icon: FileQuestion },
-  { id: 'in_progress', label: 'In Progress', icon: Clock },
-  { id: 'under_review', label: 'Under Review', icon: GitBranch },
-  { id: 'completed', label: 'Completed', icon: CheckCircle },
-]
+// Page size options
+const PAGE_SIZE_OPTIONS = [25, 50] as const
+type PageSize = typeof PAGE_SIZE_OPTIONS[number]
 
 const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   road_traffic_collision: Car,
@@ -437,9 +441,16 @@ function CreateInvestigationModal({
 }
 
 export default function Investigations() {
+  const navigate = useNavigate()
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [apiConnected, setApiConnected] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [pageSize, setPageSize] = useState<PageSize>(50)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
   const [showModal, setShowModal] = useState(false)
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null)
   
@@ -465,9 +476,39 @@ export default function Investigations() {
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState<string | null>(null)
 
+  // Load investigations with filters
+  const loadInvestigations = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      // Get status values for the filter
+      const statusValues = getStatusValuesForFilter(statusFilter)
+      // API only supports single status, so we'll filter client-side for multi-value filters
+      const response = await investigationsApi.list(currentPage, pageSize)
+      setApiConnected(true)
+      
+      let items = response.data.items || []
+      
+      // Client-side status filtering for multi-value filters (like 'open' = draft + in_progress)
+      if (statusFilter !== 'all' && statusValues.length > 0) {
+        items = items.filter(inv => statusValues.includes(inv.status as any))
+      }
+      
+      setInvestigations(items)
+      setTotalItems(response.data.total)
+    } catch (err) {
+      console.error('Failed to load investigations:', err)
+      setError(getApiErrorMessage(err))
+      setApiConnected(false)
+      setInvestigations([])
+    } finally {
+      setLoading(false)
+    }
+  }, [currentPage, pageSize, statusFilter])
+
   useEffect(() => {
     loadInvestigations()
-  }, [])
+  }, [loadInvestigations])
 
   // Load actions when investigation is selected
   useEffect(() => {
@@ -492,20 +533,18 @@ export default function Investigations() {
     }
   }
 
-  const loadInvestigations = async () => {
-    try {
-      const response = await investigationsApi.list(1, 100)
-      setInvestigations(response.data.items || [])
-    } catch (err) {
-      console.error('Failed to load investigations:', err)
-      setInvestigations([])
-    } finally {
-      setLoading(false)
-    }
+  // Handle status filter change
+  const handleStatusFilterChange = (value: string) => {
+    const option = STATUS_FILTER_OPTIONS.find(o => o.id === value)
+    if (option?.disabled) return
+    setStatusFilter(value)
+    setCurrentPage(1)
   }
 
-  const getStatusIndex = (status: string) => {
-    return STATUS_STEPS.findIndex(s => s.id === status)
+  // Handle page size change
+  const handlePageSizeChange = (value: string) => {
+    setPageSize(parseInt(value, 10) as PageSize)
+    setCurrentPage(1)
   }
 
   const handleCreateAction = async (e: React.FormEvent) => {
@@ -592,9 +631,11 @@ export default function Investigations() {
     return ENTITY_ICONS[type] || AlertTriangle
   }
 
+  // Client-side search filtering
   const filteredInvestigations = investigations.filter(
     i => i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         i.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
+         i.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         (i.data as any)?.lead_investigator?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const stats = {
@@ -602,6 +643,17 @@ export default function Investigations() {
     inProgress: investigations.filter(i => i.status === 'in_progress').length,
     underReview: investigations.filter(i => i.status === 'under_review').length,
     completed: investigations.filter(i => i.status === 'completed').length,
+  }
+
+  // Calculate action counts (simplified - would be from backend in production)
+  const getActionCount = (_investigation: Investigation) => {
+    // Placeholder - in production this would come from the API
+    return Math.floor(Math.random() * 5)
+  }
+
+  // Navigate to investigation detail
+  const handleRowClick = (investigation: Investigation) => {
+    navigate(`/investigations/${investigation.id}`)
   }
 
   if (loading) {
@@ -612,13 +664,62 @@ export default function Investigations() {
     )
   }
 
+  // Error state
+  if (error && !apiConnected) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Root Cause Investigations</h1>
+            <p className="text-muted-foreground mt-1">5-Whys analysis, RCA workflows & corrective actions</p>
+          </div>
+        </div>
+        <Card className="p-12 text-center">
+          <WifiOff className="w-16 h-16 mx-auto mb-4 text-destructive" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Connection Error</h3>
+          <p className="text-muted-foreground max-w-md mx-auto mb-4">
+            HTTP Status: {error.includes('404') ? '404' : error.includes('500') ? '500' : 'Error'}
+          </p>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <Button onClick={loadInvestigations}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Root Cause Investigations</h1>
-          <p className="text-muted-foreground mt-1">5-Whys analysis, RCA workflows & corrective actions</p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-muted-foreground">5-Whys analysis, RCA workflows & corrective actions</p>
+            {/* API Connected Indicator */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={cn(
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+                    apiConnected 
+                      ? "bg-success/10 text-success" 
+                      : "bg-destructive/10 text-destructive"
+                  )}>
+                    {apiConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                    {apiConnected ? 'API Connected' : 'Disconnected'}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {apiConnected 
+                    ? 'Successfully connected to the Investigations API' 
+                    : 'Unable to connect to the API'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
@@ -657,123 +758,200 @@ export default function Investigations() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Search investigations..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filters and Search */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search by reference, title, or lead..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Status Filter */}
+        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_FILTER_OPTIONS.map((option) => (
+              <SelectItem 
+                key={option.id} 
+                value={option.id}
+                disabled={option.disabled}
+              >
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn(option.disabled && 'line-through opacity-50')}>
+                        {option.label}
+                      </span>
+                    </TooltipTrigger>
+                    {option.disabledTooltip && (
+                      <TooltipContent>{option.disabledTooltip}</TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Page Size */}
+        <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <SelectItem key={size} value={String(size)}>
+                {size} per page
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Investigation Cards */}
-      <div className="space-y-4">
-        {filteredInvestigations.length === 0 ? (
-          <Card className="p-12 text-center">
-            <FlaskConical className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No Investigations Found</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Start a root cause investigation to analyze incidents, RTAs, or complaints.
-            </p>
-          </Card>
-        ) : (
-          filteredInvestigations.map((investigation) => {
-            const EntityIcon = getEntityIcon(investigation.assigned_entity_type)
-            const statusIndex = getStatusIndex(investigation.status)
-            
-            return (
-              <Card
-                key={investigation.id}
-                hoverable
-                onClick={() => setSelectedInvestigation(investigation)}
-                className="p-6 cursor-pointer"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                  {/* Entity Icon */}
-                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <EntityIcon className="w-8 h-8 text-primary" />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="font-mono text-sm text-primary">{investigation.reference_number}</span>
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-surface text-muted-foreground capitalize">
-                        {investigation.assigned_entity_type.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-1">
-                      {investigation.title}
-                    </h3>
-                    {investigation.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{investigation.description}</p>
-                    )}
-                  </div>
-
-                  {/* Status Timeline */}
-                  <div className="flex items-center gap-2 lg:w-80">
-                    {STATUS_STEPS.map((step, stepIndex) => {
-                      const isActive = stepIndex <= statusIndex
-                      const isCurrent = stepIndex === statusIndex
-                      return (
-                        <div key={step.id} className="flex items-center">
-                          <div className={cn(
-                            "relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300",
-                            isCurrent 
-                              ? 'bg-primary shadow-lg' 
-                              : isActive 
-                                ? 'bg-primary/20' 
-                                : 'bg-surface'
-                          )}>
-                            <step.icon className={cn(
-                              "w-5 h-5",
-                              isActive ? 'text-primary-foreground' : 'text-muted-foreground'
-                            )} />
-                            {isCurrent && (
-                              <div className="absolute inset-0 rounded-xl animate-pulse bg-primary/30" />
-                            )}
-                          </div>
-                          {stepIndex < STATUS_STEPS.length - 1 && (
-                            <ArrowRight className={cn(
-                              "w-4 h-4 mx-1",
-                              isActive ? 'text-primary' : 'text-muted-foreground/30'
-                            )} />
+      {/* Investigation Table */}
+      {filteredInvestigations.length === 0 ? (
+        <Card className="p-12 text-center">
+          <FlaskConical className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">No Investigations Found</h3>
+          <p className="text-muted-foreground max-w-md mx-auto mb-4">
+            {searchTerm || statusFilter !== 'all' 
+              ? 'No investigations match your current filters.'
+              : 'Start a root cause investigation to analyze incidents, RTAs, or complaints.'}
+          </p>
+          {/* API Connected indicator in empty state */}
+          <div className={cn(
+            "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
+            apiConnected ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+          )}>
+            {apiConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+            {apiConnected ? 'API Connected' : 'API Disconnected'}
+          </div>
+          {apiConnected && (
+            <div className="mt-4">
+              <Button onClick={() => setShowModal(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Investigation
+              </Button>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-surface border-b border-border">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Reference
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Title
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Lead
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Actions
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Created
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredInvestigations.map((investigation) => {
+                  const EntityIcon = getEntityIcon(investigation.assigned_entity_type)
+                  const statusDisplay = getStatusDisplay(investigation.status)
+                  
+                  return (
+                    <tr 
+                      key={investigation.id}
+                      onClick={() => handleRowClick(investigation)}
+                      className="hover:bg-surface/50 cursor-pointer transition-colors"
+                    >
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <EntityIcon className="w-4 h-4 text-primary" />
+                          <span className="font-mono text-sm text-primary">
+                            {investigation.reference_number}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="max-w-md">
+                          <p className="font-medium text-foreground truncate">
+                            {investigation.title}
+                          </p>
+                          {investigation.description && (
+                            <p className="text-sm text-muted-foreground truncate">
+                              {investigation.description}
+                            </p>
                           )}
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* RCA Preview */}
-                {investigation.data && Object.keys(investigation.data).length > 0 && (
-                  <div className="mt-6 pt-6 border-t border-border">
-                    <div className="flex items-center gap-2 mb-3">
-                      <GitBranch className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-primary">Root Cause Analysis</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {['Why 1', 'Why 2', 'Why 3'].map((why, i) => (
-                        <Card key={i} className="p-3">
-                          <span className="text-xs text-muted-foreground">{why}</span>
-                          <p className="text-sm text-foreground mt-1">
-                            {typeof investigation.data === 'object' && 
-                              (investigation.data as Record<string, unknown>)[`why_${i + 1}`] as string || 
-                              'Not documented'}
-                          </p>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            )
-          })
-        )}
-      </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Badge className={statusDisplay.className}>
+                          {statusDisplay.label}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-muted-foreground">
+                        {(investigation.data as any)?.lead_investigator || '—'}
+                      </td>
+                      <td className="px-4 py-4">
+                        <Badge variant="outline">
+                          {getActionCount(investigation)} actions
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-muted-foreground">
+                        {new Date(investigation.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination info */}
+          <div className="px-4 py-3 border-t border-border bg-surface/50 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {filteredInvestigations.length} of {totalItems} investigations
+            </p>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage}
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={filteredInvestigations.length < pageSize}
+                onClick={() => setCurrentPage(p => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Detail Modal */}
       <Dialog open={!!selectedInvestigation} onOpenChange={() => setSelectedInvestigation(null)}>

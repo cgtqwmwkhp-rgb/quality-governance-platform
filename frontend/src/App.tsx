@@ -12,6 +12,7 @@ import Policies from './pages/Policies'
 import Risks from './pages/Risks'
 import Audits from './pages/Audits'
 import Investigations from './pages/Investigations'
+import InvestigationDetail from './pages/InvestigationDetail'
 import Standards from './pages/Standards'
 import Actions from './pages/Actions'
 import Documents from './pages/Documents'
@@ -192,6 +193,7 @@ function App() {
           <Route path="audits/:auditId/execute" element={<AuditExecution />} />
           <Route path="audits/:auditId/mobile" element={<MobileAuditExecution />} />
           <Route path="investigations" element={<Investigations />} />
+          <Route path="investigations/:id" element={<InvestigationDetail />} />
           <Route path="standards" element={<Standards />} />
           <Route path="actions" element={<Actions />} />
           <Route path="documents" element={<Documents />} />
