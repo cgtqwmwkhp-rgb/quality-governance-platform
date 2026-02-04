@@ -102,9 +102,10 @@ jobs:
   # ============================================================================
   # STAGING DEPLOYMENT
   # Deploys to Azure Static Web App (staging environment)
+  # Also runs on workflow_dispatch for validation mode testing.
   # ============================================================================
   deploy_to_staging:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Deploy to Staging
     outputs:
@@ -174,9 +175,10 @@ jobs:
   # STAGING UI VERIFICATION (HARD GATE)
   # Runs Playwright against deployed staging SWA to verify UI renders correctly.
   # CRITICAL: This job MUST pass for production promotion to proceed.
+  # Also runs on workflow_dispatch for validation mode testing.
   # ============================================================================
   staging_ui_verification:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: deploy_to_staging
     runs-on: ubuntu-latest
     name: Staging UI Verification (GATE)
@@ -586,10 +588,10 @@ jobs:
   # PRODUCTION PROMOTION GATE
   # This job only runs if BOTH deploy_to_staging AND staging_ui_verification succeed.
   # CRITICAL: This enforces the staging-first release discipline.
-  # SECURITY: Validation mode (workflow_dispatch) NEVER runs this job.
+  # SECURITY: workflow_dispatch (validation mode) NEVER runs this job.
   # ============================================================================
   production_promotion_gate:
-    if: github.event_name == 'push' && github.event.inputs.validation_mode != 'true'
+    if: github.event_name == 'push'
     needs: [deploy_to_staging, staging_ui_verification]
     runs-on: ubuntu-latest
     name: Production Promotion Gate
