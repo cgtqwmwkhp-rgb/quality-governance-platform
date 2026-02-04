@@ -1071,6 +1071,42 @@ async def generate_customer_pack(
 # =============================================================================
 
 
+def _user_can_access_investigation(user, investigation: InvestigationRun) -> bool:
+    """Check if user has access to an investigation.
+
+    Access is granted if:
+    - User is superuser
+    - User has 'investigations:view_all' permission
+    - User is assigned_to the investigation
+    - User is the reviewer of the investigation
+    - User approved the investigation
+
+    This implements least-privilege authz: users only see investigations
+    they are directly involved with, unless they have elevated permissions.
+    """
+    # Superuser always has access
+    if user.is_superuser:
+        return True
+
+    # Check for global view permission
+    if user.has_permission("investigations:view_all"):
+        return True
+
+    # Check direct assignment
+    if investigation.assigned_to_user_id == user.id:
+        return True
+
+    # Check reviewer
+    if investigation.reviewer_user_id == user.id:
+        return True
+
+    # Check approver
+    if investigation.approved_by_id == user.id:
+        return True
+
+    return False
+
+
 @router.get("/{investigation_id}/timeline", response_model=TimelineListResponse)
 async def get_investigation_timeline(
     investigation_id: int,
@@ -1087,12 +1123,23 @@ async def get_investigation_timeline(
     """
     request_id = "N/A"
 
-    # Validate investigation exists (authz: same as get_investigation)
+    # Validate investigation exists
     inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
     inv_result = await db.execute(inv_query)
     investigation = inv_result.scalar_one_or_none()
 
     if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    if not _user_can_access_investigation(current_user, investigation):
         raise HTTPException(
             status_code=404,
             detail={
@@ -1155,21 +1202,51 @@ async def get_investigation_comments(
     current_user: CurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    include_deleted: bool = Query(False, description="Include soft-deleted comments"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
 ):
     """Get list of comments on an investigation.
 
     Returns comments in deterministic order: created_at DESC, id DESC.
     Excludes soft-deleted comments by default.
+
+    Security:
+    - include_deleted=true requires superuser or 'investigations:comments:read_deleted' permission
     """
     request_id = "N/A"
 
-    # Validate investigation exists
+    # SECURITY: include_deleted requires admin/superuser permission
+    if include_deleted:
+        has_deleted_access = current_user.is_superuser or current_user.has_permission(
+            "investigations:comments:read_deleted"
+        )
+        if not has_deleted_access:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error_code": "FORBIDDEN",
+                    "message": "Permission 'investigations:comments:read_deleted' required to view deleted comments",
+                    "request_id": request_id,
+                },
+            )
+
+    # Validate investigation exists and user has access
     inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
     inv_result = await db.execute(inv_query)
     investigation = inv_result.scalar_one_or_none()
 
     if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    # Users can access if: superuser, assigned_to, reviewer, or has investigations:view_all
+    if not _user_can_access_investigation(current_user, investigation):
         raise HTTPException(
             status_code=404,
             detail={
@@ -1244,6 +1321,17 @@ async def get_investigation_packs(
     investigation = inv_result.scalar_one_or_none()
 
     if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    if not _user_can_access_investigation(current_user, investigation):
         raise HTTPException(
             status_code=404,
             detail={
@@ -1333,6 +1421,17 @@ async def validate_investigation_closure(
     investigation = inv_result.scalar_one_or_none()
 
     if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    if not _user_can_access_investigation(current_user, investigation):
         raise HTTPException(
             status_code=404,
             detail={
