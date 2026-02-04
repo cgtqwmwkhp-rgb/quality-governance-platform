@@ -952,6 +952,7 @@ export default function InvestigationDetail() {
                   <input
                     type="file"
                     id="evidence-upload"
+                    ref={(el) => { if (el) (window as unknown as { __evidenceFileInput?: HTMLInputElement }).__evidenceFileInput = el }}
                     className="hidden"
                     accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
                     onChange={(e) => {
@@ -961,23 +962,22 @@ export default function InvestigationDetail() {
                     }}
                     disabled={uploadingEvidence}
                   />
-                  <label htmlFor="evidence-upload">
-                    <Button
-                      variant="default"
-                      disabled={uploadingEvidence}
-                      className="cursor-pointer"
-                      asChild
-                    >
-                      <span>
-                        {uploadingEvidence ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Upload className="w-4 h-4 mr-2" />
-                        )}
-                        Upload Evidence
-                      </span>
-                    </Button>
-                  </label>
+                  <Button
+                    variant="default"
+                    disabled={uploadingEvidence}
+                    onClick={() => {
+                      // Programmatically trigger file input click
+                      const fileInput = document.getElementById('evidence-upload') as HTMLInputElement
+                      if (fileInput) fileInput.click()
+                    }}
+                  >
+                    {uploadingEvidence ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    Upload Evidence
+                  </Button>
                   <Button variant="outline" onClick={loadEvidence} disabled={evidenceLoading}>
                     <RefreshCw className={cn("w-4 h-4", evidenceLoading && "animate-spin")} />
                   </Button>
