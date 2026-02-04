@@ -5,9 +5,13 @@ import { API_BASE_URL } from '../config/apiBase'
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL;
 
-// Request timeout in milliseconds (15 seconds)
+// Request timeout in milliseconds (15 seconds for normal requests)
 // Prevents infinite spinner if backend hangs
 const REQUEST_TIMEOUT_MS = 15000;
+
+// Extended timeout for file uploads (2 minutes)
+// File uploads to Azure Blob Storage can take longer, especially for large files
+const UPLOAD_TIMEOUT_MS = 120000;
 
 // ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
 // These are the ONLY allowed error codes for login
@@ -1469,6 +1473,7 @@ export const evidenceAssetsApi = {
     
     return api.post<EvidenceAssetUploadResponse>('/api/v1/evidence-assets/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: UPLOAD_TIMEOUT_MS, // Extended timeout for file uploads to Azure Blob Storage
     })
   },
 
