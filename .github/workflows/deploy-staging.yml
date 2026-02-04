@@ -213,6 +213,7 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
+          STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv 2>/dev/null || echo "")
           
           if [ -z "$DB_URL" ]; then
             echo "❌ Failed to retrieve DATABASE_URL from Key Vault"
@@ -225,10 +226,19 @@ jobs:
             --name "${{ env.ACA_NAME }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --secrets \
-              database-url="$DB_URL" \
-              secret-key="$SECRET_KEY_VAL" \
-              jwt-secret-key="$JWT_SECRET_VAL" \
+              "database-url=$DB_URL" \
+              "secret-key=$SECRET_KEY_VAL" \
+              "jwt-secret-key=$JWT_SECRET_VAL" \
             --output none
+          
+          # Add storage secret if available
+          if [ -n "$STORAGE_CONN" ]; then
+            az containerapp secret set \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --secrets "azure-storage-conn=$STORAGE_CONN" \
+              --output none
+          fi
           
           echo "✅ ACA secrets updated"
           
@@ -244,10 +254,18 @@ jobs:
               JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30 \
               JWT_REFRESH_TOKEN_EXPIRE_DAYS=7 \
               LOG_LEVEL=INFO \
-              CORS_ORIGINS='["https://${{ env.ACA_FQDN }}"]' \
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
             --output none
+          
+          # Add storage env var if secret exists
+          if [ -n "$STORAGE_CONN" ]; then
+            az containerapp update \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --set-env-vars AZURE_STORAGE_CONNECTION_STRING=secretref:azure-storage-conn \
+              --output none
+          fi
           
           echo "✅ Environment variables linked to secrets"
 

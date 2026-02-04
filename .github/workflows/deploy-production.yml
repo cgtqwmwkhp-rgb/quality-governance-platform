@@ -265,6 +265,7 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
+          STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
           
           # Configure app settings
           az webapp config appsettings set \
@@ -285,6 +286,7 @@ jobs:
               WEBSITES_PORT="8000" \
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
+              AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
             --output none
           
           echo "✅ Application settings configured"
