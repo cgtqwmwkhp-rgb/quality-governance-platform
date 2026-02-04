@@ -2,24 +2,34 @@
 
 import math
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.investigation import (
+    ClosureValidationResponse,
+    CommentListResponse,
+    CommentResponse,
     CreateFromRecordRequest,
+    CustomerPackSummaryResponse,
     InvestigationRunCreate,
     InvestigationRunListResponse,
     InvestigationRunResponse,
     InvestigationRunUpdate,
+    PackListResponse,
     SourceRecordItem,
     SourceRecordsResponse,
+    TimelineEventResponse,
+    TimelineListResponse,
 )
 from src.domain.models.investigation import (
     AssignedEntityType,
+    InvestigationComment,
+    InvestigationCustomerPack,
+    InvestigationRevisionEvent,
     InvestigationRun,
     InvestigationStatus,
     InvestigationTemplate,
@@ -1054,3 +1064,484 @@ async def generate_customer_pack(
         "included_assets": pack.included_assets,
         "checksum": pack.checksum_sha256,
     }
+
+
+# =============================================================================
+# Stage 1: Timeline, Comments, Packs List, Closure Validation Endpoints
+# =============================================================================
+
+
+def _user_can_access_investigation(user, investigation: InvestigationRun) -> bool:
+    """Check if user has access to an investigation.
+
+    Access is granted if:
+    - User is superuser
+    - User has 'investigations:view_all' permission
+    - User is assigned_to the investigation
+    - User is the reviewer of the investigation
+    - User approved the investigation
+
+    This implements least-privilege authz: users only see investigations
+    they are directly involved with, unless they have elevated permissions.
+    """
+    # Superuser always has access
+    if user.is_superuser:
+        return True
+
+    # Check for global view permission
+    if user.has_permission("investigations:view_all"):
+        return True
+
+    # Check direct assignment
+    if investigation.assigned_to_user_id == user.id:
+        return True
+
+    # Check reviewer
+    if investigation.reviewer_user_id == user.id:
+        return True
+
+    # Check approver
+    if investigation.approved_by_id == user.id:
+        return True
+
+    return False
+
+
+@router.get("/{investigation_id}/timeline", response_model=TimelineListResponse)
+async def get_investigation_timeline(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+):
+    """Get timeline of revision events for an investigation.
+
+    Returns events in deterministic order: created_at DESC, then id DESC.
+    Supports filtering by event_type and pagination.
+    """
+    request_id = "N/A"
+
+    # Validate investigation exists
+    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    inv_result = await db.execute(inv_query)
+    investigation = inv_result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    if not _user_can_access_investigation(current_user, investigation):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Build query for timeline events
+    query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
+
+    # Apply event_type filter if provided
+    if event_type:
+        query = query.where(InvestigationRevisionEvent.event_type == event_type)
+
+    # Get total count before pagination
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Deterministic ordering: created_at DESC, id DESC
+    query = query.order_by(
+        desc(InvestigationRevisionEvent.created_at),
+        desc(InvestigationRevisionEvent.id),
+    )
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    result = await db.execute(query)
+    events = list(result.scalars().all())
+
+    return TimelineListResponse(
+        items=[
+            TimelineEventResponse(
+                id=event.id,
+                created_at=event.created_at,
+                event_type=event.event_type,
+                field_path=event.field_path,
+                old_value=event.old_value,
+                new_value=event.new_value,
+                actor_id=event.actor_id,
+                version=event.version,
+                event_metadata=event.event_metadata,
+            )
+            for event in events
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        investigation_id=investigation_id,
+    )
+
+
+@router.get("/{investigation_id}/comments", response_model=CommentListResponse)
+async def get_investigation_comments(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+):
+    """Get list of comments on an investigation.
+
+    Returns comments in deterministic order: created_at DESC, id DESC.
+    Excludes soft-deleted comments by default.
+
+    Security:
+    - include_deleted=true requires superuser or 'investigations:comments:read_deleted' permission
+    """
+    request_id = "N/A"
+
+    # SECURITY: include_deleted requires admin/superuser permission
+    if include_deleted:
+        has_deleted_access = current_user.is_superuser or current_user.has_permission(
+            "investigations:comments:read_deleted"
+        )
+        if not has_deleted_access:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error_code": "FORBIDDEN",
+                    "message": "Permission 'investigations:comments:read_deleted' required to view deleted comments",
+                    "request_id": request_id,
+                },
+            )
+
+    # Validate investigation exists and user has access
+    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    inv_result = await db.execute(inv_query)
+    investigation = inv_result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    # Users can access if: superuser, assigned_to, reviewer, or has investigations:view_all
+    if not _user_can_access_investigation(current_user, investigation):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Build query for comments
+    query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
+
+    # Exclude soft-deleted by default
+    if not include_deleted:
+        query = query.where(InvestigationComment.deleted_at.is_(None))
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Deterministic ordering: created_at DESC, id DESC
+    query = query.order_by(
+        desc(InvestigationComment.created_at),
+        desc(InvestigationComment.id),
+    )
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    result = await db.execute(query)
+    comments = list(result.scalars().all())
+
+    return CommentListResponse(
+        items=[
+            CommentResponse(
+                id=comment.id,
+                created_at=comment.created_at,
+                content=comment.content,
+                author_id=comment.author_id,
+                section_id=comment.section_id,
+                field_id=comment.field_id,
+                parent_comment_id=comment.parent_comment_id,
+            )
+            for comment in comments
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        investigation_id=investigation_id,
+    )
+
+
+@router.get("/{investigation_id}/packs", response_model=PackListResponse)
+async def get_investigation_packs(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+):
+    """Get list of customer packs generated for an investigation.
+
+    Returns pack summaries (without full content) in deterministic order:
+    created_at DESC, id DESC. Full pack content should be fetched separately.
+    """
+    request_id = "N/A"
+
+    # Validate investigation exists
+    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    inv_result = await db.execute(inv_query)
+    investigation = inv_result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    if not _user_can_access_investigation(current_user, investigation):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # Build query for packs
+    query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Deterministic ordering: created_at DESC, id DESC
+    query = query.order_by(
+        desc(InvestigationCustomerPack.created_at),
+        desc(InvestigationCustomerPack.id),
+    )
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    result = await db.execute(query)
+    packs = list(result.scalars().all())
+
+    return PackListResponse(
+        items=[
+            CustomerPackSummaryResponse(
+                id=pack.id,
+                created_at=pack.created_at,
+                pack_uuid=pack.pack_uuid,
+                audience=pack.audience.value,
+                checksum_sha256=pack.checksum_sha256,
+                generated_by_id=pack.generated_by_id,
+                expires_at=pack.expires_at,
+            )
+            for pack in packs
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        investigation_id=investigation_id,
+    )
+
+
+# Closure validation reason codes
+class ClosureReasonCode:
+    """Stable reason codes for closure validation failures."""
+
+    TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND"
+    MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
+    MISSING_REQUIRED_SECTION = "MISSING_REQUIRED_SECTION"
+    INVALID_ARRAY_EMPTY = "INVALID_ARRAY_EMPTY"
+    LEVEL_NOT_SET = "LEVEL_NOT_SET"
+    STATUS_NOT_COMPLETE = "STATUS_NOT_COMPLETE"
+
+
+@router.get("/{investigation_id}/closure-validation", response_model=ClosureValidationResponse)
+async def validate_investigation_closure(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Validate whether an investigation can be closed.
+
+    Performs deterministic, template-driven validation:
+    - Checks investigation level (LOW/MEDIUM/HIGH)
+    - Validates required sections based on template structure
+    - Validates required fields within each section
+    - Returns specific reason codes for any blockers
+
+    Returns:
+        status: "OK" if closeable, "BLOCKED" if not
+        reason_codes: List of blocking reasons (stable strings)
+        missing_fields: List of field paths that are missing
+    """
+    request_id = "N/A"
+    checked_at = datetime.now(timezone.utc)
+
+    # Get investigation with template
+    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    inv_result = await db.execute(inv_query)
+    investigation = inv_result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    # AUTHZ: Check user access to investigation
+    if not _user_can_access_investigation(current_user, investigation):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation {investigation_id} not found",
+                "request_id": request_id,
+            },
+        )
+
+    reason_codes: List[str] = []
+    missing_fields: List[str] = []
+
+    # Get template
+    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation.template_id)
+    template_result = await db.execute(template_query)
+    template = template_result.scalar_one_or_none()
+
+    # Helper to get level as string value
+    def get_level_str(level: object) -> str | None:
+        if level is None:
+            return None
+        # Handle both enum and string values
+        if hasattr(level, "value"):
+            return str(level.value)
+        return str(level)
+
+    level_str = get_level_str(investigation.level)
+
+    if not template:
+        return ClosureValidationResponse(
+            status="BLOCKED",
+            reason_codes=[ClosureReasonCode.TEMPLATE_NOT_FOUND],
+            missing_fields=[],
+            checked_at_utc=checked_at,
+            investigation_id=investigation_id,
+            investigation_level=level_str,
+        )
+
+    # Check if level is set (required for section gating)
+    if not investigation.level:
+        reason_codes.append(ClosureReasonCode.LEVEL_NOT_SET)
+
+    # Get investigation data
+    data: dict = dict(investigation.data) if investigation.data else {}
+
+    # Get required sections based on level
+    # LOW: sections 1-3, MEDIUM: sections 1-4, HIGH: sections 1-6
+    level_section_counts = {
+        "low": 3,
+        "medium": 4,
+        "high": 6,
+    }
+    max_sections = level_section_counts.get(level_str or "high", 6)
+
+    # Validate template structure
+    structure: dict = dict(template.structure) if template.structure else {}
+    sections = structure.get("sections", [])
+
+    for i, section in enumerate(sections):
+        # Skip sections beyond the level requirement
+        if i >= max_sections:
+            break
+
+        section_id = section.get("id", f"section_{i}")
+        section_data = data.get(section_id, {})
+
+        # Check if section exists in data
+        if section_id not in data:
+            # Check if section has any required fields
+            fields = section.get("fields", [])
+            has_required = any(f.get("required", False) for f in fields)
+            if has_required:
+                reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
+                missing_fields.append(section_id)
+            continue
+
+        # Validate required fields within section
+        fields = section.get("fields", [])
+        for field in fields:
+            field_id = field.get("id")
+            is_required = field.get("required", False)
+            field_type = field.get("type", "text")
+
+            if not is_required:
+                continue
+
+            field_path = f"{section_id}.{field_id}"
+            field_value = section_data.get(field_id)
+
+            # Check if field is missing or empty
+            if field_value is None:
+                reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
+                missing_fields.append(field_path)
+            elif field_type == "text" and isinstance(field_value, str) and not field_value.strip():
+                reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
+                missing_fields.append(field_path)
+            elif field_type == "array" and isinstance(field_value, list) and len(field_value) == 0:
+                reason_codes.append(ClosureReasonCode.INVALID_ARRAY_EMPTY)
+                missing_fields.append(field_path)
+
+    # Deduplicate reason codes (keep unique)
+    unique_reason_codes = list(dict.fromkeys(reason_codes))
+
+    status = "OK" if not unique_reason_codes else "BLOCKED"
+
+    return ClosureValidationResponse(
+        status=status,
+        reason_codes=unique_reason_codes,
+        missing_fields=missing_fields,
+        checked_at_utc=checked_at,
+        investigation_id=investigation_id,
+        investigation_level=level_str,
+    )
