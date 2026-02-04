@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.investigation import (
     ClosureValidationResponse,
+    CommentCreateRequest,
     CommentListResponse,
     CommentResponse,
     CreateFromRecordRequest,
@@ -775,20 +776,23 @@ async def autosave_investigation(
     return investigation
 
 
-@router.post("/{investigation_id}/comments", status_code=201)
+@router.post("/{investigation_id}/comments", status_code=201, response_model=CommentResponse)
 async def add_comment(
     investigation_id: int,
-    content: str,
+    request_body: CommentCreateRequest,
     db: DbSession,
     current_user: CurrentUser,
-    section_id: Optional[str] = None,
-    field_id: Optional[str] = None,
-    parent_comment_id: Optional[int] = None,
 ):
     """Add an internal comment to an investigation.
 
     Comments are INTERNAL ONLY - never included in customer packs.
     Can be attached to specific sections/fields and support threading.
+    
+    Request body:
+        - body: Comment content (required)
+        - section_id: Section to attach to (optional)
+        - field_id: Field to attach to (optional)
+        - parent_comment_id: For threading (optional)
     """
     from src.domain.models.investigation import InvestigationComment
     from src.services.investigation_service import InvestigationService
@@ -811,9 +815,9 @@ async def add_comment(
         )
 
     # Validate parent comment if provided
-    if parent_comment_id:
+    if request_body.parent_comment_id:
         parent_query = select(InvestigationComment).where(
-            InvestigationComment.id == parent_comment_id,
+            InvestigationComment.id == request_body.parent_comment_id,
             InvestigationComment.investigation_id == investigation_id,
             InvestigationComment.deleted_at.is_(None),
         )
@@ -824,18 +828,18 @@ async def add_comment(
                 status_code=404,
                 detail={
                     "error_code": "PARENT_COMMENT_NOT_FOUND",
-                    "message": f"Parent comment {parent_comment_id} not found",
+                    "message": f"Parent comment {request_body.parent_comment_id} not found",
                     "request_id": request_id,
                 },
             )
 
-    # Create comment
+    # Create comment (map 'body' from request to 'content' in model)
     comment = InvestigationComment(
         investigation_id=investigation_id,
-        content=content,
-        section_id=section_id,
-        field_id=field_id,
-        parent_comment_id=parent_comment_id,
+        content=request_body.body,  # Frontend sends 'body', we store as 'content'
+        section_id=request_body.section_id,
+        field_id=request_body.field_id,
+        parent_comment_id=request_body.parent_comment_id,
         author_id=current_user.id,
     )
 

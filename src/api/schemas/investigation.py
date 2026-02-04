@@ -250,6 +250,18 @@ class TimelineListResponse(BaseModel):
     investigation_id: int
 
 
+class CommentCreateRequest(BaseModel):
+    """Request schema for adding a comment to an investigation.
+    
+    Accepts 'body' field to match frontend API contract.
+    """
+
+    body: str = Field(..., min_length=1, max_length=10000, description="Comment content")
+    section_id: Optional[str] = Field(None, description="Section to attach comment to")
+    field_id: Optional[str] = Field(None, description="Field to attach comment to")
+    parent_comment_id: Optional[int] = Field(None, description="Parent comment ID for threading")
+
+
 class CommentResponse(BaseModel):
     """Single comment on an investigation."""
 
