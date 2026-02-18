@@ -56,9 +56,18 @@ from src.services.reference_number import ReferenceNumberService
 router = APIRouter()
 
 TEMPLATE_UPDATE_ALLOWED_FIELDS = {
-    "name", "description", "category", "audit_type", "frequency",
-    "scoring_method", "passing_score", "allow_offline", "require_gps",
-    "require_signature", "require_approval", "auto_create_findings",
+    "name",
+    "description",
+    "category",
+    "audit_type",
+    "frequency",
+    "scoring_method",
+    "passing_score",
+    "allow_offline",
+    "require_gps",
+    "require_signature",
+    "require_approval",
+    "auto_create_findings",
 }
 
 
@@ -131,8 +140,11 @@ async def create_template(
     await db.refresh(template)
 
     await record_audit_event(
-        db, event_type="audit_template.created", entity_type="audit_template",
-        entity_id=str(template.id), action="create",
+        db,
+        event_type="audit_template.created",
+        entity_type="audit_template",
+        entity_id=str(template.id),
+        action="create",
         description=f"Template '{template.name}' created",
         actor_user_id=current_user.id,
     )
@@ -204,8 +216,11 @@ async def update_template(
 
     if changed_fields:
         await record_audit_event(
-            db, event_type="audit_template.updated", entity_type="audit_template",
-            entity_id=str(template.id), action="update",
+            db,
+            event_type="audit_template.updated",
+            entity_type="audit_template",
+            entity_id=str(template.id),
+            action="update",
             description=f"Template '{template.name}' updated: {', '.join(changed_fields)}",
             actor_user_id=current_user.id,
             payload={"changed_fields": changed_fields},
@@ -247,8 +262,11 @@ async def publish_template(
     await db.refresh(template)
 
     await record_audit_event(
-        db, event_type="audit_template.published", entity_type="audit_template",
-        entity_id=str(template.id), action="publish",
+        db,
+        event_type="audit_template.published",
+        entity_type="audit_template",
+        entity_id=str(template.id),
+        action="publish",
         description=f"Template '{template.name}' published (v{template.version}, {question_count} questions)",
         actor_user_id=current_user.id,
     )
@@ -372,8 +390,11 @@ async def delete_template(
     await db.commit()
 
     await record_audit_event(
-        db, event_type="audit_template.deleted", entity_type="audit_template",
-        entity_id=str(template_id), action="delete",
+        db,
+        event_type="audit_template.deleted",
+        entity_type="audit_template",
+        entity_id=str(template_id),
+        action="delete",
         description=f"Template '{template.name}' soft-deleted",
         actor_user_id=current_user.id,
     )
