@@ -140,8 +140,8 @@ const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[
           { id: 'q-14', text: 'Is the coolant level adequate?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
           { id: 'q-15', text: 'Is the brake fluid level adequate?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'critical', evidenceRequired: false },
           { id: 'q-16', text: 'Is the screenwash fluid topped up?', type: 'yes_no', required: true, weight: 0.5, riskLevel: 'low', evidenceRequired: false },
-          { id: 'q-17', text: 'Are there any dashboard warning lights illuminated?', type: 'yes_no_na', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'If any warning lights are on, photograph and report immediately.' },
-          { id: 'q-18', text: 'Current odometer reading (miles)', type: 'numeric', required: true, weight: 0, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-17', text: 'Are there any dashboard warning lights illuminated?', type: 'yes_no', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'If any warning lights are on, photograph and report immediately.' },
+          { id: 'q-18', text: 'Current odometer reading (miles)', type: 'number', required: true, weight: 0, riskLevel: 'low', evidenceRequired: false },
         ],
       },
       {
@@ -206,7 +206,7 @@ const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[
         questions: [
           { id: 'q-12', text: 'Are 5S audits conducted regularly?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
           { id: 'q-13', text: 'Is there evidence of continuous improvement activities?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
-          { id: 'q-14', text: 'Overall 5S score for this area', type: 'scale_1_5', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-14', text: 'Overall 5S score for this area', type: 'score', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
         ],
       },
     ];

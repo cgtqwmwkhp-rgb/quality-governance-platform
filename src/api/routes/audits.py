@@ -1,4 +1,11 @@
-"""Audits & Inspections API routes."""
+"""Audits & Inspections API routes.
+
+Enterprise-grade audit template and execution management with:
+- Full CRUD for templates, sections, questions
+- Audit event logging on all mutations
+- Mass assignment protection on update endpoints
+- Ownership verification on mutations
+"""
 
 from datetime import datetime, timezone
 from typing import Optional
@@ -43,9 +50,25 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
+from src.domain.services.audit_service import record_audit_event
 from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
+
+TEMPLATE_UPDATE_ALLOWED_FIELDS = {
+    "name",
+    "description",
+    "category",
+    "audit_type",
+    "frequency",
+    "scoring_method",
+    "passing_score",
+    "allow_offline",
+    "require_gps",
+    "require_signature",
+    "require_approval",
+    "auto_create_findings",
+}
 
 
 # ============== Template Endpoints ==============
@@ -116,6 +139,16 @@ async def create_template(
     await db.commit()
     await db.refresh(template)
 
+    await record_audit_event(
+        db,
+        event_type="audit_template.created",
+        entity_type="audit_template",
+        entity_id=str(template.id),
+        action="create",
+        description=f"Template '{template.name}' created",
+        actor_user_id=current_user.id,
+    )
+
     return AuditTemplateResponse.model_validate(template)
 
 
@@ -169,11 +202,29 @@ async def update_template(
         template.is_published = False
 
     update_data = template_data.model_dump(exclude_unset=True, exclude={"standard_ids"})
-    for field, value in update_data.items():
-        setattr(template, field, value)
+    # Mass assignment protection: only allow whitelisted fields
+    safe_data = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}
+    changed_fields = []
+    for field, value in safe_data.items():
+        old_value = getattr(template, field, None)
+        if old_value != value:
+            changed_fields.append(field)
+            setattr(template, field, value)
 
     await db.commit()
     await db.refresh(template)
+
+    if changed_fields:
+        await record_audit_event(
+            db,
+            event_type="audit_template.updated",
+            entity_type="audit_template",
+            entity_id=str(template.id),
+            action="update",
+            description=f"Template '{template.name}' updated: {', '.join(changed_fields)}",
+            actor_user_id=current_user.id,
+            payload={"changed_fields": changed_fields},
+        )
 
     return AuditTemplateResponse.model_validate(template)
 
@@ -210,6 +261,16 @@ async def publish_template(
     await db.commit()
     await db.refresh(template)
 
+    await record_audit_event(
+        db,
+        event_type="audit_template.published",
+        entity_type="audit_template",
+        entity_id=str(template.id),
+        action="publish",
+        description=f"Template '{template.name}' published (v{template.version}, {question_count} questions)",
+        actor_user_id=current_user.id,
+    )
+
     return AuditTemplateResponse.model_validate(template)
 
 
@@ -236,37 +297,43 @@ async def clone_template(
             detail="Template not found",
         )
 
-    # Generate reference number for the cloned template
-    from src.services.reference_number import ReferenceNumberService
+    reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
 
-    reference_number = await ReferenceNumberService.generate(db, "TPL", AuditTemplate)
-
-    # Create a new template with copied attributes
     cloned_template = AuditTemplate(
         name=f"Copy of {original.name}",
         description=original.description,
         category=original.category,
         audit_type=original.audit_type,
+        frequency=original.frequency,
         scoring_method=original.scoring_method,
         passing_score=original.passing_score,
-        is_active=original.is_active,
-        is_published=False,  # Clones start as unpublished
+        allow_offline=original.allow_offline,
+        require_gps=original.require_gps,
+        require_signature=original.require_signature,
+        require_approval=original.require_approval,
+        auto_create_findings=original.auto_create_findings,
+        standard_ids_json=original.standard_ids_json,
+        is_active=True,
+        is_published=False,
         created_by_id=current_user.id,
         reference_number=reference_number,
     )
     db.add(cloned_template)
-    await db.flush()  # Get the ID for the cloned template
+    await db.flush()
 
-    # Clone sections and questions
     for original_section in original.sections:
         cloned_section = AuditSection(
             template_id=cloned_template.id,
             title=original_section.title,
             description=original_section.description,
             sort_order=original_section.sort_order,
+            weight=original_section.weight,
+            is_repeatable=original_section.is_repeatable,
+            max_repeats=original_section.max_repeats,
+            is_active=original_section.is_active,
         )
         db.add(cloned_section)
-        await db.flush()  # Get the ID for the cloned section
+        await db.flush()
 
         for original_question in original_section.questions:
             cloned_question = AuditQuestion(
@@ -274,9 +341,26 @@ async def clone_template(
                 section_id=cloned_section.id,
                 question_text=original_question.question_text,
                 question_type=original_question.question_type,
+                description=original_question.description,
+                help_text=original_question.help_text,
                 is_required=original_question.is_required,
+                allow_na=original_question.allow_na,
+                is_active=original_question.is_active,
+                max_score=original_question.max_score,
                 weight=original_question.weight,
                 options_json=original_question.options_json,
+                min_value=original_question.min_value,
+                max_value=original_question.max_value,
+                decimal_places=original_question.decimal_places,
+                min_length=original_question.min_length,
+                max_length=original_question.max_length,
+                evidence_requirements_json=original_question.evidence_requirements_json,
+                conditional_logic_json=original_question.conditional_logic_json,
+                clause_ids_json=original_question.clause_ids_json,
+                control_ids_json=original_question.control_ids_json,
+                risk_category=original_question.risk_category,
+                risk_weight=original_question.risk_weight,
+                sort_order=original_question.sort_order,
             )
             db.add(cloned_question)
 
@@ -304,6 +388,16 @@ async def delete_template(
 
     template.is_active = False
     await db.commit()
+
+    await record_audit_event(
+        db,
+        event_type="audit_template.deleted",
+        entity_type="audit_template",
+        entity_id=str(template_id),
+        action="delete",
+        description=f"Template '{template.name}' soft-deleted",
+        actor_user_id=current_user.id,
+    )
 
 
 # ============== Section Endpoints ==============

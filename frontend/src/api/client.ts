@@ -544,9 +544,50 @@ export interface AuditTemplate {
   description?: string
   category?: string
   audit_type: string
+  frequency?: string
+  version: number
+  scoring_method: string
+  passing_score?: number
+  allow_offline: boolean
+  require_gps: boolean
+  require_signature: boolean
+  require_approval: boolean
+  auto_create_findings: boolean
   is_active: boolean
   is_published: boolean
+  created_by_id?: number
   created_at: string
+  updated_at: string
+}
+
+export interface AuditTemplateCreate {
+  name: string
+  description?: string
+  category?: string
+  audit_type?: string
+  frequency?: string
+  scoring_method?: string
+  passing_score?: number
+  allow_offline?: boolean
+  require_gps?: boolean
+  require_signature?: boolean
+  require_approval?: boolean
+  auto_create_findings?: boolean
+}
+
+export interface AuditTemplateUpdate {
+  name?: string
+  description?: string
+  category?: string
+  audit_type?: string
+  frequency?: string
+  scoring_method?: string
+  passing_score?: number
+  allow_offline?: boolean
+  require_gps?: boolean
+  require_signature?: boolean
+  require_approval?: boolean
+  auto_create_findings?: boolean
 }
 
 export interface AuditRunCreate {
@@ -568,25 +609,97 @@ export interface AuditRunUpdate {
 
 export interface AuditTemplateDetail {
   id: number
+  reference_number?: string
   name: string
   description?: string
   category?: string
+  audit_type: string
+  frequency?: string
   version: number
+  scoring_method: string
+  passing_score?: number
+  allow_offline: boolean
+  require_gps: boolean
+  require_signature: boolean
+  require_approval: boolean
+  auto_create_findings: boolean
   is_published: boolean
   is_active: boolean
-  passing_score?: number
+  created_by_id?: number
   sections: AuditSection[]
-  questions: AuditQuestion[]
+  section_count: number
+  question_count: number
   created_at: string
+  updated_at: string
+}
+
+export interface AuditSectionCreate {
+  title: string
+  description?: string
+  sort_order?: number
+  weight?: number
+}
+
+export interface AuditSectionUpdate {
+  title?: string
+  description?: string
+  sort_order?: number
+  weight?: number
+}
+
+export interface QuestionOptionBase {
+  value: string
+  label: string
+  score?: number
+  is_correct?: boolean
+  triggers_finding?: boolean
+}
+
+export interface AuditQuestionCreate {
+  section_id?: number
+  question_text: string
+  question_type: string
+  description?: string
+  help_text?: string
+  is_required?: boolean
+  allow_na?: boolean
+  max_score?: number
+  weight?: number
+  options?: QuestionOptionBase[]
+  sort_order?: number
+  risk_category?: string
+  risk_weight?: number
+}
+
+export interface AuditQuestionUpdate {
+  question_text?: string
+  question_type?: string
+  description?: string
+  help_text?: string
+  is_required?: boolean
+  allow_na?: boolean
+  max_score?: number
+  weight?: number
+  options?: QuestionOptionBase[]
+  sort_order?: number
+  risk_category?: string
+  risk_weight?: number
+  is_active?: boolean
 }
 
 export interface AuditSection {
   id: number
   template_id: number
-  name: string
+  title: string
   description?: string
   sort_order: number
+  weight: number
+  is_repeatable: boolean
+  max_repeats?: number
   is_active: boolean
+  questions: AuditQuestion[]
+  created_at: string
+  updated_at: string
 }
 
 export interface AuditQuestion {
@@ -594,12 +707,20 @@ export interface AuditQuestion {
   template_id: number
   section_id?: number
   question_text: string
-  question_type: 'yes_no' | 'score' | 'text' | 'multi_choice'
-  required: boolean
-  max_score?: number
-  options?: string[]
-  sort_order: number
+  question_type: string
+  description?: string
+  help_text?: string
+  is_required: boolean
+  allow_na: boolean
   is_active: boolean
+  max_score?: number
+  weight: number
+  options_json?: QuestionOptionBase[]
+  sort_order: number
+  risk_category?: string
+  risk_weight?: number
+  created_at: string
+  updated_at: string
 }
 
 export interface AuditResponse {
@@ -861,11 +982,42 @@ export const risksApi = {
 }
 
 export const auditsApi = {
-  // Templates
-  listTemplates: (page = 1, size = 10) =>
-    api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?page=${page}&size=${size}`),
+  // Templates - Full CRUD
+  listTemplates: (page = 1, size = 20, params?: { search?: string; category?: string; is_published?: boolean }) => {
+    const searchParams = new URLSearchParams({ page: String(page), page_size: String(size) })
+    if (params?.search) searchParams.set('search', params.search)
+    if (params?.category) searchParams.set('category', params.category)
+    if (params?.is_published !== undefined) searchParams.set('is_published', String(params.is_published))
+    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${searchParams}`)
+  },
   getTemplate: (id: number) =>
     api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
+  createTemplate: (data: AuditTemplateCreate) =>
+    api.post<AuditTemplate>('/api/v1/audits/templates/', data),
+  updateTemplate: (id: number, data: AuditTemplateUpdate) =>
+    api.patch<AuditTemplate>(`/api/v1/audits/templates/${id}`, data),
+  publishTemplate: (id: number) =>
+    api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/publish`),
+  cloneTemplate: (id: number) =>
+    api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/clone`),
+  deleteTemplate: (id: number) =>
+    api.delete(`/api/v1/audits/templates/${id}`),
+
+  // Sections
+  createSection: (templateId: number, data: AuditSectionCreate) =>
+    api.post<AuditSection>(`/api/v1/audits/templates/${templateId}/sections`, data),
+  updateSection: (sectionId: number, data: AuditSectionUpdate) =>
+    api.patch<AuditSection>(`/api/v1/audits/sections/${sectionId}`, data),
+  deleteSection: (sectionId: number) =>
+    api.delete(`/api/v1/audits/sections/${sectionId}`),
+
+  // Questions
+  createQuestion: (templateId: number, data: AuditQuestionCreate) =>
+    api.post<AuditQuestion>(`/api/v1/audits/templates/${templateId}/questions`, data),
+  updateQuestion: (questionId: number, data: AuditQuestionUpdate) =>
+    api.patch<AuditQuestion>(`/api/v1/audits/questions/${questionId}`, data),
+  deleteQuestion: (questionId: number) =>
+    api.delete(`/api/v1/audits/questions/${questionId}`),
 
   // Runs
   listRuns: (page = 1, size = 10) =>
@@ -881,7 +1033,7 @@ export const auditsApi = {
   completeRun: (id: number) =>
     api.post<AuditRun>(`/api/v1/audits/runs/${id}/complete`),
 
-  // Responses (recording answers to questions)
+  // Responses
   createResponse: (runId: number, data: AuditResponseCreate) =>
     api.post<AuditResponse>(`/api/v1/audits/runs/${runId}/responses`, data),
   updateResponse: (responseId: number, data: AuditResponseUpdate) =>

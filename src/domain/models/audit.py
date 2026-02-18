@@ -100,6 +100,10 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
         back_populates="template",
     )
 
+    @property
+    def standard_ids(self) -> list | None:
+        return self.standard_ids_json
+
     def __repr__(self) -> str:
         return f"<AuditTemplate(id={self.id}, name='{self.name}', v{self.version})>"
 
@@ -193,6 +197,26 @@ class AuditQuestion(Base, TimestampMixin):
     # Relationships
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="questions")
     section: Mapped[Optional["AuditSection"]] = relationship("AuditSection", back_populates="questions")
+
+    @property
+    def options(self) -> list | None:
+        return self.options_json
+
+    @property
+    def evidence_requirements(self) -> dict | None:
+        return self.evidence_requirements_json
+
+    @property
+    def conditional_logic(self) -> list | None:
+        return self.conditional_logic_json
+
+    @property
+    def clause_ids(self) -> list | None:
+        return self.clause_ids_json
+
+    @property
+    def control_ids(self) -> list | None:
+        return self.control_ids_json
 
     def __repr__(self) -> str:
         return f"<AuditQuestion(id={self.id}, type='{self.question_type}')>"
@@ -317,6 +341,18 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
+
+    @property
+    def clause_ids(self) -> list | None:
+        return self.clause_ids_json
+
+    @property
+    def control_ids(self) -> list | None:
+        return self.control_ids_json
+
+    @property
+    def risk_ids(self) -> list | None:
+        return self.risk_ids_json
 
     def __repr__(self) -> str:
         return f"<AuditFinding(id={self.id}, ref='{self.reference_number}', severity='{self.severity}')>"
