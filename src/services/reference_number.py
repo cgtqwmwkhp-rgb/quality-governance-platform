@@ -12,6 +12,7 @@ class ReferenceNumberService:
 
     # Prefix mapping for different record types
     PREFIXES = {
+        "audit_template": "TPL",
         "audit_run": "AUD",
         "audit_finding": "FND",
         "risk": "RSK",

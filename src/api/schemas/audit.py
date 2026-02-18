@@ -367,6 +367,7 @@ class AuditResponseCreate(AuditResponseBase):
     """Schema for creating an Audit Response."""
 
     question_id: int
+    max_score: Optional[float] = None
 
 
 class AuditResponseUpdate(BaseModel):
@@ -380,6 +381,7 @@ class AuditResponseUpdate(BaseModel):
     response_json: Optional[Dict[str, Any]] = None
     is_na: Optional[bool] = None
     score: Optional[float] = None
+    max_score: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -391,6 +393,7 @@ class AuditResponseResponse(AuditResponseBase):
     id: int
     run_id: int
     question_id: int
+    max_score: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 

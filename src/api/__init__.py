@@ -6,7 +6,6 @@ from src.api.routes import (
     actions,
     ai_intelligence,
     analytics,
-    audit_templates,
     audit_trail,
     auditor_competence,
     audits,
@@ -54,7 +53,6 @@ router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 router.include_router(users.router, prefix="/users", tags=["Users"])
 router.include_router(standards.router, prefix="/standards", tags=["Standards Library"])
 router.include_router(audits.router, prefix="/audits", tags=["Audits & Inspections"])
-router.include_router(audit_templates.router, prefix="/audit-templates", tags=["Audit Template Builder"])
 router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])

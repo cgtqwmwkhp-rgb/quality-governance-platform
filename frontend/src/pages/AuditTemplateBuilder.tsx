@@ -1,623 +1,725 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Save,
-  Plus,
-  Trash2,
-  GripVertical,
-  Copy,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  ToggleLeft,
-  ToggleRight,
-  Type,
-  Hash,
-  Calendar,
-  Camera,
-  FileSignature,
-  ListChecks,
-  Scale,
-  MessageSquare,
-  AlertTriangle,
-  Shield,
-  Leaf,
-  HardHat,
-  Zap,
-  Star,
-  Lock,
-  Unlock,
-  History,
-  Download,
-  Upload,
-  Layers,
-  Award,
-  FileText,
-  Sparkles,
+  ArrowLeft, Save, Plus, Trash2, GripVertical, Settings,
+  ChevronDown, ChevronRight, CheckCircle, ToggleLeft,
+  Type, Hash, Calendar, Camera, FileSignature, ListChecks, Scale,
+  MessageSquare, AlertTriangle, Shield, Leaf, HardHat, Zap, Star,
+  History, Download, Upload, Layers, Award, FileText,
+  Sparkles, Loader2, Eye, XCircle,
 } from 'lucide-react';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Textarea } from '../components/ui/Textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
+} from '../components/ui/Dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../components/ui/Select';
+import {
+  auditsApi,
+  AuditTemplateDetail, AuditSection as ApiSection,
+  AuditQuestion as ApiQuestion, AuditTemplateUpdate,
+} from '../api/client';
 import AITemplateGenerator from '../components/AITemplateGenerator';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type QuestionType = 
-  | 'yes_no' 
-  | 'yes_no_na' 
-  | 'scale_1_5' 
-  | 'scale_1_10' 
-  | 'text_short' 
-  | 'text_long' 
-  | 'numeric' 
-  | 'date' 
-  | 'photo' 
-  | 'signature' 
-  | 'multi_choice' 
-  | 'checklist'
-  | 'pass_fail';
-
-type ScoringMethod = 'weighted' | 'equal' | 'pass_fail' | 'points';
-
-interface QuestionOption {
-  id: string;
-  label: string;
-  value: string;
-  score?: number;
-  isCorrect?: boolean;
-}
-
-interface ConditionalLogic {
-  enabled: boolean;
-  showWhen: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
-  dependsOnQuestionId: string;
-  value: string;
-}
-
-interface Question {
-  id: string;
-  text: string;
-  description?: string;
-  type: QuestionType;
-  required: boolean;
-  weight: number;
-  options?: QuestionOption[];
-  conditionalLogic?: ConditionalLogic;
-  evidenceRequired: boolean;
-  evidenceType?: 'photo' | 'document' | 'signature' | 'any';
-  isoClause?: string;
-  riskLevel?: 'critical' | 'high' | 'medium' | 'low';
-  guidance?: string;
-  failureTriggersAction: boolean;
-  tags?: string[];
-}
-
-interface Section {
-  id: string;
-  title: string;
-  description?: string;
-  icon?: string;
-  color?: string;
-  questions: Question[];
-  isExpanded: boolean;
-  weight: number;
-  order: number;
-}
-
-interface AuditTemplate {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  status: 'draft' | 'published' | 'archived';
-  category: string;
-  subcategory?: string;
-  isoStandards: string[];
-  sections: Section[];
-  scoringMethod: ScoringMethod;
-  passThreshold: number;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
-  tags: string[];
-  estimatedDuration: number; // minutes
-  isLocked: boolean;
-}
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
+type QuestionType =
+  | 'yes_no' | 'pass_fail' | 'score' | 'rating'
+  | 'text' | 'textarea' | 'number'
+  | 'date' | 'datetime' | 'photo' | 'signature'
+  | 'radio' | 'dropdown' | 'checkbox' | 'file';
+
+const VALID_QUESTION_TYPES = new Set<string>([
+  'yes_no', 'pass_fail', 'score', 'rating',
+  'text', 'textarea', 'number',
+  'date', 'datetime', 'photo', 'signature',
+  'radio', 'dropdown', 'checkbox', 'file',
+]);
+
 const QUESTION_TYPES: { type: QuestionType; label: string; icon: React.ElementType; description: string }[] = [
   { type: 'yes_no', label: 'Yes / No', icon: ToggleLeft, description: 'Binary choice' },
-  { type: 'yes_no_na', label: 'Yes / No / N/A', icon: ToggleRight, description: 'With not applicable option' },
   { type: 'pass_fail', label: 'Pass / Fail', icon: CheckCircle, description: 'Compliance check' },
-  { type: 'scale_1_5', label: 'Scale 1-5', icon: Star, description: 'Rating scale' },
-  { type: 'scale_1_10', label: 'Scale 1-10', icon: Scale, description: 'Detailed rating' },
-  { type: 'multi_choice', label: 'Multiple Choice', icon: ListChecks, description: 'Select one option' },
-  { type: 'checklist', label: 'Checklist', icon: CheckCircle, description: 'Multiple selections' },
-  { type: 'text_short', label: 'Short Text', icon: Type, description: 'Single line response' },
-  { type: 'text_long', label: 'Long Text', icon: MessageSquare, description: 'Multi-line response' },
-  { type: 'numeric', label: 'Numeric', icon: Hash, description: 'Number input' },
+  { type: 'score', label: 'Score (1–5)', icon: Star, description: 'Rating scale' },
+  { type: 'rating', label: 'Score (1–10)', icon: Scale, description: 'Detailed rating' },
+  { type: 'radio', label: 'Multiple Choice', icon: ListChecks, description: 'Select one option' },
+  { type: 'checkbox', label: 'Checklist', icon: CheckCircle, description: 'Multiple selections' },
+  { type: 'dropdown', label: 'Dropdown', icon: ChevronDown, description: 'Select from list' },
+  { type: 'text', label: 'Short Text', icon: Type, description: 'Single line response' },
+  { type: 'textarea', label: 'Long Text', icon: MessageSquare, description: 'Multi-line response' },
+  { type: 'number', label: 'Numeric', icon: Hash, description: 'Number input' },
   { type: 'date', label: 'Date', icon: Calendar, description: 'Date picker' },
   { type: 'photo', label: 'Photo', icon: Camera, description: 'Image capture' },
   { type: 'signature', label: 'Signature', icon: FileSignature, description: 'Digital signature' },
+  { type: 'file', label: 'File Upload', icon: Upload, description: 'Document attachment' },
 ];
 
 const CATEGORIES = [
-  { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
-  { id: 'safety', label: 'Health & Safety', icon: HardHat, color: 'orange' },
-  { id: 'environment', label: 'Environmental', icon: Leaf, color: 'green' },
-  { id: 'security', label: 'Security', icon: Shield, color: 'purple' },
-  { id: 'compliance', label: 'Regulatory Compliance', icon: FileText, color: 'red' },
-  { id: 'operational', label: 'Operational', icon: Zap, color: 'yellow' },
-  { id: 'custom', label: 'Custom', icon: Layers, color: 'gray' },
-];
-
-const ISO_STANDARDS = [
-  { id: 'iso9001', label: 'ISO 9001:2015', description: 'Quality Management' },
-  { id: 'iso14001', label: 'ISO 14001:2015', description: 'Environmental Management' },
-  { id: 'iso45001', label: 'ISO 45001:2018', description: 'Occupational Health & Safety' },
-  { id: 'iso27001', label: 'ISO 27001:2022', description: 'Information Security' },
-  { id: 'iso22000', label: 'ISO 22000:2018', description: 'Food Safety' },
-  { id: 'iso50001', label: 'ISO 50001:2018', description: 'Energy Management' },
-];
-
-const SECTION_COLORS = [
-  'from-blue-500 to-cyan-500',
-  'from-purple-500 to-pink-500',
-  'from-emerald-500 to-green-500',
-  'from-orange-500 to-amber-500',
-  'from-red-500 to-rose-500',
-  'from-indigo-500 to-violet-500',
+  { id: 'quality', label: 'Quality Management', icon: Award },
+  { id: 'safety', label: 'Health & Safety', icon: HardHat },
+  { id: 'environment', label: 'Environmental', icon: Leaf },
+  { id: 'security', label: 'Security', icon: Shield },
+  { id: 'compliance', label: 'Regulatory Compliance', icon: FileText },
+  { id: 'operational', label: 'Operational', icon: Zap },
+  { id: 'custom', label: 'Custom', icon: Layers },
 ];
 
 // ============================================================================
-// HELPER FUNCTIONS
+// QUESTION EDITOR
 // ============================================================================
 
-const generateId = () => Math.random().toString(36).substring(2, 11);
+interface QuestionEditorProps {
+  question: ApiQuestion;
+  sectionId: number;
+  templateId: number;
+  onUpdated: () => void;
+  onDeleted: () => void;
+}
 
-const createNewQuestion = (): Question => ({
-  id: generateId(),
-  text: '',
-  type: 'yes_no',
-  required: true,
-  weight: 1,
-  evidenceRequired: false,
-  failureTriggersAction: false,
-});
-
-const createNewSection = (order: number): Section => ({
-  id: generateId(),
-  title: `Section ${order}`,
-  questions: [],
-  isExpanded: true,
-  weight: 1,
-  order,
-  color: SECTION_COLORS[order % SECTION_COLORS.length],
-});
-
-// ============================================================================
-// COMPONENTS
-// ============================================================================
-
-// Question Type Selector
-const QuestionTypeSelector = ({ 
-  selectedType, 
-  onSelect 
-}: { 
-  selectedType: QuestionType; 
-  onSelect: (type: QuestionType) => void;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const selected = QUESTION_TYPES.find(t => t.type === selectedType);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white hover:bg-slate-600 transition-colors"
-      >
-        {selected && <selected.icon className="w-4 h-4 text-purple-400" />}
-        <span>{selected?.label}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-20 mt-1 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden">
-          <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-            {QUESTION_TYPES.map((type) => (
-              <button
-                key={type.type}
-                type="button"
-                onClick={() => {
-                  onSelect(type.type);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                  selectedType === type.type
-                    ? 'bg-purple-500/20 text-purple-300'
-                    : 'hover:bg-slate-700 text-white'
-                }`}
-              >
-                <type.icon className="w-4 h-4 text-purple-400" />
-                <div>
-                  <p className="text-sm font-medium">{type.label}</p>
-                  <p className="text-xs text-slate-400">{type.description}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Question Editor
-const QuestionEditor = ({
-  question,
-  onUpdate,
-  onDelete,
-  onDuplicate,
-}: {
-  question: Question;
-  onUpdate: (questionId: string, updates: Partial<Question>) => void;
-  onDelete: (questionId: string) => void;
-  onDuplicate: (questionId: string) => void;
-}) => {
+const QuestionEditor = React.memo(function QuestionEditor({
+  question, onUpdated, onDeleted,
+}: QuestionEditorProps) {
+  const [text, setText] = useState(question.question_text);
+  const [description, setDescription] = useState(question.description || '');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const handleOptionAdd = () => {
-    const newOptions = [
-      ...(question.options || []),
-      { id: generateId(), label: '', value: '', score: 0 }
-    ];
-    onUpdate(question.id, { options: newOptions });
-  };
+  useEffect(() => {
+    setText(question.question_text);
+    setDescription(question.description || '');
+  }, [question.question_text, question.description]);
 
-  const handleOptionUpdate = (optionId: string, updates: Partial<QuestionOption>) => {
-    const newOptions = (question.options || []).map(opt =>
-      opt.id === optionId ? { ...opt, ...updates } : opt
-    );
-    onUpdate(question.id, { options: newOptions });
-  };
+  const debouncedSave = useCallback((field: string, value: unknown) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await auditsApi.updateQuestion(question.id, { [field]: value });
+        onUpdated();
+      } catch (err) {
+        console.error('Failed to save question:', err);
+      }
+    }, 600);
+  }, [question.id, onUpdated]);
 
-  const handleOptionDelete = (optionId: string) => {
-    const newOptions = (question.options || []).filter(opt => opt.id !== optionId);
-    onUpdate(question.id, { options: newOptions });
-  };
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
 
-  const needsOptions = ['multi_choice', 'checklist'].includes(question.type);
+  const handleTypeChange = useCallback(async (newType: string) => {
+    setSaving(true);
+    try {
+      await auditsApi.updateQuestion(question.id, { question_type: newType });
+      onUpdated();
+    } catch (err) {
+      console.error('Failed to update question type:', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [question.id, onUpdated]);
+
+  const handleToggle = useCallback(async (field: string, value: boolean) => {
+    try {
+      await auditsApi.updateQuestion(question.id, { [field]: value });
+      onUpdated();
+    } catch (err) {
+      console.error('Failed to toggle:', err);
+    }
+  }, [question.id, onUpdated]);
+
+  const handleDelete = useCallback(async () => {
+    try {
+      await auditsApi.deleteQuestion(question.id);
+      onDeleted();
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error('Failed to delete question:', err);
+    }
+  }, [question.id, onDeleted]);
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 group">
-      {/* Header */}
-      <div className="flex items-start gap-3 mb-4">
-        <div className="p-1.5 bg-slate-700 rounded cursor-grab hover:bg-slate-600">
-          <GripVertical className="w-4 h-4 text-slate-400" />
-        </div>
-        
-        <div className="flex-1 space-y-3">
-          {/* Question Text */}
-          <input
-            type="text"
-            value={question.text}
-            onChange={(e) => onUpdate(question.id, { text: e.target.value })}
-            placeholder="Enter question text..."
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 text-sm"
-          />
-
-          {/* Description */}
-          <input
-            type="text"
-            value={question.description || ''}
-            onChange={(e) => onUpdate(question.id, { description: e.target.value })}
-            placeholder="Optional description or guidance..."
-            className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-purple-500 text-xs"
-          />
-
-          {/* Type and Settings Row */}
-          <div className="flex flex-wrap items-center gap-3">
-            <QuestionTypeSelector
-              selectedType={question.type}
-              onSelect={(type) => onUpdate(question.id, { type })}
-            />
-
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={question.required}
-                onChange={(e) => onUpdate(question.id, { required: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500"
-              />
-              Required
-            </label>
-
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={question.evidenceRequired}
-                onChange={(e) => onUpdate(question.id, { evidenceRequired: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500"
-              />
-              <Camera className="w-4 h-4" />
-              Evidence
-            </label>
-
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={question.failureTriggersAction}
-                onChange={(e) => onUpdate(question.id, { failureTriggersAction: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-red-500 focus:ring-red-500"
-              />
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              Auto-Action
-            </label>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Weight:</span>
-              <input
-                type="number"
-                value={question.weight}
-                onChange={(e) => onUpdate(question.id, { weight: parseFloat(e.target.value) || 1 })}
-                min="0"
-                max="10"
-                step="0.5"
-                className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white text-center"
-              />
-            </div>
-          </div>
-
-          {/* Options for multi-choice/checklist */}
-          {needsOptions && (
-            <div className="space-y-2 mt-3 pl-4 border-l-2 border-purple-500/30">
-              <p className="text-xs text-slate-400 font-medium">Options:</p>
-              {(question.options || []).map((option, idx) => (
-                <div key={option.id} className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 w-4">{idx + 1}.</span>
-                  <input
-                    type="text"
-                    value={option.label}
-                    onChange={(e) => handleOptionUpdate(option.id, { label: e.target.value, value: e.target.value })}
-                    placeholder="Option label..."
-                    className="flex-1 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white"
-                  />
-                  <input
-                    type="number"
-                    value={option.score || 0}
-                    onChange={(e) => handleOptionUpdate(option.id, { score: parseInt(e.target.value) || 0 })}
-                    placeholder="Score"
-                    className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white text-center"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleOptionDelete(option.id)}
-                    className="p-1 text-slate-400 hover:text-red-400"
-                  >
-                    <XCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={handleOptionAdd}
-                className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300"
-              >
-                <Plus className="w-3 h-3" /> Add Option
-              </button>
-            </div>
-          )}
-
-          {/* Advanced Settings */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300"
-          >
-            <Settings className="w-3 h-3" />
-            Advanced Settings
-            <ChevronRight className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
-          </button>
-
-          {showAdvanced && (
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-700/30 rounded-lg">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">ISO Clause</label>
-                <input
-                  type="text"
-                  value={question.isoClause || ''}
-                  onChange={(e) => onUpdate(question.id, { isoClause: e.target.value })}
-                  placeholder="e.g., 7.1.2"
-                  className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Risk Level</label>
-                <select
-                  value={question.riskLevel || ''}
-                  onChange={(e) => onUpdate(question.id, { riskLevel: e.target.value as Question['riskLevel'] })}
-                  className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white"
-                >
-                  <option value="">None</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-slate-400 mb-1">Auditor Guidance</label>
-                <textarea
-                  value={question.guidance || ''}
-                  onChange={(e) => onUpdate(question.id, { guidance: e.target.value })}
-                  placeholder="Tips for auditors on how to assess this item..."
-                  rows={2}
-                  className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white resize-none"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            onClick={() => onDuplicate(question.id)}
-            className="p-1.5 text-slate-400 hover:text-purple-400 rounded"
-            title="Duplicate"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(question.id)}
-            className="p-1.5 text-slate-400 hover:text-red-400 rounded"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Section Editor
-const SectionEditor = ({
-  section,
-  onUpdate,
-  onDelete,
-  onAddQuestion,
-  onUpdateQuestion,
-  onDeleteQuestion,
-  onDuplicateQuestion,
-}: {
-  section: Section;
-  onUpdate: (updates: Partial<Section>) => void;
-  onDelete: () => void;
-  onAddQuestion: () => void;
-  onUpdateQuestion: (questionId: string, updates: Partial<Question>) => void;
-  onDeleteQuestion: (questionId: string) => void;
-  onDuplicateQuestion: (questionId: string) => void;
-}) => {
-  return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
-      {/* Section Header */}
-      <div 
-        className={`bg-gradient-to-r ${section.color || 'from-purple-500 to-pink-500'} p-0.5`}
-      >
-        <div className="bg-slate-900 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-slate-800 rounded cursor-grab hover:bg-slate-700">
-              <GripVertical className="w-5 h-5 text-slate-400" />
-            </div>
-            
-            <button
-              type="button"
-              onClick={() => onUpdate({ isExpanded: !section.isExpanded })}
-              className="p-1"
+    <>
+      <Card className="group">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div
+              className="p-2 rounded-lg bg-surface text-muted-foreground mt-1"
+              aria-hidden="true"
             >
-              {section.isExpanded ? (
-                <ChevronDown className="w-5 h-5 text-white" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-white" />
-              )}
-            </button>
-
-            <div className="flex-1">
-              <input
-                type="text"
-                value={section.title}
-                onChange={(e) => onUpdate({ title: e.target.value })}
-                placeholder="Section title..."
-                className="w-full bg-transparent text-lg font-semibold text-white placeholder-slate-400 focus:outline-none"
-              />
-              <input
-                type="text"
-                value={section.description || ''}
-                onChange={(e) => onUpdate({ description: e.target.value })}
-                placeholder="Section description..."
-                className="w-full bg-transparent text-sm text-slate-400 placeholder-slate-500 focus:outline-none mt-1"
-              />
+              <GripVertical className="w-4 h-4" />
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-slate-800 rounded-lg text-xs text-slate-300">
-                {section.questions.length} questions
-              </span>
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-slate-400">Weight:</span>
-                <input
-                  type="number"
-                  value={section.weight}
-                  onChange={(e) => onUpdate({ weight: parseFloat(e.target.value) || 1 })}
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  className="w-14 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-sm text-white text-center"
+            <div className="flex-1 space-y-3">
+              <div>
+                <label htmlFor={`q-text-${question.id}`} className="sr-only">Question text</label>
+                <Input
+                  id={`q-text-${question.id}`}
+                  value={text}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    debouncedSave('question_text', e.target.value);
+                  }}
+                  placeholder="Enter question text..."
+                  aria-required="true"
                 />
               </div>
+
+              <div>
+                <label htmlFor={`q-desc-${question.id}`} className="sr-only">Question description</label>
+                <Input
+                  id={`q-desc-${question.id}`}
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    debouncedSave('description', e.target.value);
+                  }}
+                  placeholder="Optional description or guidance..."
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div>
+                  <label htmlFor={`q-type-${question.id}`} className="sr-only">Question type</label>
+                  <Select
+                    value={question.question_type}
+                    onValueChange={handleTypeChange}
+                  >
+                    <SelectTrigger className="w-[180px]" id={`q-type-${question.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUESTION_TYPES.map((type) => (
+                        <SelectItem key={type.type} value={type.type}>
+                          <span className="flex items-center gap-2">
+                            <type.icon className="w-4 h-4" />
+                            {type.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer min-h-[44px] px-2">
+                  <input
+                    type="checkbox"
+                    checked={question.is_required}
+                    onChange={(e) => handleToggle('is_required', e.target.checked)}
+                    className="w-4 h-4 rounded border-input bg-background text-primary focus:ring-primary"
+                  />
+                  Required
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer min-h-[44px] px-2">
+                  <input
+                    type="checkbox"
+                    checked={question.allow_na}
+                    onChange={(e) => handleToggle('allow_na', e.target.checked)}
+                    className="w-4 h-4 rounded border-input bg-background text-primary focus:ring-primary"
+                  />
+                  Allow N/A
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <label htmlFor={`q-weight-${question.id}`} className="text-sm text-muted-foreground">Weight:</label>
+                  <Input
+                    id={`q-weight-${question.id}`}
+                    type="number"
+                    value={question.weight}
+                    onChange={(e) => debouncedSave('weight', parseFloat(e.target.value) || 1)}
+                    min={0} max={10} step={0.5}
+                    className="w-20 text-center"
+                  />
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={onDelete}
-                className="p-1.5 text-slate-400 hover:text-red-400 rounded"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
+                aria-expanded={showAdvanced}
+              >
+                <Settings className="w-4 h-4" />
+                Advanced Settings
+                <ChevronRight className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
+              </button>
+
+              {showAdvanced && (
+                <Card className="bg-surface">
+                  <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor={`q-risk-${question.id}`} className="block text-sm font-medium text-foreground mb-1">Risk Category</label>
+                      <Select
+                        value={question.risk_category || 'none'}
+                        onValueChange={(v) => debouncedSave('risk_category', v === 'none' ? null : v)}
+                      >
+                        <SelectTrigger id={`q-risk-${question.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label htmlFor={`q-help-${question.id}`} className="block text-sm font-medium text-foreground mb-1">Help Text</label>
+                      <Input
+                        id={`q-help-${question.id}`}
+                        value={question.help_text || ''}
+                        onChange={(e) => debouncedSave('help_text', e.target.value)}
+                        placeholder="Guidance for auditors..."
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+              <Button
+                variant="ghost" size="icon-sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                aria-label="Delete question"
               >
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Section Content */}
-      {section.isExpanded && (
-        <div className="p-4 space-y-3">
-          {section.questions.length === 0 ? (
-            <div className="text-center py-8">
-              <ListChecks className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-              <p className="text-slate-400 mb-4">No questions in this section</p>
-              <button
-                type="button"
-                onClick={onAddQuestion}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add First Question
-              </button>
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Question</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this question? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+});
+
+// ============================================================================
+// SECTION EDITOR
+// ============================================================================
+
+interface SectionEditorProps {
+  section: ApiSection;
+  templateId: number;
+  onUpdated: () => void;
+  onDeleted: () => void;
+}
+
+const SectionEditor = React.memo(function SectionEditor({
+  section, templateId, onUpdated, onDeleted,
+}: SectionEditorProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [title, setTitle] = useState(section.title);
+  const [description, setDescription] = useState(section.description || '');
+  const [addingQuestion, setAddingQuestion] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    setTitle(section.title);
+    setDescription(section.description || '');
+  }, [section.title, section.description]);
+
+  const debouncedSave = useCallback((field: string, value: string | number) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await auditsApi.updateSection(section.id, { [field]: value });
+        onUpdated();
+      } catch (err) {
+        console.error('Failed to save section:', err);
+      }
+    }, 600);
+  }, [section.id, onUpdated]);
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
+  const handleAddQuestion = useCallback(async () => {
+    setAddingQuestion(true);
+    try {
+      await auditsApi.createQuestion(templateId, {
+        section_id: section.id,
+        question_text: '',
+        question_type: 'yes_no',
+        is_required: true,
+        weight: 1,
+        sort_order: (section.questions?.length || 0),
+      });
+      onUpdated();
+    } catch (err) {
+      console.error('Failed to add question:', err);
+    } finally {
+      setAddingQuestion(false);
+    }
+  }, [templateId, section.id, section.questions?.length, onUpdated]);
+
+  const handleDelete = useCallback(async () => {
+    try {
+      await auditsApi.deleteSection(section.id);
+      onDeleted();
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error('Failed to delete section:', err);
+    }
+  }, [section.id, onDeleted]);
+
+  const activeQuestions = useMemo(
+    () => (section.questions || []).filter(q => q.is_active),
+    [section.questions]
+  );
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-surface text-muted-foreground" aria-hidden="true">
+              <GripVertical className="w-5 h-5" />
             </div>
-          ) : (
-            <>
-              {section.questions.map((question) => (
-                <QuestionEditor
-                  key={question.id}
-                  question={question}
-                  onUpdate={onUpdateQuestion}
-                  onDelete={onDeleteQuestion}
-                  onDuplicate={onDuplicateQuestion}
-                />
+
+            <Button
+              variant="ghost" size="icon-sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? 'Collapse section' : 'Expand section'}
+            >
+              {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+            </Button>
+
+            <div className="flex-1 space-y-1">
+              <label htmlFor={`sec-title-${section.id}`} className="sr-only">Section title</label>
+              <Input
+                id={`sec-title-${section.id}`}
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  debouncedSave('title', e.target.value);
+                }}
+                placeholder="Section title..."
+                className="text-lg font-semibold border-none bg-transparent px-0 focus-visible:ring-0 h-auto"
+              />
+              <label htmlFor={`sec-desc-${section.id}`} className="sr-only">Section description</label>
+              <Input
+                id={`sec-desc-${section.id}`}
+                value={description}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  debouncedSave('description', e.target.value);
+                }}
+                placeholder="Section description..."
+                className="text-sm border-none bg-transparent px-0 focus-visible:ring-0 h-auto text-muted-foreground"
+              />
+            </div>
+
+            <Badge variant="secondary">{activeQuestions.length} questions</Badge>
+
+            <div className="flex items-center gap-2">
+              <label htmlFor={`sec-weight-${section.id}`} className="text-sm text-muted-foreground">Weight:</label>
+              <Input
+                id={`sec-weight-${section.id}`}
+                type="number" value={section.weight}
+                onChange={(e) => debouncedSave('weight', parseFloat(e.target.value) || 1)}
+                min={0} max={10} step={0.5}
+                className="w-20 text-center"
+              />
+            </div>
+
+            <Button
+              variant="ghost" size="icon-sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              aria-label="Delete section"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardHeader>
+
+        {isExpanded && (
+          <CardContent className="pt-4 space-y-3">
+            {activeQuestions.length === 0 ? (
+              <div className="text-center py-8 border-2 border-dashed border-border rounded-xl">
+                <ListChecks className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground mb-4">No questions in this section</p>
+                <Button onClick={handleAddQuestion} disabled={addingQuestion}>
+                  {addingQuestion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add First Question
+                </Button>
+              </div>
+            ) : (
+              <>
+                {activeQuestions.map((question) => (
+                  <QuestionEditor
+                    key={question.id}
+                    question={question}
+                    sectionId={section.id}
+                    templateId={templateId}
+                    onUpdated={onUpdated}
+                    onDeleted={onUpdated}
+                  />
+                ))}
+                <Button
+                  variant="outline" className="w-full"
+                  onClick={handleAddQuestion}
+                  disabled={addingQuestion}
+                >
+                  {addingQuestion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add Question
+                </Button>
+              </>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Section</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{section.title}&quot; and all {activeQuestions.length} questions in it? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete Section</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+});
+
+// ============================================================================
+// TEMPLATE SETTINGS PANEL
+// ============================================================================
+
+interface SettingsPanelProps {
+  template: AuditTemplateDetail;
+  onSave: (data: AuditTemplateUpdate) => Promise<void>;
+}
+
+function SettingsPanel({ template, onSave }: SettingsPanelProps) {
+  const [category, setCategory] = useState(template.category || '');
+  const [scoringMethod, setScoringMethod] = useState(template.scoring_method || 'percentage');
+  const [passingScore, setPassingScore] = useState(template.passing_score ?? 80);
+  const [auditType, setAuditType] = useState(template.audit_type || 'inspection');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        category,
+        scoring_method: scoringMethod,
+        passing_score: passingScore,
+        audit_type: auditType,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Template Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+            <div className="grid grid-cols-2 gap-2">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategory(cat.id)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                    category === cat.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-border-strong'
+                  }`}
+                  aria-pressed={category === cat.id}
+                >
+                  <cat.icon className={`w-5 h-5 ${category === cat.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className="text-sm text-foreground">{cat.label}</span>
+                </button>
               ))}
-              <button
-                type="button"
-                onClick={onAddQuestion}
-                className="w-full py-3 border-2 border-dashed border-slate-700 rounded-xl text-slate-400 hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Add Question
-              </button>
-            </>
-          )}
-        </div>
-      )}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="audit-type" className="block text-sm font-medium text-foreground mb-2">Audit Type</label>
+            <Select value={auditType} onValueChange={setAuditType}>
+              <SelectTrigger id="audit-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inspection">Inspection</SelectItem>
+                <SelectItem value="audit">Audit</SelectItem>
+                <SelectItem value="assessment">Assessment</SelectItem>
+                <SelectItem value="checklist">Checklist</SelectItem>
+                <SelectItem value="survey">Survey</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label htmlFor="scoring-method" className="block text-sm font-medium text-foreground mb-2">Scoring Method</label>
+            <Select value={scoringMethod} onValueChange={setScoringMethod}>
+              <SelectTrigger id="scoring-method">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">Percentage</SelectItem>
+                <SelectItem value="points">Points Based</SelectItem>
+                <SelectItem value="weighted">Weighted</SelectItem>
+                <SelectItem value="pass_fail">Pass / Fail</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label htmlFor="passing-score" className="block text-sm font-medium text-foreground mb-2">
+              Pass Threshold: {passingScore}%
+            </label>
+            <input
+              id="passing-score"
+              type="range" min={0} max={100} value={passingScore}
+              onChange={(e) => setPassingScore(parseInt(e.target.value))}
+              className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0%</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save Settings
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
-};
+}
+
+// ============================================================================
+// TEMPLATE PREVIEW
+// ============================================================================
+
+interface PreviewPanelProps {
+  template: AuditTemplateDetail;
+}
+
+function PreviewPanel({ template }: PreviewPanelProps) {
+  const activeSections = useMemo(
+    () => template.sections.filter(s => s.is_active),
+    [template.sections]
+  );
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-foreground mb-2">{template.name || 'Untitled Template'}</h2>
+            <p className="text-muted-foreground">{template.description}</p>
+            <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
+              <Badge>{template.question_count} Questions</Badge>
+              <Badge variant="secondary">v{template.version}</Badge>
+              <Badge variant={template.is_published ? 'success' : 'warning'}>
+                {template.is_published ? 'Published' : 'Draft'}
+              </Badge>
+              {template.passing_score && (
+                <Badge variant="success">Pass: {template.passing_score}%</Badge>
+              )}
+            </div>
+          </div>
+
+          {activeSections.map((section, sectionIndex) => (
+            <div key={section.id} className="mb-6" role="region" aria-label={`Section ${sectionIndex + 1}: ${section.title}`}>
+              <Card className="bg-surface mb-3">
+                <CardContent className="p-4">
+                  <h3 className="text-lg font-semibold text-foreground">
+                    {sectionIndex + 1}. {section.title}
+                  </h3>
+                  {section.description && (
+                    <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
+                  )}
+                </CardContent>
+              </Card>
+              <div className="space-y-2 pl-4">
+                {(section.questions || []).filter(q => q.is_active).map((question, qIndex) => {
+                  const qType = QUESTION_TYPES.find(t => t.type === question.question_type);
+                  return (
+                    <div key={question.id} className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card">
+                      <span className="text-sm text-muted-foreground font-mono">{sectionIndex + 1}.{qIndex + 1}</span>
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground">
+                          {question.question_text || 'Untitled question'}
+                          {question.is_required && <span className="text-destructive ml-1">*</span>}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <Badge variant="secondary">{qType?.label || question.question_type}</Badge>
+                          {question.risk_category && (
+                            <Badge variant={
+                              question.risk_category === 'critical' ? 'critical' :
+                              question.risk_category === 'high' ? 'high' :
+                              question.risk_category === 'medium' ? 'medium' : 'low'
+                            }>
+                              {question.risk_category} risk
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {activeSections.length === 0 && (
+            <div className="text-center py-12">
+              <Eye className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">Add sections and questions to see a preview</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -626,601 +728,519 @@ const SectionEditor = ({
 export default function AuditTemplateBuilder() {
   const navigate = useNavigate();
   const { templateId } = useParams();
+  const isEditing = Boolean(templateId);
 
-  const [template, setTemplate] = useState<AuditTemplate>({
-    id: templateId || generateId(),
-    name: '',
-    description: '',
-    version: '1.0.0',
-    status: 'draft',
-    category: 'quality',
-    isoStandards: [],
-    sections: [createNewSection(1)],
-    scoringMethod: 'weighted',
-    passThreshold: 80,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'Current User',
-    tags: [],
-    estimatedDuration: 60,
-    isLocked: false,
-  });
-
+  const [template, setTemplate] = useState<AuditTemplateDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder');
-  const [isSaving, setIsSaving] = useState(false);
   const [showAIAssist, setShowAIAssist] = useState(false);
+  const [addingSection, setAddingSection] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
-  // Get all questions across all sections
-  const allQuestions = template.sections.flatMap(s => s.questions);
+  // Feedback state
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const feedbackRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Section handlers
-  const handleAddSection = () => {
-    const newSection = createNewSection(template.sections.length + 1);
-    setTemplate(prev => ({
-      ...prev,
-      sections: [...prev.sections, newSection],
-    }));
-  };
+  const showFeedback = useCallback((type: 'success' | 'error', message: string) => {
+    setFeedback({ type, message });
+    if (feedbackRef.current) clearTimeout(feedbackRef.current);
+    feedbackRef.current = setTimeout(() => setFeedback(null), 4000);
+  }, []);
 
-  const handleUpdateSection = (sectionId: string, updates: Partial<Section>) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId ? { ...s, ...updates } : s
-      ),
-    }));
-  };
+  // Template name/description local state
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const handleDeleteSection = (sectionId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.filter(s => s.id !== sectionId),
-    }));
-  };
+  // Load template
+  useEffect(() => {
+    const load = async () => {
+      if (!isEditing) {
+        try {
+          const response = await auditsApi.createTemplate({
+            name: 'Untitled Template',
+            audit_type: 'inspection',
+            scoring_method: 'percentage',
+            passing_score: 80,
+          });
+          const detail = await auditsApi.getTemplate(response.data.id);
+          setTemplate(detail.data);
+          setName(detail.data.name);
+          setDescription(detail.data.description || '');
+          window.history.replaceState(null, '', `/audit-templates/${response.data.id}/edit`);
+        } catch (err) {
+          setError('Failed to create template. Please try again.');
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
 
-  // Question handlers
-  const handleAddQuestion = (sectionId: string) => {
-    const newQuestion = createNewQuestion();
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId
-          ? { ...s, questions: [...s.questions, newQuestion] }
-          : s
-      ),
-    }));
-  };
+      try {
+        const response = await auditsApi.getTemplate(Number(templateId));
+        setTemplate(response.data);
+        setName(response.data.name);
+        setDescription(response.data.description || '');
+      } catch (err) {
+        setError('Failed to load template. It may not exist or you may not have access.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [templateId, isEditing]);
 
-  const handleUpdateQuestion = (sectionId: string, questionId: string, updates: Partial<Question>) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId
-          ? {
-              ...s,
-              questions: s.questions.map(q =>
-                q.id === questionId ? { ...q, ...updates } : q
-              ),
-            }
-          : s
-      ),
-    }));
-  };
+  // Unsaved changes warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
-  const handleDeleteQuestion = (sectionId: string, questionId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId
-          ? { ...s, questions: s.questions.filter(q => q.id !== questionId) }
-          : s
-      ),
-    }));
-  };
+  // Cleanup debounce timers on unmount
+  useEffect(() => () => {
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    if (feedbackRef.current) clearTimeout(feedbackRef.current);
+  }, []);
 
-  const handleDuplicateQuestion = (sectionId: string, questionId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s => {
-        if (s.id !== sectionId) return s;
-        const questionIndex = s.questions.findIndex(q => q.id === questionId);
-        if (questionIndex === -1) return s;
-        const originalQuestion = s.questions[questionIndex];
-        const duplicatedQuestion = {
-          ...originalQuestion,
-          id: generateId(),
-          text: `${originalQuestion.text} (Copy)`,
-        };
-        const newQuestions = [...s.questions];
-        newQuestions.splice(questionIndex + 1, 0, duplicatedQuestion);
-        return { ...s, questions: newQuestions };
-      }),
-    }));
-  };
-
-  // Save handler
-  const handleSave = async () => {
-    setIsSaving(true);
+  const refreshTemplate = useCallback(async () => {
+    if (!template) return;
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('Saving template:', template);
-      // In production, call API here
-    } catch (error) {
-      console.error('Save failed:', error);
-    } finally {
-      setIsSaving(false);
+      const response = await auditsApi.getTemplate(template.id);
+      setTemplate(response.data);
+    } catch (err) {
+      console.error('Failed to refresh template:', err);
     }
-  };
+  }, [template?.id]);
 
-  // Calculate stats
-  const totalQuestions = allQuestions.length;
-  const totalWeight = allQuestions.reduce((sum, q) => sum + q.weight, 0);
-  const requiredQuestions = allQuestions.filter(q => q.required).length;
-  const evidenceQuestions = allQuestions.filter(q => q.evidenceRequired).length;
+  const handleSave = useCallback(async () => {
+    if (!template) return;
+    setSaving(true);
+    try {
+      await auditsApi.updateTemplate(template.id, { name, description });
+      await refreshTemplate();
+      setHasUnsavedChanges(false);
+      showFeedback('success', 'Template saved successfully');
+    } catch (err) {
+      showFeedback('error', 'Failed to save template. Please try again.');
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  }, [template, name, description, refreshTemplate, showFeedback]);
+
+  // Keyboard shortcuts — must be after handleSave is defined
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveRef.current();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleSaveSettings = useCallback(async (data: AuditTemplateUpdate) => {
+    if (!template) return;
+    try {
+      await auditsApi.updateTemplate(template.id, data);
+      await refreshTemplate();
+      showFeedback('success', 'Settings saved successfully');
+    } catch (err) {
+      showFeedback('error', 'Failed to save settings.');
+      console.error(err);
+    }
+  }, [template, refreshTemplate, showFeedback]);
+
+  const handlePublish = useCallback(async () => {
+    if (!template) return;
+    setSaving(true);
+    try {
+      await auditsApi.updateTemplate(template.id, { name, description });
+      await auditsApi.publishTemplate(template.id);
+      await refreshTemplate();
+      showFeedback('success', 'Template published successfully');
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || 'Failed to publish. Ensure at least one question exists.';
+      showFeedback('error', message);
+    } finally {
+      setSaving(false);
+    }
+  }, [template, name, description, refreshTemplate, showFeedback]);
+
+  const handleAddSection = useCallback(async () => {
+    if (!template) return;
+    setAddingSection(true);
+    try {
+      await auditsApi.createSection(template.id, {
+        title: `Section ${(template.sections?.length || 0) + 1}`,
+        sort_order: template.sections?.length || 0,
+        weight: 1,
+      });
+      await refreshTemplate();
+      showFeedback('success', 'Section added');
+    } catch (err) {
+      showFeedback('error', 'Failed to add section.');
+      console.error(err);
+    } finally {
+      setAddingSection(false);
+    }
+  }, [template, refreshTemplate, showFeedback]);
+
+  const handleNameChange = useCallback((value: string) => {
+    setName(value);
+    setHasUnsavedChanges(true);
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    nameDebounceRef.current = setTimeout(async () => {
+      if (template) {
+        try {
+          await auditsApi.updateTemplate(template.id, { name: value });
+        } catch { /* will be saved on explicit save */ }
+      }
+    }, 1000);
+  }, [template]);
+
+  const handleDescriptionChange = useCallback((value: string) => {
+    setDescription(value);
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const handleNavigateAway = useCallback((path: string) => {
+    if (hasUnsavedChanges) {
+      setPendingNavigation(path);
+      setShowLeaveConfirm(true);
+    } else {
+      navigate(path);
+    }
+  }, [hasUnsavedChanges, navigate]);
+
+  // Computed stats
+  const stats = useMemo(() => {
+    if (!template) return { sections: 0, questions: 0, required: 0 };
+    const activeSections = template.sections.filter(s => s.is_active);
+    const allQuestions = activeSections.flatMap(s => (s.questions || []).filter(q => q.is_active));
+    return {
+      sections: activeSections.length,
+      questions: allQuestions.length,
+      required: allQuestions.filter(q => q.is_required).length,
+    };
+  }, [template]);
+
+  const activeSections = useMemo(
+    () => (template?.sections || []).filter(s => s.is_active),
+    [template?.sections]
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">{isEditing ? 'Loading template...' : 'Creating template...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !template) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">Unable to Load Template</h2>
+            <p className="text-muted-foreground mb-6">{error || 'Template not found.'}</p>
+            <Button onClick={() => navigate('/audit-templates')}>
+              <ArrowLeft className="w-4 h-4" />
+              Back to Library
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="space-y-6 animate-fade-in">
+      {/* Feedback Toast */}
+      {feedback && (
+        <div
+          className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border animate-fade-in ${
+            feedback.type === 'success'
+              ? 'bg-success/10 border-success/20 text-success'
+              : 'bg-destructive/10 border-destructive/20 text-destructive'
+          }`}
+          role="alert"
+          aria-live="polite"
+        >
+          {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+          <span className="text-sm font-medium">{feedback.message}</span>
+          <button
+            onClick={() => setFeedback(null)}
+            className="ml-2 p-1 hover:bg-surface rounded"
+            aria-label="Dismiss"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/audit-templates')}
-                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-400" />
-              </button>
-              <div>
-                <input
-                  type="text"
-                  value={template.name}
-                  onChange={(e) => setTemplate(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Untitled Template"
-                  className="bg-transparent text-xl font-bold text-white placeholder-slate-500 focus:outline-none"
-                />
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-2 py-0.5 text-xs rounded ${
-                    template.status === 'published' ? 'bg-green-500/20 text-green-400' :
-                    template.status === 'archived' ? 'bg-gray-500/20 text-gray-400' :
-                    'bg-amber-500/20 text-amber-400'
-                  }`}>
-                    {template.status}
-                  </span>
-                  <span className="text-xs text-slate-500">v{template.version}</span>
-                  <span className="text-xs text-slate-500">•</span>
-                  <span className="text-xs text-slate-500">{totalQuestions} questions</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Tabs */}
-              <div className="flex bg-slate-800 rounded-lg p-1">
-                {(['builder', 'settings', 'preview'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === tab
-                        ? 'bg-purple-500 text-white'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => setShowAIAssist(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg text-purple-300 hover:bg-purple-500/30 transition-colors"
-              >
-                <Sparkles className="w-4 h-4" />
-                AI Assist
-              </button>
-
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {isSaving ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Save
-              </button>
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => handleNavigateAway('/audit-templates')}
+            aria-label="Back to template library"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex-1">
+            <label htmlFor="template-name" className="sr-only">Template name</label>
+            <Input
+              id="template-name"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="Untitled Template"
+              className="text-xl font-bold border-none bg-transparent px-0 focus-visible:ring-0 h-auto"
+              aria-required="true"
+            />
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant={template.is_published ? 'success' : 'warning'}>
+                {template.is_published ? 'Published' : 'Draft'}
+              </Badge>
+              <span className="text-sm text-muted-foreground">v{template.version}</span>
+              <span className="text-sm text-muted-foreground">•</span>
+              <span className="text-sm text-muted-foreground">{stats.questions} questions</span>
+              {hasUnsavedChanges && (
+                <Badge variant="warning">Unsaved changes</Badge>
+              )}
             </div>
           </div>
         </div>
-      </header>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Tabs */}
+          <div className="flex bg-secondary rounded-lg p-1" role="tablist" aria-label="Builder views">
+            {(['builder', 'settings', 'preview'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] ${
+                  activeTab === tab
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`panel-${tab}`}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <Button variant="outline" onClick={() => setShowAIAssist(true)}>
+            <Sparkles className="w-4 h-4" />
+            AI Assist
+          </Button>
+
+          {!template.is_published && (
+            <Button variant="success" onClick={handlePublish} disabled={saving || stats.questions === 0}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              Publish
+            </Button>
+          )}
+
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save
+          </Button>
+        </div>
+      </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <div id="panel-builder" role="tabpanel" aria-labelledby="tab-builder" hidden={activeTab !== 'builder'}>
         {activeTab === 'builder' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar - Stats & Quick Actions */}
+            {/* Sidebar */}
             <div className="lg:col-span-1 space-y-4">
-              {/* Stats Card */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">Template Stats</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Sections</span>
-                    <span className="text-sm font-medium text-white">{template.sections.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Questions</span>
-                    <span className="text-sm font-medium text-white">{totalQuestions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Required</span>
-                    <span className="text-sm font-medium text-white">{requiredQuestions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">With Evidence</span>
-                    <span className="text-sm font-medium text-white">{evidenceQuestions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Total Weight</span>
-                    <span className="text-sm font-medium text-white">{totalWeight}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Pass Threshold</span>
-                    <span className="text-sm font-medium text-green-400">{template.passThreshold}%</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
-                <div className="space-y-2">
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
-                    <Upload className="w-4 h-4" />
-                    Import from Excel
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
-                    <Download className="w-4 h-4" />
-                    Export Template
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
-                    <Copy className="w-4 h-4" />
-                    Duplicate Template
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
-                    <History className="w-4 h-4" />
-                    Version History
-                  </button>
-                </div>
-              </div>
-
-              {/* ISO Standards */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">ISO Standards</h3>
-                <div className="space-y-2">
-                  {ISO_STANDARDS.map((standard) => (
-                    <label
-                      key={standard.id}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={template.isoStandards.includes(standard.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setTemplate(prev => ({
-                              ...prev,
-                              isoStandards: [...prev.isoStandards, standard.id],
-                            }));
-                          } else {
-                            setTemplate(prev => ({
-                              ...prev,
-                              isoStandards: prev.isoStandards.filter(s => s !== standard.id),
-                            }));
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500"
-                      />
-                      <div>
-                        <p className="text-sm text-white">{standard.label}</p>
-                        <p className="text-xs text-slate-500">{standard.description}</p>
-                      </div>
-                    </label>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Template Stats</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {[
+                    { label: 'Sections', value: stats.sections },
+                    { label: 'Questions', value: stats.questions },
+                    { label: 'Required', value: stats.required },
+                    { label: 'Pass Threshold', value: `${template.passing_score ?? 0}%` },
+                  ].map((stat) => (
+                    <div key={stat.label} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{stat.label}</span>
+                      <span className="font-medium text-foreground">{stat.value}</span>
+                    </div>
                   ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button variant="outline" className="w-full justify-start" size="sm" disabled>
+                    <Upload className="w-4 h-4" /> Import from Excel
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" size="sm" disabled>
+                    <Download className="w-4 h-4" /> Export Template
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" size="sm" disabled>
+                    <History className="w-4 h-4" /> Version History
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Main Builder Area */}
+            {/* Builder Area */}
             <div className="lg:col-span-3 space-y-4">
-              {/* Description */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Template Description
-                </label>
-                <textarea
-                  value={template.description}
-                  onChange={(e) => setTemplate(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe the purpose and scope of this audit template..."
-                  rows={2}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              <Card>
+                <CardContent className="p-4">
+                  <label htmlFor="template-description" className="block text-sm font-medium text-foreground mb-2">
+                    Template Description
+                  </label>
+                  <Textarea
+                    id="template-description"
+                    value={description}
+                    onChange={(e) => handleDescriptionChange(e.target.value)}
+                    placeholder="Describe the purpose and scope of this audit template..."
+                    className="min-h-[60px]"
+                  />
+                </CardContent>
+              </Card>
+
+              {activeSections.map((section) => (
+                <SectionEditor
+                  key={section.id}
+                  section={section}
+                  templateId={template.id}
+                  onUpdated={refreshTemplate}
+                  onDeleted={refreshTemplate}
                 />
-              </div>
-
-              {/* Sections */}
-              <div className="space-y-4">
-                {template.sections.map((section) => (
-                  <SectionEditor
-                    key={section.id}
-                    section={section}
-                    onUpdate={(updates) => handleUpdateSection(section.id, updates)}
-                    onDelete={() => handleDeleteSection(section.id)}
-                    onAddQuestion={() => handleAddQuestion(section.id)}
-                    onUpdateQuestion={(qId, updates) => handleUpdateQuestion(section.id, qId, updates)}
-                    onDeleteQuestion={(qId) => handleDeleteQuestion(section.id, qId)}
-                    onDuplicateQuestion={(qId) => handleDuplicateQuestion(section.id, qId)}
-                  />
-                ))}
-
-                {/* Add Section Button */}
-                <button
-                  type="button"
-                  onClick={handleAddSection}
-                  className="w-full py-4 border-2 border-dashed border-slate-700 rounded-2xl text-slate-400 hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add Section
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="max-w-2xl mx-auto space-y-6">
-            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-6">Template Settings</h2>
-              
-              <div className="space-y-6">
-                {/* Category */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setTemplate(prev => ({ ...prev, category: cat.id }))}
-                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                          template.category === cat.id
-                            ? 'border-purple-500 bg-purple-500/10'
-                            : 'border-slate-700 hover:border-slate-600'
-                        }`}
-                      >
-                        <cat.icon className={`w-5 h-5 ${
-                          template.category === cat.id ? 'text-purple-400' : 'text-slate-400'
-                        }`} />
-                        <span className="text-sm text-white">{cat.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Scoring Method */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Scoring Method</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: 'weighted', label: 'Weighted', description: 'Questions have different weights' },
-                      { id: 'equal', label: 'Equal Weight', description: 'All questions count equally' },
-                      { id: 'pass_fail', label: 'Pass/Fail', description: 'Binary pass or fail result' },
-                      { id: 'points', label: 'Points Based', description: 'Accumulate points' },
-                    ].map((method) => (
-                      <button
-                        key={method.id}
-                        type="button"
-                        onClick={() => setTemplate(prev => ({ ...prev, scoringMethod: method.id as ScoringMethod }))}
-                        className={`p-3 rounded-xl border-2 text-left transition-all ${
-                          template.scoringMethod === method.id
-                            ? 'border-purple-500 bg-purple-500/10'
-                            : 'border-slate-700 hover:border-slate-600'
-                        }`}
-                      >
-                        <p className="text-sm font-medium text-white">{method.label}</p>
-                        <p className="text-xs text-slate-400 mt-1">{method.description}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Pass Threshold */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Pass Threshold: {template.passThreshold}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={template.passThreshold}
-                    onChange={(e) => setTemplate(prev => ({ ...prev, passThreshold: parseInt(e.target.value) }))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>0%</span>
-                    <span>100%</span>
-                  </div>
-                </div>
-
-                {/* Estimated Duration */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Estimated Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={template.estimatedDuration}
-                    onChange={(e) => setTemplate(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
-                    min="0"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                {/* Version */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Version</label>
-                  <input
-                    type="text"
-                    value={template.version}
-                    onChange={(e) => setTemplate(prev => ({ ...prev, version: e.target.value }))}
-                    placeholder="1.0.0"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                {/* Lock Toggle */}
-                <div className="flex items-center justify-between p-4 bg-slate-800 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    {template.isLocked ? (
-                      <Lock className="w-5 h-5 text-amber-400" />
-                    ) : (
-                      <Unlock className="w-5 h-5 text-slate-400" />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium text-white">Lock Template</p>
-                      <p className="text-xs text-slate-400">Prevent edits after publishing</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTemplate(prev => ({ ...prev, isLocked: !prev.isLocked }))}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      template.isLocked ? 'bg-amber-500' : 'bg-slate-600'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                        template.isLocked ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'preview' && (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">{template.name || 'Untitled Template'}</h2>
-                <p className="text-slate-400">{template.description}</p>
-                <div className="flex items-center justify-center gap-4 mt-4">
-                  <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-sm">
-                    {totalQuestions} Questions
-                  </span>
-                  <span className="px-3 py-1 bg-slate-700 text-slate-300 rounded-lg text-sm">
-                    ~{template.estimatedDuration} min
-                  </span>
-                  <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-lg text-sm">
-                    Pass: {template.passThreshold}%
-                  </span>
-                </div>
-              </div>
-
-              {template.sections.map((section, sectionIndex) => (
-                <div key={section.id} className="mb-6">
-                  <div className={`bg-gradient-to-r ${section.color} p-0.5 rounded-xl`}>
-                    <div className="bg-slate-900 p-4 rounded-xl">
-                      <h3 className="text-lg font-semibold text-white">
-                        {sectionIndex + 1}. {section.title}
-                      </h3>
-                      {section.description && (
-                        <p className="text-sm text-slate-400 mt-1">{section.description}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-3 space-y-3 pl-4">
-                    {section.questions.map((question, qIndex) => (
-                      <div key={question.id} className="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
-                        <span className="text-sm text-slate-500">{sectionIndex + 1}.{qIndex + 1}</span>
-                        <div className="flex-1">
-                          <p className="text-sm text-white">
-                            {question.text || 'Untitled question'}
-                            {question.required && <span className="text-red-400 ml-1">*</span>}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-slate-500 bg-slate-700 px-2 py-0.5 rounded">
-                              {QUESTION_TYPES.find(t => t.type === question.type)?.label}
-                            </span>
-                            {question.evidenceRequired && (
-                              <span className="text-xs text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded flex items-center gap-1">
-                                <Camera className="w-3 h-3" /> Evidence
-                              </span>
-                            )}
-                            {question.riskLevel && (
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                question.riskLevel === 'critical' ? 'text-red-400 bg-red-500/10' :
-                                question.riskLevel === 'high' ? 'text-orange-400 bg-orange-500/10' :
-                                question.riskLevel === 'medium' ? 'text-amber-400 bg-amber-500/10' :
-                                'text-green-400 bg-green-500/10'
-                              }`}>
-                                {question.riskLevel} risk
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               ))}
+
+              <Button
+                variant="outline" className="w-full py-6 border-dashed border-2"
+                onClick={handleAddSection}
+                disabled={addingSection}
+              >
+                {addingSection ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                Add Section
+              </Button>
             </div>
           </div>
         )}
-      </main>
+      </div>
+
+      <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
+        {activeTab === 'settings' && (
+          <SettingsPanel template={template} onSave={handleSaveSettings} />
+        )}
+      </div>
+
+      <div id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" hidden={activeTab !== 'preview'}>
+        {activeTab === 'preview' && (
+          <PreviewPanel template={template} />
+        )}
+      </div>
 
       {/* AI Template Generator */}
       {showAIAssist && (
         <AITemplateGenerator
           onClose={() => setShowAIAssist(false)}
-          onApply={(generatedSections) => {
-            // Convert generated sections to template format
-            const newSections: Section[] = generatedSections.map((gs, idx) => ({
-              id: gs.id,
-              title: gs.title,
-              description: gs.description,
-              questions: gs.questions.map((q) => ({
-                id: q.id,
-                text: q.text,
-                type: q.type as QuestionType,
-                required: q.required,
-                weight: q.weight,
-                riskLevel: (q.riskLevel as 'critical' | 'high' | 'medium' | 'low' | undefined),
-                evidenceRequired: q.evidenceRequired,
-                isoClause: q.isoClause,
-                guidance: q.guidance,
-                failureTriggersAction: false,
-              })),
-              isExpanded: true,
-              weight: 1,
-              order: template.sections.length + idx,
-              color: SECTION_COLORS[(template.sections.length + idx) % SECTION_COLORS.length],
-            }));
-            
-            setTemplate(prev => ({
-              ...prev,
-              sections: [...prev.sections, ...newSections],
-            }));
+          onApply={async (generatedSections) => {
+            const baseOrder = template.sections?.length || 0;
+            let successes = 0;
+            let failures = 0;
+            for (let i = 0; i < generatedSections.length; i++) {
+              const gs = generatedSections[i];
+              try {
+                const sectionRes = await auditsApi.createSection(template.id, {
+                  title: gs.title,
+                  description: gs.description,
+                  sort_order: baseOrder + i,
+                });
+                for (let qi = 0; qi < gs.questions.length; qi++) {
+                  const q = gs.questions[qi];
+                  const sanitizedType = VALID_QUESTION_TYPES.has(q.type) ? q.type : 'yes_no';
+                  await auditsApi.createQuestion(template.id, {
+                    section_id: sectionRes.data.id,
+                    question_text: q.text,
+                    question_type: sanitizedType,
+                    is_required: q.required ?? true,
+                    weight: q.weight ?? 1,
+                    sort_order: qi,
+                  });
+                }
+                successes++;
+              } catch (err) {
+                failures++;
+                console.error('Failed to create AI section:', err);
+              }
+            }
+            await refreshTemplate();
             setShowAIAssist(false);
+            if (failures === 0) {
+              showFeedback('success', `${successes} AI-generated sections added`);
+            } else if (successes > 0) {
+              showFeedback('error', `${successes} sections added, ${failures} failed`);
+            } else {
+              showFeedback('error', 'Failed to add AI-generated sections');
+            }
           }}
         />
       )}
+
+      {/* Leave Confirmation Dialog */}
+      <Dialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLeaveConfirm(false)}>Stay</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setShowLeaveConfirm(false);
+                setHasUnsavedChanges(false);
+                if (pendingNavigation) navigate(pendingNavigation);
+              }}
+            >
+              Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
