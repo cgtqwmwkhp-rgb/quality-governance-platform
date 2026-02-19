@@ -119,20 +119,26 @@ export default function ComplianceEvidence() {
     const stats: Record<string, { total: number; covered: number; partial: number; gaps: number }> = {};
     
     ISO_STANDARDS.forEach(standard => {
-      const mainClauses = standard.clauses.filter(c => c.level === 2);
-      const covered = mainClauses.filter(c => 
-        mockEvidence.some(e => e.linkedClauses.includes(c.id))
-      ).length;
-      const partial = mainClauses.filter(c => {
+      const hasSubClauses = standard.clauses.some(c => c.level === 2);
+      const mainClauses = hasSubClauses
+        ? standard.clauses.filter(c => c.level === 2)
+        : standard.clauses.filter(c => c.level === 1);
+
+      const fullyCovered = mainClauses.filter(c => {
+        const evidence = mockEvidence.filter(e => e.linkedClauses.includes(c.id));
+        return evidence.length >= 2;
+      }).length;
+
+      const partiallyCovered = mainClauses.filter(c => {
         const evidence = mockEvidence.filter(e => e.linkedClauses.includes(c.id));
         return evidence.length === 1;
       }).length;
       
       stats[standard.id] = {
         total: mainClauses.length,
-        covered: covered - partial,
-        partial,
-        gaps: mainClauses.length - covered,
+        covered: fullyCovered,
+        partial: partiallyCovered,
+        gaps: mainClauses.length - fullyCovered - partiallyCovered,
       };
     });
     
@@ -303,7 +309,9 @@ export default function ComplianceEvidence() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {ISO_STANDARDS.map(standard => {
             const stats = complianceStats[standard.id];
-            const percentage = Math.round((stats.covered + stats.partial * 0.5) / stats.total * 100);
+            const percentage = stats.total > 0
+              ? Math.round((stats.covered + stats.partial * 0.5) / stats.total * 100)
+              : 0;
             const Icon = standardIcons[standard.id];
             const color = standardColors[standard.id];
 
@@ -424,8 +432,8 @@ export default function ComplianceEvidence() {
 
           {viewMode === 'evidence' && (
             <>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-success" />
                 All Evidence ({mockEvidence.length} items)
               </h2>
               <div className="space-y-3">
@@ -436,7 +444,7 @@ export default function ComplianceEvidence() {
                   return (
                     <div 
                       key={evidence.id}
-                      className="p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-all cursor-pointer"
+                      className="p-4 bg-surface/50 rounded-lg hover:bg-surface transition-all cursor-pointer"
                     >
                       <div className="flex items-start gap-3">
                         <div className={`p-2 rounded-lg ${config.color}`}>
@@ -444,7 +452,7 @@ export default function ComplianceEvidence() {
                         </div>
                         <div className="flex-grow">
                           <div className="flex items-center justify-between mb-1">
-                            <h4 className="font-medium text-white">{evidence.title}</h4>
+                            <h4 className="font-medium text-foreground">{evidence.title}</h4>
                             {evidence.autoTagged && (
                               <span className="flex items-center gap-1 text-xs bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full">
                                 <Sparkles className="w-3 h-3" />
@@ -452,7 +460,7 @@ export default function ComplianceEvidence() {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-400 mb-2">{evidence.description}</p>
+                          <p className="text-sm text-muted-foreground mb-2">{evidence.description}</p>
                           <div className="flex items-center gap-2 flex-wrap">
                             {evidence.linkedClauses.map(clauseId => {
                               const clause = getAllClauses().find(c => c.id === clauseId);
@@ -469,7 +477,7 @@ export default function ComplianceEvidence() {
                             })}
                           </div>
                         </div>
-                        <span className="text-xs text-gray-500">{evidence.date}</span>
+                        <span className="text-xs text-muted-foreground">{evidence.date}</span>
                       </div>
                     </div>
                   );
@@ -480,13 +488,18 @@ export default function ComplianceEvidence() {
 
           {viewMode === 'gaps' && (
             <>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+              <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
                 Gap Analysis - Clauses Needing Evidence
               </h2>
               <div className="space-y-3">
                 {getAllClauses()
-                  .filter(c => c.level === 2 && getCoverageStatus(c.id) === 'none')
+                  .filter(c => {
+                    const standard = ISO_STANDARDS.find(s => s.id === c.standard);
+                    const hasSubClauses = standard?.clauses.some(cl => cl.level === 2);
+                    const targetLevel = hasSubClauses ? 2 : 1;
+                    return c.level === targetLevel && getCoverageStatus(c.id) === 'none';
+                  })
                   .filter(c => selectedStandard === 'all' || c.standard === selectedStandard)
                   .map(clause => {
                     const Icon = standardIcons[clause.standard];
@@ -499,12 +512,12 @@ export default function ComplianceEvidence() {
                         onClick={() => setSelectedClause(clause)}
                       >
                         <div className="flex items-center gap-3">
-                          <XCircle className="w-5 h-5 text-red-400" />
+                          <XCircle className="w-5 h-5 text-destructive" />
                           <Icon className={`w-4 h-4 text-${color}-400`} />
-                          <span className="font-medium text-white">{clause.clauseNumber}</span>
-                          <span className="text-gray-300">{clause.title}</span>
+                          <span className="font-medium text-foreground">{clause.clauseNumber}</span>
+                          <span className="text-muted-foreground">{clause.title}</span>
                         </div>
-                        <p className="text-sm text-gray-400 mt-2 ml-12">{clause.description}</p>
+                        <p className="text-sm text-muted-foreground mt-2 ml-12">{clause.description}</p>
                         <div className="flex gap-2 mt-2 ml-12">
                           <button className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-full flex items-center gap-1">
                             <Plus className="w-3 h-3" /> Add Evidence
@@ -522,50 +535,47 @@ export default function ComplianceEvidence() {
         </div>
 
         {/* Right Panel - Clause Details */}
-        <div className="bg-slate-800 rounded-xl p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+        <div className="bg-card border border-border rounded-xl p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           {selectedClause ? (
             <>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-white">Clause Details</h2>
+                <h2 className="text-lg font-bold text-foreground">Clause Details</h2>
                 <button 
                   onClick={() => setSelectedClause(null)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <XCircle className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="space-y-4">
-                {/* Clause Info */}
-                <div className="p-4 bg-slate-700/50 rounded-lg">
+                <div className="p-4 bg-surface/50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     {React.createElement(standardIcons[selectedClause.standard], { 
                       className: `w-5 h-5 text-${standardColors[selectedClause.standard]}-400` 
                     })}
-                    <span className="font-bold text-white">{selectedClause.clauseNumber}</span>
+                    <span className="font-bold text-foreground">{selectedClause.clauseNumber}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full bg-${standardColors[selectedClause.standard]}-500/20 text-${standardColors[selectedClause.standard]}-400`}>
                       {ISO_STANDARDS.find(s => s.id === selectedClause.standard)?.code}
                     </span>
                   </div>
-                  <h3 className="text-lg font-medium text-white mb-2">{selectedClause.title}</h3>
-                  <p className="text-sm text-gray-400">{selectedClause.description}</p>
+                  <h3 className="text-lg font-medium text-foreground mb-2">{selectedClause.title}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedClause.description}</p>
                 </div>
 
-                {/* Keywords */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Keywords</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Keywords</h4>
                   <div className="flex flex-wrap gap-2">
                     {selectedClause.keywords.map((keyword, i) => (
-                      <span key={i} className="text-xs bg-slate-700 text-gray-300 px-2 py-1 rounded-full">
+                      <span key={i} className="text-xs bg-surface text-muted-foreground px-2 py-1 rounded-full border border-border">
                         {keyword}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                {/* Coverage Status */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Coverage Status</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Coverage Status</h4>
                   {(() => {
                     const status = getCoverageStatus(selectedClause.id);
                     const evidence = getEvidenceForClause(selectedClause.id);
@@ -575,20 +585,20 @@ export default function ComplianceEvidence() {
                         status === 'partial' ? 'bg-yellow-500/20 border border-yellow-500/30' :
                         'bg-red-500/20 border border-red-500/30'
                       }`}>
-                        {status === 'full' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> :
-                         status === 'partial' ? <Clock className="w-5 h-5 text-yellow-400" /> :
-                         <XCircle className="w-5 h-5 text-red-400" />}
+                        {status === 'full' ? <CheckCircle2 className="w-5 h-5 text-success" /> :
+                         status === 'partial' ? <Clock className="w-5 h-5 text-warning" /> :
+                         <XCircle className="w-5 h-5 text-destructive" />}
                         <div>
                           <p className={`font-medium ${
-                            status === 'full' ? 'text-emerald-400' :
-                            status === 'partial' ? 'text-yellow-400' :
-                            'text-red-400'
+                            status === 'full' ? 'text-success' :
+                            status === 'partial' ? 'text-warning' :
+                            'text-destructive'
                           }`}>
                             {status === 'full' ? 'Fully Covered' :
                              status === 'partial' ? 'Partially Covered' :
                              'No Evidence'}
                           </p>
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-muted-foreground">
                             {evidence.length} evidence item(s) linked
                           </p>
                         </div>
@@ -597,11 +607,10 @@ export default function ComplianceEvidence() {
                   })()}
                 </div>
 
-                {/* Linked Evidence */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-400">Linked Evidence</h4>
-                    <button className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Linked Evidence</h4>
+                    <button className="text-xs text-primary hover:text-primary-hover flex items-center gap-1">
                       <Plus className="w-3 h-3" /> Add Link
                     </button>
                   </div>
@@ -611,15 +620,15 @@ export default function ComplianceEvidence() {
                         const config = evidenceTypeConfig[evidence.type];
                         const Icon = config.icon;
                         return (
-                          <div key={evidence.id} className="p-3 bg-slate-700/50 rounded-lg flex items-center gap-3">
+                          <div key={evidence.id} className="p-3 bg-surface/50 rounded-lg flex items-center gap-3">
                             <div className={`p-1.5 rounded ${config.color}`}>
                               <Icon className="w-3 h-3 text-white" />
                             </div>
                             <div className="flex-grow">
-                              <p className="text-sm text-white">{evidence.title}</p>
-                              <p className="text-xs text-gray-400">{evidence.date}</p>
+                              <p className="text-sm text-foreground">{evidence.title}</p>
+                              <p className="text-xs text-muted-foreground">{evidence.date}</p>
                             </div>
-                            <a href={evidence.link} className="text-emerald-400 hover:text-emerald-300">
+                            <a href={evidence.link} className="text-primary hover:text-primary-hover">
                               <ArrowUpRight className="w-4 h-4" />
                             </a>
                           </div>
@@ -627,9 +636,9 @@ export default function ComplianceEvidence() {
                       })}
                     </div>
                   ) : (
-                    <div className="p-4 bg-slate-700/30 rounded-lg text-center">
-                      <p className="text-sm text-gray-400">No evidence linked yet</p>
-                      <button className="mt-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 mx-auto">
+                    <div className="p-4 bg-surface/30 rounded-lg text-center">
+                      <p className="text-sm text-muted-foreground">No evidence linked yet</p>
+                      <button className="mt-2 text-xs bg-primary hover:bg-primary-hover text-primary-foreground px-3 py-1.5 rounded-lg flex items-center gap-1 mx-auto">
                         <Plus className="w-3 h-3" /> Link Evidence
                       </button>
                     </div>
@@ -639,9 +648,9 @@ export default function ComplianceEvidence() {
             </>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-center">
-              <Target className="w-16 h-16 text-slate-600 mb-4" />
-              <h3 className="text-lg font-medium text-gray-400 mb-2">Select a Clause</h3>
-              <p className="text-sm text-gray-500">
+              <Target className="w-16 h-16 text-muted-foreground/40 mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground mb-2">Select a Clause</h3>
+              <p className="text-sm text-muted-foreground/70">
                 Click on any clause in the tree view to see details and linked evidence
               </p>
             </div>
@@ -651,22 +660,31 @@ export default function ComplianceEvidence() {
 
       {/* AI Auto-Tagger Modal */}
       {showAutoTagger && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auto-tagger-title"
+          aria-describedby="auto-tagger-desc"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowAutoTagger(false); setAutoTagText(''); setAutoTagResults([]); } }}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowAutoTagger(false); setAutoTagText(''); setAutoTagResults([]); } }}
+        >
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 id="auto-tagger-title" className="text-xl font-bold text-foreground flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-purple-400" />
                 AI Auto-Tagger
               </h2>
               <button 
                 onClick={() => { setShowAutoTagger(false); setAutoTagText(''); setAutoTagResults([]); }}
-                className="text-gray-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Close auto-tagger"
               >
                 <XCircle className="w-6 h-6" />
               </button>
             </div>
 
-            <p className="text-gray-400 mb-4">
+            <p id="auto-tagger-desc" className="text-muted-foreground mb-4">
               Paste any text content (policy, procedure, audit finding, etc.) and AI will automatically identify relevant ISO clauses.
             </p>
 
@@ -675,7 +693,8 @@ export default function ComplianceEvidence() {
               onChange={(e) => setAutoTagText(e.target.value)}
               placeholder="Paste your content here... e.g., 'This procedure describes the process for evaluating and approving new suppliers to ensure quality materials are procured.'"
               rows={6}
-              className="w-full p-4 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-4"
+              className="w-full p-4 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-4"
+              aria-label="Content to auto-tag"
             />
 
             <button
@@ -689,8 +708,8 @@ export default function ComplianceEvidence() {
 
             {autoTagResults.length > 0 && (
               <div>
-                <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-                  <Tag className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-bold text-foreground mb-3 flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-success" />
                   Detected ISO Clauses ({autoTagResults.length})
                 </h3>
                 <div className="space-y-2">
@@ -699,14 +718,14 @@ export default function ComplianceEvidence() {
                     const color = standardColors[clause.standard];
                     const apiResult = apiTagResults.find(r => r.clause_id === clause.id);
                     return (
-                      <div key={clause.id} className="p-3 bg-slate-700/50 rounded-lg flex items-center gap-3">
+                      <div key={clause.id} className="p-3 bg-surface/50 rounded-lg flex items-center gap-3">
                         <Icon className={`w-5 h-5 text-${color}-400`} />
-                        <span className="font-medium text-white">{clause.clauseNumber}</span>
-                        <span className="text-gray-300 flex-grow">{clause.title}</span>
+                        <span className="font-medium text-foreground">{clause.clauseNumber}</span>
+                        <span className="text-muted-foreground flex-grow">{clause.title}</span>
                         {apiResult && (
                           <span className="text-xs text-purple-400">{Math.round(apiResult.confidence)}%</span>
                         )}
-                        <button className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-full">
+                        <button className="text-xs bg-primary hover:bg-primary-hover text-primary-foreground px-3 py-1 rounded-full">
                           Apply Tag
                         </button>
                       </div>

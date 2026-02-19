@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { auditsApi } from '../api/client';
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,6 +20,8 @@ import {
   Timer,
   CheckCheck,
   MinusCircle,
+  Loader2,
+  Send,
 } from 'lucide-react';
 
 // ============================================================================
@@ -44,7 +47,7 @@ interface QuestionResponse {
   signature?: string;
   flagged?: boolean;
   timestamp: string;
-  duration?: number; // seconds spent on question
+  duration?: number;
 }
 
 interface AuditSection {
@@ -70,202 +73,28 @@ interface AuditQuestion {
   isoClause?: string;
 }
 
-// Mock audit data
-const MOCK_AUDIT = {
-  id: 'audit-001',
-  templateId: 'template-001',
-  templateName: 'Vehicle Pre-Departure Inspection',
-  location: 'Depot A - Main Yard',
-  asset: 'LD24VLP',
-  scheduledDate: '2026-01-19',
-  auditor: 'John Smith',
-  sections: [
-    {
-      id: 'sec-1',
-      title: 'Exterior Checks',
-      description: 'Visual inspection of vehicle exterior',
-      color: 'from-blue-500 to-cyan-500',
-      isComplete: false,
-      questions: [
-        {
-          id: 'q-1-1',
-          text: 'Are all lights working correctly? (headlights, indicators, brake lights, hazards)',
-          description: 'Check all external lighting',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Turn on ignition and test each light function. Walk around vehicle to verify.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-1-2',
-          text: 'Are tyres in good condition with adequate tread depth?',
-          description: 'Minimum 1.6mm tread depth required',
-          type: 'pass_fail',
-          required: true,
-          weight: 3,
-          evidenceRequired: true,
-          guidance: 'Use tread depth gauge. Check for damage, bulges, or embedded objects.',
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-1-3',
-          text: 'Is the windscreen free from cracks or chips in driver vision area?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: false,
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-1-4',
-          text: 'Are mirrors clean, secure, and correctly adjusted?',
-          type: 'yes_no',
-          required: true,
-          weight: 1,
-          evidenceRequired: false,
-          riskLevel: 'medium',
-        },
-        {
-          id: 'q-1-5',
-          text: 'Rate the overall exterior cleanliness',
-          type: 'scale_1_5',
-          required: false,
-          weight: 0.5,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-    {
-      id: 'sec-2',
-      title: 'Interior Checks',
-      description: 'Safety equipment and interior condition',
-      color: 'from-purple-500 to-pink-500',
-      isComplete: false,
-      questions: [
-        {
-          id: 'q-2-1',
-          text: 'Is the first aid kit present and fully stocked?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Check expiry dates on all items. Verify complete contents against checklist.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-2-2',
-          text: 'Is the fire extinguisher present, in date, and accessible?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-2-3',
-          text: 'Is the high-visibility vest present?',
-          type: 'yes_no',
-          required: true,
-          weight: 1,
-          evidenceRequired: false,
-          riskLevel: 'medium',
-        },
-        {
-          id: 'q-2-4',
-          text: 'Is the warning triangle present?',
-          type: 'yes_no',
-          required: true,
-          weight: 1,
-          evidenceRequired: false,
-          riskLevel: 'medium',
-        },
-        {
-          id: 'q-2-5',
-          text: 'Are seatbelts in good condition and functioning?',
-          type: 'pass_fail',
-          required: true,
-          weight: 3,
-          evidenceRequired: false,
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-2-6',
-          text: 'Note any interior damage or cleanliness issues',
-          type: 'text_long',
-          required: false,
-          weight: 0,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-    {
-      id: 'sec-3',
-      title: 'Mechanical Checks',
-      description: 'Engine and fluid levels',
-      color: 'from-orange-500 to-amber-500',
-      isComplete: false,
-      questions: [
-        {
-          id: 'q-3-1',
-          text: 'Is the engine oil level within acceptable range?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Check with engine cold. Oil should be between min and max marks.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-3-2',
-          text: 'Is the coolant level adequate?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: false,
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-3-3',
-          text: 'Is the screenwash fluid topped up?',
-          type: 'yes_no',
-          required: true,
-          weight: 1,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-        {
-          id: 'q-3-4',
-          text: 'Are there any warning lights on the dashboard?',
-          type: 'yes_no_na',
-          required: true,
-          weight: 3,
-          evidenceRequired: true,
-          guidance: 'If yes, photograph the warning light and do not use vehicle.',
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-3-5',
-          text: 'Current odometer reading',
-          type: 'numeric',
-          required: true,
-          weight: 0,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-  ] as AuditSection[],
-};
+interface AuditData {
+  id: string;
+  templateName: string;
+  location: string;
+  asset: string;
+  status: string;
+  sections: AuditSection[];
+}
+
+const SECTION_COLORS = [
+  'from-blue-500 to-cyan-500',
+  'from-purple-500 to-pink-500',
+  'from-orange-500 to-amber-500',
+  'from-green-500 to-emerald-500',
+  'from-red-500 to-rose-500',
+  'from-indigo-500 to-violet-500',
+];
 
 // ============================================================================
 // COMPONENTS
 // ============================================================================
 
-// Response Button Component
 const ResponseButton = ({
   selected,
   onClick,
@@ -298,7 +127,7 @@ const ResponseButton = ({
       type="button"
       onClick={onClick}
       className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200
-        ${selected ? variantStyles[variant] : `border-slate-700 bg-slate-800 text-slate-400 ${hoverStyles[variant]}`}`}
+        ${selected ? variantStyles[variant] : `border-border bg-card text-muted-foreground ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className="w-5 h-5" />}
       {children}
@@ -306,7 +135,6 @@ const ResponseButton = ({
   );
 };
 
-// Scale Input Component
 const ScaleInput = ({
   value,
   onChange,
@@ -326,7 +154,7 @@ const ScaleInput = ({
           className={`w-12 h-12 rounded-xl font-bold text-lg transition-all duration-200 ${
             value === num
               ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+              : 'bg-card text-muted-foreground hover:bg-surface hover:text-foreground border border-border'
           }`}
         >
           {num}
@@ -336,7 +164,6 @@ const ScaleInput = ({
   );
 };
 
-// Photo Capture Component
 const PhotoCapture = ({
   photos,
   onAdd,
@@ -373,7 +200,7 @@ const PhotoCapture = ({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full py-4 border-2 border-dashed border-slate-700 rounded-xl text-slate-400 hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
+        className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
       >
         <Camera className="w-5 h-5" />
         Take Photo / Upload
@@ -403,7 +230,6 @@ const PhotoCapture = ({
   );
 };
 
-// Signature Pad Component
 const SignaturePad = ({
   signature,
   onCapture,
@@ -484,18 +310,18 @@ const SignaturePad = ({
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="w-full h-40 bg-slate-800 border border-slate-700 rounded-xl cursor-crosshair touch-none"
+          className="w-full h-40 bg-card border border-border rounded-xl cursor-crosshair touch-none"
         />
         {!signature && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-slate-500">Sign here</p>
+            <p className="text-muted-foreground">Sign here</p>
           </div>
         )}
       </div>
       <button
         type="button"
         onClick={clearCanvas}
-        className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
+        className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
       >
         <RotateCcw className="w-4 h-4" /> Clear Signature
       </button>
@@ -509,8 +335,11 @@ const SignaturePad = ({
 
 export default function AuditExecution() {
   const navigate = useNavigate();
+  const { auditId } = useParams<{ auditId: string }>();
   
-  const [audit] = useState(MOCK_AUDIT);
+  const [audit, setAudit] = useState<AuditData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [responses, setResponses] = useState<Record<string, QuestionResponse>>({});
@@ -518,17 +347,98 @@ export default function AuditExecution() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showGuidance, setShowGuidance] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const responseIdMapRef = useRef<Record<string, number>>({});
+
+  // Load audit run from API
+  const loadAuditRun = useCallback(async () => {
+    if (!auditId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const numericId = parseInt(auditId, 10);
+      const runData = await auditsApi.getRun(numericId);
+      const templateData = await auditsApi.getTemplate(runData.data.template_id);
+
+      const sections: AuditSection[] = ((templateData.data as any).sections || []).map(
+        (sec: any, sIdx: number) => ({
+          id: String(sec.id),
+          title: String(sec.title || ''),
+          description: sec.description ? String(sec.description) : undefined,
+          color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
+          isComplete: false,
+          questions: (sec.questions || []).map(
+            (q: any) => ({
+              id: String(q.id),
+              text: String(q.question_text || q.text || ''),
+              description: q.description ? String(q.description) : undefined,
+              type: String(q.question_type || q.type || 'yes_no'),
+              required: q.is_required !== false,
+              weight: Number(q.weight || 1),
+              evidenceRequired: q.evidence_required === true,
+              guidance: q.help_text ? String(q.help_text) : undefined,
+              riskLevel: q.risk_category ? String(q.risk_category) : undefined,
+              isoClause: q.iso_clause ? String(q.iso_clause) : undefined,
+            })
+          ),
+        })
+      );
+
+      const rd = runData.data as any;
+      setAudit({
+        id: String(rd.id),
+        templateName: String((templateData.data as any).name || ''),
+        location: String(rd.location || ''),
+        asset: String(rd.title || ''),
+        status: String(rd.status || 'scheduled'),
+        sections,
+      });
+
+      // Restore previously saved responses
+      const existingResponses: Record<string, QuestionResponse> = {};
+      if (rd.responses) {
+        for (const r of rd.responses as any[]) {
+          const qId = String(r.question_id);
+          responseIdMapRef.current[qId] = Number(r.id);
+          existingResponses[qId] = {
+            questionId: qId,
+            response: r.is_na
+              ? 'na'
+              : r.response_value
+              ? String(r.response_value)
+              : r.score != null
+              ? Number(r.score)
+              : null,
+            notes: r.notes ? String(r.notes) : undefined,
+            flagged: r.flagged === true,
+            timestamp: String(r.created_at || new Date().toISOString()),
+          };
+        }
+      }
+      setResponses(existingResponses);
+    } catch (err) {
+      console.error('Failed to load audit run:', err);
+      setError('Failed to load audit. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [auditId]);
+
+  useEffect(() => { loadAuditRun(); }, [loadAuditRun]);
 
   // Timer
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || loading || showSummary) return;
     
     const timer = setInterval(() => {
       setElapsedTime(prev => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isPaused]);
+  }, [isPaused, loading, showSummary]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -536,22 +446,20 @@ export default function AuditExecution() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Current section and question
-  const currentSection = audit.sections[currentSectionIndex];
-  const currentQuestion = currentSection.questions[currentQuestionIndex];
-  const currentResponse = responses[currentQuestion.id];
+  const currentSection = audit?.sections[currentSectionIndex];
+  const currentQuestion = currentSection?.questions[currentQuestionIndex];
+  const currentResponse = currentQuestion ? responses[currentQuestion.id] : undefined;
 
-  // Calculate progress
-  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0);
+  const totalQuestions = audit?.sections.reduce((sum, s) => sum + s.questions.length, 0) ?? 0;
   const answeredQuestions = Object.keys(responses).length;
-  const progressPercentage = (answeredQuestions / totalQuestions) * 100;
+  const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
 
   // Calculate score
   const calculateScore = () => {
     let totalWeight = 0;
     let achievedWeight = 0;
 
-    audit.sections.forEach(section => {
+    audit?.sections.forEach(section => {
       section.questions.forEach(question => {
         const response = responses[question.id];
         if (!response) return;
@@ -578,21 +486,76 @@ export default function AuditExecution() {
     return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0;
   };
 
-  // Update response
+  // Sync a single response to the API
+  const syncResponseToApi = useCallback(async (questionId: string, updates: Partial<QuestionResponse>) => {
+    if (!auditId) return;
+    
+    const numericRunId = parseInt(auditId, 10);
+    const numericQuestionId = parseInt(questionId, 10);
+    const existingResponseId = responseIdMapRef.current[questionId];
+
+    const responseValue = updates.response != null ? String(updates.response) : undefined;
+    const isNa = updates.response === 'na';
+    let score: number | undefined;
+    let maxScore: number | undefined;
+
+    if (updates.response === 'pass' || updates.response === 'yes') {
+      score = 1;
+      maxScore = 1;
+    } else if (updates.response === 'fail' || updates.response === 'no') {
+      score = 0;
+      maxScore = 1;
+    } else if (typeof updates.response === 'number') {
+      score = updates.response;
+      maxScore = 5;
+    }
+
+    const payload: any = {
+      question_id: numericQuestionId,
+      response_value: responseValue,
+      score,
+      max_score: maxScore,
+      notes: updates.notes,
+      is_na: isNa,
+    };
+
+    try {
+      setSaveStatus('saving');
+      if (existingResponseId) {
+        await auditsApi.updateResponse(existingResponseId, payload);
+      } else {
+        const created = await auditsApi.createResponse(numericRunId, payload);
+        responseIdMapRef.current[questionId] = created.data.id;
+      }
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Failed to sync response:', err);
+      setSaveStatus('error');
+    }
+  }, [auditId]);
+
+  // Update local state + sync to API
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
+    if (!currentQuestion) return;
+    const questionId = currentQuestion.id;
+
     setResponses(prev => ({
       ...prev,
-      [currentQuestion.id]: {
-        ...prev[currentQuestion.id],
+      [questionId]: {
+        ...prev[questionId],
         ...updates,
-        questionId: currentQuestion.id,
+        questionId,
         timestamp: new Date().toISOString(),
       },
     }));
+
+    syncResponseToApi(questionId, updates);
   };
 
   // Navigation
   const goNext = () => {
+    if (!currentSection || !audit) return;
     if (currentQuestionIndex < currentSection.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else if (currentSectionIndex < audit.sections.length - 1) {
@@ -601,19 +564,53 @@ export default function AuditExecution() {
     } else {
       setShowSummary(true);
     }
+    setShowGuidance(false);
   };
 
   const goPrev = () => {
+    if (!audit) return;
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
     } else if (currentSectionIndex > 0) {
       setCurrentSectionIndex(prev => prev - 1);
       setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1);
     }
+    setShowGuidance(false);
+  };
+
+  // Submit (complete) the audit
+  const handleSubmitAudit = async () => {
+    if (!auditId) return;
+    setIsSubmitting(true);
+    try {
+      await auditsApi.completeRun(parseInt(auditId, 10));
+      navigate('/audits');
+    } catch (err) {
+      console.error('Failed to complete audit:', err);
+      setIsSubmitting(false);
+    }
+  };
+
+  // Save draft
+  const handleSaveDraft = async () => {
+    if (!auditId) return;
+    setIsSaving(true);
+    try {
+      await auditsApi.updateRun(parseInt(auditId, 10), {
+        status: 'in_progress',
+      });
+      navigate('/audits');
+    } catch (err) {
+      console.error('Failed to save draft:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Render question input based on type
   const renderQuestionInput = () => {
+    if (!currentQuestion) return null;
+
     switch (currentQuestion.type) {
       case 'pass_fail':
         return (
@@ -714,7 +711,7 @@ export default function AuditExecution() {
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter your response..."
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
           />
         );
 
@@ -725,7 +722,7 @@ export default function AuditExecution() {
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter detailed response..."
             rows={4}
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
           />
         );
 
@@ -736,7 +733,7 @@ export default function AuditExecution() {
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter number..."
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
           />
         );
 
@@ -750,52 +747,119 @@ export default function AuditExecution() {
         );
 
       default:
-        return null;
+        return (
+          <textarea
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            placeholder="Enter response..."
+            rows={3}
+            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
+          />
+        );
     }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading audit...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !audit) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <XCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Failed to Load Audit</h2>
+          <p className="text-muted-foreground mb-6">{error || 'Audit not found.'}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => navigate('/audits')}
+              className="px-6 py-2 bg-card border border-border text-foreground rounded-xl hover:bg-surface transition-colors"
+            >
+              Back to Audits
+            </button>
+            <button
+              onClick={loadAuditRun}
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No sections/questions
+  if (audit.sections.length === 0 || audit.sections.every(s => s.questions.length === 0)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <Info className="w-12 h-12 text-warning mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">No Questions Found</h2>
+          <p className="text-muted-foreground mb-6">
+            This audit template has no sections or questions configured. Please add questions in the Audit Builder first.
+          </p>
+          <button
+            onClick={() => navigate('/audits')}
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity"
+          >
+            Back to Audits
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Summary view
   if (showSummary) {
     const score = calculateScore();
     const passed = score >= 80;
 
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center animate-fade-in">
-          {/* Score Display */}
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-lg w-full bg-card border border-border rounded-3xl p-8 text-center animate-fade-in">
           <div className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-6 ${
             passed ? 'bg-gradient-to-br from-green-500 to-emerald-500' : 'bg-gradient-to-br from-red-500 to-rose-500'
           }`}>
             <span className="text-4xl font-bold text-white">{score}%</span>
           </div>
 
-          <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-green-400' : 'text-red-400'}`}>
+          <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-success' : 'text-destructive'}`}>
             {passed ? 'AUDIT PASSED' : 'AUDIT FAILED'}
           </h2>
-          <p className="text-slate-400 mb-8">
-            {audit.templateName} - {audit.asset}
+          <p className="text-muted-foreground mb-8">
+            {audit.templateName} {audit.location ? `- ${audit.location}` : ''}
           </p>
 
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">{answeredQuestions}</p>
-              <p className="text-xs text-slate-400">Questions Answered</p>
+            <div className="bg-surface rounded-xl p-4 border border-border">
+              <p className="text-2xl font-bold text-foreground">{answeredQuestions}</p>
+              <p className="text-xs text-muted-foreground">Answered</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">{formatTime(elapsedTime)}</p>
-              <p className="text-xs text-slate-400">Duration</p>
+            <div className="bg-surface rounded-xl p-4 border border-border">
+              <p className="text-2xl font-bold text-foreground">{formatTime(elapsedTime)}</p>
+              <p className="text-xs text-muted-foreground">Duration</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">
+            <div className="bg-surface rounded-xl p-4 border border-border">
+              <p className="text-2xl font-bold text-foreground">
                 {Object.values(responses).filter(r => r.photos && r.photos.length > 0).length}
               </p>
-              <p className="text-xs text-slate-400">Photos</p>
+              <p className="text-xs text-muted-foreground">Photos</p>
             </div>
           </div>
 
           {/* Findings Summary */}
           <div className="text-left mb-8">
-            <h3 className="text-lg font-semibold text-white mb-3">Findings</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-3">Findings</h3>
             <div className="space-y-2">
               {Object.values(responses)
                 .filter(r => r.response === 'fail' || r.response === 'no')
@@ -805,30 +869,35 @@ export default function AuditExecution() {
                     .find(q => q.id === r.questionId);
                   return (
                     <div key={idx} className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <XCircle className="w-5 h-5 text-red-400 mt-0.5" />
-                      <p className="text-sm text-red-300">{question?.text}</p>
+                      <XCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-destructive">{question?.text}</p>
                     </div>
                   );
                 })}
               {Object.values(responses).filter(r => r.response === 'fail' || r.response === 'no').length === 0 && (
-                <p className="text-sm text-slate-400">No failed items</p>
+                <p className="text-sm text-muted-foreground">No failed items</p>
               )}
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3">
             <button
-              onClick={() => navigate('/audits')}
-              className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors"
+              onClick={() => setShowSummary(false)}
+              className="flex-1 py-3 bg-card border border-border text-foreground rounded-xl hover:bg-surface transition-colors"
             >
-              Back to Audits
+              Review Answers
             </button>
             <button
-              onClick={() => {/* Submit audit */}}
-              className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
+              onClick={handleSubmitAudit}
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Submit Audit
+              {isSubmitting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              {isSubmitting ? 'Submitting...' : 'Submit Audit'}
             </button>
           </div>
         </div>
@@ -836,45 +905,68 @@ export default function AuditExecution() {
     );
   }
 
+  if (!currentSection || !currentQuestion) return null;
+
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800">
+      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/audits')}
-                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                className="p-2 hover:bg-surface rounded-lg transition-colors"
               >
-                <ArrowLeft className="w-5 h-5 text-slate-400" />
+                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
               </button>
               <div>
-                <h1 className="text-lg font-bold text-white">{audit.templateName}</h1>
-                <p className="text-xs text-slate-400">{audit.asset} • {audit.location}</p>
+                <h1 className="text-lg font-bold text-foreground">{audit.templateName}</h1>
+                <p className="text-xs text-muted-foreground">{audit.asset} {audit.location ? `• ${audit.location}` : ''}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Save Status */}
+              {saveStatus === 'saving' && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+                </span>
+              )}
+              {saveStatus === 'saved' && (
+                <span className="text-xs text-success flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Saved
+                </span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-xs text-destructive flex items-center gap-1">
+                  <XCircle className="w-3 h-3" /> Error
+                </span>
+              )}
+
               {/* Timer */}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-lg">
-                <Timer className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-mono text-white">{formatTime(elapsedTime)}</span>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg border border-border">
+                <Timer className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-mono text-foreground">{formatTime(elapsedTime)}</span>
               </div>
 
               {/* Pause/Play */}
               <button
                 onClick={() => setIsPaused(!isPaused)}
                 className={`p-2 rounded-lg transition-colors ${
-                  isPaused ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400 hover:text-white'
+                  isPaused ? 'bg-amber-500/20 text-amber-400' : 'bg-surface text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
               </button>
 
               {/* Save Draft */}
-              <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
-                <Save className="w-4 h-4" />
+              <button
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-surface text-foreground rounded-lg hover:bg-card border border-border"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save
               </button>
             </div>
@@ -882,11 +974,11 @@ export default function AuditExecution() {
 
           {/* Progress Bar */}
           <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
               <span>Progress: {answeredQuestions}/{totalQuestions} questions</span>
               <span>{Math.round(progressPercentage)}%</span>
             </div>
-            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-2 bg-surface rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
                 style={{ width: `${progressPercentage}%` }}
@@ -897,7 +989,7 @@ export default function AuditExecution() {
       </header>
 
       {/* Section Navigation */}
-      <div className="bg-slate-900/50 border-b border-slate-800 overflow-x-auto">
+      <div className="bg-card/50 border-b border-border overflow-x-auto">
         <div className="flex px-4 py-2 gap-2">
           {audit.sections.map((section, idx) => {
             const sectionAnswered = section.questions.filter(q => responses[q.id]).length;
@@ -910,19 +1002,20 @@ export default function AuditExecution() {
                 onClick={() => {
                   setCurrentSectionIndex(idx);
                   setCurrentQuestionIndex(0);
+                  setShowGuidance(false);
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
                   isCurrent
                     ? `bg-gradient-to-r ${section.color} text-white`
                     : isComplete
                     ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    : 'bg-surface text-muted-foreground hover:bg-card border border-border'
                 }`}
               >
                 {isComplete ? (
                   <CheckCheck className="w-4 h-4" />
                 ) : (
-                  <span className="w-5 h-5 rounded-full bg-slate-700 text-xs flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-surface text-xs flex items-center justify-center border border-border">
                     {idx + 1}
                   </span>
                 )}
@@ -938,13 +1031,13 @@ export default function AuditExecution() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-4 pb-32">
           {/* Question Card */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
+          <div className="bg-card border border-border rounded-3xl overflow-hidden">
             {/* Question Header */}
             <div className={`bg-gradient-to-r ${currentSection.color} p-0.5`}>
-              <div className="bg-slate-900 p-4">
+              <div className="bg-card p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">
+                    <span className="text-sm text-muted-foreground">
                       {currentSection.title} • Question {currentQuestionIndex + 1} of {currentSection.questions.length}
                     </span>
                   </div>
@@ -971,13 +1064,12 @@ export default function AuditExecution() {
 
             {/* Question Content */}
             <div className="p-6 space-y-6">
-              {/* Question Text */}
               <div>
-                <h2 className="text-xl font-semibold text-white mb-2">
+                <h2 className="text-xl font-semibold text-foreground mb-2">
                   {currentQuestion.text}
                 </h2>
                 {currentQuestion.description && (
-                  <p className="text-sm text-slate-400">{currentQuestion.description}</p>
+                  <p className="text-sm text-muted-foreground">{currentQuestion.description}</p>
                 )}
               </div>
 
@@ -1007,10 +1099,10 @@ export default function AuditExecution() {
 
               {/* Evidence Required */}
               {currentQuestion.evidenceRequired && (
-                <div className="pt-4 border-t border-slate-800">
+                <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-2 mb-3">
                     <Camera className="w-4 h-4 text-cyan-400" />
-                    <span className="text-sm font-medium text-white">Photo Evidence Required</span>
+                    <span className="text-sm font-medium text-foreground">Photo Evidence Required</span>
                   </div>
                   <PhotoCapture
                     photos={currentResponse?.photos || []}
@@ -1029,17 +1121,17 @@ export default function AuditExecution() {
               )}
 
               {/* Notes */}
-              <div className="pt-4 border-t border-slate-800">
+              <div className="pt-4 border-t border-border">
                 <div className="flex items-center gap-2 mb-3">
-                  <MessageSquare className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-medium text-white">Additional Notes</span>
+                  <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">Additional Notes</span>
                 </div>
                 <textarea
                   value={currentResponse?.notes || ''}
                   onChange={(e) => updateResponse({ notes: e.target.value })}
                   placeholder="Add any additional observations..."
                   rows={2}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none text-sm"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none text-sm"
                 />
               </div>
 
@@ -1049,7 +1141,7 @@ export default function AuditExecution() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                   currentResponse?.flagged
                     ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
                 }`}
               >
                 <Flag className={`w-4 h-4 ${currentResponse?.flagged ? 'fill-current' : ''}`} />
@@ -1061,12 +1153,12 @@ export default function AuditExecution() {
       </main>
 
       {/* Navigation Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-slate-900/80 backdrop-blur-xl border-t border-slate-800 p-4">
+      <footer className="fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border p-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <button
             onClick={goPrev}
             disabled={currentSectionIndex === 0 && currentQuestionIndex === 0}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-surface text-foreground rounded-xl hover:bg-card disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-border"
           >
             <ArrowLeft className="w-5 h-5" />
             Previous
@@ -1077,13 +1169,13 @@ export default function AuditExecution() {
             {currentSection.questions.map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => setCurrentQuestionIndex(idx)}
+                onClick={() => { setCurrentQuestionIndex(idx); setShowGuidance(false); }}
                 className={`w-3 h-3 rounded-full transition-all ${
                   idx === currentQuestionIndex
                     ? 'bg-purple-500 w-6'
                     : responses[currentSection.questions[idx].id]
                     ? 'bg-green-500'
-                    : 'bg-slate-700 hover:bg-slate-600'
+                    : 'bg-surface border border-border hover:bg-card'
                 }`}
               />
             ))}

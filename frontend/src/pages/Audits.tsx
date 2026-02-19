@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText, Play } from 'lucide-react'
 import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -40,6 +41,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 }
 
 export default function Audits() {
+  const navigate = useNavigate()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
@@ -298,6 +300,7 @@ export default function Audits() {
                         key={audit.id}
                         hoverable
                         className="p-4 cursor-pointer"
+                        onClick={() => navigate(`/audits/${audit.id}/execute`)}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <span className="font-mono text-xs text-primary">{audit.reference_number}</span>
@@ -316,12 +319,28 @@ export default function Audits() {
                             <span className="truncate">{audit.location}</span>
                           </div>
                         )}
-                        {audit.scheduled_date && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Calendar size={12} />
-                            <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between mt-2">
+                          {audit.scheduled_date && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Calendar size={12} />
+                              <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                          {(audit.status === 'scheduled' || audit.status === 'in_progress') && (
+                            <Button
+                              size="sm"
+                              variant={audit.status === 'in_progress' ? 'default' : 'outline'}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(`/audits/${audit.id}/execute`)
+                              }}
+                              className="text-xs h-7 px-2.5"
+                            >
+                              <Play size={12} />
+                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
+                            </Button>
+                          )}
+                        </div>
                       </Card>
                     ))
                   )}
@@ -346,12 +365,13 @@ export default function Audits() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {audits.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                      <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
                         <ClipboardCheck className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                         <p>No audits found</p>
                       </td>
@@ -361,6 +381,7 @@ export default function Audits() {
                       <tr
                         key={audit.id}
                         className="hover:bg-surface transition-colors cursor-pointer"
+                        onClick={() => navigate(`/audits/${audit.id}/execute`)}
                       >
                         <td className="px-6 py-4">
                           <span className="font-mono text-sm text-primary">{audit.reference_number}</span>
@@ -390,6 +411,34 @@ export default function Audits() {
                         </td>
                         <td className="px-6 py-4 text-sm text-muted-foreground">
                           {audit.scheduled_date ? new Date(audit.scheduled_date).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {(audit.status === 'scheduled' || audit.status === 'in_progress') ? (
+                            <Button
+                              size="sm"
+                              variant={audit.status === 'in_progress' ? 'default' : 'outline'}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(`/audits/${audit.id}/execute`)
+                              }}
+                              className="text-xs h-7"
+                            >
+                              <Play size={12} />
+                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
+                            </Button>
+                          ) : audit.status === 'completed' ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(`/audits/${audit.id}/execute`)
+                              }}
+                              className="text-xs h-7"
+                            >
+                              View
+                            </Button>
+                          ) : null}
                         </td>
                       </tr>
                     ))
