@@ -18,6 +18,7 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
+  FRONTEND_URL: https://purple-water-03205fa03.6.azurestaticapps.net
 
 jobs:
   # Only run if staging deployment succeeded
@@ -135,7 +136,7 @@ jobs:
       - name: Run Page Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || env.FRONTEND_URL }}
         run: npx playwright test tests/page-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -189,7 +190,7 @@ jobs:
       - name: Run Link Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || env.FRONTEND_URL }}
         run: npx playwright test tests/link-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -243,7 +244,7 @@ jobs:
       - name: Run Button Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || env.FRONTEND_URL }}
         run: npx playwright test tests/button-audit.spec.ts --reporter=list
         continue-on-error: true
 
@@ -297,7 +298,7 @@ jobs:
       - name: Run Workflow Audit
         working-directory: tests/ux-coverage
         env:
-          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
+          APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || env.FRONTEND_URL }}
           TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
         run: npx playwright test tests/workflow-audit.spec.ts --reporter=list
