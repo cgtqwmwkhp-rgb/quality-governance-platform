@@ -20,7 +20,6 @@ p0_workflows:
         action: "Navigate to portal home"
         route: /portal
         exit_criteria: "Portal home page loads with navigation tiles"
-        selector: "[data-testid='portal-home']"
         
       - stepId: 2
         action: "Click Report button"
