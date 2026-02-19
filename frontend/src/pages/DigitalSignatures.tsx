@@ -87,7 +87,7 @@ const DigitalSignatures: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [signatureRequests, setSignatureRequests] = useState<SignatureRequest[]>([]);
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
-  const [loading, setLoading] = useState(true);  // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [, setLoading] = useState(true);
 
   const mapApiRequest = (r: SignatureRequestEntry): SignatureRequest => ({
     id: r.id,

@@ -703,7 +703,7 @@ export default function MobileAuditExecution() {
   // Navigation
   const goNext = () => {
     triggerHaptic('light');
-    if (currentQuestionIndex < currentSection.questions.length - 1) {
+    if (currentSection && currentQuestionIndex < currentSection.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else if (currentSectionIndex < (audit?.sections.length ?? 0) - 1) {
       setCurrentSectionIndex(prev => prev + 1);

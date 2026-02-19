@@ -40,7 +40,7 @@ export default function ContractsManagement() {
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [loading, setLoading] = useState(true);  // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [, setLoading] = useState(true);
 
   const loadContracts = useCallback(async () => {
     try {

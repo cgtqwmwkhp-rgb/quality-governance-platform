@@ -78,7 +78,7 @@ export default function FormsList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);  // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [, setLoading] = useState(true);
 
   const loadForms = useCallback(async () => {
     try {

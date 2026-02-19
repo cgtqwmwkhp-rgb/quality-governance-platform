@@ -29,27 +29,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { usersApi } from '../api/client';
 import type { UserDetail, RoleDetail } from '../api/client';
 
-interface _User {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  department: string;
-  role: string;
-  status: 'active' | 'inactive' | 'pending';
-  lastLogin?: string;
-  createdAt: string;
-  permissions: string[];
-}
-
-interface _Role {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  userCount: number;
-  color: string;
-}
+/* eslint-disable @typescript-eslint/no-empty-interface */
 
 export default function UserManagement() {
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
