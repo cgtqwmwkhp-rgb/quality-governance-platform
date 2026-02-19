@@ -231,17 +231,29 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Click element if selector specified (and not form_fields step)
             if (step.selector && !step.form_fields) {
               let element = page.locator(step.selector).first();
-              let visible = await element.isVisible().catch(() => false);
+              let visible = false;
+
+              try {
+                await element.waitFor({ state: 'visible', timeout: 10000 });
+                visible = true;
+              } catch {
+                visible = false;
+              }
               
               // Try fallback
               if (!visible && step.fallback_selector) {
                 element = page.locator(step.fallback_selector).first();
-                visible = await element.isVisible().catch(() => false);
+                try {
+                  await element.waitFor({ state: 'visible', timeout: 5000 });
+                  visible = true;
+                } catch {
+                  visible = false;
+                }
               }
               
               if (visible) {
                 await element.click({ timeout: 5000 });
-                await page.waitForTimeout(500); // Brief pause for UI update
+                await page.waitForTimeout(500);
               } else {
                 throw new Error(`Element not found: ${step.selector}`);
               }
