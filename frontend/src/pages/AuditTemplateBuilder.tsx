@@ -56,6 +56,7 @@ const QUESTION_TYPES: { type: QuestionType; label: string; icon: React.ElementTy
   { type: 'textarea', label: 'Long Text', icon: MessageSquare, description: 'Multi-line response' },
   { type: 'number', label: 'Numeric', icon: Hash, description: 'Number input' },
   { type: 'date', label: 'Date', icon: Calendar, description: 'Date picker' },
+  { type: 'datetime', label: 'Date & Time', icon: Calendar, description: 'Date and time picker' },
   { type: 'photo', label: 'Photo', icon: Camera, description: 'Image capture' },
   { type: 'signature', label: 'Signature', icon: FileSignature, description: 'Digital signature' },
   { type: 'file', label: 'File Upload', icon: Upload, description: 'Document attachment' },
@@ -88,6 +89,7 @@ const QuestionEditor = React.memo(function QuestionEditor({
 }: QuestionEditorProps) {
   const [text, setText] = useState(question.question_text);
   const [description, setDescription] = useState(question.description || '');
+  const [weight, setWeight] = useState(question.weight);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -96,7 +98,8 @@ const QuestionEditor = React.memo(function QuestionEditor({
   useEffect(() => {
     setText(question.question_text);
     setDescription(question.description || '');
-  }, [question.question_text, question.description]);
+    setWeight(question.weight);
+  }, [question.question_text, question.description, question.weight]);
 
   const debouncedSave = useCallback((field: string, value: unknown) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -234,8 +237,8 @@ const QuestionEditor = React.memo(function QuestionEditor({
                   <Input
                     id={`q-weight-${question.id}`}
                     type="number"
-                    value={question.weight}
-                    onChange={(e) => debouncedSave('weight', parseFloat(e.target.value) || 1)}
+                    value={weight}
+                    onChange={(e) => { const v = parseFloat(e.target.value) || 1; setWeight(v); debouncedSave('weight', v); }}
                     min={0} max={10} step={0.5}
                     className="w-20 text-center"
                   />
@@ -337,6 +340,7 @@ const SectionEditor = React.memo(function SectionEditor({
   const [isExpanded, setIsExpanded] = useState(true);
   const [title, setTitle] = useState(section.title);
   const [description, setDescription] = useState(section.description || '');
+  const [sectionWeight, setSectionWeight] = useState(section.weight);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -344,7 +348,8 @@ const SectionEditor = React.memo(function SectionEditor({
   useEffect(() => {
     setTitle(section.title);
     setDescription(section.description || '');
-  }, [section.title, section.description]);
+    setSectionWeight(section.weight);
+  }, [section.title, section.description, section.weight]);
 
   const debouncedSave = useCallback((field: string, value: string | number) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -445,8 +450,8 @@ const SectionEditor = React.memo(function SectionEditor({
               <label htmlFor={`sec-weight-${section.id}`} className="text-sm text-muted-foreground">Weight:</label>
               <Input
                 id={`sec-weight-${section.id}`}
-                type="number" value={section.weight}
-                onChange={(e) => debouncedSave('weight', parseFloat(e.target.value) || 1)}
+                type="number" value={sectionWeight}
+                onChange={(e) => { const v = parseFloat(e.target.value) || 1; setSectionWeight(v); debouncedSave('weight', v); }}
                 min={0} max={10} step={0.5}
                 className="w-20 text-center"
               />
@@ -532,6 +537,13 @@ function SettingsPanel({ template, onSave }: SettingsPanelProps) {
   const [passingScore, setPassingScore] = useState(template.passing_score ?? 80);
   const [auditType, setAuditType] = useState(template.audit_type || 'inspection');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setCategory(template.category || '');
+    setScoringMethod(template.scoring_method || 'percentage');
+    setPassingScore(template.passing_score ?? 80);
+    setAuditType(template.audit_type || 'inspection');
+  }, [template.category, template.scoring_method, template.passing_score, template.audit_type]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -660,7 +672,7 @@ function PreviewPanel({ template }: PreviewPanelProps) {
               <Badge variant={template.is_published ? 'success' : 'warning'}>
                 {template.is_published ? 'Published' : 'Draft'}
               </Badge>
-              {template.passing_score && (
+              {template.passing_score != null && (
                 <Badge variant="success">Pass: {template.passing_score}%</Badge>
               )}
             </div>
@@ -1041,6 +1053,7 @@ export default function AuditTemplateBuilder() {
             {(['builder', 'settings', 'preview'] as const).map((tab) => (
               <button
                 key={tab}
+                id={`tab-${tab}`}
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] ${
                   activeTab === tab

@@ -428,6 +428,7 @@ class TestAuditQuestionCRUD:
         data = response.json()
         assert data["question_text"] == "Updated question text"
         assert data["question_type"] == "pass_fail"
+        assert data["weight"] == 5.0
 
     @pytest.mark.asyncio
     async def test_delete_question(
@@ -507,6 +508,10 @@ class TestAuditQuestionCRUD:
         assert response.status_code == 201
         data = response.json()
         assert data["question_type"] == "radio"
+        assert data["options"] is not None
+        assert len(data["options"]) == 4
+        assert data["options"][0]["label"] == "Excellent"
+        assert data["options"][0]["score"] == 5.0
 
 
 class TestAuditTemplateLifecycle:

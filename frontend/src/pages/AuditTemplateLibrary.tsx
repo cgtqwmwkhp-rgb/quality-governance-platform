@@ -51,6 +51,13 @@ export default function AuditTemplateLibrary() {
   const [sortBy, setSortBy] = useState<'name' | 'updated'>('updated');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuditTemplate | null>(null);
+
+  useEffect(() => {
+    if (!activeMenu) return;
+    const dismiss = () => setActiveMenu(null);
+    document.addEventListener('click', dismiss);
+    return () => document.removeEventListener('click', dismiss);
+  }, [activeMenu]);
   const [cloning, setCloning] = useState<number | null>(null);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -136,11 +143,11 @@ export default function AuditTemplateLibrary() {
     });
   }, [templates, sortBy]);
 
-  const stats = useMemo(() => ({
-    total: totalCount,
-    published: templates.filter(t => t.is_published).length,
-    draft: templates.filter(t => !t.is_published).length,
-  }), [templates, totalCount]);
+  const stats = useMemo(() => {
+    const published = templates.filter(t => t.is_published).length;
+    const draft = templates.filter(t => !t.is_published).length;
+    return { total: published + draft, published, draft };
+  }, [templates]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -318,6 +325,8 @@ export default function AuditTemplateLibrary() {
                 className="group cursor-pointer animate-fade-in"
                 style={{ animationDelay: `${index * 50}ms` }}
                 onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/audit-templates/${template.id}/edit`); } }}
+                tabIndex={0}
                 role="article"
                 aria-label={`Template: ${template.name}`}
               >
@@ -423,6 +432,8 @@ export default function AuditTemplateLibrary() {
                     <tr
                       key={template.id}
                       onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/audit-templates/${template.id}/edit`); } }}
+                      tabIndex={0}
                       className="hover:bg-surface transition-colors cursor-pointer"
                     >
                       <td className="px-6 py-4">
@@ -444,7 +455,7 @@ export default function AuditTemplateLibrary() {
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {new Date(template.updated_at).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 relative">
                         <Button
                           variant="ghost" size="icon-sm"
                           onClick={(e) => {
@@ -452,9 +463,37 @@ export default function AuditTemplateLibrary() {
                             setActiveMenu(activeMenu === String(template.id) ? null : String(template.id));
                           }}
                           aria-label="Actions"
+                          aria-expanded={activeMenu === String(template.id)}
                         >
                           <MoreVertical className="w-4 h-4" />
                         </Button>
+                        {activeMenu === String(template.id) && (
+                          <Card className="absolute right-0 mt-1 w-44 z-10">
+                            <CardContent className="p-1">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/audit-templates/${template.id}/edit`); setActiveMenu(null); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
+                              >
+                                <Edit className="w-4 h-4" /> Edit
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleClone(template); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
+                                disabled={cloning === template.id}
+                              >
+                                {cloning === template.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                                Duplicate
+                              </button>
+                              <div className="border-t border-border my-1" />
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(template); setActiveMenu(null); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                              >
+                                <Trash2 className="w-4 h-4" /> Delete
+                              </button>
+                            </CardContent>
+                          </Card>
+                        )}
                       </td>
                     </tr>
                   );

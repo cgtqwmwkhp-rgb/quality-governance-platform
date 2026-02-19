@@ -127,12 +127,13 @@ async def create_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Create a new audit template."""
+    dump = template_data.model_dump(exclude={"standard_ids"})
     template = AuditTemplate(
-        **template_data.model_dump(exclude={"standard_ids"}),
+        **dump,
+        standard_ids_json=template_data.standard_ids,
         created_by_id=current_user.id,
     )
 
-    # Generate reference number
     template.reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
 
     db.add(template)
@@ -161,7 +162,10 @@ async def get_template(
     """Get a specific audit template with sections and questions."""
     result = await db.execute(
         select(AuditTemplate)
-        .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
+        .options(
+            selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
+            selectinload(AuditTemplate.questions),
+        )
         .where(AuditTemplate.id == template_id)
     )
     template = result.scalar_one_or_none()
@@ -174,7 +178,7 @@ async def get_template(
 
     response = AuditTemplateDetailResponse.model_validate(template)
     response.section_count = len(template.sections)
-    response.question_count = sum(len(s.questions) for s in template.sections)
+    response.question_count = len(template.questions)
 
     return response
 
@@ -202,8 +206,13 @@ async def update_template(
         template.is_published = False
 
     update_data = template_data.model_dump(exclude_unset=True, exclude={"standard_ids"})
-    # Mass assignment protection: only allow whitelisted fields
     safe_data = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}
+
+    # Handle standard_ids → standard_ids_json mapping
+    raw = template_data.model_dump(exclude_unset=True)
+    if "standard_ids" in raw:
+        safe_data["standard_ids_json"] = raw["standard_ids"]
+
     changed_fields = []
     for field, value in safe_data.items():
         old_value = getattr(template, field, None)
@@ -237,9 +246,7 @@ async def publish_template(
 ) -> AuditTemplateResponse:
     """Publish an audit template, making it available for use."""
     result = await db.execute(
-        select(AuditTemplate)
-        .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
-        .where(AuditTemplate.id == template_id)
+        select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == template_id)
     )
     template = result.scalar_one_or_none()
 
@@ -249,8 +256,7 @@ async def publish_template(
             detail="Template not found",
         )
 
-    # Validate template has at least one question
-    question_count = sum(len(s.questions) for s in template.sections)
+    question_count = len(template.questions)
     if question_count == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -283,10 +289,12 @@ async def clone_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Clone an existing audit template."""
-    # Fetch the original template with all relationships
     result = await db.execute(
         select(AuditTemplate)
-        .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
+        .options(
+            selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
+            selectinload(AuditTemplate.questions),
+        )
         .where(AuditTemplate.id == template_id)
     )
     original = result.scalar_one_or_none()
@@ -361,6 +369,37 @@ async def clone_template(
                 risk_category=original_question.risk_category,
                 risk_weight=original_question.risk_weight,
                 sort_order=original_question.sort_order,
+            )
+            db.add(cloned_question)
+
+    # Clone unsectioned questions (section_id=None)
+    for oq in original.questions:
+        if oq.section_id is None:
+            cloned_question = AuditQuestion(
+                template_id=cloned_template.id,
+                section_id=None,
+                question_text=oq.question_text,
+                question_type=oq.question_type,
+                description=oq.description,
+                help_text=oq.help_text,
+                is_required=oq.is_required,
+                allow_na=oq.allow_na,
+                is_active=oq.is_active,
+                max_score=oq.max_score,
+                weight=oq.weight,
+                options_json=oq.options_json,
+                min_value=oq.min_value,
+                max_value=oq.max_value,
+                decimal_places=oq.decimal_places,
+                min_length=oq.min_length,
+                max_length=oq.max_length,
+                evidence_requirements_json=oq.evidence_requirements_json,
+                conditional_logic_json=oq.conditional_logic_json,
+                clause_ids_json=oq.clause_ids_json,
+                control_ids_json=oq.control_ids_json,
+                risk_category=oq.risk_category,
+                risk_weight=oq.risk_weight,
+                sort_order=oq.sort_order,
             )
             db.add(cloned_question)
 
@@ -506,6 +545,20 @@ async def create_question(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Template not found",
         )
+
+    # Validate section belongs to this template
+    if question_data.section_id is not None:
+        section_result = await db.execute(
+            select(AuditSection).where(
+                AuditSection.id == question_data.section_id,
+                AuditSection.template_id == template_id,
+            )
+        )
+        if not section_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Section does not belong to this template",
+            )
 
     # Convert options to JSON if provided
     question_dict = question_data.model_dump()
@@ -758,13 +811,23 @@ async def update_run(
 
     update_data = run_data.model_dump(exclude_unset=True)
 
-    # Handle status transitions
     if "status" in update_data:
-        new_status = update_data["status"]
-        if new_status == AuditStatus.IN_PROGRESS.value and run.started_at is None:
+        new_status = update_data.pop("status")
+        if new_status == AuditStatus.COMPLETED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Use POST /runs/{id}/complete to finish an audit with score calculation",
+            )
+        try:
+            validated = AuditStatus(new_status)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid status. Must be one of: {[s.value for s in AuditStatus]}",
+            )
+        if validated == AuditStatus.IN_PROGRESS and run.started_at is None:
             run.started_at = datetime.now(timezone.utc)
-        elif new_status == AuditStatus.COMPLETED.value:
-            run.completed_at = datetime.now(timezone.utc)
+        run.status = validated
 
     for field, value in update_data.items():
         setattr(run, field, value)
@@ -828,9 +891,9 @@ async def complete_run(
             detail="Audit run must be in progress to complete",
         )
 
-    # Calculate scores
-    total_score = sum(r.score or 0 for r in run.responses)
-    max_score = sum(r.max_score or 0 for r in run.responses)
+    scored_responses = [r for r in run.responses if not r.is_na]
+    total_score = sum(r.score or 0 for r in scored_responses)
+    max_score = sum(r.max_score or 0 for r in scored_responses)
 
     run.score = total_score
     run.max_score = max_score
