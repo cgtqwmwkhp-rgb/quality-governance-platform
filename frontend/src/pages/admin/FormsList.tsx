@@ -163,7 +163,7 @@ export default function FormsList() {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="admin-forms-page">
       {/* Header */}
       <header className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -174,7 +174,7 @@ export default function FormsList() {
                 Create and manage customizable forms for incidents, complaints, and more
               </p>
             </div>
-            <Button onClick={() => navigate('/admin/forms/new')}>
+            <Button onClick={() => navigate('/admin/forms/new')} data-testid="create-form-btn">
               <Plus className="w-4 h-4 mr-2" />
               Create New Form
             </Button>

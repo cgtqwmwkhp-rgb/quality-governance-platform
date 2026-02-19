@@ -52,7 +52,7 @@ export default function Portal() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-lg mx-auto px-4 sm:px-6 py-8" data-testid="portal-home">
         {/* User Welcome Card */}
         <Card className="p-4 mb-6">
           <div className="flex items-center gap-3">
@@ -81,6 +81,7 @@ export default function Portal() {
         <div className="space-y-3">
           {/* Primary Action: Submit Report */}
           <button
+            data-testid="portal-report-btn"
             onClick={() => navigate('/portal/report')}
             className={cn(
               "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",
@@ -104,6 +105,7 @@ export default function Portal() {
             hoverable
             className="p-4 cursor-pointer group"
             onClick={() => navigate('/portal/track')}
+            data-testid="portal-track-btn"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-info/10 rounded-xl flex items-center justify-center">
