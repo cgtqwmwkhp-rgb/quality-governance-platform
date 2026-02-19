@@ -469,7 +469,11 @@ async def create_section(
 
     db.add(section)
     await db.commit()
-    await db.refresh(section)
+
+    refreshed = await db.execute(
+        select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
+    )
+    section = refreshed.scalar_one()
 
     return AuditSectionResponse.model_validate(section)
 
@@ -498,7 +502,11 @@ async def update_section(
         setattr(section, field, value)
 
     await db.commit()
-    await db.refresh(section)
+
+    refreshed = await db.execute(
+        select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
+    )
+    section = refreshed.scalar_one()
 
     return AuditSectionResponse.model_validate(section)
 
