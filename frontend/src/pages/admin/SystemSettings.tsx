@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Save,
   Settings,
@@ -16,6 +16,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
+import { settingsApi } from '../../services/api';
 
 interface SettingCategory {
   id: string;
@@ -72,48 +73,38 @@ const SETTING_CATEGORIES: SettingCategory[] = [
   },
 ];
 
-const INITIAL_SETTINGS: Setting[] = [
-  // Branding
-  { key: 'company_name', value: 'Plantexpand Ltd', category: 'branding', description: 'Company name displayed throughout the system', value_type: 'string', is_editable: true },
-  { key: 'company_logo_url', value: '', category: 'branding', description: 'URL to company logo image', value_type: 'string', is_editable: true },
-  { key: 'primary_color', value: '#9BB82D', category: 'branding', description: 'Primary brand color (Electric Lime)', value_type: 'color', is_editable: true },
-  { key: 'accent_color', value: '#7A9424', category: 'branding', description: 'Accent/hover color', value_type: 'color', is_editable: true },
-  
-  // Contact
-  { key: 'support_email', value: 'support@plantexpand.com', category: 'contact', description: 'Support email address', value_type: 'email', is_editable: true },
-  { key: 'support_phone', value: '+44 1onal 234 567', category: 'contact', description: 'Support phone number', value_type: 'string', is_editable: true },
-  { key: 'emergency_phone', value: '+44 999', category: 'contact', description: 'Emergency contact number', value_type: 'string', is_editable: true },
-  
-  // Notifications
-  { key: 'incident_notification_emails', value: 'safety@plantexpand.com', category: 'notifications', description: 'Emails notified on incident submission', value_type: 'string', is_editable: true },
-  { key: 'complaint_notification_emails', value: 'quality@plantexpand.com', category: 'notifications', description: 'Emails notified on complaint submission', value_type: 'string', is_editable: true },
-  { key: 'rta_notification_emails', value: 'fleet@plantexpand.com, safety@plantexpand.com', category: 'notifications', description: 'Emails notified on RTA submission', value_type: 'string', is_editable: true },
-  { key: 'enable_email_notifications', value: 'true', category: 'notifications', description: 'Enable email notifications', value_type: 'boolean', is_editable: true },
-  { key: 'enable_push_notifications', value: 'true', category: 'notifications', description: 'Enable push notifications', value_type: 'boolean', is_editable: true },
-  
-  // Workflow
-  { key: 'auto_assign_incidents', value: 'true', category: 'workflow', description: 'Auto-assign incidents to safety team', value_type: 'boolean', is_editable: true },
-  { key: 'require_investigation', value: 'true', category: 'workflow', description: 'Require investigation for all incidents', value_type: 'boolean', is_editable: true },
-  { key: 'incident_sla_hours', value: '24', category: 'workflow', description: 'Hours to acknowledge an incident', value_type: 'number', is_editable: true },
-  { key: 'complaint_sla_hours', value: '48', category: 'workflow', description: 'Hours to respond to a complaint', value_type: 'number', is_editable: true },
-  
-  // Security
-  { key: 'session_timeout_minutes', value: '60', category: 'security', description: 'Session timeout in minutes', value_type: 'number', is_editable: true },
-  { key: 'require_mfa', value: 'false', category: 'security', description: 'Require multi-factor authentication', value_type: 'boolean', is_editable: true },
-  { key: 'allow_portal_anonymous', value: 'false', category: 'security', description: 'Allow anonymous portal submissions', value_type: 'boolean', is_editable: true },
-  
-  // Regional
-  { key: 'date_format', value: 'DD/MM/YYYY', category: 'regional', description: 'Date display format', value_type: 'string', is_editable: true },
-  { key: 'timezone', value: 'Europe/London', category: 'regional', description: 'Default timezone', value_type: 'string', is_editable: true },
-  { key: 'language', value: 'en-GB', category: 'regional', description: 'Default language', value_type: 'string', is_editable: true },
-];
-
 export default function SystemSettings() {
-  const [settings, setSettings] = useState<Setting[]>(INITIAL_SETTINGS);
+  const [settings, setSettings] = useState<Setting[]>([]);
   const [activeCategory, setActiveCategory] = useState('branding');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
+
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await settingsApi.list();
+      const mapped: Setting[] = (data.items || []).map((s: Record<string, unknown>) => ({
+        key: String(s.key || ''),
+        value: String(s.value ?? ''),
+        category: String(s.category || 'general'),
+        description: String(s.description || ''),
+        value_type: (s.value_type as Setting['value_type']) || 'string',
+        is_editable: s.is_editable !== false,
+      }));
+      setSettings(mapped);
+    } catch {
+      setError('Failed to load settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
 
   const categorySettings = settings.filter((s) => s.category === activeCategory);
 
@@ -121,19 +112,25 @@ export default function SystemSettings() {
     setSettings((prev) =>
       prev.map((s) => (s.key === key ? { ...s, value } : s))
     );
+    setChangedKeys((prev) => new Set(prev).add(key));
     setHasChanges(true);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // In real implementation, save to API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const promises = Array.from(changedKeys).map((key) => {
+        const setting = settings.find((s) => s.key === key);
+        if (setting) return settingsApi.update(key, setting.value);
+        return Promise.resolve();
+      });
+      await Promise.all(promises);
+      setChangedKeys(new Set());
       setSaveSuccess(true);
       setHasChanges(false);
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch {
-      console.error('Failed to save settings');
+      setError('Failed to save settings');
     } finally {
       setIsSaving(false);
     }
@@ -264,7 +261,19 @@ export default function SystemSettings() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {loading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        )}
+        {error && !loading && (
+          <Card className="p-6 text-center">
+            <AlertCircle className="w-8 h-8 mx-auto text-destructive mb-2" />
+            <p className="text-destructive">{error}</p>
+            <Button variant="outline" onClick={loadSettings} className="mt-4">Retry</Button>
+          </Card>
+        )}
+        {!loading && !error && <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Category Navigation */}
           <div className="lg:col-span-1">
             <nav className="space-y-1">
@@ -351,7 +360,7 @@ export default function SystemSettings() {
               </div>
             </Card>
           </div>
-        </div>
+        </div>}
       </main>
     </div>
   );

@@ -1504,11 +1504,397 @@ export interface UserSearchResult {
   department?: string
 }
 
+export interface UserDetail {
+  id: number
+  email: string
+  first_name: string
+  last_name: string
+  full_name: string
+  department?: string
+  phone?: string
+  job_title?: string
+  is_active: boolean
+  is_superuser: boolean
+  last_login?: string
+  created_at: string
+  roles: RoleDetail[]
+}
+
+export interface RoleDetail {
+  id: number
+  name: string
+  description?: string
+  permissions: string[]
+  is_system_role: boolean
+}
+
+export interface UserCreatePayload {
+  email: string
+  password: string
+  first_name: string
+  last_name: string
+  department?: string
+  phone?: string
+  job_title?: string
+  role_ids?: number[]
+}
+
+export interface UserUpdatePayload {
+  first_name?: string
+  last_name?: string
+  department?: string
+  phone?: string
+  job_title?: string
+  is_active?: boolean
+  role_ids?: number[]
+}
+
+export interface RoleCreatePayload {
+  name: string
+  description?: string
+  permissions: string[]
+}
+
+export interface RoleUpdatePayload {
+  name?: string
+  description?: string
+  permissions?: string[]
+}
+
 export const usersApi = {
   search: (query: string) =>
     api.get<UserSearchResult[]>(`/api/v1/users/search/?q=${encodeURIComponent(query)}`),
-  list: (page = 1, size = 50) =>
-    api.get<PaginatedResponse<UserSearchResult>>(`/api/v1/users/?page=${page}&size=${size}`),
+  list: (page = 1, size = 50, params?: { search?: string; department?: string; is_active?: boolean }) => {
+    const sp = new URLSearchParams({ page: String(page), page_size: String(size) })
+    if (params?.search) sp.set('search', params.search)
+    if (params?.department) sp.set('department', params.department)
+    if (params?.is_active !== undefined) sp.set('is_active', String(params.is_active))
+    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users/?${sp}`)
+  },
+  get: (id: number) =>
+    api.get<UserDetail>(`/api/v1/users/${id}`),
+  create: (data: UserCreatePayload) =>
+    api.post<UserDetail>('/api/v1/users/', data),
+  update: (id: number, data: UserUpdatePayload) =>
+    api.patch<UserDetail>(`/api/v1/users/${id}`, data),
+  delete: (id: number) =>
+    api.delete<void>(`/api/v1/users/${id}`),
+  listRoles: () =>
+    api.get<RoleDetail[]>('/api/v1/users/roles/'),
+  createRole: (data: RoleCreatePayload) =>
+    api.post<RoleDetail>('/api/v1/users/roles/', data),
+  updateRole: (id: number, data: RoleUpdatePayload) =>
+    api.patch<RoleDetail>(`/api/v1/users/roles/${id}`, data),
+}
+
+// ============ Audit Trail API ============
+
+export interface AuditLogEntry {
+  id: number
+  sequence: number
+  entry_hash: string
+  entity_type: string
+  entity_id: string
+  entity_name?: string
+  action: string
+  action_category: string
+  user_id?: number
+  user_email?: string
+  user_name?: string
+  changed_fields?: string[]
+  ip_address?: string
+  timestamp: string
+  is_sensitive: boolean
+  old_values?: Record<string, unknown>
+  new_values?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+export interface AuditVerification {
+  id: number
+  start_sequence: number
+  end_sequence: number
+  is_valid: boolean
+  entries_verified: number
+  invalid_entries?: unknown[]
+  verified_at: string
+}
+
+export const auditTrailApi = {
+  list: (params?: { entity_type?: string; action?: string; user_id?: number; date_from?: string; date_to?: string; page?: number; per_page?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.entity_type) sp.set('entity_type', params.entity_type)
+    if (params?.action) sp.set('action', params.action)
+    if (params?.user_id) sp.set('user_id', String(params.user_id))
+    if (params?.date_from) sp.set('date_from', params.date_from)
+    if (params?.date_to) sp.set('date_to', params.date_to)
+    sp.set('page', String(params?.page || 1))
+    sp.set('per_page', String(params?.per_page || 50))
+    return api.get<AuditLogEntry[]>(`/api/v1/audit-trail/?${sp}`)
+  },
+  getEntry: (id: number) =>
+    api.get<AuditLogEntry>(`/api/v1/audit-trail/${id}`),
+  getByEntity: (entityType: string, entityId: string) =>
+    api.get<AuditLogEntry[]>(`/api/v1/audit-trail/entity/${entityType}/${entityId}`),
+  getByUser: (userId: number, days = 30) =>
+    api.get<AuditLogEntry[]>(`/api/v1/audit-trail/user/${userId}?days=${days}`),
+  verify: () =>
+    api.post<AuditVerification>('/api/v1/audit-trail/verify'),
+  exportLog: (params: { format?: string; date_from?: string; date_to?: string; entity_type?: string; reason?: string }) =>
+    api.post<{ export_id: number; entries_count: number; file_hash: string; data?: unknown[] }>('/api/v1/audit-trail/export', params),
+  getStats: (days = 30) =>
+    api.get<Record<string, unknown>>(`/api/v1/audit-trail/stats?days=${days}`),
+}
+
+// ============ Risk Register API ============
+
+export interface RiskEntry {
+  id: number
+  title: string
+  description?: string
+  category?: string
+  risk_owner?: string
+  status: string
+  likelihood?: number
+  impact?: number
+  risk_score?: number
+  residual_likelihood?: number
+  residual_impact?: number
+  residual_score?: number
+  treatment_strategy?: string
+  review_date?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface RiskHeatmapData {
+  cells: { likelihood: number; impact: number; count: number; risks: { id: number; title: string }[] }[]
+}
+
+export interface RiskSummary {
+  total_risks: number
+  critical: number
+  high: number
+  medium: number
+  low: number
+  by_category: Record<string, number>
+}
+
+export const riskRegisterApi = {
+  list: (params?: { page?: number; size?: number; status?: string; category?: string; search?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.size) sp.set('size', String(params.size))
+    if (params?.status) sp.set('status', params.status)
+    if (params?.category) sp.set('category', params.category)
+    if (params?.search) sp.set('search', params.search)
+    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risks/?${sp}`)
+  },
+  create: (data: Partial<RiskEntry>) =>
+    api.post<RiskEntry>('/api/v1/risks/', data),
+  get: (id: number) =>
+    api.get<RiskEntry>(`/api/v1/risks/${id}`),
+  update: (id: number, data: Partial<RiskEntry>) =>
+    api.patch<RiskEntry>(`/api/v1/risks/${id}`, data),
+  delete: (id: number) =>
+    api.delete<void>(`/api/v1/risks/${id}`),
+  assess: (id: number, scores: { likelihood: number; impact: number }) =>
+    api.post<RiskEntry>(`/api/v1/risks/${id}/assess`, scores),
+  getHeatmap: () =>
+    api.get<RiskHeatmapData>('/api/v1/risks/heatmap'),
+  getSummary: () =>
+    api.get<RiskSummary>('/api/v1/risks/summary'),
+  getTrends: (days = 90) =>
+    api.get<unknown>(`/api/v1/risks/trends?days=${days}`),
+  getBowtie: (id: number) =>
+    api.get<unknown>(`/api/v1/risks/${id}/bowtie`),
+  addBowtieElement: (id: number, data: Record<string, unknown>) =>
+    api.post<unknown>(`/api/v1/risks/${id}/bowtie`, data),
+  deleteBowtieElement: (id: number, elementId: number) =>
+    api.delete<void>(`/api/v1/risks/${id}/bowtie/${elementId}`),
+  listControls: () =>
+    api.get<unknown[]>('/api/v1/risks/controls'),
+  createControl: (data: Record<string, unknown>) =>
+    api.post<unknown>('/api/v1/risks/controls', data),
+  linkControl: (riskId: number, controlId: number) =>
+    api.post<void>(`/api/v1/risks/${riskId}/controls/${controlId}`),
+  getKRIDashboard: () =>
+    api.get<unknown>('/api/v1/risks/kri/dashboard'),
+  createKRI: (data: Record<string, unknown>) =>
+    api.post<unknown>('/api/v1/risks/kri', data),
+  updateKRIValue: (id: number, value: number) =>
+    api.post<unknown>(`/api/v1/risks/kri/${id}/values`, { value }),
+  getKRIHistory: (id: number) =>
+    api.get<unknown>(`/api/v1/risks/kri/${id}/history`),
+  getAppetiteStatements: () =>
+    api.get<unknown[]>('/api/v1/risks/appetite'),
+}
+
+// ============ Signatures API ============
+
+export interface SignatureRequestEntry {
+  id: number
+  reference_number: string
+  title: string
+  description?: string
+  document_type: string
+  workflow_type: string
+  status: string
+  expires_at?: string
+  created_at: string
+  completed_at?: string
+  signers: { id: number; email: string; name: string; role: string; order: number; status: string; signed_at?: string; declined_at?: string }[]
+}
+
+export const signaturesApi = {
+  list: (status?: string, limit = 50) => {
+    const sp = new URLSearchParams({ limit: String(limit) })
+    if (status) sp.set('status', status)
+    return api.get<SignatureRequestEntry[]>(`/api/v1/signatures/requests?${sp}`)
+  },
+  get: (id: number) =>
+    api.get<SignatureRequestEntry>(`/api/v1/signatures/requests/${id}`),
+  create: (data: { title: string; description?: string; document_type: string; document_id?: string; workflow_type?: string; require_all?: boolean; expires_in_days?: number; signers: { email: string; name: string; role?: string; order?: number }[] }) =>
+    api.post<SignatureRequestEntry>('/api/v1/signatures/requests', data),
+  send: (id: number) =>
+    api.post<{ status: string; reference: string }>(`/api/v1/signatures/requests/${id}/send`),
+  void: (id: number, reason?: string) =>
+    api.post<{ status: string; reference: string }>(`/api/v1/signatures/requests/${id}/void`, { reason }),
+  getPending: () =>
+    api.get<SignatureRequestEntry[]>('/api/v1/signatures/requests/pending'),
+  getAuditLog: (id: number) =>
+    api.get<unknown[]>(`/api/v1/signatures/requests/${id}/audit-log`),
+  getStats: () =>
+    api.get<{ requests_by_status: Record<string, number>; total_signatures: number; requests_this_month: number }>('/api/v1/signatures/stats'),
+  listTemplates: () =>
+    api.get<unknown[]>('/api/v1/signatures/templates'),
+  createTemplate: (data: { name: string; description?: string; signer_roles?: unknown[]; workflow_type?: string }) =>
+    api.post<unknown>('/api/v1/signatures/templates', data),
+}
+
+// ============ AI Intelligence API ============
+
+export const aiApi = {
+  analyzeText: (text: string, analysisType?: string) =>
+    api.post<unknown>('/api/v1/ai/analyze-text', { text, analysis_type: analysisType }),
+  getPredictions: (module?: string) =>
+    api.get<unknown>(`/api/v1/ai/predictions${module ? `?module=${module}` : ''}`),
+  getAnomalies: (module?: string, days?: number) =>
+    api.get<unknown>(`/api/v1/ai/anomalies?${new URLSearchParams({ ...(module ? { module } : {}), ...(days ? { days: String(days) } : {}) })}`),
+  auditAssistant: (query: string, context?: Record<string, unknown>) =>
+    api.post<unknown>('/api/v1/ai/audit-assistant', { query, context }),
+  getRecommendations: (module?: string) =>
+    api.get<unknown>(`/api/v1/ai/recommendations${module ? `?module=${module}` : ''}`),
+  getSentiment: (text: string) =>
+    api.post<unknown>('/api/v1/ai/sentiment', { text }),
+  classifyRisk: (description: string) =>
+    api.post<unknown>('/api/v1/ai/classify-risk', { description }),
+  getDashboard: () =>
+    api.get<unknown>('/api/v1/ai/dashboard'),
+}
+
+// ============ Analytics API ============
+
+export const analyticsApi = {
+  getKPIs: (timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/kpis${timeRange ? `?time_range=${timeRange}` : ''}`),
+  getTrends: (dataSource: string, timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/trends?data_source=${dataSource}${timeRange ? `&time_range=${timeRange}` : ''}`),
+  getBenchmarks: () =>
+    api.get<unknown>('/api/v1/analytics/benchmarks'),
+  getExecutiveSummary: () =>
+    api.get<unknown>('/api/v1/analytics/executive-summary'),
+  getNonComplianceCosts: () =>
+    api.get<unknown>('/api/v1/analytics/non-compliance-costs'),
+  getROI: () =>
+    api.get<unknown>('/api/v1/analytics/roi'),
+  getCostBreakdown: () =>
+    api.get<unknown>('/api/v1/analytics/cost-breakdown'),
+  getDashboard: () =>
+    api.get<unknown>('/api/v1/analytics/dashboard'),
+}
+
+// ============ Notifications API ============
+
+export interface NotificationEntry {
+  id: number
+  type: string
+  priority: string
+  title: string
+  message: string
+  entity_type?: string
+  entity_id?: string
+  action_url?: string
+  sender_id?: number
+  is_read: boolean
+  created_at: string
+}
+
+export const notificationsApi = {
+  list: (params?: { page?: number; page_size?: number; unread_only?: boolean }) => {
+    const sp = new URLSearchParams()
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.page_size) sp.set('page_size', String(params.page_size))
+    if (params?.unread_only) sp.set('unread_only', 'true')
+    return api.get<{ items: NotificationEntry[]; total: number; unread_count: number }>(`/api/v1/notifications/?${sp}`)
+  },
+  getUnreadCount: () =>
+    api.get<{ unread_count: number }>('/api/v1/notifications/unread-count'),
+  markRead: (id: number) =>
+    api.post<{ success: boolean }>(`/api/v1/notifications/${id}/read`),
+  markAllRead: () =>
+    api.post<{ success: boolean }>('/api/v1/notifications/read-all'),
+  delete: (id: number) =>
+    api.delete<{ success: boolean }>(`/api/v1/notifications/${id}`),
+  getPreferences: () =>
+    api.get<Record<string, unknown>>('/api/v1/notifications/preferences'),
+  updatePreferences: (data: Record<string, unknown>) =>
+    api.put<{ success: boolean }>('/api/v1/notifications/preferences', data),
+}
+
+// ============ Compliance API ============
+
+export interface AutoTagResult {
+  clause_id: string
+  clause_number: string
+  title: string
+  standard: string
+  confidence: number
+  linked_by: string
+}
+
+export const complianceApi = {
+  listClauses: (standard?: string, search?: string) => {
+    const sp = new URLSearchParams()
+    if (standard) sp.set('standard', standard)
+    if (search) sp.set('search', search)
+    return api.get<unknown[]>(`/api/v1/compliance/clauses?${sp}`)
+  },
+  autoTag: (content: string, useAi = false) =>
+    api.post<AutoTagResult[]>('/api/v1/compliance/auto-tag', { content, use_ai: useAi }),
+  linkEvidence: (data: { entity_type: string; entity_id: string; clause_ids: string[]; linked_by?: string; confidence?: number }) =>
+    api.post<{ status: string }>('/api/v1/compliance/evidence/link', data),
+  getCoverage: (standard?: string) =>
+    api.get<Record<string, unknown>>(`/api/v1/compliance/coverage${standard ? `?standard=${standard}` : ''}`),
+  getGaps: (standard?: string) =>
+    api.get<{ total_gaps: number; gap_clauses: unknown[] }>(`/api/v1/compliance/gaps${standard ? `?standard=${standard}` : ''}`),
+  getReport: (standard?: string) =>
+    api.get<unknown>(`/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`),
+  listStandards: () =>
+    api.get<unknown[]>('/api/v1/compliance/standards'),
+}
+
+// ============ Global Search API ============
+
+export const searchApi = {
+  search: (query: string, filters?: { module?: string; type?: string; date_from?: string; date_to?: string }) => {
+    const sp = new URLSearchParams({ q: query })
+    if (filters?.module) sp.set('module', filters.module)
+    if (filters?.type) sp.set('type', filters.type)
+    if (filters?.date_from) sp.set('date_from', filters.date_from)
+    if (filters?.date_to) sp.set('date_to', filters.date_to)
+    return api.get<{ results: unknown[]; total: number; facets?: Record<string, unknown> }>(`/api/v1/search/?${sp}`)
+  },
 }
 
 // ============ Evidence Assets API ============

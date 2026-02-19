@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Bell,
   BellOff,
@@ -14,13 +14,15 @@ import {
   Mail,
   MessageSquare,
   Smartphone,
-  Volume2
+  Volume2,
+  Loader2
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Switch } from '../components/ui/Switch';
 import { cn } from "../helpers/utils";
+import { notificationsApi, NotificationEntry } from '../api/client';
 
 interface Notification {
   id: string;
@@ -43,72 +45,46 @@ interface NotificationPreference {
   inApp: boolean;
 }
 
+const TYPE_MAP: Record<string, Notification['type']> = {
+  mention: 'info',
+  assignment: 'alert',
+  sos_alert: 'alert',
+  action_due_soon: 'warning',
+  action_overdue: 'warning',
+  system_announcement: 'info',
+  audit_scheduled: 'reminder',
+  risk_assessment: 'success',
+};
+
+function mapApiNotification(n: NotificationEntry): Notification {
+  const mapped: Notification['type'] = TYPE_MAP[n.type] || (n.priority === 'high' ? 'alert' : 'info');
+  const created = new Date(n.created_at);
+  const diffMs = Date.now() - created.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  let timestamp: string;
+  if (diffMin < 1) timestamp = 'Just now';
+  else if (diffMin < 60) timestamp = `${diffMin} min ago`;
+  else if (diffMin < 1440) timestamp = `${Math.floor(diffMin / 60)}h ago`;
+  else timestamp = `${Math.floor(diffMin / 1440)}d ago`;
+
+  return {
+    id: String(n.id),
+    type: mapped,
+    title: n.title,
+    message: n.message,
+    timestamp,
+    read: n.is_read,
+    module: n.entity_type ? n.entity_type.charAt(0).toUpperCase() + n.entity_type.slice(1) + 's' : undefined,
+    actionUrl: n.action_url || undefined,
+    actionLabel: n.action_url ? 'View' : undefined,
+  };
+}
+
 export default function Notifications() {
   const [activeTab, setActiveTab] = useState<'notifications' | 'settings'>('notifications');
   const [filter, setFilter] = useState<'all' | 'unread' | 'alerts'>('all');
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 'NOT001',
-      type: 'alert',
-      title: 'High Priority Incident Reported',
-      message: 'A new high-priority incident (INC-2024-0847) has been reported and requires immediate attention.',
-      timestamp: '5 minutes ago',
-      read: false,
-      module: 'Incidents',
-      actionUrl: '/incidents/INC-2024-0847',
-      actionLabel: 'View Incident'
-    },
-    {
-      id: 'NOT002',
-      type: 'warning',
-      title: 'Action Item Overdue',
-      message: 'Action ACT-2024-0523 "Update Emergency Procedures" is now 4 days overdue.',
-      timestamp: '1 hour ago',
-      read: false,
-      module: 'Actions',
-      actionUrl: '/actions/ACT-2024-0523',
-      actionLabel: 'View Action'
-    },
-    {
-      id: 'NOT003',
-      type: 'reminder',
-      title: 'Upcoming Audit Reminder',
-      message: 'ISO 9001:2015 Internal Audit is scheduled for January 22, 2024. Prepare documentation.',
-      timestamp: '2 hours ago',
-      read: false,
-      module: 'Audits',
-      actionUrl: '/audits/AUD-2024-0156',
-      actionLabel: 'View Audit'
-    },
-    {
-      id: 'NOT004',
-      type: 'success',
-      title: 'Risk Assessment Approved',
-      message: 'Risk RSK-2024-0089 has been reviewed and approved by Sarah Johnson.',
-      timestamp: '3 hours ago',
-      read: true,
-      module: 'Risks'
-    },
-    {
-      id: 'NOT005',
-      type: 'info',
-      title: 'New Document Uploaded',
-      message: 'A new document "Safety Protocol v2.1" has been uploaded to the Document Library.',
-      timestamp: 'Yesterday',
-      read: true,
-      module: 'Documents'
-    },
-    {
-      id: 'NOT006',
-      type: 'info',
-      title: 'Weekly Summary Available',
-      message: 'Your weekly IMS summary report is now available for review.',
-      timestamp: 'Yesterday',
-      read: true,
-      actionUrl: '/reports',
-      actionLabel: 'View Report'
-    }
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [preferences, setPreferences] = useState<NotificationPreference[]>([
     { id: 'PREF001', label: 'High Priority Alerts', description: 'Critical incidents, severe risks, and urgent actions', email: true, push: true, inApp: true },
@@ -118,6 +94,24 @@ export default function Notifications() {
     { id: 'PREF005', label: 'Weekly Summaries', description: 'Weekly digest of IMS activities', email: true, push: false, inApp: false },
     { id: 'PREF006', label: 'Assignment Notifications', description: 'When tasks or items are assigned to you', email: true, push: true, inApp: true },
   ]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      const resp = await notificationsApi.list({ page: 1, page_size: 50 });
+      const data = resp as { items?: NotificationEntry[] };
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setNotifications(items.map(mapApiNotification));
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const typeStyles: Record<string, { icon: React.ReactNode; variant: string }> = {
     alert: { icon: <AlertTriangle className="w-5 h-5" />, variant: 'destructive' },
@@ -135,25 +129,53 @@ export default function Notifications() {
     return true;
   });
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markAsRead = async (id: string) => {
+    try {
+      await notificationsApi.markRead(Number(id));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error('Failed to mark notification as read', err);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      await notificationsApi.markAllRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Failed to mark all as read', err);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+  const deleteNotification = async (id: string) => {
+    try {
+      await notificationsApi.delete(Number(id));
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err) {
+      console.error('Failed to delete notification', err);
+    }
   };
 
-  const clearAll = () => {
-    setNotifications([]);
+  const clearAll = async () => {
+    try {
+      await notificationsApi.markAllRead();
+      setNotifications([]);
+    } catch (err) {
+      console.error('Failed to clear notifications', err);
+    }
   };
 
   const togglePreference = (id: string, channel: 'email' | 'push' | 'inApp') => {
     setPreferences(prev => prev.map(p => p.id === id ? { ...p, [channel]: !p[channel] } : p));
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

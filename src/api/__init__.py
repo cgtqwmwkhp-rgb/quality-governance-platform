@@ -20,6 +20,7 @@ from src.api.routes import (
     evidence_assets,
     executive_dashboard,
     form_config,
+    global_search,
     incidents,
     investigation_templates,
     investigations,
@@ -105,6 +106,8 @@ router.include_router(executive_dashboard.router, tags=["Executive Dashboard"])
 router.include_router(rca_tools.router, tags=["RCA Tools"])
 # Auditor Competence Management
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
+# Global Search
+router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 # CI Testing Endpoints (Staging Only)
 router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart3,
   TrendingUp,
@@ -19,6 +19,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from "../helpers/utils";
+import { analyticsApi } from '../api/client';
 
 interface KPICard {
   id: string;
@@ -44,97 +45,69 @@ export default function Analytics() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const [kpis, setKpis] = useState<KPICard[]>([]);
+  const [moduleStats, setModuleStats] = useState<ModuleStats[]>([]);
+  const [monthlyTrends, setMonthlyTrends] = useState<{ month: string; incidents: number; rtas: number; complaints: number }[]>([]);
 
-  const kpis: KPICard[] = [
-    {
-      id: 'total-records',
-      title: 'Total Records',
-      value: '2,847',
-      change: 12.5,
-      changeType: 'increase',
-      icon: <FileText className="w-6 h-6" />,
-      variant: 'info',
-      sparkline: [20, 25, 30, 28, 35, 40, 38, 45, 50, 48, 55, 60]
-    },
-    {
-      id: 'open-items',
-      title: 'Open Items',
-      value: 156,
-      change: -8.3,
-      changeType: 'decrease',
-      icon: <Clock className="w-6 h-6" />,
-      variant: 'warning',
-      sparkline: [45, 42, 40, 38, 35, 33, 30, 28, 26, 25, 23, 20]
-    },
-    {
-      id: 'resolution-rate',
-      title: 'Resolution Rate',
-      value: '94.5%',
-      change: 3.2,
-      changeType: 'increase',
-      icon: <CheckCircle2 className="w-6 h-6" />,
-      variant: 'success',
-      sparkline: [85, 87, 88, 89, 90, 91, 92, 93, 93, 94, 94, 95]
-    },
-    {
-      id: 'avg-resolution',
-      title: 'Avg Resolution Time',
-      value: '4.2 days',
-      change: -15.8,
-      changeType: 'decrease',
-      icon: <Activity className="w-6 h-6" />,
-      variant: 'primary',
-      sparkline: [8, 7.5, 7, 6.5, 6, 5.5, 5, 4.8, 4.6, 4.4, 4.3, 4.2]
-    },
-    {
-      id: 'compliance-score',
-      title: 'Compliance Score',
-      value: '98.2%',
-      change: 1.5,
-      changeType: 'increase',
-      icon: <Shield className="w-6 h-6" />,
-      variant: 'info',
-      sparkline: [95, 95.5, 96, 96.5, 97, 97, 97.5, 97.8, 98, 98, 98.1, 98.2]
-    },
-    {
-      id: 'high-priority',
-      title: 'High Priority',
-      value: 23,
-      change: 0,
-      changeType: 'neutral',
-      icon: <AlertTriangle className="w-6 h-6" />,
-      variant: 'destructive',
-      sparkline: [25, 24, 23, 24, 23, 22, 23, 24, 23, 23, 23, 23]
+  const ICON_MAP: Record<string, React.ReactNode> = {
+    'total-records': <FileText className="w-6 h-6" />,
+    'open-items': <Clock className="w-6 h-6" />,
+    'resolution-rate': <CheckCircle2 className="w-6 h-6" />,
+    'avg-resolution': <Activity className="w-6 h-6" />,
+    'compliance-score': <Shield className="w-6 h-6" />,
+    'high-priority': <AlertTriangle className="w-6 h-6" />,
+  };
+
+  const loadAnalytics = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [kpiRes, trendRes, dashRes] = await Promise.all([
+        analyticsApi.getKPIs(timeRange),
+        analyticsApi.getTrends('incidents', timeRange),
+        analyticsApi.getDashboard(),
+      ]);
+
+      const kpiData = kpiRes.data as Record<string, unknown>;
+      if (kpiData?.kpis && Array.isArray(kpiData.kpis)) {
+        setKpis((kpiData.kpis as Record<string, unknown>[]).map((k) => ({
+          id: String(k.id || ''),
+          title: String(k.title || ''),
+          value: k.value as string | number,
+          change: Number(k.change || 0),
+          changeType: (k.changeType || k.change_type || 'neutral') as KPICard['changeType'],
+          icon: ICON_MAP[String(k.id)] || <BarChart3 className="w-6 h-6" />,
+          variant: (k.variant || 'primary') as KPICard['variant'],
+          sparkline: k.sparkline as number[] | undefined,
+        })));
+      }
+
+      const trendData = trendRes.data as Record<string, unknown>;
+      if (trendData?.trends && Array.isArray(trendData.trends)) {
+        setMonthlyTrends(trendData.trends as typeof monthlyTrends);
+      }
+
+      const dashData = dashRes.data as Record<string, unknown>;
+      if (dashData?.module_stats && Array.isArray(dashData.module_stats)) {
+        setModuleStats((dashData.module_stats as Record<string, unknown>[]).map((m) => ({
+          module: String(m.module || ''),
+          total: Number(m.total || 0),
+          open: Number(m.open || 0),
+          closed: Number(m.closed || 0),
+          avgResolutionDays: Number(m.avg_resolution_days || m.avgResolutionDays || 0),
+          trend: Number(m.trend || 0),
+        })));
+      }
+    } catch {
+      console.error('Failed to load analytics');
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  }, [timeRange]);
 
-  const moduleStats: ModuleStats[] = [
-    { module: 'Incidents', total: 847, open: 45, closed: 802, avgResolutionDays: 3.2, trend: 5.2 },
-    { module: 'RTAs', total: 234, open: 12, closed: 222, avgResolutionDays: 8.5, trend: -12.3 },
-    { module: 'Complaints', total: 456, open: 34, closed: 422, avgResolutionDays: 5.1, trend: 2.1 },
-    { module: 'Risks', total: 189, open: 28, closed: 161, avgResolutionDays: 15.3, trend: -5.8 },
-    { module: 'Audits', total: 156, open: 18, closed: 138, avgResolutionDays: 21.2, trend: 0 },
-    { module: 'Actions', total: 523, open: 67, closed: 456, avgResolutionDays: 7.4, trend: 8.9 }
-  ];
-
-  const monthlyTrends = [
-    { month: 'Jan', incidents: 65, rtas: 18, complaints: 42 },
-    { month: 'Feb', incidents: 72, rtas: 22, complaints: 38 },
-    { month: 'Mar', incidents: 58, rtas: 15, complaints: 45 },
-    { month: 'Apr', incidents: 81, rtas: 28, complaints: 52 },
-    { month: 'May', incidents: 69, rtas: 20, complaints: 48 },
-    { month: 'Jun', incidents: 75, rtas: 25, complaints: 41 },
-    { month: 'Jul', incidents: 88, rtas: 31, complaints: 55 },
-    { month: 'Aug', incidents: 92, rtas: 27, complaints: 49 },
-    { month: 'Sep', incidents: 78, rtas: 23, complaints: 44 },
-    { month: 'Oct', incidents: 85, rtas: 29, complaints: 51 },
-    { month: 'Nov', incidents: 71, rtas: 19, complaints: 46 },
-    { month: 'Dec', incidents: 67, rtas: 16, complaints: 39 }
-  ];
+  useEffect(() => { loadAnalytics(); }, [loadAnalytics]);
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1500);
+    loadAnalytics();
   };
 
   const TrendIndicator = ({ change, type }: { change: number; type: 'increase' | 'decrease' | 'neutral' }) => {

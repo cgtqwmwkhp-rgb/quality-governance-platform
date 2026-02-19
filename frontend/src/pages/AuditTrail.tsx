@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { auditTrailApi } from '../api/client';
+import type { AuditLogEntry } from '../api/client';
 import {
   History,
   Search,
@@ -46,106 +48,47 @@ export default function AuditTrail() {
   const [dateRange, setDateRange] = useState<string>('today');
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [page, setPage] = useState(1);
 
-  const auditEntries: AuditEntry[] = [
-    {
-      id: 'AUD001',
-      timestamp: '2024-01-19 10:45:23',
-      user: { name: 'John Smith', email: 'john.smith@company.com' },
-      action: 'create',
-      module: 'Incidents',
-      resource: 'Incident',
-      resourceId: 'INC-2024-0847',
-      details: 'Created new incident report: Workplace Safety Incident',
-      ipAddress: '192.168.1.100',
-      changes: [
-        { field: 'title', oldValue: '', newValue: 'Workplace Safety Incident - Warehouse Zone B' },
-        { field: 'severity', oldValue: '', newValue: 'High' },
-        { field: 'status', oldValue: '', newValue: 'Open' }
-      ]
-    },
-    {
-      id: 'AUD002',
-      timestamp: '2024-01-19 10:30:15',
-      user: { name: 'Sarah Johnson', email: 'sarah.johnson@company.com' },
-      action: 'update',
-      module: 'Risks',
-      resource: 'Risk',
-      resourceId: 'RSK-2024-0089',
-      details: 'Updated risk assessment: Supply Chain Disruption Risk',
-      ipAddress: '192.168.1.105',
-      changes: [
-        { field: 'severity', oldValue: 'Medium', newValue: 'High' },
-        { field: 'mitigation', oldValue: 'Under review', newValue: 'Action plan approved' }
-      ]
-    },
-    {
-      id: 'AUD003',
-      timestamp: '2024-01-19 10:15:00',
-      user: { name: 'Mike Chen', email: 'mike.chen@company.com' },
-      action: 'approve',
-      module: 'Actions',
-      resource: 'Action',
-      resourceId: 'ACT-2024-0523',
-      details: 'Approved action completion: Update Emergency Procedures',
-      ipAddress: '192.168.1.110'
-    },
-    {
-      id: 'AUD004',
-      timestamp: '2024-01-19 09:45:30',
-      user: { name: 'Emma Wilson', email: 'emma.wilson@company.com' },
-      action: 'view',
-      module: 'Complaints',
-      resource: 'Complaint',
-      resourceId: 'CMP-2024-0456',
-      details: 'Viewed complaint details: Customer Service Response Time',
-      ipAddress: '192.168.1.115'
-    },
-    {
-      id: 'AUD005',
-      timestamp: '2024-01-19 09:30:00',
-      user: { name: 'David Brown', email: 'david.brown@company.com' },
-      action: 'login',
-      module: 'System',
-      resource: 'Session',
-      resourceId: 'SES-2024-1234',
-      details: 'User logged in successfully',
-      ipAddress: '192.168.1.120'
-    },
-    {
-      id: 'AUD006',
-      timestamp: '2024-01-19 09:00:45',
-      user: { name: 'John Smith', email: 'john.smith@company.com' },
-      action: 'export',
-      module: 'Reports',
-      resource: 'Report',
-      resourceId: 'RPT-2024-0100',
-      details: 'Exported monthly incident report to PDF',
-      ipAddress: '192.168.1.100'
-    },
-    {
-      id: 'AUD007',
-      timestamp: '2024-01-18 17:30:00',
-      user: { name: 'Sarah Johnson', email: 'sarah.johnson@company.com' },
-      action: 'delete',
-      module: 'Documents',
-      resource: 'Document',
-      resourceId: 'DOC-2024-0050',
-      details: 'Deleted draft document: Old Procedure v1',
-      ipAddress: '192.168.1.105'
-    },
-    {
-      id: 'AUD008',
-      timestamp: '2024-01-18 16:00:00',
-      user: { name: 'Mike Chen', email: 'mike.chen@company.com' },
-      action: 'reject',
-      module: 'RTAs',
-      resource: 'RTA',
-      resourceId: 'RTA-2024-0230',
-      details: 'Rejected RTA closure: Additional investigation required',
-      ipAddress: '192.168.1.110'
+  const mapApiEntry = (e: AuditLogEntry): AuditEntry => ({
+    id: String(e.id),
+    timestamp: e.timestamp,
+    user: { name: e.user_name || 'System', email: e.user_email || '' },
+    action: (e.action || 'view') as AuditEntry['action'],
+    module: (e.entity_type || 'system').charAt(0).toUpperCase() + (e.entity_type || 'system').slice(1),
+    resource: e.entity_type || '',
+    resourceId: e.entity_id || '',
+    details: e.entity_name || `${e.action} on ${e.entity_type} ${e.entity_id}`,
+    ipAddress: e.ip_address || '',
+    changes: e.changed_fields?.map(f => ({
+      field: String(f),
+      oldValue: e.old_values?.[String(f)] != null ? String(e.old_values[String(f)]) : '',
+      newValue: e.new_values?.[String(f)] != null ? String(e.new_values[String(f)]) : '',
+    })),
+  });
+
+  const loadEntries = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const actionParam = selectedAction !== 'all' ? selectedAction : undefined;
+      const entityParam = selectedModule !== 'all' ? selectedModule.toLowerCase() : undefined;
+      const res = await auditTrailApi.list({ action: actionParam, entity_type: entityParam, page, per_page: 50 });
+      const entries = (res.data || []).map(mapApiEntry);
+      if (page === 1) {
+        setAuditEntries(entries);
+      } else {
+        setAuditEntries(prev => [...prev, ...entries]);
+      }
+    } catch {
+      console.error('Failed to load audit trail');
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  }, [selectedAction, selectedModule, page]);
+
+  useEffect(() => { setPage(1); }, [selectedAction, selectedModule, dateRange]);
+  useEffect(() => { loadEntries(); }, [loadEntries]);
 
   const actionIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
     create: { icon: <Plus className="w-4 h-4" />, color: 'text-success', bg: 'bg-success/20' },
@@ -163,17 +106,23 @@ export default function AuditTrail() {
   const actions = ['create', 'update', 'delete', 'view', 'login', 'logout', 'approve', 'reject', 'export'];
 
   const filteredEntries = auditEntries.filter(entry => {
-    const matchesSearch = entry.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          entry.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          entry.resourceId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesAction = selectedAction === 'all' || entry.action === selectedAction;
-    const matchesModule = selectedModule === 'all' || entry.module === selectedModule;
-    return matchesSearch && matchesAction && matchesModule;
+    if (!searchQuery) return true;
+    return entry.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           entry.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           entry.resourceId.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1000);
+    setPage(1);
+    loadEntries();
+  };
+
+  const handleExport = async () => {
+    try {
+      await auditTrailApi.exportLog({ format: 'json', reason: 'Manual export' });
+    } catch {
+      console.error('Failed to export');
+    }
   };
 
   return (
@@ -200,7 +149,7 @@ export default function AuditTrail() {
             <RefreshCw className="w-5 h-5" />
           </button>
           
-          <button className="px-4 py-2 bg-secondary border border-border text-foreground font-medium rounded-xl hover:bg-surface transition-all flex items-center gap-2">
+          <button onClick={handleExport} className="px-4 py-2 bg-secondary border border-border text-foreground font-medium rounded-xl hover:bg-surface transition-all flex items-center gap-2">
             <Download className="w-5 h-5" />
             Export Log
           </button>
@@ -396,7 +345,7 @@ export default function AuditTrail() {
       {/* Load More */}
       {filteredEntries.length > 0 && (
         <div className="text-center">
-          <button className="px-6 py-2 bg-slate-800/50 border border-slate-700 text-slate-300 font-medium rounded-xl hover:bg-slate-700/50 transition-all">
+          <button onClick={() => setPage(p => p + 1)} className="px-6 py-2 bg-slate-800/50 border border-slate-700 text-slate-300 font-medium rounded-xl hover:bg-slate-700/50 transition-all">
             Load More
           </button>
         </div>
