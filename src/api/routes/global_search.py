@@ -31,7 +31,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResultItem]
     total: int
     query: str
-    facets: dict = {}
+    facets: dict = {}  # type: ignore[type-arg]
 
 
 @router.get("/", response_model=SearchResponse)
@@ -45,7 +45,7 @@ async def global_search(
     date_to: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-):
+) -> SearchResponse:
     """
     Unified search across all modules.
 
@@ -54,13 +54,15 @@ async def global_search(
     """
     from sqlalchemy import String, cast, func, or_, select
 
+    _ = date_from, date_to  # reserved for future date filtering
+
     query_lower = q.lower()
     all_results: list[SearchResultItem] = []
 
     try:
         from src.domain.models.incident import Incident
 
-        stmt = (
+        inc_stmt = (
             select(Incident)
             .where(
                 or_(
@@ -70,8 +72,8 @@ async def global_search(
             )
             .limit(10)
         )
-        result = await db.execute(stmt)
-        for inc in result.scalars().all():
+        inc_result = await db.execute(inc_stmt)
+        for inc in inc_result.scalars().all():
             words = query_lower.split()
             title_lower = (inc.title or "").lower()
             desc_lower = (inc.description or "").lower()
@@ -96,7 +98,7 @@ async def global_search(
     try:
         from src.domain.models.rta import RTA
 
-        stmt = (
+        rta_stmt = (
             select(RTA)
             .where(
                 or_(
@@ -106,8 +108,8 @@ async def global_search(
             )
             .limit(10)
         )
-        result = await db.execute(stmt)
-        for rta in result.scalars().all():
+        rta_result = await db.execute(rta_stmt)
+        for rta in rta_result.scalars().all():
             all_results.append(
                 SearchResultItem(
                     id=rta.reference_number or f"RTA-{rta.id}",
@@ -116,7 +118,7 @@ async def global_search(
                     description=(rta.description or "")[:200],
                     module="RTAs",
                     status=rta.status or "Open",
-                    date=str(rta.incident_date or rta.created_at or ""),
+                    date=str(rta.collision_date or rta.created_at or ""),
                     relevance=75,
                     highlights=query_lower.split(),
                 )
@@ -127,7 +129,7 @@ async def global_search(
     try:
         from src.domain.models.complaint import Complaint
 
-        stmt = (
+        cmp_stmt = (
             select(Complaint)
             .where(
                 or_(
@@ -137,8 +139,8 @@ async def global_search(
             )
             .limit(10)
         )
-        result = await db.execute(stmt)
-        for cmp in result.scalars().all():
+        cmp_result = await db.execute(cmp_stmt)
+        for cmp in cmp_result.scalars().all():
             all_results.append(
                 SearchResultItem(
                     id=cmp.reference_number or f"CMP-{cmp.id}",
@@ -158,7 +160,7 @@ async def global_search(
     try:
         from src.domain.models.risk import Risk
 
-        stmt = (
+        risk_stmt = (
             select(Risk)
             .where(
                 or_(
@@ -168,8 +170,8 @@ async def global_search(
             )
             .limit(10)
         )
-        result = await db.execute(stmt)
-        for risk in result.scalars().all():
+        risk_result = await db.execute(risk_stmt)
+        for risk in risk_result.scalars().all():
             all_results.append(
                 SearchResultItem(
                     id=f"RSK-{risk.id}",
@@ -180,37 +182,6 @@ async def global_search(
                     status=risk.status or "Open",
                     date=str(risk.created_at or ""),
                     relevance=72,
-                    highlights=query_lower.split(),
-                )
-            )
-    except Exception:
-        pass
-
-    try:
-        from src.domain.models.action import Action
-
-        stmt = (
-            select(Action)
-            .where(
-                or_(
-                    func.lower(Action.title).contains(query_lower),
-                    func.lower(Action.description).contains(query_lower),
-                )
-            )
-            .limit(10)
-        )
-        result = await db.execute(stmt)
-        for act in result.scalars().all():
-            all_results.append(
-                SearchResultItem(
-                    id=f"ACT-{act.id}",
-                    type="action",
-                    title=act.title or "Untitled Action",
-                    description=(act.description or "")[:200],
-                    module="Actions",
-                    status=act.status or "Open",
-                    date=str(act.due_date or act.created_at or ""),
-                    relevance=68,
                     highlights=query_lower.split(),
                 )
             )

@@ -504,7 +504,7 @@ async def get_signature_stats(
         .where(SignatureRequest.tenant_id == tenant_id)
         .group_by(SignatureRequest.status)
     )
-    status_counts = dict(status_result.all())
+    status_counts: dict[str, int] = dict(status_result.all())
 
     total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
