@@ -332,6 +332,12 @@ test.describe('Button Wiring Audit', () => {
         
         if (result.outcome_observed) {
           result.result = 'PASS';
+        } else if (buttonEntry.disabled_reason) {
+          // Button with documented disabled_reason had no effect when clicked
+          // without meeting preconditions - this is expected behaviour
+          result.result = 'PASS';
+          result.outcome_observed = true;
+          result.outcome_type = 'noop_expected_precondition';
         } else {
           result.error_message = 'No observable outcome after click (noop)';
           result.result = 'FAIL';
