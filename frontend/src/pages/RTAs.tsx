@@ -195,7 +195,7 @@ export default function RTAs() {
           <h1 className="text-2xl font-bold text-foreground">Road Traffic Collisions</h1>
           <p className="text-muted-foreground mt-1">Manage vehicle accidents and incidents</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
+        <Button onClick={() => setShowModal(true)} data-testid="create-rta-btn">
           <Plus size={20} />
           Report RTA
         </Button>
