@@ -31,7 +31,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResultItem]
     total: int
     query: str
-    facets: dict = {}  # type: ignore[type-arg]
+    facets: dict[str, object] = {}
 
 
 @router.get("/", response_model=SearchResponse)
