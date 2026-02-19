@@ -111,10 +111,16 @@ class AuditQuestionUpdate(BaseModel):
     options: Optional[List[QuestionOptionBase]] = None
     min_value: Optional[float] = None
     max_value: Optional[float] = None
+    decimal_places: Optional[int] = None
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
     evidence_requirements: Optional[EvidenceRequirement] = None
     conditional_logic: Optional[List[ConditionalLogicRule]] = None
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
+    risk_category: Optional[str] = None
+    risk_weight: Optional[float] = None
+    section_id: Optional[int] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -302,7 +308,10 @@ class AuditRunUpdate(BaseModel):
     due_date: Optional[datetime] = None
     assigned_to_id: Optional[int] = None
     notes: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[str] = Field(
+        None,
+        pattern="^(draft|scheduled|in_progress|pending_review|cancelled)$",
+    )
 
 
 class AuditRunResponse(AuditRunBase):
@@ -432,14 +441,17 @@ class AuditFindingUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
-    severity: Optional[str] = None
-    finding_type: Optional[str] = None
+    severity: Optional[str] = Field(None, pattern="^(critical|high|medium|low|observation)$")
+    finding_type: Optional[str] = Field(None, pattern="^(nonconformity|observation|opportunity|positive)$")
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
     risk_ids: Optional[List[int]] = None
     corrective_action_required: Optional[bool] = None
     corrective_action_due_date: Optional[datetime] = None
-    status: Optional[str] = None
+    status: Optional[str] = Field(
+        None,
+        pattern="^(open|in_progress|pending_verification|closed|deferred)$",
+    )
 
 
 class AuditFindingResponse(AuditFindingBase):

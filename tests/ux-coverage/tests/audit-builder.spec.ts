@@ -128,9 +128,8 @@ test.describe('Audit Template Builder', () => {
     await page.waitForURL('**/audit-templates/**/edit', { timeout: 15000 });
 
     const publishButton = page.locator('button:has-text("Publish")');
-    if (await publishButton.isVisible()) {
-      await expect(publishButton).toBeDisabled();
-    }
+    await expect(publishButton).toBeVisible();
+    await expect(publishButton).toBeDisabled();
   });
 });
 
@@ -152,7 +151,7 @@ test.describe('Audit Template Builder - Accessibility', () => {
       if (id) {
         const label = page.locator(`label[for="${id}"]`);
         const hasVisibleLabel = await label.isVisible().catch(() => false);
-        const hasSrLabel = await page.locator(`label.sr-only[for="${id}"]`).isVisible().catch(() => false);
+        const hasSrLabel = await page.locator(`label.sr-only[for="${id}"]`).count().then(c => c > 0).catch(() => false);
         expect(hasVisibleLabel || hasSrLabel || ariaLabel || labelledBy).toBeTruthy();
       }
     }
