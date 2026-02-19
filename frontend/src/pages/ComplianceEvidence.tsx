@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Award,
   Leaf,
@@ -42,39 +42,7 @@ interface EvidenceItem {
   link: string;
 }
 
-// Mock evidence data - in production this would come from the API
-const mockEvidence: EvidenceItem[] = [
-  { id: 'e1', type: 'policy', title: 'Quality Policy Statement', description: 'Corporate quality policy aligned with ISO 9001', date: '2025-12-15', status: 'active', linkedClauses: ['9001-5.2', '9001-5.1.1'], autoTagged: false, link: '/documents/1' },
-  { id: 'e2', type: 'policy', title: 'Environmental Policy', description: 'Environmental commitment and objectives', date: '2025-11-20', status: 'active', linkedClauses: ['14001-5.2', '14001-6.2'], autoTagged: false, link: '/documents/2' },
-  { id: 'e3', type: 'policy', title: 'Health & Safety Policy', description: 'OH&S policy statement signed by CEO', date: '2025-10-05', status: 'active', linkedClauses: ['45001-5.2', '45001-5.1'], autoTagged: false, link: '/documents/3' },
-  { id: 'e4', type: 'document', title: 'Risk Assessment Procedure', description: 'Procedure for identifying and assessing risks', date: '2025-09-18', status: 'active', linkedClauses: ['9001-6.1', '45001-6.1.2', '14001-6.1'], autoTagged: true, confidence: 92, link: '/documents/4' },
-  { id: 'e5', type: 'document', title: 'Document Control Procedure', description: 'Procedure for controlling documented information', date: '2025-08-22', status: 'active', linkedClauses: ['9001-7.5', '14001-7.5', '45001-7.5'], autoTagged: false, link: '/documents/5' },
-  { id: 'e6', type: 'audit', title: 'Internal Audit Report Q4 2025', description: 'Internal audit of manufacturing processes', date: '2025-12-10', status: 'active', linkedClauses: ['9001-9.2', '9001-8.5'], autoTagged: true, confidence: 88, link: '/audits/1' },
-  { id: 'e7', type: 'audit', title: 'Environmental Compliance Audit', description: 'Annual environmental compliance evaluation', date: '2025-11-28', status: 'active', linkedClauses: ['14001-9.1.2', '14001-9.2'], autoTagged: true, confidence: 95, link: '/audits/2' },
-  { id: 'e8', type: 'incident', title: 'Near Miss - Forklift Operation', description: 'Near miss incident during warehouse operations', date: '2025-12-08', status: 'active', linkedClauses: ['45001-10.2', '45001-6.1.2'], autoTagged: true, confidence: 87, link: '/incidents/1' },
-  { id: 'e9', type: 'incident', title: 'Customer Complaint - Late Delivery', description: 'Complaint regarding delivery timeframes', date: '2025-12-05', status: 'active', linkedClauses: ['9001-9.1.2', '9001-8.2', '9001-10.2'], autoTagged: true, confidence: 78, link: '/incidents/2' },
-  { id: 'e10', type: 'action', title: 'CAPA-2025-042: Calibration Process', description: 'Corrective action for calibration gaps', date: '2025-11-15', status: 'active', linkedClauses: ['9001-10.2', '9001-7.1.5'], autoTagged: true, confidence: 91, link: '/actions/1' },
-  { id: 'e11', type: 'risk', title: 'Supply Chain Disruption Risk', description: 'Risk assessment for key supplier dependencies', date: '2025-10-30', status: 'active', linkedClauses: ['9001-8.4', '9001-6.1'], autoTagged: true, confidence: 85, link: '/risks/1' },
-  { id: 'e12', type: 'training', title: 'Safety Induction Training Records', description: 'New employee safety training completion records', date: '2025-12-12', status: 'active', linkedClauses: ['45001-7.2', '45001-7.3'], autoTagged: true, confidence: 94, link: '/training/1' },
-  { id: 'e13', type: 'document', title: 'Management Review Minutes - Dec 2025', description: 'Minutes from quarterly management review meeting', date: '2025-12-18', status: 'active', linkedClauses: ['9001-9.3', '14001-9.3', '45001-9.3'], autoTagged: false, link: '/documents/6' },
-  { id: 'e14', type: 'document', title: 'Emergency Response Plan', description: 'Procedures for emergency situations', date: '2025-07-14', status: 'active', linkedClauses: ['45001-8.2', '14001-8.2'], autoTagged: true, confidence: 96, link: '/documents/7' },
-  { id: 'e15', type: 'document', title: 'Supplier Evaluation Procedure', description: 'Process for evaluating and approving suppliers', date: '2025-06-20', status: 'active', linkedClauses: ['9001-8.4'], autoTagged: true, confidence: 89, link: '/documents/8' },
-  // ISO 27001 Evidence
-  { id: 'e16', type: 'policy', title: 'Information Security Policy', description: 'Corporate information security policy aligned with ISO 27001', date: '2025-11-01', status: 'active', linkedClauses: ['27001-5.2', '27001-A.5.1'], autoTagged: false, link: '/documents/9' },
-  { id: 'e17', type: 'document', title: 'Statement of Applicability', description: 'SoA documenting Annex A control selection and justification', date: '2025-10-15', status: 'active', linkedClauses: ['27001-6.1.3', '27001-A.5'], autoTagged: false, link: '/documents/10' },
-  { id: 'e18', type: 'audit', title: 'ISMS Internal Audit Report', description: 'Internal audit of information security controls', date: '2025-12-01', status: 'active', linkedClauses: ['27001-9.2', '27001-A.8.15'], autoTagged: true, confidence: 91, link: '/audits/3' },
-  { id: 'e19', type: 'training', title: 'Security Awareness Training Records', description: 'Phishing awareness and security training completion', date: '2025-12-10', status: 'active', linkedClauses: ['27001-7.3', '27001-A.6.3'], autoTagged: true, confidence: 94, link: '/training/2' },
-  { id: 'e20', type: 'incident', title: 'Security Incident Report - Phishing Attempt', description: 'Detected and blocked phishing attack on finance team', date: '2025-12-05', status: 'active', linkedClauses: ['27001-A.5.24', '27001-10.2'], autoTagged: true, confidence: 88, link: '/incidents/3' },
-  // Planet Mark Evidence
-  { id: 'e21', type: 'document', title: 'Carbon Footprint Report YE2024', description: 'Annual carbon footprint measurement per GHG Protocol', date: '2024-09-30', status: 'active', linkedClauses: ['pm-1', 'pm-1.1', 'pm-1.2', 'pm-1.3'], autoTagged: true, confidence: 96, link: '/planet-mark' },
-  { id: 'e22', type: 'document', title: 'Year 2 Improvement Plan', description: 'SMART actions for 5% emissions reduction target', date: '2025-07-01', status: 'active', linkedClauses: ['pm-3', 'pm-3.1', 'pm-3.2'], autoTagged: true, confidence: 92, link: '/planet-mark' },
-  { id: 'e23', type: 'document', title: 'Fleet Fuel Card Audit', description: '100% fleet transactions via fuel card for data quality', date: '2025-08-31', status: 'active', linkedClauses: ['pm-2.1', 'pm-1.1'], autoTagged: true, confidence: 89, link: '/planet-mark' },
-  { id: 'e24', type: 'document', title: 'Planet Mark Certificate YE2024', description: 'Planet Mark Business Certification - Year 1', date: '2024-10-15', status: 'active', linkedClauses: ['pm-4'], autoTagged: false, link: '/documents/11' },
-  // UVDB Achilles Evidence
-  { id: 'e25', type: 'audit', title: 'UVDB B2 Audit Report 2025', description: 'UVDB Achilles Verify B2 audit completed with 94% score', date: '2025-09-15', status: 'active', linkedClauses: ['uvdb-1', 'uvdb-2', 'uvdb-3', 'uvdb-4'], autoTagged: false, link: '/uvdb' },
-  { id: 'e26', type: 'document', title: 'Subcontractor Management Procedure', description: 'Process for selecting and managing subcontractors', date: '2025-05-20', status: 'active', linkedClauses: ['uvdb-12', '9001-8.4', '45001-8.1.4'], autoTagged: true, confidence: 87, link: '/documents/12' },
-  { id: 'e27', type: 'document', title: 'RIDDOR Statistics Report', description: 'Annual RIDDOR reportable incident statistics', date: '2025-12-01', status: 'active', linkedClauses: ['uvdb-15', '45001-9.1'], autoTagged: true, confidence: 91, link: '/analytics' },
-];
+// Evidence items are loaded from the API on mount
 
 const evidenceTypeConfig: Record<EvidenceType, { icon: React.ElementType; label: string; color: string }> = {
   policy: { icon: BookOpen, label: 'Policy', color: 'bg-purple-500' },
@@ -113,8 +81,50 @@ export default function ComplianceEvidence() {
   const [showAutoTagger, setShowAutoTagger] = useState(false);
   const [autoTagText, setAutoTagText] = useState('');
   const [autoTagResults, setAutoTagResults] = useState<ISOClause[]>([]);
+  const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
 
-  // Calculate compliance stats
+  useEffect(() => {
+    const fetchEvidence = async () => {
+      try {
+        const [coverageRes] = await Promise.allSettled([
+          complianceApi.getCoverage(),
+          complianceApi.getGaps(),
+        ]);
+
+        // Build evidence items from coverage data if available
+        const items: EvidenceItem[] = [];
+        if (coverageRes.status === 'fulfilled' && coverageRes.value.data) {
+          const data = coverageRes.value.data as any;
+          if (data.covered_clauses && Array.isArray(data.covered_clauses)) {
+            data.covered_clauses.forEach((link: any, idx: number) => {
+              items.push({
+                id: `ev-${idx}`,
+                type: (link.entity_type || 'document') as EvidenceType,
+                title: link.entity_name || link.entity_type || 'Linked Evidence',
+                description: `Evidence linked to clause ${link.clause_id}`,
+                date: link.created_at || new Date().toISOString().split('T')[0],
+                status: 'active',
+                linkedClauses: [link.clause_id],
+                autoTagged: link.linked_by === 'auto',
+                confidence: link.confidence ? link.confidence * 100 : undefined,
+                link: '#',
+              });
+            });
+          }
+        }
+
+        setEvidenceItems(items);
+      } catch (err) {
+        console.error('Failed to fetch compliance evidence:', err);
+        setEvidenceItems([]);
+      } finally {
+        // loading complete
+      }
+    };
+
+    fetchEvidence();
+  }, []);
+
   const complianceStats = useMemo(() => {
     const stats: Record<string, { total: number; covered: number; partial: number; gaps: number }> = {};
     
@@ -125,12 +135,12 @@ export default function ComplianceEvidence() {
         : standard.clauses.filter(c => c.level === 1);
 
       const fullyCovered = mainClauses.filter(c => {
-        const evidence = mockEvidence.filter(e => e.linkedClauses.includes(c.id));
+        const evidence = evidenceItems.filter(e => e.linkedClauses.includes(c.id));
         return evidence.length >= 2;
       }).length;
 
       const partiallyCovered = mainClauses.filter(c => {
-        const evidence = mockEvidence.filter(e => e.linkedClauses.includes(c.id));
+        const evidence = evidenceItems.filter(e => e.linkedClauses.includes(c.id));
         return evidence.length === 1;
       }).length;
       
@@ -143,11 +153,10 @@ export default function ComplianceEvidence() {
     });
     
     return stats;
-  }, []);
+  }, [evidenceItems]);
 
-  // Get evidence for a specific clause
   const getEvidenceForClause = (clauseId: string): EvidenceItem[] => {
-    return mockEvidence.filter(e => e.linkedClauses.includes(clauseId));
+    return evidenceItems.filter(e => e.linkedClauses.includes(clauseId));
   };
 
   // Filter clauses based on search and selected standard
@@ -434,10 +443,10 @@ export default function ComplianceEvidence() {
             <>
               <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-success" />
-                All Evidence ({mockEvidence.length} items)
+                All Evidence ({evidenceItems.length} items)
               </h2>
               <div className="space-y-3">
-                {mockEvidence.map(evidence => {
+                {evidenceItems.map(evidence => {
                   const config = evidenceTypeConfig[evidence.type];
                   const Icon = config.icon;
 
