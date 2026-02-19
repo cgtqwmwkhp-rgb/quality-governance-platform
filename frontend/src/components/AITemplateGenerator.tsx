@@ -41,6 +41,7 @@ interface GeneratedSection {
 interface AITemplateGeneratorProps {
   onApply: (sections: GeneratedSection[]) => void;
   onClose: () => void;
+  applying?: boolean;
 }
 
 // ============================================================================
@@ -262,7 +263,7 @@ const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[
 // MAIN COMPONENT
 // ============================================================================
 
-export default function AITemplateGenerator({ onApply, onClose }: AITemplateGeneratorProps) {
+export default function AITemplateGenerator({ onApply, onClose, applying }: AITemplateGeneratorProps) {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedSections, setGeneratedSections] = useState<GeneratedSection[] | null>(null);
@@ -514,11 +515,20 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
               </button>
               <button
                 onClick={handleApply}
-                disabled={selectedSections.size === 0}
+                disabled={selectedSections.size === 0 || applying}
                 className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
               >
-                <Plus className="w-4 h-4" />
-                Add to Template
+                {applying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Adding sections...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Add to Template
+                  </>
+                )}
               </button>
             </div>
           </div>

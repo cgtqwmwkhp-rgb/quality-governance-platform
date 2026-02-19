@@ -471,7 +471,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         )
 
     # Bounded error class: validate status if provided
-    valid_statuses = {"open", "in_progress", "pending_verification", "completed", "cancelled"}
+    incident_statuses = {s.value for s in ActionStatus}
+    investigation_statuses = {s.value for s in InvestigationActionStatus}
+    valid_statuses = incident_statuses | investigation_statuses
     if action_data.status and action_data.status.lower() not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

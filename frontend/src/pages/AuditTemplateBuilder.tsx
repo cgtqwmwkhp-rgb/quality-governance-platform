@@ -751,6 +751,7 @@ export default function AuditTemplateBuilder() {
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder');
   const [showAIAssist, setShowAIAssist] = useState(false);
   const [addingSection, setAddingSection] = useState(false);
+  const [applyingAI, setApplyingAI] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -1190,44 +1191,53 @@ export default function AuditTemplateBuilder() {
       {showAIAssist && (
         <AITemplateGenerator
           onClose={() => setShowAIAssist(false)}
+          applying={applyingAI}
           onApply={async (generatedSections) => {
+            if (applyingAI) return;
+            setApplyingAI(true);
             const baseOrder = template.sections?.length || 0;
             let successes = 0;
             let failures = 0;
-            for (let i = 0; i < generatedSections.length; i++) {
-              const gs = generatedSections[i];
-              try {
-                const sectionRes = await auditsApi.createSection(template.id, {
-                  title: gs.title,
-                  description: gs.description,
-                  sort_order: baseOrder + i,
-                });
-                for (let qi = 0; qi < gs.questions.length; qi++) {
-                  const q = gs.questions[qi];
-                  const sanitizedType = VALID_QUESTION_TYPES.has(q.type) ? q.type : 'yes_no';
-                  await auditsApi.createQuestion(template.id, {
-                    section_id: sectionRes.data.id,
-                    question_text: q.text,
-                    question_type: sanitizedType,
-                    is_required: q.required ?? true,
-                    weight: q.weight ?? 1,
-                    sort_order: qi,
+            try {
+              for (let i = 0; i < generatedSections.length; i++) {
+                const gs = generatedSections[i];
+                try {
+                  const sectionRes = await auditsApi.createSection(template.id, {
+                    title: gs.title,
+                    description: gs.description,
+                    sort_order: baseOrder + i,
                   });
+                  for (let qi = 0; qi < gs.questions.length; qi++) {
+                    const q = gs.questions[qi];
+                    const sanitizedType = VALID_QUESTION_TYPES.has(q.type) ? q.type : 'yes_no';
+                    await auditsApi.createQuestion(template.id, {
+                      section_id: sectionRes.data.id,
+                      question_text: q.text || 'New Question',
+                      question_type: sanitizedType,
+                      is_required: q.required ?? true,
+                      weight: q.weight ?? 1,
+                      sort_order: qi,
+                      risk_category: q.riskLevel || undefined,
+                      help_text: q.guidance || undefined,
+                    });
+                  }
+                  successes++;
+                } catch (err) {
+                  failures++;
+                  console.error('Failed to create AI section:', err);
                 }
-                successes++;
-              } catch (err) {
-                failures++;
-                console.error('Failed to create AI section:', err);
               }
-            }
-            await refreshTemplate();
-            setShowAIAssist(false);
-            if (failures === 0) {
-              showFeedback('success', `${successes} AI-generated sections added`);
-            } else if (successes > 0) {
-              showFeedback('error', `${successes} sections added, ${failures} failed`);
-            } else {
-              showFeedback('error', 'Failed to add AI-generated sections');
+              await refreshTemplate();
+              setShowAIAssist(false);
+              if (failures === 0) {
+                showFeedback('success', `${successes} AI-generated sections added`);
+              } else if (successes > 0) {
+                showFeedback('error', `${successes} sections added, ${failures} failed`);
+              } else {
+                showFeedback('error', 'Failed to add AI-generated sections');
+              }
+            } finally {
+              setApplyingAI(false);
             }
           }}
         />

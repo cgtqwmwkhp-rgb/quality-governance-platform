@@ -138,7 +138,7 @@ def create_application() -> FastAPI:
         docs_url="/docs",  # Always enable API docs
         redoc_url="/redoc",
         openapi_url="/openapi.json",
-        redirect_slashes=False,  # Disabled to prevent HTTP redirects behind HTTPS proxy
+        redirect_slashes=True,
         lifespan=lifespan,
     )
 
