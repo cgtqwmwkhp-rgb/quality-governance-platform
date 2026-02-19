@@ -861,7 +861,7 @@ export default function DynamicFormRenderer({
           )}
 
           {isLastStep ? (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting} data-testid="submit-report-btn">
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

@@ -211,14 +211,25 @@ test.describe('Button Wiring Audit', () => {
         await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
         
-        // Try to find button with primary selector
+        // Try to find button with primary selector (wait for render)
         let button = page.locator(buttonEntry.selector).first();
-        let buttonVisible = await button.isVisible().catch(() => false);
+        let buttonVisible = false;
+        try {
+          await button.waitFor({ state: 'visible', timeout: 10000 });
+          buttonVisible = true;
+        } catch {
+          buttonVisible = false;
+        }
         
         // Try fallback selector if primary not found
         if (!buttonVisible && buttonEntry.fallback_selector) {
           button = page.locator(buttonEntry.fallback_selector).first();
-          buttonVisible = await button.isVisible().catch(() => false);
+          try {
+            await button.waitFor({ state: 'visible', timeout: 5000 });
+            buttonVisible = true;
+          } catch {
+            buttonVisible = false;
+          }
         }
         
         if (!buttonVisible) {
