@@ -52,7 +52,7 @@ async def global_search(
     Searches incidents, RTAs, complaints, risks, audits, actions, and documents.
     Results are ranked by relevance.
     """
-    from sqlalchemy import select, func, or_, cast, String
+    from sqlalchemy import String, cast, func, or_, select
 
     query_lower = q.lower()
     all_results: list[SearchResultItem] = []

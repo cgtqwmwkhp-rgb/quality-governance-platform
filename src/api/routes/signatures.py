@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.database import get_db
@@ -167,8 +167,9 @@ async def list_signature_requests(
     db: AsyncSession = Depends(get_db),
 ):
     """List signature requests."""
-    from src.domain.models.digital_signature import SignatureRequest
     from sqlalchemy.orm import selectinload
+
+    from src.domain.models.digital_signature import SignatureRequest
 
     tenant_id = 1
 
