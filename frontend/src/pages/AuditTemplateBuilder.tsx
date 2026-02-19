@@ -102,6 +102,7 @@ const QuestionEditor = React.memo(function QuestionEditor({
   }, [question.question_text, question.description, question.weight]);
 
   const debouncedSave = useCallback((field: string, value: unknown) => {
+    if (field === 'question_text' && (typeof value !== 'string' || value.trim() === '')) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -352,6 +353,7 @@ const SectionEditor = React.memo(function SectionEditor({
   }, [section.title, section.description, section.weight]);
 
   const debouncedSave = useCallback((field: string, value: string | number) => {
+    if (field === 'title' && (typeof value !== 'string' || value.trim() === '')) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -372,7 +374,7 @@ const SectionEditor = React.memo(function SectionEditor({
     try {
       await auditsApi.createQuestion(templateId, {
         section_id: section.id,
-        question_text: '',
+        question_text: 'New Question',
         question_type: 'yes_no',
         is_required: true,
         weight: 1,
@@ -917,6 +919,7 @@ export default function AuditTemplateBuilder() {
     setName(value);
     setHasUnsavedChanges(true);
     if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    if (!value.trim()) return;
     nameDebounceRef.current = setTimeout(async () => {
       if (template) {
         try {
