@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   AlertTriangle,
   Shield,
@@ -20,6 +20,7 @@ import {
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { riskRegisterApi } from '../api/client'
 
 interface Risk {
   id: number
@@ -95,167 +96,93 @@ export default function RiskRegister() {
     escalated: 0,
   })
 
-  useEffect(() => {
-    setTimeout(() => {
-      const mockRisks: Risk[] = [
-        {
-          id: 1,
-          reference: 'RISK-0001',
-          title: 'Supply chain disruption affecting critical components',
-          category: 'operational',
-          department: 'Operations',
-          inherent_score: 20,
-          residual_score: 12,
-          risk_level: 'high',
-          risk_color: 'hsl(var(--warning))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'John Smith',
-          next_review_date: '2026-03-15',
-        },
-        {
-          id: 2,
-          reference: 'RISK-0002',
-          title: 'Regulatory compliance failure - Environmental permits',
-          category: 'compliance',
-          department: 'QHSE',
-          inherent_score: 25,
-          residual_score: 15,
-          risk_level: 'high',
-          risk_color: 'hsl(var(--warning))',
-          treatment_strategy: 'treat',
-          status: 'treating',
-          is_within_appetite: false,
-          risk_owner_name: 'Sarah Johnson',
-          next_review_date: '2026-02-28',
-        },
-        {
-          id: 3,
-          reference: 'RISK-0003',
-          title: 'Key personnel departure without succession plan',
-          category: 'strategic',
-          department: 'HR',
-          inherent_score: 16,
-          residual_score: 8,
-          risk_level: 'medium',
-          risk_color: 'hsl(var(--info))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'Mike Davis',
-          next_review_date: '2026-04-01',
-        },
-        {
-          id: 4,
-          reference: 'RISK-0004',
-          title: 'Cybersecurity breach leading to data loss',
-          category: 'technological',
-          department: 'IT',
-          inherent_score: 25,
-          residual_score: 9,
-          risk_level: 'medium',
-          risk_color: 'hsl(var(--info))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'Alex Chen',
-          next_review_date: '2026-02-15',
-        },
-        {
-          id: 5,
-          reference: 'RISK-0005',
-          title: 'Workplace accident resulting in serious injury',
-          category: 'health_safety',
-          department: 'Operations',
-          inherent_score: 20,
-          residual_score: 6,
-          risk_level: 'medium',
-          risk_color: 'hsl(var(--info))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'Emma Wilson',
-          next_review_date: '2026-03-01',
-        },
-      ]
+  const scoreToLevel = (score: number) => {
+    if (score > 16) return 'critical'
+    if (score > 9) return 'high'
+    if (score > 4) return 'medium'
+    return 'low'
+  }
 
-      setRisks(mockRisks)
+  const levelToColor = (level: string) => {
+    const map: Record<string, string> = { critical: 'hsl(var(--destructive))', high: 'hsl(var(--warning))', medium: 'hsl(var(--info))', low: 'hsl(var(--success))' }
+    return map[level] || map.low
+  }
+
+  const buildHeatmap = (riskData: Risk[]) => {
+    const hm: HeatMapData = {
+      matrix: [],
+      summary: {
+        total_risks: riskData.length,
+        critical_risks: riskData.filter(r => r.risk_level === 'critical').length,
+        high_risks: riskData.filter(r => r.risk_level === 'high').length,
+        outside_appetite: riskData.filter(r => !r.is_within_appetite).length,
+        average_inherent_score: riskData.length ? riskData.reduce((s, r) => s + r.inherent_score, 0) / riskData.length : 0,
+        average_residual_score: riskData.length ? riskData.reduce((s, r) => s + r.residual_score, 0) / riskData.length : 0,
+      },
+      likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+      impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+    }
+    for (let likelihood = 5; likelihood >= 1; likelihood--) {
+      const row: MatrixCell[] = []
+      for (let impact = 1; impact <= 5; impact++) {
+        const score = likelihood * impact
+        const level = scoreToLevel(score)
+        const cellRisks = riskData.filter(r => Math.ceil(r.residual_score / 5) === likelihood && ((r.residual_score - 1) % 5) + 1 === impact)
+        row.push({ likelihood, impact, score, level, color: levelToColor(level), risk_count: cellRisks.length, risk_ids: cellRisks.map(r => r.id), risk_titles: cellRisks.map(r => r.title.substring(0, 30)) })
+      }
+      hm.matrix.push(row)
+    }
+    return hm
+  }
+
+  const loadRisks = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await riskRegisterApi.list({ page: 1, size: 100 })
+      const items = res.data?.items || []
+      const mapped: Risk[] = items.map((r: any) => {
+        const resScore = Number(r.residual_score || r.risk_score || 0)
+        const inhScore = Number(r.inherent_score || (Number(r.likelihood || 3) * Number(r.impact || 3)))
+        const level = scoreToLevel(resScore || inhScore)
+        return {
+          id: Number(r.id),
+          reference: String(r.reference || `RISK-${String(r.id).padStart(4, '0')}`),
+          title: String(r.title || ''),
+          category: String(r.category || 'operational'),
+          department: String(r.department || r.risk_owner || ''),
+          inherent_score: inhScore,
+          residual_score: resScore,
+          risk_level: level,
+          risk_color: levelToColor(level),
+          treatment_strategy: String(r.treatment_strategy || 'treat'),
+          status: String(r.status || 'monitoring'),
+          is_within_appetite: r.is_within_appetite !== false,
+          risk_owner_name: String(r.risk_owner || ''),
+          next_review_date: r.review_date ? String(r.review_date) : null,
+        }
+      })
+      setRisks(mapped)
+
+      const critical = mapped.filter(r => r.risk_level === 'critical').length
+      const high = mapped.filter(r => r.risk_level === 'high').length
+      const medium = mapped.filter(r => r.risk_level === 'medium').length
+      const low = mapped.filter(r => r.risk_level === 'low').length
       setSummary({
-        total_risks: 5,
-        by_level: { critical: 0, high: 2, medium: 3, low: 0 },
-        outside_appetite: 1,
-        overdue_review: 0,
+        total_risks: mapped.length,
+        by_level: { critical, high, medium, low },
+        outside_appetite: mapped.filter(r => !r.is_within_appetite).length,
+        overdue_review: mapped.filter(r => r.next_review_date && new Date(r.next_review_date) < new Date()).length,
         escalated: 0,
       })
-
-      const mockHeatMap: HeatMapData = {
-        matrix: [],
-        summary: {
-          total_risks: 5,
-          critical_risks: 0,
-          high_risks: 2,
-          outside_appetite: 1,
-          average_inherent_score: 21.2,
-          average_residual_score: 10.0,
-        },
-        likelihood_labels: {
-          1: 'Rare',
-          2: 'Unlikely',
-          3: 'Possible',
-          4: 'Likely',
-          5: 'Almost Certain',
-        },
-        impact_labels: {
-          1: 'Insignificant',
-          2: 'Minor',
-          3: 'Moderate',
-          4: 'Major',
-          5: 'Catastrophic',
-        },
-      }
-
-      for (let likelihood = 5; likelihood >= 1; likelihood--) {
-        const row: MatrixCell[] = []
-        for (let impact = 1; impact <= 5; impact++) {
-          const score = likelihood * impact
-          let level = 'low'
-          let color = 'hsl(var(--success))'
-          if (score > 16) {
-            level = 'critical'
-            color = 'hsl(var(--destructive))'
-          } else if (score > 9) {
-            level = 'high'
-            color = 'hsl(var(--warning))'
-          } else if (score > 4) {
-            level = 'medium'
-            color = 'hsl(var(--info))'
-          }
-
-          const cellRisks = mockRisks.filter(
-            (r) =>
-              Math.ceil(r.residual_score / 5) === likelihood &&
-              ((r.residual_score - 1) % 5) + 1 === impact
-          )
-
-          row.push({
-            likelihood,
-            impact,
-            score,
-            level,
-            color,
-            risk_count: cellRisks.length,
-            risk_ids: cellRisks.map((r) => r.id),
-            risk_titles: cellRisks.map((r) => r.title.substring(0, 30)),
-          })
-        }
-        mockHeatMap.matrix.push(row)
-      }
-
-      setHeatMapData(mockHeatMap)
+      setHeatMapData(buildHeatmap(mapped))
+    } catch {
+      console.error('Failed to load risks')
+    } finally {
       setLoading(false)
-    }, 500)
+    }
   }, [])
+
+  useEffect(() => { loadRisks() }, [loadRisks])
 
   const getRiskLevelBadge = (level: string) => {
     const variants: Record<string, 'destructive' | 'warning' | 'info' | 'resolved'> = {

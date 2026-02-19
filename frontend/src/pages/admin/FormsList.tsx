@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -20,6 +20,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
+import { formTemplatesApi } from '../../services/api';
 
 interface FormTemplate {
   id: number;
@@ -71,68 +72,39 @@ const FORM_TYPE_CONFIG: Record<
   },
 };
 
-// Mock data for demonstration
-const MOCK_FORMS: FormTemplate[] = [
-  {
-    id: 1,
-    name: 'Incident Report Form',
-    slug: 'incident-report',
-    form_type: 'incident',
-    description: 'Standard incident reporting form for workplace injuries',
-    is_active: true,
-    is_published: true,
-    version: 3,
-    steps_count: 4,
-    fields_count: 18,
-    updated_at: '2026-01-19T14:30:00Z',
-  },
-  {
-    id: 2,
-    name: 'Near Miss Report',
-    slug: 'near-miss',
-    form_type: 'near_miss',
-    description: 'Report near miss incidents and close calls',
-    is_active: true,
-    is_published: true,
-    version: 2,
-    steps_count: 3,
-    fields_count: 12,
-    updated_at: '2026-01-18T10:15:00Z',
-  },
-  {
-    id: 3,
-    name: 'Customer Complaint',
-    slug: 'complaint',
-    form_type: 'complaint',
-    description: 'Customer complaint submission form',
-    is_active: true,
-    is_published: true,
-    version: 1,
-    steps_count: 3,
-    fields_count: 10,
-    updated_at: '2026-01-17T09:00:00Z',
-  },
-  {
-    id: 4,
-    name: 'Road Traffic Collision',
-    slug: 'rta',
-    form_type: 'rta',
-    description: 'Report road traffic incidents and collisions',
-    is_active: true,
-    is_published: true,
-    version: 2,
-    steps_count: 5,
-    fields_count: 24,
-    updated_at: '2026-01-16T16:45:00Z',
-  },
-];
-
 export default function FormsList() {
   const navigate = useNavigate();
-  const [forms, setForms] = useState<FormTemplate[]>(MOCK_FORMS);
+  const [forms, setForms] = useState<FormTemplate[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [, setLoading] = useState(true);
+
+  const loadForms = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await formTemplatesApi.list(filterType || undefined);
+      setForms((data.items || []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        slug: f.slug,
+        form_type: f.form_type,
+        description: f.description,
+        is_active: f.is_active,
+        is_published: f.is_published,
+        version: f.version,
+        steps_count: f.steps_count ?? 0,
+        fields_count: f.fields_count ?? 0,
+        updated_at: f.updated_at ?? '',
+      })));
+    } catch {
+      console.error('Failed to load forms');
+    } finally {
+      setLoading(false);
+    }
+  }, [filterType]);
+
+  useEffect(() => { loadForms(); }, [loadForms]);
 
   const filteredForms = forms.filter((form) => {
     const matchesSearch =
@@ -142,32 +114,51 @@ export default function FormsList() {
     return matchesSearch && matchesType;
   });
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Are you sure you want to delete this form?')) {
-      setForms((prev) => prev.filter((f) => f.id !== id));
+      try {
+        await formTemplatesApi.delete(id);
+        setForms((prev) => prev.filter((f) => f.id !== id));
+      } catch {
+        console.error('Failed to delete form');
+      }
     }
     setActiveMenu(null);
   };
 
-  const handleDuplicate = (form: FormTemplate) => {
-    const duplicate: FormTemplate = {
-      ...form,
-      id: Date.now(),
-      name: `${form.name} (Copy)`,
-      slug: `${form.slug}-copy`,
-      is_published: false,
-      version: 1,
-    };
-    setForms((prev) => [...prev, duplicate]);
+  const handleDuplicate = async (form: FormTemplate) => {
+    try {
+      const created = await formTemplatesApi.create({
+        name: `${form.name} (Copy)`,
+        slug: `${form.slug}-copy-${Date.now()}`,
+        form_type: form.form_type,
+        description: form.description,
+      });
+      const c = created as any;
+      setForms((prev) => [...prev, { ...c, steps_count: c.steps_count ?? 0, fields_count: c.fields_count ?? 0, updated_at: c.updated_at ?? '' }]);
+    } catch {
+      console.error('Failed to duplicate form');
+    }
     setActiveMenu(null);
   };
 
-  const togglePublish = (id: number) => {
-    setForms((prev) =>
-      prev.map((f) =>
-        f.id === id ? { ...f, is_published: !f.is_published } : f
-      )
-    );
+  const togglePublish = async (id: number) => {
+    const form = forms.find((f) => f.id === id);
+    if (!form) return;
+    try {
+      if (!form.is_published) {
+        await formTemplatesApi.publish(id);
+      } else {
+        await formTemplatesApi.update(id, { is_published: false });
+      }
+      setForms((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, is_published: !f.is_published } : f
+        )
+      );
+    } catch {
+      console.error('Failed to toggle publish');
+    }
     setActiveMenu(null);
   };
 

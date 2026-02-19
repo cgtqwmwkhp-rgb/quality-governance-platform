@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   UserPlus,
@@ -16,7 +16,8 @@ import {
   XCircle,
   Clock,
   Save,
-  AlertTriangle
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { cn } from "../helpers/utils";
 import { Button } from '../components/ui/Button';
@@ -25,150 +26,90 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+import { usersApi } from '../api/client';
+import type { UserDetail, RoleDetail } from '../api/client';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  department: string;
-  role: string;
-  status: 'active' | 'inactive' | 'pending';
-  lastLogin?: string;
-  createdAt: string;
-  permissions: string[];
-}
-
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  userCount: number;
-  color: string;
-}
+/* eslint-disable @typescript-eslint/no-empty-interface */
 
 export default function UserManagement() {
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
-  const [_selectedUser] = useState<User | null>(null); void _selectedUser;
+  const [users, setUsers] = useState<UserDetail[]>([]);
+  const [roles, setRoles] = useState<RoleDetail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', phone: '', department: '', role: '' });
 
-  const users: User[] = [
-    {
-      id: 'USR001',
-      name: 'John Smith',
-      email: 'john.smith@company.com',
-      phone: '+44 7700 900123',
-      department: 'Operations',
-      role: 'Admin',
-      status: 'active',
-      lastLogin: '2024-01-19 09:45',
-      createdAt: '2023-06-15',
-      permissions: ['all']
-    },
-    {
-      id: 'USR002',
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@company.com',
-      department: 'Quality',
-      role: 'Manager',
-      status: 'active',
-      lastLogin: '2024-01-19 08:30',
-      createdAt: '2023-08-20',
-      permissions: ['incidents.manage', 'audits.manage', 'reports.view']
-    },
-    {
-      id: 'USR003',
-      name: 'Mike Chen',
-      email: 'mike.chen@company.com',
-      department: 'Fleet',
-      role: 'Supervisor',
-      status: 'active',
-      lastLogin: '2024-01-18 17:20',
-      createdAt: '2023-09-10',
-      permissions: ['rtas.manage', 'incidents.view', 'actions.manage']
-    },
-    {
-      id: 'USR004',
-      name: 'Emma Wilson',
-      email: 'emma.wilson@company.com',
-      department: 'Customer Service',
-      role: 'User',
-      status: 'inactive',
-      lastLogin: '2024-01-10 14:00',
-      createdAt: '2023-10-05',
-      permissions: ['complaints.view', 'complaints.create']
-    },
-    {
-      id: 'USR005',
-      name: 'David Brown',
-      email: 'david.brown@company.com',
-      department: 'Safety',
-      role: 'Manager',
-      status: 'pending',
-      createdAt: '2024-01-15',
-      permissions: ['incidents.manage', 'risks.manage', 'actions.manage']
+  const ROLE_COLORS: Record<string, string> = {
+    Admin: 'from-destructive to-destructive/80',
+    Manager: 'from-primary to-primary-hover',
+    Supervisor: 'from-info to-info/80',
+    User: 'from-success to-success/80',
+    Auditor: 'from-warning to-warning/80',
+  };
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [usersRes, rolesRes] = await Promise.all([
+        usersApi.list(1, 100),
+        usersApi.listRoles(),
+      ]);
+      setUsers(usersRes.data?.items || []);
+      setRoles(rolesRes.data || []);
+    } catch {
+      console.error('Failed to load users/roles');
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, []);
 
-  const roles: Role[] = [
-    {
-      id: 'ROLE001',
-      name: 'Admin',
-      description: 'Full system access with user management capabilities',
-      permissions: ['all'],
-      userCount: 2,
-      color: 'from-destructive to-destructive/80'
-    },
-    {
-      id: 'ROLE002',
-      name: 'Manager',
-      description: 'Department-level access with reporting capabilities',
-      permissions: ['incidents.manage', 'audits.manage', 'reports.view', 'risks.manage'],
-      userCount: 8,
-      color: 'from-primary to-primary-hover'
-    },
-    {
-      id: 'ROLE003',
-      name: 'Supervisor',
-      description: 'Team-level access with limited management rights',
-      permissions: ['incidents.view', 'rtas.manage', 'actions.manage'],
-      userCount: 15,
-      color: 'from-info to-info/80'
-    },
-    {
-      id: 'ROLE004',
-      name: 'User',
-      description: 'Basic access for viewing and creating records',
-      permissions: ['*.view', '*.create'],
-      userCount: 45,
-      color: 'from-success to-success/80'
-    },
-    {
-      id: 'ROLE005',
-      name: 'Auditor',
-      description: 'Read-only access to all modules for audit purposes',
-      permissions: ['*.view', 'reports.view', 'audit-trail.view'],
-      userCount: 5,
-      color: 'from-warning to-warning/80'
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleCreateUser = async () => {
+    if (!newUser.email || !newUser.firstName || !newUser.lastName) return;
+    setSaving(true);
+    try {
+      const roleObj = roles.find(r => r.name.toLowerCase() === newUser.role);
+      await usersApi.create({
+        email: newUser.email,
+        password: 'TempPass123!',
+        first_name: newUser.firstName,
+        last_name: newUser.lastName,
+        phone: newUser.phone || undefined,
+        department: newUser.department || undefined,
+        role_ids: roleObj ? [roleObj.id] : [],
+      });
+      setShowAddModal(false);
+      setNewUser({ firstName: '', lastName: '', email: '', phone: '', department: '', role: '' });
+      await loadData();
+    } catch {
+      console.error('Failed to create user');
+    } finally {
+      setSaving(false);
     }
-  ];
+  };
 
-  // Permissions list available for role configuration
-  const _permissions = [
-    { id: 'incidents', name: 'Incidents', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
-    { id: 'rtas', name: 'RTAs', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
-    { id: 'complaints', name: 'Complaints', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
-    { id: 'risks', name: 'Risks', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
-    { id: 'audits', name: 'Audits', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
-    { id: 'actions', name: 'Actions', actions: ['view', 'create', 'edit', 'delete', 'manage'] },
-    { id: 'documents', name: 'Documents', actions: ['view', 'upload', 'edit', 'delete', 'manage'] },
-    { id: 'reports', name: 'Reports', actions: ['view', 'create', 'export'] },
-    { id: 'users', name: 'Users', actions: ['view', 'create', 'edit', 'delete', 'manage'] }
-  ];
-  void _permissions; // Used for role configuration UI
+  const handleToggleActive = async (user: UserDetail) => {
+    try {
+      await usersApi.update(user.id, { is_active: !user.is_active });
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
+    } catch {
+      console.error('Failed to toggle user');
+    }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (!confirm('Are you sure you want to deactivate this user?')) return;
+    try {
+      await usersApi.delete(userId);
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch {
+      console.error('Failed to delete user');
+    }
+  };
 
   const statusConfig: Record<string, { variant: 'resolved' | 'submitted' | 'destructive'; icon: React.ReactNode }> = {
     active: { variant: 'resolved', icon: <CheckCircle2 className="w-4 h-4" /> },
@@ -176,12 +117,28 @@ export default function UserManagement() {
     pending: { variant: 'submitted', icon: <Clock className="w-4 h-4" /> }
   };
 
+  const getUserStatus = (user: UserDetail): 'active' | 'inactive' | 'pending' => {
+    if (!user.is_active) return 'inactive';
+    return 'active';
+  };
+
+  const getUserRoleName = (user: UserDetail) => user.roles?.[0]?.name || 'User';
+
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const fullName = user.full_name || `${user.first_name} ${user.last_name}`;
+    const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = selectedRole === 'all' || user.role === selectedRole;
+    const matchesRole = selectedRole === 'all' || getUserRoleName(user) === selectedRole;
     return matchesSearch && matchesRole;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -216,7 +173,7 @@ export default function UserManagement() {
         >
           <span className="flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Users ({users.length})
+            Users ({filteredUsers.length})
           </span>
         </button>
         <button
@@ -279,7 +236,12 @@ export default function UserManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((user) => (
+                  {filteredUsers.map((user) => {
+                    const displayName = user.full_name || `${user.first_name} ${user.last_name}`;
+                    const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase();
+                    const status = getUserStatus(user);
+                    const roleName = getUserRoleName(user);
+                    return (
                     <tr
                       key={user.id}
                       className="border-b border-border hover:bg-muted/30 transition-colors"
@@ -287,10 +249,10 @@ export default function UserManagement() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-primary-foreground font-semibold">
-                            {user.name.split(' ').map(n => n[0]).join('')}
+                            {initials}
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">{user.name}</p>
+                            <p className="font-medium text-foreground">{displayName}</p>
                             <p className="text-sm text-muted-foreground">{user.email}</p>
                           </div>
                         </div>
@@ -298,22 +260,22 @@ export default function UserManagement() {
                       <td className="p-4">
                         <span className="flex items-center gap-2 text-foreground">
                           <Building className="w-4 h-4 text-muted-foreground" />
-                          {user.department}
+                          {user.department || '—'}
                         </span>
                       </td>
                       <td className="p-4">
                         <Badge variant="default">
-                          {user.role}
+                          {roleName}
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <Badge variant={statusConfig[user.status].variant} className="flex items-center gap-1 w-fit">
-                          {statusConfig[user.status].icon}
-                          {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                        <Badge variant={statusConfig[status].variant} className="flex items-center gap-1 w-fit">
+                          {statusConfig[status].icon}
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
                         </Badge>
                       </td>
                       <td className="p-4 text-muted-foreground text-sm">
-                        {user.lastLogin || 'Never'}
+                        {user.last_login || 'Never'}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
@@ -323,17 +285,19 @@ export default function UserManagement() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            title={user.status === 'active' ? 'Deactivate' : 'Activate'}
+                            title={user.is_active ? 'Deactivate' : 'Activate'}
+                            onClick={() => handleToggleActive(user)}
                           >
-                            {user.status === 'active' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                            {user.is_active ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title="Delete User">
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title="Delete User" onClick={() => handleDeleteUser(user.id)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -344,14 +308,17 @@ export default function UserManagement() {
       {/* Roles Tab */}
       {activeTab === 'roles' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {roles.map((role) => (
+          {roles.map((role) => {
+            const color = ROLE_COLORS[role.name] || 'from-muted to-muted/80';
+            const roleUserCount = users.filter(u => u.roles?.some(r => r.id === role.id)).length;
+            return (
             <Card
               key={role.id}
               className="hover:border-primary/50 transition-all"
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className={cn("p-3 rounded-xl bg-gradient-to-br", role.color)}>
+                  <div className={cn("p-3 rounded-xl bg-gradient-to-br", color)}>
                     <Shield className="w-6 h-6 text-white" />
                   </div>
                   <Button variant="ghost" size="sm">
@@ -360,19 +327,19 @@ export default function UserManagement() {
                 </div>
                 
                 <h3 className="text-xl font-semibold text-foreground mb-2">{role.name}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{role.description}</p>
+                <p className="text-sm text-muted-foreground mb-4">{role.description || 'No description'}</p>
                 
                 <div className="flex items-center justify-between pt-4 border-t border-border">
                   <span className="text-sm text-muted-foreground">
-                    <span className="text-foreground font-medium">{role.userCount}</span> users
+                    <span className="text-foreground font-medium">{roleUserCount}</span> users
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    <span className="text-foreground font-medium">{role.permissions.length}</span> permissions
+                    <span className="text-foreground font-medium">{role.permissions?.length || 0}</span> permissions
                   </span>
                 </div>
                 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {role.permissions.slice(0, 3).map((perm, i) => (
+                  {(role.permissions || []).slice(0, 3).map((perm, i) => (
                     <span
                       key={i}
                       className="px-2 py-1 bg-muted text-muted-foreground rounded text-xs"
@@ -380,7 +347,7 @@ export default function UserManagement() {
                       {perm}
                     </span>
                   ))}
-                  {role.permissions.length > 3 && (
+                  {(role.permissions?.length || 0) > 3 && (
                     <Badge variant="default" className="text-xs">
                       +{role.permissions.length - 3} more
                     </Badge>
@@ -388,7 +355,8 @@ export default function UserManagement() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
           
           {/* Add New Role Card */}
           <button className="bg-card/30 rounded-xl border border-dashed border-border p-6 flex flex-col items-center justify-center gap-3 hover:border-primary/50 hover:bg-card/50 transition-all min-h-[200px]">
@@ -411,11 +379,11 @@ export default function UserManagement() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2">First Name</label>
-                <Input type="text" placeholder="John" />
+                <Input type="text" placeholder="John" value={newUser.firstName} onChange={(e) => setNewUser(p => ({ ...p, firstName: e.target.value }))} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
-                <Input type="text" placeholder="Smith" />
+                <Input type="text" placeholder="Smith" value={newUser.lastName} onChange={(e) => setNewUser(p => ({ ...p, lastName: e.target.value }))} />
               </div>
             </div>
             
@@ -427,6 +395,8 @@ export default function UserManagement() {
                   type="email"
                   className="pl-10"
                   placeholder="john.smith@company.com"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser(p => ({ ...p, email: e.target.value }))}
                 />
               </div>
             </div>
@@ -439,6 +409,8 @@ export default function UserManagement() {
                   type="tel"
                   className="pl-10"
                   placeholder="+44 7700 900000"
+                  value={newUser.phone}
+                  onChange={(e) => setNewUser(p => ({ ...p, phone: e.target.value }))}
                 />
               </div>
             </div>
@@ -446,23 +418,23 @@ export default function UserManagement() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2">Department</label>
-                <Select>
+                <Select value={newUser.department} onValueChange={(v) => setNewUser(p => ({ ...p, department: v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="operations">Operations</SelectItem>
-                    <SelectItem value="quality">Quality</SelectItem>
-                    <SelectItem value="fleet">Fleet</SelectItem>
-                    <SelectItem value="safety">Safety</SelectItem>
-                    <SelectItem value="customer-service">Customer Service</SelectItem>
-                    <SelectItem value="hr">HR</SelectItem>
+                    <SelectItem value="Operations">Operations</SelectItem>
+                    <SelectItem value="Quality">Quality</SelectItem>
+                    <SelectItem value="Fleet">Fleet</SelectItem>
+                    <SelectItem value="Safety">Safety</SelectItem>
+                    <SelectItem value="Customer Service">Customer Service</SelectItem>
+                    <SelectItem value="HR">HR</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2">Role</label>
-                <Select>
+                <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
@@ -487,8 +459,8 @@ export default function UserManagement() {
             <Button variant="ghost" onClick={() => setShowAddModal(false)}>
               Cancel
             </Button>
-            <Button>
-              <Save className="w-5 h-5" />
+            <Button onClick={handleCreateUser} disabled={saving}>
+              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
               Create User
             </Button>
           </DialogFooter>

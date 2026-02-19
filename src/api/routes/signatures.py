@@ -9,7 +9,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.database import get_db
 
@@ -130,7 +131,7 @@ class AuditLogResponse(BaseModel):
 @router.post("/requests", response_model=SignatureRequestResponse)
 async def create_signature_request(
     data: SignatureRequestCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -163,27 +164,34 @@ async def create_signature_request(
 async def list_signature_requests(
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List signature requests."""
+    from sqlalchemy.orm import selectinload
+
     from src.domain.models.digital_signature import SignatureRequest
 
-    # TODO: Get from auth
     tenant_id = 1
 
-    query = db.query(SignatureRequest).filter(SignatureRequest.tenant_id == tenant_id)
+    stmt = (
+        select(SignatureRequest)
+        .options(selectinload(SignatureRequest.signers))
+        .where(SignatureRequest.tenant_id == tenant_id)
+    )
 
     if status:
-        query = query.filter(SignatureRequest.status == status)
+        stmt = stmt.where(SignatureRequest.status == status)
 
-    requests = query.order_by(SignatureRequest.created_at.desc()).limit(limit).all()
+    stmt = stmt.order_by(SignatureRequest.created_at.desc()).limit(limit)
+    result = await db.execute(stmt)
+    requests = result.scalars().unique().all()
 
     return [_format_request(r) for r in requests]
 
 
 @router.get("/requests/pending")
 async def get_pending_requests(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get signature requests pending user's signature."""
     from src.domain.services.signature_service import SignatureService
@@ -207,7 +215,7 @@ async def get_pending_requests(
 @router.get("/requests/{request_id}", response_model=SignatureRequestResponse)
 async def get_signature_request(
     request_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get a signature request by ID."""
     from src.domain.services.signature_service import SignatureService
@@ -224,7 +232,7 @@ async def get_signature_request(
 @router.post("/requests/{request_id}/send")
 async def send_signature_request(
     request_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Send a signature request to signers."""
     from src.domain.services.signature_service import SignatureService
@@ -242,7 +250,7 @@ async def send_signature_request(
 async def void_signature_request(
     request_id: int,
     reason: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Void a signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -262,7 +270,7 @@ async def void_signature_request(
 @router.get("/requests/{request_id}/audit-log", response_model=list[AuditLogResponse])
 async def get_audit_log(
     request_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get audit log for a signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -282,7 +290,7 @@ async def get_audit_log(
 async def get_signing_page(
     token: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get signing page data for external signer."""
     from src.domain.services.signature_service import SignatureService
@@ -328,7 +336,7 @@ async def sign_document(
     token: str,
     data: SignInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Apply signature to document."""
     from src.domain.services.signature_service import SignatureService
@@ -365,7 +373,7 @@ async def decline_signing(
     token: str,
     data: DeclineInput,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Decline to sign."""
     from src.domain.services.signature_service import SignatureService
@@ -400,7 +408,7 @@ async def decline_signing(
 @router.post("/templates", response_model=TemplateResponse)
 async def create_template(
     data: TemplateCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a signature template."""
     from src.domain.services.signature_service import SignatureService
@@ -428,23 +436,23 @@ async def create_template(
 
 @router.get("/templates", response_model=list[TemplateResponse])
 async def list_templates(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List signature templates."""
     from src.domain.models.digital_signature import SignatureTemplate
 
-    # TODO: Get from auth
     tenant_id = 1
 
-    templates = (
-        db.query(SignatureTemplate)
-        .filter(
+    stmt = (
+        select(SignatureTemplate)
+        .where(
             SignatureTemplate.tenant_id == tenant_id,
-            SignatureTemplate.is_active == True,
+            SignatureTemplate.is_active == True,  # noqa: E712
         )
         .order_by(SignatureTemplate.name)
-        .all()
     )
+    result = await db.execute(stmt)
+    templates = result.scalars().all()
 
     return templates
 
@@ -454,7 +462,7 @@ async def use_template(
     template_id: int,
     signers: list[SignerInput],
     title: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a signature request from a template."""
     from src.domain.services.signature_service import SignatureService
@@ -484,40 +492,35 @@ async def use_template(
 
 @router.get("/stats")
 async def get_signature_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get signature statistics."""
-    from sqlalchemy import func
-
     from src.domain.models.digital_signature import Signature, SignatureRequest
 
-    # TODO: Get from auth
     tenant_id = 1
 
-    # Request counts by status
-    status_counts = (
-        db.query(SignatureRequest.status, func.count(SignatureRequest.id))
-        .filter(SignatureRequest.tenant_id == tenant_id)
+    status_result = await db.execute(
+        select(SignatureRequest.status, func.count(SignatureRequest.id))
+        .where(SignatureRequest.tenant_id == tenant_id)
         .group_by(SignatureRequest.status)
-        .all()
     )
+    status_counts: dict[str, int] = dict(status_result.all())
 
-    # Total signatures
-    total_signatures = db.query(func.count(Signature.id)).filter(Signature.tenant_id == tenant_id).scalar()
+    total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
-    # This month
     this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
     this_month_count = (
-        db.query(func.count(SignatureRequest.id))
-        .filter(
-            SignatureRequest.tenant_id == tenant_id,
-            SignatureRequest.created_at >= this_month_start,
+        await db.scalar(
+            select(func.count(SignatureRequest.id)).where(
+                SignatureRequest.tenant_id == tenant_id,
+                SignatureRequest.created_at >= this_month_start,
+            )
         )
-        .scalar()
+        or 0
     )
 
     return {
-        "requests_by_status": dict(status_counts),
+        "requests_by_status": status_counts,
         "total_signatures": total_signatures,
         "requests_this_month": this_month_count,
     }
@@ -530,7 +533,7 @@ async def get_signature_stats(
 
 @router.post("/admin/send-reminders")
 async def send_reminders(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Send reminders for pending signatures (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService
@@ -547,7 +550,7 @@ async def send_reminders(
 
 @router.post("/admin/expire-old")
 async def expire_old_requests(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Expire old signature requests (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService

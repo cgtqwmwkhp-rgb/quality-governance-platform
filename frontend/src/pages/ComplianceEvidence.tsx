@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Award,
   Leaf,
@@ -23,7 +23,8 @@ import {
   Plus,
   Tag,
 } from 'lucide-react';
-import { ISO_STANDARDS, ISOClause, getAllClauses, autoTagContent } from '../data/isoStandards';
+import { ISO_STANDARDS, ISOClause, getAllClauses } from '../data/isoStandards';
+import { complianceApi, AutoTagResult } from '../api/client';
 
 // Evidence types that can be linked to ISO clauses
 type EvidenceType = 'policy' | 'document' | 'audit' | 'incident' | 'action' | 'risk' | 'training';
@@ -172,13 +173,27 @@ export default function ComplianceEvidence() {
     setExpandedClauses(newExpanded);
   };
 
-  // Auto-tag handler
-  const handleAutoTag = () => {
-    if (autoTagText.trim()) {
-      const results = autoTagContent(autoTagText);
-      setAutoTagResults(results);
+  const [autoTagging, setAutoTagging] = useState(false);
+  const [apiTagResults, setApiTagResults] = useState<AutoTagResult[]>([]);
+
+  const handleAutoTag = useCallback(async () => {
+    if (!autoTagText.trim()) return;
+    try {
+      setAutoTagging(true);
+      const results = await complianceApi.autoTag(autoTagText, false);
+      const arr = Array.isArray(results) ? results : [];
+      setApiTagResults(arr);
+      const allClauses = getAllClauses();
+      const mapped = arr
+        .map(r => allClauses.find(c => c.id === r.clause_id))
+        .filter((c): c is ISOClause => c !== undefined);
+      setAutoTagResults(mapped);
+    } catch (err) {
+      console.error('Auto-tag failed', err);
+    } finally {
+      setAutoTagging(false);
     }
-  };
+  }, [autoTagText]);
 
   // Get coverage status for a clause
   const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' => {
@@ -665,11 +680,11 @@ export default function ComplianceEvidence() {
 
             <button
               onClick={handleAutoTag}
-              disabled={!autoTagText.trim()}
+              disabled={!autoTagText.trim() || autoTagging}
               className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-bold flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4"
             >
               <Sparkles className="w-5 h-5" />
-              Analyze & Auto-Tag
+              {autoTagging ? 'Analyzing...' : 'Analyze & Auto-Tag'}
             </button>
 
             {autoTagResults.length > 0 && (
@@ -682,11 +697,15 @@ export default function ComplianceEvidence() {
                   {autoTagResults.map(clause => {
                     const Icon = standardIcons[clause.standard];
                     const color = standardColors[clause.standard];
+                    const apiResult = apiTagResults.find(r => r.clause_id === clause.id);
                     return (
                       <div key={clause.id} className="p-3 bg-slate-700/50 rounded-lg flex items-center gap-3">
                         <Icon className={`w-5 h-5 text-${color}-400`} />
                         <span className="font-medium text-white">{clause.clauseNumber}</span>
                         <span className="text-gray-300 flex-grow">{clause.title}</span>
+                        {apiResult && (
+                          <span className="text-xs text-purple-400">{Math.round(apiResult.confidence)}%</span>
+                        )}
                         <button className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-full">
                           Apply Tag
                         </button>

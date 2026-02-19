@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   X,
@@ -24,6 +24,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { searchApi } from '../api/client';
 
 interface SearchResult {
   id: string;
@@ -161,24 +162,43 @@ export default function GlobalSearch() {
     'Closed': 'resolved'
   };
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
-    
+
     setIsSearching(true);
-    
+
     if (!searchHistory.includes(query)) {
-      setSearchHistory([query, ...searchHistory.slice(0, 4)]);
+      setSearchHistory(prev => [query, ...prev.slice(0, 4)]);
     }
-    
-    setTimeout(() => {
-      setResults(mockResults.filter(r => 
+
+    try {
+      const resp = await searchApi.search(query, {
+        module: filters.modules.length === 1 ? filters.modules[0] : undefined,
+      });
+      const data = resp as { results?: SearchResult[]; total?: number };
+      const items = Array.isArray(data?.results) ? data.results : [];
+      setResults(items.map(r => ({
+        id: r.id || '',
+        type: (r.type || 'document') as SearchResult['type'],
+        title: r.title || '',
+        description: r.description || '',
+        module: r.module || '',
+        status: r.status || '',
+        date: r.date || '',
+        relevance: r.relevance || 0,
+        highlights: Array.isArray(r.highlights) ? r.highlights : [],
+      })));
+    } catch (err) {
+      console.error('Search failed, falling back to local results', err);
+      setResults(mockResults.filter(r =>
         r.title.toLowerCase().includes(query.toLowerCase()) ||
         r.description.toLowerCase().includes(query.toLowerCase()) ||
         r.module.toLowerCase().includes(query.toLowerCase())
       ));
+    } finally {
       setIsSearching(false);
-    }, 500);
-  };
+    }
+  }, [query, filters.modules]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

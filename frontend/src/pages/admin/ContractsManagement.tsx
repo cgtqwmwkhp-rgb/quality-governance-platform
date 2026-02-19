@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Search,
@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { cn } from '../../helpers/utils';
+import { contractsApi } from '../../services/api';
 
 interface Contract {
   id: number;
@@ -32,27 +33,28 @@ interface Contract {
   display_order: number;
 }
 
-// Mock data
-const INITIAL_CONTRACTS: Contract[] = [
-  { id: 1, name: 'UKPN', code: 'ukpn', client_name: 'UK Power Networks', is_active: true, display_order: 1 },
-  { id: 2, name: 'Openreach', code: 'openreach', client_name: 'BT Group', is_active: true, display_order: 2 },
-  { id: 3, name: 'Thames Water', code: 'thames-water', client_name: 'Thames Water Utilities', is_active: true, display_order: 3 },
-  { id: 4, name: 'Plantexpand Ltd', code: 'plantexpand', client_name: 'Internal', is_active: true, display_order: 4 },
-  { id: 5, name: 'Cadent', code: 'cadent', client_name: 'Cadent Gas', is_active: true, display_order: 5 },
-  { id: 6, name: 'SGN', code: 'sgn', client_name: 'Southern Gas Networks', is_active: true, display_order: 6 },
-  { id: 7, name: 'Southern Water', code: 'southern-water', client_name: 'Southern Water Services', is_active: true, display_order: 7 },
-  { id: 8, name: 'Zenith', code: 'zenith', client_name: 'Zenith Vehicle Solutions', is_active: true, display_order: 8 },
-  { id: 9, name: 'Novuna', code: 'novuna', client_name: 'Scottish Power', is_active: true, display_order: 9 },
-  { id: 10, name: 'Enterprise', code: 'enterprise', client_name: 'Enterprise Fleet Management', is_active: true, display_order: 10 },
-];
-
 export default function ContractsManagement() {
-  const [contracts, setContracts] = useState<Contract[]>(INITIAL_CONTRACTS);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [, setLoading] = useState(true);
+
+  const loadContracts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await contractsApi.list(false);
+      setContracts(data.items || []);
+    } catch {
+      console.error('Failed to load contracts');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadContracts(); }, [loadContracts]);
 
   const [formData, setFormData] = useState<Partial<Contract>>({
     name: '',
@@ -104,29 +106,21 @@ export default function ContractsManagement() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       if (isAdding) {
-        const newContract: Contract = {
-          id: Date.now(),
+        const created = await contractsApi.create({
           name: formData.name || '',
           code: formData.code || '',
           description: formData.description,
           client_name: formData.client_name,
-          client_contact: formData.client_contact,
-          client_email: formData.client_email,
           is_active: formData.is_active ?? true,
-          display_order: contracts.length + 1,
-        };
-        setContracts((prev) => [...prev, newContract]);
+        } as any);
+        setContracts((prev) => [...prev, created]);
       } else if (editingContract) {
+        const updated = await contractsApi.update(editingContract.id, formData);
         setContracts((prev) =>
-          prev.map((c) =>
-            c.id === editingContract.id ? { ...c, ...formData } : c
-          )
+          prev.map((c) => (c.id === editingContract.id ? updated : c))
         );
       }
-
       handleCancel();
     } catch {
       console.error('Failed to save');
@@ -135,16 +129,28 @@ export default function ContractsManagement() {
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Are you sure you want to delete this contract?')) {
-      setContracts((prev) => prev.filter((c) => c.id !== id));
+      try {
+        await contractsApi.delete(id);
+        setContracts((prev) => prev.filter((c) => c.id !== id));
+      } catch {
+        console.error('Failed to delete');
+      }
     }
   };
 
-  const toggleActive = (id: number) => {
-    setContracts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c))
-    );
+  const toggleActive = async (id: number) => {
+    const contract = contracts.find((c) => c.id === id);
+    if (!contract) return;
+    try {
+      await contractsApi.update(id, { is_active: !contract.is_active });
+      setContracts((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c))
+      );
+    } catch {
+      console.error('Failed to toggle');
+    }
   };
 
   return (

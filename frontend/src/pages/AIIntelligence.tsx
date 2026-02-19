@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Brain,
   Zap,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { aiApi } from '../api/client'
 
 interface Prediction {
   factor_type: string
@@ -51,27 +52,40 @@ interface Cluster {
 export default function AIIntelligence() {
   const [activeTab, setActiveTab] = useState<'predictions' | 'anomalies' | 'audit' | 'recommendations'>('predictions')
   const [analyzing, setAnalyzing] = useState(false)
+  const [predictions, setPredictions] = useState<Prediction[]>([])
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([])
+  const [clusters, setClusters] = useState<Cluster[]>([])
+  const [recommendations, setRecommendations] = useState<{ title: string; description: string; priority: string; timeframe: string; responsible: string; confidence: number }[]>([])
 
-  const predictions: Prediction[] = [
-    { factor_type: 'department', factor_value: 'Operations', incident_count: 45, percentage: 32.1, risk_level: 'high' },
-    { factor_type: 'department', factor_value: 'Field Services', incident_count: 28, percentage: 20.0, risk_level: 'medium' },
-    { factor_type: 'department', factor_value: 'Warehouse', incident_count: 22, percentage: 15.7, risk_level: 'medium' },
-    { factor_type: 'time_of_day', factor_value: '06:00 - 10:00', high_risk_hours: [6, 7, 8, 9], risk_level: 'medium' },
-    { factor_type: 'seasonal', factor_value: 'January', incident_count: 18, risk_level: 'low' },
-  ]
+  const loadAIData = useCallback(async () => {
+    setAnalyzing(true)
+    try {
+      const [predRes, anomRes, recRes] = await Promise.all([
+        aiApi.getPredictions(),
+        aiApi.getAnomalies(),
+        aiApi.getRecommendations(),
+      ])
 
-  const anomalies: Anomaly[] = [
-    { type: 'category_clustering', category: 'Manual Handling', percentage: 42.5, count: 17, message: '42.5% of incidents are Manual Handling - investigate root cause' },
-    { type: 'day_clustering', day: 'Monday', percentage: 31.2, count: 12, message: '31.2% of incidents occur on Mondays' },
-    { type: 'frequency_spike', category: 'Operations', percentage: 180, count: 9, message: 'Operations department showing 180% above average incident rate' },
-  ]
+      const predData = predRes.data as Record<string, unknown>
+      if (predData?.predictions) setPredictions(predData.predictions as Prediction[])
+      else if (Array.isArray(predData)) setPredictions(predData as Prediction[])
 
-  const clusters: Cluster[] = [
-    { category: 'manual_handling', incident_count: 17, departments_affected: ['Operations', 'Warehouse'], priority: 'high', suggested_action: 'Investigate systemic causes of manual handling incidents' },
-    { category: 'slips_trips_falls', incident_count: 12, departments_affected: ['Field Services', 'Warehouse'], priority: 'high', suggested_action: 'Review floor conditions and housekeeping procedures' },
-    { category: 'vehicle_incident', incident_count: 8, departments_affected: ['Field Services', 'Logistics'], priority: 'medium', suggested_action: 'Review driving standards and telematics data' },
-    { category: 'working_at_height', incident_count: 5, departments_affected: ['Operations'], priority: 'medium', suggested_action: 'Review work at height procedures and equipment' },
-  ]
+      const anomData = anomRes.data as Record<string, unknown>
+      if (anomData?.anomalies) setAnomalies(anomData.anomalies as Anomaly[])
+      else if (Array.isArray(anomData)) setAnomalies(anomData as Anomaly[])
+      if (anomData?.clusters) setClusters(anomData.clusters as Cluster[])
+
+      const recData = recRes.data as Record<string, unknown>
+      if (recData?.recommendations) setRecommendations(recData.recommendations as typeof recommendations)
+      else if (Array.isArray(recData)) setRecommendations(recData as typeof recommendations)
+    } catch {
+      console.error('Failed to load AI data')
+    } finally {
+      setAnalyzing(false)
+    }
+  }, [])
+
+  useEffect(() => { loadAIData() }, [loadAIData])
 
   const auditQuestions = [
     { clause: '6.1', question: 'How are OH&S hazards identified?', type: 'compliance', evidence: ['Risk Assessment', 'Hazard Register'] },
@@ -81,44 +95,8 @@ export default function AIIntelligence() {
     { clause: '10.2', question: 'What is the process for incident investigation?', type: 'compliance', evidence: ['Investigation Procedure', 'Incident Reports'] },
   ]
 
-  const recommendations = [
-    {
-      title: 'Implement Ergonomic Assessment Program',
-      description: 'Based on high manual handling incidents, implement a formal ergonomic assessment for all high-risk tasks',
-      priority: 'high',
-      timeframe: '2 weeks',
-      responsible: 'H&S Manager',
-      confidence: 92,
-    },
-    {
-      title: 'Enhanced Monday Toolbox Talks',
-      description: 'Incident clustering on Mondays suggests need for enhanced safety briefings at week start',
-      priority: 'medium',
-      timeframe: '1 week',
-      responsible: 'Team Leaders',
-      confidence: 85,
-    },
-    {
-      title: 'Operations Department Safety Blitz',
-      description: 'Focused safety intervention for Operations due to elevated incident rate',
-      priority: 'high',
-      timeframe: 'Immediate',
-      responsible: 'Operations Manager',
-      confidence: 88,
-    },
-    {
-      title: 'Slip Hazard Audit',
-      description: 'Conduct comprehensive slip hazard assessment in Field Services and Warehouse',
-      priority: 'medium',
-      timeframe: '1 month',
-      responsible: 'Facilities Team',
-      confidence: 78,
-    },
-  ]
-
   const handleAnalyze = () => {
-    setAnalyzing(true)
-    setTimeout(() => setAnalyzing(false), 2000)
+    loadAIData()
   }
 
   return (

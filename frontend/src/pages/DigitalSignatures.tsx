@@ -8,7 +8,9 @@
  * - Audit trail viewer
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { signaturesApi } from '../api/client';
+import type { SignatureRequestEntry } from '../api/client';
 import {
   FileSignature,
   Plus,
@@ -83,101 +85,59 @@ const DigitalSignatures: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<SignatureRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [signatureRequests, setSignatureRequests] = useState<SignatureRequest[]>([]);
+  const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
+  const [, setLoading] = useState(true);
 
-  // Mock data
-  const signatureRequests: SignatureRequest[] = [
-    {
-      id: 1,
-      referenceNumber: 'SIG-20260120-A1B2',
-      title: 'Safety Policy Acknowledgment',
-      description: 'Annual safety policy review and acknowledgment',
-      documentType: 'policy',
-      status: 'pending',
-      workflowType: 'sequential',
-      createdAt: new Date('2026-01-20'),
-      expiresAt: new Date('2026-02-19'),
-      signers: [
-        { id: 1, name: 'John Smith', email: 'john@example.com', role: 'Employee', order: 1, status: 'signed', signedAt: new Date() },
-        { id: 2, name: 'Sarah Johnson', email: 'sarah@example.com', role: 'Manager', order: 2, status: 'pending' },
-        { id: 3, name: 'Mike Wilson', email: 'mike@example.com', role: 'Director', order: 3, status: 'pending' },
-      ],
-    },
-    {
-      id: 2,
-      referenceNumber: 'SIG-20260119-C3D4',
-      title: 'Incident Investigation Report',
-      description: 'Final sign-off for incident INC-2026-045',
-      documentType: 'report',
-      status: 'completed',
-      workflowType: 'parallel',
-      createdAt: new Date('2026-01-19'),
-      expiresAt: new Date('2026-02-18'),
-      completedAt: new Date('2026-01-20'),
-      signers: [
-        { id: 4, name: 'Emily Brown', email: 'emily@example.com', role: 'Investigator', order: 1, status: 'signed', signedAt: new Date() },
-        { id: 5, name: 'David Lee', email: 'david@example.com', role: 'Safety Manager', order: 1, status: 'signed', signedAt: new Date() },
-      ],
-    },
-    {
-      id: 3,
-      referenceNumber: 'SIG-20260118-E5F6',
-      title: 'CAPA Closure Approval',
-      description: 'Approval to close corrective action CAPA-2025-122',
-      documentType: 'capa',
-      status: 'declined',
-      workflowType: 'sequential',
-      createdAt: new Date('2026-01-18'),
-      expiresAt: new Date('2026-02-17'),
-      signers: [
-        { id: 6, name: 'Alex Turner', email: 'alex@example.com', role: 'Quality Manager', order: 1, status: 'declined', declinedAt: new Date() },
-      ],
-    },
-  ];
+  const mapApiRequest = (r: SignatureRequestEntry): SignatureRequest => ({
+    id: r.id,
+    referenceNumber: r.reference_number,
+    title: r.title,
+    description: r.description,
+    documentType: r.document_type,
+    status: r.status as SignatureRequest['status'],
+    workflowType: r.workflow_type as 'sequential' | 'parallel',
+    createdAt: new Date(r.created_at),
+    expiresAt: r.expires_at ? new Date(r.expires_at) : new Date(Date.now() + 30 * 86400000),
+    completedAt: r.completed_at ? new Date(r.completed_at) : undefined,
+    signers: (r.signers || []).map(s => ({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      role: s.role,
+      order: s.order,
+      status: s.status as Signer['status'],
+      signedAt: s.signed_at ? new Date(s.signed_at) : undefined,
+      declinedAt: s.declined_at ? new Date(s.declined_at) : undefined,
+    })),
+  });
 
-  const templates: SignatureTemplate[] = [
-    {
-      id: 1,
-      name: 'Policy Acknowledgment',
-      description: 'Standard template for policy sign-off',
-      signerRoles: [
-        { role: 'Employee', order: 1 },
-        { role: 'Manager', order: 2 },
-      ],
-      workflowType: 'sequential',
-      expiryDays: 30,
-    },
-    {
-      id: 2,
-      name: 'Audit Report Sign-off',
-      description: 'Audit report approval workflow',
-      signerRoles: [
-        { role: 'Auditor', order: 1 },
-        { role: 'Audit Manager', order: 2 },
-        { role: 'Director', order: 3 },
-      ],
-      workflowType: 'sequential',
-      expiryDays: 14,
-    },
-    {
-      id: 3,
-      name: 'Incident Closure',
-      description: 'Incident investigation closure approval',
-      signerRoles: [
-        { role: 'Investigator', order: 1 },
-        { role: 'Safety Manager', order: 1 },
-      ],
-      workflowType: 'parallel',
-      expiryDays: 7,
-    },
-  ];
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [reqRes, tplRes] = await Promise.all([
+        signaturesApi.list(filterStatus !== 'all' ? filterStatus : undefined),
+        signaturesApi.listTemplates(),
+      ]);
+      setSignatureRequests((reqRes.data || []).map(mapApiRequest));
+      setTemplates((tplRes.data || []).map((t: any) => ({
+        id: Number(t.id),
+        name: String(t.name || ''),
+        description: t.description ? String(t.description) : undefined,
+        signerRoles: (t.signer_roles as { role: string; order: number }[]) || [],
+        workflowType: String(t.workflow_type || 'sequential'),
+        expiryDays: Number(t.expiry_days || 30),
+      })));
+    } catch {
+      console.error('Failed to load signatures');
+    } finally {
+      setLoading(false);
+    }
+  }, [filterStatus]);
 
-  const auditLog = [
-    { id: 1, action: 'created', actor: 'Admin User', time: new Date('2026-01-20T10:00:00'), details: 'Request created' },
-    { id: 2, action: 'sent', actor: 'System', time: new Date('2026-01-20T10:01:00'), details: 'Sent to signers' },
-    { id: 3, action: 'viewed', actor: 'John Smith', time: new Date('2026-01-20T10:15:00'), details: 'Document viewed', ip: '192.168.1.100' },
-    { id: 4, action: 'signed', actor: 'John Smith', time: new Date('2026-01-20T10:20:00'), details: 'Document signed', ip: '192.168.1.100' },
-    { id: 5, action: 'reminded', actor: 'System', time: new Date('2026-01-20T11:00:00'), details: 'Reminder sent to Sarah Johnson' },
-  ];
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const auditLog: { id: number; action: string; actor: string; time: Date; details: string; ip?: string }[] = [];
 
   const statusVariants: Record<string, 'default' | 'submitted' | 'in-progress' | 'resolved' | 'destructive'> = {
     draft: 'default',

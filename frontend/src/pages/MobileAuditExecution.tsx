@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { auditsApi } from '../api/client';
 import {
   ArrowLeft,
   ArrowRight,
@@ -81,154 +82,14 @@ interface AuditSection {
   questions: AuditQuestion[];
 }
 
-// Mock audit data
-const MOCK_AUDIT = {
-  id: 'audit-001',
-  templateName: 'Vehicle Pre-Departure Inspection',
-  location: 'Depot A - Main Yard',
-  asset: 'LD24VLP',
-  sections: [
-    {
-      id: 'sec-1',
-      title: 'Exterior Checks',
-      description: 'Visual inspection of vehicle exterior',
-      color: 'from-blue-500 to-cyan-500',
-      questions: [
-        {
-          id: 'q-1-1',
-          text: 'Are all lights working correctly?',
-          description: 'Headlights, indicators, brake lights, hazards',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Turn on ignition and test each light function.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-1-2',
-          text: 'Are tyres in good condition with adequate tread depth?',
-          description: 'Minimum 1.6mm tread depth required',
-          type: 'pass_fail',
-          required: true,
-          weight: 3,
-          evidenceRequired: true,
-          guidance: 'Use tread depth gauge. Check for damage.',
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-1-3',
-          text: 'Is the windscreen free from cracks?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: false,
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-1-4',
-          text: 'Are mirrors clean and correctly adjusted?',
-          type: 'yes_no',
-          required: true,
-          weight: 1,
-          evidenceRequired: false,
-          riskLevel: 'medium',
-        },
-        {
-          id: 'q-1-5',
-          text: 'Rate exterior cleanliness',
-          type: 'scale_1_5',
-          required: false,
-          weight: 0.5,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-    {
-      id: 'sec-2',
-      title: 'Interior & Safety',
-      description: 'Safety equipment and interior condition',
-      color: 'from-purple-500 to-pink-500',
-      questions: [
-        {
-          id: 'q-2-1',
-          text: 'Is the first aid kit present and stocked?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Check expiry dates on all items.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-2-2',
-          text: 'Is the fire extinguisher present and in date?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-2-3',
-          text: 'Are seatbelts functioning correctly?',
-          type: 'pass_fail',
-          required: true,
-          weight: 3,
-          evidenceRequired: false,
-          riskLevel: 'critical',
-        },
-      ],
-    },
-    {
-      id: 'sec-3',
-      title: 'Mechanical',
-      description: 'Engine and fluid levels',
-      color: 'from-orange-500 to-amber-500',
-      questions: [
-        {
-          id: 'q-3-1',
-          text: 'Is the engine oil level acceptable?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Check with engine cold.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-3-2',
-          text: 'Are there any dashboard warning lights?',
-          type: 'yes_no_na',
-          required: true,
-          weight: 3,
-          evidenceRequired: true,
-          guidance: 'If yes, photograph and do not use vehicle.',
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-3-3',
-          text: 'Current odometer reading',
-          type: 'numeric',
-          required: true,
-          weight: 0,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-  ] as AuditSection[],
-};
-
-// AI Suggestions based on question context
-const AI_SUGGESTIONS: Record<string, { suggestion: string; confidence: number }> = {
-  'q-1-1': { suggestion: 'Based on vehicle age (2 years), lights should be in good condition. Check LED indicators specifically.', confidence: 0.85 },
-  'q-1-2': { suggestion: 'Last inspection showed 3.2mm tread. Should still be compliant but verify front tyres.', confidence: 0.92 },
-  'q-2-1': { suggestion: 'First aid kit was restocked 3 months ago. Check bandage expiry dates.', confidence: 0.88 },
-  'q-2-2': { suggestion: 'Fire extinguisher service due in 45 days. Verify gauge is in green zone.', confidence: 0.95 },
-  'q-3-2': { suggestion: 'No warning lights reported in last 5 inspections. If any appear, likely new issue.', confidence: 0.78 },
-};
+const SECTION_COLORS = [
+  'from-blue-500 to-cyan-500',
+  'from-purple-500 to-pink-500',
+  'from-orange-500 to-amber-500',
+  'from-green-500 to-emerald-500',
+  'from-red-500 to-rose-500',
+  'from-indigo-500 to-violet-500',
+];
 
 // ============================================================================
 // COMPONENTS
@@ -628,8 +489,18 @@ const LocationCapture = ({
 
 export default function MobileAuditExecution() {
   const navigate = useNavigate();
+  const { runId } = useParams<{ runId: string }>();
   
-  const [audit] = useState(MOCK_AUDIT);
+  interface AuditData {
+    id: string;
+    templateName: string;
+    location: string;
+    asset: string;
+    sections: AuditSection[];
+  }
+  
+  const [audit, setAudit] = useState<AuditData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [responses, setResponses] = useState<Record<string, QuestionResponse>>({});
@@ -642,6 +513,71 @@ export default function MobileAuditExecution() {
   const [batteryLevel] = useState(85);
   const [aiLoading, setAiLoading] = useState(false);
   const [showAISuggestion, setShowAISuggestion] = useState(true);
+  const responseIdMapRef = useRef<Record<string, number>>({});
+
+  const loadAuditRun = useCallback(async () => {
+    if (!runId) return;
+    try {
+      setLoading(true);
+      const numericId = parseInt(runId, 10);
+      const runData = await auditsApi.getRun(numericId);
+      const templateData = await auditsApi.getTemplate(runData.data.template_id);
+
+      const sections: AuditSection[] = ((templateData.data as any).sections || []).map(
+        (sec: any, sIdx: number) => ({
+          id: String(sec.id),
+          title: String(sec.title || ''),
+          description: sec.description ? String(sec.description) : undefined,
+          color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
+          questions: (sec.questions || []).map(
+            (q: any) => ({
+              id: String(q.id),
+              text: String(q.text || ''),
+              description: q.description ? String(q.description) : undefined,
+              type: String(q.question_type || q.type || 'yes_no'),
+              required: q.is_required !== false,
+              weight: Number(q.weight || 1),
+              evidenceRequired: q.evidence_required === true,
+              guidance: q.guidance ? String(q.guidance) : undefined,
+              riskLevel: q.risk_category ? String(q.risk_category) : undefined,
+              isoClause: q.iso_clause ? String(q.iso_clause) : undefined,
+            })
+          ),
+        })
+      );
+
+      const rd = runData.data as any;
+      setAudit({
+        id: String(rd.id),
+        templateName: String((templateData.data as any).name || ''),
+        location: String(rd.location || ''),
+        asset: String(rd.asset_id || ''),
+        sections,
+      });
+
+      const existingResponses: Record<string, QuestionResponse> = {};
+      if (rd.responses) {
+        for (const r of rd.responses as any[]) {
+          const qId = String(r.question_id);
+          responseIdMapRef.current[qId] = Number(r.id);
+          existingResponses[qId] = {
+            questionId: qId,
+            response: r.is_na ? 'na' : (r.score != null ? Number(r.score) : (r.text_response ? String(r.text_response) : null)),
+            notes: r.notes ? String(r.notes) : undefined,
+            flagged: r.flagged === true,
+            timestamp: String(r.created_at || new Date().toISOString()),
+          };
+        }
+      }
+      setResponses(existingResponses);
+    } catch {
+      console.error('Failed to load audit run');
+    } finally {
+      setLoading(false);
+    }
+  }, [runId]);
+
+  useEffect(() => { loadAuditRun(); }, [loadAuditRun]);
 
   // Handle online/offline status
   useEffect(() => {
@@ -668,18 +604,10 @@ export default function MobileAuditExecution() {
     return () => clearInterval(timer);
   }, [isPaused]);
 
-  // Simulate AI loading when question changes
   useEffect(() => {
-    const question = audit.sections[currentSectionIndex]?.questions[currentQuestionIndex];
-    if (question && AI_SUGGESTIONS[question.id]) {
-      setAiLoading(true);
-      setShowAISuggestion(true);
-      const timer = setTimeout(() => setAiLoading(false), 800);
-      return () => clearTimeout(timer);
-    } else {
-      setShowAISuggestion(false);
-    }
-  }, [currentSectionIndex, currentQuestionIndex, audit.sections]);
+    setShowAISuggestion(false);
+    setAiLoading(false);
+  }, [currentSectionIndex, currentQuestionIndex]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -687,14 +615,11 @@ export default function MobileAuditExecution() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Current section and question
-  const currentSection = audit.sections[currentSectionIndex];
+  const currentSection = audit?.sections[currentSectionIndex];
   const currentQuestion = currentSection?.questions[currentQuestionIndex];
   const currentResponse = currentQuestion ? responses[currentQuestion.id] : undefined;
-  const currentAISuggestion = currentQuestion ? AI_SUGGESTIONS[currentQuestion.id] : undefined;
 
-  // Calculate progress
-  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0);
+  const totalQuestions = audit?.sections.reduce((sum, s) => sum + s.questions.length, 0) ?? 0;
   const answeredQuestions = Object.keys(responses).length;
   const progressPercentage = (answeredQuestions / totalQuestions) * 100;
 
@@ -703,7 +628,7 @@ export default function MobileAuditExecution() {
     let totalWeight = 0;
     let achievedWeight = 0;
 
-    audit.sections.forEach(section => {
+    audit?.sections.forEach(section => {
       section.questions.forEach(question => {
         const response = responses[question.id];
         if (!response) return;
@@ -730,29 +655,57 @@ export default function MobileAuditExecution() {
     return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0;
   };
 
-  // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !runId) return;
+    const questionId = currentQuestion.id;
     setResponses(prev => ({
       ...prev,
-      [currentQuestion.id]: {
-        ...prev[currentQuestion.id],
+      [questionId]: {
+        ...prev[questionId],
         ...updates,
-        questionId: currentQuestion.id,
+        questionId,
         timestamp: new Date().toISOString(),
       },
     }));
     setIsSynced(false);
-    // Simulate sync
-    setTimeout(() => setIsSynced(true), 1500);
+
+    const numericRunId = parseInt(runId, 10);
+    const numericQuestionId = parseInt(questionId, 10);
+    const existingResponseId = responseIdMapRef.current[questionId];
+
+    const payload: Record<string, unknown> = {
+      question_id: numericQuestionId,
+      score: typeof updates.response === 'number' ? updates.response : undefined,
+      text_response: typeof updates.response === 'string' && !['yes','no','pass','fail','na'].includes(updates.response) ? updates.response : undefined,
+      is_na: updates.response === 'na',
+      notes: updates.notes,
+      flagged: updates.flagged,
+    };
+    if (updates.response === 'pass' || updates.response === 'yes') payload.score = 1;
+    if (updates.response === 'fail' || updates.response === 'no') payload.score = 0;
+
+    const syncToApi = async () => {
+      try {
+        if (existingResponseId) {
+          await auditsApi.updateResponse(existingResponseId, payload as never);
+        } else {
+          const created = await auditsApi.createResponse(numericRunId, payload as never);
+          responseIdMapRef.current[questionId] = created.data.id;
+        }
+        setIsSynced(true);
+      } catch {
+        console.error('Failed to sync response');
+      }
+    };
+    syncToApi();
   };
 
   // Navigation
   const goNext = () => {
     triggerHaptic('light');
-    if (currentQuestionIndex < currentSection.questions.length - 1) {
+    if (currentSection && currentQuestionIndex < currentSection.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
-    } else if (currentSectionIndex < audit.sections.length - 1) {
+    } else if (currentSectionIndex < (audit?.sections.length ?? 0) - 1) {
       setCurrentSectionIndex(prev => prev + 1);
       setCurrentQuestionIndex(0);
     } else {
@@ -766,7 +719,7 @@ export default function MobileAuditExecution() {
       setCurrentQuestionIndex(prev => prev - 1);
     } else if (currentSectionIndex > 0) {
       setCurrentSectionIndex(prev => prev - 1);
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1);
+      setCurrentQuestionIndex(audit?.sections[currentSectionIndex - 1]?.questions.length ? audit.sections[currentSectionIndex - 1].questions.length - 1 : 0);
     }
   };
 
@@ -883,6 +836,14 @@ export default function MobileAuditExecution() {
     }
   };
 
+  if (loading || !audit) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+      </div>
+    );
+  }
+
   if (showSummary) {
     const score = calculateScore();
     const passed = score >= 80;
@@ -943,9 +904,13 @@ export default function MobileAuditExecution() {
             {/* Actions */}
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => {
-                  // Submit audit
+                onClick={async () => {
                   triggerHaptic('heavy');
+                  if (runId) {
+                    try {
+                      await auditsApi.completeRun(parseInt(runId, 10));
+                    } catch { /* navigate anyway */ }
+                  }
                   navigate('/audits');
                 }}
                 className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl active:scale-98"
@@ -954,7 +919,14 @@ export default function MobileAuditExecution() {
                 Submit Audit
               </button>
               <button
-                onClick={() => navigate('/audits')}
+                onClick={async () => {
+                  if (runId) {
+                    try {
+                      await auditsApi.updateRun(parseInt(runId, 10), { notes: 'Draft saved from mobile' } as never);
+                    } catch { /* navigate anyway */ }
+                  }
+                  navigate('/audits');
+                }}
                 className="w-full py-3 bg-slate-800 text-slate-300 rounded-xl"
               >
                 Save as Draft
@@ -1119,10 +1091,10 @@ export default function MobileAuditExecution() {
               )}
 
               {/* AI Suggestion */}
-              {showAISuggestion && (
+              {(showAISuggestion || aiLoading) && (
                 <AISuggestion
-                  suggestion={currentAISuggestion?.suggestion}
-                  confidence={currentAISuggestion?.confidence}
+                  suggestion={undefined}
+                  confidence={undefined}
                   onAccept={() => updateResponse({ aiAccepted: true })}
                   onDismiss={() => setShowAISuggestion(false)}
                   isLoading={aiLoading}
