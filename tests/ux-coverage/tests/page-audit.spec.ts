@@ -96,21 +96,24 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   }
   
   if (authType === 'portal_sso') {
-    // For SSO, we simulate a logged-in state
-    // In real CI, this would use test credentials from secrets
-    if (process.env.PORTAL_TEST_TOKEN) {
-      try {
-        await page.evaluate((token) => {
-          localStorage.setItem('portal_token', token);
-        }, process.env.PORTAL_TEST_TOKEN);
-        return true;
-      } catch (storageError: any) {
-        console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
-        return false;
-      }
+    try {
+      await page.evaluate(() => {
+        const demoUser = {
+          id: 'ux-test-001',
+          email: 'ux-test@plantexpand.com',
+          name: 'UX Test User',
+          firstName: 'UX',
+          lastName: 'Test',
+          isDemoUser: true,
+        };
+        localStorage.setItem('portal_user', JSON.stringify(demoUser));
+        localStorage.setItem('portal_session_time', Date.now().toString());
+      });
+      return true;
+    } catch (storageError: any) {
+      console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
+      return false;
     }
-    // Skip if no token available
-    return false;
   }
   
   if (authType === 'jwt_admin') {
