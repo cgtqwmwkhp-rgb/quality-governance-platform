@@ -934,7 +934,7 @@ export const incidentsApi = {
   list: (page = 1, size = 10) => 
     api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?page=${page}&size=${size}`),
   create: (data: IncidentCreate) => 
-    api.post<Incident>('/api/v1/incidents/', data),
+    api.post<Incident>('/api/v1/incidents', data),
   get: (id: number) => 
     api.get<Incident>(`/api/v1/incidents/${id}`),
   update: (id: number, data: IncidentUpdate) =>
@@ -945,7 +945,7 @@ export const rtasApi = {
   list: (page = 1, size = 10) => 
     api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&size=${size}`),
   create: (data: RTACreate) => 
-    api.post<RTA>('/api/v1/rtas/', data),
+    api.post<RTA>('/api/v1/rtas', data),
   get: (id: number) => 
     api.get<RTA>(`/api/v1/rtas/${id}`),
   update: (id: number, data: RTAUpdate) =>
@@ -956,7 +956,7 @@ export const complaintsApi = {
   list: (page = 1, size = 10) => 
     api.get<PaginatedResponse<Complaint>>(`/api/v1/complaints/?page=${page}&size=${size}`),
   create: (data: ComplaintCreate) => 
-    api.post<Complaint>('/api/v1/complaints/', data),
+    api.post<Complaint>('/api/v1/complaints', data),
   get: (id: number) => 
     api.get<Complaint>(`/api/v1/complaints/${id}`),
   update: (id: number, data: ComplaintUpdate) =>
@@ -967,7 +967,7 @@ export const policiesApi = {
   list: (page = 1, size = 10) => 
     api.get<PaginatedResponse<Policy>>(`/api/v1/policies/?page=${page}&size=${size}`),
   create: (data: PolicyCreate) => 
-    api.post<Policy>('/api/v1/policies/', data),
+    api.post<Policy>('/api/v1/policies', data),
   get: (id: number) => 
     api.get<Policy>(`/api/v1/policies/${id}`),
 }
@@ -976,7 +976,7 @@ export const risksApi = {
   list: (page = 1, size = 10) => 
     api.get<PaginatedResponse<Risk>>(`/api/v1/risks/?page=${page}&size=${size}`),
   create: (data: RiskCreate) => 
-    api.post<Risk>('/api/v1/risks/', data),
+    api.post<Risk>('/api/v1/risks', data),
   get: (id: number) => 
     api.get<Risk>(`/api/v1/risks/${id}`),
 }
@@ -988,12 +988,12 @@ export const auditsApi = {
     if (params?.search) searchParams.set('search', params.search)
     if (params?.category) searchParams.set('category', params.category)
     if (params?.is_published !== undefined) searchParams.set('is_published', String(params.is_published))
-    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${searchParams}`)
+    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates?${searchParams}`)
   },
   getTemplate: (id: number) =>
     api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
   createTemplate: (data: AuditTemplateCreate) =>
-    api.post<AuditTemplate>('/api/v1/audits/templates/', data),
+    api.post<AuditTemplate>('/api/v1/audits/templates', data),
   updateTemplate: (id: number, data: AuditTemplateUpdate) =>
     api.patch<AuditTemplate>(`/api/v1/audits/templates/${id}`, data),
   publishTemplate: (id: number) =>
@@ -1021,9 +1021,9 @@ export const auditsApi = {
 
   // Runs
   listRuns: (page = 1, size = 10) =>
-    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs/?page=${page}&size=${size}`),
+    api.get<PaginatedResponse<AuditRun>>(`/api/v1/audits/runs?page=${page}&size=${size}`),
   createRun: (data: AuditRunCreate) =>
-    api.post<AuditRun>('/api/v1/audits/runs/', data),
+    api.post<AuditRun>('/api/v1/audits/runs', data),
   getRun: (id: number) =>
     api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
   updateRun: (id: number, data: AuditRunUpdate) =>
@@ -1135,10 +1135,10 @@ export const investigationsApi = {
   list: (page = 1, size = 10, status?: string) => {
     const params = new URLSearchParams({ page: String(page), size: String(size) })
     if (status) params.set('status', status)
-    return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
+    return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations?${params}`)
   },
   create: (data: InvestigationCreate) => 
-    api.post<Investigation>('/api/v1/investigations/', data),
+    api.post<Investigation>('/api/v1/investigations', data),
   get: (id: number) => 
     api.get<Investigation>(`/api/v1/investigations/${id}`),
   /**
@@ -1268,7 +1268,7 @@ export const actionsApi = {
    * Create a new action linked to a source entity.
    */
   create: (data: ActionCreate) => 
-    api.post<Action>('/api/v1/actions/', data),
+    api.post<Action>('/api/v1/actions', data),
   /**
    * Get a single action by ID. Requires source_type.
    */
@@ -1569,20 +1569,20 @@ export const usersApi = {
     if (params?.search) sp.set('search', params.search)
     if (params?.department) sp.set('department', params.department)
     if (params?.is_active !== undefined) sp.set('is_active', String(params.is_active))
-    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users/?${sp}`)
+    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users?${sp}`)
   },
   get: (id: number) =>
     api.get<UserDetail>(`/api/v1/users/${id}`),
   create: (data: UserCreatePayload) =>
-    api.post<UserDetail>('/api/v1/users/', data),
+    api.post<UserDetail>('/api/v1/users', data),
   update: (id: number, data: UserUpdatePayload) =>
     api.patch<UserDetail>(`/api/v1/users/${id}`, data),
   delete: (id: number) =>
     api.delete<void>(`/api/v1/users/${id}`),
   listRoles: () =>
-    api.get<RoleDetail[]>('/api/v1/users/roles/'),
+    api.get<RoleDetail[]>('/api/v1/users/roles'),
   createRole: (data: RoleCreatePayload) =>
-    api.post<RoleDetail>('/api/v1/users/roles/', data),
+    api.post<RoleDetail>('/api/v1/users/roles', data),
   updateRole: (id: number, data: RoleUpdatePayload) =>
     api.patch<RoleDetail>(`/api/v1/users/roles/${id}`, data),
 }
@@ -1630,7 +1630,7 @@ export const auditTrailApi = {
     if (params?.date_to) sp.set('date_to', params.date_to)
     sp.set('page', String(params?.page || 1))
     sp.set('per_page', String(params?.per_page || 50))
-    return api.get<AuditLogEntry[]>(`/api/v1/audit-trail/?${sp}`)
+    return api.get<AuditLogEntry[]>(`/api/v1/audit-trail?${sp}`)
   },
   getEntry: (id: number) =>
     api.get<AuditLogEntry>(`/api/v1/audit-trail/${id}`),
@@ -1688,10 +1688,10 @@ export const riskRegisterApi = {
     if (params?.status) sp.set('status', params.status)
     if (params?.category) sp.set('category', params.category)
     if (params?.search) sp.set('search', params.search)
-    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risks/?${sp}`)
+    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risks?${sp}`)
   },
   create: (data: Partial<RiskEntry>) =>
-    api.post<RiskEntry>('/api/v1/risks/', data),
+    api.post<RiskEntry>('/api/v1/risks', data),
   get: (id: number) =>
     api.get<RiskEntry>(`/api/v1/risks/${id}`),
   update: (id: number, data: Partial<RiskEntry>) =>
@@ -1836,7 +1836,7 @@ export const notificationsApi = {
     if (params?.page) sp.set('page', String(params.page))
     if (params?.page_size) sp.set('page_size', String(params.page_size))
     if (params?.unread_only) sp.set('unread_only', 'true')
-    return api.get<{ items: NotificationEntry[]; total: number; unread_count: number }>(`/api/v1/notifications/?${sp}`)
+    return api.get<{ items: NotificationEntry[]; total: number; unread_count: number }>(`/api/v1/notifications?${sp}`)
   },
   getUnreadCount: () =>
     api.get<{ unread_count: number }>('/api/v1/notifications/unread-count'),
@@ -1893,7 +1893,7 @@ export const searchApi = {
     if (filters?.type) sp.set('type', filters.type)
     if (filters?.date_from) sp.set('date_from', filters.date_from)
     if (filters?.date_to) sp.set('date_to', filters.date_to)
-    return api.get<{ results: unknown[]; total: number; facets?: Record<string, unknown> }>(`/api/v1/search/?${sp}`)
+    return api.get<{ results: unknown[]; total: number; facets?: Record<string, unknown> }>(`/api/v1/search?${sp}`)
   },
 }
 
@@ -1977,7 +1977,7 @@ export const evidenceAssetsApi = {
     if (options?.source_id) params.set('source_id', String(options.source_id))
     if (options?.asset_type) params.set('asset_type', options.asset_type)
     if (options?.linked_investigation_id) params.set('linked_investigation_id', String(options.linked_investigation_id))
-    return api.get<EvidenceAssetListResponse>(`/api/v1/evidence-assets/?${params}`)
+    return api.get<EvidenceAssetListResponse>(`/api/v1/evidence-assets?${params}`)
   },
 
   /**
