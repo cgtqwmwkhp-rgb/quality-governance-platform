@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -300,7 +301,7 @@ export default function Audits() {
                       >
                         <div className="flex items-start justify-between mb-2">
                           <span className="font-mono text-xs text-primary">{audit.reference_number}</span>
-                          {audit.score_percentage !== undefined && (
+                          {audit.score_percentage != null && (
                             <span className={cn("text-sm font-bold", getScoreColor(audit.score_percentage))}>
                               {audit.score_percentage.toFixed(0)}%
                             </span>
@@ -379,7 +380,7 @@ export default function Audits() {
                           </Badge>
                         </td>
                         <td className="px-6 py-4">
-                          {audit.score_percentage !== undefined ? (
+                          {audit.score_percentage != null ? (
                             <span className={cn("font-bold", getScoreColor(audit.score_percentage))}>
                               {audit.score_percentage.toFixed(0)}%
                             </span>
@@ -460,6 +461,9 @@ export default function Audits() {
               <ClipboardCheck className="w-5 h-5 text-primary" />
               Schedule New Audit
             </DialogTitle>
+            <DialogDescription>
+              Select a published template and schedule an audit run.
+            </DialogDescription>
           </DialogHeader>
           
           {successMessage ? (
