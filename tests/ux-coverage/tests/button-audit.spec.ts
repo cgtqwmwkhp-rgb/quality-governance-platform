@@ -207,9 +207,10 @@ test.describe('Button Wiring Audit', () => {
           return;
         }
         
-        // Navigate to page
-        await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
+        // Navigate to page (use 'load' instead of 'networkidle' to avoid
+        // flaky timeouts on pages with polling or streaming connections)
+        await page.goto(route, { waitUntil: 'load', timeout: 30000 });
+        await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
         
         // Try to find button with primary selector (wait for render)
         let button = page.locator(buttonEntry.selector).first();
