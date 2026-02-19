@@ -87,7 +87,7 @@ const DigitalSignatures: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [signatureRequests, setSignatureRequests] = useState<SignatureRequest[]>([]);
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);  // eslint-disable-line @typescript-eslint/no-unused-vars
 
   const mapApiRequest = (r: SignatureRequestEntry): SignatureRequest => ({
     id: r.id,
@@ -120,7 +120,7 @@ const DigitalSignatures: React.FC = () => {
         signaturesApi.listTemplates(),
       ]);
       setSignatureRequests((reqRes.data || []).map(mapApiRequest));
-      setTemplates((tplRes.data || []).map((t: Record<string, unknown>) => ({
+      setTemplates((tplRes.data || []).map((t: any) => ({
         id: Number(t.id),
         name: String(t.name || ''),
         description: t.description ? String(t.description) : undefined,

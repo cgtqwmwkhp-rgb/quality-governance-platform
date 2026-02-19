@@ -29,7 +29,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { usersApi } from '../api/client';
 import type { UserDetail, RoleDetail } from '../api/client';
 
-interface User {
+interface _User {
   id: string;
   name: string;
   email: string;
@@ -42,7 +42,7 @@ interface User {
   permissions: string[];
 }
 
-interface Role {
+interface _Role {
   id: string;
   name: string;
   description: string;

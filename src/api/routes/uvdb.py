@@ -814,16 +814,20 @@ async def get_uvdb_dashboard(
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
     total_audits = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
-    active_audits = await db.scalar(
-        select(func.count()).select_from(
-            select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()
+    active_audits = (
+        await db.scalar(
+            select(func.count()).select_from(
+                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()
+            )
         )
-    ) or 0
-    completed_audits = await db.scalar(
-        select(func.count()).select_from(
-            select(UVDBAudit).where(UVDBAudit.status == "completed").subquery()
+        or 0
+    )
+    completed_audits = (
+        await db.scalar(
+            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())
         )
-    ) or 0
+        or 0
+    )
 
     result = await db.execute(
         select(UVDBAudit).where(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None))

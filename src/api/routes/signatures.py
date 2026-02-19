@@ -172,7 +172,11 @@ async def list_signature_requests(
 
     tenant_id = 1
 
-    stmt = select(SignatureRequest).options(selectinload(SignatureRequest.signers)).where(SignatureRequest.tenant_id == tenant_id)
+    stmt = (
+        select(SignatureRequest)
+        .options(selectinload(SignatureRequest.signers))
+        .where(SignatureRequest.tenant_id == tenant_id)
+    )
 
     if status:
         stmt = stmt.where(SignatureRequest.status == status)
@@ -501,18 +505,18 @@ async def get_signature_stats(
     )
     status_counts = dict(status_result.all())
 
-    total_signatures = await db.scalar(
-        select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)
-    ) or 0
+    total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
     this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
-    this_month_count = await db.scalar(
-        select(func.count(SignatureRequest.id))
-        .where(
-            SignatureRequest.tenant_id == tenant_id,
-            SignatureRequest.created_at >= this_month_start,
+    this_month_count = (
+        await db.scalar(
+            select(func.count(SignatureRequest.id)).where(
+                SignatureRequest.tenant_id == tenant_id,
+                SignatureRequest.created_at >= this_month_start,
+            )
         )
-    ) or 0
+        or 0
+    )
 
     return {
         "requests_by_status": status_counts,

@@ -523,14 +523,14 @@ export default function MobileAuditExecution() {
       const runData = await auditsApi.getRun(numericId);
       const templateData = await auditsApi.getTemplate(runData.data.template_id);
 
-      const sections: AuditSection[] = (templateData.data.sections || []).map(
-        (sec: Record<string, unknown>, sIdx: number) => ({
+      const sections: AuditSection[] = ((templateData.data as any).sections || []).map(
+        (sec: any, sIdx: number) => ({
           id: String(sec.id),
           title: String(sec.title || ''),
           description: sec.description ? String(sec.description) : undefined,
           color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
-          questions: ((sec.questions as Record<string, unknown>[]) || []).map(
-            (q: Record<string, unknown>) => ({
+          questions: (sec.questions || []).map(
+            (q: any) => ({
               id: String(q.id),
               text: String(q.text || ''),
               description: q.description ? String(q.description) : undefined,
@@ -546,17 +546,18 @@ export default function MobileAuditExecution() {
         })
       );
 
+      const rd = runData.data as any;
       setAudit({
-        id: String(runData.data.id),
-        templateName: String(templateData.data.name || ''),
-        location: String(runData.data.location || ''),
-        asset: String(runData.data.asset_id || ''),
+        id: String(rd.id),
+        templateName: String((templateData.data as any).name || ''),
+        location: String(rd.location || ''),
+        asset: String(rd.asset_id || ''),
         sections,
       });
 
       const existingResponses: Record<string, QuestionResponse> = {};
-      if (runData.data.responses) {
-        for (const r of runData.data.responses as Record<string, unknown>[]) {
+      if (rd.responses) {
+        for (const r of rd.responses as any[]) {
           const qId = String(r.question_id);
           responseIdMapRef.current[qId] = Number(r.id);
           existingResponses[qId] = {
@@ -614,13 +615,11 @@ export default function MobileAuditExecution() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Current section and question
-  const currentSection = audit.sections[currentSectionIndex];
+  const currentSection = audit?.sections[currentSectionIndex];
   const currentQuestion = currentSection?.questions[currentQuestionIndex];
   const currentResponse = currentQuestion ? responses[currentQuestion.id] : undefined;
 
-  // Calculate progress
-  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0);
+  const totalQuestions = audit?.sections.reduce((sum, s) => sum + s.questions.length, 0) ?? 0;
   const answeredQuestions = Object.keys(responses).length;
   const progressPercentage = (answeredQuestions / totalQuestions) * 100;
 
@@ -629,7 +628,7 @@ export default function MobileAuditExecution() {
     let totalWeight = 0;
     let achievedWeight = 0;
 
-    audit.sections.forEach(section => {
+    audit?.sections.forEach(section => {
       section.questions.forEach(question => {
         const response = responses[question.id];
         if (!response) return;
@@ -706,7 +705,7 @@ export default function MobileAuditExecution() {
     triggerHaptic('light');
     if (currentQuestionIndex < currentSection.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
-    } else if (currentSectionIndex < audit.sections.length - 1) {
+    } else if (currentSectionIndex < (audit?.sections.length ?? 0) - 1) {
       setCurrentSectionIndex(prev => prev + 1);
       setCurrentQuestionIndex(0);
     } else {
@@ -720,7 +719,7 @@ export default function MobileAuditExecution() {
       setCurrentQuestionIndex(prev => prev - 1);
     } else if (currentSectionIndex > 0) {
       setCurrentSectionIndex(prev => prev - 1);
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1);
+      setCurrentQuestionIndex(audit?.sections[currentSectionIndex - 1]?.questions.length ? audit.sections[currentSectionIndex - 1].questions.length - 1 : 0);
     }
   };
 

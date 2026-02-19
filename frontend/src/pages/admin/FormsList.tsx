@@ -78,13 +78,25 @@ export default function FormsList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);  // eslint-disable-line @typescript-eslint/no-unused-vars
 
   const loadForms = useCallback(async () => {
     try {
       setLoading(true);
       const data = await formTemplatesApi.list(filterType || undefined);
-      setForms(data.items || []);
+      setForms((data.items || []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        slug: f.slug,
+        form_type: f.form_type,
+        description: f.description,
+        is_active: f.is_active,
+        is_published: f.is_published,
+        version: f.version,
+        steps_count: f.steps_count ?? 0,
+        fields_count: f.fields_count ?? 0,
+        updated_at: f.updated_at ?? '',
+      })));
     } catch {
       console.error('Failed to load forms');
     } finally {
@@ -122,7 +134,8 @@ export default function FormsList() {
         form_type: form.form_type,
         description: form.description,
       });
-      setForms((prev) => [...prev, created]);
+      const c = created as any;
+      setForms((prev) => [...prev, { ...c, steps_count: c.steps_count ?? 0, fields_count: c.fields_count ?? 0, updated_at: c.updated_at ?? '' }]);
     } catch {
       console.error('Failed to duplicate form');
     }

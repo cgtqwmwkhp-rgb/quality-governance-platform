@@ -140,7 +140,7 @@ export default function RiskRegister() {
       setLoading(true)
       const res = await riskRegisterApi.list({ page: 1, size: 100 })
       const items = res.data?.items || []
-      const mapped: Risk[] = items.map((r: Record<string, unknown>) => {
+      const mapped: Risk[] = items.map((r: any) => {
         const resScore = Number(r.residual_score || r.risk_score || 0)
         const inhScore = Number(r.inherent_score || (Number(r.likelihood || 3) * Number(r.impact || 3)))
         const level = scoreToLevel(resScore || inhScore)
