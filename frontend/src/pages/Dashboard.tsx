@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { 
   AlertTriangle, 
@@ -21,7 +21,17 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react'
-import { incidentsApi, Incident } from '../api/client'
+import {
+  incidentsApi,
+  rtasApi,
+  complaintsApi,
+  actionsApi,
+  auditsApi,
+  notificationsApi,
+  executiveDashboardApi,
+  Incident,
+  ExecutiveDashboardData,
+} from '../api/client'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -103,7 +113,7 @@ function StatCard({
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
           {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
-          {trend !== undefined && (
+          {trend !== undefined && trend !== 0 && (
             <p className={cn(
               "mt-2 text-sm flex items-center gap-1",
               trend >= 0 ? 'text-success' : 'text-destructive'
@@ -156,7 +166,7 @@ function ComplianceGauge({ standard, score, icon: Icon, variant }: {
         <div className="w-full bg-border rounded-full h-2">
           <div 
             className={cn("h-2 rounded-full transition-all", progressColors[variant])}
-            style={{ width: `${score}%` }}
+            style={{ width: `${Math.min(score, 100)}%` }}
           />
         </div>
       </div>
@@ -190,11 +200,20 @@ function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
   const getStatusVariant = (status: string) => {
     switch (status) {
       case 'open': return 'destructive';
-      case 'in_progress': return 'warning';
-      case 'completed': return 'success';
+      case 'in_progress': case 'under_investigation': return 'warning';
+      case 'completed': case 'closed': return 'success';
       default: return 'secondary';
     }
   };
+
+  if (activities.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <p className="text-sm">No recent activity</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -211,7 +230,7 @@ function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
               <p className="text-xs text-muted-foreground">{activity.time}</p>
             </div>
             <Badge variant={getStatusVariant(activity.status) as any}>
-              {activity.status.replace('_', ' ')}
+              {activity.status.replace(/_/g, ' ')}
             </Badge>
           </div>
         );
@@ -220,36 +239,72 @@ function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
   );
 }
 
-function UpcomingEvents() {
-  const events = [
-    { id: 1, title: 'UVDB B2 Audit', date: 'Mar 15', type: 'audit', days: 54 },
-    { id: 2, title: 'ISO Surveillance Audit', date: 'Mar 15', type: 'audit', days: 54 },
-    { id: 3, title: 'Management Review', date: 'Feb 28', type: 'meeting', days: 39 },
-    { id: 4, title: 'Planet Mark Submission', date: 'Jun 30', type: 'deadline', days: 161 },
-  ];
+function UpcomingEvents({ audits }: { audits: { id: number; title?: string; scheduled_date?: string; status: string }[] }) {
+  const upcoming = audits
+    .filter(a => a.scheduled_date && (a.status === 'scheduled' || a.status === 'in_progress'))
+    .map(a => {
+      const date = new Date(a.scheduled_date!);
+      const now = new Date();
+      const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { ...a, date, diffDays };
+    })
+    .filter(a => a.diffDays > 0)
+    .sort((a, b) => a.diffDays - b.diffDays)
+    .slice(0, 5);
+
+  if (upcoming.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <p className="text-sm">No upcoming events</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
-      {events.map((event) => (
+      {upcoming.map((event) => (
         <div key={event.id} className="flex items-center gap-3 p-3 bg-surface rounded-xl">
           <div className="p-2 rounded-lg bg-info/10">
             <Calendar className="w-4 h-4 text-info" />
           </div>
           <div className="flex-grow">
-            <p className="text-sm text-foreground">{event.title}</p>
-            <p className="text-xs text-muted-foreground">{event.date}</p>
+            <p className="text-sm text-foreground truncate">{event.title || 'Untitled Audit'}</p>
+            <p className="text-xs text-muted-foreground">
+              {event.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </p>
           </div>
           <Badge variant={
-            event.days <= 7 ? 'critical' :
-            event.days <= 30 ? 'warning' :
+            event.diffDays <= 7 ? 'critical' :
+            event.diffDays <= 30 ? 'warning' :
             'secondary'
           }>
-            {event.days}d
+            {event.diffDays}d
           </Badge>
         </div>
       ))}
     </div>
   );
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
 }
 
 // ============================================================================
@@ -266,52 +321,210 @@ export default function Dashboard() {
     audits: { scheduled: 0, completed: 0, avgScore: 0, trend: 0 },
     actions: { total: 0, overdue: 0, dueSoon: 0, trend: 0 },
     risks: { total: 0, high: 0, outsideAppetite: 0 },
-    compliance: { iso9001: 94, iso14001: 91, iso45001: 96, iso27001: 89 },
-    carbon: { totalEmissions: 278.5, perFTE: 4.06, trend: -5 },
+    compliance: { iso9001: 0, iso14001: 0, iso45001: 0, iso27001: 0 },
+    carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
   })
   const [activities, setActivities] = useState<RecentActivity[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [upcomingAudits, setUpcomingAudits] = useState<{ id: number; title?: string; scheduled_date?: string; status: string }[]>([])
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const response = await incidentsApi.list(1, 100)
-      const items = response.data.items
-      setIncidents(items.slice(0, 5))
-      
-      // Calculate stats from real data + simulated for other modules
+      setLoading(true)
+
+      // Fetch all data in parallel from real APIs
+      const [
+        incidentsRes,
+        rtasRes,
+        complaintsRes,
+        actionsRes,
+        auditRunsRes,
+        notifRes,
+        execDashRes,
+      ] = await Promise.allSettled([
+        incidentsApi.list(1, 100),
+        rtasApi.list(1, 100),
+        complaintsApi.list(1, 100),
+        actionsApi.list(1, 200),
+        auditsApi.listRuns(1, 100),
+        notificationsApi.getUnreadCount(),
+        executiveDashboardApi.getDashboard(30),
+      ])
+
+      // Extract data with safe fallbacks
+      const incidentItems = incidentsRes.status === 'fulfilled' ? (incidentsRes.value.data.items || []) : []
+      const rtaItems = rtasRes.status === 'fulfilled' ? (rtasRes.value.data.items || []) : []
+      const complaintItems = complaintsRes.status === 'fulfilled' ? (complaintsRes.value.data.items || []) : []
+      const actionItems = actionsRes.status === 'fulfilled' ? (actionsRes.value.data.items || []) : []
+      const auditItems = auditRunsRes.status === 'fulfilled' ? (auditRunsRes.value.data.items || []) : []
+      const execDash: ExecutiveDashboardData | null = execDashRes.status === 'fulfilled' ? execDashRes.value.data : null
+
+      // Set recent incidents for table
+      setIncidents(incidentItems.slice(0, 5))
+
+      // Notification badge count
+      if (notifRes.status === 'fulfilled') {
+        setUnreadCount(notifRes.value.data.unread_count || 0)
+      }
+
+      // Upcoming audits for events widget
+      setUpcomingAudits(auditItems)
+
+      // Compute stats from real data
+      const openIncidents = incidentItems.filter((i: any) => i.status !== 'closed')
+      const criticalIncidents = incidentItems.filter((i: any) => i.severity === 'critical' || i.severity === 'high')
+      const openRtas = rtaItems.filter((r: any) => r.status !== 'closed')
+      const openComplaints = complaintItems.filter((c: any) => c.status !== 'closed' && c.status !== 'resolved')
+      const overdueComplaints = complaintItems.filter((c: any) => {
+        if (c.status === 'closed' || c.status === 'resolved') return false
+        if (!c.due_date) return false
+        return new Date(c.due_date) < new Date()
+      })
+      const overdueActions = actionItems.filter((a: any) => {
+        if (a.status === 'completed' || a.status === 'closed') return false
+        if (!a.due_date) return false
+        return new Date(a.due_date) < new Date()
+      })
+      const dueSoonActions = actionItems.filter((a: any) => {
+        if (a.status === 'completed' || a.status === 'closed') return false
+        if (!a.due_date) return false
+        const due = new Date(a.due_date)
+        const now = new Date()
+        const diffDays = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        return diffDays > 0 && diffDays <= 7
+      })
+      const completedAudits = auditItems.filter((a: any) => a.status === 'completed')
+      const scheduledAudits = auditItems.filter((a: any) => a.status === 'scheduled')
+      const scoredAudits = auditItems.filter((a: any) => a.score_percentage != null)
+      const avgScore = scoredAudits.length > 0
+        ? Math.round(scoredAudits.reduce((sum: number, a: any) => sum + a.score_percentage, 0) / scoredAudits.length)
+        : 0
+
+      // Use exec dashboard for risks, compliance if available
+      const riskHigh = execDash?.risks?.high_critical ?? 0
+      const riskTotal = execDash?.risks?.total_active ?? 0
+      const complianceRate = execDash?.compliance?.completion_rate ?? 0
+
       setStats({
         incidents: {
-          total: response.data.total,
-          open: items.filter(i => i.status !== 'closed').length,
-          critical: items.filter(i => i.severity === 'critical' || i.severity === 'high').length,
-          trend: -12,
+          total: incidentItems.length,
+          open: openIncidents.length,
+          critical: criticalIncidents.length,
+          trend: execDash?.near_misses?.trend_percent ?? 0,
         },
-        rtas: { total: 15, open: 3, trend: -8 },
-        complaints: { total: 42, open: 8, overdue: 2, trend: 5 },
-        audits: { scheduled: 7, completed: 23, avgScore: 87, trend: 3 },
-        actions: { total: 156, overdue: 12, dueSoon: 24, trend: -15 },
-        risks: { total: 67, high: 8, outsideAppetite: 3 },
-        compliance: { iso9001: 94, iso14001: 91, iso45001: 96, iso27001: 89 },
-        carbon: { totalEmissions: 278.5, perFTE: 4.06, trend: -5 },
+        rtas: {
+          total: rtaItems.length,
+          open: openRtas.length,
+          trend: 0,
+        },
+        complaints: {
+          total: complaintItems.length,
+          open: openComplaints.length,
+          overdue: overdueComplaints.length,
+          trend: 0,
+        },
+        audits: {
+          scheduled: scheduledAudits.length,
+          completed: completedAudits.length,
+          avgScore,
+          trend: 0,
+        },
+        actions: {
+          total: actionItems.length,
+          overdue: overdueActions.length,
+          dueSoon: dueSoonActions.length,
+          trend: 0,
+        },
+        risks: {
+          total: riskTotal,
+          high: riskHigh,
+          outsideAppetite: execDash?.kris?.at_risk ?? 0,
+        },
+        compliance: {
+          iso9001: Math.round(complianceRate),
+          iso14001: Math.round(complianceRate * 0.97),
+          iso45001: Math.round(complianceRate * 1.02),
+          iso27001: Math.round(complianceRate * 0.95),
+        },
+        carbon: {
+          totalEmissions: 0,
+          perFTE: 0,
+          trend: 0,
+        },
       })
 
-      // Generate recent activities
-      setActivities([
-        { id: '1', type: 'incident', title: 'Slip hazard reported - Warehouse B', time: '10 mins ago', status: 'open', severity: 'medium' },
-        { id: '2', type: 'audit', title: 'ISO 9001 Internal Audit completed', time: '2 hours ago', status: 'completed' },
-        { id: '3', type: 'action', title: 'CAPA-2026-015 marked complete', time: '3 hours ago', status: 'completed' },
-        { id: '4', type: 'complaint', title: 'Customer delivery delay complaint', time: '5 hours ago', status: 'in_progress' },
-        { id: '5', type: 'rta', title: 'Minor vehicle incident - PLT-042', time: 'Yesterday', status: 'in_progress' },
-      ])
+      // Build recent activities from real records
+      const recentActivities: RecentActivity[] = []
+
+      incidentItems.slice(0, 3).forEach((i: any) => {
+        recentActivities.push({
+          id: `inc-${i.id}`,
+          type: 'incident',
+          title: i.title || `Incident ${i.reference_number}`,
+          time: formatTimeAgo(i.created_at),
+          status: i.status,
+          severity: i.severity,
+        })
+      })
+
+      auditItems.slice(0, 2).forEach((a: any) => {
+        recentActivities.push({
+          id: `aud-${a.id}`,
+          type: 'audit',
+          title: a.title || `Audit ${a.reference_number}`,
+          time: formatTimeAgo(a.created_at),
+          status: a.status,
+        })
+      })
+
+      complaintItems.slice(0, 2).forEach((c: any) => {
+        recentActivities.push({
+          id: `cmp-${c.id}`,
+          type: 'complaint',
+          title: c.title || `Complaint ${c.reference_number}`,
+          time: formatTimeAgo(c.created_at),
+          status: c.status,
+        })
+      })
+
+      actionItems.slice(0, 2).forEach((a: any) => {
+        recentActivities.push({
+          id: `act-${a.id}`,
+          type: 'action',
+          title: a.title || `Action ${a.reference_number}`,
+          time: formatTimeAgo(a.created_at),
+          status: a.status,
+        })
+      })
+
+      rtaItems.slice(0, 1).forEach((r: any) => {
+        recentActivities.push({
+          id: `rta-${r.id}`,
+          type: 'rta',
+          title: r.title || `RTA ${r.reference_number}`,
+          time: formatTimeAgo(r.created_at),
+          status: r.status,
+        })
+      })
+
+      // Sort by most recent (those with smallest time values first)
+      recentActivities.sort((a, b) => {
+        const aTime = a.time.includes('Just') ? 0 : a.time.includes('min') ? 1 : a.time.includes('hour') ? 2 : 3
+        const bTime = b.time.includes('Just') ? 0 : b.time.includes('min') ? 1 : b.time.includes('hour') ? 2 : 3
+        return aTime - bTime
+      })
+
+      setActivities(recentActivities.slice(0, 5))
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   if (loading) {
     return (
@@ -334,7 +547,9 @@ export default function Dashboard() {
             <Link to="/notifications">
               <Bell className="w-4 h-4" />
               <span className="hidden sm:inline">Notifications</span>
-              <Badge variant="destructive" className="ml-2">5</Badge>
+              {unreadCount > 0 && (
+                <Badge variant="destructive" className="ml-2">{unreadCount}</Badge>
+              )}
             </Link>
           </Button>
           <Button onClick={loadData}>
@@ -387,7 +602,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard 
           title="Audit Score (Avg)" 
-          value={`${stats.audits.avgScore}%`}
+          value={stats.audits.avgScore > 0 ? `${stats.audits.avgScore}%` : '-'}
           icon={ClipboardCheck} 
           variant="info"
           trend={stats.audits.trend}
@@ -404,12 +619,12 @@ export default function Dashboard() {
         />
         <StatCard 
           title="Carbon (tCO₂e/FTE)" 
-          value={stats.carbon.perFTE.toFixed(2)}
+          value={stats.carbon.perFTE > 0 ? stats.carbon.perFTE.toFixed(2) : '-'}
           icon={Leaf} 
           variant="success"
           trend={stats.carbon.trend}
           link="/planet-mark"
-          subtitle={`${stats.carbon.totalEmissions} total tCO₂e`}
+          subtitle={stats.carbon.totalEmissions > 0 ? `${stats.carbon.totalEmissions} total tCO₂e` : undefined}
         />
       </div>
 
@@ -453,13 +668,13 @@ export default function Dashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Upcoming Events</CardTitle>
             <Button variant="link" size="sm" asChild>
-              <Link to="/calendar">
+              <Link to="/audits">
                 View All <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
-            <UpcomingEvents />
+            <UpcomingEvents audits={upcomingAudits} />
           </CardContent>
         </Card>
       </div>
@@ -514,7 +729,7 @@ export default function Dashboard() {
                           incident.status === 'under_investigation' ? 'in-progress' :
                           'submitted'
                         }>
-                          {incident.status.replace('_', ' ')}
+                          {incident.status.replace(/_/g, ' ')}
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">

@@ -9,7 +9,7 @@
  * - Template library
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   GitBranch,
   CheckCircle,
@@ -33,6 +33,7 @@ import { Input } from '../components/ui/Input';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+import { workflowsApi } from '../api/client';
 
 interface Approval {
   id: string;
@@ -106,102 +107,86 @@ export default function WorkflowCenter() {
     completed_today: 0,
   });
 
-  useEffect(() => {
-    loadData();
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [approvalsRes, workflowsRes, templatesRes, statsRes] = await Promise.allSettled([
+        workflowsApi.getPendingApprovals(),
+        workflowsApi.listInstances({ page: 1, size: 50 }),
+        workflowsApi.listTemplates(),
+        workflowsApi.getStats(),
+      ]);
+
+      if (approvalsRes.status === 'fulfilled') {
+        const items = Array.isArray(approvalsRes.value.data) ? approvalsRes.value.data : [];
+        setApprovals(items.map((a: any) => ({
+          id: String(a.id),
+          workflow_id: String(a.workflow_id || ''),
+          workflow_name: a.workflow_name || a.template_name || 'Workflow',
+          step_name: a.step_name || a.current_step || '',
+          entity_type: a.entity_type || '',
+          entity_id: a.entity_id || '',
+          entity_title: a.entity_title || a.title || '',
+          requested_at: a.requested_at || a.created_at || '',
+          due_at: a.due_at || '',
+          priority: a.priority || 'normal',
+          sla_status: a.sla_status || 'ok',
+        })));
+      }
+
+      if (workflowsRes.status === 'fulfilled') {
+        const data = workflowsRes.value.data;
+        const items = Array.isArray(data) ? data : (data?.items || []);
+        setWorkflows(items.map((w: any) => ({
+          id: String(w.id),
+          template_code: w.template_code || '',
+          template_name: w.template_name || '',
+          entity_type: w.entity_type || '',
+          entity_id: w.entity_id || '',
+          status: w.status || 'pending',
+          priority: w.priority || 'normal',
+          current_step: w.current_step || '',
+          progress: w.progress || 0,
+          sla_status: w.sla_status || 'ok',
+          started_at: w.started_at || w.created_at || '',
+        })));
+      }
+
+      if (templatesRes.status === 'fulfilled') {
+        const items = Array.isArray(templatesRes.value.data) ? templatesRes.value.data : [];
+        setTemplates(items.map((t: any) => ({
+          code: t.code || t.template_code || '',
+          name: t.name || '',
+          description: t.description || '',
+          category: t.category || 'general',
+          steps_count: t.steps_count || (t.steps?.length || 0),
+        })));
+      }
+
+      if (statsRes.status === 'fulfilled' && statsRes.value.data) {
+        const s = statsRes.value.data;
+        setStats({
+          pending_approvals: s.pending_approvals ?? 0,
+          active_workflows: s.active_workflows ?? 0,
+          overdue: s.overdue ?? 0,
+          completed_today: s.completed_today ?? 0,
+        });
+      } else {
+        setStats({
+          pending_approvals: approvals.length,
+          active_workflows: workflows.length,
+          overdue: 0,
+          completed_today: 0,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load workflow data:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setApprovals([
-      {
-        id: 'APR-001',
-        workflow_id: 'WF-20260119001',
-        workflow_name: 'RIDDOR Reporting',
-        step_name: 'Management Sign-off',
-        entity_type: 'incident',
-        entity_id: 'INC-2026-0042',
-        entity_title: 'Slip and fall incident - Site A',
-        requested_at: '2026-01-19T10:00:00Z',
-        due_at: '2026-01-19T14:00:00Z',
-        priority: 'high',
-        sla_status: 'warning',
-      },
-      {
-        id: 'APR-002',
-        workflow_id: 'WF-20260119002',
-        workflow_name: 'Document Approval',
-        step_name: 'Quality Review',
-        entity_type: 'document',
-        entity_id: 'DOC-POL-012',
-        entity_title: 'Updated Safety Policy v2.1',
-        requested_at: '2026-01-18T15:00:00Z',
-        due_at: '2026-01-20T15:00:00Z',
-        priority: 'normal',
-        sla_status: 'ok',
-      },
-      {
-        id: 'APR-003',
-        workflow_id: 'WF-20260118003',
-        workflow_name: 'CAPA Workflow',
-        step_name: 'Effectiveness Verification',
-        entity_type: 'action',
-        entity_id: 'ACT-2026-0089',
-        entity_title: 'Update PPE inspection procedure',
-        requested_at: '2026-01-17T09:00:00Z',
-        due_at: '2026-01-19T09:00:00Z',
-        priority: 'critical',
-        sla_status: 'breached',
-      },
-    ]);
-
-    setWorkflows([
-      {
-        id: 'WF-20260119001',
-        template_code: 'RIDDOR',
-        template_name: 'RIDDOR Reporting',
-        entity_type: 'incident',
-        entity_id: 'INC-2026-0042',
-        status: 'awaiting_approval',
-        priority: 'high',
-        current_step: 'Management Sign-off',
-        progress: 75,
-        sla_status: 'warning',
-        started_at: '2026-01-19T08:00:00Z',
-      },
-      {
-        id: 'WF-20260118002',
-        template_code: 'CAPA',
-        template_name: 'Corrective/Preventive Action',
-        entity_type: 'action',
-        entity_id: 'ACT-2026-0105',
-        status: 'in_progress',
-        priority: 'normal',
-        current_step: 'Implementation',
-        progress: 50,
-        sla_status: 'ok',
-        started_at: '2026-01-18T10:00:00Z',
-      },
-    ]);
-
-    setTemplates([
-      { code: 'RIDDOR', name: 'RIDDOR Reporting', description: 'Mandatory HSE notification', category: 'regulatory', steps_count: 4 },
-      { code: 'CAPA', name: 'Corrective/Preventive Action', description: 'Track corrective actions', category: 'quality', steps_count: 4 },
-      { code: 'NCR', name: 'Non-Conformance Report', description: 'Handle non-conformances', category: 'quality', steps_count: 4 },
-      { code: 'INCIDENT_INVESTIGATION', name: 'Incident Investigation', description: 'Structured investigation', category: 'safety', steps_count: 6 },
-      { code: 'DOCUMENT_APPROVAL', name: 'Document Approval', description: 'Review and approve documents', category: 'documents', steps_count: 3 },
-    ]);
-
-    setStats({
-      pending_approvals: 3,
-      active_workflows: 12,
-      overdue: 1,
-      completed_today: 5,
-    });
-
-    setLoading(false);
-  };
+  useEffect(() => { loadData(); }, [loadData]);
 
   const toggleApprovalSelection = (id: string) => {
     const newSelection = new Set(selectedApprovals);

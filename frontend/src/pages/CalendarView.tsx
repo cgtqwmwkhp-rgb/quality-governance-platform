@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Calendar,
   ChevronLeft,
@@ -10,12 +10,14 @@ import {
   Filter,
   List,
   Grid3X3,
-  Bell
+  Bell,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { cn } from "../helpers/utils";
+import { auditsApi, actionsApi } from '../api/client';
 
 interface CalendarEvent {
   id: string;
@@ -34,91 +36,79 @@ interface CalendarEvent {
 }
 
 export default function CalendarView() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19));
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
   const [, setSelectedDate] = useState<Date | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const events: CalendarEvent[] = [
-    {
-      id: 'EVT001',
-      title: 'ISO 9001:2015 Internal Audit',
-      type: 'audit',
-      date: '2024-01-22',
-      time: '09:00',
-      endTime: '17:00',
-      location: 'Main Office - Conference Room A',
-      attendees: ['John Smith', 'Sarah Johnson', 'External Auditor'],
-      description: 'Annual internal audit for quality management system',
-      status: 'upcoming',
-      priority: 'high',
-      relatedModule: 'Audits',
-      relatedId: 'AUD-2024-0156'
-    },
-    {
-      id: 'EVT002',
-      title: 'Risk Register Review',
-      type: 'review',
-      date: '2024-01-19',
-      time: '14:00',
-      endTime: '15:30',
-      location: 'Virtual - Teams Meeting',
-      attendees: ['Sarah Johnson', 'Mike Chen'],
-      description: 'Quarterly review of risk register',
-      status: 'today',
-      priority: 'medium',
-      relatedModule: 'Risks'
-    },
-    {
-      id: 'EVT003',
-      title: 'Action Item Deadline - Update Emergency Procedures',
-      type: 'deadline',
-      date: '2024-01-15',
-      description: 'Deadline for completing emergency procedure updates',
-      status: 'overdue',
-      priority: 'high',
-      relatedModule: 'Actions',
-      relatedId: 'ACT-2024-0523'
-    },
-    {
-      id: 'EVT004',
-      title: 'Health & Safety Training',
-      type: 'training',
-      date: '2024-01-25',
-      time: '10:00',
-      endTime: '12:00',
-      location: 'Training Room B',
-      attendees: ['All Staff'],
-      description: 'Mandatory annual health and safety training',
-      status: 'upcoming',
-      priority: 'medium'
-    },
-    {
-      id: 'EVT005',
-      title: 'Management Review Meeting',
-      type: 'meeting',
-      date: '2024-01-26',
-      time: '09:00',
-      endTime: '11:00',
-      location: 'Board Room',
-      attendees: ['Executive Team', 'Department Heads'],
-      description: 'Monthly management review of IMS performance',
-      status: 'upcoming',
-      priority: 'high'
-    },
-    {
-      id: 'EVT006',
-      title: 'Complaint Resolution Deadline',
-      type: 'deadline',
-      date: '2024-01-20',
-      description: 'SLA deadline for CMP-2024-0456',
-      status: 'upcoming',
-      priority: 'high',
-      relatedModule: 'Complaints',
-      relatedId: 'CMP-2024-0456'
+  const loadEvents = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [auditsRes, actionsRes] = await Promise.allSettled([
+        auditsApi.listRuns(1, 100),
+        actionsApi.list(1, 200),
+      ]);
+
+      const calendarEvents: CalendarEvent[] = [];
+      const now = new Date();
+
+      if (auditsRes.status === 'fulfilled') {
+        (auditsRes.value.data.items || []).forEach((audit: any) => {
+          if (audit.scheduled_date) {
+            const date = new Date(audit.scheduled_date);
+            const dateStr = date.toISOString().split('T')[0];
+            const isOverdue = date < now && audit.status !== 'completed';
+            const isToday = dateStr === now.toISOString().split('T')[0];
+            calendarEvents.push({
+              id: `audit-${audit.id}`,
+              title: audit.title || `Audit ${audit.reference_number || audit.id}`,
+              type: 'audit',
+              date: dateStr,
+              description: `Audit run: ${audit.status}`,
+              status: audit.status === 'completed' ? 'completed' : isOverdue ? 'overdue' : isToday ? 'today' : 'upcoming',
+              priority: 'high',
+              relatedModule: 'Audits',
+              relatedId: String(audit.id),
+            });
+          }
+        });
+      }
+
+      if (actionsRes.status === 'fulfilled') {
+        (actionsRes.value.data.items || []).forEach((action: any) => {
+          if (action.due_date && action.status !== 'completed' && action.status !== 'closed') {
+            const date = new Date(action.due_date);
+            const dateStr = date.toISOString().split('T')[0];
+            const isOverdue = date < now;
+            const isToday = dateStr === now.toISOString().split('T')[0];
+            calendarEvents.push({
+              id: `action-${action.id}`,
+              title: action.title || `Action ${action.reference_number || action.id}`,
+              type: 'deadline',
+              date: dateStr,
+              description: `Priority: ${action.priority || 'medium'}`,
+              status: isOverdue ? 'overdue' : isToday ? 'today' : 'upcoming',
+              priority: action.priority === 'critical' || action.priority === 'high' ? 'high' : 'medium',
+              relatedModule: 'Actions',
+              relatedId: String(action.id),
+            });
+          }
+        });
+      }
+
+      calendarEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      setEvents(calendarEvents);
+    } catch (err) {
+      console.error('Failed to load calendar events:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, []);
+
+  useEffect(() => { loadEvents(); }, [loadEvents]);
 
   const eventTypeStyles: Record<string, { variant: string }> = {
     audit: { variant: 'info' },
@@ -168,7 +158,7 @@ export default function CalendarView() {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const isToday = (day: number) => {
-    const today = new Date(2024, 0, 19);
+    const today = new Date();
     return day === today.getDate() && 
            currentDate.getMonth() === today.getMonth() && 
            currentDate.getFullYear() === today.getFullYear();
@@ -178,6 +168,14 @@ export default function CalendarView() {
     .filter(e => e.status !== 'completed')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

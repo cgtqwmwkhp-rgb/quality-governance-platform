@@ -2037,6 +2037,113 @@ export const evidenceAssetsApi = {
   },
 }
 
+// ============ Workflows ============
+
+export const workflowsApi = {
+  getPendingApprovals: () =>
+    api.get<any[]>('/api/v1/workflows/approvals/pending'),
+  approveRequest: (approvalId: number, data?: { comments?: string }) =>
+    api.post(`/api/v1/workflows/approvals/${approvalId}/approve`, data),
+  rejectRequest: (approvalId: number, data?: { comments?: string; reason?: string }) =>
+    api.post(`/api/v1/workflows/approvals/${approvalId}/reject`, data),
+  bulkApprove: (approvalIds: number[], data?: { comments?: string }) =>
+    api.post('/api/v1/workflows/approvals/bulk-approve', { approval_ids: approvalIds, ...data }),
+  listInstances: (params?: { page?: number; size?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.page) sp.set('page', String(params.page));
+    if (params?.size) sp.set('size', String(params.size));
+    return api.get<{ items: any[]; total: number }>(`/api/v1/workflows/instances?${sp}`);
+  },
+  listTemplates: () =>
+    api.get<any[]>('/api/v1/workflows/templates'),
+  getStats: () =>
+    api.get<any>('/api/v1/workflows/stats'),
+  getDelegations: () =>
+    api.get<any[]>('/api/v1/workflows/delegations'),
+  setDelegation: (data: { delegate_to: number; entity_type?: string; start_date?: string; end_date?: string }) =>
+    api.post('/api/v1/workflows/delegations', data),
+  cancelDelegation: (delegationId: number) =>
+    api.delete(`/api/v1/workflows/delegations/${delegationId}`),
+}
+
+// ============ Executive Dashboard ============
+
+export interface ExecutiveDashboardData {
+  generated_at: string
+  period_days: number
+  health_score: {
+    score: number
+    status: string
+    color: string
+    components: Record<string, number>
+  }
+  incidents: {
+    total_in_period: number
+    open: number
+    by_severity: Record<string, number>
+    sif_count: number
+    psif_count: number
+    critical_high: number
+  }
+  near_misses: {
+    total_in_period: number
+    previous_period: number
+    trend_percent: number
+    reporting_rate: string
+  }
+  complaints: {
+    total_in_period: number
+    open: number
+    closed_in_period: number
+    resolution_rate: number
+  }
+  rtas: {
+    total_in_period: number
+  }
+  risks: {
+    total_active: number
+    by_level: Record<string, number>
+    high_critical: number
+    average_score: number
+  }
+  kris: {
+    total_active: number
+    by_status: Record<string, number>
+    at_risk: number
+    pending_alerts: number
+  }
+  compliance: {
+    total_assigned: number
+    completed: number
+    overdue: number
+    completion_rate: number
+  }
+  sla_performance: {
+    total_tracked: number
+    met: number
+    breached: number
+    compliance_rate: number
+  }
+  trends: {
+    incidents_weekly: { week_start: string; count: number }[]
+  }
+  alerts: {
+    type: string
+    severity: string
+    title: string
+    triggered_at: string
+  }[]
+}
+
+export const executiveDashboardApi = {
+  getDashboard: (periodDays = 30) =>
+    api.get<ExecutiveDashboardData>(`/api/v1/executive-dashboard?period_days=${periodDays}`),
+  getSummary: () =>
+    api.get<{ health_score: number; health_status: string; open_incidents: number; pending_actions: number; overdue_items: number; kri_alerts: number }>('/api/v1/executive-dashboard/summary'),
+  getAlerts: () =>
+    api.get<{ total: number; alerts: ExecutiveDashboardData['alerts'] }>('/api/v1/executive-dashboard/alerts'),
+}
+
 // ============ Report/Pack Capability Check ============
 
 /**

@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -14,9 +15,11 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { cn } from '../../helpers/utils';
+import { usersApi, auditTrailApi, actionsApi } from '../../api/client';
 
 interface QuickAction {
   title: string;
@@ -79,47 +82,76 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-const STATS: StatCard[] = [
-  {
-    label: 'Active Forms',
-    value: '12',
-    change: '+2 this month',
-    trend: 'up',
-    icon: <FileText className="w-5 h-5" />,
-  },
-  {
-    label: 'Active Contracts',
-    value: '10',
-    change: 'No change',
-    trend: 'neutral',
-    icon: <Building className="w-5 h-5" />,
-  },
-  {
-    label: 'Submissions Today',
-    value: '24',
-    change: '+15% vs yesterday',
-    trend: 'up',
-    icon: <Activity className="w-5 h-5" />,
-  },
-  {
-    label: 'Pending Actions',
-    value: '8',
-    change: '-3 from last week',
-    trend: 'down',
-    icon: <Clock className="w-5 h-5" />,
-  },
-];
-
-const RECENT_ACTIVITY = [
-  { action: 'Form "Incident Report" updated', user: 'David Harris', time: '2 hours ago', type: 'edit' },
-  { action: 'New contract "National Grid" added', user: 'Admin', time: '4 hours ago', type: 'add' },
-  { action: 'System settings updated', user: 'David Harris', time: '1 day ago', type: 'settings' },
-  { action: 'Form "RTA Report" published', user: 'Admin', time: '2 days ago', type: 'publish' },
-  { action: 'User "John Smith" added', user: 'Admin', time: '3 days ago', type: 'add' },
-];
+function formatTimeAgo(dateStr: string): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays} days ago`;
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<StatCard[]>([]);
+  const [recentActivity, setRecentActivity] = useState<{ action: string; user: string; time: string; type: string }[]>([]);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [usersRes, actionsRes, trailRes] = await Promise.allSettled([
+        usersApi.list(1, 10),
+        actionsApi.list(1, 100),
+        auditTrailApi.list({ page: 1, per_page: 10 }),
+      ]);
+
+      const userCount = usersRes.status === 'fulfilled' ? (usersRes.value.data?.total || 0) : 0;
+      const actionItems = actionsRes.status === 'fulfilled' ? (actionsRes.value.data?.items || []) : [];
+      const pendingActions = actionItems.filter((a: any) => a.status !== 'completed' && a.status !== 'closed').length;
+
+      setStats([
+        { label: 'Total Users', value: String(userCount), change: '', trend: 'neutral' as const, icon: <Users className="w-5 h-5" /> },
+        { label: 'Total Actions', value: String(actionItems.length), change: '', trend: 'neutral' as const, icon: <Activity className="w-5 h-5" /> },
+        { label: 'Pending Actions', value: String(pendingActions), change: '', trend: pendingActions > 0 ? 'down' as const : 'neutral' as const, icon: <Clock className="w-5 h-5" /> },
+        { label: 'System Status', value: 'Healthy', change: '', trend: 'up' as const, icon: <CheckCircle className="w-5 h-5" /> },
+      ]);
+
+      if (trailRes.status === 'fulfilled') {
+        const entries = Array.isArray(trailRes.value.data) ? trailRes.value.data : [];
+        setRecentActivity(entries.slice(0, 5).map((e: any) => {
+          const actionType = e.action === 'create' ? 'add' : e.action === 'update' ? 'edit' : e.action === 'delete' ? 'settings' : 'publish';
+          const timeAgo = formatTimeAgo(e.timestamp || e.created_at || '');
+          return {
+            action: e.entity_name || `${e.action} on ${e.entity_type} ${e.entity_id}`,
+            user: e.user_name || 'System',
+            time: timeAgo,
+            type: actionType,
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load admin dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -146,7 +178,7 @@ export default function AdminDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {STATS.map((stat) => (
+          {stats.map((stat) => (
             <Card key={stat.label} className="p-5">
               <div className="flex items-start justify-between">
                 <div>
@@ -208,7 +240,7 @@ export default function AdminDashboard() {
           <Card className="p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
             <div className="space-y-4">
-              {RECENT_ACTIVITY.map((activity, index) => (
+              {recentActivity.map((activity, index) => (
                 <div
                   key={index}
                   className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0"

@@ -194,7 +194,7 @@ const DigitalSignatures: React.FC = () => {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats - computed from real data */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5">
@@ -204,7 +204,7 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-2xl font-bold text-foreground">5</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'pending').length}</p>
               </div>
             </div>
           </CardContent>
@@ -217,7 +217,7 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">In Progress</p>
-                <p className="text-2xl font-bold text-foreground">3</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'in_progress').length}</p>
               </div>
             </div>
           </CardContent>
@@ -230,7 +230,7 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Completed</p>
-                <p className="text-2xl font-bold text-foreground">47</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'completed').length}</p>
               </div>
             </div>
           </CardContent>
@@ -242,8 +242,8 @@ const DigitalSignatures: React.FC = () => {
                 <FileText className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Signatures</p>
-                <p className="text-2xl font-bold text-foreground">156</p>
+                <p className="text-sm text-muted-foreground">Total Requests</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.length}</p>
               </div>
             </div>
           </CardContent>

@@ -54,83 +54,13 @@ export default function GlobalSearch() {
     status: [],
     dateRange: 'all'
   });
-  const [searchHistory, setSearchHistory] = useState<string[]>([
-    'safety incident report',
-    'overdue actions',
-    'ISO 9001 audit',
-    'vehicle collision',
-    'customer complaint'
-  ]);
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('qgp-search-history');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const mockResults: SearchResult[] = [
-    {
-      id: 'INC-2024-0847',
-      type: 'incident',
-      title: 'Workplace Safety Incident - Warehouse Zone B',
-      description: 'Employee reported slip hazard near loading dock area. Immediate action required.',
-      module: 'Incidents',
-      status: 'Open',
-      date: '2024-01-15',
-      relevance: 98,
-      highlights: ['safety', 'incident', 'warehouse']
-    },
-    {
-      id: 'RTA-2024-0234',
-      type: 'rta',
-      title: 'Vehicle Collision - Fleet Vehicle PLT-001',
-      description: 'Minor collision reported at customer site. No injuries. Vehicle damage assessment pending.',
-      module: 'RTAs',
-      status: 'Under Investigation',
-      date: '2024-01-14',
-      relevance: 92,
-      highlights: ['vehicle', 'collision', 'fleet']
-    },
-    {
-      id: 'CMP-2024-0456',
-      type: 'complaint',
-      title: 'Customer Service Response Time',
-      description: 'Customer complained about delayed response to service request. SLA breach identified.',
-      module: 'Complaints',
-      status: 'In Progress',
-      date: '2024-01-13',
-      relevance: 85,
-      highlights: ['customer', 'service', 'response']
-    },
-    {
-      id: 'RSK-2024-0089',
-      type: 'risk',
-      title: 'Supply Chain Disruption Risk',
-      description: 'High risk identified for Q2 supply chain delays. Mitigation measures being implemented.',
-      module: 'Risks',
-      status: 'Monitoring',
-      date: '2024-01-12',
-      relevance: 78,
-      highlights: ['supply', 'chain', 'risk']
-    },
-    {
-      id: 'AUD-2024-0156',
-      type: 'audit',
-      title: 'ISO 9001:2015 Internal Audit',
-      description: 'Scheduled internal audit for quality management system compliance verification.',
-      module: 'Audits',
-      status: 'Scheduled',
-      date: '2024-01-20',
-      relevance: 72,
-      highlights: ['ISO', 'audit', 'quality']
-    },
-    {
-      id: 'ACT-2024-0523',
-      type: 'action',
-      title: 'Update Emergency Procedures',
-      description: 'Action item to update emergency evacuation procedures following safety review.',
-      module: 'Actions',
-      status: 'Overdue',
-      date: '2024-01-10',
-      relevance: 65,
-      highlights: ['emergency', 'procedures', 'safety']
-    }
-  ];
 
   const moduleIcons: Record<string, React.ReactNode> = {
     'Incidents': <AlertTriangle className="w-5 h-5" />,
@@ -168,7 +98,9 @@ export default function GlobalSearch() {
     setIsSearching(true);
 
     if (!searchHistory.includes(query)) {
-      setSearchHistory(prev => [query, ...prev.slice(0, 4)]);
+      const updated = [query, ...searchHistory.filter(h => h !== query)].slice(0, 5);
+      setSearchHistory(updated);
+      try { localStorage.setItem('qgp-search-history', JSON.stringify(updated)); } catch { /* noop */ }
     }
 
     try {
@@ -189,12 +121,8 @@ export default function GlobalSearch() {
         highlights: Array.isArray(r.highlights) ? r.highlights : [],
       })));
     } catch (err) {
-      console.error('Search failed, falling back to local results', err);
-      setResults(mockResults.filter(r =>
-        r.title.toLowerCase().includes(query.toLowerCase()) ||
-        r.description.toLowerCase().includes(query.toLowerCase()) ||
-        r.module.toLowerCase().includes(query.toLowerCase())
-      ));
+      console.error('Search failed:', err);
+      setResults([]);
     } finally {
       setIsSearching(false);
     }
