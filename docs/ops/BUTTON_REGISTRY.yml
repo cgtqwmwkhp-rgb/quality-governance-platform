@@ -156,7 +156,7 @@ admin_actions:
     criticality: P0
     expected_outcome: navigation
     expected_route: /incidents/:id
-    disabled_reason: null
+    disabled_reason: "No incidents in empty state"
     description: "View incident details"
 
   # RTA List Actions  
