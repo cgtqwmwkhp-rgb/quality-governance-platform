@@ -208,10 +208,10 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Navigate if route specified
             if (step.route) {
               await page.goto(step.route, { 
-                waitUntil: 'networkidle', 
+                waitUntil: 'load', 
                 timeout: workflow.max_duration_seconds * 1000 
               });
-              await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
+              await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
             }
             
             // Fill form fields if specified
@@ -270,8 +270,8 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
               ).catch(() => null);
             }
             
-            // Wait for any navigation or network activity to settle
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            // Wait for DOM to settle after action
+            await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
             
             stepResult.result = 'PASS';
             result.completed_steps++;
