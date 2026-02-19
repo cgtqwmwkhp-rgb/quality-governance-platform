@@ -102,6 +102,26 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Ensure app settings use Key Vault references
+        run: |
+          KV_URI="https://kv-qgp-prod.vault.azure.net/secrets"
+          CURRENT=$(az webapp config appsettings list \
+            --name "${{ secrets.PROD_AZURE_WEBAPP_NAME }}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "[?name=='AZURE_STORAGE_CONNECTION_STRING'].value" \
+            -o tsv 2>/dev/null || echo "")
+          if [[ "$CURRENT" != @Microsoft.KeyVault* ]]; then
+            echo "Remediating AZURE_STORAGE_CONNECTION_STRING to Key Vault reference..."
+            az webapp config appsettings set \
+              --name "${{ secrets.PROD_AZURE_WEBAPP_NAME }}" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --settings AZURE_STORAGE_CONNECTION_STRING="@Microsoft.KeyVault(SecretUri=${KV_URI}/AZURE-STORAGE-CONNECTION-STRING/)" \
+              --output none
+            echo "✅ Remediated"
+          else
+            echo "✅ Already a Key Vault reference"
+          fi
+
       - name: Run Prod Dependencies Gate
         id: gate
         run: |
@@ -259,15 +279,10 @@ jobs:
 
       - name: Configure App Service environment
         run: |
-          echo "🔧 Configuring App Service with Azure AD settings..."
+          echo "🔧 Configuring App Service with Key Vault references..."
           
-          # Fetch secrets from Key Vault
-          DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv)
-          SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
-          JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
-          STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
+          KV_URI="https://kv-qgp-prod.vault.azure.net/secrets"
           
-          # Configure app settings
           az webapp config appsettings set \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -275,9 +290,9 @@ jobs:
               APP_ENV="production" \
               BUILD_SHA="${{ github.sha }}" \
               BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              DATABASE_URL="$DB_URL" \
-              SECRET_KEY="$SECRET_KEY_VAL" \
-              JWT_SECRET_KEY="$JWT_SECRET_VAL" \
+              DATABASE_URL="@Microsoft.KeyVault(SecretUri=${KV_URI}/DATABASE-URL/)" \
+              SECRET_KEY="@Microsoft.KeyVault(SecretUri=${KV_URI}/SECRET-KEY/)" \
+              JWT_SECRET_KEY="@Microsoft.KeyVault(SecretUri=${KV_URI}/JWT-SECRET-KEY/)" \
               JWT_ALGORITHM="HS256" \
               JWT_ACCESS_TOKEN_EXPIRE_MINUTES="30" \
               JWT_REFRESH_TOKEN_EXPIRE_DAYS="7" \
@@ -286,10 +301,10 @@ jobs:
               WEBSITES_PORT="8000" \
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
-              AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              AZURE_STORAGE_CONNECTION_STRING="@Microsoft.KeyVault(SecretUri=${KV_URI}/AZURE-STORAGE-CONNECTION-STRING/)" \
             --output none
           
-          echo "✅ Application settings configured"
+          echo "✅ Application settings configured with Key Vault references"
 
       - name: Cleanup old migration containers
         continue-on-error: true
