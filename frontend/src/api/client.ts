@@ -555,6 +555,8 @@ export interface AuditTemplate {
   auto_create_findings: boolean
   is_active: boolean
   is_published: boolean
+  archived_at?: string | null
+  archived_by_id?: number | null
   created_by_id?: number
   created_at: string
   updated_at: string
@@ -1002,6 +1004,10 @@ export const auditsApi = {
     api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/clone`),
   deleteTemplate: (id: number) =>
     api.delete(`/api/v1/audits/templates/${id}`),
+  listArchivedTemplates: (page = 1, size = 20) =>
+    api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/archived?page=${page}&page_size=${size}`),
+  restoreTemplate: (id: number) =>
+    api.post<AuditTemplate>(`/api/v1/audits/templates/${id}/restore`),
 
   // Sections
   createSection: (templateId: number, data: AuditSectionCreate) =>

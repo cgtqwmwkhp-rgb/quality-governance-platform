@@ -7,7 +7,7 @@ Enterprise-grade audit template and execution management with:
 - Ownership verification on mutations
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -86,7 +86,10 @@ async def list_templates(
     is_published: Optional[bool] = None,
 ) -> AuditTemplateListResponse:
     """List all audit templates with pagination and filtering."""
-    query = select(AuditTemplate).where(AuditTemplate.is_active == True)
+    query = select(AuditTemplate).where(
+        AuditTemplate.is_active == True,  # noqa: E712
+        AuditTemplate.archived_at.is_(None),
+    )
 
     if search:
         search_filter = f"%{search}%"
@@ -151,6 +154,77 @@ async def create_template(
     )
 
     return AuditTemplateResponse.model_validate(template)
+
+
+@router.get("/templates/archived", response_model=AuditTemplateListResponse)
+async def list_archived_templates(
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> AuditTemplateListResponse:
+    """List archived templates that are within the 30-day recovery window."""
+    query = select(AuditTemplate).where(AuditTemplate.archived_at.isnot(None))
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(AuditTemplate.archived_at.desc())
+
+    result = await db.execute(query)
+    templates = result.scalars().all()
+
+    return AuditTemplateListResponse(
+        items=[AuditTemplateResponse.model_validate(t) for t in templates],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
+    )
+
+
+@router.post("/templates/purge-expired")
+async def purge_expired_templates(
+    db: DbSession,
+    current_user: CurrentSuperuser,
+) -> dict:
+    """Purge templates archived more than 30 days ago (superuser only).
+
+    This can also be called by a scheduled cron job.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.archived_at.isnot(None),
+            AuditTemplate.archived_at < cutoff,
+        )
+    )
+    expired = result.scalars().all()
+
+    purged_count = len(expired)
+    purged_names = [t.name for t in expired]
+
+    for template in expired:
+        await db.delete(template)
+
+    if purged_count > 0:
+        await db.commit()
+        await record_audit_event(
+            db,
+            event_type="audit_template.purge",
+            entity_type="audit_template",
+            entity_id="batch",
+            action="purge",
+            description=f"Purged {purged_count} expired archived template(s)",
+            actor_user_id=current_user.id,
+            payload={"purged_templates": purged_names},
+        )
+
+    return {
+        "purged_count": purged_count,
+        "purged_templates": purged_names,
+    }
 
 
 @router.get("/templates/{template_id}", response_model=AuditTemplateDetailResponse)
@@ -409,32 +483,129 @@ async def clone_template(
     return AuditTemplateResponse.model_validate(cloned_template)
 
 
-@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_template(
+@router.delete("/templates/{template_id}", status_code=status.HTTP_200_OK)
+async def archive_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
-) -> None:
-    """Soft delete an audit template (superuser only)."""
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    current_user: CurrentUser,
+) -> dict:
+    """Archive an audit template (two-stage delete).
+
+    Stage 1: Template is moved to the archive for 30 days.
+    Stage 2: After 30 days, a purge job permanently deletes it.
+    Archived templates can be restored within the 30-day window.
+    """
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            AuditTemplate.archived_at.is_(None),
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
+            detail="Template not found or already archived",
         )
 
+    template.archived_at = datetime.now(timezone.utc)
+    template.archived_by_id = current_user.id
     template.is_active = False
     await db.commit()
 
     await record_audit_event(
         db,
-        event_type="audit_template.deleted",
+        event_type="audit_template.archived",
         entity_type="audit_template",
         entity_id=str(template_id),
-        action="delete",
-        description=f"Template '{template.name}' soft-deleted",
+        action="archive",
+        description=f"Template '{template.name}' archived (recoverable for 30 days)",
+        actor_user_id=current_user.id,
+    )
+
+    return {
+        "message": f"Template '{template.name}' moved to archive. It can be restored within 30 days.",
+        "archived_at": template.archived_at.isoformat(),
+        "expires_at": (template.archived_at + timedelta(days=30)).isoformat(),
+    }
+
+
+@router.post("/templates/{template_id}/restore", response_model=AuditTemplateResponse)
+async def restore_template(
+    template_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> AuditTemplateResponse:
+    """Restore an archived template back to active status."""
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            AuditTemplate.archived_at.isnot(None),
+        )
+    )
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Archived template not found",
+        )
+
+    template.archived_at = None
+    template.archived_by_id = None
+    template.is_active = True
+    await db.commit()
+    await db.refresh(template)
+
+    await record_audit_event(
+        db,
+        event_type="audit_template.restored",
+        entity_type="audit_template",
+        entity_id=str(template_id),
+        action="restore",
+        description=f"Template '{template.name}' restored from archive",
+        actor_user_id=current_user.id,
+    )
+
+    return AuditTemplateResponse.model_validate(template)
+
+
+@router.delete("/templates/{template_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+async def permanently_delete_template(
+    template_id: int,
+    db: DbSession,
+    current_user: CurrentSuperuser,
+) -> None:
+    """Permanently delete an archived template (superuser only).
+
+    Only works on templates that are already archived.
+    """
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            AuditTemplate.archived_at.isnot(None),
+        )
+    )
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Archived template not found",
+        )
+
+    template_name = template.name
+    await db.delete(template)
+    await db.commit()
+
+    await record_audit_event(
+        db,
+        event_type="audit_template.permanently_deleted",
+        entity_type="audit_template",
+        entity_id=str(template_id),
+        action="permanent_delete",
+        description=f"Template '{template_name}' permanently deleted",
         actor_user_id=current_user.id,
     )
 

@@ -63,6 +63,12 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Archive / soft-delete: two-stage (archive → purge after 30 days)
+    archived_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None, index=True
+    )
+    archived_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     # Scoring configuration
     scoring_method: Mapped[str] = mapped_column(String(50), default="percentage")
     passing_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -81,6 +87,10 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
 
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
 
     # Relationships
     sections: Mapped[List["AuditSection"]] = relationship(

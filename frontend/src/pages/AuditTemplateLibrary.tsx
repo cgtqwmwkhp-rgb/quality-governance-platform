@@ -2,10 +2,9 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Grid3X3, List, MoreVertical,
-  Copy, Trash2, Edit, Upload, FolderOpen, Clock,
+  Copy, Edit, Upload, FolderOpen, Clock,
   CheckCircle2, Shield, Leaf, HardHat, Zap, FileText, Award,
-  Layers,
-  RotateCcw, Loader2, Filter,
+  Layers, Archive, RotateCcw, Loader2, Filter, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -34,6 +33,13 @@ const CATEGORIES = [
 const getCategoryIcon = (categoryId: string) =>
   CATEGORIES.find(c => c.id === categoryId)?.icon || Layers;
 
+function getDaysRemaining(archivedAt: string): number {
+  const archived = new Date(archivedAt);
+  const expiry = new Date(archived.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  return Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -41,7 +47,9 @@ const getCategoryIcon = (categoryId: string) =>
 export default function AuditTemplateLibrary() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<AuditTemplate[]>([]);
+  const [archivedTemplates, setArchivedTemplates] = useState<AuditTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -50,7 +58,15 @@ export default function AuditTemplateLibrary() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'updated'>('updated');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<AuditTemplate | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
+
+  // Two-stage delete state
+  const [archiveTarget, setArchiveTarget] = useState<AuditTemplate | null>(null);
+  const [archiveConfirmStep, setArchiveConfirmStep] = useState<1 | 2>(1);
+  const [archiving, setArchiving] = useState(false);
+
+  // Restore state
+  const [restoring, setRestoring] = useState<number | null>(null);
 
   useEffect(() => {
     if (!activeMenu) return;
@@ -60,6 +76,7 @@ export default function AuditTemplateLibrary() {
   }, [activeMenu]);
   const [cloning, setCloning] = useState<number | null>(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [archivedCount, setArchivedCount] = useState(0);
 
   // Feedback
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -104,22 +121,70 @@ export default function AuditTemplateLibrary() {
     }
   }, [debouncedSearch, selectedCategory]);
 
+  const loadArchivedTemplates = useCallback(async () => {
+    try {
+      setArchiveLoading(true);
+      const response = await auditsApi.listArchivedTemplates(1, 100);
+      setArchivedTemplates(response.data.items);
+      setArchivedCount(response.data.total);
+    } catch (err) {
+      console.error('Failed to load archived templates:', err);
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadTemplates();
-  }, [loadTemplates]);
+    loadArchivedTemplates();
+  }, [loadTemplates, loadArchivedTemplates]);
 
-  const handleDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    try {
-      await auditsApi.deleteTemplate(deleteTarget.id);
-      setDeleteTarget(null);
-      showFeedback('success', 'Template deleted');
-      loadTemplates();
-    } catch (err) {
-      showFeedback('error', 'Failed to delete template.');
-      console.error(err);
+  // Two-stage archive: Step 1 shows info, Step 2 requires confirmation
+  const handleArchiveStep1 = useCallback((template: AuditTemplate) => {
+    setArchiveTarget(template);
+    setArchiveConfirmStep(1);
+    setActiveMenu(null);
+  }, []);
+
+  const handleArchiveConfirm = useCallback(async () => {
+    if (!archiveTarget) return;
+
+    if (archiveConfirmStep === 1) {
+      setArchiveConfirmStep(2);
+      return;
     }
-  }, [deleteTarget, loadTemplates, showFeedback]);
+
+    // Step 2: actually archive
+    try {
+      setArchiving(true);
+      await auditsApi.deleteTemplate(archiveTarget.id);
+      setArchiveTarget(null);
+      setArchiveConfirmStep(1);
+      showFeedback('success', `"${archiveTarget.name}" moved to archive. Recoverable for 30 days.`);
+      loadTemplates();
+      loadArchivedTemplates();
+    } catch (err) {
+      showFeedback('error', 'Failed to archive template.');
+      console.error(err);
+    } finally {
+      setArchiving(false);
+    }
+  }, [archiveTarget, archiveConfirmStep, loadTemplates, loadArchivedTemplates, showFeedback]);
+
+  const handleRestore = useCallback(async (template: AuditTemplate) => {
+    try {
+      setRestoring(template.id);
+      await auditsApi.restoreTemplate(template.id);
+      showFeedback('success', `"${template.name}" restored successfully.`);
+      loadTemplates();
+      loadArchivedTemplates();
+    } catch (err) {
+      showFeedback('error', 'Failed to restore template.');
+      console.error(err);
+    } finally {
+      setRestoring(null);
+    }
+  }, [loadTemplates, loadArchivedTemplates, showFeedback]);
 
   const handleClone = useCallback(async (template: AuditTemplate) => {
     setCloning(template.id);
@@ -172,6 +237,19 @@ export default function AuditTemplateLibrary() {
           <p className="text-muted-foreground mt-1">Create, manage, and deploy audit templates</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant={showArchive ? 'default' : 'outline'}
+            onClick={() => setShowArchive(!showArchive)}
+            className="relative"
+          >
+            <Archive className="w-4 h-4" />
+            Archive
+            {archivedCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-warning text-warning-foreground">
+                {archivedCount}
+              </span>
+            )}
+          </Button>
           <Button variant="outline" disabled>
             <Upload className="w-4 h-4" /> Import
           </Button>
@@ -180,6 +258,84 @@ export default function AuditTemplateLibrary() {
           </Button>
         </div>
       </div>
+
+      {/* Archive Section */}
+      {showArchive && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-warning/20 flex items-center justify-center">
+                <Archive className="w-5 h-5 text-warning" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Archived Templates</h2>
+                <p className="text-sm text-muted-foreground">
+                  Templates are kept for 30 days before permanent deletion
+                </p>
+              </div>
+            </div>
+
+            {archiveLoading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+
+            {!archiveLoading && archivedTemplates.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Archive className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No archived templates</p>
+              </div>
+            )}
+
+            {!archiveLoading && archivedTemplates.length > 0 && (
+              <div className="space-y-3">
+                {archivedTemplates.map((template) => {
+                  const daysLeft = template.archived_at ? getDaysRemaining(template.archived_at) : 0;
+                  const isExpiringSoon = daysLeft <= 7;
+                  return (
+                    <div
+                      key={template.id}
+                      className="flex items-center justify-between p-4 rounded-xl bg-background border border-border"
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{template.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Archived {template.archived_at ? new Date(template.archived_at).toLocaleDateString() : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <Badge variant={isExpiringSoon ? 'destructive' : 'warning'} className="whitespace-nowrap">
+                          {isExpiringSoon && <AlertTriangle className="w-3 h-3 mr-1" />}
+                          {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestore(template)}
+                          disabled={restoring === template.id}
+                        >
+                          {restoring === template.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-4 h-4" />
+                          )}
+                          Restore
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -371,10 +527,10 @@ export default function AuditTemplateLibrary() {
                             </button>
                             <div className="border-t border-border my-1" />
                             <button
-                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(template); setActiveMenu(null); }}
+                              onClick={(e) => { e.stopPropagation(); handleArchiveStep1(template); }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
                             >
-                              <Trash2 className="w-4 h-4" /> Delete
+                              <Archive className="w-4 h-4" /> Archive
                             </button>
                           </CardContent>
                         </Card>
@@ -486,10 +642,10 @@ export default function AuditTemplateLibrary() {
                               </button>
                               <div className="border-t border-border my-1" />
                               <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(template); setActiveMenu(null); }}
+                                onClick={(e) => { e.stopPropagation(); handleArchiveStep1(template); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
                               >
-                                <Trash2 className="w-4 h-4" /> Delete
+                                <Archive className="w-4 h-4" /> Archive
                               </button>
                             </CardContent>
                           </Card>
@@ -533,18 +689,65 @@ export default function AuditTemplateLibrary() {
         </div>
       )}
 
-      {/* Delete Confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      {/* Two-Stage Archive Confirmation Dialog */}
+      <Dialog
+        open={!!archiveTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setArchiveTarget(null);
+            setArchiveConfirmStep(1);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {archiveConfirmStep === 1 ? (
+                <>
+                  <Archive className="w-5 h-5 text-warning" />
+                  Archive Template
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                  Confirm Archive
+                </>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete &quot;{deleteTarget?.name}&quot;? This action cannot be undone.
+              {archiveConfirmStep === 1 ? (
+                <>
+                  Are you sure you want to archive &quot;{archiveTarget?.name}&quot;?
+                  <br /><br />
+                  The template will be moved to the archive where it can be
+                  <strong> recovered within 30 days</strong>. After 30 days it will
+                  be permanently deleted.
+                </>
+              ) : (
+                <>
+                  Please confirm that you want to archive &quot;{archiveTarget?.name}&quot;.
+                  <br /><br />
+                  This template will no longer appear in the active library. You can restore
+                  it from the Archive section at any time within 30 days.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete Template</Button>
+            <Button
+              variant="outline"
+              onClick={() => { setArchiveTarget(null); setArchiveConfirmStep(1); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={archiveConfirmStep === 1 ? 'default' : 'destructive'}
+              onClick={handleArchiveConfirm}
+              disabled={archiving}
+            >
+              {archiving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+              {archiveConfirmStep === 1 ? 'Continue' : 'Archive Template'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
