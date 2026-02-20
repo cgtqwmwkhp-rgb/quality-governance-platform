@@ -181,8 +181,8 @@ async def list_entity_types() -> Any:
 
 @router.get("/stats", response_model=AuditStatsResponse)
 async def get_audit_stats(
+    db: DbSession,
     days: int = Query(30, ge=1, le=365),
-    db: DbSession = None,  # type: ignore[assignment]
 ) -> Any:
     """Get audit log statistics for the specified period."""
     tenant_id = DEFAULT_TENANT_ID
@@ -255,8 +255,8 @@ async def get_audit_stats(
 
 @router.get("/verifications", response_model=list[VerificationResponse])
 async def list_verifications(
+    db: DbSession,
     limit: int = Query(10, ge=1, le=50),
-    db: DbSession = None,  # type: ignore[assignment]
 ) -> Any:
     """Get history of chain verifications."""
     tenant_id = DEFAULT_TENANT_ID
@@ -281,6 +281,7 @@ async def list_verifications(
 
 @router.get("/", response_model=AuditLogListResponse)
 async def list_audit_logs(
+    db: DbSession,
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
     action: Optional[str] = None,
@@ -289,7 +290,6 @@ async def list_audit_logs(
     date_to: Optional[datetime] = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
-    db: DbSession = None,  # type: ignore[assignment]
 ) -> Any:
     """List audit log entries with filters and pagination."""
     tenant_id = DEFAULT_TENANT_ID
@@ -342,7 +342,7 @@ async def list_audit_logs(
 async def get_entity_history(
     entity_type: str,
     entity_id: str,
-    db: DbSession = None,  # type: ignore[assignment]
+    db: DbSession,
 ) -> Any:
     """Get complete audit history for a specific entity."""
     tenant_id = DEFAULT_TENANT_ID
@@ -366,8 +366,8 @@ async def get_entity_history(
 @router.get("/user/{user_id}", response_model=list[AuditLogEntryResponse])
 async def get_user_activity(
     user_id: int,
+    db: DbSession,
     days: int = Query(30, ge=1, le=365),
-    db: DbSession = None,  # type: ignore[assignment]
 ) -> Any:
     """Get recent activity for a specific user."""
     tenant_id = DEFAULT_TENANT_ID
@@ -400,7 +400,7 @@ async def get_user_activity(
 @router.get("/{entry_id}", response_model=AuditLogDetailResponse)
 async def get_audit_entry(
     entry_id: int,
-    db: DbSession = None,  # type: ignore[assignment]
+    db: DbSession,
 ) -> Any:
     """Get a single audit log entry with full details."""
     try:
@@ -423,9 +423,9 @@ async def get_audit_entry(
 
 @router.post("/verify", response_model=VerificationResponse)
 async def verify_chain(
+    db: DbSession,
     start_sequence: Optional[int] = None,
     end_sequence: Optional[int] = None,
-    db: DbSession = None,  # type: ignore[assignment]
 ) -> Any:
     """
     Verify the integrity of the audit log hash chain.
@@ -526,7 +526,7 @@ async def verify_chain(
 @router.post("/export")
 async def export_audit_logs(
     data: ExportRequest,
-    db: DbSession = None,  # type: ignore[assignment]
+    db: DbSession,
 ) -> Any:
     """Export audit logs for compliance with integrity hash."""
     tenant_id = DEFAULT_TENANT_ID
