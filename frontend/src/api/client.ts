@@ -1692,7 +1692,7 @@ export const auditTrailApi = {
     if (params?.date_to) sp.set('date_to', params.date_to)
     sp.set('page', String(params?.page || 1))
     sp.set('per_page', String(params?.per_page || 50))
-    return api.get<AuditLogEntry[]>(`/api/v1/audit-trail?${sp}`)
+    return api.get<{ items: AuditLogEntry[]; total: number; page: number; per_page: number }>(`/api/v1/audit-trail?${sp}`)
   },
   getEntry: (id: number) =>
     api.get<AuditLogEntry>(`/api/v1/audit-trail/${id}`),

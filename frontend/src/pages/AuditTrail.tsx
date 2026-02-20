@@ -74,7 +74,9 @@ export default function AuditTrail() {
       const actionParam = selectedAction !== 'all' ? selectedAction : undefined;
       const entityParam = selectedModule !== 'all' ? selectedModule.toLowerCase() : undefined;
       const res = await auditTrailApi.list({ action: actionParam, entity_type: entityParam, page, per_page: 50 });
-      const entries = (res.data || []).map(mapApiEntry);
+      const raw = res.data;
+      const items = Array.isArray(raw) ? raw : raw?.items || [];
+      const entries = items.map(mapApiEntry);
       if (page === 1) {
         setAuditEntries(entries);
       } else {

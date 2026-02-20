@@ -83,7 +83,8 @@ export default function AuditTrailViewer() {
       if (filters.date_to) params.date_to = filters.date_to;
 
       const res = await auditTrailApi.list(params);
-      setEntries(res.data || []);
+      const payload = res.data;
+      setEntries(Array.isArray(payload) ? payload : payload?.items || []);
     } catch (err) {
       console.error('Failed to load audit logs', err);
       setEntries([]);
