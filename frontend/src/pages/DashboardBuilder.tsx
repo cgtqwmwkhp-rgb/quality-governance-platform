@@ -94,7 +94,7 @@ const metrics: Record<string, string[]> = {
 };
 
 export default function DashboardBuilder() {
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
+  const { toasts, show: _showToast, dismiss: dismissToast } = useToast();
   const [dashboardList, setDashboardList] = useState<DashboardListItem[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard>({
     id: 0,

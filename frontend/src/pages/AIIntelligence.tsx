@@ -51,7 +51,7 @@ interface Cluster {
 }
 
 export default function AIIntelligence() {
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
+  const { toasts, show: _showToast, dismiss: dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<'predictions' | 'anomalies' | 'audit' | 'recommendations'>('predictions')
   const [analyzing, setAnalyzing] = useState(false)
   const [predictions, setPredictions] = useState<Prediction[]>([])

@@ -75,7 +75,7 @@ const SETTING_CATEGORIES: SettingCategory[] = [
 ];
 
 export default function SystemSettings() {
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
+  const { toasts, show: _showToast, dismiss: dismissToast } = useToast();
   const [settings, setSettings] = useState<Setting[]>([]);
   const [activeCategory, setActiveCategory] = useState('branding');
   const [isSaving, setIsSaving] = useState(false);
