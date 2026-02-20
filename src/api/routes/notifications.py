@@ -17,6 +17,7 @@ from sqlalchemy import func, select, update
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -120,7 +121,7 @@ async def list_notifications(
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query) or 0
 
-    unread_query = select(func.count()).where(
+    unread_query = select(func.count(Notification.id)).where(
         Notification.user_id == current_user.id,
         Notification.is_read == False,
     )
@@ -146,7 +147,7 @@ async def get_unread_count(db: DbSession, current_user: CurrentUser):
     """Get the count of unread notifications for the current user."""
     count = (
         await db.scalar(
-            select(func.count()).where(
+            select(func.count(Notification.id)).where(
                 Notification.user_id == current_user.id,
                 Notification.is_read == False,
             )
@@ -285,53 +286,39 @@ async def update_notification_preferences(
 
 @router.get("/mentions/search", response_model=List[MentionSearchResult])
 async def search_users_for_mention(
+    db: DbSession,
+    current_user: CurrentUser,
     q: str = Query(..., min_length=1, max_length=50),
     limit: int = Query(10, ge=1, le=50),
 ):
     """
     Search users for @mention autocomplete.
 
-    Returns users matching the query by name or email.
+    Returns active users matching the query by name or email.
     """
-    # Mock users for demonstration
-    mock_users = [
+    search_pattern = f"%{q}%"
+    result = await db.execute(
+        select(User)
+        .where(
+            User.is_active == True,
+            (User.first_name.ilike(search_pattern))
+            | (User.last_name.ilike(search_pattern))
+            | (User.email.ilike(search_pattern)),
+        )
+        .order_by(User.first_name, User.last_name)
+        .limit(limit)
+    )
+    users = result.scalars().all()
+
+    return [
         MentionSearchResult(
-            id=1,
-            display_name="John Smith",
-            email="john.smith@plantexpand.com",
+            id=u.id,
+            display_name=f"{u.first_name} {u.last_name}",
+            email=u.email,
             avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=2,
-            display_name="Jane Doe",
-            email="jane.doe@plantexpand.com",
-            avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=3,
-            display_name="Bob Wilson",
-            email="bob.wilson@plantexpand.com",
-            avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=4,
-            display_name="Alice Brown",
-            email="alice.brown@plantexpand.com",
-            avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=5,
-            display_name="Charlie Davis",
-            email="charlie.davis@plantexpand.com",
-            avatar_url=None,
-        ),
+        )
+        for u in users
     ]
-
-    # Filter by query
-    q_lower = q.lower()
-    filtered = [u for u in mock_users if q_lower in u.display_name.lower() or q_lower in u.email.lower()]
-
-    return filtered[:limit]
 
 
 @router.post("/test-notification")
