@@ -87,8 +87,8 @@ class TenantResponse(BaseModel):
 @router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     data: TenantCreate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Create a new tenant."""
     service = TenantService(db)
@@ -111,8 +111,8 @@ async def create_tenant(
 async def list_tenants(
     skip: int = 0,
     limit: int = 100,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
@@ -124,8 +124,8 @@ async def list_tenants(
 
 @router.get("/current", response_model=TenantResponse)
 async def get_current_tenant(
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Get the current tenant context."""
     service = TenantService(db)
@@ -140,8 +140,8 @@ async def get_current_tenant(
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
     tenant_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Get tenant by ID."""
     service = TenantService(db)
@@ -157,8 +157,8 @@ async def get_tenant(
 async def update_tenant(
     tenant_id: int,
     data: TenantUpdate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Update tenant settings."""
     service = TenantService(db)
@@ -180,8 +180,8 @@ async def update_tenant(
 async def update_branding(
     tenant_id: int,
     data: TenantBranding,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Update tenant branding."""
     service = TenantService(db)
@@ -201,8 +201,8 @@ async def update_branding(
 @router.get("/{tenant_id}/users")
 async def list_tenant_users(
     tenant_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """List all users in a tenant."""
     service = TenantService(db)
@@ -226,8 +226,8 @@ async def list_tenant_users(
 async def add_user_to_tenant(
     tenant_id: int,
     data: TenantUserAdd,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Add a user to a tenant."""
     service = TenantService(db)
@@ -250,8 +250,8 @@ async def add_user_to_tenant(
 async def remove_user_from_tenant(
     tenant_id: int,
     user_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Remove a user from a tenant."""
     service = TenantService(db)
@@ -272,8 +272,8 @@ async def remove_user_from_tenant(
 async def create_invitation(
     tenant_id: int,
     data: TenantInvite,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Create an invitation to join a tenant."""
     service = TenantService(db)
@@ -296,8 +296,8 @@ async def create_invitation(
 @router.post("/invitations/{token}/accept")
 async def accept_invitation(
     token: str,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Accept a tenant invitation."""
     service = TenantService(db)
@@ -317,8 +317,8 @@ async def accept_invitation(
 @router.get("/{tenant_id}/features")
 async def get_features(
     tenant_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Get enabled features for a tenant."""
     service = TenantService(db)
@@ -335,8 +335,8 @@ async def toggle_feature(
     tenant_id: int,
     feature: str,
     enabled: bool = True,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Enable or disable a feature for a tenant."""
     service = TenantService(db)
@@ -357,8 +357,8 @@ async def toggle_feature(
 @router.get("/{tenant_id}/limits")
 async def get_limits(
     tenant_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Get usage limits for a tenant."""
     service = TenantService(db)

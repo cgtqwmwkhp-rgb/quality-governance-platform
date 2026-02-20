@@ -121,8 +121,8 @@ async def list_documents(
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """List controlled documents with filtering"""
     stmt = select(ControlledDocument).where(ControlledDocument.is_current == True)
@@ -170,8 +170,8 @@ async def list_documents(
 @router.post("/", response_model=dict, status_code=201)
 async def create_document(
     document_data: DocumentCreate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new controlled document"""
     count_result = await db.execute(select(func.count()).select_from(ControlledDocument))
@@ -217,8 +217,8 @@ async def create_document(
 
 @router.get("/workflows", response_model=list)
 async def list_workflows(
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """List approval workflows"""
     result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True))
@@ -240,8 +240,8 @@ async def list_workflows(
 @router.post("/workflows", response_model=dict, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create approval workflow"""
     workflow = DocumentApprovalWorkflow(**workflow_data.model_dump())
@@ -257,8 +257,8 @@ async def create_workflow(
 
 @router.get("/summary", response_model=dict)
 async def get_document_summary(
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get document control summary statistics"""
     total_result = await db.execute(
@@ -335,8 +335,8 @@ async def get_document_summary(
 @router.get("/{document_id}", response_model=dict)
 async def get_document(
     document_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed document information"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -429,8 +429,8 @@ async def get_document(
 async def update_document(
     document_id: int,
     document_data: DocumentUpdate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update document metadata"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -456,8 +456,8 @@ async def update_document(
 async def create_new_version(
     document_id: int,
     version_data: VersionCreate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -506,8 +506,8 @@ async def get_version_diff(
     document_id: int,
     version_id: int,
     compare_to: Optional[int] = Query(None, description="Version ID to compare with"),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get diff between versions"""
     result = await db.execute(
@@ -555,8 +555,8 @@ async def get_version_diff(
 async def submit_for_approval(
     document_id: int,
     workflow_id: int = Query(...),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Submit document for approval"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -597,8 +597,8 @@ async def submit_for_approval(
 async def take_approval_action(
     instance_id: int,
     action_request: ApprovalActionRequest,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
     result = await db.execute(select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id))
@@ -667,8 +667,8 @@ async def take_approval_action(
 async def distribute_document(
     document_id: int,
     distribution: DistributionCreate,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -696,8 +696,8 @@ async def distribute_document(
 async def acknowledge_distribution(
     document_id: int,
     distribution_id: int,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Acknowledge receipt of document"""
     result = await db.execute(
@@ -725,8 +725,8 @@ async def acknowledge_distribution(
 async def mark_document_obsolete(
     document_id: int,
     obsolete_data: ObsoleteRequest,
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -764,8 +764,8 @@ async def mark_document_obsolete(
 async def get_access_log(
     document_id: int,
     limit: int = Query(100, ge=1, le=500),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Get document access log"""
     result = await db.execute(

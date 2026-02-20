@@ -142,7 +142,7 @@ async def create_signature_request(
 
     tenant_id = getattr(current_user, "tenant_id", 1) or 1
 
-    request = service.create_request(
+    request = await service.create_request(
         tenant_id=tenant_id,
         title=data.title,
         initiated_by_id=current_user.id,
@@ -202,7 +202,7 @@ async def get_pending_requests(
 
     tenant_id = getattr(current_user, "tenant_id", 1) or 1
 
-    requests = service.get_pending_requests(
+    requests = await service.get_pending_requests(
         tenant_id=tenant_id,
         user_id=current_user.id,
         email=current_user.email,
@@ -220,7 +220,7 @@ async def get_signature_request(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
-    request = service.get_request(request_id)
+    request = await service.get_request(request_id)
 
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -239,7 +239,7 @@ async def send_signature_request(
     service = SignatureService(db)
 
     try:
-        request = service.send_request(request_id)
+        request = await service.send_request(request_id)
         return {"status": "sent", "reference": request.reference_number}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -258,7 +258,7 @@ async def void_signature_request(
     service = SignatureService(db)
 
     try:
-        request = service.void_request(request_id, current_user.id, reason)
+        request = await service.void_request(request_id, current_user.id, reason)
         return {"status": "voided", "reference": request.reference_number}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -273,7 +273,7 @@ async def get_audit_log(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
-    logs = service.get_audit_log(request_id)
+    logs = await service.get_audit_log(request_id)
 
     return logs
 
@@ -293,15 +293,14 @@ async def get_signing_page(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
-    signer = service.get_signer_by_token(token)
+    signer = await service.get_signer_by_token(token)
 
     if not signer:
         raise HTTPException(status_code=404, detail="Invalid or expired signing link")
 
     sig_request = signer.request
 
-    # Record view
-    service.record_view(
+    await service.record_view(
         signer_id=signer.id,
         ip_address=request.client.host if request.client else "unknown",
         user_agent=request.headers.get("user-agent", "unknown"),
@@ -339,13 +338,13 @@ async def sign_document(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
-    signer = service.get_signer_by_token(token)
+    signer = await service.get_signer_by_token(token)
 
     if not signer:
         raise HTTPException(status_code=404, detail="Invalid or expired signing link")
 
     try:
-        signature = service.sign(
+        signature = await service.sign(
             signer_id=signer.id,
             signature_type=data.signature_type,
             signature_data=data.signature_data,
@@ -376,13 +375,13 @@ async def decline_signing(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
-    signer = service.get_signer_by_token(token)
+    signer = await service.get_signer_by_token(token)
 
     if not signer:
         raise HTTPException(status_code=404, detail="Invalid or expired signing link")
 
     try:
-        signer = service.decline(
+        signer = await service.decline(
             signer_id=signer.id,
             reason=data.reason,
             ip_address=request.client.host if request.client else "unknown",
@@ -415,7 +414,7 @@ async def create_template(
 
     tenant_id = getattr(current_user, "tenant_id", 1) or 1
 
-    template = service.create_template(
+    template = await service.create_template(
         tenant_id=tenant_id,
         name=data.name,
         created_by_id=current_user.id,
@@ -468,7 +467,7 @@ async def use_template(
     service = SignatureService(db)
 
     try:
-        request = service.create_from_template(
+        request = await service.create_from_template(
             template_id=template_id,
             initiated_by_id=current_user.id,
             signers=[s.model_dump() for s in signers],
@@ -539,7 +538,7 @@ async def send_reminders(
 
     tenant_id = getattr(current_user, "tenant_id", 1) or 1
 
-    count = service.send_reminders(tenant_id)
+    count = await service.send_reminders(tenant_id)
 
     return {"reminders_sent": count}
 
@@ -556,7 +555,7 @@ async def expire_old_requests(
 
     tenant_id = getattr(current_user, "tenant_id", 1) or 1
 
-    count = service.expire_old_requests(tenant_id)
+    count = await service.expire_old_requests(tenant_id)
 
     return {"expired_count": count}
 
