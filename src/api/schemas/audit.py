@@ -250,6 +250,8 @@ class AuditTemplateResponse(AuditTemplateBase):
     version: int
     is_active: bool
     is_published: bool
+    archived_at: Optional[datetime] = None
+    archived_by_id: Optional[int] = None
     created_by_id: Optional[int]
     created_at: datetime
     updated_at: datetime
