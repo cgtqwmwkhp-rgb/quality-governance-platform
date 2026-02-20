@@ -101,7 +101,10 @@ class AuditQuestionUpdate(BaseModel):
     """Schema for updating an Audit Question."""
 
     question_text: Optional[str] = Field(None, min_length=1, max_length=1000)
-    question_type: Optional[str] = None
+    question_type: Optional[str] = Field(
+        None,
+        pattern="^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score)$",
+    )
     description: Optional[str] = None
     help_text: Optional[str] = None
     is_required: Optional[bool] = None
