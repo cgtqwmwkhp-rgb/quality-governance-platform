@@ -12,12 +12,11 @@ Provides endpoints for:
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import CurrentUser
+from src.api.deps import CurrentUser, DbSession
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -28,7 +27,6 @@ from src.domain.models.risk_register import (
     RiskControlMapping,
 )
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
-from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -124,6 +122,8 @@ class BowTieElementCreate(BaseModel):
 
 @router.get("/", response_model=dict)
 async def list_risks(
+    db: DbSession,
+    current_user: CurrentUser,
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -131,8 +131,6 @@ async def list_risks(
     outside_appetite: Optional[bool] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List risks with filtering options"""
     conditions = []
@@ -183,8 +181,8 @@ async def list_risks(
 @router.post("/", response_model=dict, status_code=201)
 async def create_risk(
     risk_data: RiskCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new risk"""
     service = RiskService(db)
@@ -200,8 +198,8 @@ async def create_risk(
 @router.get("/{risk_id}", response_model=dict)
 async def get_risk(
     risk_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed risk information"""
     risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
@@ -299,8 +297,8 @@ async def get_risk(
 async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
     risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
@@ -322,8 +320,8 @@ async def update_risk(
 async def assess_risk(
     risk_id: int,
     assessment: RiskAssessmentUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update risk assessment scores"""
     service = RiskService(db)
@@ -343,8 +341,8 @@ async def assess_risk(
 @router.delete("/{risk_id}", status_code=204)
 async def delete_risk(
     risk_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> None:
     """Delete a risk (soft delete by changing status)"""
     risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
@@ -361,7 +359,7 @@ async def delete_risk(
 
 @router.get("/matrix/config", response_model=dict)
 async def get_risk_matrix_config(
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get risk matrix configuration"""
     return {
@@ -381,10 +379,10 @@ async def get_risk_matrix_config(
 
 @router.get("/heatmap", response_model=dict)
 async def get_risk_heat_map(
+    db: DbSession,
+    current_user: CurrentUser,
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get risk heat map data"""
     service = RiskService(db)
@@ -393,10 +391,10 @@ async def get_risk_heat_map(
 
 @router.get("/trends", response_model=list)
 async def get_risk_trends(
+    db: DbSession,
+    current_user: CurrentUser,
     risk_id: Optional[int] = Query(None),
     days: int = Query(365, ge=30, le=1095),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
 ) -> list[dict[str, Any]]:
     """Get risk score trends over time"""
     service = RiskService(db)
@@ -405,9 +403,9 @@ async def get_risk_trends(
 
 @router.get("/forecast", response_model=list)
 async def get_risk_forecast(
+    db: DbSession,
+    current_user: CurrentUser,
     months_ahead: int = Query(6, ge=1, le=12),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
 ) -> list[dict[str, Any]]:
     """Get risk trend forecast"""
     service = RiskService(db)
@@ -420,8 +418,8 @@ async def get_risk_forecast(
 @router.get("/{risk_id}/bowtie", response_model=dict)
 async def get_bow_tie(
     risk_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get bow-tie diagram data for a risk"""
     service = BowTieService(db)
@@ -435,8 +433,8 @@ async def get_bow_tie(
 async def add_bow_tie_element(
     risk_id: int,
     element: BowTieElementCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add element to bow-tie diagram"""
     risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
@@ -465,8 +463,8 @@ async def add_bow_tie_element(
 async def delete_bow_tie_element(
     risk_id: int,
     element_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> None:
     """Delete bow-tie element"""
     result = await db.execute(
@@ -486,8 +484,8 @@ async def delete_bow_tie_element(
 
 @router.get("/kris/dashboard", response_model=dict)
 async def get_kri_dashboard(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get KRI dashboard summary"""
     service = KRIService(db)
@@ -497,8 +495,8 @@ async def get_kri_dashboard(
 @router.post("/kris", response_model=dict, status_code=201)
 async def create_kri(
     kri_data: KRICreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
     risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == kri_data.risk_id))).scalar_one_or_none()
@@ -517,8 +515,8 @@ async def create_kri(
 async def update_kri_value(
     kri_id: int,
     value_update: KRIValueUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update KRI value"""
     service = KRIService(db)
@@ -536,8 +534,8 @@ async def update_kri_value(
 @router.get("/kris/{kri_id}/history", response_model=list)
 async def get_kri_history(
     kri_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Get KRI historical values"""
     kri = (
@@ -554,8 +552,8 @@ async def get_kri_history(
 
 @router.get("/controls", response_model=list)
 async def list_controls(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """List all risk controls"""
     result = await db.execute(
@@ -582,11 +580,11 @@ async def list_controls(
 @router.post("/controls", response_model=dict, status_code=201)
 async def create_control(
     control_data: ControlCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a risk control"""
-    count = await db.scalar(select(func.count()).select_from(EnterpriseRiskControl))
+    count = await db.scalar(select(func.count()).select_from(EnterpriseRiskControl)) or 0
     reference = f"CTRL-{(count + 1):04d}"
 
     control = EnterpriseRiskControl(
@@ -604,10 +602,10 @@ async def create_control(
 async def link_control_to_risk(
     risk_id: int,
     control_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     reduces_likelihood: bool = True,
     reduces_impact: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Link a control to a risk"""
     risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
@@ -649,8 +647,8 @@ async def link_control_to_risk(
 
 @router.get("/appetite/statements", response_model=list)
 async def list_appetite_statements(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """List risk appetite statements by category"""
     result = await db.execute(
@@ -679,8 +677,8 @@ async def list_appetite_statements(
 
 @router.get("/summary", response_model=dict)
 async def get_risk_summary(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = None,
+    db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get overall risk register summary"""
     total_risks = await db.scalar(

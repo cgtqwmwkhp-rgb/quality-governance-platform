@@ -122,7 +122,7 @@ class RiskService:
 
     async def create_risk(self, data: dict, created_by: Optional[int] = None) -> EnterpriseRisk:
         """Create a new risk with automatic scoring"""
-        count = await self.db.scalar(select(func.count()).select_from(EnterpriseRisk))
+        count = await self.db.scalar(select(func.count()).select_from(EnterpriseRisk)) or 0
         reference = f"RISK-{(count + 1):04d}"
 
         inherent_score = RiskScoringEngine.calculate_score(
