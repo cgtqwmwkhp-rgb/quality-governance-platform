@@ -21,8 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 export default function Incidents() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const navigate = useNavigate()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +50,7 @@ export default function Incidents() {
       setIncidents(response.data.items)
     } catch (err) {
       console.error('Failed to load incidents:', err)
+      showToast('Failed to load incidents. Please try again.', 'error')
     } finally {
       setLoading(false)
     }
@@ -74,6 +77,7 @@ export default function Incidents() {
       loadIncidents()
     } catch (err) {
       console.error('Failed to create incident:', err)
+      showToast('Failed to create incident. Please try again.', 'error')
     } finally {
       setCreating(false)
     }
@@ -325,6 +329,7 @@ export default function Incidents() {
           </form>
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

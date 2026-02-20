@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from "../helpers/utils"
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 interface Document {
   id: number
@@ -97,6 +98,7 @@ const getStatusVariant = (status: string) => {
 }
 
 export default function Documents() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -126,6 +128,7 @@ export default function Documents() {
       setStats(statsRes.data)
     } catch (err) {
       console.error('Failed to load documents:', err)
+      showToast('Failed to load documents. Please try again.', 'error')
       setDocuments([])
     } finally {
       setLoading(false)
@@ -144,6 +147,7 @@ export default function Documents() {
       setSearchResults(response.data.results)
     } catch (err) {
       console.error('Search failed:', err)
+      showToast('Search failed. Please try again.', 'error')
       setSearchResults([])
     } finally {
       setIsSearching(false)
@@ -207,6 +211,7 @@ export default function Documents() {
       setShowUploadModal(false)
     } catch (err) {
       console.error('Upload failed:', err)
+      showToast('Document upload failed. Please try again.', 'error')
     } finally {
       setUploading(false)
       setUploadProgress(0)
@@ -685,6 +690,7 @@ export default function Documents() {
           </Card>
         </div>
       )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

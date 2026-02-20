@@ -195,104 +195,6 @@ async def create_risk(
     }
 
 
-@router.get("/{risk_id}", response_model=dict)
-async def get_risk(
-    risk_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-) -> dict[str, Any]:
-    """Get detailed risk information"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-
-    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
-    control_mappings = result.scalars().all()
-    control_ids = [m.control_id for m in control_mappings]
-    if control_ids:
-        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
-        controls = result.scalars().all()
-    else:
-        controls = []
-
-    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
-    kris = result.scalars().all()
-
-    result = await db.execute(
-        select(RiskAssessmentHistory)
-        .where(RiskAssessmentHistory.risk_id == risk_id)
-        .order_by(RiskAssessmentHistory.assessment_date.desc())
-        .limit(10)
-    )
-    history = result.scalars().all()
-
-    return {
-        "id": risk.id,
-        "reference": risk.reference,
-        "title": risk.title,
-        "description": risk.description,
-        "category": risk.category,
-        "subcategory": risk.subcategory,
-        "department": risk.department,
-        "location": risk.location,
-        "process": risk.process,
-        "inherent_likelihood": risk.inherent_likelihood,
-        "inherent_impact": risk.inherent_impact,
-        "inherent_score": risk.inherent_score,
-        "residual_likelihood": risk.residual_likelihood,
-        "residual_impact": risk.residual_impact,
-        "residual_score": risk.residual_score,
-        "target_score": risk.target_score,
-        "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
-        "risk_color": RiskScoringEngine.get_risk_color(risk.residual_score),
-        "risk_appetite": risk.risk_appetite,
-        "appetite_threshold": risk.appetite_threshold,
-        "is_within_appetite": risk.is_within_appetite,
-        "treatment_strategy": risk.treatment_strategy,
-        "treatment_plan": risk.treatment_plan,
-        "treatment_status": risk.treatment_status,
-        "status": risk.status,
-        "risk_owner_id": risk.risk_owner_id,
-        "risk_owner_name": risk.risk_owner_name,
-        "review_frequency_days": risk.review_frequency_days,
-        "last_review_date": risk.last_review_date.isoformat() if risk.last_review_date else None,
-        "next_review_date": risk.next_review_date.isoformat() if risk.next_review_date else None,
-        "review_notes": risk.review_notes,
-        "is_escalated": risk.is_escalated,
-        "escalation_reason": risk.escalation_reason,
-        "identified_date": risk.identified_date.isoformat() if risk.identified_date else None,
-        "controls": [
-            {
-                "id": c.id,
-                "reference": c.reference,
-                "name": c.name,
-                "control_type": c.control_type,
-                "effectiveness": c.effectiveness,
-            }
-            for c in controls
-        ],
-        "kris": [
-            {
-                "id": k.id,
-                "name": k.name,
-                "current_value": k.current_value,
-                "current_status": k.current_status,
-                "last_updated": k.last_updated.isoformat() if k.last_updated else None,
-            }
-            for k in kris
-        ],
-        "assessment_history": [
-            {
-                "date": h.assessment_date.isoformat() if h.assessment_date else None,
-                "inherent_score": h.inherent_score,
-                "residual_score": h.residual_score,
-                "status": h.status,
-            }
-            for h in history
-        ],
-    }
-
-
 @router.put("/{risk_id}", response_model=dict)
 async def update_risk(
     risk_id: int,
@@ -739,4 +641,105 @@ async def get_risk_summary(
         "overdue_review": overdue_review,
         "escalated": escalated,
         "by_category": {cat: count for cat, count in categories},
+    }
+
+
+# ============ Individual Risk Detail (after all literal GET paths) ============
+
+
+@router.get("/{risk_id}", response_model=dict)
+async def get_risk(
+    risk_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Get detailed risk information"""
+    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
+    if not risk:
+        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+
+    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
+    control_mappings = result.scalars().all()
+    control_ids = [m.control_id for m in control_mappings]
+    if control_ids:
+        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
+        controls = result.scalars().all()
+    else:
+        controls = []
+
+    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
+    kris = result.scalars().all()
+
+    result = await db.execute(
+        select(RiskAssessmentHistory)
+        .where(RiskAssessmentHistory.risk_id == risk_id)
+        .order_by(RiskAssessmentHistory.assessment_date.desc())
+        .limit(10)
+    )
+    history = result.scalars().all()
+
+    return {
+        "id": risk.id,
+        "reference": risk.reference,
+        "title": risk.title,
+        "description": risk.description,
+        "category": risk.category,
+        "subcategory": risk.subcategory,
+        "department": risk.department,
+        "location": risk.location,
+        "process": risk.process,
+        "inherent_likelihood": risk.inherent_likelihood,
+        "inherent_impact": risk.inherent_impact,
+        "inherent_score": risk.inherent_score,
+        "residual_likelihood": risk.residual_likelihood,
+        "residual_impact": risk.residual_impact,
+        "residual_score": risk.residual_score,
+        "target_score": risk.target_score,
+        "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
+        "risk_color": RiskScoringEngine.get_risk_color(risk.residual_score),
+        "risk_appetite": risk.risk_appetite,
+        "appetite_threshold": risk.appetite_threshold,
+        "is_within_appetite": risk.is_within_appetite,
+        "treatment_strategy": risk.treatment_strategy,
+        "treatment_plan": risk.treatment_plan,
+        "treatment_status": risk.treatment_status,
+        "status": risk.status,
+        "risk_owner_id": risk.risk_owner_id,
+        "risk_owner_name": risk.risk_owner_name,
+        "review_frequency_days": risk.review_frequency_days,
+        "last_review_date": risk.last_review_date.isoformat() if risk.last_review_date else None,
+        "next_review_date": risk.next_review_date.isoformat() if risk.next_review_date else None,
+        "review_notes": risk.review_notes,
+        "is_escalated": risk.is_escalated,
+        "escalation_reason": risk.escalation_reason,
+        "identified_date": risk.identified_date.isoformat() if risk.identified_date else None,
+        "controls": [
+            {
+                "id": c.id,
+                "reference": c.reference,
+                "name": c.name,
+                "control_type": c.control_type,
+                "effectiveness": c.effectiveness,
+            }
+            for c in controls
+        ],
+        "kris": [
+            {
+                "id": k.id,
+                "name": k.name,
+                "current_value": k.current_value,
+                "current_status": k.current_status,
+                "last_updated": k.last_updated.isoformat() if k.last_updated else None,
+            }
+            for k in kris
+        ],
+        "assessment_history": [
+            {
+                "date": h.assessment_date.isoformat() if h.assessment_date else None,
+                "inherent_score": h.inherent_score,
+                "residual_score": h.residual_score,
+                "status": h.status,
+            }
+            for h in history
+        ],
     }

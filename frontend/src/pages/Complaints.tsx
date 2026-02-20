@@ -21,8 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 export default function Complaints() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const navigate = useNavigate()
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,6 +52,7 @@ export default function Complaints() {
       setComplaints(response.data.items)
     } catch (err) {
       console.error('Failed to load complaints:', err)
+      showToast('Failed to load complaints. Please try again.', 'error')
     } finally {
       setLoading(false)
     }
@@ -77,6 +80,7 @@ export default function Complaints() {
       loadComplaints()
     } catch (err) {
       console.error('Failed to create complaint:', err)
+      showToast('Failed to create complaint. Please try again.', 'error')
     } finally {
       setCreating(false)
     }
@@ -370,6 +374,7 @@ export default function Complaints() {
           </form>
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from '../components/ui/Dialog'
 import { cn } from "../helpers/utils"
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 type ViewMode = 'kanban' | 'list' | 'findings'
 
@@ -41,6 +42,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 }
 
 export default function Audits() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const navigate = useNavigate()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
@@ -73,6 +75,7 @@ export default function Audits() {
       setTemplates((templatesRes.data.items || []).filter(t => t.is_published))
     } catch (err) {
       console.error('Failed to load audits:', err)
+      showToast('Failed to load audits. Please try again.', 'error')
       setAudits([])
       setFindings([])
       setTemplates([])
@@ -130,6 +133,7 @@ export default function Audits() {
       
     } catch (err: any) {
       console.error('Failed to create audit:', err)
+      showToast('Failed to schedule audit. Please try again.', 'error')
       const errorMessage = err.response?.data?.detail || 'Failed to schedule audit. Please try again.'
       setFormError(errorMessage)
     } finally {
@@ -661,6 +665,7 @@ export default function Audits() {
           )}
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

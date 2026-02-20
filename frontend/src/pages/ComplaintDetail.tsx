@@ -42,10 +42,12 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 export default function ComplaintDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [complaint, setComplaint] = useState<Complaint | null>(null)
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,6 +99,7 @@ export default function ComplaintDetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to load complaint:', err)
+      showToast('Failed to load complaint', 'error');
     } finally {
       setLoading(false)
     }
@@ -126,6 +129,7 @@ export default function ComplaintDetail() {
       setIsEditing(false)
     } catch (err) {
       console.error('Failed to update complaint:', err)
+      showToast('Failed to update complaint', 'error');
     } finally {
       setSaving(false)
     }
@@ -220,6 +224,7 @@ export default function ComplaintDetail() {
       loadActions()
     } catch (err: unknown) {
       console.error('Failed to create action:', err)
+      showToast('Failed to create action', 'error');
       alert(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreating(false)
@@ -872,6 +877,8 @@ export default function ComplaintDetail() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

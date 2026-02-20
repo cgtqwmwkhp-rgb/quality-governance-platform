@@ -19,6 +19,7 @@ import {
   ArrowRight,
   RefreshCw
 } from 'lucide-react';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface AuditEntry {
   id: string;
@@ -42,6 +43,7 @@ interface AuditEntry {
 }
 
 export default function AuditTrail() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [selectedModule, setSelectedModule] = useState<string>('all');
@@ -84,6 +86,7 @@ export default function AuditTrail() {
       }
     } catch {
       console.error('Failed to load audit trail');
+      showToast('Failed to load audit trail.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -124,6 +127,7 @@ export default function AuditTrail() {
       await auditTrailApi.exportLog({ format: 'json', reason: 'Manual export' });
     } catch {
       console.error('Failed to export');
+      showToast('Failed to export.', 'error');
     }
   };
 
@@ -352,6 +356,8 @@ export default function AuditTrail() {
           </button>
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -133,10 +133,10 @@ class LocalFileStorageService(BlobStorageService):
 
     def _get_full_path(self, storage_key: str) -> Path:
         """Get full filesystem path for storage key."""
-        # Ensure storage key doesn't escape base directory
-        safe_key = storage_key.lstrip("/").replace("..", "")
-        full_path = self.base_path / safe_key
-        # Create parent directories if needed
+        safe_key = storage_key.lstrip("/")
+        full_path = (self.base_path / safe_key).resolve()
+        if not str(full_path).startswith(str(self.base_path.resolve())):
+            raise ValueError("Path traversal detected")
         full_path.parent.mkdir(parents=True, exist_ok=True)
         return full_path
 

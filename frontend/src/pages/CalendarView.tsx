@@ -18,6 +18,7 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { cn } from "../helpers/utils";
 import { auditsApi, actionsApi } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface CalendarEvent {
   id: string;
@@ -36,6 +37,7 @@ interface CalendarEvent {
 }
 
 export default function CalendarView() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
   const [, setSelectedDate] = useState<Date | null>(null);
@@ -103,6 +105,7 @@ export default function CalendarView() {
       setEvents(calendarEvents);
     } catch (err) {
       console.error('Failed to load calendar events:', err);
+      showToast('Failed to load calendar events. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -445,6 +448,8 @@ export default function CalendarView() {
           </div>
         </Card>
       </div>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

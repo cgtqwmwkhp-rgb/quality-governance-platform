@@ -112,12 +112,8 @@ def _validate_override_headers(request: Request) -> tuple[bool, Optional[str]]:
 
 def _get_user_id_from_request(request: Request) -> Optional[str]:
     """Extract user ID from request (non-PII identifier)."""
-    # Try to get from state (set by auth middleware)
     if hasattr(request.state, "user_id"):
         return str(request.state.user_id)
-    # Try to get from headers
-    if "X-User-ID" in request.headers:
-        return request.headers["X-User-ID"]
     return None
 
 

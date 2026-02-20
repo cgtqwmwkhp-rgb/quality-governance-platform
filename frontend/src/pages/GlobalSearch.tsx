@@ -25,6 +25,7 @@ import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { searchApi } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface SearchResult {
   id: string;
@@ -45,6 +46,7 @@ interface SearchFilter {
 }
 
 export default function GlobalSearch() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -122,6 +124,7 @@ export default function GlobalSearch() {
       })));
     } catch (err) {
       console.error('Search failed:', err);
+      showToast('Search failed. Please try again.', 'error');
       setResults([]);
     } finally {
       setIsSearching(false);
@@ -428,6 +431,8 @@ export default function GlobalSearch() {
           </p>
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

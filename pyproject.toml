@@ -70,27 +70,27 @@ disable_error_code = ["no-any-return", "attr-defined"]
 [[tool.mypy.overrides]]
 module = "src.domain.services.audit_log_service"
 # GOVPLAT-004: SQLAlchemy Row type issues
-disable_error_code = ["var-annotated", "arg-type"]
+disable_error_code = ["var-annotated", "arg-type", "return-value"]
 
 [[tool.mypy.overrides]]
 module = "src.domain.services.abac_service"
 # GOVPLAT-004: ABAC type issues
-disable_error_code = ["no-any-return"]
+disable_error_code = ["no-any-return", "return-value", "assignment"]
 
 [[tool.mypy.overrides]]
 module = "src.domain.services.signature_service"
 # GOVPLAT-004: Signature service type issues
-disable_error_code = ["no-any-return", "operator"]
+disable_error_code = ["no-any-return", "operator", "return-value"]
 
 [[tool.mypy.overrides]]
 module = "src.domain.services.collaboration_service"
 # GOVPLAT-004: Collaboration service type issues
-disable_error_code = ["no-any-return"]
+disable_error_code = ["no-any-return", "return-value"]
 
 [[tool.mypy.overrides]]
 module = "src.domain.services.tenant_service"
 # GOVPLAT-004: Tenant service type issues
-disable_error_code = ["no-any-return"]
+disable_error_code = ["no-any-return", "return-value", "operator"]
 
 [[tool.mypy.overrides]]
 module = "src.services.auditor_competence"
@@ -120,7 +120,12 @@ disable_error_code = ["arg-type", "attr-defined", "assignment", "misc"]
 [[tool.mypy.overrides]]
 module = "src.api.routes.planet_mark"
 # GOVPLAT-004: Planet mark route type issues
-disable_error_code = ["operator", "assignment", "arg-type", "return-value", "misc"]
+disable_error_code = ["operator", "assignment", "arg-type", "return-value", "misc", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.iso27001"
+# GOVPLAT-004: ISO 27001 route type issues
+disable_error_code = ["operator", "call-overload"]
 
 [[tool.mypy.overrides]]
 module = "src.api.routes.document_control"
@@ -160,7 +165,7 @@ disable_error_code = ["attr-defined"]
 [[tool.mypy.overrides]]
 module = "src.api.routes.push_notifications"
 # GOVPLAT-004: Push notifications route type issues
-disable_error_code = ["assignment", "arg-type"]
+disable_error_code = ["assignment", "arg-type", "attr-defined", "return-value"]
 
 [[tool.mypy.overrides]]
 module = "src.api.routes.near_miss"

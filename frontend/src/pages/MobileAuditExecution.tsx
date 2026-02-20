@@ -32,6 +32,7 @@ import {
   ThumbsDown,
   Send,
 } from 'lucide-react';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 // ============================================================================
 // TYPES
@@ -264,8 +265,10 @@ const TouchScaleInput = ({
 // Voice Recording Component
 const VoiceRecorder = ({
   onRecordingComplete,
+  onError,
 }: {
   onRecordingComplete: (audioBlob: string) => void;
+  onError?: (message: string) => void;
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -309,7 +312,7 @@ const VoiceRecorder = ({
       triggerHaptic('medium');
     } catch (err) {
       console.error('Error accessing microphone:', err);
-      alert('Could not access microphone. Please check permissions.');
+      onError?.('Could not access microphone. Please check permissions.');
     }
   };
 
@@ -421,15 +424,17 @@ const PhotoCapture = ({
 const LocationCapture = ({
   location,
   onCapture,
+  onError,
 }: {
   location?: { lat: number; lng: number };
   onCapture: (loc: { lat: number; lng: number }) => void;
+  onError?: (message: string) => void;
 }) => {
   const [isCapturing, setIsCapturing] = useState(false);
 
   const captureLocation = () => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by this device.');
+      onError?.('Geolocation is not supported by this device.');
       return;
     }
 
@@ -445,7 +450,7 @@ const LocationCapture = ({
       },
       (error) => {
         console.error('Geolocation error:', error);
-        alert('Could not get location. Please check permissions.');
+        onError?.('Could not get location. Please check permissions.');
         setIsCapturing(false);
       },
       { enableHighAccuracy: true }
@@ -490,6 +495,7 @@ const LocationCapture = ({
 export default function MobileAuditExecution() {
   const navigate = useNavigate();
   const { runId } = useParams<{ runId: string }>();
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   
   interface AuditData {
     id: string;
@@ -572,6 +578,7 @@ export default function MobileAuditExecution() {
       setResponses(existingResponses);
     } catch {
       console.error('Failed to load audit run');
+      showToast('Failed to load audit run.', 'error');
     } finally {
       setLoading(false);
     }
@@ -695,6 +702,7 @@ export default function MobileAuditExecution() {
         setIsSynced(true);
       } catch {
         console.error('Failed to sync response');
+        showToast('Failed to sync response.', 'error');
       }
     };
     syncToApi();
@@ -934,6 +942,7 @@ export default function MobileAuditExecution() {
             </div>
           </div>
         </div>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
     );
   }
@@ -1136,12 +1145,14 @@ export default function MobileAuditExecution() {
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3">
               <VoiceRecorder
                 onRecordingComplete={(audio) => updateResponse({ voiceNote: audio })}
+                onError={(msg) => showToast(msg, 'error')}
               />
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3">
               <LocationCapture
                 location={currentResponse?.location}
                 onCapture={(loc) => updateResponse({ location: loc })}
+                onError={(msg) => showToast(msg, 'error')}
               />
             </div>
           </div>
@@ -1230,6 +1241,8 @@ export default function MobileAuditExecution() {
           </button>
         </div>
       </footer>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

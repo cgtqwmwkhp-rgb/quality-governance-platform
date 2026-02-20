@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auditsApi } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 import {
   ArrowLeft,
   ArrowRight,
@@ -340,6 +341,7 @@ const SignaturePad = ({
 export default function AuditExecution() {
   const navigate = useNavigate();
   const { auditId } = useParams<{ auditId: string }>();
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   
   const [audit, setAudit] = useState<AuditData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -541,9 +543,10 @@ export default function AuditExecution() {
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       console.error('Failed to sync response:', err);
+      showToast('Failed to save response', 'error');
       setSaveStatus('error');
     }
-  }, [auditId]);
+  }, [auditId, showToast]);
 
   // Update local state + sync to API
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
@@ -597,6 +600,7 @@ export default function AuditExecution() {
       navigate('/audits');
     } catch (err) {
       console.error('Failed to complete audit:', err);
+      showToast('Failed to submit audit', 'error');
       setIsSubmitting(false);
     }
   };
@@ -612,6 +616,7 @@ export default function AuditExecution() {
       navigate('/audits');
     } catch (err) {
       console.error('Failed to save draft:', err);
+      showToast('Failed to save draft', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -1004,6 +1009,7 @@ export default function AuditExecution() {
             </button>
           </div>
         </div>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
     );
   }
@@ -1297,6 +1303,7 @@ export default function AuditExecution() {
           </button>
         </div>
       </footer>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

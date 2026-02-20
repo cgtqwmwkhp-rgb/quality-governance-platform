@@ -34,6 +34,7 @@ import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
 import { workflowsApi } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface Approval {
   id: string;
@@ -94,6 +95,7 @@ const slaColors: Record<string, string> = {
 };
 
 export default function WorkflowCenter() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<'approvals' | 'workflows' | 'templates' | 'delegation'>('approvals');
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowInstance[]>([]);
@@ -183,6 +185,7 @@ export default function WorkflowCenter() {
       }
     } catch (err) {
       console.error('Failed to load workflow data:', err);
+      showToast('Failed to load workflow data. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -214,6 +217,7 @@ export default function WorkflowCenter() {
       await loadData();
     } catch (err) {
       console.error('Approve failed:', err);
+      showToast('Failed to approve request. Please try again.', 'error');
     }
   };
 
@@ -225,6 +229,7 @@ export default function WorkflowCenter() {
       await loadData();
     } catch (err) {
       console.error('Reject failed:', err);
+      showToast('Failed to reject request. Please try again.', 'error');
     }
   };
 
@@ -238,6 +243,7 @@ export default function WorkflowCenter() {
       await loadData();
     } catch (err) {
       console.error('Bulk approve failed:', err);
+      showToast('Failed to approve selected items. Please try again.', 'error');
     }
   };
 
@@ -614,6 +620,8 @@ export default function WorkflowCenter() {
           </Card>
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

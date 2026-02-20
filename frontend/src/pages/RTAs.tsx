@@ -23,8 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 export default function RTAs() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const navigate = useNavigate()
   const [rtas, setRtas] = useState<RTA[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,6 +67,7 @@ export default function RTAs() {
       setError(null)
     } catch (err: any) {
       console.error('Failed to load RTAs:', err)
+      showToast('Failed to load RTAs. Please try again.', 'error')
       
       // Extract error details for display
       const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.name === 'AbortError'
@@ -122,6 +125,7 @@ export default function RTAs() {
       loadRtas()
     } catch (err) {
       console.error('Failed to create RTA:', err)
+      showToast('Failed to report RTA. Please try again.', 'error')
     } finally {
       setCreating(false)
     }
@@ -414,6 +418,8 @@ export default function RTAs() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }
