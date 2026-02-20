@@ -273,7 +273,7 @@ class BowTieElement(Base):
 class EnterpriseKeyRiskIndicator(Base):
     """Key Risk Indicators (KRIs) for monitoring (Enterprise)"""
 
-    __tablename__ = "key_risk_indicators"
+    __tablename__ = "enterprise_key_risk_indicators"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
