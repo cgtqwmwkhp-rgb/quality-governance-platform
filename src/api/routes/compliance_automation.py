@@ -223,6 +223,20 @@ async def get_compliance_trend(
 # ============================================================================
 
 
+@router.get("/riddor/submissions")
+async def list_riddor_submissions(
+    db: DbSession,
+    current_user: CurrentUser,
+    status_filter: Optional[str] = None,
+):
+    """List RIDDOR submissions."""
+    submissions = await compliance_automation_service.get_riddor_submissions(
+        db=db,
+        status=status_filter,
+    )
+    return {"submissions": submissions, "total": len(submissions)}
+
+
 @router.post("/riddor/check")
 async def check_riddor_required(
     incident_data: dict,
