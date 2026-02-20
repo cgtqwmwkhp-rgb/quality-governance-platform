@@ -16,12 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, update
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.models.notification import (
-    Notification,
-    NotificationPreference,
-    NotificationPriority,
-    NotificationType,
-)
+from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
 
 router = APIRouter()
 

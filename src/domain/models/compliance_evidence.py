@@ -9,8 +9,9 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import DateTime
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import TimestampMixin

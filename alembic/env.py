@@ -18,6 +18,8 @@ from src.domain.models import (
     Complaint,
     ComplaintAction,
     Control,
+    EscalationLog,
+    EscalationRule,
     Incident,
     IncidentAction,
     OperationalRiskControl,
@@ -30,13 +32,11 @@ from src.domain.models import (
     RTAAction,
     Standard,
     User,
-    WorkflowTemplate,
+    UserDelegation,
+    WorkflowApprovalRequest,
     WorkflowInstance,
     WorkflowStep,
-    WorkflowApprovalRequest,
-    EscalationRule,
-    EscalationLog,
-    UserDelegation,
+    WorkflowTemplate,
 )
 
 # Import all models to ensure they are registered with Base.metadata
