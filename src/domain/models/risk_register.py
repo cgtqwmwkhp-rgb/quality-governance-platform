@@ -228,7 +228,7 @@ class RiskControlMapping(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
     control_id: Mapped[int] = mapped_column(
-        ForeignKey("risk_controls.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("enterprise_risk_controls.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Mapping details
@@ -258,7 +258,7 @@ class BowTieElement(Base):
 
     # For barriers
     barrier_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # hard, soft
-    linked_control_id: Mapped[Optional[int]] = mapped_column(ForeignKey("risk_controls.id"), nullable=True)
+    linked_control_id: Mapped[Optional[int]] = mapped_column(ForeignKey("enterprise_risk_controls.id"), nullable=True)
     effectiveness: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Ordering
