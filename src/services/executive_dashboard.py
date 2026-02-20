@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.complaint import Complaint
+from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, ThresholdStatus
 from src.domain.models.near_miss import NearMiss
@@ -44,9 +44,19 @@ class ExecutiveDashboardService:
         """Get complete executive dashboard with all KPIs."""
         cutoff = datetime.utcnow() - timedelta(days=period_days)
 
-        empty_summary = {"total_in_period": 0, "open": 0}
-        empty_risk = {"total_active": 0, "by_level": {}, "open": 0}
-        empty_kri = {"total": 0, "triggered": 0, "pending_alerts": 0}
+        empty_summary = {"total_in_period": 0, "open": 0, "critical_high": 0}
+        empty_risk = {
+            "total_active": 0,
+            "by_level": {},
+            "high_critical": 0,
+            "average_score": 0,
+        }
+        empty_kri = {
+            "total_active": 0,
+            "by_status": {"green": 0, "amber": 0, "red": 0, "not_measured": 0},
+            "at_risk": 0,
+            "pending_alerts": 0,
+        }
         empty_compliance = {"total_assigned": 0, "completed": 0, "overdue": 0, "completion_rate": 100}
         empty_sla = {"total_tracked": 0, "met": 0, "breached": 0, "compliance_rate": 100}
 
@@ -192,7 +202,14 @@ class ExecutiveDashboardService:
         # Open complaints
         open_result = await self.db.execute(
             select(func.count(Complaint.id)).where(
-                Complaint.status.in_(["received", "acknowledged", "investigating", "action_required"])
+                Complaint.status.in_(
+                    [
+                        ComplaintStatus.RECEIVED,
+                        ComplaintStatus.ACKNOWLEDGED,
+                        ComplaintStatus.UNDER_INVESTIGATION,
+                        ComplaintStatus.PENDING_RESPONSE,
+                    ]
+                )
             )
         )
         open_count = open_result.scalar() or 0
@@ -202,7 +219,7 @@ class ExecutiveDashboardService:
             select(func.count(Complaint.id)).where(
                 and_(
                     Complaint.closed_at >= cutoff,
-                    Complaint.status == "closed",
+                    Complaint.status == ComplaintStatus.CLOSED,
                 )
             )
         )
