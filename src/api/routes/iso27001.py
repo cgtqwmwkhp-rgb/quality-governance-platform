@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.iso27001 import (
