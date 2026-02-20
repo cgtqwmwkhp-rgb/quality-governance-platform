@@ -20,6 +20,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { cn } from '../../helpers/utils';
+import { formTemplatesApi } from '../../services/api';
 
 // Field type definitions
 const FIELD_TYPES = [
@@ -126,8 +127,51 @@ export default function FormBuilder() {
   // Load existing template if editing
   useEffect(() => {
     if (templateId) {
-      // In real implementation, fetch from API
-      // For now, use placeholder
+      (async () => {
+        try {
+          const data = await formTemplatesApi.getById(Number(templateId));
+          if (data) {
+            setTemplate({
+              id: data.id,
+              name: data.name || '',
+              slug: data.slug || '',
+              description: data.description || '',
+              form_type: data.form_type || 'incident',
+              icon: data.icon,
+              color: data.color,
+              allow_drafts: data.allow_drafts ?? true,
+              allow_attachments: data.allow_attachments ?? true,
+              require_signature: data.require_signature ?? false,
+              auto_assign_reference: data.auto_assign_reference ?? true,
+              reference_prefix: data.reference_prefix,
+              notify_on_submit: data.notify_on_submit ?? true,
+              notification_emails: (data as any).notification_emails || '',
+              steps: (data.steps || []).map((s: any, i: number) => ({
+                id: s.id ? String(s.id) : `step-${i}`,
+                name: s.name || `Step ${i + 1}`,
+                description: s.description || '',
+                order: s.order ?? i,
+                icon: s.icon,
+                fields: (s.fields || []).map((f: any) => ({
+                  id: f.id ? String(f.id) : `field-${Date.now()}-${Math.random()}`,
+                  name: f.name || '',
+                  label: f.label || '',
+                  field_type: f.field_type || 'text',
+                  order: f.order ?? 0,
+                  placeholder: f.placeholder,
+                  help_text: f.help_text,
+                  is_required: f.is_required ?? false,
+                  options: f.options,
+                  width: f.width || 'full',
+                })),
+                isExpanded: i === 0,
+              })),
+            });
+          }
+        } catch (err) {
+          console.error('Failed to load template', err);
+        }
+      })();
     }
   }, [templateId]);
 
@@ -228,12 +272,46 @@ export default function FormBuilder() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // In real implementation, save to API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const payload: any = {
+        name: template.name,
+        slug: template.slug || generateSlug(template.name),
+        description: template.description,
+        form_type: template.form_type,
+        allow_drafts: template.allow_drafts,
+        allow_attachments: template.allow_attachments,
+        require_signature: template.require_signature,
+        auto_assign_reference: template.auto_assign_reference,
+        reference_prefix: template.reference_prefix,
+        notify_on_submit: template.notify_on_submit,
+        steps: template.steps.map((s, i) => ({
+          name: s.name,
+          description: s.description,
+          order: i,
+          fields: s.fields.map((f, fi) => ({
+            name: f.name,
+            label: f.label,
+            field_type: f.field_type,
+            order: fi,
+            placeholder: f.placeholder,
+            help_text: f.help_text,
+            is_required: f.is_required,
+            options: f.options,
+            width: f.width,
+          })),
+        })),
+      };
+
+      if (template.id) {
+        await formTemplatesApi.update(template.id, payload);
+      } else {
+        const created = await formTemplatesApi.create(payload);
+        setTemplate(prev => ({ ...prev, id: created.id }));
+      }
+
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
-    } catch {
-      console.error('Failed to save template');
+    } catch (err) {
+      console.error('Failed to save template', err);
     } finally {
       setIsSaving(false);
     }
