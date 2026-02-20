@@ -115,26 +115,80 @@ class ComplianceAutomationService:
                 title = f"Gap Analysis - {reg.title}"
                 description = f"Analysis triggered by regulatory update: {reg.source_reference}"
 
-        gaps_data: List[Dict[str, Any]] = [
-            {
-                "clause": "8.2",
-                "requirement": "Operational control procedures",
-                "current_state": "Partially implemented",
-                "gap_description": "Procedures need updating for new requirements",
-                "severity": "high",
-                "effort_hours": 24,
-                "recommendation": "Review and update operational procedures",
-            },
-            {
-                "clause": "7.2",
-                "requirement": "Competence and training records",
-                "current_state": "Records exist but gaps in coverage",
-                "gap_description": "Training records incomplete for new requirements",
-                "severity": "medium",
-                "effort_hours": 16,
-                "recommendation": "Conduct training needs analysis and update records",
-            },
-        ]
+        gaps_data: List[Dict[str, Any]] = []
+
+        if reg:
+            clauses = reg.affected_clauses or []
+            standards = reg.affected_standards or []
+            for clause in clauses:
+                gaps_data.append(
+                    {
+                        "clause": clause,
+                        "requirement": f"Clause {clause} compliance for {', '.join(standards) or 'applicable standard'}",
+                        "current_state": "Requires review against updated regulation",
+                        "gap_description": (
+                            f"Regulatory change '{reg.title}' affects clause {clause}. "
+                            "Current procedures and documentation must be assessed for alignment."
+                        ),
+                        "severity": "high" if reg.impact in ("critical", "high") else "medium",
+                        "effort_hours": 24 if reg.impact in ("critical", "high") else 12,
+                        "recommendation": (
+                            f"Review clause {clause} documentation and procedures against "
+                            f"the updated requirements from {reg.source_reference}. "
+                            "Update SOPs and notify relevant personnel."
+                        ),
+                    }
+                )
+            if not clauses:
+                gaps_data.append(
+                    {
+                        "clause": "General",
+                        "requirement": f"Overall compliance with {', '.join(standards) or 'regulatory update'}",
+                        "current_state": "Pending assessment",
+                        "gap_description": (f"Regulatory update '{reg.title}' requires a general compliance review."),
+                        "severity": "medium",
+                        "effort_hours": 16,
+                        "recommendation": "Conduct a thorough review of affected processes and documentation.",
+                    }
+                )
+        else:
+            all_audits_q = (
+                select(ScheduledAudit)
+                .where(ScheduledAudit.is_active == True)  # noqa: E712
+                .where(ScheduledAudit.next_due_date < datetime.utcnow())
+            )
+            overdue_result = await db.execute(all_audits_q)
+            overdue_audits = overdue_result.scalars().all()
+            for oa in overdue_audits:
+                stds = oa.standard_ids or []
+                gaps_data.append(
+                    {
+                        "clause": "Audit Schedule",
+                        "requirement": f"Timely completion of '{oa.name}'",
+                        "current_state": "Overdue",
+                        "gap_description": (
+                            f"Scheduled audit '{oa.name}' is overdue since " f"{oa.next_due_date.strftime('%Y-%m-%d')}."
+                        ),
+                        "severity": "high",
+                        "effort_hours": 8,
+                        "recommendation": (
+                            f"Complete overdue {oa.audit_type} audit for "
+                            f"{', '.join(stds) if stds else oa.department or 'assigned department'}."
+                        ),
+                    }
+                )
+            if not overdue_audits:
+                gaps_data.append(
+                    {
+                        "clause": "General",
+                        "requirement": "Overall compliance posture review",
+                        "current_state": "No specific gaps detected from overdue audits",
+                        "gap_description": "No overdue audits found. General compliance health check.",
+                        "severity": "low",
+                        "effort_hours": 4,
+                        "recommendation": "Continue monitoring and maintain current compliance cadence.",
+                    }
+                )
 
         total = len(gaps_data)
         critical = sum(1 for g in gaps_data if g["severity"] == "critical")
@@ -150,13 +204,7 @@ class ComplianceAutomationService:
             total_gaps=total,
             critical_gaps=critical,
             high_gaps=high,
-            recommendations={
-                "items": [
-                    "Prioritize high-severity gaps first",
-                    "Create CAPA for each identified gap",
-                    "Schedule follow-up audit in 3 months",
-                ]
-            },
+            recommendations={"items": [g["recommendation"] for g in gaps_data[:5]]},
             estimated_effort_hours=effort,
             status="pending",
         )
@@ -425,6 +473,18 @@ class ComplianceAutomationService:
         ]
 
     # ==================== RIDDOR Automation ====================
+
+    async def get_riddor_submissions(
+        self,
+        db: AsyncSession,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get RIDDOR submissions."""
+        query = select(RIDDORSubmission).order_by(RIDDORSubmission.created_at.desc())
+        if status:
+            query = query.where(RIDDORSubmission.submission_status == status)
+        result = await db.execute(query)
+        return [_row_to_dict(s) for s in result.scalars().all()]
 
     async def check_riddor_required(
         self,

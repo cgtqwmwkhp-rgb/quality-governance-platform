@@ -2046,6 +2046,11 @@ export const complianceAutomationApi = {
     if (params?.months) sp.set('months', String(params.months))
     return api.get<{ trend: unknown[]; period_months: number }>(`/api/v1/compliance-automation/score/trend?${sp}`)
   },
+  listRiddorSubmissions: (status?: string) => {
+    const sp = new URLSearchParams()
+    if (status) sp.set('status_filter', status)
+    return api.get<{ submissions: unknown[]; total: number }>(`/api/v1/compliance-automation/riddor/submissions?${sp}`)
+  },
   checkRiddor: (incidentData: Record<string, unknown>) =>
     api.post<{ is_riddor: boolean; riddor_types: string[]; deadline: string | null; submission_url: string | null }>('/api/v1/compliance-automation/riddor/check', incidentData),
   prepareRiddor: (incidentId: number, riddorType: string) => {
