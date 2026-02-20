@@ -149,12 +149,15 @@ async def list_notifications(
 @router.get("/unread-count")
 async def get_unread_count(db: DbSession, current_user: CurrentUser):
     """Get the count of unread notifications for the current user."""
-    count = await db.scalar(
-        select(func.count()).where(
-            Notification.user_id == current_user.id,
-            Notification.is_read == False,
+    count = (
+        await db.scalar(
+            select(func.count()).where(
+                Notification.user_id == current_user.id,
+                Notification.is_read == False,
+            )
         )
-    ) or 0
+        or 0
+    )
     return {"unread_count": count}
 
 
@@ -232,9 +235,7 @@ async def delete_notification(notification_id: int, db: DbSession, current_user:
 @router.get("/preferences")
 async def get_notification_preferences(db: DbSession, current_user: CurrentUser):
     """Get notification preferences for the current user."""
-    result = await db.execute(
-        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
-    )
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
     if not prefs:
@@ -272,9 +273,7 @@ async def update_notification_preferences(
     current_user: CurrentUser,
 ):
     """Update notification preferences for the current user."""
-    result = await db.execute(
-        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
-    )
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
     if not prefs:

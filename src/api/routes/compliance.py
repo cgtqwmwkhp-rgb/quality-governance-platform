@@ -103,14 +103,10 @@ class GapClause(BaseModel):
 # ============================================================================
 
 
-async def _load_evidence_links(
-    db, standard: Optional[ISOStandard] = None
-) -> list[EvidenceLink]:
+async def _load_evidence_links(db, standard: Optional[ISOStandard] = None) -> list[EvidenceLink]:
     """Query all active evidence links from the database and convert to
     the EvidenceLink dataclass used by the ISOComplianceService."""
-    query = select(ComplianceEvidenceLink).where(
-        ComplianceEvidenceLink.deleted_at.is_(None)
-    )
+    query = select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.deleted_at.is_(None))
     result = await db.execute(query)
     rows = result.scalars().all()
 
@@ -164,9 +160,14 @@ async def list_clauses(
 
     return [
         ClauseResponse(
-            id=c.id, standard=c.standard.value, clause_number=c.clause_number,
-            title=c.title, description=c.description, keywords=c.keywords,
-            parent_clause=c.parent_clause, level=c.level,
+            id=c.id,
+            standard=c.standard.value,
+            clause_number=c.clause_number,
+            title=c.title,
+            description=c.description,
+            keywords=c.keywords,
+            parent_clause=c.parent_clause,
+            level=c.level,
         )
         for c in clauses
     ]
@@ -179,9 +180,14 @@ async def get_clause(clause_id: str):
     if not clause:
         raise HTTPException(status_code=404, detail=f"Clause not found: {clause_id}")
     return ClauseResponse(
-        id=clause.id, standard=clause.standard.value, clause_number=clause.clause_number,
-        title=clause.title, description=clause.description, keywords=clause.keywords,
-        parent_clause=clause.parent_clause, level=clause.level,
+        id=clause.id,
+        standard=clause.standard.value,
+        clause_number=clause.clause_number,
+        title=clause.title,
+        description=clause.description,
+        keywords=clause.keywords,
+        parent_clause=clause.parent_clause,
+        level=clause.level,
     )
 
 
@@ -240,15 +246,19 @@ async def link_evidence(
         db.add(link)
         await db.flush()
 
-        created.append({
-            "id": link.id,
-            "entity_type": link.entity_type,
-            "entity_id": link.entity_id,
-            "clause_id": link.clause_id,
-            "linked_by": method.value,
-            "confidence": link.confidence,
-            "created_at": link.created_at.isoformat() if link.created_at else datetime.now(timezone.utc).isoformat(),
-        })
+        created.append(
+            {
+                "id": link.id,
+                "entity_type": link.entity_type,
+                "entity_id": link.entity_id,
+                "clause_id": link.clause_id,
+                "linked_by": method.value,
+                "confidence": link.confidence,
+                "created_at": (
+                    link.created_at.isoformat() if link.created_at else datetime.now(timezone.utc).isoformat()
+                ),
+            }
+        )
 
     return {
         "status": "success",
@@ -268,9 +278,7 @@ async def list_evidence_links(
     size: int = Query(50, ge=1, le=200),
 ):
     """List evidence links with optional filtering."""
-    query = select(ComplianceEvidenceLink).where(
-        ComplianceEvidenceLink.deleted_at.is_(None)
-    )
+    query = select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.deleted_at.is_(None))
     if entity_type:
         query = query.where(ComplianceEvidenceLink.entity_type == entity_type)
     if entity_id:
@@ -308,9 +316,7 @@ async def delete_evidence_link(
     current_user: CurrentUser,
 ):
     """Soft-delete an evidence link."""
-    result = await db.execute(
-        select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.id == link_id)
-    )
+    result = await db.execute(select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.id == link_id))
     link = result.scalar_one_or_none()
     if not link:
         raise HTTPException(status_code=404, detail="Evidence link not found")

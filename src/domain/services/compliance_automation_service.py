@@ -81,9 +81,7 @@ class ComplianceAutomationService:
         action_notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Mark a regulatory update as reviewed."""
-        result = await db.execute(
-            select(RegulatoryUpdate).where(RegulatoryUpdate.id == update_id)
-        )
+        result = await db.execute(select(RegulatoryUpdate).where(RegulatoryUpdate.id == update_id))
         update = result.scalar_one_or_none()
         if not update:
             raise ValueError(f"Regulatory update {update_id} not found")
@@ -111,9 +109,7 @@ class ComplianceAutomationService:
         description = None
 
         if regulatory_update_id:
-            result = await db.execute(
-                select(RegulatoryUpdate).where(RegulatoryUpdate.id == regulatory_update_id)
-            )
+            result = await db.execute(select(RegulatoryUpdate).where(RegulatoryUpdate.id == regulatory_update_id))
             reg = result.scalar_one_or_none()
             if reg:
                 title = f"Gap Analysis - {reg.title}"
@@ -216,21 +212,37 @@ class ComplianceAutomationService:
         now = datetime.utcnow()
 
         expired_q = select(func.count()).select_from(Certificate).where(Certificate.expiry_date < now)
-        exp_7_q = select(func.count()).select_from(Certificate).where(
-            Certificate.expiry_date >= now,
-            Certificate.expiry_date <= now + timedelta(days=7),
+        exp_7_q = (
+            select(func.count())
+            .select_from(Certificate)
+            .where(
+                Certificate.expiry_date >= now,
+                Certificate.expiry_date <= now + timedelta(days=7),
+            )
         )
-        exp_30_q = select(func.count()).select_from(Certificate).where(
-            Certificate.expiry_date >= now,
-            Certificate.expiry_date <= now + timedelta(days=30),
+        exp_30_q = (
+            select(func.count())
+            .select_from(Certificate)
+            .where(
+                Certificate.expiry_date >= now,
+                Certificate.expiry_date <= now + timedelta(days=30),
+            )
         )
-        exp_90_q = select(func.count()).select_from(Certificate).where(
-            Certificate.expiry_date >= now,
-            Certificate.expiry_date <= now + timedelta(days=90),
+        exp_90_q = (
+            select(func.count())
+            .select_from(Certificate)
+            .where(
+                Certificate.expiry_date >= now,
+                Certificate.expiry_date <= now + timedelta(days=90),
+            )
         )
-        critical_q = select(func.count()).select_from(Certificate).where(
-            Certificate.is_critical == True,  # noqa: E712
-            Certificate.expiry_date <= now + timedelta(days=90),
+        critical_q = (
+            select(func.count())
+            .select_from(Certificate)
+            .where(
+                Certificate.is_critical == True,  # noqa: E712
+                Certificate.expiry_date <= now + timedelta(days=90),
+            )
         )
 
         expired = await db.scalar(expired_q) or 0
@@ -261,8 +273,16 @@ class ComplianceAutomationService:
             entity_id=data["entity_id"],
             entity_name=data.get("entity_name"),
             issuing_body=data.get("issuing_body"),
-            issue_date=datetime.fromisoformat(data["issue_date"]) if isinstance(data["issue_date"], str) else data["issue_date"],
-            expiry_date=datetime.fromisoformat(data["expiry_date"]) if isinstance(data["expiry_date"], str) else data["expiry_date"],
+            issue_date=(
+                datetime.fromisoformat(data["issue_date"])
+                if isinstance(data["issue_date"], str)
+                else data["issue_date"]
+            ),
+            expiry_date=(
+                datetime.fromisoformat(data["expiry_date"])
+                if isinstance(data["expiry_date"], str)
+                else data["expiry_date"]
+            ),
             reminder_days=data.get("reminder_days", 30),
             is_critical=data.get("is_critical", False),
             notes=data.get("notes"),
@@ -281,7 +301,9 @@ class ComplianceAutomationService:
     ) -> List[Dict[str, Any]]:
         """Get scheduled audits."""
         now = datetime.utcnow()
-        query = select(ScheduledAudit).where(ScheduledAudit.is_active == True).order_by(ScheduledAudit.next_due_date.asc())  # noqa: E712
+        query = (
+            select(ScheduledAudit).where(ScheduledAudit.is_active == True).order_by(ScheduledAudit.next_due_date.asc())
+        )  # noqa: E712
 
         if overdue:
             query = query.where(ScheduledAudit.next_due_date < now)
@@ -312,7 +334,11 @@ class ComplianceAutomationService:
             description=data.get("description"),
             audit_type=data["audit_type"],
             frequency=data["frequency"],
-            next_due_date=datetime.fromisoformat(data["next_due_date"]) if isinstance(data["next_due_date"], str) else data["next_due_date"],
+            next_due_date=(
+                datetime.fromisoformat(data["next_due_date"])
+                if isinstance(data["next_due_date"], str)
+                else data["next_due_date"]
+            ),
             department=data.get("department"),
             standard_ids=data.get("standard_ids"),
             reminder_days_before=data.get("reminder_days_before", 7),
@@ -351,7 +377,11 @@ class ComplianceAutomationService:
             d["overall_score"] = score.percentage
             d["previous_score"] = score.previous_score
             d["change"] = score.score_change or 0
-            d["trend"] = "improving" if (score.score_change or 0) > 0 else "declining" if (score.score_change or 0) < 0 else "stable"
+            d["trend"] = (
+                "improving"
+                if (score.score_change or 0) > 0
+                else "declining" if (score.score_change or 0) < 0 else "stable"
+            )
             return d
 
         return {
@@ -406,7 +436,10 @@ class ComplianceAutomationService:
         if incident_data.get("fatality"):
             riddor_types.append("death")
         if incident_data.get("injury_type") in [
-            "fracture", "amputation", "dislocation", "loss_of_sight",
+            "fracture",
+            "amputation",
+            "dislocation",
+            "loss_of_sight",
         ]:
             riddor_types.append("specified_injury")
         if incident_data.get("days_off_work", 0) > 7:
@@ -491,9 +524,7 @@ class ComplianceAutomationService:
 
     async def seed_default_data(self, db: AsyncSession) -> None:
         """Seed default regulatory updates and certificates if tables are empty."""
-        count_result = await db.scalar(
-            select(func.count()).select_from(RegulatoryUpdate)
-        )
+        count_result = await db.scalar(select(func.count()).select_from(RegulatoryUpdate))
         if count_result and count_result > 0:
             logger.info("Compliance automation data already exists, skipping seed")
             return

@@ -40,9 +40,21 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "sla_hours": 24,
         "warning_hours": 20,
         "steps": [
-            {"name": "Initial Review", "type": "approval", "approval_type": "sequential", "approvers": ["safety_manager"], "sla_hours": 4},
+            {
+                "name": "Initial Review",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["safety_manager"],
+                "sla_hours": 4,
+            },
             {"name": "HSE Notification", "type": "task", "assignee_role": "safety_manager", "sla_hours": 8},
-            {"name": "Management Sign-off", "type": "approval", "approval_type": "sequential", "approvers": ["operations_director"], "sla_hours": 4},
+            {
+                "name": "Management Sign-off",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["operations_director"],
+                "sla_hours": 4,
+            },
             {"name": "Final Submission", "type": "task", "assignee_role": "compliance_officer", "sla_hours": 4},
         ],
         "escalation_rules": [{"trigger": "sla_breach", "escalate_to": "operations_director", "priority": "critical"}],
@@ -58,9 +70,21 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "warning_hours": 120,
         "steps": [
             {"name": "Root Cause Analysis", "type": "task", "assignee": "action_owner", "sla_hours": 48},
-            {"name": "Action Plan Review", "type": "approval", "approval_type": "sequential", "approvers": ["quality_manager"], "sla_hours": 24},
+            {
+                "name": "Action Plan Review",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["quality_manager"],
+                "sla_hours": 24,
+            },
             {"name": "Implementation", "type": "task", "assignee": "action_owner", "sla_hours": 72},
-            {"name": "Effectiveness Verification", "type": "approval", "approval_type": "sequential", "approvers": ["quality_manager"], "sla_hours": 24},
+            {
+                "name": "Effectiveness Verification",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["quality_manager"],
+                "sla_hours": 24,
+            },
         ],
     },
     {
@@ -75,7 +99,13 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "steps": [
             {"name": "NCR Registration", "type": "task", "assignee_role": "quality_team", "sla_hours": 8},
             {"name": "Root Cause Investigation", "type": "task", "assignee": "finding_owner", "sla_hours": 24},
-            {"name": "Corrective Action Plan", "type": "approval", "approval_type": "parallel", "approvers": ["quality_manager", "department_head"], "sla_hours": 16},
+            {
+                "name": "Corrective Action Plan",
+                "type": "approval",
+                "approval_type": "parallel",
+                "approvers": ["quality_manager", "department_head"],
+                "sla_hours": 16,
+            },
             {"name": "Implementation & Closure", "type": "task", "assignee": "finding_owner", "sla_hours": 24},
         ],
     },
@@ -92,9 +122,21 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
             {"name": "Initial Assessment", "type": "task", "assignee_role": "safety_manager", "sla_hours": 4},
             {"name": "Evidence Collection", "type": "task", "assignee_role": "investigator", "sla_hours": 24},
             {"name": "Root Cause Analysis", "type": "task", "assignee_role": "investigator", "sla_hours": 48},
-            {"name": "Findings Review", "type": "approval", "approval_type": "sequential", "approvers": ["safety_manager", "operations_manager"], "sla_hours": 24},
+            {
+                "name": "Findings Review",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["safety_manager", "operations_manager"],
+                "sla_hours": 24,
+            },
             {"name": "Action Assignment", "type": "task", "assignee_role": "safety_manager", "sla_hours": 8},
-            {"name": "Management Sign-off", "type": "approval", "approval_type": "sequential", "approvers": ["operations_director"], "sla_hours": 16},
+            {
+                "name": "Management Sign-off",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["operations_director"],
+                "sla_hours": 16,
+            },
         ],
     },
     {
@@ -107,9 +149,27 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "sla_hours": 48,
         "warning_hours": 36,
         "steps": [
-            {"name": "Technical Review", "type": "approval", "approval_type": "sequential", "approvers": ["document_owner"], "sla_hours": 24},
-            {"name": "Quality Review", "type": "approval", "approval_type": "sequential", "approvers": ["quality_manager"], "sla_hours": 16},
-            {"name": "Final Approval", "type": "approval", "approval_type": "sequential", "approvers": ["document_controller"], "sla_hours": 8},
+            {
+                "name": "Technical Review",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["document_owner"],
+                "sla_hours": 24,
+            },
+            {
+                "name": "Quality Review",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["quality_manager"],
+                "sla_hours": 16,
+            },
+            {
+                "name": "Final Approval",
+                "type": "approval",
+                "approval_type": "sequential",
+                "approvers": ["document_controller"],
+                "sla_hours": 8,
+            },
         ],
     },
 ]
@@ -119,22 +179,22 @@ async def seed_default_templates(db: AsyncSession) -> int:
     """Insert default templates if they don't already exist. Returns count of newly created."""
     created = 0
     for tpl in DEFAULT_TEMPLATES:
-        result = await db.execute(
-            select(WorkflowTemplate).where(WorkflowTemplate.code == tpl["code"])
-        )
+        result = await db.execute(select(WorkflowTemplate).where(WorkflowTemplate.code == tpl["code"]))
         if result.scalar_one_or_none() is None:
-            db.add(WorkflowTemplate(
-                name=tpl["name"],
-                code=tpl["code"],
-                description=tpl["description"],
-                category=tpl["category"],
-                trigger_entity_type=tpl["trigger_entity_type"],
-                trigger_conditions=tpl.get("trigger_conditions"),
-                sla_hours=tpl.get("sla_hours"),
-                warning_hours=tpl.get("warning_hours"),
-                steps=tpl["steps"],
-                escalation_rules=tpl.get("escalation_rules"),
-            ))
+            db.add(
+                WorkflowTemplate(
+                    name=tpl["name"],
+                    code=tpl["code"],
+                    description=tpl["description"],
+                    category=tpl["category"],
+                    trigger_entity_type=tpl["trigger_entity_type"],
+                    trigger_conditions=tpl.get("trigger_conditions"),
+                    sla_hours=tpl.get("sla_hours"),
+                    warning_hours=tpl.get("warning_hours"),
+                    steps=tpl["steps"],
+                    escalation_rules=tpl.get("escalation_rules"),
+                )
+            )
             created += 1
     if created:
         await db.flush()
@@ -151,9 +211,7 @@ async def list_templates(db: AsyncSession, category: Optional[str] = None) -> Li
 
 
 async def get_template(db: AsyncSession, template_code: str) -> Optional[WorkflowTemplate]:
-    result = await db.execute(
-        select(WorkflowTemplate).where(WorkflowTemplate.code == template_code)
-    )
+    result = await db.execute(select(WorkflowTemplate).where(WorkflowTemplate.code == template_code))
     return result.scalar_one_or_none()
 
 
@@ -220,17 +278,13 @@ async def start_workflow(
 
 
 async def get_instance(db: AsyncSession, instance_id: int) -> Optional[WorkflowInstance]:
-    result = await db.execute(
-        select(WorkflowInstance).where(WorkflowInstance.id == instance_id)
-    )
+    result = await db.execute(select(WorkflowInstance).where(WorkflowInstance.id == instance_id))
     return result.scalar_one_or_none()
 
 
 async def get_instance_steps(db: AsyncSession, instance_id: int) -> List[WorkflowStep]:
     result = await db.execute(
-        select(WorkflowStep)
-        .where(WorkflowStep.instance_id == instance_id)
-        .order_by(WorkflowStep.step_number)
+        select(WorkflowStep).where(WorkflowStep.instance_id == instance_id).order_by(WorkflowStep.step_number)
     )
     return list(result.scalars().all())
 
@@ -383,19 +437,21 @@ async def get_pending_approvals(db: AsyncSession, user_id: int) -> List[Dict[str
             elif step.due_at - now < timedelta(hours=4):
                 sla_status = "warning"
 
-        approvals.append({
-            "id": step.id,
-            "workflow_id": inst.id,
-            "workflow_name": tpl.name,
-            "step_name": step.step_name,
-            "entity_type": inst.entity_type,
-            "entity_id": inst.entity_id,
-            "entity_title": f"{inst.entity_type.title()} {inst.entity_id}",
-            "requested_at": (step.started_at or inst.started_at).isoformat(),
-            "due_at": step.due_at.isoformat() if step.due_at else None,
-            "priority": inst.priority,
-            "sla_status": sla_status,
-        })
+        approvals.append(
+            {
+                "id": step.id,
+                "workflow_id": inst.id,
+                "workflow_name": tpl.name,
+                "step_name": step.step_name,
+                "entity_type": inst.entity_type,
+                "entity_id": inst.entity_id,
+                "entity_title": f"{inst.entity_type.title()} {inst.entity_id}",
+                "requested_at": (step.started_at or inst.started_at).isoformat(),
+                "due_at": step.due_at.isoformat() if step.due_at else None,
+                "priority": inst.priority,
+                "sla_status": sla_status,
+            }
+        )
 
     return approvals
 
@@ -407,9 +463,7 @@ async def approve_step(
     notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Approve the given step and advance the workflow."""
-    result = await db.execute(
-        select(WorkflowStep).where(WorkflowStep.id == step_id)
-    )
+    result = await db.execute(select(WorkflowStep).where(WorkflowStep.id == step_id))
     step = result.scalar_one_or_none()
     if step is None:
         raise ValueError(f"Step {step_id} not found")
@@ -432,9 +486,7 @@ async def reject_step(
     reason: str,
 ) -> Dict[str, Any]:
     """Reject the given step, marking the workflow as rejected."""
-    result = await db.execute(
-        select(WorkflowStep).where(WorkflowStep.id == step_id)
-    )
+    result = await db.execute(select(WorkflowStep).where(WorkflowStep.id == step_id))
     step = result.scalar_one_or_none()
     if step is None:
         raise ValueError(f"Step {step_id} not found")
@@ -511,14 +563,16 @@ async def check_escalations(db: AsyncSession) -> List[Dict[str, Any]]:
         inst.sla_breached = True
         inst.updated_at = now
 
-        escalations.append({
-            "workflow_id": inst.id,
-            "template": tpl.code,
-            "reason": "SLA breach",
-            "hours_overdue": hours_overdue,
-            "current_step": inst.current_step_name,
-            "recommended_action": "Escalate to management",
-        })
+        escalations.append(
+            {
+                "workflow_id": inst.id,
+                "template": tpl.code,
+                "reason": "SLA breach",
+                "hours_overdue": hours_overdue,
+                "current_step": inst.current_step_name,
+                "recommended_action": "Escalate to management",
+            }
+        )
 
     if escalations:
         await db.flush()
@@ -607,9 +661,7 @@ async def set_delegation(
 
 
 async def cancel_delegation(db: AsyncSession, delegation_id: int) -> bool:
-    result = await db.execute(
-        select(UserDelegation).where(UserDelegation.id == delegation_id)
-    )
+    result = await db.execute(select(UserDelegation).where(UserDelegation.id == delegation_id))
     delegation = result.scalar_one_or_none()
     if delegation is None:
         return False
@@ -630,8 +682,7 @@ async def get_workflow_stats(db: AsyncSession) -> Dict[str, Any]:
     # Total counts by status
     status_counts = {}
     result = await db.execute(
-        select(WorkflowInstance.status, func.count(WorkflowInstance.id))
-        .group_by(WorkflowInstance.status)
+        select(WorkflowInstance.status, func.count(WorkflowInstance.id)).group_by(WorkflowInstance.status)
     )
     for row_status, cnt in result.all():
         status_counts[row_status] = cnt

@@ -161,7 +161,11 @@ async def list_workflow_instances(
 ):
     """List workflow instances with filtering and pagination."""
     instances, total = await engine.list_instances(
-        db, status=status, entity_type=entity_type, page=page, page_size=size,
+        db,
+        status=status,
+        entity_type=entity_type,
+        page=page,
+        page_size=size,
     )
 
     items = []
@@ -179,18 +183,20 @@ async def list_workflow_instances(
             elif inst.sla_warning_at and now > inst.sla_warning_at:
                 sla_status = "warning"
 
-        items.append({
-            "id": inst.id,
-            "template_id": inst.template_id,
-            "entity_type": inst.entity_type,
-            "entity_id": inst.entity_id,
-            "status": inst.status,
-            "priority": inst.priority,
-            "current_step": inst.current_step_name or "",
-            "progress": progress,
-            "sla_status": sla_status,
-            "started_at": inst.started_at.isoformat() if inst.started_at else None,
-        })
+        items.append(
+            {
+                "id": inst.id,
+                "template_id": inst.template_id,
+                "entity_type": inst.entity_type,
+                "entity_id": inst.entity_id,
+                "status": inst.status,
+                "priority": inst.priority,
+                "current_step": inst.current_step_name or "",
+                "progress": progress,
+                "sla_status": sla_status,
+                "started_at": inst.started_at.isoformat() if inst.started_at else None,
+            }
+        )
 
     return {"items": items, "total": total}
 
@@ -217,21 +223,23 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
 
     step_data = []
     for s in steps:
-        step_data.append({
-            "id": s.id,
-            "step_number": s.step_number,
-            "name": s.step_name,
-            "type": s.step_type,
-            "status": s.status,
-            "approval_type": s.approval_type,
-            "required_approvers": s.required_approvers,
-            "outcome": s.outcome,
-            "outcome_reason": s.outcome_reason,
-            "outcome_by": s.outcome_by,
-            "due_at": s.due_at.isoformat() if s.due_at else None,
-            "started_at": s.started_at.isoformat() if s.started_at else None,
-            "completed_at": s.completed_at.isoformat() if s.completed_at else None,
-        })
+        step_data.append(
+            {
+                "id": s.id,
+                "step_number": s.step_number,
+                "name": s.step_name,
+                "type": s.step_type,
+                "status": s.status,
+                "approval_type": s.approval_type,
+                "required_approvers": s.required_approvers,
+                "outcome": s.outcome,
+                "outcome_reason": s.outcome_reason,
+                "outcome_by": s.outcome_by,
+                "due_at": s.due_at.isoformat() if s.due_at else None,
+                "started_at": s.started_at.isoformat() if s.started_at else None,
+                "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+            }
+        )
 
     return {
         "id": inst.id,
@@ -352,7 +360,10 @@ async def get_pending_escalations(db: DbSession, current_user: CurrentUser):
 
 @router.post("/instances/{workflow_id}/escalate")
 async def escalate_workflow(
-    workflow_id: int, request: EscalationRequest, db: DbSession, current_user: CurrentUser,
+    workflow_id: int,
+    request: EscalationRequest,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Escalate a workflow."""
     try:

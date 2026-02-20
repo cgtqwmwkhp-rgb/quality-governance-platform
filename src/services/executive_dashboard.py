@@ -50,7 +50,9 @@ class ExecutiveDashboardService:
         empty_compliance = {"total_assigned": 0, "completed": 0, "overdue": 0, "completion_rate": 100}
         empty_sla = {"total_tracked": 0, "met": 0, "breached": 0, "compliance_rate": 100}
 
-        incident_summary = await self._safe_call(self._get_incident_summary(cutoff), {**empty_summary, "by_severity": {}, "high_severity": 0})
+        incident_summary = await self._safe_call(
+            self._get_incident_summary(cutoff), {**empty_summary, "by_severity": {}, "high_severity": 0}
+        )
         near_miss_summary = await self._safe_call(self._get_near_miss_summary(cutoff), empty_summary)
         complaint_summary = await self._safe_call(self._get_complaint_summary(cutoff), empty_summary)
         rta_summary = await self._safe_call(self._get_rta_summary(cutoff), empty_summary)

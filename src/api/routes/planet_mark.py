@@ -872,6 +872,7 @@ async def get_carbon_dashboard(
     """Get Planet Mark carbon management dashboard"""
     try:
         from sqlalchemy import select as sa_select
+
         result = await db.execute(
             sa_select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3)
         )
@@ -912,6 +913,7 @@ async def get_carbon_dashboard(
 
     current_year = years[0]
     from sqlalchemy import select as sa_select
+
     baseline_result = await db.execute(
         sa_select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True)
     )

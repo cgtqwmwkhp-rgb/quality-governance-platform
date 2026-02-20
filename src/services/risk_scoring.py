@@ -583,9 +583,7 @@ class KRIService:
         from src.domain.models.audit import AuditFinding
 
         cutoff = datetime.utcnow() - timedelta(days=days)
-        result = await self.db.execute(
-            select(func.count(AuditFinding.id)).where(AuditFinding.created_at >= cutoff)
-        )
+        result = await self.db.execute(select(func.count(AuditFinding.id)).where(AuditFinding.created_at >= cutoff))
         return float(result.scalar() or 0)
 
     async def _count_high_risk_findings(self) -> float:

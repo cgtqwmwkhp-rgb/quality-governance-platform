@@ -37,7 +37,9 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     entity_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True,
+        String(50),
+        nullable=False,
+        index=True,
     )
     entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
 
@@ -57,7 +59,8 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     created_by_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     __table_args__ = (
