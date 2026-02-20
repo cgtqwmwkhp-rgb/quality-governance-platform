@@ -109,10 +109,10 @@ async def create_tenant(
 
 @router.get("/", response_model=list[TenantResponse])
 async def list_tenants(
-    skip: int = 0,
-    limit: int = 100,
     db: DbSession,
     current_user: CurrentUser,
+    skip: int = 0,
+    limit: int = 100,
 ) -> Any:
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
@@ -334,9 +334,9 @@ async def get_features(
 async def toggle_feature(
     tenant_id: int,
     feature: str,
-    enabled: bool = True,
     db: DbSession,
     current_user: CurrentUser,
+    enabled: bool = True,
 ) -> Any:
     """Enable or disable a feature for a tenant."""
     service = TenantService(db)

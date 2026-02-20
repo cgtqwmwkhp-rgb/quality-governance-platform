@@ -114,6 +114,8 @@ class ObsoleteRequest(BaseModel):
 
 @router.get("/", response_model=dict)
 async def list_documents(
+    db: DbSession,
+    current_user: CurrentUser,
     document_type: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
@@ -121,8 +123,6 @@ async def list_documents(
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: DbSession,
-    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """List controlled documents with filtering"""
     stmt = select(ControlledDocument).where(ControlledDocument.is_current == True)
@@ -505,9 +505,9 @@ async def create_new_version(
 async def get_version_diff(
     document_id: int,
     version_id: int,
-    compare_to: Optional[int] = Query(None, description="Version ID to compare with"),
     db: DbSession,
     current_user: CurrentUser,
+    compare_to: Optional[int] = Query(None, description="Version ID to compare with"),
 ) -> dict[str, Any]:
     """Get diff between versions"""
     result = await db.execute(
@@ -554,9 +554,9 @@ async def get_version_diff(
 @router.post("/{document_id}/submit-for-approval", response_model=dict)
 async def submit_for_approval(
     document_id: int,
-    workflow_id: int = Query(...),
     db: DbSession,
     current_user: CurrentUser,
+    workflow_id: int = Query(...),
 ) -> dict[str, Any]:
     """Submit document for approval"""
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
@@ -763,9 +763,9 @@ async def mark_document_obsolete(
 @router.get("/{document_id}/access-log", response_model=list)
 async def get_access_log(
     document_id: int,
-    limit: int = Query(100, ge=1, le=500),
     db: DbSession,
     current_user: CurrentUser,
+    limit: int = Query(100, ge=1, le=500),
 ) -> list[dict[str, Any]]:
     """Get document access log"""
     result = await db.execute(

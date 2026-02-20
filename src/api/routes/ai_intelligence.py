@@ -91,8 +91,8 @@ async def analyze_text(
 
 @router.get("/predict/risk-factors", response_model=list)
 async def predict_risk_factors(
-    lookback_days: int = Query(365, ge=30, le=730),
     db: DbSession,
+    lookback_days: int = Query(365, ge=30, le=730),
 ) -> list[dict[str, Any]]:
     """Identify conditions that predict higher incident likelihood"""
     predictor = IncidentPredictor(db)
@@ -102,8 +102,8 @@ async def predict_risk_factors(
 @router.post("/predict/similar-incidents", response_model=list)
 async def find_similar_incidents(
     request: TextAnalysisRequest,
-    limit: int = Query(5, ge=1, le=20),
     db: DbSession,
+    limit: int = Query(5, ge=1, le=20),
 ) -> list[dict[str, Any]]:
     """Find similar past incidents based on description"""
     predictor = IncidentPredictor(db)
@@ -115,10 +115,10 @@ async def find_similar_incidents(
 
 @router.get("/anomalies/frequency", response_model=dict)
 async def detect_frequency_anomalies(
+    db: DbSession,
     entity: str = Query(..., description="Entity name (department, location)"),
     entity_type: str = Query("department", description="Type: department or location"),
     lookback_days: int = Query(90, ge=30, le=365),
-    db: DbSession,
 ) -> dict[str, Any]:
     """Detect if incident frequency is abnormal for an entity"""
     detector = AnomalyDetector(db)
@@ -127,8 +127,8 @@ async def detect_frequency_anomalies(
 
 @router.get("/anomalies/patterns", response_model=list)
 async def detect_pattern_anomalies(
-    lookback_days: int = Query(30, ge=7, le=90),
     db: DbSession,
+    lookback_days: int = Query(30, ge=7, le=90),
 ) -> list[dict[str, Any]]:
     """Detect unusual patterns across all incidents"""
     detector = AnomalyDetector(db)
@@ -156,8 +156,8 @@ async def get_corrective_action_recommendations(
 
 @router.get("/root-cause/clusters", response_model=list)
 async def get_incident_clusters(
-    lookback_days: int = Query(180, ge=30, le=365),
     db: DbSession,
+    lookback_days: int = Query(180, ge=30, le=365),
 ) -> list[dict[str, Any]]:
     """Cluster similar incidents to identify systemic issues"""
     analyzer = RootCauseAnalyzer(db)
@@ -271,8 +271,8 @@ async def generate_findings_report(
 
 @router.get("/audit/trends", response_model=dict)
 async def get_audit_trends(
-    months: int = Query(24, ge=6, le=60),
     db: DbSession,
+    months: int = Query(24, ge=6, le=60),
 ) -> dict[str, Any]:
     """Get audit finding trends over time"""
     analyzer = AuditTrendAnalyzer(db)
@@ -281,8 +281,8 @@ async def get_audit_trends(
 
 @router.get("/audit/recurring-findings", response_model=list)
 async def get_recurring_findings(
-    min_occurrences: int = Query(3, ge=2, le=10),
     db: DbSession,
+    min_occurrences: int = Query(3, ge=2, le=10),
 ) -> list[dict[str, Any]]:
     """Identify recurring findings across audits"""
     analyzer = AuditTrendAnalyzer(db)

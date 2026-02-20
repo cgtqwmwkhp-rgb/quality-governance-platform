@@ -151,8 +151,8 @@ async def close_session(session_id: int, db: DbSession):
 
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
-    limit: int = Query(20, ge=1, le=100),
     db: DbSession,
+    limit: int = Query(20, ge=1, le=100),
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
@@ -205,8 +205,8 @@ async def send_message(
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 async def get_messages(
     session_id: int,
-    limit: int = Query(50, ge=1, le=200),
     db: DbSession,
+    limit: int = Query(50, ge=1, le=200),
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
@@ -364,10 +364,10 @@ async def suggest_actions(
 
 @router.get("/knowledge/search")
 async def search_knowledge(
+    db: DbSession,
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
-    db: DbSession,
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
@@ -401,8 +401,8 @@ async def add_knowledge(
     title: str,
     content: str,
     category: str,
-    tags: Optional[list[str]] = None,
     db: DbSession,
+    tags: Optional[list[str]] = None,
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService
