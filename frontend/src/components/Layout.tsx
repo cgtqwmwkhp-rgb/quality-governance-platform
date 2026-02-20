@@ -58,6 +58,7 @@ const navSections = [
     items: [
       { path: '/audits', icon: ClipboardCheck, label: 'Audits' },
       { path: '/audit-templates', icon: Sparkles, label: 'Audit Builder' },
+      { path: '/risk-register', icon: Target, label: 'Risk Register' },
       { path: '/compliance', icon: Shield, label: 'ISO Compliance' },
       { path: '/uvdb', icon: Award, label: 'UVDB Achilles' },
       { path: '/planet-mark', icon: Leaf, label: 'Planet Mark' },
@@ -71,13 +72,11 @@ const navSections = [
     items: [
       { path: '/documents', icon: FolderOpen, label: 'Documents' },
       { path: '/policies', icon: FileText, label: 'Policies' },
-      { path: '/risks', icon: Shield, label: 'Risks' },
     ]
   },
   {
     title: 'Enterprise',
     items: [
-      { path: '/risk-register', icon: Target, label: 'Risk Register' },
       { path: '/ims', icon: GitMerge, label: 'IMS Dashboard' },
       { path: '/ai-intelligence', icon: Brain, label: 'AI Intelligence' },
     ]

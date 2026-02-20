@@ -9,7 +9,7 @@ import RTADetail from './pages/RTADetail'
 import Complaints from './pages/Complaints'
 import ComplaintDetail from './pages/ComplaintDetail'
 import Policies from './pages/Policies'
-import Risks from './pages/Risks'
+// Risks page retired — consolidated into Enterprise Risk Register
 import Audits from './pages/Audits'
 import Investigations from './pages/Investigations'
 import InvestigationDetail from './pages/InvestigationDetail'
@@ -219,7 +219,7 @@ function App() {
           <Route path="complaints" element={<Complaints />} />
           <Route path="complaints/:id" element={<ComplaintDetail />} />
           <Route path="policies" element={<Policies />} />
-          <Route path="risks" element={<Risks />} />
+          <Route path="risks" element={<Navigate to="/risk-register" replace />} />
           <Route path="audits" element={<Audits />} />
           <Route path="audit-templates" element={<AuditTemplateLibrary />} />
           <Route path="audit-templates/new" element={<AuditTemplateBuilder />} />
