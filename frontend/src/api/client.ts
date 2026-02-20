@@ -1733,53 +1733,53 @@ export interface RiskSummary {
 }
 
 export const riskRegisterApi = {
-  list: (params?: { page?: number; size?: number; status?: string; category?: string; search?: string }) => {
+  list: (params?: { skip?: number; limit?: number; status?: string; category?: string; search?: string }) => {
     const sp = new URLSearchParams()
-    if (params?.page) sp.set('page', String(params.page))
-    if (params?.size) sp.set('size', String(params.size))
+    if (params?.skip != null) sp.set('skip', String(params.skip))
+    if (params?.limit != null) sp.set('limit', String(params.limit))
     if (params?.status) sp.set('status', params.status)
     if (params?.category) sp.set('category', params.category)
     if (params?.search) sp.set('search', params.search)
-    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risks?${sp}`)
+    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register?${sp}`)
   },
   create: (data: Partial<RiskEntry>) =>
-    api.post<RiskEntry>('/api/v1/risks', data),
+    api.post<RiskEntry>('/api/v1/risk-register', data),
   get: (id: number) =>
-    api.get<RiskEntry>(`/api/v1/risks/${id}`),
+    api.get<RiskEntry>(`/api/v1/risk-register/${id}`),
   update: (id: number, data: Partial<RiskEntry>) =>
-    api.patch<RiskEntry>(`/api/v1/risks/${id}`, data),
+    api.put<RiskEntry>(`/api/v1/risk-register/${id}`, data),
   delete: (id: number) =>
-    api.delete<void>(`/api/v1/risks/${id}`),
+    api.delete<void>(`/api/v1/risk-register/${id}`),
   assess: (id: number, scores: { likelihood: number; impact: number }) =>
-    api.post<RiskEntry>(`/api/v1/risks/${id}/assess`, scores),
+    api.post<RiskEntry>(`/api/v1/risk-register/${id}/assess`, scores),
   getHeatmap: () =>
-    api.get<RiskHeatmapData>('/api/v1/risks/heatmap'),
+    api.get<RiskHeatmapData>('/api/v1/risk-register/heatmap'),
   getSummary: () =>
-    api.get<RiskSummary>('/api/v1/risks/summary'),
+    api.get<RiskSummary>('/api/v1/risk-register/summary'),
   getTrends: (days = 90) =>
-    api.get<unknown>(`/api/v1/risks/trends?days=${days}`),
+    api.get<unknown>(`/api/v1/risk-register/trends?days=${days}`),
   getBowtie: (id: number) =>
-    api.get<unknown>(`/api/v1/risks/${id}/bowtie`),
+    api.get<unknown>(`/api/v1/risk-register/${id}/bowtie`),
   addBowtieElement: (id: number, data: Record<string, unknown>) =>
-    api.post<unknown>(`/api/v1/risks/${id}/bowtie`, data),
+    api.post<unknown>(`/api/v1/risk-register/${id}/bowtie`, data),
   deleteBowtieElement: (id: number, elementId: number) =>
-    api.delete<void>(`/api/v1/risks/${id}/bowtie/${elementId}`),
+    api.delete<void>(`/api/v1/risk-register/${id}/bowtie/${elementId}`),
   listControls: () =>
-    api.get<unknown[]>('/api/v1/risks/controls'),
+    api.get<unknown[]>('/api/v1/risk-register/controls'),
   createControl: (data: Record<string, unknown>) =>
-    api.post<unknown>('/api/v1/risks/controls', data),
+    api.post<unknown>('/api/v1/risk-register/controls', data),
   linkControl: (riskId: number, controlId: number) =>
-    api.post<void>(`/api/v1/risks/${riskId}/controls/${controlId}`),
+    api.post<void>(`/api/v1/risk-register/${riskId}/controls/${controlId}`),
   getKRIDashboard: () =>
-    api.get<unknown>('/api/v1/risks/kri/dashboard'),
+    api.get<unknown>('/api/v1/risk-register/kris/dashboard'),
   createKRI: (data: Record<string, unknown>) =>
-    api.post<unknown>('/api/v1/risks/kri', data),
+    api.post<unknown>('/api/v1/risk-register/kris', data),
   updateKRIValue: (id: number, value: number) =>
-    api.post<unknown>(`/api/v1/risks/kri/${id}/values`, { value }),
+    api.post<unknown>(`/api/v1/risk-register/kris/${id}/value`, { value }),
   getKRIHistory: (id: number) =>
-    api.get<unknown>(`/api/v1/risks/kri/${id}/history`),
+    api.get<unknown>(`/api/v1/risk-register/kris/${id}/history`),
   getAppetiteStatements: () =>
-    api.get<unknown[]>('/api/v1/risks/appetite'),
+    api.get<unknown[]>('/api/v1/risk-register/appetite/statements'),
 }
 
 // ============ Signatures API ============
