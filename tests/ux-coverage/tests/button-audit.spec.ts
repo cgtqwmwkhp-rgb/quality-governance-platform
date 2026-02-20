@@ -177,42 +177,37 @@ test.describe('Button Wiring Audit', () => {
         outcome_observed: false,
       };
       
+      // Pre-flight checks (skip conditions)
+      const route = loadPageRoute(buttonEntry.pageId);
+      if (!route) {
+        result.result = 'SKIP';
+        result.error_message = 'Page route not found';
+        buttonAuditResults.push(result);
+        test.skip(true, result.error_message);
+        return;
+      }
+      if (route.includes(':')) {
+        result.result = 'SKIP';
+        result.error_message = 'Parameterized route - requires test data';
+        buttonAuditResults.push(result);
+        test.skip(true, result.error_message);
+        return;
+      }
+      const authReady = await setupAuth(page, buttonEntry.pageId);
+      if (!authReady) {
+        result.result = 'SKIP';
+        result.error_message = 'Auth not configured';
+        buttonAuditResults.push(result);
+        test.skip(true, result.error_message);
+        return;
+      }
+      
       try {
-        // Get page route
-        const route = loadPageRoute(buttonEntry.pageId);
-        if (!route) {
-          result.result = 'SKIP';
-          result.error_message = 'Page route not found';
-          buttonAuditResults.push(result);
-          test.skip(true, result.error_message);
-          return;
-        }
-        
-        // Skip parameterized routes (need specific data)
-        if (route.includes(':')) {
-          result.result = 'SKIP';
-          result.error_message = 'Parameterized route - requires test data';
-          buttonAuditResults.push(result);
-          test.skip(true, result.error_message);
-          return;
-        }
-        
-        // Setup auth
-        const authReady = await setupAuth(page, buttonEntry.pageId);
-        if (!authReady) {
-          result.result = 'SKIP';
-          result.error_message = 'Auth not configured';
-          buttonAuditResults.push(result);
-          test.skip(true, result.error_message);
-          return;
-        }
-        
-        // Navigate to page (use 'load' instead of 'networkidle' to avoid
-        // flaky timeouts on pages with polling or streaming connections)
+        // Navigate to page
         await page.goto(route, { waitUntil: 'load', timeout: 30000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
         
-        // Try to find button with primary selector (wait for render)
+        // Try to find button with primary selector
         let button = page.locator(buttonEntry.selector).first();
         let buttonVisible = false;
         try {
@@ -237,110 +232,74 @@ test.describe('Button Wiring Audit', () => {
           result.found = false;
           result.error_message = 'Button not visible on page';
           
-          // For non-critical buttons, this is acceptable
           if (buttonEntry.criticality === 'P1') {
             result.result = 'SKIP';
-            buttonAuditResults.push(result);
-            test.skip(true, 'P1 button not visible - may be conditional');
-            return;
-          }
-          
-          // P0 buttons with disabled_reason may legitimately be hidden
-          // (e.g. multi-step forms where submit only appears on the last step)
-          if (buttonEntry.disabled_reason) {
+          } else if (buttonEntry.disabled_reason) {
             result.result = 'PASS';
             result.outcome_observed = true;
             result.outcome_type = 'disabled_precondition';
-            buttonAuditResults.push(result);
-            return;
+          } else {
+            throw new Error('P0 button not found');
           }
-          
-          throw new Error('P0 button not found');
-        }
-        
-        result.found = true;
-        
-        // Check if button is disabled
-        const isDisabled = await button.isDisabled().catch(() => false);
-        if (isDisabled) {
-          // Verify disabled reason is shown (tooltip or nearby text)
-          result.outcome_observed = true;
-          result.outcome_type = 'disabled';
-          result.result = 'PASS';
-          buttonAuditResults.push(result);
-          return;
-        }
-        
-        // Setup observers for click outcomes
-        let navigationOccurred = false;
-        let networkCallMade = false;
-        let uiStateChanged = false;
-        
-        const initialUrl = page.url();
-        const initialHtml = await page.content();
-        
-        // Listen for network requests
-        const requestPromise = new Promise<Request | null>((resolve) => {
-          const handler = (request: Request) => {
-            if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') {
-              page.off('request', handler);
-              resolve(request);
-            }
-          };
-          page.on('request', handler);
-          setTimeout(() => resolve(null), 3000);
-        });
-        
-        // Click the button
-        await button.click({ timeout: 5000 });
-        result.clicked = true;
-        
-        // Wait for any outcome
-        await page.waitForTimeout(1000);
-        
-        // Check for navigation
-        if (page.url() !== initialUrl) {
-          navigationOccurred = true;
-          result.outcome_type = 'navigation';
-        }
-        
-        // Check for network call
-        const request = await requestPromise;
-        if (request) {
-          networkCallMade = true;
-          result.outcome_type = result.outcome_type || 'network_call';
-        }
-        
-        // Check for UI state change (modal, form, etc.)
-        const newHtml = await page.content();
-        if (newHtml !== initialHtml && !navigationOccurred) {
-          uiStateChanged = true;
-          result.outcome_type = result.outcome_type || 'ui_state';
-        }
-        
-        // Check for visible modal/dialog
-        const modalVisible = await page.locator(
-          '[role="dialog"], [data-testid*="modal"], .modal, [data-state="open"]'
-        ).first().isVisible().catch(() => false);
-        if (modalVisible) {
-          uiStateChanged = true;
-          result.outcome_type = 'ui_state';
-        }
-        
-        // Determine if outcome was observed
-        result.outcome_observed = navigationOccurred || networkCallMade || uiStateChanged;
-        
-        if (result.outcome_observed) {
-          result.result = 'PASS';
-        } else if (buttonEntry.disabled_reason) {
-          // Button with documented disabled_reason had no effect when clicked
-          // without meeting preconditions - this is expected behaviour
-          result.result = 'PASS';
-          result.outcome_observed = true;
-          result.outcome_type = 'noop_expected_precondition';
         } else {
-          result.error_message = 'No observable outcome after click (noop)';
-          result.result = 'FAIL';
+          result.found = true;
+          
+          const isDisabled = await button.isDisabled().catch(() => false);
+          if (isDisabled) {
+            result.outcome_observed = true;
+            result.outcome_type = 'disabled';
+            result.result = 'PASS';
+          } else {
+            // Setup observers for click outcomes
+            const initialUrl = page.url();
+            const initialHtml = await page.content();
+            
+            const requestPromise = new Promise<Request | null>((resolve) => {
+              const handler = (request: Request) => {
+                if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') {
+                  page.off('request', handler);
+                  resolve(request);
+                }
+              };
+              page.on('request', handler);
+              setTimeout(() => resolve(null), 3000);
+            });
+            
+            await button.click({ timeout: 5000 });
+            result.clicked = true;
+            await page.waitForTimeout(1000);
+            
+            let navigationOccurred = page.url() !== initialUrl;
+            if (navigationOccurred) result.outcome_type = 'navigation';
+            
+            const request = await requestPromise;
+            if (request) {
+              result.outcome_type = result.outcome_type || 'network_call';
+            }
+            
+            const newHtml = await page.content();
+            if (newHtml !== initialHtml && !navigationOccurred) {
+              result.outcome_type = result.outcome_type || 'ui_state';
+            }
+            
+            const modalVisible = await page.locator(
+              '[role="dialog"], [data-testid*="modal"], .modal, [data-state="open"]'
+            ).first().isVisible().catch(() => false);
+            if (modalVisible) result.outcome_type = 'ui_state';
+            
+            result.outcome_observed = navigationOccurred || !!request || (newHtml !== initialHtml) || modalVisible;
+            
+            if (result.outcome_observed) {
+              result.result = 'PASS';
+            } else if (buttonEntry.disabled_reason) {
+              result.result = 'PASS';
+              result.outcome_observed = true;
+              result.outcome_type = 'noop_expected_precondition';
+            } else {
+              result.error_message = 'No observable outcome after click (noop)';
+              result.result = 'FAIL';
+            }
+          }
         }
         
       } catch (error: any) {
@@ -350,7 +309,10 @@ test.describe('Button Wiring Audit', () => {
       
       buttonAuditResults.push(result);
       
-      // Assert for test framework
+      if (result.result === 'SKIP') {
+        test.skip(true, result.error_message || 'Conditional button');
+        return;
+      }
       expect(result.result).toBe('PASS');
     });
   }
