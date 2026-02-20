@@ -683,6 +683,11 @@ export interface AuditQuestionUpdate {
   max_score?: number
   weight?: number
   options?: QuestionOptionBase[]
+  min_value?: number | null
+  max_value?: number | null
+  decimal_places?: number | null
+  min_length?: number | null
+  max_length?: number | null
   sort_order?: number
   risk_category?: string
   risk_weight?: number
@@ -717,7 +722,12 @@ export interface AuditQuestion {
   is_active: boolean
   max_score?: number
   weight: number
-  options_json?: QuestionOptionBase[]
+  options?: QuestionOptionBase[]
+  min_value?: number
+  max_value?: number
+  decimal_places?: number
+  min_length?: number
+  max_length?: number
   sort_order: number
   risk_category?: string
   risk_weight?: number

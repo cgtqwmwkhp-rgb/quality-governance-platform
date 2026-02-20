@@ -85,6 +85,173 @@ interface QuestionEditorProps {
   onDeleted: () => void;
 }
 
+const OPTION_TYPES = new Set(['radio', 'dropdown', 'checkbox']);
+const NUMERIC_TYPES = new Set(['number', 'score', 'rating']);
+const SCORE_DEFAULTS: Record<string, { min: number; max: number }> = {
+  score: { min: 1, max: 5 },
+  rating: { min: 1, max: 10 },
+};
+
+interface OptionsEditorProps {
+  questionId: number;
+  options: { value: string; label: string; score?: number; is_correct?: boolean; triggers_finding?: boolean }[];
+  onSaved: () => void;
+}
+
+function OptionsEditor({ questionId, options: initial, onSaved }: OptionsEditorProps) {
+  const [opts, setOpts] = useState(initial.length > 0 ? initial : [{ value: 'option_1', label: 'Option 1', score: 0 }]);
+  const [saving, setSaving] = useState(false);
+
+  const addOption = () => {
+    const idx = opts.length + 1;
+    setOpts([...opts, { value: `option_${idx}`, label: `Option ${idx}`, score: 0 }]);
+  };
+
+  const removeOption = (index: number) => {
+    if (opts.length <= 1) return;
+    setOpts(opts.filter((_, i) => i !== index));
+  };
+
+  const updateOption = (index: number, field: string, value: string | number | boolean) => {
+    const updated = [...opts];
+    updated[index] = { ...updated[index], [field]: value };
+    if (field === 'label') {
+      updated[index].value = String(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `option_${index + 1}`;
+    }
+    setOpts(updated);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await auditsApi.updateQuestion(questionId, { options: opts });
+      onSaved();
+    } catch (err) {
+      console.error('Failed to save options:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="bg-surface border-primary/20">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-foreground">Answer Options</h4>
+          <Button variant="outline" size="sm" onClick={addOption}>
+            <Plus className="w-3 h-3" /> Add Option
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          {opts.map((opt, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground font-mono w-6 text-right">{idx + 1}.</span>
+              <Input
+                value={opt.label}
+                onChange={(e) => updateOption(idx, 'label', e.target.value)}
+                placeholder="Option label..."
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                value={opt.score ?? 0}
+                onChange={(e) => updateOption(idx, 'score', parseFloat(e.target.value) || 0)}
+                className="w-20 text-center"
+                placeholder="Score"
+                title="Score value"
+              />
+              <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap" title="Triggers audit finding">
+                <input
+                  type="checkbox"
+                  checked={opt.triggers_finding || false}
+                  onChange={(e) => updateOption(idx, 'triggers_finding', e.target.checked)}
+                  className="w-3 h-3"
+                />
+                Finding
+              </label>
+              <Button
+                variant="ghost" size="icon-sm"
+                onClick={() => removeOption(idx)}
+                disabled={opts.length <= 1}
+                aria-label="Remove option"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <Button size="sm" onClick={handleSave} disabled={saving} className="w-full">
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+          Save Options
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface NumericConfigProps {
+  questionId: number;
+  questionType: string;
+  minValue?: number | null;
+  maxValue?: number | null;
+  maxScore?: number | null;
+  onSaved: () => void;
+}
+
+function NumericConfig({ questionId, questionType, minValue, maxValue, maxScore, onSaved }: NumericConfigProps) {
+  const defaults = SCORE_DEFAULTS[questionType];
+  const [min, setMin] = useState(minValue ?? defaults?.min ?? 0);
+  const [max, setMax] = useState(maxValue ?? defaults?.max ?? 100);
+  const [score, setScore] = useState(maxScore ?? defaults?.max ?? 10);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await auditsApi.updateQuestion(questionId, {
+        min_value: min,
+        max_value: max,
+        max_score: score,
+      });
+      onSaved();
+    } catch (err) {
+      console.error('Failed to save numeric config:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="bg-surface border-primary/20">
+      <CardContent className="p-4 space-y-3">
+        <h4 className="text-sm font-semibold text-foreground">
+          {questionType === 'score' ? 'Score Range (1–5)' : questionType === 'rating' ? 'Rating Range (1–10)' : 'Numeric Constraints'}
+        </h4>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Min Value</label>
+            <Input type="number" value={min} onChange={(e) => setMin(parseFloat(e.target.value) || 0)} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Max Value</label>
+            <Input type="number" value={max} onChange={(e) => setMax(parseFloat(e.target.value) || 0)} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Max Score</label>
+            <Input type="number" value={score} onChange={(e) => setScore(parseFloat(e.target.value) || 0)} />
+          </div>
+        </div>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="w-full">
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+          Save Configuration
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 const QuestionEditor = React.memo(function QuestionEditor({
   question, onUpdated, onDeleted,
 }: QuestionEditorProps) {
@@ -95,6 +262,9 @@ const QuestionEditor = React.memo(function QuestionEditor({
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const needsOptions = OPTION_TYPES.has(question.question_type);
+  const needsNumericConfig = NUMERIC_TYPES.has(question.question_type);
 
   useEffect(() => {
     setText(question.question_text);
@@ -122,7 +292,21 @@ const QuestionEditor = React.memo(function QuestionEditor({
   const handleTypeChange = useCallback(async (newType: string) => {
     setSaving(true);
     try {
-      await auditsApi.updateQuestion(question.id, { question_type: newType });
+      const update: Record<string, unknown> = { question_type: newType };
+      const defaults = SCORE_DEFAULTS[newType];
+      if (defaults) {
+        update.min_value = defaults.min;
+        update.max_value = defaults.max;
+        update.max_score = defaults.max;
+      }
+      if (newType === 'yes_no' || newType === 'pass_fail') {
+        update.max_score = 1;
+        update.options = [
+          { value: newType === 'yes_no' ? 'yes' : 'pass', label: newType === 'yes_no' ? 'Yes' : 'Pass', score: 1, triggers_finding: false },
+          { value: newType === 'yes_no' ? 'no' : 'fail', label: newType === 'yes_no' ? 'No' : 'Fail', score: 0, triggers_finding: true },
+        ];
+      }
+      await auditsApi.updateQuestion(question.id, update);
       onUpdated();
     } catch (err) {
       console.error('Failed to update question type:', err);
@@ -247,6 +431,25 @@ const QuestionEditor = React.memo(function QuestionEditor({
                 </div>
               </div>
 
+              {needsOptions && (
+                <OptionsEditor
+                  questionId={question.id}
+                  options={question.options || []}
+                  onSaved={onUpdated}
+                />
+              )}
+
+              {needsNumericConfig && (
+                <NumericConfig
+                  questionId={question.id}
+                  questionType={question.question_type}
+                  minValue={question.min_value}
+                  maxValue={question.max_value}
+                  maxScore={question.max_score}
+                  onSaved={onUpdated}
+                />
+              )}
+
               <button
                 type="button"
                 onClick={() => setShowAdvanced(!showAdvanced)}
@@ -286,6 +489,16 @@ const QuestionEditor = React.memo(function QuestionEditor({
                         value={question.help_text || ''}
                         onChange={(e) => debouncedSave('help_text', e.target.value)}
                         placeholder="Guidance for auditors..."
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`q-maxscore-${question.id}`} className="block text-sm font-medium text-foreground mb-1">Max Score</label>
+                      <Input
+                        id={`q-maxscore-${question.id}`}
+                        type="number"
+                        value={question.max_score ?? ''}
+                        onChange={(e) => debouncedSave('max_score', parseFloat(e.target.value) || null)}
+                        placeholder="Maximum score"
                       />
                     </div>
                   </CardContent>
