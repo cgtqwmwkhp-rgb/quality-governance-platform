@@ -205,7 +205,7 @@ async def get_audit_stats(
             )
             .group_by(AuditLogEntry.action)
         )
-        by_action: dict[str, int] = dict(action_result.all())
+        by_action: dict[str, int] = {row[0]: row[1] for row in action_result.all()}
 
         entity_result = await db.execute(
             select(AuditLogEntry.entity_type, func.count(AuditLogEntry.id))
@@ -215,7 +215,7 @@ async def get_audit_stats(
             )
             .group_by(AuditLogEntry.entity_type)
         )
-        by_entity: dict[str, int] = dict(entity_result.all())
+        by_entity: dict[str, int] = {row[0]: row[1] for row in entity_result.all()}
 
         user_result = await db.execute(
             select(AuditLogEntry.user_email, func.count(AuditLogEntry.id))
