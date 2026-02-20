@@ -333,6 +333,7 @@ async def _get_compliance_coverage(db: Any) -> dict:
 
     links = [
         EvidenceLink(
+            id=str(lnk.id),
             entity_type=lnk.entity_type,
             entity_id=lnk.entity_id,
             clause_id=lnk.clause_id,

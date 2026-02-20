@@ -115,7 +115,7 @@ class ComplianceAutomationService:
                 title = f"Gap Analysis - {reg.title}"
                 description = f"Analysis triggered by regulatory update: {reg.source_reference}"
 
-        gaps_data = [
+        gaps_data: List[Dict[str, Any]] = [
             {
                 "clause": "8.2",
                 "requirement": "Operational control procedures",
@@ -679,7 +679,7 @@ class ComplianceAutomationService:
             ),
         ]
 
-        for obj in updates + certificates + scheduled_audits + initial_scores:  # type: ignore[operator]
+        for obj in [*updates, *certificates, *scheduled_audits, *initial_scores]:
             db.add(obj)
 
         await db.flush()

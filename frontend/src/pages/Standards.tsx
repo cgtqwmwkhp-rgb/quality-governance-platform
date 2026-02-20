@@ -37,6 +37,7 @@ export default function Standards() {
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ text, type })
+    // STATIC_UI_CONFIG_OK - toast auto-dismiss timer, not a data simulation
     setTimeout(() => setToastMessage(null), 4000)
   }
 

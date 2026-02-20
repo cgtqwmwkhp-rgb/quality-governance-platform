@@ -234,7 +234,7 @@ async def start_workflow(
     sla_due = now + timedelta(hours=template.sla_hours or 72)
     warning_at = now + timedelta(hours=template.warning_hours or 48)
 
-    step_defs: list = template.steps  # type: ignore[assignment]
+    step_defs = list(template.steps) if template.steps else []
 
     instance = WorkflowInstance(
         template_id=template.id,
