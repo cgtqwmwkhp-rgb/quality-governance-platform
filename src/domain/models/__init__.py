@@ -20,6 +20,19 @@ from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, Audit
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
 
+# Compliance Automation
+from src.domain.models.compliance_automation import (
+    Certificate,
+    ComplianceScore,
+    GapAnalysis,
+    RegulatoryUpdate,
+    RIDDORSubmission,
+    ScheduledAudit,
+)
+
+# Compliance Evidence Links
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
     Signature,
@@ -140,6 +153,17 @@ from src.domain.models.uvdb_achilles import (
     UVDBKPIRecord,
     UVDBQuestion,
     UVDBSection,
+)
+
+# Workflow Persistence Models
+from src.domain.models.workflow import ApprovalRequest as WorkflowApprovalRequest
+from src.domain.models.workflow import (
+    EscalationLog,
+    EscalationRule,
+    UserDelegation,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowTemplate,
 )
 
 __all__ = [
@@ -282,4 +306,22 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
+    # Compliance Evidence Links
+    "ComplianceEvidenceLink",
+    "EvidenceLinkMethod",
+    # Compliance Automation
+    "RegulatoryUpdate",
+    "GapAnalysis",
+    "Certificate",
+    "ScheduledAudit",
+    "ComplianceScore",
+    "RIDDORSubmission",
+    # Workflow Persistence Models
+    "WorkflowTemplate",
+    "WorkflowInstance",
+    "WorkflowStep",
+    "WorkflowApprovalRequest",
+    "EscalationRule",
+    "EscalationLog",
+    "UserDelegation",
 ]

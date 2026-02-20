@@ -23,8 +23,11 @@ import {
   ExternalLink,
   Link2,
   XCircle,
+  X,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react'
-import { uvdbApi, ErrorClass, createApiError } from '../api/client'
+import { uvdbApi, ErrorClass, createApiError, getApiErrorMessage } from '../api/client'
 
 interface UVDBSection {
   number: string
@@ -55,6 +58,60 @@ export default function UVDBAudits() {
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [showNewAuditModal, setShowNewAuditModal] = useState(false)
+  const [auditForm, setAuditForm] = useState({ audit_name: '', audit_type: 'verification', auditor_name: '', planned_date: '' })
+  const [auditSubmitting, setAuditSubmitting] = useState(false)
+  const [exportingProtocol, setExportingProtocol] = useState(false)
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type })
+    // STATIC_UI_CONFIG_OK - toast auto-dismiss timer, not a data simulation
+    setTimeout(() => setToastMessage(null), 4000)
+  }
+
+  const handleExportProtocol = async () => {
+    try {
+      setExportingProtocol(true)
+      const response = await uvdbApi.getProtocol()
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `uvdb-protocol-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast('Protocol exported successfully')
+    } catch (err) {
+      showToast(getApiErrorMessage(err), 'error')
+    } finally {
+      setExportingProtocol(false)
+    }
+  }
+
+  const handleCreateAudit = async () => {
+    if (!auditForm.audit_name.trim()) { showToast('Audit name is required', 'error'); return }
+    try {
+      setAuditSubmitting(true)
+      await uvdbApi.createAudit({
+        company_name: auditForm.audit_name,
+        audit_type: auditForm.audit_type,
+        lead_auditor: auditForm.auditor_name || undefined,
+        audit_date: auditForm.planned_date || undefined,
+      })
+      showToast('Audit created successfully')
+      setShowNewAuditModal(false)
+      setAuditForm({ audit_name: '', audit_type: 'verification', auditor_name: '', planned_date: '' })
+      setRetryCount(0)
+      loadData()
+    } catch (err) {
+      showToast(getApiErrorMessage(err), 'error')
+    } finally {
+      setAuditSubmitting(false)
+    }
+  }
 
   // Transform API section to component type
   const transformSection = (apiSection: {
@@ -218,6 +275,91 @@ export default function UVDBAudits() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
+      {/* Toast */}
+      {toastMessage && (
+        <div className={`fixed top-4 right-4 z-[100] border rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 animate-fade-in ${
+          toastMessage.type === 'error' ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-card border-border text-foreground'
+        }`}>
+          {toastMessage.type === 'error' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 text-success" />}
+          <span className="text-sm">{toastMessage.text}</span>
+          <button onClick={() => setToastMessage(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
+        </div>
+      )}
+
+      {/* New Audit Modal */}
+      {showNewAuditModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNewAuditModal(false) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowNewAuditModal(false) }}
+        >
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <Plus className="w-5 h-5 text-primary" />
+                New UVDB Audit
+              </h2>
+              <button onClick={() => setShowNewAuditModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Audit Name</label>
+                <input
+                  type="text"
+                  value={auditForm.audit_name}
+                  onChange={(e) => setAuditForm(f => ({ ...f, audit_name: e.target.value }))}
+                  placeholder="e.g. Plantexpand Limited - Annual Review"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Audit Type</label>
+                <select
+                  value={auditForm.audit_type}
+                  onChange={(e) => setAuditForm(f => ({ ...f, audit_type: e.target.value }))}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                >
+                  <option value="verification">Verification</option>
+                  <option value="assessment">Assessment</option>
+                  <option value="desktop">Desktop</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Auditor Name</label>
+                <input
+                  type="text"
+                  value={auditForm.auditor_name}
+                  onChange={(e) => setAuditForm(f => ({ ...f, auditor_name: e.target.value }))}
+                  placeholder="Lead auditor name"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Planned Date</label>
+                <input
+                  type="date"
+                  value={auditForm.planned_date}
+                  onChange={(e) => setAuditForm(f => ({ ...f, planned_date: e.target.value }))}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <button
+                onClick={handleCreateAudit}
+                disabled={auditSubmitting || !auditForm.audit_name.trim()}
+                className="w-full py-3 bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {auditSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                {auditSubmitting ? 'Creating...' : 'Create Audit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
@@ -228,11 +370,18 @@ export default function UVDBAudits() {
           <p className="text-muted-foreground">Utilities Vendor Database - Supply Chain Qualification Audit</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
-            <Download className="w-4 h-4" />
+          <button
+            onClick={handleExportProtocol}
+            disabled={exportingProtocol}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors disabled:opacity-50"
+          >
+            {exportingProtocol ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Export Protocol
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={() => setShowNewAuditModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             New Audit
           </button>
@@ -325,7 +474,10 @@ export default function UVDBAudits() {
           <Award className="w-12 h-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold text-foreground mb-2">No UVDB Data Yet</h3>
           <p className="text-muted-foreground mb-4">Start your UVDB qualification journey by creating a new audit.</p>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={() => setShowNewAuditModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             New Audit
           </button>
@@ -507,7 +659,10 @@ export default function UVDBAudits() {
                     Filter
                   </button>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors">
+                <button
+                  onClick={() => setShowNewAuditModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors"
+                >
                   <Plus className="w-4 h-4" />
                   New Audit
                 </button>

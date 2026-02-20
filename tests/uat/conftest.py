@@ -23,7 +23,7 @@ from httpx import ASGITransport, AsyncClient
 from src.main import app
 
 # Configure pytest-asyncio to use strict mode with function scope
-pytest_plugins = ("pytest_asyncio",)
+# pytest_plugins moved to root conftest per pytest deprecation rules
 
 
 @pytest.fixture(scope="session")

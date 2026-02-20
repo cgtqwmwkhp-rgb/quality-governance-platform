@@ -345,7 +345,7 @@ export default function Dashboard() {
         incidentsApi.list(1, 100),
         rtasApi.list(1, 100),
         complaintsApi.list(1, 100),
-        actionsApi.list(1, 200),
+        actionsApi.list(1, 100),
         auditsApi.listRuns(1, 100),
         notificationsApi.getUnreadCount(),
         executiveDashboardApi.getDashboard(30),

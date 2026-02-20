@@ -25,8 +25,10 @@ import {
   Home,
   Globe,
   XCircle,
+  X,
+  Loader2,
 } from 'lucide-react'
-import { planetMarkApi, ErrorClass, createApiError, isSetupRequired, SetupRequiredResponse } from '../api/client'
+import { planetMarkApi, ErrorClass, createApiError, isSetupRequired, SetupRequiredResponse, getApiErrorMessage } from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface ReportingYear {
@@ -77,6 +79,99 @@ export default function PlanetMark() {
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+
+  const [showEmissionModal, setShowEmissionModal] = useState(false)
+  const [emissionForm, setEmissionForm] = useState({ source_name: '', scope: '1', category: '', activity_data: '', activity_unit: 'litres', notes: '' })
+  const [emissionSubmitting, setEmissionSubmitting] = useState(false)
+
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [actionForm, setActionForm] = useState({ action_name: '', description: '', target_reduction_percent: '', deadline: '' })
+  const [actionSubmitting, setActionSubmitting] = useState(false)
+
+  const [exportingReport, setExportingReport] = useState(false)
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type })
+    // STATIC_UI_CONFIG_OK - toast auto-dismiss timer, not a data simulation
+    setTimeout(() => setToastMessage(null), 4000)
+  }
+
+  const handleExportReport = async () => {
+    try {
+      setExportingReport(true)
+      const response = await planetMarkApi.getDashboard()
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `planet-mark-report-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast('Report exported successfully')
+    } catch (err) {
+      showToast(getApiErrorMessage(err), 'error')
+    } finally {
+      setExportingReport(false)
+    }
+  }
+
+  const handleAddEmission = async () => {
+    if (!emissionForm.source_name.trim() || !emissionForm.category.trim()) {
+      showToast('Source name and category are required', 'error'); return
+    }
+    if (!currentYear) { showToast('No reporting year selected', 'error'); return }
+    try {
+      setEmissionSubmitting(true)
+      await planetMarkApi.addEmissionSource(currentYear.id, {
+        source_name: emissionForm.source_name,
+        source_category: emissionForm.category,
+        scope: `scope_${emissionForm.scope}`,
+        activity_type: emissionForm.category.toLowerCase().replace(/\s+/g, '_'),
+        activity_value: parseFloat(emissionForm.activity_data) || 0,
+        activity_unit: emissionForm.activity_unit,
+        data_source: emissionForm.notes || undefined,
+      })
+      showToast('Emission source added successfully')
+      setShowEmissionModal(false)
+      setEmissionForm({ source_name: '', scope: '1', category: '', activity_data: '', activity_unit: 'litres', notes: '' })
+      setRetryCount(0)
+      loadData()
+    } catch (err) {
+      showToast(getApiErrorMessage(err), 'error')
+    } finally {
+      setEmissionSubmitting(false)
+    }
+  }
+
+  const handleAddAction = async () => {
+    if (!actionForm.action_name.trim() || !actionForm.description.trim()) {
+      showToast('Action name and description are required', 'error'); return
+    }
+    if (!currentYear) { showToast('No reporting year selected', 'error'); return }
+    try {
+      setActionSubmitting(true)
+      await planetMarkApi.createAction(currentYear.id, {
+        action_title: actionForm.action_name,
+        specific: actionForm.description,
+        measurable: `Reduce emissions by ${actionForm.target_reduction_percent || 0}%`,
+        achievable_owner: 'TBD',
+        time_bound: actionForm.deadline ? new Date(actionForm.deadline).toISOString() : new Date().toISOString(),
+        expected_reduction_pct: actionForm.target_reduction_percent ? parseFloat(actionForm.target_reduction_percent) : undefined,
+      })
+      showToast('Improvement action created successfully')
+      setShowActionModal(false)
+      setActionForm({ action_name: '', description: '', target_reduction_percent: '', deadline: '' })
+      setRetryCount(0)
+      loadData()
+    } catch (err) {
+      showToast(getApiErrorMessage(err), 'error')
+    } finally {
+      setActionSubmitting(false)
+    }
+  }
 
   // Transform API response to component types
   const transformYear = (apiYear: { 
@@ -262,6 +357,165 @@ export default function PlanetMark() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
+      {/* Toast */}
+      {toastMessage && (
+        <div className={`fixed top-4 right-4 z-[100] border rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 animate-fade-in ${
+          toastMessage.type === 'error' ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-card border-border text-foreground'
+        }`}>
+          {toastMessage.type === 'error' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 text-success" />}
+          <span className="text-sm">{toastMessage.text}</span>
+          <button onClick={() => setToastMessage(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
+        </div>
+      )}
+
+      {/* Add Emission Modal */}
+      {showEmissionModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          role="dialog" aria-modal="true"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowEmissionModal(false) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowEmissionModal(false) }}
+        >
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <Plus className="w-5 h-5 text-primary" />
+                Add Emission Source
+              </h2>
+              <button onClick={() => setShowEmissionModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Source Name</label>
+                <input type="text" value={emissionForm.source_name}
+                  onChange={(e) => setEmissionForm(f => ({ ...f, source_name: e.target.value }))}
+                  placeholder="e.g. Fleet Diesel, Natural Gas"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Scope</label>
+                  <select value={emissionForm.scope}
+                    onChange={(e) => setEmissionForm(f => ({ ...f, scope: e.target.value }))}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                    <option value="1">Scope 1 - Direct</option>
+                    <option value="2">Scope 2 - Indirect (Energy)</option>
+                    <option value="3">Scope 3 - Value Chain</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+                  <input type="text" value={emissionForm.category}
+                    onChange={(e) => setEmissionForm(f => ({ ...f, category: e.target.value }))}
+                    placeholder="e.g. fuel, electricity"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Activity Data</label>
+                  <input type="number" value={emissionForm.activity_data}
+                    onChange={(e) => setEmissionForm(f => ({ ...f, activity_data: e.target.value }))}
+                    placeholder="e.g. 103500"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Unit</label>
+                  <select value={emissionForm.activity_unit}
+                    onChange={(e) => setEmissionForm(f => ({ ...f, activity_unit: e.target.value }))}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                    <option value="litres">Litres</option>
+                    <option value="kWh">kWh</option>
+                    <option value="tonnes">Tonnes</option>
+                    <option value="km">Kilometres</option>
+                    <option value="miles">Miles</option>
+                    <option value="m3">m³</option>
+                    <option value="FTE">FTE</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Notes (optional)</label>
+                <textarea value={emissionForm.notes}
+                  onChange={(e) => setEmissionForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Data source, assumptions, etc."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+              </div>
+              <button onClick={handleAddEmission}
+                disabled={emissionSubmitting || !emissionForm.source_name.trim() || !emissionForm.category.trim()}
+                className="w-full py-3 bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                {emissionSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                {emissionSubmitting ? 'Adding...' : 'Add Emission Source'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Action Modal */}
+      {showActionModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          role="dialog" aria-modal="true"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowActionModal(false) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowActionModal(false) }}
+        >
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <Target className="w-5 h-5 text-primary" />
+                Add Improvement Action
+              </h2>
+              <button onClick={() => setShowActionModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Action Name</label>
+                <input type="text" value={actionForm.action_name}
+                  onChange={(e) => setActionForm(f => ({ ...f, action_name: e.target.value }))}
+                  placeholder="e.g. Implement eco-driving programme"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                <textarea value={actionForm.description}
+                  onChange={(e) => setActionForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe the action, expected outcomes, and measurable targets..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Target Reduction (%)</label>
+                  <input type="number" value={actionForm.target_reduction_percent}
+                    onChange={(e) => setActionForm(f => ({ ...f, target_reduction_percent: e.target.value }))}
+                    placeholder="e.g. 5"
+                    min="0" max="100"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Deadline</label>
+                  <input type="date" value={actionForm.deadline}
+                    onChange={(e) => setActionForm(f => ({ ...f, deadline: e.target.value }))}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary" />
+                </div>
+              </div>
+              <button onClick={handleAddAction}
+                disabled={actionSubmitting || !actionForm.action_name.trim() || !actionForm.description.trim()}
+                className="w-full py-3 bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                {actionSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Target className="w-5 h-5" />}
+                {actionSubmitting ? 'Creating...' : 'Create Action'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -274,11 +528,18 @@ export default function PlanetMark() {
           </div>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
-            <Download className="w-4 h-4" />
+          <button
+            onClick={handleExportReport}
+            disabled={exportingReport}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors disabled:opacity-50"
+          >
+            {exportingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Export Report
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={() => setShowEmissionModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             Add Emission
           </button>
@@ -575,7 +836,10 @@ export default function PlanetMark() {
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
                   <h3 className="font-bold text-white">Emission Sources by Scope</h3>
-                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                  <button
+                    onClick={() => setShowEmissionModal(true)}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
                     <Plus className="w-4 h-4" /> Add Source
                   </button>
                 </div>
@@ -697,7 +961,10 @@ export default function PlanetMark() {
                     <h3 className="font-bold text-white">SMART Improvement Actions</h3>
                     <p className="text-sm text-gray-400">Monthly action schedule for Year 2</p>
                   </div>
-                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                  <button
+                    onClick={() => setShowActionModal(true)}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
                     <Plus className="w-4 h-4" /> Add Action
                   </button>
                 </div>

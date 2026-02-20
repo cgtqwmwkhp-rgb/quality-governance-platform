@@ -118,7 +118,8 @@ export default function WorkflowCenter() {
       ]);
 
       if (approvalsRes.status === 'fulfilled') {
-        const items = Array.isArray(approvalsRes.value.data) ? approvalsRes.value.data : [];
+        const raw = approvalsRes.value.data as any;
+        const items = Array.isArray(raw) ? raw : (raw?.approvals || []);
         setApprovals(items.map((a: any) => ({
           id: String(a.id),
           workflow_id: String(a.workflow_id || ''),
@@ -153,7 +154,8 @@ export default function WorkflowCenter() {
       }
 
       if (templatesRes.status === 'fulfilled') {
-        const items = Array.isArray(templatesRes.value.data) ? templatesRes.value.data : [];
+        const raw = templatesRes.value.data as any;
+        const items = Array.isArray(raw) ? raw : (raw?.templates || []);
         setTemplates(items.map((t: any) => ({
           code: t.code || t.template_code || '',
           name: t.name || '',
@@ -206,9 +208,37 @@ export default function WorkflowCenter() {
     }
   };
 
-  const handleBulkApprove = () => {
-    alert(`Approving ${selectedApprovals.size} items...`);
-    setSelectedApprovals(new Set());
+  const handleApprove = async (stepId: string) => {
+    try {
+      await workflowsApi.approveRequest(Number(stepId), {});
+      await loadData();
+    } catch (err) {
+      console.error('Approve failed:', err);
+    }
+  };
+
+  const handleReject = async (stepId: string) => {
+    const reason = prompt('Please provide a reason for rejection:');
+    if (!reason) return;
+    try {
+      await workflowsApi.rejectRequest(Number(stepId), { reason });
+      await loadData();
+    } catch (err) {
+      console.error('Reject failed:', err);
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    try {
+      await workflowsApi.bulkApprove(
+        Array.from(selectedApprovals).map(Number),
+        {},
+      );
+      setSelectedApprovals(new Set());
+      await loadData();
+    } catch (err) {
+      console.error('Bulk approve failed:', err);
+    }
   };
 
   const tabs = [
@@ -405,11 +435,11 @@ export default function WorkflowCenter() {
                       </div>
 
                       <div className="flex items-center gap-2 mt-3">
-                        <Button variant="success" size="sm">
+                        <Button variant="success" size="sm" onClick={() => handleApprove(approval.id)}>
                           <CheckCircle className="w-4 h-4" />
                           Approve
                         </Button>
-                        <Button variant="destructive" size="sm">
+                        <Button variant="destructive" size="sm" onClick={() => handleReject(approval.id)}>
                           <XCircle className="w-4 h-4" />
                           Reject
                         </Button>

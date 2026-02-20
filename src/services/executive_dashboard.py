@@ -29,6 +29,14 @@ class ExecutiveDashboardService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _safe_call(self, coro, default):
+        """Run an async function, returning default on any DB error."""
+        try:
+            return await coro
+        except Exception as e:
+            logger.warning("Dashboard query failed: %s", e)
+            return default
+
     async def get_full_dashboard(
         self,
         period_days: int = 30,
@@ -36,17 +44,23 @@ class ExecutiveDashboardService:
         """Get complete executive dashboard with all KPIs."""
         cutoff = datetime.utcnow() - timedelta(days=period_days)
 
-        # Get all module summaries in parallel
-        incident_summary = await self._get_incident_summary(cutoff)
-        near_miss_summary = await self._get_near_miss_summary(cutoff)
-        complaint_summary = await self._get_complaint_summary(cutoff)
-        rta_summary = await self._get_rta_summary(cutoff)
-        risk_summary = await self._get_risk_summary()
-        kri_summary = await self._get_kri_summary()
-        compliance_summary = await self._get_compliance_summary()
-        sla_summary = await self._get_sla_summary()
+        empty_summary = {"total_in_period": 0, "open": 0}
+        empty_risk = {"total_active": 0, "by_level": {}, "open": 0}
+        empty_kri = {"total": 0, "triggered": 0, "pending_alerts": 0}
+        empty_compliance = {"total_assigned": 0, "completed": 0, "overdue": 0, "completion_rate": 100}
+        empty_sla = {"total_tracked": 0, "met": 0, "breached": 0, "compliance_rate": 100}
 
-        # Calculate overall health score
+        incident_summary = await self._safe_call(
+            self._get_incident_summary(cutoff), {**empty_summary, "by_severity": {}, "high_severity": 0}
+        )
+        near_miss_summary = await self._safe_call(self._get_near_miss_summary(cutoff), empty_summary)
+        complaint_summary = await self._safe_call(self._get_complaint_summary(cutoff), empty_summary)
+        rta_summary = await self._safe_call(self._get_rta_summary(cutoff), empty_summary)
+        risk_summary = await self._safe_call(self._get_risk_summary(), empty_risk)
+        kri_summary = await self._safe_call(self._get_kri_summary(), empty_kri)
+        compliance_summary = await self._safe_call(self._get_compliance_summary(), empty_compliance)
+        sla_summary = await self._safe_call(self._get_sla_summary(), empty_sla)
+
         health_score = self._calculate_health_score(
             incident_summary,
             near_miss_summary,
@@ -56,6 +70,9 @@ class ExecutiveDashboardService:
             compliance_summary,
             sla_summary,
         )
+
+        trends = await self._safe_call(self._get_trends(period_days), {})
+        alerts = await self._safe_call(self._get_active_alerts(), [])
 
         return {
             "generated_at": datetime.utcnow().isoformat(),
@@ -69,8 +86,8 @@ class ExecutiveDashboardService:
             "kris": kri_summary,
             "compliance": compliance_summary,
             "sla_performance": sla_summary,
-            "trends": await self._get_trends(period_days),
-            "alerts": await self._get_active_alerts(),
+            "trends": trends,
+            "alerts": alerts,
         }
 
     async def _get_incident_summary(self, cutoff: datetime) -> Dict[str, Any]:
