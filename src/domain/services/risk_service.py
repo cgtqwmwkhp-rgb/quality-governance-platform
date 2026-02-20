@@ -462,12 +462,12 @@ class BowTieService:
         if not risk:
             raise ValueError(f"Risk {risk_id} not found")
 
-        result = await self.db.execute(
+        bt_result = await self.db.execute(
             select(BowTieElement)
             .where(BowTieElement.risk_id == risk_id)
             .order_by(BowTieElement.position, BowTieElement.order_index)
         )
-        elements = result.scalars().all()
+        elements = bt_result.scalars().all()
 
         causes = [e for e in elements if e.element_type == "cause"]
         consequences = [e for e in elements if e.element_type == "consequence"]
@@ -475,14 +475,14 @@ class BowTieService:
         mitigation_barriers = [e for e in elements if e.element_type == "mitigation"]
         escalation_factors = [e for e in elements if e.is_escalation_factor]
 
-        result = await self.db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
-        control_mappings = result.scalars().all()
+        mapping_result = await self.db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
+        control_mappings = mapping_result.scalars().all()
         control_ids = [m.control_id for m in control_mappings]
         if control_ids:
-            result = await self.db.execute(
+            ctrl_result = await self.db.execute(
                 select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids))
             )
-            controls = result.scalars().all()
+            controls = ctrl_result.scalars().all()
         else:
             controls = []
 
