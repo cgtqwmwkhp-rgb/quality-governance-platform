@@ -153,8 +153,8 @@ class TestKRIAlert:
 
         assert alert.severity == ThresholdStatus.RED
         assert alert.trigger_value == 20
-        assert alert.is_acknowledged is False
-        assert alert.is_resolved is False
+        assert not alert.is_acknowledged
+        assert not alert.is_resolved
 
 
 class TestRiskScoreHistory:

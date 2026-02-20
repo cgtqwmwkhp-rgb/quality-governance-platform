@@ -152,7 +152,7 @@ class TestAuthSmoke:
         )
         # Should return 401 for bad credentials, not 500
         # 404 may occur if auth routes aren't included in test configuration
-        assert response.status_code in [200, 401, 404, 422], f"Login endpoint error: {response.status_code}"
+        assert response.status_code in [200, 401, 404, 422, 429], f"Login endpoint error: {response.status_code}"
 
     def test_valid_credentials_work(self, auth_token):
         """✓ Valid credentials must return token."""

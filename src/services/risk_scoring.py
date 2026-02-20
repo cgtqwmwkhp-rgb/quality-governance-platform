@@ -453,10 +453,30 @@ class KRIService:
         return float(result.scalar() or 0)
 
     async def _calculate_incident_rate(self) -> float:
-        """Calculate incident rate per 1000 employees (placeholder)."""
-        # This would typically be: (incidents / total_employees) * 1000
-        # For now, just return the count
-        return await self._count_incidents(days=30)
+        """Calculate incident rate per 1000 employees.
+
+        Uses a configurable workforce size; defaults to 250 if not
+        available from tenant settings.
+        """
+        incident_count = await self._count_incidents(days=30)
+        workforce_size = await self._get_workforce_size()
+        if workforce_size <= 0:
+            logger.warning("Workforce size unavailable, defaulting to 250")
+            workforce_size = 250
+        return (incident_count / workforce_size) * 1000
+
+    async def _get_workforce_size(self) -> int:
+        """Retrieve the workforce headcount from tenant settings or default."""
+        try:
+            from src.domain.models.tenant import Tenant
+
+            result = await self.db.execute(select(Tenant).limit(1))
+            tenant = result.scalar_one_or_none()
+            if tenant and hasattr(tenant, "employee_count") and tenant.employee_count:
+                return int(tenant.employee_count)
+        except Exception:
+            logger.debug("Could not retrieve workforce size from tenant settings")
+        return 250
 
     async def _calculate_closure_rate(self, entity_type: str) -> float:
         """Calculate percentage of cases closed within target."""
@@ -511,18 +531,76 @@ class KRIService:
         return float(result.scalar() or 0)
 
     async def _calculate_avg_resolution_days(self, entity_type: str) -> float:
-        """Calculate average resolution time in days."""
-        # Simplified implementation
-        return 5.0  # Placeholder
+        """Calculate average resolution time in days from closed records."""
+        if entity_type == "complaint":
+            from src.domain.models.complaint import Complaint, ComplaintStatus
+
+            cutoff = datetime.utcnow() - timedelta(days=90)
+            result = await self.db.execute(
+                select(Complaint.received_date, Complaint.resolved_date).where(
+                    and_(
+                        Complaint.status.in_([ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED]),
+                        Complaint.resolved_date.isnot(None),
+                        Complaint.created_at >= cutoff,
+                    )
+                )
+            )
+            rows = result.all()
+            if not rows:
+                return 0.0
+            total_days = sum(
+                (row.resolved_date - row.received_date).total_seconds() / 86400
+                for row in rows
+                if row.resolved_date and row.received_date
+            )
+            return round(total_days / len(rows), 1) if rows else 0.0
+
+        if entity_type == "incident":
+            cutoff = datetime.utcnow() - timedelta(days=90)
+            result = await self.db.execute(
+                select(Incident.created_at, Incident.closed_at).where(
+                    and_(
+                        Incident.status == IncidentStatus.CLOSED,
+                        Incident.closed_at.isnot(None),
+                        Incident.created_at >= cutoff,
+                    )
+                )
+            )
+            rows = result.all()
+            if not rows:
+                return 0.0
+            total_days = sum(
+                (row.closed_at - row.created_at).total_seconds() / 86400
+                for row in rows
+                if row.closed_at and row.created_at
+            )
+            return round(total_days / len(rows), 1) if rows else 0.0
+
+        return 0.0
 
     async def _count_audit_findings(self, days: int) -> float:
         """Count audit findings in period."""
-        # Would query audit_findings table
-        return 0.0  # Placeholder
+        from src.domain.models.audit import AuditFinding
+
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        result = await self.db.execute(
+            select(func.count(AuditFinding.id)).where(AuditFinding.created_at >= cutoff)
+        )
+        return float(result.scalar() or 0)
 
     async def _count_high_risk_findings(self) -> float:
-        """Count high-risk audit findings."""
-        return 0.0  # Placeholder
+        """Count high-risk audit findings that are still open."""
+        from src.domain.models.audit import AuditFinding, FindingStatus
+
+        result = await self.db.execute(
+            select(func.count(AuditFinding.id)).where(
+                and_(
+                    AuditFinding.severity.in_(["critical", "high"]),
+                    AuditFinding.status.in_([FindingStatus.OPEN, FindingStatus.IN_PROGRESS]),
+                )
+            )
+        )
+        return float(result.scalar() or 0)
 
     async def _count_high_risks(self) -> float:
         """Count risks rated high or critical."""

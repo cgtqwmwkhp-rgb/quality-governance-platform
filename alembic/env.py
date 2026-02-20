@@ -30,6 +30,13 @@ from src.domain.models import (
     RTAAction,
     Standard,
     User,
+    WorkflowTemplate,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowApprovalRequest,
+    EscalationRule,
+    EscalationLog,
+    UserDelegation,
 )
 
 # Import all models to ensure they are registered with Base.metadata

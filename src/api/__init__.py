@@ -21,6 +21,7 @@ from src.api.routes import (
     executive_dashboard,
     form_config,
     global_search,
+    ims_dashboard,
     incidents,
     investigation_templates,
     investigations,
@@ -80,6 +81,8 @@ router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS
 router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
+# IMS (Integrated Management System) Dashboard
+router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
 # AI Copilot (Tier 2)
 router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
 # Digital Signatures (Tier 2)

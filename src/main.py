@@ -71,6 +71,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.is_development:
         await init_db()
 
+    # Seed compliance automation default data if tables are empty
+    try:
+        from src.domain.services.compliance_automation_service import compliance_automation_service
+        from src.infrastructure.database import async_session_maker
+
+        async with async_session_maker() as session:
+            await compliance_automation_service.seed_default_data(session)
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Compliance automation seed skipped: {e}")
+
     # Pre-warm OpenAPI schema generation for fast first request
     # This avoids cold-start latency when /openapi.json is first accessed
     # FastAPI caches the schema internally after first generation

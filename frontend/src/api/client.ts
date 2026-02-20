@@ -1387,6 +1387,38 @@ export const planetMarkApi = {
     api.get<{ status: string; evidence_checklist: Record<string, boolean> }>(
       `/api/v1/planet-mark/years/${yearId}/certification`
     ),
+
+  /**
+   * Add an emission source to a reporting year.
+   */
+  addEmissionSource: (yearId: number, data: {
+    source_name: string
+    source_category: string
+    scope: string
+    activity_type: string
+    activity_value: number
+    activity_unit: string
+    data_quality_level?: string
+    data_source?: string
+  }) =>
+    api.post<{ id: number; co2e_tonnes: number; message: string }>(
+      `/api/v1/planet-mark/years/${yearId}/sources`, data
+    ),
+
+  /**
+   * Create a SMART improvement action for a reporting year.
+   */
+  createAction: (yearId: number, data: {
+    action_title: string
+    specific: string
+    measurable: string
+    achievable_owner: string
+    time_bound: string
+    expected_reduction_pct?: number
+  }) =>
+    api.post<{ id: number; action_id: string; message: string }>(
+      `/api/v1/planet-mark/years/${yearId}/actions`, data
+    ),
 }
 
 // ============ UVDB Achilles Types ============
@@ -1491,6 +1523,20 @@ export const uvdbApi = {
   getISOMapping: () =>
     api.get<{ mappings: { uvdb_section: string; iso_clauses: string[] }[] }>(
       '/api/v1/uvdb/iso-mapping'
+    ),
+
+  /**
+   * Create a new UVDB audit.
+   */
+  createAudit: (data: {
+    company_name: string
+    audit_type?: string
+    audit_scope?: string
+    audit_date?: string
+    lead_auditor?: string
+  }) =>
+    api.post<{ id: number; audit_reference: string; message: string }>(
+      '/api/v1/uvdb/audits', data
     ),
 }
 
@@ -1863,6 +1909,19 @@ export interface AutoTagResult {
   linked_by: string
 }
 
+export interface EvidenceLinkRecord {
+  id: number
+  entity_type: string
+  entity_id: string
+  clause_id: string
+  linked_by: string
+  confidence: number | null
+  title: string | null
+  notes: string | null
+  created_at: string
+  created_by_email: string | null
+}
+
 export const complianceApi = {
   listClauses: (standard?: string, search?: string) => {
     const sp = new URLSearchParams()
@@ -1872,8 +1931,27 @@ export const complianceApi = {
   },
   autoTag: (content: string, useAi = false) =>
     api.post<AutoTagResult[]>('/api/v1/compliance/auto-tag', { content, use_ai: useAi }),
-  linkEvidence: (data: { entity_type: string; entity_id: string; clause_ids: string[]; linked_by?: string; confidence?: number }) =>
-    api.post<{ status: string }>('/api/v1/compliance/evidence/link', data),
+  linkEvidence: (data: {
+    entity_type: string
+    entity_id: string
+    clause_ids: string[]
+    linked_by?: string
+    confidence?: number
+    title?: string
+    notes?: string
+  }) =>
+    api.post<{ status: string; message: string; links: unknown[] }>('/api/v1/compliance/evidence/link', data),
+  listEvidenceLinks: (params?: { entity_type?: string; entity_id?: string; clause_id?: string; page?: number; size?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.entity_type) sp.set('entity_type', params.entity_type)
+    if (params?.entity_id) sp.set('entity_id', params.entity_id)
+    if (params?.clause_id) sp.set('clause_id', params.clause_id)
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.size) sp.set('size', String(params.size))
+    return api.get<EvidenceLinkRecord[]>(`/api/v1/compliance/evidence/links?${sp}`)
+  },
+  deleteEvidenceLink: (linkId: number) =>
+    api.delete<{ status: string }>(`/api/v1/compliance/evidence/link/${linkId}`),
   getCoverage: (standard?: string) =>
     api.get<Record<string, unknown>>(`/api/v1/compliance/coverage${standard ? `?standard=${standard}` : ''}`),
   getGaps: (standard?: string) =>
@@ -1882,6 +1960,168 @@ export const complianceApi = {
     api.get<unknown>(`/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`),
   listStandards: () =>
     api.get<unknown[]>('/api/v1/compliance/standards'),
+}
+
+// ============ Compliance Automation API ============
+
+export const complianceAutomationApi = {
+  listRegulatoryUpdates: (params?: { source?: string; impact?: string; reviewed?: boolean }) => {
+    const sp = new URLSearchParams()
+    if (params?.source) sp.set('source', params.source)
+    if (params?.impact) sp.set('impact', params.impact)
+    if (params?.reviewed !== undefined) sp.set('reviewed', String(params.reviewed))
+    return api.get<{ updates: unknown[]; total: number; unreviewed: number }>(`/api/v1/compliance-automation/regulatory-updates?${sp}`)
+  },
+  reviewUpdate: (updateId: number, data?: { requires_action?: boolean; action_notes?: string }) => {
+    const sp = new URLSearchParams()
+    if (data?.requires_action !== undefined) sp.set('requires_action', String(data.requires_action))
+    if (data?.action_notes) sp.set('action_notes', data.action_notes)
+    return api.post<unknown>(`/api/v1/compliance-automation/regulatory-updates/${updateId}/review?${sp}`)
+  },
+  runGapAnalysis: (params?: { regulatory_update_id?: number; standard_id?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.regulatory_update_id) sp.set('regulatory_update_id', String(params.regulatory_update_id))
+    if (params?.standard_id) sp.set('standard_id', String(params.standard_id))
+    return api.post<unknown>(`/api/v1/compliance-automation/gap-analysis/run?${sp}`)
+  },
+  listGapAnalyses: (status?: string) => {
+    const sp = new URLSearchParams()
+    if (status) sp.set('status_filter', status)
+    return api.get<{ analyses: unknown[]; total: number }>(`/api/v1/compliance-automation/gap-analyses?${sp}`)
+  },
+  listCertificates: (params?: { certificate_type?: string; entity_type?: string; status?: string; expiring_within_days?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.certificate_type) sp.set('certificate_type', params.certificate_type)
+    if (params?.entity_type) sp.set('entity_type', params.entity_type)
+    if (params?.status) sp.set('status_filter', params.status)
+    if (params?.expiring_within_days) sp.set('expiring_within_days', String(params.expiring_within_days))
+    return api.get<{ certificates: unknown[]; total: number }>(`/api/v1/compliance-automation/certificates?${sp}`)
+  },
+  getExpiringCertificates: () =>
+    api.get<{ expired: number; expiring_7_days: number; expiring_30_days: number; expiring_90_days: number; total_critical: number }>('/api/v1/compliance-automation/certificates/expiring-summary'),
+  addCertificate: (data: {
+    name: string
+    certificate_type: string
+    entity_type: string
+    entity_id: string
+    entity_name?: string
+    issuing_body?: string
+    issue_date: string
+    expiry_date: string
+    is_critical?: boolean
+    notes?: string
+  }) =>
+    api.post<unknown>('/api/v1/compliance-automation/certificates', data),
+  listScheduledAudits: (params?: { upcoming_days?: number; overdue?: boolean }) => {
+    const sp = new URLSearchParams()
+    if (params?.upcoming_days) sp.set('upcoming_days', String(params.upcoming_days))
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    return api.get<{ audits: unknown[]; total: number }>(`/api/v1/compliance-automation/scheduled-audits?${sp}`)
+  },
+  scheduleAudit: (data: {
+    name: string
+    audit_type: string
+    frequency: string
+    next_due_date: string
+    description?: string
+    department?: string
+    standard_ids?: string[]
+  }) =>
+    api.post<unknown>('/api/v1/compliance-automation/scheduled-audits', data),
+  getComplianceScore: (params?: { scope_type?: string; scope_id?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.scope_type) sp.set('scope_type', params.scope_type)
+    if (params?.scope_id) sp.set('scope_id', params.scope_id)
+    return api.get<Record<string, unknown>>(`/api/v1/compliance-automation/score?${sp}`)
+  },
+  getComplianceTrend: (params?: { scope_type?: string; months?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.scope_type) sp.set('scope_type', params.scope_type)
+    if (params?.months) sp.set('months', String(params.months))
+    return api.get<{ trend: unknown[]; period_months: number }>(`/api/v1/compliance-automation/score/trend?${sp}`)
+  },
+  checkRiddor: (incidentData: Record<string, unknown>) =>
+    api.post<{ is_riddor: boolean; riddor_types: string[]; deadline: string | null; submission_url: string | null }>('/api/v1/compliance-automation/riddor/check', incidentData),
+  prepareRiddor: (incidentId: number, riddorType: string) => {
+    const sp = new URLSearchParams({ riddor_type: riddorType })
+    return api.post<unknown>(`/api/v1/compliance-automation/riddor/prepare/${incidentId}?${sp}`)
+  },
+  submitRiddor: (incidentId: number) =>
+    api.post<unknown>(`/api/v1/compliance-automation/riddor/submit/${incidentId}`),
+}
+
+// ============ IMS Dashboard API ============
+
+export interface IMSDashboardResponse {
+  generated_at: string
+  overall_compliance: number
+  standards: {
+    standard_id: number
+    standard_code: string
+    standard_name: string
+    full_name: string
+    version: string
+    total_controls: number
+    implemented_count: number
+    partial_count: number
+    not_implemented_count: number
+    compliance_percentage: number
+    setup_required: boolean
+  }[]
+  isms: {
+    assets: { total: number; critical: number }
+    controls: { total: number; applicable: number; implemented: number; implementation_percentage: number }
+    risks: { open: number; high_critical: number }
+    incidents: { open: number; last_30_days: number }
+    suppliers: { high_risk: number }
+    compliance_score: number
+    domains: { domain: string; total: number; implemented: number; percentage: number }[]
+    recent_incidents: { id: string; title: string; incident_type: string; severity: string; status: string; date: string }[]
+  } | null
+  isms_error?: string
+  uvdb: {
+    total_audits: number
+    active_audits: number
+    completed_audits: number
+    average_score: number
+    latest_score: number | null
+    status: string
+  } | null
+  uvdb_error?: string
+  planet_mark: {
+    status: string
+    current_year: number | null
+    total_emissions: number | null
+    certification_status: string | null
+    reduction_vs_previous: number | null
+    scope1: number
+    scope2: number
+    scope3: number
+  } | null
+  planet_mark_error?: string
+  compliance_coverage: {
+    total_clauses: number
+    covered_clauses: number
+    coverage_percentage: number
+    gaps: number
+    total_evidence_links: number
+  } | null
+  compliance_coverage_error?: string
+  audit_schedule: {
+    id: number
+    reference_number: string
+    title: string | null
+    status: string
+    scheduled_date: string | null
+    due_date: string | null
+  }[]
+  audit_schedule_error?: string
+  standards_error?: string
+}
+
+export const imsDashboardApi = {
+  getDashboard: () =>
+    api.get<IMSDashboardResponse>('/api/v1/ims/dashboard'),
 }
 
 // ============ Global Search API ============

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2 } from 'lucide-react'
-import { standardsApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
+import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2, Link2, X, XCircle } from 'lucide-react'
+import { standardsApi, complianceApi, Standard, Clause, ControlListItem, ComplianceScore, getApiErrorMessage } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -28,6 +28,46 @@ export default function Standards() {
   const [loadingClauses, setLoadingClauses] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [expanded, setExpanded] = useState<ExpandedState>({})
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [linkClauseId, setLinkClauseId] = useState<string | null>(null)
+  const [linkClauseLabel, setLinkClauseLabel] = useState('')
+  const [linkForm, setLinkForm] = useState({ entity_type: 'document', entity_id: '' })
+  const [linkSubmitting, setLinkSubmitting] = useState(false)
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type })
+    setTimeout(() => setToastMessage(null), 4000)
+  }
+
+  const openLinkModal = (clauseId: string, label: string) => {
+    setLinkClauseId(clauseId)
+    setLinkClauseLabel(label)
+    setLinkForm({ entity_type: 'document', entity_id: '' })
+    setShowLinkModal(true)
+  }
+
+  const handleLinkEvidence = async () => {
+    if (!linkForm.entity_id.trim() || !linkClauseId) {
+      showToast('Reference ID is required', 'error'); return
+    }
+    try {
+      setLinkSubmitting(true)
+      await complianceApi.linkEvidence({
+        entity_type: linkForm.entity_type,
+        entity_id: linkForm.entity_id,
+        clause_ids: [linkClauseId],
+        linked_by: 'manual',
+        title: `${linkForm.entity_type} ${linkForm.entity_id}`,
+      })
+      showToast('Evidence linked successfully')
+      setShowLinkModal(false)
+    } catch (err) {
+      showToast(getApiErrorMessage(err), 'error')
+    } finally {
+      setLinkSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     loadStandards()
@@ -126,6 +166,82 @@ export default function Standards() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Toast */}
+      {toastMessage && (
+        <div className={`fixed top-4 right-4 z-[100] border rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 animate-fade-in ${
+          toastMessage.type === 'error' ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-card border-border text-foreground'
+        }`}>
+          {toastMessage.type === 'error' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 text-success" />}
+          <span className="text-sm">{toastMessage.text}</span>
+          <button onClick={() => setToastMessage(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
+        </div>
+      )}
+
+      {/* Link Evidence Modal */}
+      {showLinkModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          role="dialog" aria-modal="true"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowLinkModal(false) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkModal(false) }}
+        >
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-primary" />
+                Link Evidence
+              </h2>
+              <button onClick={() => setShowLinkModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {linkClauseLabel && (
+              <div className="mb-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
+                <p className="text-sm font-medium text-foreground">{linkClauseLabel}</p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Evidence Type</label>
+                <select
+                  value={linkForm.entity_type}
+                  onChange={(e) => setLinkForm(f => ({ ...f, entity_type: e.target.value }))}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                >
+                  <option value="policy">Policy</option>
+                  <option value="document">Document</option>
+                  <option value="audit">Audit</option>
+                  <option value="incident">Incident</option>
+                  <option value="action">Action</option>
+                  <option value="risk">Risk</option>
+                  <option value="training">Training</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Reference ID</label>
+                <input
+                  type="text"
+                  value={linkForm.entity_id}
+                  onChange={(e) => setLinkForm(f => ({ ...f, entity_id: e.target.value }))}
+                  placeholder="e.g. DOC-001, POL-2026-003"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <button
+                onClick={handleLinkEvidence}
+                disabled={linkSubmitting || !linkForm.entity_id.trim()}
+                className="w-full py-3 bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {linkSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Link2 className="w-5 h-5" />}
+                {linkSubmitting ? 'Linking...' : 'Link Evidence'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
@@ -351,6 +467,14 @@ export default function Standards() {
                                   )} />
                                   <span className="font-mono text-xs text-primary">{control.control_number}</span>
                                   <span className="text-sm text-foreground truncate flex-1">{control.title}</span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openLinkModal(String(control.clause_id), `${control.control_number} - ${control.title}`) }}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 rounded-md transition-colors flex-shrink-0"
+                                    title="Link Evidence"
+                                  >
+                                    <Link2 className="w-3 h-3" />
+                                    Link Evidence
+                                  </button>
                                   <Badge 
                                     variant={
                                       control.implementation_status === 'implemented' ? 'resolved' :

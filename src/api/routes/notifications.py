@@ -11,11 +11,17 @@ Features:
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func, select, update
 
-from src.api.dependencies import CurrentUser
-from src.domain.models.notification import NotificationPriority, NotificationType
+from src.api.dependencies import CurrentUser, DbSession
+from src.domain.models.notification import (
+    Notification,
+    NotificationPreference,
+    NotificationPriority,
+    NotificationType,
+)
 
 router = APIRouter()
 
@@ -97,6 +103,7 @@ class MentionSearchResult(BaseModel):
 
 @router.get("/", response_model=NotificationListResponse)
 async def list_notifications(
+    db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -108,128 +115,178 @@ async def list_notifications(
 
     Supports filtering by read status and notification type.
     """
-    # Parse notification type filter (placeholder for production implementation)
-    _ = notification_type  # Used in production for filtering
+    query = select(Notification).where(Notification.user_id == current_user.id)
 
-    # Mock notifications for demonstration
-    mock_notifications = [
-        NotificationResponse(
-            id=1,
-            type="mention",
-            priority="medium",
-            title="You were mentioned",
-            message="John Smith mentioned you in an incident report",
-            entity_type="incident",
-            entity_id="INC-001",
-            action_url="/incidents/INC-001",
-            sender_id=2,
-            is_read=False,
-            created_at=datetime.utcnow(),
-        ),
-        NotificationResponse(
-            id=2,
-            type="assignment",
-            priority="high",
-            title="Action assigned to you",
-            message="Complete risk assessment for Site A",
-            entity_type="action",
-            entity_id="ACT-042",
-            action_url="/actions/ACT-042",
-            sender_id=3,
-            is_read=False,
-            created_at=datetime.utcnow(),
-        ),
-        NotificationResponse(
-            id=3,
-            type="action_due_soon",
-            priority="medium",
-            title="Action due tomorrow",
-            message="Update safety documentation - due in 24 hours",
-            entity_type="action",
-            entity_id="ACT-038",
-            action_url="/actions/ACT-038",
-            sender_id=None,
-            is_read=True,
-            created_at=datetime.utcnow(),
-        ),
-    ]
-
-    # Filter by read status
     if unread_only:
-        mock_notifications = [n for n in mock_notifications if not n.is_read]
+        query = query.where(Notification.is_read == False)
+    if notification_type:
+        query = query.where(Notification.type == notification_type)
 
-    total = len(mock_notifications)
-    unread = len([n for n in mock_notifications if not n.is_read])
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
 
-    # Paginate
-    start = (page - 1) * page_size
-    end = start + page_size
-    items = mock_notifications[start:end]
+    unread_query = select(func.count()).where(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    )
+    unread_count = await db.scalar(unread_query) or 0
+
+    query = query.order_by(Notification.created_at.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
+    result = await db.execute(query)
+    notifications = result.scalars().all()
 
     return NotificationListResponse(
-        items=items,
+        items=[NotificationResponse.model_validate(n) for n in notifications],
         total=total,
-        unread_count=unread,
+        unread_count=unread_count,
         page=page,
         page_size=page_size,
     )
 
 
 @router.get("/unread-count")
-async def get_unread_count(current_user: CurrentUser):
+async def get_unread_count(db: DbSession, current_user: CurrentUser):
     """Get the count of unread notifications for the current user."""
-    # Mock count for demonstration
-    return {"unread_count": 5}
+    count = await db.scalar(
+        select(func.count()).where(
+            Notification.user_id == current_user.id,
+            Notification.is_read == False,
+        )
+    ) or 0
+    return {"unread_count": count}
 
 
 @router.post("/{notification_id}/read")
-async def mark_notification_read(notification_id: int, current_user: CurrentUser):
+async def mark_notification_read(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Mark a specific notification as read."""
-    # In production, update database
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.is_read = True
+    notification.read_at = datetime.utcnow()
+    await db.commit()
+    return {"success": True, "notification_id": notification_id}
+
+
+@router.post("/{notification_id}/unread")
+async def mark_notification_unread(notification_id: int, db: DbSession, current_user: CurrentUser):
+    """Mark a specific notification as unread."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.is_read = False
+    notification.read_at = None
+    await db.commit()
     return {"success": True, "notification_id": notification_id}
 
 
 @router.post("/read-all")
-async def mark_all_notifications_read(current_user: CurrentUser):
+async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
     """Mark all notifications as read for the current user."""
-    # In production, update database
-    return {"success": True, "count": 5}
+    result = await db.execute(
+        update(Notification)
+        .where(
+            Notification.user_id == current_user.id,
+            Notification.is_read == False,
+        )
+        .values(is_read=True, read_at=datetime.utcnow())
+    )
+    await db.commit()
+    return {"success": True, "count": result.rowcount}
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(notification_id: int, current_user: CurrentUser):
+async def delete_notification(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Delete a specific notification."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    await db.delete(notification)
+    await db.commit()
     return {"success": True, "notification_id": notification_id}
 
 
 @router.get("/preferences")
-async def get_notification_preferences(current_user: CurrentUser):
+async def get_notification_preferences(db: DbSession, current_user: CurrentUser):
     """Get notification preferences for the current user."""
-    # Mock preferences
+    result = await db.execute(
+        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
+    )
+    prefs = result.scalar_one_or_none()
+
+    if not prefs:
+        return {
+            "email_enabled": True,
+            "sms_enabled": False,
+            "push_enabled": True,
+            "phone_number": None,
+            "quiet_hours_enabled": False,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "07:00",
+            "email_digest_enabled": True,
+            "email_digest_frequency": "daily",
+            "category_preferences": {},
+        }
+
     return {
-        "email_enabled": True,
-        "sms_enabled": False,
-        "push_enabled": True,
-        "phone_number": None,
-        "quiet_hours_enabled": False,
-        "quiet_hours_start": "22:00",
-        "quiet_hours_end": "07:00",
-        "email_digest_enabled": True,
-        "email_digest_frequency": "daily",
-        "category_preferences": {
-            "mention": ["in_app", "email"],
-            "assignment": ["in_app", "email", "push"],
-            "sos_alert": ["in_app", "email", "sms", "push"],
-            "action_due_soon": ["in_app", "email"],
-        },
+        "email_enabled": prefs.email_enabled,
+        "sms_enabled": prefs.sms_enabled,
+        "push_enabled": prefs.push_enabled,
+        "phone_number": prefs.phone_number,
+        "quiet_hours_enabled": prefs.quiet_hours_enabled,
+        "quiet_hours_start": prefs.quiet_hours_start,
+        "quiet_hours_end": prefs.quiet_hours_end,
+        "email_digest_enabled": prefs.email_digest_enabled,
+        "email_digest_frequency": prefs.email_digest_frequency,
+        "category_preferences": prefs.category_preferences or {},
     }
 
 
 @router.put("/preferences")
-async def update_notification_preferences(preferences: NotificationPreferencesUpdate, current_user: CurrentUser):
+async def update_notification_preferences(
+    preferences: NotificationPreferencesUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
     """Update notification preferences for the current user."""
-    # In production, update database
-    return {"success": True, "preferences": preferences.dict(exclude_unset=True)}
+    result = await db.execute(
+        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
+    )
+    prefs = result.scalar_one_or_none()
+
+    if not prefs:
+        prefs = NotificationPreference(user_id=current_user.id)
+        db.add(prefs)
+
+    update_data = preferences.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(prefs, field, value)
+
+    await db.commit()
+    return {"success": True, "preferences": update_data}
 
 
 @router.get("/mentions/search", response_model=List[MentionSearchResult])

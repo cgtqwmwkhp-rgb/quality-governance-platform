@@ -871,9 +871,12 @@ async def get_carbon_dashboard(
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
     try:
-        years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
+        from sqlalchemy import select as sa_select
+        result = await db.execute(
+            sa_select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3)
+        )
+        years = list(result.scalars().all())
     except (ProgrammingError, OperationalError) as e:
-        # Table doesn't exist or schema mismatch - log and return setup required
         logger.warning(
             "Planet Mark dashboard query failed (likely missing table): %s",
             str(e)[:200],
@@ -886,7 +889,6 @@ async def get_carbon_dashboard(
             request_id=get_request_id(request),
         )
     except Exception as e:
-        # Unexpected error - log full details for debugging
         logger.error(
             "Planet Mark dashboard query failed unexpectedly: %s: %s",
             type(e).__name__,
@@ -909,9 +911,12 @@ async def get_carbon_dashboard(
         )
 
     current_year = years[0]
-    baseline = db.query(CarbonReportingYear).filter(CarbonReportingYear.is_baseline_year == True).first()
+    from sqlalchemy import select as sa_select
+    baseline_result = await db.execute(
+        sa_select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True)
+    )
+    baseline = baseline_result.scalars().first()
 
-    # Calculate year-on-year change
     yoy_change = None
     if len(years) >= 2:
         prev_year = years[1]
@@ -920,8 +925,10 @@ async def get_carbon_dashboard(
                 (current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte
             ) * 100
 
-    # Action summary
-    actions = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == current_year.id).all()
+    actions_result = await db.execute(
+        sa_select(ImprovementAction).where(ImprovementAction.reporting_year_id == current_year.id)
+    )
+    actions = list(actions_result.scalars().all())
 
     overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]
 

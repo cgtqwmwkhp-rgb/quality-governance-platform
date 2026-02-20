@@ -50,6 +50,19 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 
+# Compliance Evidence Links
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+
+# Compliance Automation
+from src.domain.models.compliance_automation import (
+    Certificate,
+    ComplianceScore,
+    GapAnalysis,
+    RegulatoryUpdate,
+    RIDDORSubmission,
+    ScheduledAudit,
+)
+
 # Evidence Assets (Shared Attachments Module)
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
@@ -131,6 +144,17 @@ from src.domain.models.risk_register import (
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
+
+# Workflow Persistence Models
+from src.domain.models.workflow import (
+    ApprovalRequest as WorkflowApprovalRequest,
+    EscalationLog,
+    EscalationRule,
+    UserDelegation,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowTemplate,
+)
 
 # UVDB Achilles Verify B2 Audit Protocol
 from src.domain.models.uvdb_achilles import (
@@ -282,4 +306,22 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
+    # Compliance Evidence Links
+    "ComplianceEvidenceLink",
+    "EvidenceLinkMethod",
+    # Compliance Automation
+    "RegulatoryUpdate",
+    "GapAnalysis",
+    "Certificate",
+    "ScheduledAudit",
+    "ComplianceScore",
+    "RIDDORSubmission",
+    # Workflow Persistence Models
+    "WorkflowTemplate",
+    "WorkflowInstance",
+    "WorkflowStep",
+    "WorkflowApprovalRequest",
+    "EscalationRule",
+    "EscalationLog",
+    "UserDelegation",
 ]

@@ -10,7 +10,7 @@
  * - RIDDOR automation
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Bell,
   AlertTriangle,
@@ -34,9 +34,12 @@ import {
   BarChart3,
   Zap,
   BookOpen,
+  X,
+  Plus,
 } from 'lucide-react';
 import { cn } from '../helpers/utils';
 import { Button } from '../components/ui/Button';
+import { complianceAutomationApi } from '../api/client';
 
 interface RegulatoryUpdate {
   id: number;
@@ -47,6 +50,7 @@ interface RegulatoryUpdate {
   category: string;
   impact: string;
   affected_standards: string[];
+  affected_clauses: string[];
   published_date: string;
   effective_date: string;
   is_reviewed: boolean;
@@ -58,8 +62,10 @@ interface Certificate {
   name: string;
   certificate_type: string;
   entity_type: string;
+  entity_id: string;
   entity_name: string;
   issuing_body: string;
+  issue_date: string;
   expiry_date: string;
   status: string;
   is_critical: boolean;
@@ -73,6 +79,14 @@ interface ScheduledAudit {
   next_due_date: string;
   status: string;
   standards: string[];
+  department: string;
+}
+
+interface ComplianceScoreData {
+  overall_score: number;
+  previous_score: number | null;
+  change: number;
+  breakdown: Record<string, { score: number; clauses_compliant: number; clauses_total: number; gaps: number }>;
 }
 
 const impactColors: Record<string, string> = {
@@ -91,129 +105,151 @@ const statusColors: Record<string, string> = {
   overdue: 'bg-destructive/10 text-destructive',
 };
 
+const EMPTY_CERT_FORM = {
+  name: '',
+  certificate_type: 'training',
+  entity_type: 'user',
+  entity_id: '',
+  entity_name: '',
+  issuing_body: '',
+  issue_date: '',
+  expiry_date: '',
+  is_critical: false,
+};
+
+const EMPTY_AUDIT_FORM = {
+  name: '',
+  audit_type: 'internal_audit',
+  frequency: 'monthly',
+  next_due_date: '',
+  description: '',
+  department: '',
+  standard_ids: '' as string,
+};
+
 export default function ComplianceAutomation() {
   const [activeTab, setActiveTab] = useState<'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor'>('regulatory');
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [audits, setAudits] = useState<ScheduledAudit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [complianceScore] = useState({
-    overall: 87.5,
-    previous: 85.2,
-    change: 2.3,
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [complianceScore, setComplianceScore] = useState<ComplianceScoreData>({
+    overall_score: 0,
+    previous_score: null,
+    change: 0,
+    breakdown: {},
   });
+
+  const [showCertModal, setShowCertModal] = useState(false);
+  const [certForm, setCertForm] = useState(EMPTY_CERT_FORM);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditForm, setAuditForm] = useState(EMPTY_AUDIT_FORM);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [updatesRes, certsRes, auditsRes, scoreRes] = await Promise.allSettled([
+        complianceAutomationApi.listRegulatoryUpdates(),
+        complianceAutomationApi.listCertificates(),
+        complianceAutomationApi.listScheduledAudits(),
+        complianceAutomationApi.getComplianceScore(),
+      ]);
+
+      if (updatesRes.status === 'fulfilled') {
+        setUpdates((updatesRes.value.data as any).updates ?? []);
+      }
+      if (certsRes.status === 'fulfilled') {
+        setCertificates((certsRes.value.data as any).certificates ?? []);
+      }
+      if (auditsRes.status === 'fulfilled') {
+        setAudits((auditsRes.value.data as any).audits ?? []);
+      }
+      if (scoreRes.status === 'fulfilled') {
+        const s = scoreRes.value.data as any;
+        setComplianceScore({
+          overall_score: s.overall_score ?? 0,
+          previous_score: s.previous_score ?? null,
+          change: s.change ?? 0,
+          breakdown: s.breakdown ?? {},
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load compliance data', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  const loadData = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+  const handleMarkReviewed = async (updateId: number) => {
+    setActionLoading(`review-${updateId}`);
+    try {
+      await complianceAutomationApi.reviewUpdate(updateId);
+      setUpdates(prev => prev.map(u => u.id === updateId ? { ...u, is_reviewed: true } : u));
+    } catch (err) {
+      console.error('Failed to mark update as reviewed', err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
-    setUpdates([
-      {
-        id: 1,
-        source: 'hse_uk',
-        source_reference: 'HSE/2026/001',
-        title: 'Updated guidance on workplace first aid requirements',
-        summary: 'New requirements for first aid training and equipment in workplaces with 50+ employees.',
-        category: 'health_safety',
-        impact: 'high',
-        affected_standards: ['ISO 45001'],
-        published_date: '2026-01-15',
-        effective_date: '2026-04-01',
-        is_reviewed: false,
-        requires_action: true,
-      },
-      {
-        id: 2,
-        source: 'iso',
-        source_reference: 'ISO/TC 176/2026',
-        title: 'Amendment to ISO 9001:2015 - Clause 4.4.1',
-        summary: 'Clarification on process interaction requirements.',
-        category: 'quality',
-        impact: 'medium',
-        affected_standards: ['ISO 9001'],
-        published_date: '2026-01-10',
-        effective_date: '2026-07-01',
-        is_reviewed: true,
-        requires_action: false,
-      },
-      {
-        id: 3,
-        source: 'hse_uk',
-        source_reference: 'HSE/2026/002',
-        title: 'RIDDOR amendment - digital submission requirements',
-        summary: 'All RIDDOR submissions must be made digitally from March 2026.',
-        category: 'regulatory',
-        impact: 'critical',
-        affected_standards: ['ISO 45001'],
-        published_date: '2026-01-18',
-        effective_date: '2026-03-01',
-        is_reviewed: false,
-        requires_action: true,
-      },
-    ]);
+  const handleRunGapAnalysis = async (regulatoryUpdateId?: number) => {
+    setActionLoading(`gap-${regulatoryUpdateId ?? 'new'}`);
+    try {
+      await complianceAutomationApi.runGapAnalysis(
+        regulatoryUpdateId ? { regulatory_update_id: regulatoryUpdateId } : undefined
+      );
+    } catch (err) {
+      console.error('Failed to run gap analysis', err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
-    setCertificates([
-      {
-        id: 1,
-        name: 'First Aid at Work Certificate',
-        certificate_type: 'training',
-        entity_type: 'user',
-        entity_name: 'John Smith',
-        issuing_body: 'St John Ambulance',
-        expiry_date: '2026-03-05',
-        status: 'expiring_soon',
-        is_critical: true,
-      },
-      {
-        id: 2,
-        name: 'IPAF Licence',
-        certificate_type: 'license',
-        entity_type: 'user',
-        entity_name: 'Mike Johnson',
-        issuing_body: 'IPAF',
-        expiry_date: '2026-07-18',
-        status: 'valid',
-        is_critical: false,
-      },
-      {
-        id: 3,
-        name: 'Crane Calibration Certificate',
-        certificate_type: 'calibration',
-        entity_type: 'equipment',
-        entity_name: 'Mobile Crane MC-01',
-        issuing_body: 'UKAS Accredited',
-        expiry_date: '2026-01-29',
-        status: 'expiring_soon',
-        is_critical: true,
-      },
-    ]);
+  const handleAddCertificate = async () => {
+    if (!certForm.name || !certForm.issue_date || !certForm.expiry_date || !certForm.entity_id) return;
+    setActionLoading('add-cert');
+    try {
+      await complianceAutomationApi.addCertificate({
+        ...certForm,
+      });
+      setShowCertModal(false);
+      setCertForm(EMPTY_CERT_FORM);
+      const res = await complianceAutomationApi.listCertificates();
+      setCertificates((res.data as any).certificates ?? []);
+    } catch (err) {
+      console.error('Failed to add certificate', err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
-    setAudits([
-      {
-        id: 1,
-        name: 'Monthly H&S Inspection - Site A',
-        audit_type: 'safety_inspection',
-        frequency: 'monthly',
-        next_due_date: '2026-01-24',
-        status: 'scheduled',
-        standards: ['ISO 45001'],
-      },
-      {
-        id: 2,
-        name: 'Quarterly ISO 9001 Internal Audit',
-        audit_type: 'internal_audit',
-        frequency: 'quarterly',
-        next_due_date: '2026-01-16',
-        status: 'overdue',
-        standards: ['ISO 9001'],
-      },
-    ]);
-
-    setLoading(false);
+  const handleScheduleAudit = async () => {
+    if (!auditForm.name || !auditForm.next_due_date) return;
+    setActionLoading('schedule-audit');
+    try {
+      await complianceAutomationApi.scheduleAudit({
+        name: auditForm.name,
+        audit_type: auditForm.audit_type,
+        frequency: auditForm.frequency,
+        next_due_date: auditForm.next_due_date,
+        description: auditForm.description || undefined,
+        department: auditForm.department || undefined,
+        standard_ids: auditForm.standard_ids ? auditForm.standard_ids.split(',').map(s => s.trim()) : undefined,
+      });
+      setShowAuditModal(false);
+      setAuditForm(EMPTY_AUDIT_FORM);
+      const res = await complianceAutomationApi.listScheduledAudits();
+      setAudits((res.data as any).audits ?? []);
+    } catch (err) {
+      console.error('Failed to schedule audit', err);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const tabs = [
@@ -231,6 +267,8 @@ export default function ComplianceAutomation() {
       </div>
     );
   }
+
+  const scoreChange = complianceScore.change ?? 0;
 
   return (
     <div className="space-y-6">
@@ -254,12 +292,12 @@ export default function ComplianceAutomation() {
         <div className="lg:col-span-1 bg-gradient-to-br from-primary to-primary-hover rounded-xl p-6 text-primary-foreground">
           <div className="flex items-center justify-between mb-4">
             <Shield className="w-8 h-8 opacity-80" />
-            <span className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}>
-              {complianceScore.change >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              {complianceScore.change >= 0 ? '+' : ''}{complianceScore.change}%
+            <span className={`flex items-center gap-1 text-sm ${scoreChange >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}>
+              {scoreChange >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+              {scoreChange >= 0 ? '+' : ''}{scoreChange}%
             </span>
           </div>
-          <div className="text-4xl font-bold mb-1">{complianceScore.overall}%</div>
+          <div className="text-4xl font-bold mb-1">{complianceScore.overall_score}%</div>
           <div className="text-primary-foreground/80 text-sm">Overall Compliance Score</div>
         </div>
 
@@ -327,6 +365,13 @@ export default function ComplianceAutomation() {
       {/* Regulatory Updates Tab */}
       {activeTab === 'regulatory' && (
         <div className="space-y-4">
+          {updates.length === 0 && (
+            <div className="bg-card/50 border border-border rounded-xl p-8 text-center">
+              <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
+              <p className="text-foreground font-medium">No regulatory updates</p>
+              <p className="text-muted-foreground text-sm mt-1">All caught up!</p>
+            </div>
+          )}
           {updates.map(update => (
             <div
               key={update.id}
@@ -360,22 +405,34 @@ export default function ComplianceAutomation() {
                   <span className="text-gray-500">
                     Published: {new Date(update.published_date).toLocaleDateString()}
                   </span>
-                  <span className="text-gray-500">
-                    Effective: {new Date(update.effective_date).toLocaleDateString()}
-                  </span>
-                  <span className="text-gray-400">
-                    Affects: {update.affected_standards.join(', ')}
-                  </span>
+                  {update.effective_date && (
+                    <span className="text-gray-500">
+                      Effective: {new Date(update.effective_date).toLocaleDateString()}
+                    </span>
+                  )}
+                  {update.affected_standards?.length > 0 && (
+                    <span className="text-gray-400">
+                      Affects: {update.affected_standards.join(', ')}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-sm transition-colors">
+                  <button
+                    onClick={() => handleRunGapAnalysis(update.id)}
+                    disabled={actionLoading === `gap-${update.id}`}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                  >
                     <Zap className="w-4 h-4" />
-                    Run Gap Analysis
+                    {actionLoading === `gap-${update.id}` ? 'Running...' : 'Run Gap Analysis'}
                   </button>
                   {!update.is_reviewed && (
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+                    <button
+                      onClick={() => handleMarkReviewed(update.id)}
+                      disabled={actionLoading === `review-${update.id}`}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                    >
                       <CheckCircle className="w-4 h-4" />
-                      Mark Reviewed
+                      {actionLoading === `review-${update.id}` ? 'Saving...' : 'Mark Reviewed'}
                     </button>
                   )}
                 </div>
@@ -390,55 +447,66 @@ export default function ComplianceAutomation() {
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-slate-700 flex items-center justify-between">
             <h3 className="font-medium text-white">Certificate Expiry Tracking</h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+            <button
+              onClick={() => setShowCertModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors"
+            >
               <Award className="w-4 h-4" />
               Add Certificate
             </button>
           </div>
-          <div className="divide-y divide-slate-700">
-            {certificates.map(cert => (
-              <div key={cert.id} className="p-4 hover:bg-slate-700/30 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${
-                      cert.entity_type === 'user' ? 'bg-blue-500/20' :
-                      cert.entity_type === 'equipment' ? 'bg-purple-500/20' : 'bg-emerald-500/20'
-                    }`}>
-                      {cert.entity_type === 'user' ? <Users className="w-5 h-5 text-blue-400" /> :
-                       cert.entity_type === 'equipment' ? <Truck className="w-5 h-5 text-purple-400" /> :
-                       <Building className="w-5 h-5 text-emerald-400" />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-white">{cert.name}</h4>
-                        {cert.is_critical && (
-                          <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
-                            Critical
-                          </span>
-                        )}
+          {certificates.length === 0 ? (
+            <div className="p-8 text-center">
+              <Award className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+              <p className="text-white font-medium">No certificates tracked</p>
+              <p className="text-gray-400 text-sm mt-1">Add certificates to track their expiry</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-700">
+              {certificates.map(cert => (
+                <div key={cert.id} className="p-4 hover:bg-slate-700/30 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${
+                        cert.entity_type === 'user' ? 'bg-blue-500/20' :
+                        cert.entity_type === 'equipment' ? 'bg-purple-500/20' : 'bg-emerald-500/20'
+                      }`}>
+                        {cert.entity_type === 'user' ? <Users className="w-5 h-5 text-blue-400" /> :
+                         cert.entity_type === 'equipment' ? <Truck className="w-5 h-5 text-purple-400" /> :
+                         <Building className="w-5 h-5 text-emerald-400" />}
                       </div>
-                      <p className="text-sm text-gray-400">
-                        {cert.entity_name} • {cert.issuing_body}
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-white">{cert.name}</h4>
+                          {cert.is_critical && (
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
+                              Critical
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-400">
+                          {cert.entity_name} {cert.issuing_body ? `\u2022 ${cert.issuing_body}` : ''}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[cert.status]}`}>
-                        {cert.status.replace('_', ' ').toUpperCase()}
-                      </span>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Expires: {new Date(cert.expiry_date).toLocaleDateString()}
-                      </p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[cert.status] || ''}`}>
+                          {cert.status.replace('_', ' ').toUpperCase()}
+                        </span>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Expires: {new Date(cert.expiry_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-slate-700">
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-slate-700">
-                      <Eye className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -447,39 +515,50 @@ export default function ComplianceAutomation() {
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-slate-700 flex items-center justify-between">
             <h3 className="font-medium text-white">Scheduled Audits & Inspections</h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+            <button
+              onClick={() => setShowAuditModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors"
+            >
               <Calendar className="w-4 h-4" />
               Schedule Audit
             </button>
           </div>
-          <div className="divide-y divide-slate-700">
-            {audits.map(audit => (
-              <div key={audit.id} className="p-4 hover:bg-slate-700/30 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-medium text-white">{audit.name}</h4>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[audit.status]}`}>
-                        {audit.status.toUpperCase()}
-                      </span>
+          {audits.length === 0 ? (
+            <div className="p-8 text-center">
+              <Calendar className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+              <p className="text-white font-medium">No scheduled audits</p>
+              <p className="text-gray-400 text-sm mt-1">Schedule your first audit</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-700">
+              {audits.map(audit => (
+                <div key={audit.id} className="p-4 hover:bg-slate-700/30 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-medium text-white">{audit.name}</h4>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[audit.status] || ''}`}>
+                          {audit.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        {audit.frequency} {audit.standards?.length ? `\u2022 ${audit.standards.join(', ')}` : ''}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-400">
-                      {audit.frequency} • {audit.standards.join(', ')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-sm text-white">Due: {new Date(audit.next_due_date).toLocaleDateString()}</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm text-white">Due: {new Date(audit.next_due_date).toLocaleDateString()}</p>
+                      </div>
+                      <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+                        <Play className="w-4 h-4" />
+                        Start
+                      </button>
                     </div>
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
-                      <Play className="w-4 h-4" />
-                      Start
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -489,44 +568,51 @@ export default function ComplianceAutomation() {
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
             <h3 className="font-medium text-white mb-4">Score Breakdown by Standard</h3>
             <div className="space-y-4">
-              {[
-                { name: 'ISO 9001', score: 92, color: 'emerald' },
-                { name: 'ISO 14001', score: 88.5, color: 'blue' },
-                { name: 'ISO 45001', score: 82, color: 'purple' },
-              ].map(standard => (
-                <div key={standard.name}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium">{standard.name}</span>
-                    <span className="text-white">{standard.score}%</span>
+              {Object.entries(complianceScore.breakdown).length > 0 ? (
+                Object.entries(complianceScore.breakdown).map(([name, data]) => (
+                  <div key={name}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-medium">{name}</span>
+                      <span className="text-white">{data.score}%</span>
+                    </div>
+                    <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-500"
+                        style={{ width: `${data.score}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {data.clauses_compliant}/{data.clauses_total} clauses compliant &middot; {data.gaps} gaps
+                    </p>
                   </div>
-                  <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full bg-${standard.color}-500`}
-                      style={{ width: `${standard.score}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-gray-400 text-sm">No score data available yet.</p>
+              )}
             </div>
           </div>
 
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
             <h3 className="font-medium text-white mb-4">Key Gaps</h3>
             <div className="space-y-3">
-              {[
-                { standard: 'ISO 45001', clause: '8.2', description: 'First aid training gaps' },
-                { standard: 'ISO 14001', clause: '6.1', description: 'Environmental risk register outdated' },
-                { standard: 'ISO 9001', clause: '10.2', description: 'NCR closure rate below target' },
-              ].map((gap, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-yellow-400" />
-                  <div className="flex-1">
-                    <p className="text-white text-sm">{gap.description}</p>
-                    <p className="text-gray-500 text-xs">{gap.standard} Clause {gap.clause}</p>
+              {Object.entries(complianceScore.breakdown)
+                .filter(([, d]) => d.gaps > 0)
+                .map(([standard, data]) => (
+                  <div key={standard} className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-yellow-400" />
+                    <div className="flex-1">
+                      <p className="text-white text-sm">{data.gaps} gap{data.gaps !== 1 ? 's' : ''} identified</p>
+                      <p className="text-gray-500 text-xs">{standard}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500" />
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                ))}
+              {Object.entries(complianceScore.breakdown).filter(([, d]) => d.gaps > 0).length === 0 && (
+                <div className="p-4 text-center">
+                  <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">No gaps identified</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -546,10 +632,15 @@ export default function ComplianceAutomation() {
                   Automatically detect reportable incidents and prepare RIDDOR submissions to the Health & Safety Executive.
                 </p>
                 <div className="flex items-center gap-4">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                  <a
+                    href="https://www.hse.gov.uk/riddor/report.htm"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                  >
                     <ExternalLink className="w-4 h-4" />
                     HSE RIDDOR Portal
-                  </button>
+                  </a>
                   <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
                     <BookOpen className="w-4 h-4" />
                     View Guide
@@ -567,6 +658,242 @@ export default function ComplianceAutomation() {
               <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
               <p className="text-white font-medium">No pending RIDDOR submissions</p>
               <p className="text-gray-400 text-sm mt-1">All reportable incidents have been submitted</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Certificate Modal */}
+      {showCertModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="font-medium text-white">Add Certificate</h3>
+              <button onClick={() => setShowCertModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Certificate Name *</label>
+                <input
+                  value={certForm.name}
+                  onChange={e => setCertForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  placeholder="e.g. First Aid at Work"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Type</label>
+                  <select
+                    value={certForm.certificate_type}
+                    onChange={e => setCertForm(f => ({ ...f, certificate_type: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  >
+                    <option value="training">Training</option>
+                    <option value="equipment">Equipment</option>
+                    <option value="competency">Competency</option>
+                    <option value="license">License</option>
+                    <option value="accreditation">Accreditation</option>
+                    <option value="calibration">Calibration</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Entity Type</label>
+                  <select
+                    value={certForm.entity_type}
+                    onChange={e => setCertForm(f => ({ ...f, entity_type: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  >
+                    <option value="user">Person</option>
+                    <option value="equipment">Equipment</option>
+                    <option value="organization">Organisation</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Entity ID *</label>
+                  <input
+                    value={certForm.entity_id}
+                    onChange={e => setCertForm(f => ({ ...f, entity_id: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                    placeholder="e.g. user-001"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Entity Name</label>
+                  <input
+                    value={certForm.entity_name}
+                    onChange={e => setCertForm(f => ({ ...f, entity_name: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                    placeholder="e.g. John Smith"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Issuing Body</label>
+                <input
+                  value={certForm.issuing_body}
+                  onChange={e => setCertForm(f => ({ ...f, issuing_body: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  placeholder="e.g. St John Ambulance"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Issue Date *</label>
+                  <input
+                    type="date"
+                    value={certForm.issue_date}
+                    onChange={e => setCertForm(f => ({ ...f, issue_date: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Expiry Date *</label>
+                  <input
+                    type="date"
+                    value={certForm.expiry_date}
+                    onChange={e => setCertForm(f => ({ ...f, expiry_date: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_critical"
+                  checked={certForm.is_critical}
+                  onChange={e => setCertForm(f => ({ ...f, is_critical: e.target.checked }))}
+                  className="rounded border-slate-600"
+                />
+                <label htmlFor="is_critical" className="text-sm text-gray-400">Critical certificate</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-700">
+              <button
+                onClick={() => setShowCertModal(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddCertificate}
+                disabled={actionLoading === 'add-cert' || !certForm.name || !certForm.issue_date || !certForm.expiry_date || !certForm.entity_id}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                {actionLoading === 'add-cert' ? 'Adding...' : 'Add Certificate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Audit Modal */}
+      {showAuditModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="font-medium text-white">Schedule Audit</h3>
+              <button onClick={() => setShowAuditModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Audit Name *</label>
+                <input
+                  value={auditForm.name}
+                  onChange={e => setAuditForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  placeholder="e.g. Monthly H&S Inspection"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Description</label>
+                <input
+                  value={auditForm.description}
+                  onChange={e => setAuditForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  placeholder="Optional description"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Audit Type</label>
+                  <select
+                    value={auditForm.audit_type}
+                    onChange={e => setAuditForm(f => ({ ...f, audit_type: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  >
+                    <option value="internal_audit">Internal Audit</option>
+                    <option value="safety_inspection">Safety Inspection</option>
+                    <option value="environmental_audit">Environmental Audit</option>
+                    <option value="supplier_audit">Supplier Audit</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Frequency</label>
+                  <select
+                    value={auditForm.frequency}
+                    onChange={e => setAuditForm(f => ({ ...f, frequency: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="annual">Annual</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Next Due Date *</label>
+                  <input
+                    type="date"
+                    value={auditForm.next_due_date}
+                    onChange={e => setAuditForm(f => ({ ...f, next_due_date: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Department</label>
+                  <input
+                    value={auditForm.department}
+                    onChange={e => setAuditForm(f => ({ ...f, department: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                    placeholder="e.g. Safety Team"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Standards (comma-separated)</label>
+                <input
+                  value={auditForm.standard_ids}
+                  onChange={e => setAuditForm(f => ({ ...f, standard_ids: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                  placeholder="e.g. ISO 9001, ISO 45001"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-700">
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleScheduleAudit}
+                disabled={actionLoading === 'schedule-audit' || !auditForm.name || !auditForm.next_due_date}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                <Calendar className="w-4 h-4" />
+                {actionLoading === 'schedule-audit' ? 'Scheduling...' : 'Schedule Audit'}
+              </button>
             </div>
           </div>
         </div>

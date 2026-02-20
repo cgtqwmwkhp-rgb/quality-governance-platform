@@ -28,6 +28,7 @@ from src.domain.models.document import (
     SensitivityLevel,
 )
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.infrastructure.storage import StorageError, storage_service
 
 router = APIRouter()
 
@@ -203,27 +204,40 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
 
-    # TODO: Upload to Azure Blob Storage
-    # await azure_blob_service.upload(file_path, content)
+    try:
+        store = storage_service()
+        await store.upload(
+            storage_key=file_path,
+            content=content,
+            content_type=file.content_type or "application/octet-stream",
+            metadata={"document_id": str(doc.id), "title": title},
+        )
+    except StorageError as e:
+        doc.status = DocumentStatus.FAILED
+        doc.indexing_error = f"Storage upload failed: {e}"
+        await db.commit()
+        return DocumentUploadResponse(
+            id=doc.id,
+            reference_number=doc.reference_number,
+            title=doc.title,
+            status=doc.status.value,
+            message=f"Document record created but file upload failed: {e}",
+        )
 
-    # Trigger AI processing (async background job)
-    # For now, do inline processing
     try:
         ai_service = DocumentAIService()
 
-        # Extract text content based on file type
         text_content = ""
         if file_type in [FileType.TXT, FileType.MD]:
             text_content = content.decode("utf-8", errors="ignore")
+        elif file_type == FileType.CSV:
+            text_content = content.decode("utf-8", errors="ignore")
         elif file_type == FileType.PDF:
-            # TODO: Use pdf-parse or similar
-            text_content = f"[PDF content extraction not implemented for {file.filename}]"
+            text_content = ""
         elif file_type in [FileType.DOCX, FileType.DOC]:
-            # TODO: Use python-docx
-            text_content = f"[Word content extraction not implemented for {file.filename}]"
-        elif file_type in [FileType.XLSX, FileType.XLS, FileType.CSV]:
-            # TODO: Use openpyxl/pandas
-            text_content = f"[Spreadsheet content extraction not implemented for {file.filename}]"
+            text_content = ""
+        elif file_type in [FileType.XLSX, FileType.XLS]:
+            text_content = ""
 
         if text_content and not text_content.startswith("["):
             # Analyze with AI
