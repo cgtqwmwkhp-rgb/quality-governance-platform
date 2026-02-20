@@ -82,6 +82,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning(f"Compliance automation seed skipped: {e}")
 
+    # Seed IMS module data (standards, ISO 27001 controls, UVDB, Planet Mark)
+    try:
+        from src.domain.services.ims_seed_service import seed_all_ims_modules
+        from src.infrastructure.database import async_session_maker as _ims_sm
+
+        async with _ims_sm() as ims_session:
+            await seed_all_ims_modules(ims_session)
+            await ims_session.commit()
+    except Exception as e:
+        logger.warning(f"IMS module seed skipped: {e}")
+
     # Pre-warm OpenAPI schema generation for fast first request
     # This avoids cold-start latency when /openapi.json is first accessed
     # FastAPI caches the schema internally after first generation
