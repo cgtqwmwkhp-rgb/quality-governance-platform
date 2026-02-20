@@ -11,6 +11,7 @@ Features:
 - Statistics from live data
 """
 
+import enum
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -755,8 +756,6 @@ async def get_workflow_stats(db: AsyncSession) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Backward-compatible exports expected by existing tests and callers
 # ---------------------------------------------------------------------------
-
-import enum
 
 
 class WorkflowStepType(str, enum.Enum):
