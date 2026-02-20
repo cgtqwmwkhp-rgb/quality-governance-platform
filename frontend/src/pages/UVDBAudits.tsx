@@ -24,9 +24,9 @@ import {
   Link2,
   XCircle,
   X,
-  CheckCircle2,
   Loader2,
 } from 'lucide-react'
+import { ToastContainer, useToast } from '../components/ui/Toast'
 import { uvdbApi, ErrorClass, createApiError, getApiErrorMessage } from '../api/client'
 
 interface UVDBSection {
@@ -62,13 +62,7 @@ export default function UVDBAudits() {
   const [auditForm, setAuditForm] = useState({ audit_name: '', audit_type: 'verification', auditor_name: '', planned_date: '' })
   const [auditSubmitting, setAuditSubmitting] = useState(false)
   const [exportingProtocol, setExportingProtocol] = useState(false)
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
-
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
-    setToastMessage({ text, type })
-    // STATIC_UI_CONFIG_OK - toast auto-dismiss timer, not a data simulation
-    setTimeout(() => setToastMessage(null), 4000)
-  }
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
   const handleExportProtocol = async () => {
     try {
@@ -275,16 +269,7 @@ export default function UVDBAudits() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
-      {/* Toast */}
-      {toastMessage && (
-        <div className={`fixed top-4 right-4 z-[100] border rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 animate-fade-in ${
-          toastMessage.type === 'error' ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-card border-border text-foreground'
-        }`}>
-          {toastMessage.type === 'error' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 text-success" />}
-          <span className="text-sm">{toastMessage.text}</span>
-          <button onClick={() => setToastMessage(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* New Audit Modal */}
       {showNewAuditModal && (

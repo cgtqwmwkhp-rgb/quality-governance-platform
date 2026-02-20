@@ -24,8 +24,8 @@ import {
   Tag,
   Trash2,
   Loader2,
-  X,
 } from 'lucide-react';
+import { ToastContainer, useToast } from '../components/ui/Toast';
 import { ISO_STANDARDS, ISOClause, getAllClauses } from '../data/isoStandards';
 import { complianceApi, AutoTagResult, EvidenceLinkRecord } from '../api/client';
 
@@ -92,12 +92,7 @@ export default function ComplianceEvidence() {
   const [linkForm, setLinkForm] = useState({ entity_type: 'document' as EvidenceType, entity_id: '', title: '', notes: '' });
   const [linkSubmitting, setLinkSubmitting] = useState(false);
   const [exportingReport, setExportingReport] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
   const loadEvidenceData = useCallback(async () => {
     try {
@@ -175,12 +170,12 @@ export default function ComplianceEvidence() {
         notes: notes || linkForm.notes || undefined,
         confidence,
       });
-      showToast(`Evidence linked to ${clauseIds.length} clause(s)`);
+      showToast(`Evidence linked to ${clauseIds.length} clause(s)`, 'success');
       setShowLinkModal(false);
       setLinkForm({ entity_type: 'document', entity_id: '', title: '', notes: '' });
       await loadEvidenceData();
     } catch (err: any) {
-      showToast(`Failed to link evidence: ${err?.response?.data?.detail || err.message || 'Unknown error'}`);
+      showToast(`Failed to link evidence: ${err?.response?.data?.detail || err.message || 'Unknown error'}`, 'error');
     } finally {
       setLinkSubmitting(false);
     }
@@ -189,10 +184,10 @@ export default function ComplianceEvidence() {
   const handleDeleteLink = async (linkId: number) => {
     try {
       await complianceApi.deleteEvidenceLink(linkId);
-      showToast('Evidence link removed');
+      showToast('Evidence link removed', 'success');
       await loadEvidenceData();
     } catch (err) {
-      showToast('Failed to delete evidence link');
+      showToast('Failed to delete evidence link', 'error');
     }
   };
 
@@ -210,9 +205,9 @@ export default function ComplianceEvidence() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast('Report exported');
+      showToast('Report exported', 'success');
     } catch (err) {
-      showToast('Failed to export report');
+      showToast('Failed to export report', 'error');
     } finally {
       setExportingReport(false);
     }
@@ -377,13 +372,7 @@ export default function ComplianceEvidence() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-[100] bg-card border border-border rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-success" />
-          <span className="text-sm text-foreground">{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -795,13 +784,13 @@ export default function ComplianceEvidence() {
 
               <button
                 onClick={async () => {
-                  if (!linkForm.entity_id.trim()) { showToast('Reference ID is required'); return; }
+                  if (!linkForm.entity_id.trim()) { showToast('Reference ID is required', 'error'); return; }
                   if (linkModalClauseId) {
                     await handleLinkEvidence([linkModalClauseId]);
                   } else {
                     const checkboxes = document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked');
                     const clauseIds = Array.from(checkboxes).map(cb => cb.value).filter(v => v.startsWith('9001-') || v.startsWith('14001-') || v.startsWith('45001-') || v.startsWith('27001-'));
-                    if (clauseIds.length === 0) { showToast('Select at least one clause'); return; }
+                    if (clauseIds.length === 0) { showToast('Select at least one clause', 'error'); return; }
                     await handleLinkEvidence(clauseIds);
                   }
                 }}
