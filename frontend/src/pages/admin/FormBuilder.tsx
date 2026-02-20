@@ -20,6 +20,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { cn } from '../../helpers/utils';
+import { useToast, ToastContainer } from '../../components/ui/Toast';
 import { formTemplatesApi } from '../../services/api';
 
 // Field type definitions
@@ -93,6 +94,7 @@ export default function FormBuilder() {
   const navigate = useNavigate();
   const { templateId } = useParams();
   const isEditing = !!templateId;
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
   const [template, setTemplate] = useState<FormTemplate>({
     name: '',
@@ -170,6 +172,7 @@ export default function FormBuilder() {
           }
         } catch (err) {
           console.error('Failed to load template', err);
+          showToast('Failed to load template', 'error');
         }
       })();
     }
@@ -312,6 +315,7 @@ export default function FormBuilder() {
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err) {
       console.error('Failed to save template', err);
+      showToast('Failed to save template', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -709,6 +713,7 @@ export default function FormBuilder() {
           </div>
         </div>
       </div>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
+import { useToast, ToastContainer } from '../../components/ui/Toast';
 import { formTemplatesApi } from '../../services/api';
 
 interface FormTemplate {
@@ -74,6 +75,7 @@ const FORM_TYPE_CONFIG: Record<
 
 export default function FormsList() {
   const navigate = useNavigate();
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [forms, setForms] = useState<FormTemplate[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export default function FormsList() {
       })));
     } catch {
       console.error('Failed to load forms');
+      showToast('Failed to load forms', 'error');
     } finally {
       setLoading(false);
     }
@@ -121,6 +124,7 @@ export default function FormsList() {
         setForms((prev) => prev.filter((f) => f.id !== id));
       } catch {
         console.error('Failed to delete form');
+        showToast('Failed to delete form', 'error');
       }
     }
     setActiveMenu(null);
@@ -138,6 +142,7 @@ export default function FormsList() {
       setForms((prev) => [...prev, { ...c, steps_count: c.steps_count ?? 0, fields_count: c.fields_count ?? 0, updated_at: c.updated_at ?? '' }]);
     } catch {
       console.error('Failed to duplicate form');
+      showToast('Failed to duplicate form', 'error');
     }
     setActiveMenu(null);
   };
@@ -158,6 +163,7 @@ export default function FormsList() {
       );
     } catch {
       console.error('Failed to toggle publish');
+      showToast('Failed to toggle publish status', 'error');
     }
     setActiveMenu(null);
   };
@@ -364,6 +370,7 @@ export default function FormsList() {
           </div>
         )}
       </main>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

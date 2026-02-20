@@ -16,8 +16,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import and_, desc, func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # AI Integration
 try:
@@ -483,7 +483,7 @@ class AuditQuestionGenerator:
         ],
     }
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
@@ -678,10 +678,10 @@ Format as JSON array with objects containing: question, type (compliance/effecti
 class EvidenceMatcher:
     """Match evidence to audit requirements"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def find_evidence_for_clause(self, standard: str, clause: str) -> list[dict[str, Any]]:
+    async def find_evidence_for_clause(self, standard: str, clause: str) -> list[dict[str, Any]]:
         """Find existing evidence that may satisfy a clause"""
         from src.domain.models.document_control import ControlledDocument
         from src.domain.models.iso_compliance import ComplianceEvidence
@@ -689,11 +689,12 @@ class EvidenceMatcher:
         evidence = []
 
         # Search compliance evidence
-        compliance_evidence = (
-            self.db.query(ComplianceEvidence)
-            .filter(ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}]))
-            .all()
+        result = await self.db.execute(
+            select(ComplianceEvidence).where(
+                ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}])
+            )
         )
+        compliance_evidence = result.scalars().all()
 
         for ce in compliance_evidence:
             evidence.append(
@@ -710,17 +711,17 @@ class EvidenceMatcher:
 
         # Search controlled documents
         clause_pattern = f"%{clause}%"
-        documents = (
-            self.db.query(ControlledDocument)
-            .filter(
+        result = await self.db.execute(
+            select(ControlledDocument)
+            .where(
                 and_(
                     ControlledDocument.relevant_clauses.isnot(None),
                     ControlledDocument.status == "active",
                 )
             )
             .limit(100)
-            .all()
         )
+        documents = result.scalars().all()
 
         for doc in documents:
             if doc.relevant_clauses:
@@ -741,25 +742,24 @@ class EvidenceMatcher:
 
         return evidence
 
-    def suggest_evidence_gaps(self, audit_id: int) -> list[dict[str, Any]]:
+    async def suggest_evidence_gaps(self, audit_id: int) -> list[dict[str, Any]]:
         """Identify clauses lacking sufficient evidence"""
         # Get audit findings
         from src.domain.models.audit import AuditFinding
 
-        findings = (
-            self.db.query(AuditFinding)
-            .filter(
+        result = await self.db.execute(
+            select(AuditFinding).where(
                 and_(
                     AuditFinding.audit_id == audit_id,
                     AuditFinding.conformance.in_(["minor_nc", "major_nc", "observation"]),
                 )
             )
-            .all()
         )
+        findings = result.scalars().all()
 
         gaps = []
         for finding in findings:
-            existing_evidence = self.find_evidence_for_clause(finding.standard or "", finding.clause or "")
+            existing_evidence = await self.find_evidence_for_clause(finding.standard or "", finding.clause or "")
             if len(existing_evidence) < 2:
                 gaps.append(
                     {
@@ -818,7 +818,7 @@ class FindingClassifier:
         "monitoring": ["monitoring", "measurement", "verification", "check", "review"],
     }
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
@@ -864,21 +864,23 @@ class FindingClassifier:
 class AuditReportGenerator:
     """Generate professional audit reports"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
             self.claude_client = anthropic.Anthropic()
 
-    def generate_executive_summary(self, audit_id: int) -> str:
+    async def generate_executive_summary(self, audit_id: int) -> str:
         """Generate executive summary for audit"""
         from src.domain.models.audit import Audit, AuditFinding
 
-        audit = self.db.query(Audit).filter(Audit.id == audit_id).first()
+        result = await self.db.execute(select(Audit).where(Audit.id == audit_id))
+        audit = result.scalar_one_or_none()
         if not audit:
             return "Audit not found"
 
-        findings = self.db.query(AuditFinding).filter(AuditFinding.audit_id == audit_id).all()
+        result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit_id))
+        findings = result.scalars().all()
 
         # Count findings by type
         finding_counts = Counter(f.conformance for f in findings if f.conformance)
@@ -927,19 +929,19 @@ RECOMMENDATION:
 
         return summary
 
-    def generate_findings_report(self, audit_id: int) -> list[dict[str, Any]]:
+    async def generate_findings_report(self, audit_id: int) -> list[dict[str, Any]]:
         """Generate detailed findings report"""
         from src.domain.models.audit import AuditFinding
 
-        findings = (
-            self.db.query(AuditFinding)
-            .filter(AuditFinding.audit_id == audit_id)
+        result = await self.db.execute(
+            select(AuditFinding)
+            .where(AuditFinding.audit_id == audit_id)
             .order_by(
                 desc(AuditFinding.conformance == "major_nc"),
                 desc(AuditFinding.conformance == "minor_nc"),
             )
-            .all()
         )
+        findings = result.scalars().all()
 
         report = []
         for i, finding in enumerate(findings, 1):
@@ -966,16 +968,17 @@ RECOMMENDATION:
 class AuditTrendAnalyzer:
     """Analyze trends across audits"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def get_finding_trends(self, months: int = 24) -> dict[str, Any]:
+    async def get_finding_trends(self, months: int = 24) -> dict[str, Any]:
         """Analyze finding trends over time"""
         from src.domain.models.audit import Audit, AuditFinding
 
         cutoff = datetime.utcnow() - timedelta(days=months * 30)
 
-        audits = self.db.query(Audit).filter(Audit.audit_date >= cutoff).order_by(Audit.audit_date).all()
+        result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))
+        audits = result.scalars().all()
 
         monthly_data: dict[str, dict] = defaultdict(
             lambda: {"major_nc": 0, "minor_nc": 0, "observation": 0, "opportunity": 0}
@@ -986,7 +989,8 @@ class AuditTrendAnalyzer:
                 continue
             month_key = audit.audit_date.strftime("%Y-%m")
 
-            findings = self.db.query(AuditFinding).filter(AuditFinding.audit_id == audit.id).all()
+            result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit.id))
+            findings = result.scalars().all()
 
             for finding in findings:
                 if finding.conformance in monthly_data[month_key]:
@@ -1034,14 +1038,17 @@ class AuditTrendAnalyzer:
             },
         }
 
-    def get_recurring_findings(self, min_occurrences: int = 3) -> list[dict[str, Any]]:
+    async def get_recurring_findings(self, min_occurrences: int = 3) -> list[dict[str, Any]]:
         """Identify recurring findings across audits"""
         from src.domain.models.audit import AuditFinding
 
         # Group findings by clause
         clause_findings: dict[str, list] = defaultdict(list)
 
-        findings = self.db.query(AuditFinding).filter(AuditFinding.conformance.in_(["major_nc", "minor_nc"])).all()
+        result = await self.db.execute(
+            select(AuditFinding).where(AuditFinding.conformance.in_(["major_nc", "minor_nc"]))
+        )
+        findings = result.scalars().all()
 
         for finding in findings:
             if finding.clause:

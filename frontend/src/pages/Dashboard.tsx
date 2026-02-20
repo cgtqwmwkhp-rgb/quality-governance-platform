@@ -36,6 +36,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { cn } from "../helpers/utils"
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 // ============================================================================
 // Types
@@ -312,6 +313,7 @@ function formatTimeAgo(dateStr: string): string {
 // ============================================================================
 
 export default function Dashboard() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<ModuleStats>({
@@ -517,6 +519,7 @@ export default function Dashboard() {
       setActivities(recentActivities.slice(0, 5))
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
+      showToast('Failed to load dashboard data. Please try again.', 'error')
     } finally {
       setLoading(false)
     }
@@ -779,6 +782,7 @@ export default function Dashboard() {
           </Card>
         </Link>
       </div>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

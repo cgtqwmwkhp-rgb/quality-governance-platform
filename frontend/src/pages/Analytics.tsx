@@ -20,6 +20,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from "../helpers/utils";
 import { analyticsApi } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface KPICard {
   id: string;
@@ -42,6 +43,7 @@ interface ModuleStats {
 }
 
 export default function Analytics() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
@@ -101,6 +103,7 @@ export default function Analytics() {
       setModuleStats(stats);
     } catch {
       console.error('Failed to load analytics');
+      showToast('Failed to load analytics. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -400,6 +403,7 @@ export default function Analytics() {
           </div>
         </div>
       </Card>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

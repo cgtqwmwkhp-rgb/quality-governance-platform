@@ -7,11 +7,11 @@ Interactive conversational AI assistant for QHSE management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-from src.infrastructure.database import get_db
+from src.api.dependencies import CurrentUser, DbSession
 
 router = APIRouter()
 
@@ -87,7 +87,7 @@ class SuggestedAction(BaseModel):
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(
     data: SessionCreate,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
@@ -98,7 +98,7 @@ async def create_session(
     tenant_id = 1
     user_id = 1
 
-    session = service.create_session(
+    session = await service.create_session(
         tenant_id=tenant_id,
         user_id=user_id,
         context_type=data.context_type,
@@ -111,7 +111,7 @@ async def create_session(
 
 
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
-async def get_active_session(db: Session = Depends(get_db)):
+async def get_active_session(db: DbSession = None):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
@@ -120,17 +120,17 @@ async def get_active_session(db: Session = Depends(get_db)):
     # TODO: Get from auth
     user_id = 1
 
-    session = service.get_active_session(user_id)
+    session = await service.get_active_session(user_id)
     return session
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: int, db: Session = Depends(get_db)):
+async def get_session(session_id: int, db: DbSession = None):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    session = service.get_session(session_id)
+    session = await service.get_session(session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -139,12 +139,12 @@ async def get_session(session_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/sessions/{session_id}")
-async def close_session(session_id: int, db: Session = Depends(get_db)):
+async def close_session(session_id: int, db: DbSession = None):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    service.close_session(session_id)
+    await service.close_session(session_id)
 
     return {"status": "closed"}
 
@@ -152,7 +152,7 @@ async def close_session(session_id: int, db: Session = Depends(get_db)):
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
@@ -160,13 +160,14 @@ async def list_sessions(
     # TODO: Get from auth
     user_id = 1
 
-    sessions = (
-        db.query(CopilotSession)
-        .filter(CopilotSession.user_id == user_id)
+    stmt = (
+        select(CopilotSession)
+        .where(CopilotSession.user_id == user_id)
         .order_by(CopilotSession.updated_at.desc())
         .limit(limit)
-        .all()
     )
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
 
     return sessions
 
@@ -180,7 +181,7 @@ async def list_sessions(
 async def send_message(
     session_id: int,
     data: MessageCreate,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
@@ -205,13 +206,13 @@ async def send_message(
 async def get_messages(
     session_id: int,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    messages = service.get_session_messages(session_id, limit=limit)
+    messages = await service.get_session_messages(session_id, limit=limit)
 
     return messages
 
@@ -220,7 +221,7 @@ async def get_messages(
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
@@ -232,7 +233,7 @@ async def submit_feedback(
     user_id = 1
 
     try:
-        feedback = service.submit_feedback(
+        feedback = await service.submit_feedback(
             message_id=message_id,
             user_id=user_id,
             tenant_id=tenant_id,
@@ -266,16 +267,13 @@ async def list_actions(category: Optional[str] = None):
 @router.post("/actions/execute")
 async def execute_action(
     data: ActionExecute,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
         raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
-
-    # Execute the action
-    # This would actually perform the action
 
     return {
         "status": "executed",
@@ -369,7 +367,7 @@ async def search_knowledge(
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
@@ -379,7 +377,7 @@ async def search_knowledge(
     # TODO: Get from auth
     tenant_id = 1
 
-    results = service.search_knowledge(
+    results = await service.search_knowledge(
         query=query,
         tenant_id=tenant_id,
         category=category,
@@ -404,7 +402,7 @@ async def add_knowledge(
     content: str,
     category: str,
     tags: Optional[list[str]] = None,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService
@@ -414,7 +412,7 @@ async def add_knowledge(
     # TODO: Get from auth
     tenant_id = 1
 
-    knowledge = service.add_knowledge(
+    knowledge = await service.add_knowledge(
         title=title,
         content=content,
         category=category,
@@ -455,7 +453,7 @@ manager = ConnectionManager()
 async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat."""
     from src.domain.services.copilot_service import CopilotService
-    from src.infrastructure.database import SessionLocal
+    from src.infrastructure.database import get_db
 
     await manager.connect(websocket, session_id)
 
@@ -463,54 +461,52 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
         while True:
             data = await websocket.receive_json()
 
-            db = SessionLocal()
-            try:
-                service = CopilotService(db)
+            async for db in get_db():
+                try:
+                    service = CopilotService(db)
 
-                # Handle different message types
-                if data.get("type") == "message":
-                    message = await service.send_message(
-                        session_id=session_id,
-                        content=data["content"],
-                        user_id=data.get("user_id", 1),
-                    )
+                    if data.get("type") == "message":
+                        message = await service.send_message(
+                            session_id=session_id,
+                            content=data["content"],
+                            user_id=data.get("user_id", 1),
+                        )
 
-                    await manager.send_message(
-                        {
-                            "type": "response",
-                            "message": {
-                                "id": message.id,
-                                "role": message.role,
-                                "content": message.content,
-                                "content_type": message.content_type,
-                                "action_type": message.action_type,
-                                "action_data": message.action_data,
-                                "created_at": message.created_at.isoformat(),
+                        await manager.send_message(
+                            {
+                                "type": "response",
+                                "message": {
+                                    "id": message.id,
+                                    "role": message.role,
+                                    "content": message.content,
+                                    "content_type": message.content_type,
+                                    "action_type": message.action_type,
+                                    "action_data": message.action_data,
+                                    "created_at": message.created_at.isoformat(),
+                                },
                             },
-                        },
-                        session_id,
-                    )
+                            session_id,
+                        )
 
-                elif data.get("type") == "typing":
-                    # User is typing indicator
-                    pass
+                    elif data.get("type") == "typing":
+                        pass
 
-                elif data.get("type") == "feedback":
-                    service.submit_feedback(
-                        message_id=data["message_id"],
-                        user_id=data.get("user_id", 1),
-                        tenant_id=1,
-                        rating=data["rating"],
-                        feedback_type=data.get("feedback_type", "other"),
-                    )
+                    elif data.get("type") == "feedback":
+                        await service.submit_feedback(
+                            message_id=data["message_id"],
+                            user_id=data.get("user_id", 1),
+                            tenant_id=1,
+                            rating=data["rating"],
+                            feedback_type=data.get("feedback_type", "other"),
+                        )
 
-                    await manager.send_message(
-                        {"type": "feedback_received"},
-                        session_id,
-                    )
+                        await manager.send_message(
+                            {"type": "feedback_received"},
+                            session_id,
+                        )
 
-            finally:
-                db.close()
+                finally:
+                    break
 
     except WebSocketDisconnect:
         manager.disconnect(session_id)

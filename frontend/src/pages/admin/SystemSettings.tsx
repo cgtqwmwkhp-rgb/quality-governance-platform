@@ -16,6 +16,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
+import { useToast, ToastContainer } from '../../components/ui/Toast';
 import { settingsApi } from '../../services/api';
 
 interface SettingCategory {
@@ -74,6 +75,7 @@ const SETTING_CATEGORIES: SettingCategory[] = [
 ];
 
 export default function SystemSettings() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [settings, setSettings] = useState<Setting[]>([]);
   const [activeCategory, setActiveCategory] = useState('branding');
   const [isSaving, setIsSaving] = useState(false);
@@ -362,6 +364,7 @@ export default function SystemSettings() {
           </div>
         </div>}
       </main>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

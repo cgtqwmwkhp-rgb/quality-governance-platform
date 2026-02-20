@@ -20,8 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 export default function Policies() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const [policies, setPolicies] = useState<Policy[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -46,6 +48,7 @@ export default function Policies() {
       setPolicies(response.data.items)
     } catch (err) {
       console.error('Failed to load policies:', err)
+      showToast('Failed to load policies. Please try again.', 'error')
     } finally {
       setLoading(false)
     }
@@ -68,6 +71,7 @@ export default function Policies() {
       loadPolicies()
     } catch (err) {
       console.error('Failed to create policy:', err)
+      showToast('Failed to create document. Please try again.', 'error')
     } finally {
       setCreating(false)
     }
@@ -302,6 +306,7 @@ export default function Policies() {
           </form>
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

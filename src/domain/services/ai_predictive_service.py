@@ -17,8 +17,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import and_, desc, func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # AI Integration
 try:
@@ -146,10 +146,10 @@ class TextAnalyzer:
 class AnomalyDetector:
     """Detect anomalies in incident patterns"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def detect_frequency_anomalies(
+    async def detect_frequency_anomalies(
         self, entity: str, entity_type: str = "department", lookback_days: int = 90
     ) -> dict[str, Any]:
         """Detect if incident frequency is abnormal for an entity"""
@@ -159,17 +159,15 @@ class AnomalyDetector:
 
         # Get incidents for this entity
         if entity_type == "department":
-            recent_incidents = (
-                self.db.query(Incident)
-                .filter(and_(Incident.department == entity, Incident.reported_date >= cutoff))
-                .all()
+            result = await self.db.execute(
+                select(Incident).where(and_(Incident.department == entity, Incident.reported_date >= cutoff))
             )
+            recent_incidents = result.scalars().all()
         elif entity_type == "location":
-            recent_incidents = (
-                self.db.query(Incident)
-                .filter(and_(Incident.location.ilike(f"%{entity}%"), Incident.reported_date >= cutoff))
-                .all()
+            result = await self.db.execute(
+                select(Incident).where(and_(Incident.location.ilike(f"%{entity}%"), Incident.reported_date >= cutoff))
             )
+            recent_incidents = result.scalars().all()
         else:
             recent_incidents = []
 
@@ -212,12 +210,13 @@ class AnomalyDetector:
             ),
         }
 
-    def detect_pattern_anomalies(self, lookback_days: int = 30) -> list[dict[str, Any]]:
+    async def detect_pattern_anomalies(self, lookback_days: int = 30) -> list[dict[str, Any]]:
         """Detect unusual patterns across all incidents"""
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        recent = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
+        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
+        recent = result.scalars().all()
 
         anomalies = []
 
@@ -271,15 +270,16 @@ class AnomalyDetector:
 class IncidentPredictor:
     """ML-based incident prediction"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def predict_risk_factors(self, lookback_days: int = 365) -> list[dict[str, Any]]:
+    async def predict_risk_factors(self, lookback_days: int = 365) -> list[dict[str, Any]]:
         """Identify conditions that predict higher incident likelihood"""
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        incidents = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
+        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
+        incidents = result.scalars().all()
 
         if not incidents:
             return []
@@ -355,7 +355,7 @@ class IncidentPredictor:
 
         return risk_factors
 
-    def get_similar_incidents(self, description: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def get_similar_incidents(self, description: str, limit: int = 5) -> list[dict[str, Any]]:
         """Find similar past incidents using keyword matching"""
         from src.domain.models.incident import Incident
 
@@ -364,13 +364,10 @@ class IncidentPredictor:
             return []
 
         # Simple keyword-based similarity
-        all_incidents = (
-            self.db.query(Incident)
-            .filter(Incident.description.isnot(None))
-            .order_by(desc(Incident.reported_date))
-            .limit(1000)
-            .all()
+        result = await self.db.execute(
+            select(Incident).where(Incident.description.isnot(None)).order_by(desc(Incident.reported_date)).limit(1000)
         )
+        all_incidents = result.scalars().all()
 
         scored = []
         for inc in all_incidents:
@@ -402,7 +399,7 @@ class IncidentPredictor:
 class RecommendationEngine:
     """AI-powered recommendation engine"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
@@ -567,19 +564,18 @@ Format as JSON array with objects containing: title, description, priority, time
 class RootCauseAnalyzer:
     """AI-powered root cause analysis"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def cluster_incidents(self, lookback_days: int = 180) -> list[dict[str, Any]]:
+    async def cluster_incidents(self, lookback_days: int = 180) -> list[dict[str, Any]]:
         """Cluster similar incidents to identify systemic issues"""
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        incidents = (
-            self.db.query(Incident)
-            .filter(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
-            .all()
+        result = await self.db.execute(
+            select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
         )
+        incidents = result.scalars().all()
 
         # Group by extracted keywords
         clusters: dict[str, list] = defaultdict(list)
@@ -596,10 +592,10 @@ class RootCauseAnalyzer:
                 )
 
         # Return clusters with multiple incidents
-        result = []
+        result_list = []
         for category, cluster_incidents in clusters.items():
             if len(cluster_incidents) >= 3:  # At least 3 similar incidents
-                result.append(
+                result_list.append(
                     {
                         "category": category,
                         "incident_count": len(cluster_incidents),
@@ -616,8 +612,8 @@ class RootCauseAnalyzer:
                     }
                 )
 
-        result.sort(key=lambda x: x["incident_count"], reverse=True)
-        return result
+        result_list.sort(key=lambda x: x["incident_count"], reverse=True)
+        return result_list
 
     def analyze_5_whys(self, incident_id: int, answers: list[str]) -> dict[str, Any]:
         """Guide 5 Whys analysis"""

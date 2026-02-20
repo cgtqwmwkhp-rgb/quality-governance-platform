@@ -41,6 +41,7 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 // Status options for action updates
 const ACTION_STATUS_OPTIONS = [
@@ -54,6 +55,7 @@ const ACTION_STATUS_OPTIONS = [
 export default function IncidentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [incident, setIncident] = useState<Incident | null>(null)
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,6 +111,7 @@ export default function IncidentDetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to load incident:', err)
+      showToast('Failed to load incident', 'error');
     } finally {
       setLoading(false)
     }
@@ -138,6 +141,7 @@ export default function IncidentDetail() {
       setIsEditing(false)
     } catch (err) {
       console.error('Failed to update incident:', err)
+      showToast('Failed to update incident', 'error');
     } finally {
       setSaving(false)
     }
@@ -185,6 +189,7 @@ export default function IncidentDetail() {
       navigate('/investigations')
     } catch (err: any) {
       console.error('Failed to create investigation:', err)
+      showToast('Failed to create investigation', 'error');
       
       // Check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
@@ -269,6 +274,7 @@ export default function IncidentDetail() {
       setActions(prev => prev.map(a => a.id === selectedAction.id ? response.data : a))
     } catch (err) {
       console.error('Failed to update action status:', err)
+      showToast('Failed to update action status', 'error');
       setActionUpdateError(getApiErrorMessage(err))
     } finally {
       setUpdatingAction(false)
@@ -962,6 +968,8 @@ export default function IncidentDetail() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

@@ -28,10 +28,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
 import { usersApi } from '../api/client';
 import type { UserDetail, RoleDetail } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 /* eslint-disable @typescript-eslint/no-empty-interface */
 
 export default function UserManagement() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +63,7 @@ export default function UserManagement() {
       setRoles(rolesRes.data || []);
     } catch {
       console.error('Failed to load users/roles');
+      showToast('Failed to load users and roles. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -87,6 +90,7 @@ export default function UserManagement() {
       await loadData();
     } catch {
       console.error('Failed to create user');
+      showToast('Failed to create user. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -98,6 +102,7 @@ export default function UserManagement() {
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
     } catch {
       console.error('Failed to toggle user');
+      showToast('Failed to update user status.', 'error');
     }
   };
 
@@ -108,6 +113,7 @@ export default function UserManagement() {
       setUsers(prev => prev.filter(u => u.id !== userId));
     } catch {
       console.error('Failed to delete user');
+      showToast('Failed to delete user. Please try again.', 'error');
     }
   };
 
@@ -466,6 +472,8 @@ export default function UserManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

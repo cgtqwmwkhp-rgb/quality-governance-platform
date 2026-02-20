@@ -22,6 +22,7 @@ import {
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 import { aiApi } from '../api/client'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 interface Prediction {
   factor_type: string
@@ -50,6 +51,7 @@ interface Cluster {
 }
 
 export default function AIIntelligence() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<'predictions' | 'anomalies' | 'audit' | 'recommendations'>('predictions')
   const [analyzing, setAnalyzing] = useState(false)
   const [predictions, setPredictions] = useState<Prediction[]>([])
@@ -515,6 +517,8 @@ export default function AIIntelligence() {
           ))}
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

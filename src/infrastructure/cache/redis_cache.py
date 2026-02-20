@@ -170,7 +170,7 @@ class RedisCache:
             data = await redis.get(self._make_key(key))
             if data is None:
                 return None
-            return pickle.loads(data)  # nosec B301 - internal cache data only
+            return json.loads(data)
         except Exception as e:
             print(f"[Cache] Redis get error: {e}")
             return await self._fallback.get(key)
@@ -185,7 +185,7 @@ class RedisCache:
             return await self._fallback.set(key, value, ttl)
 
         try:
-            data = pickle.dumps(value)
+            data = json.dumps(value, default=str)
             if ttl > 0:
                 await redis.setex(self._make_key(key), ttl, data)
             else:
@@ -391,7 +391,9 @@ async def warmup_cache():
 # ============================================================================
 
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
+
+from src.api.dependencies import CurrentSuperuser
 
 cache_router = APIRouter(prefix="/cache", tags=["Cache"])
 
@@ -404,16 +406,16 @@ async def get_cache_stats():
 
 
 @cache_router.post("/clear")
-async def clear_cache():
-    """Clear all cache entries (admin only)."""
+async def clear_cache(user: CurrentSuperuser):
+    """Clear all cache entries (superuser only)."""
     cache = get_cache()
     await cache.clear()
     return {"success": True, "message": "Cache cleared"}
 
 
 @cache_router.delete("/{pattern}")
-async def invalidate_pattern(pattern: str):
-    """Invalidate cache entries matching pattern (admin only)."""
+async def invalidate_pattern(pattern: str, user: CurrentSuperuser):
+    """Invalidate cache entries matching pattern (superuser only)."""
     cache = get_cache()
     count = await cache.delete_pattern(pattern)
     return {"success": True, "invalidated": count}

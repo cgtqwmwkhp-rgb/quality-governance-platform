@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { cn } from '../../helpers/utils';
+import { useToast, ToastContainer } from '../../components/ui/Toast';
 import { usersApi, auditTrailApi, actionsApi } from '../../api/client';
 
 interface QuickAction {
@@ -99,6 +100,7 @@ function formatTimeAgo(dateStr: string): string {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<StatCard[]>([]);
   const [recentActivity, setRecentActivity] = useState<{ action: string; user: string; time: string; type: string }[]>([]);
@@ -138,6 +140,7 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('Failed to load admin dashboard:', err);
+      showToast('Failed to load dashboard data', 'error');
     } finally {
       setLoading(false);
     }
@@ -321,6 +324,7 @@ export default function AdminDashboard() {
           </Card>
         </div>
       </main>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

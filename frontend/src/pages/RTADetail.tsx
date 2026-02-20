@@ -42,10 +42,12 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { useToast, ToastContainer } from '../components/ui/Toast'
 
 export default function RTADetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [rta, setRta] = useState<RTA | null>(null)
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,6 +99,7 @@ export default function RTADetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to load RTA:', err)
+      showToast('Failed to load RTA details', 'error');
     } finally {
       setLoading(false)
     }
@@ -114,6 +117,7 @@ export default function RTADetail() {
       setActions(rtaActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
+      showToast('Failed to load actions', 'error');
     }
   }
 
@@ -220,6 +224,7 @@ export default function RTADetail() {
       loadActions()
     } catch (err: unknown) {
       console.error('Failed to create action:', err)
+      showToast('Failed to create action', 'error');
       alert(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreating(false)
@@ -823,6 +828,8 @@ export default function RTADetail() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

@@ -23,6 +23,7 @@ import { Badge } from '../components/ui/Badge';
 import { Switch } from '../components/ui/Switch';
 import { cn } from "../helpers/utils";
 import { notificationsApi, NotificationEntry } from '../api/client';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface Notification {
   id: string;
@@ -81,6 +82,7 @@ function mapApiNotification(n: NotificationEntry): Notification {
 }
 
 export default function Notifications() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<'notifications' | 'settings'>('notifications');
   const [filter, setFilter] = useState<'all' | 'unread' | 'alerts'>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -104,6 +106,7 @@ export default function Notifications() {
       setNotifications(items.map(mapApiNotification));
     } catch (err) {
       console.error('Failed to load notifications', err);
+      showToast('Failed to load notifications. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -135,6 +138,7 @@ export default function Notifications() {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     } catch (err) {
       console.error('Failed to mark notification as read', err);
+      showToast('Failed to mark notification as read.', 'error');
     }
   };
 
@@ -144,6 +148,7 @@ export default function Notifications() {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (err) {
       console.error('Failed to mark all as read', err);
+      showToast('Failed to mark all notifications as read.', 'error');
     }
   };
 
@@ -153,6 +158,7 @@ export default function Notifications() {
       setNotifications(prev => prev.filter(n => n.id !== id));
     } catch (err) {
       console.error('Failed to delete notification', err);
+      showToast('Failed to delete notification.', 'error');
     }
   };
 
@@ -162,6 +168,7 @@ export default function Notifications() {
       setNotifications([]);
     } catch (err) {
       console.error('Failed to clear notifications', err);
+      showToast('Failed to clear notifications.', 'error');
     }
   };
 
@@ -434,6 +441,8 @@ export default function Notifications() {
           </div>
         </Card>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

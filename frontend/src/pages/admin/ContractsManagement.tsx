@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { cn } from '../../helpers/utils';
+import { useToast, ToastContainer } from '../../components/ui/Toast';
 import { contractsApi } from '../../services/api';
 
 interface Contract {
@@ -34,6 +35,7 @@ interface Contract {
 }
 
 export default function ContractsManagement() {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -49,6 +51,7 @@ export default function ContractsManagement() {
       setContracts(data.items || []);
     } catch {
       console.error('Failed to load contracts');
+      showToast('Failed to load contracts', 'error');
     } finally {
       setLoading(false);
     }
@@ -124,6 +127,7 @@ export default function ContractsManagement() {
       handleCancel();
     } catch {
       console.error('Failed to save');
+      showToast('Failed to save contract', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -136,6 +140,7 @@ export default function ContractsManagement() {
         setContracts((prev) => prev.filter((c) => c.id !== id));
       } catch {
         console.error('Failed to delete');
+        showToast('Failed to delete contract', 'error');
       }
     }
   };
@@ -150,6 +155,7 @@ export default function ContractsManagement() {
       );
     } catch {
       console.error('Failed to toggle');
+      showToast('Failed to update contract status', 'error');
     }
   };
 
@@ -415,6 +421,7 @@ export default function ContractsManagement() {
           </div>
         </div>
       </main>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

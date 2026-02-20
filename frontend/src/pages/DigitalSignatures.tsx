@@ -43,6 +43,7 @@ import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 
 interface SignatureRequest {
   id: number;
@@ -79,6 +80,7 @@ interface SignatureTemplate {
 }
 
 const DigitalSignatures: React.FC = () => {
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'templates' | 'audit'>('requests');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSigningModal, setShowSigningModal] = useState(false);
@@ -130,6 +132,7 @@ const DigitalSignatures: React.FC = () => {
       })));
     } catch {
       console.error('Failed to load signatures');
+      showToast('Failed to load signature requests. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -599,6 +602,8 @@ const DigitalSignatures: React.FC = () => {
           }}
         />
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 };

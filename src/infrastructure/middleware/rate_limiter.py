@@ -163,12 +163,12 @@ def get_client_identifier(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         try:
-            import jwt
+            from src.core.security import decode_token
 
             token = auth_header[7:]
-            # Decode without verification just to get sub claim
-            payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get("sub")
+            payload = decode_token(token)
+            if payload:
+                user_id = payload.get("sub")
         except Exception:
             pass
 
