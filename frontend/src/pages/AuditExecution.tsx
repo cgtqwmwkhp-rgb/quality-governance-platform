@@ -65,8 +65,12 @@ interface AuditQuestion {
   description?: string;
   type: string;
   required: boolean;
+  allowNa: boolean;
   weight: number;
-  options?: { id: string; label: string; value: string; score?: number }[];
+  options?: { value: string; label: string; score?: number; triggers_finding?: boolean }[];
+  minValue?: number;
+  maxValue?: number;
+  maxScore?: number;
   evidenceRequired: boolean;
   guidance?: string;
   riskLevel?: string;
@@ -370,14 +374,19 @@ export default function AuditExecution() {
           description: sec.description ? String(sec.description) : undefined,
           color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
           isComplete: false,
-          questions: (sec.questions || []).map(
+          questions: (sec.questions || []).filter((q: any) => q.is_active !== false).map(
             (q: any) => ({
               id: String(q.id),
               text: String(q.question_text || q.text || ''),
               description: q.description ? String(q.description) : undefined,
               type: String(q.question_type || q.type || 'yes_no'),
               required: q.is_required !== false,
+              allowNa: q.allow_na === true,
               weight: Number(q.weight || 1),
+              options: q.options || q.options_json || undefined,
+              minValue: q.min_value != null ? Number(q.min_value) : undefined,
+              maxValue: q.max_value != null ? Number(q.max_value) : undefined,
+              maxScore: q.max_score != null ? Number(q.max_score) : undefined,
               evidenceRequired: q.evidence_required === true,
               guidance: q.help_text ? String(q.help_text) : undefined,
               riskLevel: q.risk_category ? String(q.risk_category) : undefined,
@@ -466,16 +475,17 @@ export default function AuditExecution() {
 
         totalWeight += question.weight;
 
-        if (question.type === 'pass_fail' || question.type === 'yes_no') {
+        if (response.response === 'na') {
+          totalWeight -= question.weight;
+        } else if (question.type === 'pass_fail' || question.type === 'yes_no') {
           if (response.response === 'pass' || response.response === 'yes') {
             achievedWeight += question.weight;
           }
-        } else if (question.type === 'yes_no_na') {
-          if (response.response === 'yes' || response.response === 'na') {
-            achievedWeight += question.weight;
-          }
-        } else if (question.type.startsWith('scale_')) {
-          const max = question.type === 'scale_1_5' ? 5 : 10;
+        } else if (question.type === 'score' || question.type === 'scale_1_5') {
+          const max = question.maxValue ?? 5;
+          achievedWeight += (Number(response.response) / max) * question.weight;
+        } else if (question.type === 'rating' || question.type === 'scale_1_10') {
+          const max = question.maxValue ?? 10;
           achievedWeight += (Number(response.response) / max) * question.weight;
         } else if (question.weight > 0) {
           achievedWeight += question.weight;
@@ -610,100 +620,137 @@ export default function AuditExecution() {
   // Render question input based on type
   const renderQuestionInput = () => {
     if (!currentQuestion) return null;
+    const qType = currentQuestion.type;
+    const opts = currentQuestion.options || [];
+    const allowNa = currentQuestion.allowNa;
 
-    switch (currentQuestion.type) {
+    const naButton = allowNa ? (
+      <ResponseButton
+        selected={currentResponse?.response === 'na'}
+        onClick={() => updateResponse({ response: 'na' })}
+        variant="neutral"
+        icon={MinusCircle}
+      >
+        N/A
+      </ResponseButton>
+    ) : null;
+
+    switch (qType) {
       case 'pass_fail':
         return (
-          <div className="flex gap-4">
-            <ResponseButton
-              selected={currentResponse?.response === 'pass'}
-              onClick={() => updateResponse({ response: 'pass' })}
-              variant="success"
-              icon={CheckCircle2}
-            >
-              PASS
-            </ResponseButton>
-            <ResponseButton
-              selected={currentResponse?.response === 'fail'}
-              onClick={() => updateResponse({ response: 'fail' })}
-              variant="danger"
-              icon={XCircle}
-            >
-              FAIL
-            </ResponseButton>
+          <div className="flex gap-3">
+            <ResponseButton selected={currentResponse?.response === 'pass'} onClick={() => updateResponse({ response: 'pass' })} variant="success" icon={CheckCircle2}>PASS</ResponseButton>
+            <ResponseButton selected={currentResponse?.response === 'fail'} onClick={() => updateResponse({ response: 'fail' })} variant="danger" icon={XCircle}>FAIL</ResponseButton>
+            {naButton}
           </div>
         );
 
       case 'yes_no':
         return (
-          <div className="flex gap-4">
-            <ResponseButton
-              selected={currentResponse?.response === 'yes'}
-              onClick={() => updateResponse({ response: 'yes' })}
-              variant="success"
-              icon={CheckCircle2}
-            >
-              YES
-            </ResponseButton>
-            <ResponseButton
-              selected={currentResponse?.response === 'no'}
-              onClick={() => updateResponse({ response: 'no' })}
-              variant="danger"
-              icon={XCircle}
-            >
-              NO
-            </ResponseButton>
-          </div>
-        );
-
-      case 'yes_no_na':
-        return (
           <div className="flex gap-3">
-            <ResponseButton
-              selected={currentResponse?.response === 'yes'}
-              onClick={() => updateResponse({ response: 'yes' })}
-              variant="success"
-              icon={CheckCircle2}
-            >
-              YES
-            </ResponseButton>
-            <ResponseButton
-              selected={currentResponse?.response === 'no'}
-              onClick={() => updateResponse({ response: 'no' })}
-              variant="danger"
-              icon={XCircle}
-            >
-              NO
-            </ResponseButton>
-            <ResponseButton
-              selected={currentResponse?.response === 'na'}
-              onClick={() => updateResponse({ response: 'na' })}
-              variant="neutral"
-              icon={MinusCircle}
-            >
-              N/A
-            </ResponseButton>
+            <ResponseButton selected={currentResponse?.response === 'yes'} onClick={() => updateResponse({ response: 'yes' })} variant="success" icon={CheckCircle2}>YES</ResponseButton>
+            <ResponseButton selected={currentResponse?.response === 'no'} onClick={() => updateResponse({ response: 'no' })} variant="danger" icon={XCircle}>NO</ResponseButton>
+            {naButton}
           </div>
         );
 
+      case 'score':
       case 'scale_1_5':
         return (
           <ScaleInput
             value={currentResponse?.response as number | null}
             onChange={(val) => updateResponse({ response: val })}
-            max={5}
+            max={currentQuestion.maxValue ?? 5}
           />
         );
 
+      case 'rating':
       case 'scale_1_10':
         return (
           <ScaleInput
             value={currentResponse?.response as number | null}
             onChange={(val) => updateResponse({ response: val })}
-            max={10}
+            max={currentQuestion.maxValue ?? 10}
           />
         );
 
+      case 'radio':
+        return (
+          <div className="space-y-2">
+            {opts.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateResponse({ response: opt.value })}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                  currentResponse?.response === opt.value
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:border-primary/50 hover:bg-surface'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  currentResponse?.response === opt.value ? 'border-primary' : 'border-muted-foreground'
+                }`}>
+                  {currentResponse?.response === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                </div>
+                <span className="font-medium">{opt.label}</span>
+              </button>
+            ))}
+            {opts.length === 0 && <p className="text-sm text-muted-foreground italic">No options configured for this question.</p>}
+          </div>
+        );
+
+      case 'dropdown':
+        return (
+          <div className="space-y-2">
+            <select
+              value={(currentResponse?.response as string) || ''}
+              onChange={(e) => updateResponse({ response: e.target.value || null })}
+              className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
+            >
+              <option value="">Select an option...</option>
+              {opts.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {opts.length === 0 && <p className="text-sm text-muted-foreground italic">No options configured for this question.</p>}
+          </div>
+        );
+
+      case 'checkbox':
+        const selected = currentResponse?.response ? (typeof currentResponse.response === 'string' ? currentResponse.response.split(',').filter(Boolean) : Array.isArray(currentResponse.response) ? currentResponse.response : []) : [];
+        return (
+          <div className="space-y-2">
+            {opts.map((opt) => {
+              const isChecked = selected.includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    const newSelected = isChecked ? selected.filter(v => v !== opt.value) : [...selected, opt.value];
+                    updateResponse({ response: newSelected.join(',') });
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                    isChecked
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/50 hover:bg-surface'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                    isChecked ? 'border-primary bg-primary' : 'border-muted-foreground'
+                  }`}>
+                    {isChecked && <CheckCircle2 className="w-3 h-3 text-primary-foreground" />}
+                  </div>
+                  <span className="font-medium">{opt.label}</span>
+                </button>
+              );
+            })}
+            {opts.length === 0 && <p className="text-sm text-muted-foreground italic">No options configured for this question.</p>}
+          </div>
+        );
+
+      case 'text':
       case 'text_short':
         return (
           <input
@@ -715,6 +762,7 @@ export default function AuditExecution() {
           />
         );
 
+      case 'textarea':
       case 'text_long':
         return (
           <textarea
@@ -726,6 +774,7 @@ export default function AuditExecution() {
           />
         );
 
+      case 'number':
       case 'numeric':
         return (
           <input
@@ -733,8 +782,62 @@ export default function AuditExecution() {
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter number..."
+            min={currentQuestion.minValue}
+            max={currentQuestion.maxValue}
             className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
           />
+        );
+
+      case 'date':
+        return (
+          <input
+            type="date"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground focus:outline-none focus:border-primary"
+          />
+        );
+
+      case 'datetime':
+        return (
+          <input
+            type="datetime-local"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground focus:outline-none focus:border-primary"
+          />
+        );
+
+      case 'photo':
+        return (
+          <PhotoCapture
+            photos={currentResponse?.photos || []}
+            onAdd={(photo) => {
+              const newPhotos = [...(currentResponse?.photos || []), photo];
+              updateResponse({ photos: newPhotos, response: `${newPhotos.length} photo(s)` });
+            }}
+            onRemove={(idx) => {
+              const newPhotos = (currentResponse?.photos || []).filter((_, i) => i !== idx);
+              updateResponse({ photos: newPhotos, response: newPhotos.length > 0 ? `${newPhotos.length} photo(s)` : null });
+            }}
+          />
+        );
+
+      case 'file':
+        return (
+          <div className="space-y-3">
+            <input
+              type="file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) updateResponse({ response: file.name });
+              }}
+              className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary file:text-primary-foreground file:font-medium file:cursor-pointer"
+            />
+            {currentResponse?.response && (
+              <p className="text-sm text-muted-foreground">Selected: {currentResponse.response as string}</p>
+            )}
+          </div>
         );
 
       case 'signature':
