@@ -6,9 +6,10 @@ import {
   Type, Hash, Calendar, Camera, FileSignature, ListChecks, Scale,
   MessageSquare, AlertTriangle, Shield, Leaf, HardHat, Zap, Star,
   History, Download, Upload, Layers, Award, FileText,
-  Sparkles, Loader2, Eye, XCircle,
+  Sparkles, Loader2, Eye,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { ToastContainer, useToast } from '../components/ui/Toast';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -756,15 +757,7 @@ export default function AuditTemplateBuilder() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
-  // Feedback state
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const feedbackRef = useRef<ReturnType<typeof setTimeout>>();
-
-  const showFeedback = useCallback((type: 'success' | 'error', message: string) => {
-    setFeedback({ type, message });
-    if (feedbackRef.current) clearTimeout(feedbackRef.current);
-    feedbackRef.current = setTimeout(() => setFeedback(null), 4000);
-  }, []);
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
   // Template name/description local state
   const [name, setName] = useState('');
@@ -825,7 +818,6 @@ export default function AuditTemplateBuilder() {
   // Cleanup debounce timers on unmount
   useEffect(() => () => {
     if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
-    if (feedbackRef.current) clearTimeout(feedbackRef.current);
   }, []);
 
   const refreshTemplate = useCallback(async () => {
@@ -845,14 +837,14 @@ export default function AuditTemplateBuilder() {
       await auditsApi.updateTemplate(template.id, { name, description });
       await refreshTemplate();
       setHasUnsavedChanges(false);
-      showFeedback('success', 'Template saved successfully');
+      showToast('Template saved successfully', 'success');
     } catch (err) {
-      showFeedback('error', 'Failed to save template. Please try again.');
+      showToast('Failed to save template. Please try again.', 'error');
       console.error(err);
     } finally {
       setSaving(false);
     }
-  }, [template, name, description, refreshTemplate, showFeedback]);
+  }, [template, name, description, refreshTemplate, showToast]);
 
   // Keyboard shortcuts — must be after handleSave is defined
   const handleSaveRef = useRef(handleSave);
@@ -874,12 +866,12 @@ export default function AuditTemplateBuilder() {
     try {
       await auditsApi.updateTemplate(template.id, data);
       await refreshTemplate();
-      showFeedback('success', 'Settings saved successfully');
+      showToast('Settings saved successfully', 'success');
     } catch (err) {
-      showFeedback('error', 'Failed to save settings.');
+      showToast('Failed to save settings.', 'error');
       console.error(err);
     }
-  }, [template, refreshTemplate, showFeedback]);
+  }, [template, refreshTemplate, showToast]);
 
   const handlePublish = useCallback(async () => {
     if (!template) return;
@@ -888,14 +880,14 @@ export default function AuditTemplateBuilder() {
       await auditsApi.updateTemplate(template.id, { name, description });
       await auditsApi.publishTemplate(template.id);
       await refreshTemplate();
-      showFeedback('success', 'Template published successfully');
+      showToast('Template published successfully', 'success');
     } catch (err: any) {
       const message = err?.response?.data?.detail || 'Failed to publish. Ensure at least one question exists.';
-      showFeedback('error', message);
+      showToast(message, 'error');
     } finally {
       setSaving(false);
     }
-  }, [template, name, description, refreshTemplate, showFeedback]);
+  }, [template, name, description, refreshTemplate, showToast]);
 
   const handleAddSection = useCallback(async () => {
     if (!template) return;
@@ -907,14 +899,14 @@ export default function AuditTemplateBuilder() {
         weight: 1,
       });
       await refreshTemplate();
-      showFeedback('success', 'Section added');
+      showToast('Section added', 'success');
     } catch (err) {
-      showFeedback('error', 'Failed to add section.');
+      showToast('Failed to add section.', 'error');
       console.error(err);
     } finally {
       setAddingSection(false);
     }
-  }, [template, refreshTemplate, showFeedback]);
+  }, [template, refreshTemplate, showToast]);
 
   const handleNameChange = useCallback((value: string) => {
     setName(value);
@@ -994,28 +986,7 @@ export default function AuditTemplateBuilder() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Feedback Toast */}
-      {feedback && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border animate-fade-in ${
-            feedback.type === 'success'
-              ? 'bg-success/10 border-success/20 text-success'
-              : 'bg-destructive/10 border-destructive/20 text-destructive'
-          }`}
-          role="alert"
-          aria-live="polite"
-        >
-          {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-          <span className="text-sm font-medium">{feedback.message}</span>
-          <button
-            onClick={() => setFeedback(null)}
-            className="ml-2 p-1 hover:bg-surface rounded"
-            aria-label="Dismiss"
-          >
-            <XCircle className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -1230,11 +1201,11 @@ export default function AuditTemplateBuilder() {
               await refreshTemplate();
               setShowAIAssist(false);
               if (failures === 0) {
-                showFeedback('success', `${successes} AI-generated sections added`);
+                showToast(`${successes} AI-generated sections added`, 'success');
               } else if (successes > 0) {
-                showFeedback('error', `${successes} sections added, ${failures} failed`);
+                showToast(`${successes} sections added, ${failures} failed`, 'error');
               } else {
-                showFeedback('error', 'Failed to add AI-generated sections');
+                showToast('Failed to add AI-generated sections', 'error');
               }
             } finally {
               setApplyingAI(false);

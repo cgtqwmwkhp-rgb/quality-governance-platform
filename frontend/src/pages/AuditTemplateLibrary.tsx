@@ -15,6 +15,7 @@ import {
   DialogDescription, DialogFooter,
 } from '../components/ui/Dialog';
 import { auditsApi, AuditTemplate } from '../api/client';
+import { ToastContainer, useToast } from '../components/ui/Toast';
 
 // ============================================================================
 // CONSTANTS
@@ -78,20 +79,8 @@ export default function AuditTemplateLibrary() {
   const [totalCount, setTotalCount] = useState(0);
   const [archivedCount, setArchivedCount] = useState(0);
 
-  // Feedback
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const requestIdRef = useRef(0);
-
-  const showFeedback = useCallback((type: 'success' | 'error', message: string) => {
-    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
-    setFeedback({ type, message });
-    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 4000);
-  }, []);
-
-  useEffect(() => () => {
-    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
-  }, []);
 
   // Debounce search input by 300ms
   useEffect(() => {
@@ -160,46 +149,46 @@ export default function AuditTemplateLibrary() {
       await auditsApi.deleteTemplate(archiveTarget.id);
       setArchiveTarget(null);
       setArchiveConfirmStep(1);
-      showFeedback('success', `"${archiveTarget.name}" moved to archive. Recoverable for 30 days.`);
+      showToast(`"${archiveTarget.name}" moved to archive. Recoverable for 30 days.`, 'success');
       loadTemplates();
       loadArchivedTemplates();
     } catch (err) {
-      showFeedback('error', 'Failed to archive template.');
+      showToast('Failed to archive template.', 'error');
       console.error(err);
     } finally {
       setArchiving(false);
     }
-  }, [archiveTarget, archiveConfirmStep, loadTemplates, loadArchivedTemplates, showFeedback]);
+  }, [archiveTarget, archiveConfirmStep, loadTemplates, loadArchivedTemplates, showToast]);
 
   const handleRestore = useCallback(async (template: AuditTemplate) => {
     try {
       setRestoring(template.id);
       await auditsApi.restoreTemplate(template.id);
-      showFeedback('success', `"${template.name}" restored successfully.`);
+      showToast(`"${template.name}" restored successfully.`, 'success');
       loadTemplates();
       loadArchivedTemplates();
     } catch (err) {
-      showFeedback('error', 'Failed to restore template.');
+      showToast('Failed to restore template.', 'error');
       console.error(err);
     } finally {
       setRestoring(null);
     }
-  }, [loadTemplates, loadArchivedTemplates, showFeedback]);
+  }, [loadTemplates, loadArchivedTemplates, showToast]);
 
   const handleClone = useCallback(async (template: AuditTemplate) => {
     setCloning(template.id);
     setActiveMenu(null);
     try {
       await auditsApi.cloneTemplate(template.id);
-      showFeedback('success', `Cloned "${template.name}"`);
+      showToast(`Cloned "${template.name}"`, 'success');
       loadTemplates();
     } catch (err) {
-      showFeedback('error', 'Failed to clone template.');
+      showToast('Failed to clone template.', 'error');
       console.error(err);
     } finally {
       setCloning(null);
     }
-  }, [loadTemplates, showFeedback]);
+  }, [loadTemplates, showToast]);
 
   const sortedTemplates = useMemo(() => {
     return [...templates].sort((a, b) => {
@@ -216,19 +205,7 @@ export default function AuditTemplateLibrary() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Feedback Toast */}
-      {feedback && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border animate-fade-in ${
-            feedback.type === 'success'
-              ? 'bg-success/10 border-success/20 text-success'
-              : 'bg-destructive/10 border-destructive/20 text-destructive'
-          }`}
-          role="alert" aria-live="polite"
-        >
-          <span className="text-sm font-medium">{feedback.message}</span>
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

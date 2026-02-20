@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { ToastContainer, useToast } from '../components/ui/Toast'
 import { imsDashboardApi, type IMSDashboardResponse, getApiErrorMessage } from '../api/client'
 
 type StandardDisplay = {
@@ -86,7 +87,7 @@ export default function IMSDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -105,13 +106,6 @@ export default function IMSDashboard() {
     loadDashboard()
   }, [loadDashboard])
 
-  useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [toastMessage])
-
   const handleSync = () => {
     setSyncing(true)
     loadDashboard()
@@ -126,12 +120,12 @@ export default function IMSDashboard() {
     a.download = `ims-report-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
-    setToastMessage('Report downloaded')
+    showToast('Report downloaded', 'success')
   }
 
   const handleExportSoA = () => {
     if (!dashboardData?.isms) {
-      setToastMessage('No ISMS data to export')
+      showToast('No ISMS data to export', 'error')
       return
     }
     const soaData = {
@@ -147,7 +141,7 @@ export default function IMSDashboard() {
     a.download = `soa-export-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
-    setToastMessage('SoA exported')
+    showToast('SoA exported', 'success')
   }
 
   // Map API standards to display format
@@ -204,13 +198,7 @@ export default function IMSDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
-      {/* Toast */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-card border border-border rounded-lg px-4 py-3 shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 className="w-4 h-4 text-success" />
-          <span className="text-sm text-foreground">{toastMessage}</span>
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
@@ -811,7 +799,7 @@ export default function IMSDashboard() {
 
             <button
               className="w-full mt-6 px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg text-sm font-medium transition-colors"
-              onClick={() => setToastMessage('Feature coming soon')}
+              onClick={() => showToast('Feature coming soon', 'info')}
             >
               Schedule Review Meeting
             </button>

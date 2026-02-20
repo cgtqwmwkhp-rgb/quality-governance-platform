@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2, Link2, X, XCircle } from 'lucide-react'
+import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2, Link2, X } from 'lucide-react'
+import { ToastContainer, useToast } from '../components/ui/Toast'
 import { standardsApi, complianceApi, Standard, Clause, ControlListItem, ComplianceScore, getApiErrorMessage } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
@@ -33,13 +34,7 @@ export default function Standards() {
   const [linkClauseLabel, setLinkClauseLabel] = useState('')
   const [linkForm, setLinkForm] = useState({ entity_type: 'document', entity_id: '' })
   const [linkSubmitting, setLinkSubmitting] = useState(false)
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
-
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
-    setToastMessage({ text, type })
-    // STATIC_UI_CONFIG_OK - toast auto-dismiss timer, not a data simulation
-    setTimeout(() => setToastMessage(null), 4000)
-  }
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
   const openLinkModal = (clauseId: string, label: string) => {
     setLinkClauseId(clauseId)
@@ -167,16 +162,7 @@ export default function Standards() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Toast */}
-      {toastMessage && (
-        <div className={`fixed top-4 right-4 z-[100] border rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 animate-fade-in ${
-          toastMessage.type === 'error' ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-card border-border text-foreground'
-        }`}>
-          {toastMessage.type === 'error' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 text-success" />}
-          <span className="text-sm">{toastMessage.text}</span>
-          <button onClick={() => setToastMessage(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Link Evidence Modal */}
       {showLinkModal && (
