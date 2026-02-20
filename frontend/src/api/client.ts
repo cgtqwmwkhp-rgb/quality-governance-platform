@@ -1853,6 +1853,10 @@ export const aiApi = {
     api.post<unknown>('/api/v1/ai/classify-risk', { description }),
   getDashboard: () =>
     api.get<unknown>('/api/v1/ai/dashboard'),
+  generateAuditQuestions: (standard: string, clause: string, context?: string) =>
+    api.post<unknown[]>('/api/v1/ai/audit/generate-questions', { standard, clause, context }),
+  generateAuditChecklist: (standard: string, scopeClauses?: string[]) =>
+    api.post<unknown[]>('/api/v1/ai/audit/generate-checklist', { standard, scope_clauses: scopeClauses }),
 }
 
 // ============ Analytics API ============
@@ -1861,19 +1865,33 @@ export const analyticsApi = {
   getKPIs: (timeRange?: string) =>
     api.get<unknown>(`/api/v1/analytics/kpis${timeRange ? `?time_range=${timeRange}` : ''}`),
   getTrends: (dataSource: string, timeRange?: string) =>
-    api.get<unknown>(`/api/v1/analytics/trends?data_source=${dataSource}${timeRange ? `&time_range=${timeRange}` : ''}`),
-  getBenchmarks: () =>
-    api.get<unknown>('/api/v1/analytics/benchmarks'),
-  getExecutiveSummary: () =>
-    api.get<unknown>('/api/v1/analytics/executive-summary'),
-  getNonComplianceCosts: () =>
-    api.get<unknown>('/api/v1/analytics/non-compliance-costs'),
+    api.get<unknown>(`/api/v1/analytics/trends/${dataSource}${timeRange ? `?time_range=${timeRange}` : ''}`),
+  getBenchmarks: (industry?: string) =>
+    api.get<unknown>(`/api/v1/analytics/benchmarks${industry ? `?industry=${industry}` : ''}`),
+  getExecutiveSummary: (timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/reports/executive-summary${timeRange ? `?time_range=${timeRange}` : ''}`),
+  getNonComplianceCosts: (timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/costs/non-compliance${timeRange ? `?time_range=${timeRange}` : ''}`),
   getROI: () =>
     api.get<unknown>('/api/v1/analytics/roi'),
-  getCostBreakdown: () =>
-    api.get<unknown>('/api/v1/analytics/cost-breakdown'),
-  getDashboard: () =>
-    api.get<unknown>('/api/v1/analytics/dashboard'),
+  getCostBreakdown: (timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/costs/breakdown${timeRange ? `?time_range=${timeRange}` : ''}`),
+  getDrillDown: (dataSource: string, dimension: string, value: string, timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/drill-down/${dataSource}?dimension=${dimension}&value=${value}${timeRange ? `&time_range=${timeRange}` : ''}`),
+  forecast: (dataSource: string, metric: string, periodsAhead?: number) =>
+    api.post<unknown>('/api/v1/analytics/forecast', { data_source: dataSource, metric, periods_ahead: periodsAhead || 12, confidence_level: 0.95 }),
+  listDashboards: () =>
+    api.get<{ dashboards: Array<{ id: number; name: string; description?: string; icon?: string; color?: string; is_default?: boolean; widget_count?: number; updated_at?: string }> }>('/api/v1/analytics/dashboards'),
+  getDashboard: (id: number) =>
+    api.get<{ id: number; name: string; description?: string; widgets: Array<{ id: number; widget_type: string; title: string; data_source: string; metric: string; grid_x: number; grid_y: number; grid_w: number; grid_h: number }> }>(`/api/v1/analytics/dashboards/${id}`),
+  createDashboard: (data: { name: string; description?: string; widgets?: unknown[] }) =>
+    api.post<{ id: number; name: string }>('/api/v1/analytics/dashboards', data),
+  updateDashboard: (id: number, data: { name?: string; description?: string; layout?: unknown }) =>
+    api.put<{ id: number; name: string }>(`/api/v1/analytics/dashboards/${id}`, data),
+  deleteDashboard: (id: number) =>
+    api.delete<{ success: boolean }>(`/api/v1/analytics/dashboards/${id}`),
+  getWidgetData: (widgetId: number, timeRange?: string) =>
+    api.get<unknown>(`/api/v1/analytics/widgets/${widgetId}/data${timeRange ? `?time_range=${timeRange}` : ''}`),
 }
 
 // ============ Notifications API ============

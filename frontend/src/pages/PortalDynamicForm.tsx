@@ -17,6 +17,7 @@ import { Button } from '../components/ui/Button';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { cn } from '../helpers/utils';
 import { API_BASE_URL } from '../config/apiBase';
+import { formTemplatesApi, contractsApi, lookupsApi } from '../services/api';
 import type { FormTemplate, Contract, LookupOption } from '../services/api';
 import type { DynamicFormData } from '../components/DynamicForm';
 
@@ -396,23 +397,29 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       setError(null);
 
       try {
-        // Try to load from API first
-        // In production, this would be:
-        // const [templateRes, contractsRes, rolesRes] = await Promise.all([
-        //   formTemplatesApi.getBySlug(formType),
-        //   contractsApi.list(true),
-        //   lookupsApi.list('roles', true),
-        // ]);
+        const [templateRes, contractsRes, rolesRes] = await Promise.allSettled([
+          formTemplatesApi.getBySlug(formType),
+          contractsApi.list(true),
+          lookupsApi.list('roles', true),
+        ]);
 
-        // For now, use fallbacks with simulated delay
-        await new Promise(resolve => setTimeout(resolve, 300));
+        const loadedTemplate = templateRes.status === 'fulfilled' && templateRes.value
+          ? templateRes.value
+          : FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident;
 
-        setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident);
-        setContracts(FALLBACK_CONTRACTS);
-        setRoles(FALLBACK_ROLES);
+        const loadedContracts = contractsRes.status === 'fulfilled' && contractsRes.value?.items?.length
+          ? contractsRes.value.items
+          : FALLBACK_CONTRACTS;
+
+        const loadedRoles = rolesRes.status === 'fulfilled' && rolesRes.value?.items?.length
+          ? rolesRes.value.items
+          : FALLBACK_ROLES;
+
+        setTemplate(loadedTemplate);
+        setContracts(loadedContracts);
+        setRoles(loadedRoles);
       } catch (err) {
         console.error('Failed to load form configuration:', err);
-        // Fall back to local config
         setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident);
         setContracts(FALLBACK_CONTRACTS);
         setRoles(FALLBACK_ROLES);

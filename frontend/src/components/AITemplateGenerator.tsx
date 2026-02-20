@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   X,
 } from 'lucide-react';
+import { aiApi } from '../api/client';
 
 // ============================================================================
 // TYPES
@@ -94,14 +95,56 @@ const PRESET_PROMPTS = [
 ];
 
 // ============================================================================
-// MOCK AI GENERATION (In production, call Claude/GPT API)
+// AI GENERATION (tries backend API, falls back to built-in templates)
 // ============================================================================
 
-const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[]> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+const STANDARD_MAP: Record<string, string> = {
+  'iso 9001': 'ISO 9001',
+  'iso 14001': 'ISO 14001',
+  'iso 45001': 'ISO 45001',
+  'quality': 'ISO 9001',
+  'environmental': 'ISO 14001',
+  'health': 'ISO 45001',
+  'safety': 'ISO 45001',
+};
 
-  // Check which preset matches
+function detectStandard(prompt: string): string | null {
+  const lower = prompt.toLowerCase();
+  for (const [key, standard] of Object.entries(STANDARD_MAP)) {
+    if (lower.includes(key)) return standard;
+  }
+  return null;
+}
+
+const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[]> => {
+  const standard = detectStandard(prompt);
+  if (standard) {
+    try {
+      const res = await aiApi.generateAuditChecklist(standard);
+      const data = res.data as any[];
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((section: any, sIdx: number) => ({
+          id: section.id || `sec-${sIdx}`,
+          title: section.title || section.clause || `Section ${sIdx + 1}`,
+          description: section.description || '',
+          questions: (section.questions || []).map((q: any, qIdx: number) => ({
+            id: q.id || `q-${sIdx}-${qIdx}`,
+            text: q.text || q.question_text || '',
+            type: q.type || q.question_type || 'yes_no',
+            required: q.required !== false,
+            weight: q.weight ?? 1,
+            riskLevel: q.risk_level || q.riskLevel || 'medium',
+            evidenceRequired: q.evidence_required || q.evidenceRequired || false,
+            isoClause: q.iso_clause || q.isoClause,
+            guidance: q.guidance,
+          })),
+        }));
+      }
+    } catch {
+      // fall through to built-in templates
+    }
+  }
+
   const lowerPrompt = prompt.toLowerCase();
   
   if (lowerPrompt.includes('vehicle') || lowerPrompt.includes('car') || lowerPrompt.includes('fleet')) {

@@ -240,45 +240,6 @@ export default function Login({ onLogin }: LoginProps) {
     }, SLOW_WARNING_MS)
 
     try {
-      // Demo login bypass - allows access without backend
-      const DEMO_CREDENTIALS = [
-        { email: 'admin@plantexpand.com', password: 'TestUser123!' },
-        { email: 'demo@plantexpand.com', password: 'demo123' },
-        { email: 'jamie.uncle@plantexpand.com', password: 'Plantexpand2026!' },
-      ]
-      
-      const isDemoLogin = DEMO_CREDENTIALS.some(
-        cred => cred.email.toLowerCase() === email.toLowerCase() && cred.password === password
-      )
-      
-      if (isDemoLogin) {
-        // Generate a demo token (JWT-like structure for demo purposes)
-        const getUserName = (userEmail: string) => {
-          const names: Record<string, string> = {
-            'admin@plantexpand.com': 'Admin User',
-            'demo@plantexpand.com': 'Demo User',
-            'jamie.uncle@plantexpand.com': 'Jamie Uncle',
-          }
-          return names[userEmail.toLowerCase()] || 'User'
-        }
-        const demoPayload = {
-          sub: email,
-          email: email,
-          name: getUserName(email),
-          role: 'admin',
-          exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
-        }
-        const demoToken = `demo.${btoa(JSON.stringify(demoPayload))}.signature`
-        
-        const durationMs = Date.now() - requestStartRef.current
-        emitLoginTelemetry('success', durationMs)
-        
-        setLoginState('success')
-        onLogin(demoToken)
-        return
-      }
-      
-      // Try real API login
       const response = await authApi.login({ email, password })
       
       const durationMs = Date.now() - requestStartRef.current
@@ -515,7 +476,7 @@ export default function Login({ onLogin }: LoginProps) {
             )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              Demo: admin@plantexpand.com / TestUser123!
+              Sign in with your organization credentials
             </p>
           </form>
         </Card>

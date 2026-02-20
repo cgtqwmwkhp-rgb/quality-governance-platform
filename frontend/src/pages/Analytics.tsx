@@ -61,10 +61,9 @@ export default function Analytics() {
   const loadAnalytics = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [kpiRes, trendRes, dashRes] = await Promise.all([
+      const [kpiRes, trendRes] = await Promise.all([
         analyticsApi.getKPIs(timeRange),
         analyticsApi.getTrends('incidents', timeRange),
-        analyticsApi.getDashboard(),
       ]);
 
       const kpiData = kpiRes.data as Record<string, unknown>;
@@ -86,17 +85,20 @@ export default function Analytics() {
         setMonthlyTrends(trendData.trends as typeof monthlyTrends);
       }
 
-      const dashData = dashRes.data as Record<string, unknown>;
-      if (dashData?.module_stats && Array.isArray(dashData.module_stats)) {
-        setModuleStats((dashData.module_stats as Record<string, unknown>[]).map((m) => ({
-          module: String(m.module || ''),
+      const rawKpis = kpiRes.data as Record<string, Record<string, number>>;
+      const modules = ['incidents', 'actions', 'audits', 'risks'];
+      const stats = modules.map((mod) => {
+        const m = rawKpis[mod] || {};
+        return {
+          module: mod.charAt(0).toUpperCase() + mod.slice(1),
           total: Number(m.total || 0),
           open: Number(m.open || 0),
-          closed: Number(m.closed || 0),
-          avgResolutionDays: Number(m.avg_resolution_days || m.avgResolutionDays || 0),
+          closed: Number(m.closed || m.completed || m.mitigated || 0),
+          avgResolutionDays: Number(m.avg_resolution_days || 0),
           trend: Number(m.trend || 0),
-        })));
-      }
+        };
+      });
+      setModuleStats(stats);
     } catch {
       console.error('Failed to load analytics');
     } finally {
