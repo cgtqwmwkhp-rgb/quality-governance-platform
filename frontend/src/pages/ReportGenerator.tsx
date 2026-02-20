@@ -35,6 +35,7 @@ import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+import { analyticsApi } from '../api/client';
 
 interface ScheduledReport {
   id: number;
@@ -160,9 +161,24 @@ export default function ReportGenerator() {
   const handleGenerateReport = async () => {
     if (!selectedTemplate) return;
     setGenerating(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setGenerating(false);
-    alert('Report generated! Download starting...');
+    try {
+      const res = await analyticsApi.getExecutiveSummary(reportConfig.timeRange);
+      const reportData = res.data;
+      const blob = new Blob(
+        [JSON.stringify(reportData, null, 2)],
+        { type: 'application/json' },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedTemplate}-report-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      console.error('Report generation failed');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const toggleReportStatus = (id: number) => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Download,
   FileText,
@@ -20,6 +20,7 @@ import { cn } from "../helpers/utils";
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { analyticsApi } from '../api/client';
 
 interface ExportJob {
   id: string;
@@ -51,86 +52,32 @@ export default function ExportCenter() {
   const [dateRange, setDateRange] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
 
-  const modules = [
-    { id: 'incidents', name: 'Incidents', count: 847 },
-    { id: 'rtas', name: 'RTAs', count: 234 },
-    { id: 'complaints', name: 'Complaints', count: 456 },
-    { id: 'risks', name: 'Risks', count: 189 },
-    { id: 'audits', name: 'Audits', count: 156 },
-    { id: 'actions', name: 'Actions', count: 523 },
-    { id: 'documents', name: 'Documents', count: 312 }
-  ];
+  const [modules, setModules] = useState([
+    { id: 'incidents', name: 'Incidents', count: 0 },
+    { id: 'actions', name: 'Actions', count: 0 },
+    { id: 'audits', name: 'Audits', count: 0 },
+    { id: 'risks', name: 'Risks', count: 0 },
+    { id: 'complaints', name: 'Complaints', count: 0 },
+  ]);
+  const [exportJobs, setExportJobs] = useState<ExportJob[]>([]);
+  const [templates] = useState<ExportTemplate[]>([]);
 
-  const exportJobs: ExportJob[] = [
-    {
-      id: 'EXP001',
-      name: 'Monthly Incident Report',
-      format: 'pdf',
-      modules: ['incidents'],
-      status: 'completed',
-      createdAt: '2024-01-19 10:30',
-      completedAt: '2024-01-19 10:32',
-      fileSize: '2.4 MB',
-      downloadUrl: '#'
-    },
-    {
-      id: 'EXP002',
-      name: 'Full Data Export',
-      format: 'excel',
-      modules: ['incidents', 'rtas', 'complaints', 'risks'],
-      status: 'processing',
-      progress: 65,
-      createdAt: '2024-01-19 10:45'
-    },
-    {
-      id: 'EXP003',
-      name: 'Audit Evidence Pack',
-      format: 'pdf',
-      modules: ['audits', 'actions'],
-      status: 'completed',
-      createdAt: '2024-01-18 14:00',
-      completedAt: '2024-01-18 14:05',
-      fileSize: '8.7 MB',
-      downloadUrl: '#'
-    },
-    {
-      id: 'EXP004',
-      name: 'Risk Register JSON',
-      format: 'json',
-      modules: ['risks'],
-      status: 'failed',
-      createdAt: '2024-01-17 09:00'
+  const loadModuleCounts = useCallback(async () => {
+    try {
+      const res = await analyticsApi.getKPIs();
+      const kpis = res.data as Record<string, Record<string, number>>;
+      setModules(prev => prev.map(m => ({
+        ...m,
+        count: kpis[m.id]?.total || m.count,
+      })));
+    } catch {
+      // keep defaults
     }
-  ];
+  }, []);
 
-  const templates: ExportTemplate[] = [
-    {
-      id: 'TPL001',
-      name: 'Weekly Safety Summary',
-      description: 'Automated weekly export of incidents and RTAs',
-      modules: ['incidents', 'rtas'],
-      format: 'pdf',
-      schedule: 'Every Monday 6:00 AM',
-      lastRun: '2024-01-15 06:00'
-    },
-    {
-      id: 'TPL002',
-      name: 'Monthly Compliance Pack',
-      description: 'Full compliance data for management review',
-      modules: ['audits', 'risks', 'actions'],
-      format: 'excel',
-      schedule: 'First day of month',
-      lastRun: '2024-01-01 08:00'
-    },
-    {
-      id: 'TPL003',
-      name: 'Customer Feedback Report',
-      description: 'Quarterly complaints analysis',
-      modules: ['complaints'],
-      format: 'pdf',
-      schedule: 'Quarterly'
-    }
-  ];
+  useEffect(() => {
+    loadModuleCounts();
+  }, [loadModuleCounts]);
 
   const formatIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
     pdf: { icon: <FileText className="w-5 h-5" />, color: 'text-destructive', bg: 'bg-destructive/20' },
@@ -154,13 +101,49 @@ export default function ExportCenter() {
     );
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (selectedModules.length === 0) return;
     setIsExporting(true);
-    setTimeout(() => {
-      setIsExporting(false);
+    try {
+      const res = await analyticsApi.getExecutiveSummary(dateRange === 'all' ? undefined : dateRange);
+      const reportData = res.data;
+      const blob = new Blob(
+        [selectedFormat === 'json' ? JSON.stringify(reportData, null, 2) : JSON.stringify(reportData)],
+        { type: selectedFormat === 'json' ? 'application/json' : 'text/plain' },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `export-${selectedModules.join('-')}-${Date.now()}.${selectedFormat === 'excel' ? 'json' : selectedFormat}`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const newJob: ExportJob = {
+        id: `EXP${Date.now()}`,
+        name: `${selectedModules.join(', ')} Export`,
+        format: selectedFormat,
+        modules: selectedModules,
+        status: 'completed',
+        createdAt: new Date().toLocaleString(),
+        completedAt: new Date().toLocaleString(),
+        fileSize: `${(blob.size / 1024).toFixed(1)} KB`,
+      };
+      setExportJobs(prev => [newJob, ...prev]);
       setActiveTab('history');
-    }, 2000);
+    } catch (err) {
+      const failedJob: ExportJob = {
+        id: `EXP${Date.now()}`,
+        name: `${selectedModules.join(', ')} Export`,
+        format: selectedFormat,
+        modules: selectedModules,
+        status: 'failed',
+        createdAt: new Date().toLocaleString(),
+      };
+      setExportJobs(prev => [failedJob, ...prev]);
+      setActiveTab('history');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
