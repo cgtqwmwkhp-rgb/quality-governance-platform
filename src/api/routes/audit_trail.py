@@ -117,21 +117,38 @@ async def list_actions() -> Any:
     """Get list of possible audit actions."""
     return {
         "data": [
-            "create", "update", "delete", "view",
-            "export", "approve", "reject", "assign",
+            "create",
+            "update",
+            "delete",
+            "view",
+            "export",
+            "approve",
+            "reject",
+            "assign",
         ],
         "auth": [
-            "login", "logout", "login_failed",
-            "password_change", "password_reset",
-            "mfa_enabled", "mfa_disabled",
+            "login",
+            "logout",
+            "login_failed",
+            "password_change",
+            "password_reset",
+            "mfa_enabled",
+            "mfa_disabled",
         ],
         "admin": [
-            "user_created", "user_deleted", "role_changed",
-            "permission_granted", "permission_revoked", "settings_changed",
+            "user_created",
+            "user_deleted",
+            "role_changed",
+            "permission_granted",
+            "permission_revoked",
+            "settings_changed",
         ],
         "system": [
-            "backup_created", "backup_restored", "migration_run",
-            "maintenance_started", "maintenance_ended",
+            "backup_created",
+            "backup_restored",
+            "migration_run",
+            "maintenance_started",
+            "maintenance_ended",
         ],
     }
 
@@ -140,10 +157,20 @@ async def list_actions() -> Any:
 async def list_entity_types() -> Any:
     """Get list of auditable entity types."""
     return [
-        "incident", "audit", "audit_finding", "risk",
-        "complaint", "rta", "document", "policy",
-        "action", "investigation", "user", "tenant",
-        "workflow", "auth",
+        "incident",
+        "audit",
+        "audit_finding",
+        "risk",
+        "complaint",
+        "rta",
+        "document",
+        "policy",
+        "action",
+        "investigation",
+        "user",
+        "tenant",
+        "workflow",
+        "auth",
     ]
 
 
@@ -282,9 +309,7 @@ async def list_audit_logs(
         if date_to:
             conditions.append(AuditLogEntry.timestamp <= date_to)
 
-        count_result = await db.execute(
-            select(func.count(AuditLogEntry.id)).where(*conditions)
-        )
+        count_result = await db.execute(select(func.count(AuditLogEntry.id)).where(*conditions))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * per_page
@@ -379,9 +404,7 @@ async def get_audit_entry(
 ) -> Any:
     """Get a single audit log entry with full details."""
     try:
-        result = await db.execute(
-            select(AuditLogEntry).where(AuditLogEntry.id == entry_id)
-        )
+        result = await db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
         entry = result.scalar_one_or_none()
     except Exception as e:
         logger.error("Failed to get audit entry %s: %s", entry_id, e)
@@ -443,12 +466,14 @@ async def verify_chain(
 
         for entry in entries:
             if entry.previous_hash != previous_hash:
-                invalid_entries.append({
-                    "sequence": entry.sequence,
-                    "error": "Previous hash mismatch",
-                    "expected": previous_hash,
-                    "actual": entry.previous_hash,
-                })
+                invalid_entries.append(
+                    {
+                        "sequence": entry.sequence,
+                        "error": "Previous hash mismatch",
+                        "expected": previous_hash,
+                        "actual": entry.previous_hash,
+                    }
+                )
 
             computed_hash = AuditLogEntry.compute_hash(
                 sequence=entry.sequence,
@@ -463,12 +488,14 @@ async def verify_chain(
             )
 
             if computed_hash != entry.entry_hash:
-                invalid_entries.append({
-                    "sequence": entry.sequence,
-                    "error": "Entry hash mismatch",
-                    "expected": computed_hash,
-                    "actual": entry.entry_hash,
-                })
+                invalid_entries.append(
+                    {
+                        "sequence": entry.sequence,
+                        "error": "Entry hash mismatch",
+                        "expected": computed_hash,
+                        "actual": entry.entry_hash,
+                    }
+                )
 
             previous_hash = entry.entry_hash
 
@@ -538,9 +565,7 @@ async def export_audit_logs(
             for e in entries
         ]
 
-        export_hash = hashlib.sha256(
-            json.dumps(exported_data, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        export_hash = hashlib.sha256(json.dumps(exported_data, sort_keys=True, default=str).encode()).hexdigest()
 
         export_record = AuditLogExport(
             tenant_id=tenant_id,
