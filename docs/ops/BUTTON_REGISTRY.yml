@@ -163,11 +163,11 @@ admin_actions:
   - pageId: rtas-list
     actionId: create-new-rta
     selector: "[data-testid='create-rta-btn']"
-    fallback_selector: "button:has-text('New RTA'), button:has-text('Create')"
+    fallback_selector: "button:has-text('Report RTA'), button:has-text('New RTA'), button:has-text('Create')"
     criticality: P0
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
-    disabled_reason: null
+    disabled_reason: "Page may be in loading or error state"
     description: "Open create RTA form"
 
   # Audit Actions
