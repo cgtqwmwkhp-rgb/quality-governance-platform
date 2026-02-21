@@ -101,6 +101,11 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   # Optional: pgAdmin for database management
   pgadmin:
@@ -113,6 +118,11 @@ services:
     depends_on:
       - db
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
     profiles:
       - tools
 

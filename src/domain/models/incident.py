@@ -84,6 +84,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Who was involved
     reporter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     reporter_email: Mapped[Optional[str]] = mapped_column(

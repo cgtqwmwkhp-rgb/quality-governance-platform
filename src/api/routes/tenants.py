@@ -13,11 +13,12 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.tenant import verify_tenant_access
+from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.services.tenant_service import TenantService
 
 router = APIRouter()
@@ -112,15 +113,12 @@ async def create_tenant(
 async def list_tenants(
     db: DbSession,
     current_user: CurrentSuperuser,
-    skip: int = 0,
-    limit: int = 100,
+    params: PaginationParams = Depends(),
 ) -> Any:
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
 
-    result = await db.execute(select(Tenant).offset(skip).limit(limit))
-    tenants = result.scalars().all()
-    return tenants
+    return await paginate(db, select(Tenant), params)
 
 
 @router.get("/current", response_model=TenantResponse)

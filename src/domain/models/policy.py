@@ -61,6 +61,9 @@ class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     tags: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated tags
 
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Ownership
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

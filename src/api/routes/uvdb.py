@@ -12,12 +12,13 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
@@ -521,10 +522,9 @@ async def get_section_questions(
 async def list_audits(
     current_user: CurrentUser,
     db: DbSession,
+    params: PaginationParams = Depends(),
     status: Optional[str] = Query(None),
     company_name: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
     """List UVDB audits"""
     stmt = select(UVDBAudit)
@@ -534,16 +534,11 @@ async def list_audits(
     if company_name:
         stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))
 
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = await db.scalar(count_stmt) or 0
-
-    stmt = stmt.order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit)
-    result = await db.execute(stmt)
-    audits = result.scalars().all()
+    stmt = stmt.order_by(UVDBAudit.audit_date.desc())
+    result = await paginate(db, stmt, params)
 
     return {
-        "total": total,
-        "audits": [
+        "items": [
             {
                 "id": a.id,
                 "audit_reference": a.audit_reference,
@@ -554,8 +549,12 @@ async def list_audits(
                 "percentage_score": a.percentage_score,
                 "lead_auditor": a.lead_auditor,
             }
-            for a in audits
+            for a in result.items
         ],
+        "total": result.total,
+        "page": result.page,
+        "page_size": result.page_size,
+        "pages": result.pages,
     }
 
 

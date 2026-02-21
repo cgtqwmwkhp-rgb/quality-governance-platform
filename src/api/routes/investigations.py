@@ -1,11 +1,10 @@
 """Investigation Run API routes."""
 
-import math
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import desc, func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -27,6 +26,7 @@ from src.api.schemas.investigation import (
     TimelineListResponse,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -36,6 +36,7 @@ from src.domain.models.investigation import (
     InvestigationStatus,
     InvestigationTemplate,
 )
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
 router = APIRouter()
 
@@ -154,6 +155,7 @@ async def create_investigation(
     db.add(investigation)
     await db.commit()
     await db.refresh(investigation)
+    await invalidate_tenant_cache(current_user.tenant_id, "investigations")
 
     return investigation
 
@@ -162,8 +164,7 @@ async def create_investigation(
 async def list_investigations(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     entity_id: Optional[int] = Query(None, description="Filter by entity ID"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
@@ -221,27 +222,7 @@ async def list_investigations(
     # Deterministic ordering: created_at DESC, id ASC
     query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query)
-
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    # Execute query
-    result = await db.execute(query)
-    investigations = result.scalars().all()
-
-    pages = math.ceil(total / page_size) if total and total > 0 else 1
-
-    return InvestigationRunListResponse(
-        items=[InvestigationRunResponse.model_validate(inv) for inv in investigations],
-        total=total or 0,
-        page=page,
-        page_size=page_size,
-        pages=pages,
-    )
+    return await paginate(db, query, params)
 
 
 @router.get("/{investigation_id}", response_model=InvestigationRunResponse)
@@ -289,6 +270,7 @@ async def update_investigation(
 
     await db.commit()
     await db.refresh(investigation)
+    await invalidate_tenant_cache(current_user.tenant_id, "investigations")
 
     return investigation
 
@@ -453,8 +435,7 @@ async def list_source_records(
         ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
     ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Page size"),
+    params: PaginationParams = Depends(),
 ):
     """List source records available for investigation creation.
 
@@ -536,18 +517,10 @@ async def list_source_records(
 
             base_query = base_query.where(or_(*search_conditions))
 
-    # Count total records
-    count_query = select(func.count()).select_from(base_query.subquery())
-    total = await db.scalar(count_query) or 0
-
-    # Apply deterministic ordering and pagination
+    # Apply deterministic ordering and paginate
     base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
-    offset = (page - 1) * page_size
-    base_query = base_query.offset(offset).limit(page_size)
-
-    # Execute query
-    result = await db.execute(base_query)
-    records = list(result.scalars().all())
+    paginated = await paginate(db, base_query, params)
+    records = list(paginated.items)
 
     # Get existing investigations for these source records
     source_ids = [r.id for r in records]
@@ -589,14 +562,12 @@ async def list_source_records(
             )
         )
 
-    pages = math.ceil(total / page_size) if total > 0 else 1
-
     return SourceRecordsResponse(
         items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=pages,
+        total=paginated.total,
+        page=paginated.page,
+        page_size=paginated.page_size,
+        pages=paginated.pages,
         source_type=source_type,
     )
 
@@ -960,8 +931,7 @@ async def get_investigation_timeline(
     investigation_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
     event_type: Optional[str] = Query(None, description="Filter by event type"),
 ):
     """Get timeline of revision events for an investigation.
@@ -978,22 +948,13 @@ async def get_investigation_timeline(
     if event_type:
         query = query.where(InvestigationRevisionEvent.event_type == event_type)
 
-    # Get total count before pagination
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
     # Deterministic ordering: created_at DESC, id DESC
     query = query.order_by(
         desc(InvestigationRevisionEvent.created_at),
         desc(InvestigationRevisionEvent.id),
     )
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    result = await db.execute(query)
-    events = list(result.scalars().all())
+    result = await paginate(db, query, params)
 
     return TimelineListResponse(
         items=[
@@ -1008,11 +969,11 @@ async def get_investigation_timeline(
                 version=event.version,
                 event_metadata=event.event_metadata,
             )
-            for event in events
+            for event in result.items
         ],
-        total=total,
-        page=page,
-        page_size=page_size,
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
         investigation_id=investigation_id,
     )
 
@@ -1022,8 +983,7 @@ async def get_investigation_comments(
     investigation_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
     include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
 ):
     """Get list of comments on an investigation.
@@ -1060,22 +1020,13 @@ async def get_investigation_comments(
     if not include_deleted:
         query = query.where(InvestigationComment.deleted_at.is_(None))
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
     # Deterministic ordering: created_at DESC, id DESC
     query = query.order_by(
         desc(InvestigationComment.created_at),
         desc(InvestigationComment.id),
     )
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    result = await db.execute(query)
-    comments = list(result.scalars().all())
+    result = await paginate(db, query, params)
 
     return CommentListResponse(
         items=[
@@ -1088,11 +1039,11 @@ async def get_investigation_comments(
                 field_id=comment.field_id,
                 parent_comment_id=comment.parent_comment_id,
             )
-            for comment in comments
+            for comment in result.items
         ],
-        total=total,
-        page=page,
-        page_size=page_size,
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
         investigation_id=investigation_id,
     )
 
@@ -1102,8 +1053,7 @@ async def get_investigation_packs(
     investigation_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
 ):
     """Get list of customer packs generated for an investigation.
 
@@ -1115,22 +1065,13 @@ async def get_investigation_packs(
     # Build query for packs
     query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
     # Deterministic ordering: created_at DESC, id DESC
     query = query.order_by(
         desc(InvestigationCustomerPack.created_at),
         desc(InvestigationCustomerPack.id),
     )
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    result = await db.execute(query)
-    packs = list(result.scalars().all())
+    result = await paginate(db, query, params)
 
     return PackListResponse(
         items=[
@@ -1143,11 +1084,11 @@ async def get_investigation_packs(
                 generated_by_id=pack.generated_by_id,
                 expires_at=pack.expires_at,
             )
-            for pack in packs
+            for pack in result.items
         ],
-        total=total,
-        page=page,
-        page_size=page_size,
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
         investigation_id=investigation_id,
     )
 

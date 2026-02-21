@@ -9,7 +9,18 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from src.api.schemas.error_codes import ErrorCode
+
 logger = logging.getLogger(__name__)
+
+_STATUS_TO_ERROR_CODE: dict[int, str] = {
+    400: ErrorCode.VALIDATION_ERROR,
+    401: ErrorCode.AUTHENTICATION_REQUIRED,
+    403: ErrorCode.PERMISSION_DENIED,
+    404: ErrorCode.ENTITY_NOT_FOUND,
+    429: ErrorCode.RATE_LIMIT_EXCEEDED,
+    500: ErrorCode.INTERNAL_ERROR,
+}
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -18,11 +29,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         request_id = str(uuid.uuid4())
+        code = _STATUS_TO_ERROR_CODE.get(exc.status_code, f"HTTP_{exc.status_code}")
         return JSONResponse(
             status_code=exc.status_code,
             content={
-                "error": _status_phrase(exc.status_code),
-                "message": str(exc.detail),
+                "code": code,
+                "message": _status_phrase(exc.status_code),
+                "detail": exc.detail,
                 "request_id": request_id,
             },
         )
@@ -30,22 +43,22 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
         request_id = str(uuid.uuid4())
-        details = []
+        field_errors = []
         for error in exc.errors():
             field = " -> ".join(str(loc) for loc in error.get("loc", []))
-            details.append(
+            field_errors.append(
                 {
                     "field": field,
                     "message": error.get("msg", ""),
-                    "code": error.get("type", ""),
+                    "type": error.get("type", ""),
                 }
             )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "error": "Validation Error",
+                "code": ErrorCode.VALIDATION_ERROR,
                 "message": "Request validation failed",
-                "details": details,
+                "detail": field_errors,
                 "request_id": request_id,
             },
         )
@@ -62,8 +75,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "error": "Internal Server Error",
+                "code": ErrorCode.INTERNAL_ERROR,
                 "message": "An unexpected error occurred",
+                "detail": "An internal server error occurred. Please try again later.",
                 "request_id": request_id,
             },
         )

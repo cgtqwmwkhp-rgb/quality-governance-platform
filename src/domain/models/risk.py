@@ -47,6 +47,9 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     risk_score: Mapped[int] = mapped_column(Integer, default=9)  # likelihood * impact
     risk_level: Mapped[str] = mapped_column(String(50), default="medium")
 
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Risk ownership
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

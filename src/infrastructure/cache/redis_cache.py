@@ -310,7 +310,7 @@ def get_cache() -> Union[InMemoryCache, RedisCache]:
     return _cache
 
 
-async def invalidate_tenant_cache(tenant_id: int, entity_type: str) -> int:
+async def invalidate_tenant_cache(tenant_id: int | None, entity_type: str) -> int:
     """Invalidate all cached entries for a tenant's entity type.
 
     Uses pattern-based key deletion for namespace isolation.
@@ -455,7 +455,6 @@ async def warmup_cache():
 
         async with async_session_maker() as db:
             from sqlalchemy import select
-
             from src.domain.models.standard import Standard
 
             result = await db.execute(select(Standard).limit(100))

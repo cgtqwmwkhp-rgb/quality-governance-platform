@@ -15,6 +15,7 @@ from src.api.utils.update import apply_updates
 from src.domain.models.incident import Incident
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
@@ -73,6 +74,7 @@ async def create_incident(
         reporter_name=incident_data.reporter_name,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(incident)
@@ -92,6 +94,7 @@ async def create_incident(
 
     await db.commit()
     await db.refresh(incident)
+    await invalidate_tenant_cache(current_user.tenant_id, "incidents")
     track_metric("incidents.created")
     return incident
 
@@ -107,7 +110,7 @@ async def get_incident(
 
     Requires authentication.
     """
-    return await get_or_404(db, Incident, incident_id)
+    return await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
 
 
 @router.get("/", response_model=IncidentListResponse)
@@ -166,7 +169,7 @@ async def list_incidents(
     logger = logging.getLogger(__name__)
 
     try:
-        query = select(Incident)
+        query = select(Incident).where(Incident.tenant_id == current_user.tenant_id)
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)
@@ -220,7 +223,7 @@ async def list_incident_investigations(
     """
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    await get_or_404(db, Incident, incident_id)
+    await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
 
     query = (
         select(InvestigationRun)
@@ -247,7 +250,7 @@ async def update_incident(
 
     Requires authentication.
     """
-    incident = await get_or_404(db, Incident, incident_id)
+    incident = await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
 
     update_dict = apply_updates(incident, incident_data, set_updated_at=False)
 
@@ -268,6 +271,7 @@ async def update_incident(
 
     await db.commit()
     await db.refresh(incident)
+    await invalidate_tenant_cache(current_user.tenant_id, "incidents")
     return incident
 
 
@@ -283,7 +287,7 @@ async def delete_incident(
 
     Requires authentication.
     """
-    incident = await get_or_404(db, Incident, incident_id)
+    incident = await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
 
     # Record audit event
     await record_audit_event(
@@ -300,3 +304,4 @@ async def delete_incident(
 
     await db.delete(incident)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "incidents")

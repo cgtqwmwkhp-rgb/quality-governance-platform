@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.document_control import (
     ControlledDocument,
@@ -118,13 +119,12 @@ class ObsoleteRequest(BaseModel):
 async def list_documents(
     db: DbSession,
     current_user: CurrentUser,
+    params: PaginationParams = Depends(),
     document_type: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
     """List controlled documents with filtering"""
     stmt = select(ControlledDocument).where(ControlledDocument.is_current == True)
@@ -142,14 +142,11 @@ async def list_documents(
             ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%")
         )
 
-    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = count_result.scalar_one()
-    result = await db.execute(stmt.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit))
-    documents = result.scalars().all()
+    stmt = stmt.order_by(ControlledDocument.updated_at.desc())
+    result = await paginate(db, stmt, params)
 
     return {
-        "total": total,
-        "documents": [
+        "items": [
             {
                 "id": d.id,
                 "document_number": d.document_number,
@@ -164,8 +161,12 @@ async def list_documents(
                 "next_review_date": d.next_review_date.isoformat() if d.next_review_date else None,
                 "is_overdue": (d.next_review_date < datetime.utcnow() if d.next_review_date else False),
             }
-            for d in documents
+            for d in result.items
         ],
+        "total": result.total,
+        "page": result.page,
+        "page_size": result.page_size,
+        "pages": result.pages,
     }
 
 

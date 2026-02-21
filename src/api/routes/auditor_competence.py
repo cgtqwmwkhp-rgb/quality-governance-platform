@@ -11,6 +11,21 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.auditor_competence import (
+    AuditorProfileCreateResponse,
+    AuditorProfileResponse,
+    AuditorProfileUpdateResponse,
+    CertificationCreateResponse,
+    CertificationListResponse,
+    CompetenceScoreResponse,
+    CompetencyAssessmentResponse,
+    CompetencyGapsResponse,
+    ExpiredCertificationsUpdateResponse,
+    ExpiringCertificationsResponse,
+    QualifiedAuditorsResponse,
+    TrainingCompleteResponse,
+    TrainingCreateResponse,
+)
 from src.domain.services.auditor_competence import AuditorCompetenceService
 
 router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
@@ -75,7 +90,7 @@ class AssessCompetencyRequest(BaseModel):
 # =============================================================================
 
 
-@router.post("/profiles", status_code=status.HTTP_201_CREATED)
+@router.post("/profiles", status_code=status.HTTP_201_CREATED, response_model=AuditorProfileCreateResponse)
 async def create_auditor_profile(
     request: CreateProfileRequest,
     db: DbSession,
@@ -97,7 +112,7 @@ async def create_auditor_profile(
     }
 
 
-@router.get("/profiles/{user_id}")
+@router.get("/profiles/{user_id}", response_model=AuditorProfileResponse)
 async def get_auditor_profile(
     user_id: int,
     db: DbSession,
@@ -126,7 +141,7 @@ async def get_auditor_profile(
     }
 
 
-@router.patch("/profiles/{user_id}")
+@router.patch("/profiles/{user_id}", response_model=AuditorProfileUpdateResponse)
 async def update_auditor_profile(
     user_id: int,
     request: UpdateProfileRequest,
@@ -149,7 +164,7 @@ async def update_auditor_profile(
     }
 
 
-@router.post("/profiles/{user_id}/calculate-score")
+@router.post("/profiles/{user_id}/calculate-score", response_model=CompetenceScoreResponse)
 async def calculate_competence_score(
     user_id: int,
     db: DbSession,
@@ -170,7 +185,11 @@ async def calculate_competence_score(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/certifications", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/profiles/{user_id}/certifications",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CertificationCreateResponse,
+)
 async def add_certification(
     user_id: int,
     request: AddCertificationRequest,
@@ -202,7 +221,7 @@ async def add_certification(
     }
 
 
-@router.get("/profiles/{user_id}/certifications")
+@router.get("/profiles/{user_id}/certifications", response_model=CertificationListResponse)
 async def get_certifications(
     user_id: int,
     db: DbSession,
@@ -231,7 +250,7 @@ async def get_certifications(
     }
 
 
-@router.get("/certifications/expiring")
+@router.get("/certifications/expiring", response_model=ExpiringCertificationsResponse)
 async def get_expiring_certifications(
     db: DbSession,
     current_user: CurrentUser,
@@ -248,7 +267,7 @@ async def get_expiring_certifications(
     }
 
 
-@router.post("/certifications/update-expired")
+@router.post("/certifications/update-expired", response_model=ExpiredCertificationsUpdateResponse)
 async def update_expired_certifications(
     db: DbSession,
     current_user: CurrentUser,
@@ -268,7 +287,7 @@ async def update_expired_certifications(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/training", status_code=status.HTTP_201_CREATED)
+@router.post("/profiles/{user_id}/training", status_code=status.HTTP_201_CREATED, response_model=TrainingCreateResponse)
 async def add_training(
     user_id: int,
     request: AddTrainingRequest,
@@ -297,7 +316,7 @@ async def add_training(
     }
 
 
-@router.post("/training/{training_id}/complete")
+@router.post("/training/{training_id}/complete", response_model=TrainingCompleteResponse)
 async def complete_training(
     training_id: int,
     request: CompleteTrainingRequest,
@@ -331,7 +350,7 @@ async def complete_training(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/assess")
+@router.post("/profiles/{user_id}/assess", response_model=CompetencyAssessmentResponse)
 async def assess_competency(
     user_id: int,
     request: AssessCompetencyRequest,
@@ -361,7 +380,7 @@ async def assess_competency(
     }
 
 
-@router.get("/profiles/{user_id}/gaps")
+@router.get("/profiles/{user_id}/gaps", response_model=CompetencyGapsResponse)
 async def get_competency_gaps(
     user_id: int,
     db: DbSession,
@@ -383,7 +402,7 @@ async def get_competency_gaps(
 # =============================================================================
 
 
-@router.get("/find-auditors/{audit_type}")
+@router.get("/find-auditors/{audit_type}", response_model=QualifiedAuditorsResponse)
 async def find_qualified_auditors(
     audit_type: str,
     db: DbSession,
@@ -410,7 +429,7 @@ async def find_qualified_auditors(
 # =============================================================================
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=dict)
 async def get_competence_dashboard(
     db: DbSession,
     current_user: CurrentUser,
