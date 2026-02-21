@@ -45,6 +45,7 @@ async def search_users(
     query = (
         select(User)
         .options(selectinload(User.roles))
+        .where(User.tenant_id == current_user.tenant_id)
         .where(
             (User.email.ilike(search_filter))
             | (User.first_name.ilike(search_filter))
@@ -71,7 +72,7 @@ async def list_users(
     is_active: Optional[bool] = None,
 ) -> UserListResponse:
     """List all users with pagination and filtering."""
-    query = select(User).options(selectinload(User.roles))
+    query = select(User).options(selectinload(User.roles)).where(User.tenant_id == current_user.tenant_id)
 
     if search:
         search_filter = f"%{search}%"

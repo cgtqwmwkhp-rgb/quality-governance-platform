@@ -15,13 +15,13 @@ import {
   MessageSquare,
   Smartphone,
   Volume2,
-  Loader2
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Switch } from '../components/ui/Switch';
 import { cn } from "../helpers/utils";
+import { TableSkeleton } from '../components/ui/SkeletonLoader';
 import { notificationsApi, NotificationEntry } from '../api/client';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 
@@ -177,11 +177,7 @@ export default function Notifications() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   return (

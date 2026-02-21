@@ -15,6 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
@@ -571,7 +572,7 @@ async def list_audits(
     company_name: Optional[str] = Query(None),
 ) -> dict[str, Any]:
     """List UVDB audits"""
-    stmt = select(UVDBAudit)
+    stmt = select(UVDBAudit).options(selectinload(UVDBAudit.responses))
 
     if status:
         stmt = stmt.where(UVDBAudit.status == status)

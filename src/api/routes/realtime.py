@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser
+from src.api.schemas.error_codes import ErrorCode
 from src.core.security import decode_token, is_token_revoked
 from src.infrastructure.websocket.connection_manager import connection_manager
 
@@ -39,6 +40,15 @@ class PresenceResponse(BaseModel):
     status: str
     last_seen: str
     active_connections: int
+
+
+class BroadcastMessageRequest(BaseModel):
+    """Broadcast message payload"""
+
+    message_type: str = "info"
+    title: Optional[str] = None
+    content: str
+    data: Optional[dict] = None
 
 
 @router.websocket("/ws/{user_id}")
@@ -126,7 +136,7 @@ async def get_connection_stats(current_user: CurrentUser):
     )
 
 
-@router.get("/online-users")
+@router.get("/online-users", response_model=dict)
 async def get_online_users(current_user: CurrentUser):
     """
     Get list of currently online user IDs.
@@ -162,8 +172,8 @@ async def get_user_presence(user_id: int, current_user: CurrentUser):
     return None
 
 
-@router.post("/broadcast")
-async def broadcast_message(message: dict, current_user: CurrentUser, channel: Optional[str] = None):
+@router.post("/broadcast", response_model=dict)
+async def broadcast_message(message: BroadcastMessageRequest, current_user: CurrentUser, channel: Optional[str] = None):
     """
     Broadcast a message to connected users.
 
@@ -173,13 +183,13 @@ async def broadcast_message(message: dict, current_user: CurrentUser, channel: O
     Admin only endpoint.
     """
     if not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ErrorCode.PERMISSION_DENIED)
 
     if channel:
         count = await connection_manager.broadcast_to_channel(
-            channel=channel, message=message, event_type="admin_broadcast"
+            channel=channel, message=message.model_dump(), event_type="admin_broadcast"
         )
     else:
-        count = await connection_manager.broadcast_to_all(message=message, event_type="admin_broadcast")
+        count = await connection_manager.broadcast_to_all(message=message.model_dump(), event_type="admin_broadcast")
 
     return {"success": True, "recipients": count, "channel": channel}

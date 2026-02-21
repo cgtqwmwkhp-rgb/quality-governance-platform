@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -171,9 +172,9 @@ async def list_complaints(
             page_size=paginated.page_size,
             pages=paginated.pages,
         )
-    except Exception as e:
+    except SQLAlchemyError as e:
         error_str = str(e).lower()
-        logger.error(f"Error listing complaints: {e}", exc_info=True)
+        logger.exception(f"Error listing complaints: {e}")
 
         column_errors = [
             "email",

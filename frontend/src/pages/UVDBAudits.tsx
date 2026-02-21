@@ -27,6 +27,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { ToastContainer, useToast } from '../components/ui/Toast'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { uvdbApi, ErrorClass, createApiError, getApiErrorMessage } from '../api/client'
 
 interface UVDBSection {
@@ -425,10 +426,7 @@ export default function UVDBAudits() {
 
       {/* Loading State */}
       {loadState === 'loading' && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-warning animate-spin mb-4" />
-          <p className="text-muted-foreground">Loading UVDB data...</p>
-        </div>
+        <TableSkeleton />
       )}
 
       {/* Error State */}

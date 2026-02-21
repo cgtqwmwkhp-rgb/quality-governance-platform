@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter
 from sqlalchemy import func, select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
 
@@ -399,7 +399,7 @@ async def get_ims_dashboard(
     # Standards compliance scores
     try:
         response["standards"] = await _get_standards_compliance(db)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("IMS dashboard: standards query failed: %s", str(e)[:200])
         response["standards"] = []
         response["standards_error"] = "Unable to load standards data"
@@ -421,7 +421,7 @@ async def get_ims_dashboard(
         logger.warning("IMS dashboard: ISMS tables not available: %s", str(e)[:200])
         response["isms"] = None
         response["isms_error"] = "ISO 27001 module not configured"
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("IMS dashboard: ISMS query failed: %s", str(e)[:200])
         response["isms"] = None
         response["isms_error"] = "Unable to load ISMS data"
@@ -433,7 +433,7 @@ async def get_ims_dashboard(
         logger.warning("IMS dashboard: UVDB tables not available: %s", str(e)[:200])
         response["uvdb"] = None
         response["uvdb_error"] = "UVDB module not configured"
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("IMS dashboard: UVDB query failed: %s", str(e)[:200])
         response["uvdb"] = None
         response["uvdb_error"] = "Unable to load UVDB data"
@@ -445,7 +445,7 @@ async def get_ims_dashboard(
         logger.warning("IMS dashboard: Planet Mark tables not available: %s", str(e)[:200])
         response["planet_mark"] = None
         response["planet_mark_error"] = "Planet Mark module not configured"
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("IMS dashboard: Planet Mark query failed: %s", str(e)[:200])
         response["planet_mark"] = None
         response["planet_mark_error"] = "Unable to load Planet Mark data"
@@ -453,7 +453,7 @@ async def get_ims_dashboard(
     # Compliance coverage
     try:
         response["compliance_coverage"] = await _get_compliance_coverage(db)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("IMS dashboard: compliance coverage failed: %s", str(e)[:200])
         response["compliance_coverage"] = None
         response["compliance_coverage_error"] = "Unable to load compliance data"
@@ -461,7 +461,7 @@ async def get_ims_dashboard(
     # Audit schedule
     try:
         response["audit_schedule"] = await _get_audit_schedule(db)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("IMS dashboard: audit schedule failed: %s", str(e)[:200])
         response["audit_schedule"] = []
         response["audit_schedule_error"] = "Unable to load audit schedule"

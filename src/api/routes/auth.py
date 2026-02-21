@@ -17,6 +17,7 @@ from src.api.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
@@ -80,7 +81,7 @@ async def exchange_azure_token(
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired Azure AD token",
+            detail=ErrorCode.AUTHENTICATION_REQUIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -90,7 +91,7 @@ async def exchange_azure_token(
     if not user_info.get("email"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token does not contain email claim",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     email = user_info["email"].lower()
@@ -157,14 +158,14 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     if user is None or not verify_password(request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail=ErrorCode.AUTHENTICATION_REQUIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled",
+            detail=ErrorCode.PERMISSION_DENIED,
         )
 
     # Update last login
@@ -190,7 +191,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail=ErrorCode.TOKEN_EXPIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -198,7 +199,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail=ErrorCode.TOKEN_EXPIRED,
         )
 
     # Verify user still exists and is active
@@ -208,7 +209,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
+            detail=ErrorCode.AUTHENTICATION_REQUIRED,
         )
 
     # Revoke the old refresh token
@@ -236,7 +237,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
 security_scheme = HTTPBearer()
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=dict)
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: DbSession = None,  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-001
@@ -248,7 +249,7 @@ async def logout(
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail=ErrorCode.TOKEN_EXPIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -256,7 +257,7 @@ async def logout(
     if jti is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token does not contain a jti claim",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     exp_timestamp = payload.get("exp")
@@ -322,7 +323,7 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
     )
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=dict)
 async def change_password(
     request: PasswordChangeRequest,
     current_user: CurrentUser,
@@ -332,7 +333,7 @@ async def change_password(
     if not verify_password(request.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect current password",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     current_user.hashed_password = get_password_hash(request.new_password)
@@ -346,7 +347,7 @@ async def change_password(
 # =============================================================================
 
 
-@router.post("/password-reset/request")
+@router.post("/password-reset/request", response_model=dict)
 async def request_password_reset(
     request: PasswordResetRequest,
     db: DbSession,
@@ -392,7 +393,7 @@ async def request_password_reset(
     return {"message": "If an account with that email exists, a password reset link has been sent."}
 
 
-@router.post("/password-reset/confirm")
+@router.post("/password-reset/confirm", response_model=dict)
 async def confirm_password_reset(
     request: PasswordResetConfirm,
     db: DbSession,
@@ -411,7 +412,7 @@ async def confirm_password_reset(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+            detail=ErrorCode.TOKEN_EXPIRED,
         )
 
     # Find user
@@ -421,7 +422,7 @@ async def confirm_password_reset(
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+            detail=ErrorCode.TOKEN_EXPIRED,
         )
 
     # Update password

@@ -27,6 +27,17 @@ from src.domain.models.investigation import (
 )
 
 
+class InvestigationStatusManager:
+    @staticmethod
+    def apply_status_timestamps(investigation, new_status: str) -> None:
+        if new_status == "in_progress" and not investigation.started_at:
+            investigation.started_at = datetime.utcnow()
+        elif new_status == "completed" and not investigation.completed_at:
+            investigation.completed_at = datetime.utcnow()
+        elif new_status == "closed" and not investigation.closed_at:
+            investigation.closed_at = datetime.utcnow()
+
+
 class MappingReasonCode:
     """Reason codes for field mapping (Mapping Contract v1)."""
 

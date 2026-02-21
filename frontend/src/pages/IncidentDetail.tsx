@@ -40,6 +40,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 import { useToast, ToastContainer } from '../components/ui/Toast'
 
@@ -308,11 +309,7 @@ export default function IncidentDetail() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
+    return <CardSkeleton count={1} />
   }
 
   if (!incident) {

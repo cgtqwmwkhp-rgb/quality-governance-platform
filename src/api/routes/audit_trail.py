@@ -18,8 +18,10 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
 
@@ -111,7 +113,7 @@ class AuditStatsResponse(BaseModel):
 # ============================================================================
 
 
-@router.get("/actions")
+@router.get("/actions", response_model=dict)
 async def list_actions(current_user: CurrentUser) -> Any:
     """Get list of possible audit actions."""
     return {
@@ -152,7 +154,7 @@ async def list_actions(current_user: CurrentUser) -> Any:
     }
 
 
-@router.get("/entity-types")
+@router.get("/entity-types", response_model=list[str])
 async def list_entity_types(current_user: CurrentUser) -> Any:
     """Get list of auditable entity types."""
     return [
@@ -237,8 +239,8 @@ async def get_audit_stats(
             "top_users": top_users,
             "period_days": days,
         }
-    except Exception as e:
-        logger.error("Failed to get audit stats: %s", e)
+    except SQLAlchemyError as e:
+        logger.exception("Failed to get audit stats: %s", e)
         return {
             "total_entries": 0,
             "by_action": {},
@@ -270,8 +272,8 @@ async def list_verifications(
             .limit(limit)
         )
         return result.scalars().all()
-    except Exception as e:
-        logger.error("Failed to list verifications: %s", e)
+    except SQLAlchemyError as e:
+        logger.exception("Failed to list verifications: %s", e)
         return []
 
 
@@ -312,8 +314,8 @@ async def list_audit_logs(
 
         query = select(AuditLogEntry).where(*conditions).order_by(desc(AuditLogEntry.timestamp))
         return await paginate(db, query, params)
-    except Exception as e:
-        logger.error("Failed to list audit logs: %s", e)
+    except SQLAlchemyError as e:
+        logger.exception("Failed to list audit logs: %s", e)
         return {
             "items": [],
             "total": 0,
@@ -343,8 +345,8 @@ async def get_entity_history(
             .order_by(AuditLogEntry.timestamp)
         )
         return result.scalars().all()
-    except Exception as e:
-        logger.error("Failed to get entity history: %s", e)
+    except SQLAlchemyError as e:
+        logger.exception("Failed to get entity history: %s", e)
         return []
 
 
@@ -371,8 +373,8 @@ async def get_user_activity(
             .limit(100)
         )
         return result.scalars().all()
-    except Exception as e:
-        logger.error("Failed to get user activity: %s", e)
+    except SQLAlchemyError as e:
+        logger.exception("Failed to get user activity: %s", e)
         return []
 
 
@@ -393,15 +395,12 @@ async def get_audit_entry(
     try:
         result = await db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
         entry = result.scalar_one_or_none()
-    except Exception as e:
-        logger.error("Failed to get audit entry %s: %s", entry_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve audit entry",
-        )
+    except SQLAlchemyError as e:
+        logger.exception("Failed to get audit entry %s: %s", entry_id, e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ErrorCode.INTERNAL_ERROR)
 
     if not entry:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit entry not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return entry
 
@@ -504,12 +503,9 @@ async def verify_chain(
         await db.flush()
         await db.refresh(verification)
         return verification
-    except Exception as e:
-        logger.error("Failed to verify chain: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Chain verification failed",
-        )
+    except SQLAlchemyError as e:
+        logger.exception("Failed to verify chain: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ErrorCode.INTERNAL_ERROR)
 
 
 # ============================================================================
@@ -517,7 +513,7 @@ async def verify_chain(
 # ============================================================================
 
 
-@router.post("/export")
+@router.post("/export", response_model=dict)
 async def export_audit_logs(
     data: ExportRequest,
     db: DbSession,
@@ -589,6 +585,6 @@ async def export_audit_logs(
             "file_hash": export_hash,
             "data": exported_data if data.format == "json" else None,
         }
-    except Exception as e:
-        logger.error("Failed to export audit logs: %s", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Export failed")
+    except SQLAlchemyError as e:
+        logger.exception("Failed to export audit logs: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ErrorCode.INTERNAL_ERROR)

@@ -15,6 +15,22 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.compliance_automation import (
+    AuditScheduleCreate,
+    CertificateCreate,
+    CertificateExpirySummaryResponse,
+    CertificateListResponse,
+    ComplianceScoreResponse,
+    ComplianceTrendResponse,
+    GapAnalysisListResponse,
+    RegulatoryUpdateResponse,
+    RIDDORCheckRequest,
+    RIDDORCheckResponse,
+    RIDDORSubmissionListResponse,
+    RIDDORSubmitResponse,
+    ScheduledAuditListResponse,
+)
+from src.api.schemas.error_codes import ErrorCode
 from src.domain.services.compliance_automation_service import compliance_automation_service
 
 router = APIRouter()
@@ -25,7 +41,7 @@ router = APIRouter()
 # ============================================================================
 
 
-@router.get("/regulatory-updates")
+@router.get("/regulatory-updates", response_model=RegulatoryUpdateResponse)
 async def list_regulatory_updates(
     db: DbSession,
     current_user: CurrentUser,
@@ -47,7 +63,7 @@ async def list_regulatory_updates(
     }
 
 
-@router.post("/regulatory-updates/{update_id}/review")
+@router.post("/regulatory-updates/{update_id}/review", response_model=dict)
 async def review_regulatory_update(
     update_id: int,
     db: DbSession,
@@ -66,7 +82,7 @@ async def review_regulatory_update(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
 
 # ============================================================================
@@ -74,7 +90,7 @@ async def review_regulatory_update(
 # ============================================================================
 
 
-@router.post("/gap-analysis/run")
+@router.post("/gap-analysis/run", response_model=dict)
 async def run_gap_analysis(
     db: DbSession,
     current_user: CurrentUser,
@@ -89,7 +105,7 @@ async def run_gap_analysis(
     )
 
 
-@router.get("/gap-analyses")
+@router.get("/gap-analyses", response_model=GapAnalysisListResponse)
 async def list_gap_analyses(
     db: DbSession,
     current_user: CurrentUser,
@@ -108,7 +124,7 @@ async def list_gap_analyses(
 # ============================================================================
 
 
-@router.get("/certificates")
+@router.get("/certificates", response_model=CertificateListResponse)
 async def list_certificates(
     db: DbSession,
     current_user: CurrentUser,
@@ -128,7 +144,7 @@ async def list_certificates(
     return {"certificates": certificates, "total": len(certificates)}
 
 
-@router.get("/certificates/expiring-summary")
+@router.get("/certificates/expiring-summary", response_model=CertificateExpirySummaryResponse)
 async def get_expiring_certificates_summary(
     db: DbSession,
     current_user: CurrentUser,
@@ -137,14 +153,14 @@ async def get_expiring_certificates_summary(
     return await compliance_automation_service.get_expiring_certificates_summary(db=db)
 
 
-@router.post("/certificates")
+@router.post("/certificates", response_model=dict)
 async def add_certificate(
-    data: dict,
+    data: CertificateCreate,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """Add a new certificate."""
-    return await compliance_automation_service.add_certificate(db=db, data=data)
+    return await compliance_automation_service.add_certificate(db=db, data=data.model_dump())
 
 
 # ============================================================================
@@ -152,7 +168,7 @@ async def add_certificate(
 # ============================================================================
 
 
-@router.get("/scheduled-audits")
+@router.get("/scheduled-audits", response_model=ScheduledAuditListResponse)
 async def list_scheduled_audits(
     db: DbSession,
     current_user: CurrentUser,
@@ -168,16 +184,16 @@ async def list_scheduled_audits(
     return {"audits": audits, "total": len(audits)}
 
 
-@router.post("/scheduled-audits")
+@router.post("/scheduled-audits", response_model=dict)
 async def schedule_audit(
-    data: dict,
+    data: AuditScheduleCreate,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """Schedule a new audit."""
     return await compliance_automation_service.schedule_audit(
         db=db,
-        data=data,
+        data=data.model_dump(),
         created_by=current_user.id,
     )
 
@@ -187,7 +203,7 @@ async def schedule_audit(
 # ============================================================================
 
 
-@router.get("/score")
+@router.get("/score", response_model=ComplianceScoreResponse)
 async def get_compliance_score(
     db: DbSession,
     current_user: CurrentUser,
@@ -202,7 +218,7 @@ async def get_compliance_score(
     )
 
 
-@router.get("/score/trend")
+@router.get("/score/trend", response_model=ComplianceTrendResponse)
 async def get_compliance_trend(
     db: DbSession,
     current_user: CurrentUser,
@@ -223,7 +239,7 @@ async def get_compliance_trend(
 # ============================================================================
 
 
-@router.get("/riddor/submissions")
+@router.get("/riddor/submissions", response_model=RIDDORSubmissionListResponse)
 async def list_riddor_submissions(
     db: DbSession,
     current_user: CurrentUser,
@@ -237,16 +253,16 @@ async def list_riddor_submissions(
     return {"submissions": submissions, "total": len(submissions)}
 
 
-@router.post("/riddor/check")
+@router.post("/riddor/check", response_model=RIDDORCheckResponse)
 async def check_riddor_required(
-    incident_data: dict,
+    incident_data: RIDDORCheckRequest,
     current_user: CurrentUser,
 ):
     """Check if incident requires RIDDOR reporting."""
-    return await compliance_automation_service.check_riddor_required(incident_data)
+    return await compliance_automation_service.check_riddor_required(incident_data.model_dump())
 
 
-@router.post("/riddor/prepare/{incident_id}")
+@router.post("/riddor/prepare/{incident_id}", response_model=dict)
 async def prepare_riddor_submission(
     incident_id: int,
     riddor_type: str,
@@ -261,7 +277,7 @@ async def prepare_riddor_submission(
     )
 
 
-@router.post("/riddor/submit/{incident_id}")
+@router.post("/riddor/submit/{incident_id}", response_model=dict)
 async def submit_riddor(
     incident_id: int,
     db: DbSession,
@@ -275,4 +291,4 @@ async def submit_riddor(
             submitted_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)

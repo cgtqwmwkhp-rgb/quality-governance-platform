@@ -313,6 +313,13 @@ class PackListResponse(BaseModel):
     investigation_id: int
 
 
+class AutosaveRequest(BaseModel):
+    """Request schema for autosaving investigation data with optimistic locking."""
+
+    data: Dict[str, Any] = Field(..., description="Investigation data to save")
+    version: int = Field(..., gt=0, description="Expected version for optimistic locking")
+
+
 class ClosureValidationResponse(BaseModel):
     """Result of closure validation check."""
 

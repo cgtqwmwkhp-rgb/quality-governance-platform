@@ -18,7 +18,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -264,8 +264,8 @@ async def list_reporting_years(
             next_action="Run database migrations with: alembic upgrade head",
             request_id=get_request_id(request),
         )
-    except Exception as e:
-        logger.error(
+    except SQLAlchemyError as e:
+        logger.exception(
             "Planet Mark years query failed unexpectedly: %s: %s",
             type(e).__name__,
             str(e)[:500],
@@ -952,8 +952,8 @@ async def get_carbon_dashboard(
             next_action="Run database migrations with: alembic upgrade head",
             request_id=get_request_id(request),
         )
-    except Exception as e:
-        logger.error(
+    except SQLAlchemyError as e:
+        logger.exception(
             "Planet Mark dashboard query failed unexpectedly: %s: %s",
             type(e).__name__,
             str(e)[:500],

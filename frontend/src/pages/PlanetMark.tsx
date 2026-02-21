@@ -29,6 +29,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { ToastContainer, useToast } from '../components/ui/Toast'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { planetMarkApi, ErrorClass, createApiError, isSetupRequired, SetupRequiredResponse, getApiErrorMessage } from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
@@ -614,10 +615,7 @@ export default function PlanetMark() {
 
       {/* Loading State */}
       {loadState === 'loading' && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
-          <p className="text-muted-foreground">Loading carbon data...</p>
-        </div>
+        <CardSkeleton />
       )}
 
       {/* Error State */}

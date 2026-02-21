@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -55,7 +56,11 @@ async def list_form_templates(
     is_active: Optional[bool] = Query(None),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
-    query = select(FormTemplate).where(FormTemplate.tenant_id == current_user.tenant_id)
+    query = (
+        select(FormTemplate)
+        .where(FormTemplate.tenant_id == current_user.tenant_id)
+        .options(selectinload(FormTemplate.steps))
+    )
 
     if form_type:
         query = query.where(FormTemplate.form_type == form_type)

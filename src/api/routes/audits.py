@@ -53,6 +53,7 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
+from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -1013,13 +1014,10 @@ async def complete_run(
             detail="Audit run must be in progress to complete",
         )
 
-    scored_responses = [r for r in run.responses if not r.is_na]
-    total_score = sum(r.score or 0 for r in scored_responses)
-    max_score = sum(r.max_score or 0 for r in scored_responses)
-
-    run.score = total_score
-    run.max_score = max_score
-    run.score_percentage = (total_score / max_score * 100) if max_score > 0 else 0
+    score = AuditScoringService.calculate_run_score(run.responses)
+    run.score = score.total_score
+    run.max_score = score.max_score
+    run.score_percentage = score.score_percentage
 
     # Get template to check passing score
     template_result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))

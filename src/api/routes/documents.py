@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -289,7 +290,7 @@ async def upload_document(
 
         await db.commit()
 
-    except Exception as e:
+    except (SQLAlchemyError, ValueError) as e:
         doc.status = DocumentStatus.FAILED
         doc.indexing_error = str(e)
         await db.commit()

@@ -32,6 +32,7 @@ import {
   UserCheck,
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { Button } from '../components/ui/Button'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { imsDashboardApi, type IMSDashboardResponse, getApiErrorMessage } from '../api/client'
@@ -170,14 +171,7 @@ export default function IMSDashboard() {
   const auditSchedule = dashboardData?.audit_schedule ?? []
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="w-10 h-10 text-primary animate-spin" />
-          <p className="text-muted-foreground">Loading IMS Dashboard...</p>
-        </div>
-      </div>
-    )
+    return <CardSkeleton />
   }
 
   if (error && !dashboardData) {

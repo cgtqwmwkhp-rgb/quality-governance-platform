@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from "../helpers/utils"
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { actionsApi, Action as ApiAction, ActionCreate } from '../api/client'
 
 // Bounded error taxonomy for deterministic error handling
@@ -222,12 +223,7 @@ export default function Actions() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span className="ml-3 text-muted-foreground">Loading actions...</span>
-      </div>
-    )
+    return <TableSkeleton />
   }
 
   if (error) {
