@@ -104,7 +104,9 @@ class GapClause(BaseModel):
 # ============================================================================
 
 
-async def _load_evidence_links(db, tenant_id: int, standard: Optional[ISOStandard] = None) -> list[EvidenceLink]:
+async def _load_evidence_links(
+    db, tenant_id: int | None = None, standard: Optional[ISOStandard] = None
+) -> list[EvidenceLink]:
     """Query all active evidence links from the database and convert to
     the EvidenceLink dataclass used by the ISOComplianceService."""
     query = select(ComplianceEvidenceLink).where(

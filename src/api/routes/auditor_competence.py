@@ -346,7 +346,7 @@ async def assess_competency(
             user_id=user_id,
             competency_area_id=request.competency_area_id,
             current_level=request.current_level,
-            assessor_id=current_user.get("id"),
+            assessor_id=getattr(current_user, "id", None),
             assessment_method=request.assessment_method,
             evidence_summary=request.evidence_summary,
         )

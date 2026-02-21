@@ -214,10 +214,12 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     # Revoke the old refresh token
     old_jti = payload.get("jti")
     if old_jti:
+        expires_at = datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)
         await TokenService.revoke_token(
             db=db,
             jti=old_jti,
             user_id=int(user_id),
+            expires_at=expires_at,
             reason="token_refresh",
         )
 

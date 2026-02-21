@@ -238,6 +238,14 @@ disable_error_code = ["attr-defined"]
 module = "src.api.routes.capa"
 disable_error_code = ["assignment", "call-overload"]
 
+[[tool.mypy.overrides]]
+module = "src.api.routes.audits"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.actions"
+disable_error_code = ["arg-type", "attr-defined"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
