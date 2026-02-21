@@ -19,10 +19,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
-
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.iso27001 import (
     AssetCreateResponse,
@@ -40,7 +36,9 @@ from src.api.schemas.iso27001 import (
     SupplierAssessmentCreateResponse,
     SupplierSecurityAssessmentListResponse,
 )
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.iso27001 import (
     AccessControlRecord,
     BusinessContinuityPlan,
@@ -53,6 +51,7 @@ from src.domain.models.iso27001 import (
     SupplierSecurityAssessment,
 )
 from src.domain.services.iso27001_service import ISO27001Service
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
