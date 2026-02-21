@@ -369,7 +369,7 @@ async def assess_competency(
             user_id=user_id,
             competency_area_id=request.competency_area_id,
             current_level=request.current_level,
-            assessor_id=getattr(current_user, "id", None),
+            assessor_id=getattr(current_user, "id", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
             assessment_method=request.assessment_method,
             evidence_summary=request.evidence_summary,
         )

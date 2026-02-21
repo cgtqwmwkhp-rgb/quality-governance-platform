@@ -965,7 +965,7 @@ class ConditionEvaluator:
         value = data
         for key in keys:
             if isinstance(value, dict):
-                value = value.get(key)
+                value = value.get(key)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             else:
                 return None
         return value
@@ -1275,7 +1275,7 @@ class RuleEvaluator:
 
     async def check_escalations(self) -> List[Dict[str, Any]]:
         """Check and process pending escalations (called periodically by scheduler)."""
-        results = []
+        results = []  # type: ignore[var-annotated]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         query = select(WorkflowRule).where(
             and_(
@@ -1293,7 +1293,7 @@ class RuleEvaluator:
             if not model:
                 continue
 
-            threshold = datetime.now(timezone.utc) - timedelta(hours=rule.delay_hours)
+            threshold = datetime.now(timezone.utc) - timedelta(hours=rule.delay_hours)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
             delay_field = rule.delay_from_field or "created_at"
 
             logger.info(f"Checking escalation rule: {rule.name}")

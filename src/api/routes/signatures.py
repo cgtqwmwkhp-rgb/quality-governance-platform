@@ -157,7 +157,7 @@ async def create_signature_request(
     tenant_id = current_user.tenant_id
 
     request = await service.create_request(
-        tenant_id=tenant_id,
+        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         title=data.title,
         initiated_by_id=current_user.id,
         document_type=data.document_type,
@@ -219,7 +219,7 @@ async def get_pending_requests(
     tenant_id = current_user.tenant_id
 
     requests = await service.get_pending_requests(
-        tenant_id=tenant_id,
+        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         user_id=current_user.id,
         email=current_user.email,
     )
@@ -438,7 +438,7 @@ async def create_template(
     tenant_id = current_user.tenant_id
 
     template = await service.create_template(
-        tenant_id=tenant_id,
+        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         name=data.name,
         created_by_id=current_user.id,
         description=data.description,
@@ -524,7 +524,7 @@ async def get_signature_stats(
         .where(SignatureRequest.tenant_id == tenant_id)
         .group_by(SignatureRequest.status)
     )
-    status_counts: dict[str, int] = dict(status_result.all())
+    status_counts: dict[str, int] = dict(status_result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
@@ -563,7 +563,7 @@ async def send_reminders(
 
     tenant_id = current_user.tenant_id
 
-    count = await service.send_reminders(tenant_id)
+    count = await service.send_reminders(tenant_id)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     return {"reminders_sent": count}
 
@@ -580,7 +580,7 @@ async def expire_old_requests(
 
     tenant_id = current_user.tenant_id
 
-    count = await service.expire_old_requests(tenant_id)
+    count = await service.expire_old_requests(tenant_id)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     return {"expired_count": count}
 

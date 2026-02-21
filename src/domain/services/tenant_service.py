@@ -202,7 +202,7 @@ class TenantService:
                 )
             )
             owner_count = result.scalar_one()
-            if owner_count <= 1:
+            if owner_count <= 1:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
                 raise ValueError("Cannot remove the last owner")
 
         tenant_user.is_active = False

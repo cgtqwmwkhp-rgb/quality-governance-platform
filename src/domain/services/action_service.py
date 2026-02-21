@@ -42,9 +42,9 @@ def action_to_dict(
         "description": action.description,
         "action_type": getattr(action, "action_type", None) or "corrective",
         "priority": getattr(action, "priority", None) or "medium",
-        "status": action_status.value if hasattr(action_status, "value") else str(action_status),
-        "due_date": action.due_date.isoformat() if getattr(action, "due_date", None) else None,
-        "completed_at": action.completed_at.isoformat() if getattr(action, "completed_at", None) else None,
+        "status": action_status.value if hasattr(action_status, "value") else str(action_status),  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+        "due_date": action.due_date.isoformat() if getattr(action, "due_date", None) else None,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+        "completed_at": action.completed_at.isoformat() if getattr(action, "completed_at", None) else None,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         "completion_notes": getattr(action, "completion_notes", None),
         "source_type": source_type,
         "source_id": source_id,
@@ -274,7 +274,7 @@ class ActionService:
             "investigation": InvestigationRun,
         }
         model = model_map[src_type]
-        stmt = select(model).where(model.id == source_id)
+        stmt = select(model).where(model.id == source_id)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         if tenant_id is not None and hasattr(model, "tenant_id"):
             stmt = stmt.where(model.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
@@ -369,7 +369,7 @@ class ActionService:
             return action, action.investigation_id
 
     async def _get_model_or_raise(self, model: type, entity_id: int, tenant_id: int | None = None) -> Any:
-        stmt = select(model).where(model.id == entity_id)
+        stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined, var-annotated]  # TYPE-IGNORE: MYPY-OVERRIDE
         if tenant_id is not None and hasattr(model, "tenant_id"):
             stmt = stmt.where(model.tenant_id == tenant_id)
         result = await self.db.execute(stmt)

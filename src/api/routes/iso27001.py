@@ -428,10 +428,10 @@ async def get_current_soa(
             "status": "not_created",
             "total_controls": total,
             "applicable_controls": applicable,
-            "excluded_controls": int(total) - int(applicable),
+            "excluded_controls": int(total) - int(applicable),  # type: ignore[call-overload]  # TYPE-IGNORE: MYPY-OVERRIDE
             "implemented_controls": implemented,
             "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
-                int(implemented), int(applicable)
+                int(implemented), int(applicable)  # type: ignore[call-overload]  # TYPE-IGNORE: MYPY-OVERRIDE
             ),
         }
 

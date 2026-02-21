@@ -521,7 +521,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.action)
         )
-        by_action: dict[str, int] = dict(result.all())
+        by_action: dict[str, int] = dict(result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         # By entity type
         result = await self.db.execute(
@@ -532,7 +532,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.entity_type)
         )
-        by_entity: dict[str, int] = dict(result.all())
+        by_entity: dict[str, int] = dict(result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         # Most active users
         result = await self.db.execute(

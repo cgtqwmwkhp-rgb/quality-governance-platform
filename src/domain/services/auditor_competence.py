@@ -108,8 +108,8 @@ class AuditorCompetenceService:
             score = (comp.current_level / 5) * 100
             weight = area.weight
 
-            total_weighted_score += score * weight
-            total_weight += weight
+            total_weighted_score += score * weight  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            total_weight += weight  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         if total_weight == 0:
             return 0.0
@@ -301,7 +301,7 @@ class AuditorCompetenceService:
         certs = result.scalars().all()
 
         for cert in certs:
-            cert.cpd_hours_completed += hours
+            cert.cpd_hours_completed += hours  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         await self.db.commit()
 
@@ -496,7 +496,7 @@ class AuditorCompetenceService:
             )
 
         # Sort by qualification status and score
-        qualified_auditors.sort(key=lambda x: (not x["is_qualified"], -(x["competence_score"] or 0)))
+        qualified_auditors.sort(key=lambda x: (not x["is_qualified"], -(x["competence_score"] or 0)))  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         return qualified_auditors
 

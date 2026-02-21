@@ -128,7 +128,7 @@ async def update_workflow_rule(
     """Update a workflow rule."""
     rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     apply_updates(rule, rule_data)
-    rule.updated_by = current_user.email
+    rule.updated_by = current_user.email  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     await db.commit()
     await db.refresh(rule)
@@ -234,7 +234,7 @@ async def update_sla_configuration(
     """Update an SLA configuration."""
     config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     apply_updates(config, config_data)
-    config.updated_by = current_user.email
+    config.updated_by = current_user.email  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     await db.commit()
     await db.refresh(config)

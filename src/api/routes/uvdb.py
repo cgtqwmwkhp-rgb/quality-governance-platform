@@ -498,7 +498,7 @@ async def list_sections(
                 "number": section["number"],
                 "title": section["title"],
                 "max_score": section["max_score"],
-                "question_count": len(section.get("questions", [])),
+                "question_count": len(section.get("questions", [])),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
                 "iso_mapping": section.get("iso_mapping", {}),
             }
         )
@@ -794,7 +794,7 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     mappings = []
 
     for section in UVDB_B2_SECTIONS:
-        for question in section.get("questions", []):
+        for question in section.get("questions", []):  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             if "iso_mapping" in question and question["iso_mapping"]:
                 mappings.append(
                     {

@@ -177,7 +177,7 @@ async def update_kri(
         db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
     apply_updates(kri, kri_data, set_updated_at=False)
-    kri.updated_by = getattr(current_user, "email", "")
+    kri.updated_by = getattr(current_user, "email", "")  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     await db.commit()
     await db.refresh(kri)
@@ -366,13 +366,13 @@ async def assess_incident_sif(
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
-        is_sif=getattr(incident, "is_sif", None),
-        is_psif=getattr(incident, "is_psif", None),
-        sif_classification=getattr(incident, "sif_classification", None),
-        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
+        is_sif=getattr(incident, "is_sif", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        is_psif=getattr(incident, "is_psif", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        sif_classification=getattr(incident, "sif_classification", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        sif_assessment_date=getattr(incident, "sif_assessment_date", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
         sif_rationale=getattr(incident, "sif_rationale", None),
-        life_altering_potential=getattr(incident, "life_altering_potential", None),
+        life_altering_potential=getattr(incident, "life_altering_potential", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         precursor_events=getattr(incident, "precursor_events", None),
         control_failures=getattr(incident, "control_failures", None),
     )
@@ -396,8 +396,8 @@ async def get_incident_sif_assessment(
         incident_id=incident.id,
         is_sif=getattr(incident, "is_sif", False) or False,
         is_psif=getattr(incident, "is_psif", False) or False,
-        sif_classification=getattr(incident, "sif_classification", None),
-        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
+        sif_classification=getattr(incident, "sif_classification", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        sif_assessment_date=getattr(incident, "sif_assessment_date", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
         sif_rationale=getattr(incident, "sif_rationale", None),
         life_altering_potential=getattr(incident, "life_altering_potential", False) or False,

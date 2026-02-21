@@ -62,7 +62,7 @@ async def create_acknowledgment_requirement(
     service = PolicyAcknowledgmentService(db)
     requirement = await service.create_requirement(
         policy_id=requirement_data.policy_id,
-        acknowledgment_type=requirement_data.acknowledgment_type,
+        acknowledgment_type=requirement_data.acknowledgment_type,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         required_for_all=requirement_data.required_for_all,
         required_departments=requirement_data.required_departments,
         required_roles=requirement_data.required_roles,

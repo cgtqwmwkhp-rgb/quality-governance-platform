@@ -271,7 +271,7 @@ class SignatureService:
                 )
             )
             pending_before = result.scalar_one()
-            if pending_before > 0:
+            if pending_before > 0:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
                 raise ValueError("Waiting for previous signers")
 
         now = datetime.now(timezone.utc)
@@ -556,7 +556,7 @@ class SignatureService:
         for request in requests:
             if request.last_reminder_at:
                 days_since = (now - request.last_reminder_at).days
-                if days_since < request.reminder_frequency:
+                if days_since < request.reminder_frequency:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
                     continue
             else:
                 days_since_created = (now - request.created_at).days

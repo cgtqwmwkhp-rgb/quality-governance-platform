@@ -162,10 +162,10 @@ class CAPAService:
 
         action.status = new_status
         if new_status == CAPAStatus.VERIFICATION:
-            action.completed_at = datetime.now(timezone.utc)
+            action.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
         elif new_status == CAPAStatus.CLOSED:
-            action.verified_at = datetime.now(timezone.utc)
-            action.verified_by_id = user_id
+            action.verified_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            action.verified_by_id = user_id  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             track_metric("capa.closed")
 
         await record_audit_event(

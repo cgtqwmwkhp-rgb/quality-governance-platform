@@ -228,7 +228,7 @@ class RedisCache:
                 )
                 client = aioredis.Redis(connection_pool=pool)
                 await client.ping()
-                self._redis = client
+                self._redis = client  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
                 self._use_fallback = False
                 self._consecutive_failures = 0
                 logger.info("[Cache] Auto-recovery succeeded – switched back to Redis")

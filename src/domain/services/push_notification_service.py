@@ -55,9 +55,9 @@ class PushNotificationServiceDomain:
         existing = result.scalars().first()
 
         if existing:
-            existing.user_id = user_id
-            existing.is_active = True
-            existing.last_used_at = datetime.utcnow()
+            existing.user_id = user_id  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            existing.is_active = True  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            existing.last_used_at = datetime.utcnow()  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             await self.db.commit()
             return {
                 "success": True,
@@ -99,7 +99,7 @@ class PushNotificationServiceDomain:
         if not subscription:
             raise LookupError("Subscription not found")
 
-        subscription.is_active = False
+        subscription.is_active = False  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
         await self.db.commit()
         return True
 

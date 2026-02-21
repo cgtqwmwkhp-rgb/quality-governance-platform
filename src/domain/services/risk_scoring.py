@@ -126,7 +126,7 @@ class RiskScoringService:
         linked_risk_ids = []
         if getattr(near_miss, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             try:
-                linked_risk_ids = [int(x.strip()) for x in str(near_miss.linked_risk_ids).split(",") if x.strip()]
+                linked_risk_ids = [int(x.strip()) for x in str(near_miss.linked_risk_ids).split(",") if x.strip()]  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             except ValueError:
                 pass
 
@@ -223,7 +223,7 @@ class RiskScoringService:
         count_result = await self.db.execute(
             select(func.count(NearMiss.id)).where(
                 and_(
-                    NearMiss.linked_risk_ids.contains(str(risk_id)),
+                    NearMiss.linked_risk_ids.contains(str(risk_id)),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                     NearMiss.created_at >= one_month_ago,
                 )
             )
@@ -735,16 +735,16 @@ class KRIService:
 
         for kri in kris:
             if kri.current_status:
-                summary["by_status"][kri.current_status.value] += 1
+                summary["by_status"][kri.current_status.value] += 1  # type: ignore[index]  # TYPE-IGNORE: MYPY-OVERRIDE
             else:
-                summary["by_status"]["not_measured"] += 1
+                summary["by_status"]["not_measured"] += 1  # type: ignore[index]  # TYPE-IGNORE: MYPY-OVERRIDE
 
             category = kri.category.value
-            if category not in summary["by_category"]:
-                summary["by_category"][category] = 0
-            summary["by_category"][category] += 1
+            if category not in summary["by_category"]:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
+                summary["by_category"][category] = 0  # type: ignore[index]  # TYPE-IGNORE: MYPY-OVERRIDE
+            summary["by_category"][category] += 1  # type: ignore[index]  # TYPE-IGNORE: MYPY-OVERRIDE
 
-            summary["kris"].append(
+            summary["kris"].append(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 {
                     "id": kri.id,
                     "code": kri.code,

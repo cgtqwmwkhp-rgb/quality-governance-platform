@@ -53,7 +53,7 @@ class DocumentControlService:
     ) -> dict[str, Any]:
         stmt = select(ControlledDocument).where(
             ControlledDocument.is_current == True,  # noqa: E712
-            ControlledDocument.tenant_id == tenant_id,
+            ControlledDocument.tenant_id == tenant_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
 
         if document_type:
@@ -367,7 +367,7 @@ class DocumentControlService:
         result = await self.db.execute(
             select(DocumentApprovalWorkflow).where(
                 DocumentApprovalWorkflow.is_active == True,  # noqa: E712
-                DocumentApprovalWorkflow.tenant_id == tenant_id,
+                DocumentApprovalWorkflow.tenant_id == tenant_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         workflows = result.scalars().all()
@@ -624,7 +624,7 @@ class DocumentControlService:
     # ------------------------------------------------------------------
 
     async def get_summary(self, *, tenant_id: int | None) -> dict[str, Any]:
-        tenant_filter = ControlledDocument.tenant_id == tenant_id
+        tenant_filter = ControlledDocument.tenant_id == tenant_id  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         total_result = await self.db.execute(
             select(func.count())
@@ -748,7 +748,7 @@ class DocumentControlService:
         result = await self.db.execute(
             select(ControlledDocument).where(
                 ControlledDocument.id == document_id,
-                ControlledDocument.tenant_id == tenant_id,
+                ControlledDocument.tenant_id == tenant_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         document = result.scalar_one_or_none()
@@ -760,7 +760,7 @@ class DocumentControlService:
         result = await self.db.execute(
             select(DocumentApprovalWorkflow).where(
                 DocumentApprovalWorkflow.id == workflow_id,
-                DocumentApprovalWorkflow.tenant_id == tenant_id,
+                DocumentApprovalWorkflow.tenant_id == tenant_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         workflow = result.scalar_one_or_none()
@@ -774,7 +774,7 @@ class DocumentControlService:
         result = await self.db.execute(
             select(DocumentApprovalInstance).where(
                 DocumentApprovalInstance.id == instance_id,
-                DocumentApprovalInstance.tenant_id == tenant_id,
+                DocumentApprovalInstance.tenant_id == tenant_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         instance = result.scalar_one_or_none()

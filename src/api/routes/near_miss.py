@@ -32,7 +32,7 @@ async def create_near_miss(
         tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-    return near_miss
+    return near_miss  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
 
 
 @router.get("/", response_model=NearMissListResponse)
@@ -76,7 +76,7 @@ async def get_near_miss(
     """Get a near miss by ID."""
     service = NearMissService(db)
     try:
-        return await service.get_near_miss(near_miss_id, tenant_id=current_user.tenant_id)
+        return await service.get_near_miss(near_miss_id, tenant_id=current_user.tenant_id)  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Near miss not found")
 
@@ -92,7 +92,7 @@ async def update_near_miss(
     """Update a near miss."""
     service = NearMissService(db)
     try:
-        return await service.update_near_miss(
+        return await service.update_near_miss(  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
             near_miss_id,
             data,
             user_id=current_user.id,

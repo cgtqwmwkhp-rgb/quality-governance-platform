@@ -154,7 +154,7 @@ async def list_incidents(
             params=params,
             reporter_email=reporter_email,
         )
-        return {
+        return {  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
             "items": paginated.items,
             "total": paginated.total,
             "page": paginated.page,

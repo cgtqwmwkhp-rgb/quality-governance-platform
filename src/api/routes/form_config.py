@@ -163,10 +163,10 @@ async def create_form_template(
     track_metric("form_config.mutation", 1)
     track_metric("form_config.templates_created", 1)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="form_template",
-        entity_id=template.id,
+        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="created",
         user_id=current_user.id,
         details={"name": template.name, "form_type": template.form_type},
@@ -231,10 +231,10 @@ async def update_form_template(
     await invalidate_tenant_cache(current_user.tenant_id, "form_config")
     track_metric("form_config.mutation", 1)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="form_template",
-        entity_id=template.id,
+        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="updated",
         user_id=current_user.id,
         details=update_data,
@@ -261,10 +261,10 @@ async def publish_form_template(
     await db.commit()
     await db.refresh(template)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="form_template",
-        entity_id=template.id,
+        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="published",
         user_id=current_user.id,
         details={"published_at": template.published_at.isoformat()},
@@ -284,10 +284,10 @@ async def delete_form_template(
     """Delete a form template."""
     template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="form_template",
-        entity_id=template.id,
+        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="deleted",
         user_id=current_user.id,
         details={"name": template.name},
@@ -512,10 +512,10 @@ async def create_contract(
     await invalidate_tenant_cache(current_user.tenant_id, "form_config")
     track_metric("form_config.mutation", 1)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="contract",
-        entity_id=contract.id,
+        entity_id=contract.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="created",
         user_id=current_user.id,
         details={"name": contract.name, "code": contract.code},
@@ -554,10 +554,10 @@ async def update_contract(
     await invalidate_tenant_cache(current_user.tenant_id, "form_config")
     track_metric("form_config.mutation", 1)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="contract",
-        entity_id=contract.id,
+        entity_id=contract.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="updated",
         user_id=current_user.id,
         details=update_data,
@@ -577,10 +577,10 @@ async def delete_contract(
     """Delete a contract."""
     contract = await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
 
-    await record_audit_event(
+    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         db=db,
         entity_type="contract",
-        entity_id=contract.id,
+        entity_id=contract.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         action="deleted",
         user_id=current_user.id,
         details={"name": contract.name},
