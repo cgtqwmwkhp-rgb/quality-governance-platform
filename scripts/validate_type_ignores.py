@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 23  # Current count: 23 (10 from Stage 3.3 + 11 from Stage 2 Investigations + 1 for generic exception handler + 1 for logout DbSession)
-ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
+MAX_TYPE_IGNORES = 33  # Current count: 33 (23 prior + 10 OpenTelemetry tracer optional-dependency)
+ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+|optional-dependency)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"
 

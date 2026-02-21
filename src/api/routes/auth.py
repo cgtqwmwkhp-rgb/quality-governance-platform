@@ -40,7 +40,7 @@ try:
 
     tracer = trace.get_tracer(__name__)
 except ImportError:
-    tracer = None  # type: ignore[assignment]
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 logger = logging.getLogger(__name__)
 
