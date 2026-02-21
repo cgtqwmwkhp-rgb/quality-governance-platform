@@ -48,10 +48,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
     if connection_string:
         try:
-            from azure.monitor.opentelemetry.exporter import (
-                AzureMonitorMetricExporter,
-                AzureMonitorTraceExporter,
-            )
+            from azure.monitor.opentelemetry.exporter import AzureMonitorMetricExporter, AzureMonitorTraceExporter
 
             trace_exporter = AzureMonitorTraceExporter(connection_string=connection_string)
             tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
