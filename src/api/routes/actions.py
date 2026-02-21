@@ -1,16 +1,16 @@
 """Unified Actions API routes for incidents, RTAs, complaints, and investigations."""
 
 import logging
-from datetime import datetime
-from typing import Any, Optional, Union
+from datetime import datetime, timezone
+from typing import Annotated, Any, Optional, Union
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, literal, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.domain.models.complaint import Complaint, ComplaintAction
@@ -223,7 +223,7 @@ async def list_actions(
 async def create_action(  # noqa: C901 - complexity justified by multi-entity support
     action_data: ActionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:create"))],
 ) -> ActionResponse:
     """Create a new action for an incident, RTA, complaint, or investigation."""
     src_type = action_data.source_type.lower()
@@ -447,7 +447,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     action_id: int,
     action_data: ActionUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:update"))],
     source_type: str = Query(..., description="Type of source: incident, rta, complaint, or investigation"),
 ) -> ActionResponse:
     """Update an existing action by ID.
@@ -525,7 +525,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             action.status = ActionStatus(status_value)
         # Set completed_at if status changed to completed
         if status_value == "completed" and not action.completed_at:
-            action.completed_at = datetime.utcnow()
+            action.completed_at = datetime.now(timezone.utc)
         # Clear completed_at if status changed away from completed
         elif status_value != "completed":
             action.completed_at = None

@@ -79,7 +79,7 @@ export default function UserManagement() {
       const roleObj = roles.find(r => r.name.toLowerCase() === newUser.role);
       await usersApi.create({
         email: newUser.email,
-        password: 'TempPass123!',
+        password: crypto.randomUUID().slice(0, 12) + '!A1',
         first_name: newUser.firstName,
         last_name: newUser.lastName,
         phone: newUser.phone || undefined,
@@ -272,8 +272,8 @@ export default function UserManagement() {
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <Badge variant={statusConfig[status].variant} className="flex items-center gap-1 w-fit">
-                          {statusConfig[status].icon}
+                        <Badge variant={statusConfig[status]!.variant} className="flex items-center gap-1 w-fit">
+                          {statusConfig[status]!.icon}
                           {status.charAt(0).toUpperCase() + status.slice(1)}
                         </Badge>
                       </td>

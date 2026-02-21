@@ -73,6 +73,10 @@ export default function IncidentDetail() {
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState('')
 
+  // Completion notes dialog state
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [completionNotes, setCompletionNotes] = useState('')
+
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({
     title: '',
@@ -284,8 +288,8 @@ export default function IncidentDetail() {
   }
 
   const handleCompleteAction = () => {
-    const notes = window.prompt('Enter completion notes (optional):')
-    handleUpdateActionStatus('completed', notes || undefined)
+    setCompletionNotes('')
+    setShowCompletionDialog(true)
   }
 
   const getSeverityVariant = (severity: string) => {
@@ -965,6 +969,33 @@ export default function IncidentDetail() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Completion Notes Dialog */}
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Action</DialogTitle>
+            <DialogDescription>
+              Enter completion notes (optional) before marking this action as completed.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={completionNotes}
+            onChange={(e) => setCompletionNotes(e.target.value)}
+            placeholder="Enter completion notes..."
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompletionDialog(false)}>Cancel</Button>
+            <Button onClick={() => {
+              handleUpdateActionStatus('completed', completionNotes || undefined)
+              setShowCompletionDialog(false)
+            }}>
+              Complete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

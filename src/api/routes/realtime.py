@@ -99,13 +99,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
             return
 
         jti = payload.get("jti")
-        if jti:
-            from src.infrastructure.database import get_db
+        if not jti:
+            await websocket.close(code=4001, reason="Invalid token: missing jti")
+            return
 
-            async for db in get_db():
-                if await is_token_revoked(jti, db):
-                    await websocket.close(code=4001, reason="Token has been revoked")
-                    return
+        from src.infrastructure.database import get_db
+
+        async for db in get_db():
+            if await is_token_revoked(jti, db):
+                await websocket.close(code=4001, reason="Token has been revoked")
+                return
 
         token_user_id = payload.get("sub")
         if token_user_id is not None and int(token_user_id) != user_id:

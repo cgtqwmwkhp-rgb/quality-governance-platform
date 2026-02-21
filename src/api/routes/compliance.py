@@ -9,14 +9,16 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.pagination import DataListResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
@@ -206,7 +208,7 @@ async def _load_evidence_links(
 # ============================================================================
 
 
-@router.get("/clauses", response_model=List[ClauseResponse])
+@router.get("/clauses", response_model=DataListResponse)
 async def list_clauses(
     standard: Optional[str] = Query(None, description="Filter by ISO standard (iso9001, iso14001, iso45001)"),
     level: Optional[int] = Query(None, description="Filter by clause level (1=main, 2=sub)"),
@@ -228,19 +230,21 @@ async def list_clauses(
     if level:
         clauses = [c for c in clauses if c.level == level]
 
-    return [
-        ClauseResponse(
-            id=c.id,
-            standard=c.standard.value,
-            clause_number=c.clause_number,
-            title=c.title,
-            description=c.description,
-            keywords=c.keywords,
-            parent_clause=c.parent_clause,
-            level=c.level,
-        )
-        for c in clauses
-    ]
+    return {
+        "data": [
+            ClauseResponse(
+                id=c.id,
+                standard=c.standard.value,
+                clause_number=c.clause_number,
+                title=c.title,
+                description=c.description,
+                keywords=c.keywords,
+                parent_clause=c.parent_clause,
+                level=c.level,
+            )
+            for c in clauses
+        ]
+    }
 
 
 @router.get("/clauses/{clause_id}", response_model=ClauseResponse)
@@ -277,7 +281,7 @@ async def auto_tag_content(request: AutoTagRequest):
 async def link_evidence(
     request: EvidenceLinkRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
 ):
     """Link an entity to one or more ISO clauses. Persisted to database."""
     _span = tracer.start_span("link_evidence") if tracer else None
@@ -461,35 +465,37 @@ async def generate_compliance_report(
     return iso_compliance_service.generate_audit_report(links, std_enum, include_evidence)
 
 
-@router.get("/standards", response_model=List[StandardInfo])
+@router.get("/standards", response_model=DataListResponse)
 async def list_standards():
     """List all supported ISO standards."""
-    return [
-        {
-            "id": "iso9001",
-            "code": "ISO 9001:2015",
-            "name": "Quality Management System",
-            "description": "Requirements for a quality management system",
-            "clause_count": len(
-                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_9001) if c.level == 2]
-            ),
-        },
-        {
-            "id": "iso14001",
-            "code": "ISO 14001:2015",
-            "name": "Environmental Management System",
-            "description": "Requirements for an environmental management system",
-            "clause_count": len(
-                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_14001) if c.level == 2]
-            ),
-        },
-        {
-            "id": "iso45001",
-            "code": "ISO 45001:2018",
-            "name": "Occupational Health and Safety Management System",
-            "description": "Requirements for an OH&S management system",
-            "clause_count": len(
-                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_45001) if c.level == 2]
-            ),
-        },
-    ]
+    return {
+        "data": [
+            {
+                "id": "iso9001",
+                "code": "ISO 9001:2015",
+                "name": "Quality Management System",
+                "description": "Requirements for a quality management system",
+                "clause_count": len(
+                    [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_9001) if c.level == 2]
+                ),
+            },
+            {
+                "id": "iso14001",
+                "code": "ISO 14001:2015",
+                "name": "Environmental Management System",
+                "description": "Requirements for an environmental management system",
+                "clause_count": len(
+                    [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_14001) if c.level == 2]
+                ),
+            },
+            {
+                "id": "iso45001",
+                "code": "ISO 45001:2018",
+                "name": "Occupational Health and Safety Management System",
+                "description": "Requirements for an OH&S management system",
+                "clause_count": len(
+                    [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_45001) if c.level == 2]
+                ),
+            },
+        ]
+    }

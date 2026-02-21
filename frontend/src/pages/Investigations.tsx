@@ -477,6 +477,10 @@ export default function Investigations() {
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState<string | null>(null)
 
+  // Completion notes dialog state
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [completionNotes, setCompletionNotes] = useState('')
+
   // Load investigations with filters
   const loadInvestigations = useCallback(async () => {
     try {
@@ -636,7 +640,7 @@ export default function Investigations() {
   const filteredInvestigations = investigations.filter(
     i => i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
          i.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         String((i.data as Record<string, unknown>)?.lead_investigator || "").toLowerCase().includes(searchTerm.toLowerCase())
+         String((i.data as Record<string, unknown>)?.['lead_investigator'] || "").toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const stats = {
@@ -646,10 +650,9 @@ export default function Investigations() {
     completed: investigations.filter(i => i.status === 'completed').length,
   }
 
-  // Calculate action counts (simplified - would be from backend in production)
   const getActionCount = (_investigation: Investigation) => {
-    // Placeholder - in production this would come from the API
-    return Math.floor(Math.random() * 5)
+    // TODO: fetch from API when endpoint is available
+    return 0
   }
 
   // Navigate to investigation detail
@@ -905,7 +908,7 @@ export default function Investigations() {
                         </Badge>
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {String((investigation.data as Record<string, unknown>)?.lead_investigator || "") || '—'}
+                        {String((investigation.data as Record<string, unknown>)?.['lead_investigator'] || "") || '—'}
                       </td>
                       <td className="px-4 py-4">
                         <Badge variant="outline">
@@ -1256,9 +1259,8 @@ export default function Investigations() {
                       disabled={updatingAction || selectedAction.status === option.value}
                       onClick={() => {
                         if (option.value === 'completed') {
-                          // Prompt for completion notes
-                          const notes = window.prompt('Enter completion notes (optional):')
-                          handleCompleteAction(notes || '')
+                          setCompletionNotes('')
+                          setShowCompletionDialog(true)
                         } else {
                           handleUpdateActionStatus(option.value)
                         }
@@ -1285,6 +1287,33 @@ export default function Investigations() {
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowActionDetailModal(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Completion Notes Dialog */}
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Action</DialogTitle>
+            <DialogDescription>
+              Enter completion notes (optional) before marking this action as completed.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={completionNotes}
+            onChange={(e) => setCompletionNotes(e.target.value)}
+            placeholder="Enter completion notes..."
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompletionDialog(false)}>Cancel</Button>
+            <Button onClick={() => {
+              handleCompleteAction(completionNotes)
+              setShowCompletionDialog(false)
+            }}>
+              Complete
             </Button>
           </DialogFooter>
         </DialogContent>

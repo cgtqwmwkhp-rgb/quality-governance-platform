@@ -8,14 +8,14 @@ Features:
 - Mention search
 """
 
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.notification import (
     DeleteNotificationResponse,
@@ -179,7 +179,7 @@ async def get_unread_count(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/{notification_id}/read", response_model=MarkNotificationReadResponse)
-async def mark_notification_read(notification_id: int, db: DbSession, current_user: CurrentUser):
+async def mark_notification_read(notification_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]):
     """Mark a specific notification as read."""
     result = await db.execute(
         select(Notification).where(
@@ -192,7 +192,7 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     notification.is_read = True
-    notification.read_at = datetime.utcnow()
+    notification.read_at = datetime.now(timezone.utc)
     await db.commit()
     await invalidate_tenant_cache(current_user.tenant_id, "notifications")
     track_metric("notification.mutation", 1)
@@ -200,7 +200,7 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
 
 
 @router.post("/{notification_id}/unread", response_model=MarkNotificationUnreadResponse)
-async def mark_notification_unread(notification_id: int, db: DbSession, current_user: CurrentUser):
+async def mark_notification_unread(notification_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]):
     """Mark a specific notification as unread."""
     result = await db.execute(
         select(Notification).where(
@@ -221,7 +221,7 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
 
 
 @router.post("/read-all", response_model=MarkAllReadResponse)
-async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
+async def mark_all_notifications_read(db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]):
     """Mark all notifications as read for the current user."""
     _span = tracer.start_span("mark_all_notifications_read") if tracer else None
     result = await db.execute(
@@ -230,7 +230,7 @@ async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
             Notification.user_id == current_user.id,
             Notification.is_read == False,
         )
-        .values(is_read=True, read_at=datetime.utcnow())
+        .values(is_read=True, read_at=datetime.now(timezone.utc))
     )
     await db.commit()
     await invalidate_tenant_cache(current_user.tenant_id, "notifications")
@@ -299,7 +299,7 @@ async def get_notification_preferences(db: DbSession, current_user: CurrentUser)
 async def update_notification_preferences(
     preferences: NotificationPreferencesUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("notification:update"))],
 ):
     """Update notification preferences for the current user."""
     result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
@@ -355,7 +355,7 @@ async def search_users_for_mention(
 
 
 @router.post("/test-notification", response_model=TestNotificationResponse)
-async def send_test_notification(current_user: CurrentUser):
+async def send_test_notification(current_user: Annotated[User, Depends(require_permission("notification:create"))]):
     """
     Send a test notification to the current user.
 
@@ -371,7 +371,7 @@ async def send_test_notification(current_user: CurrentUser):
             "priority": "low",
             "title": "Test Notification",
             "message": "This is a test notification. WebSocket is working!",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         },
         event_type="notification",
     )
