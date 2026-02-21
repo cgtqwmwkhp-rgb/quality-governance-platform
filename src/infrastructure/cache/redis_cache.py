@@ -455,6 +455,7 @@ async def warmup_cache():
 
         async with async_session_maker() as db:
             from sqlalchemy import select
+
             from src.domain.models.standard import Standard
 
             result = await db.execute(select(Standard).limit(100))
