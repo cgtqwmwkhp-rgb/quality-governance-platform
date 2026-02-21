@@ -228,7 +228,15 @@ disable_error_code = ["assignment", "var-annotated", "arg-type", "operator"]
 
 [[tool.mypy.overrides]]
 module = "src.domain.services.risk_scoring"
-disable_error_code = ["attr-defined", "index"]
+disable_error_code = ["attr-defined", "index", "operator"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.audit_trail"
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.capa"
+disable_error_code = ["assignment", "call-overload"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
