@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
@@ -86,7 +86,7 @@ class AuditLogListResponse(BaseModel):
     items: list[AuditLogEntryResponse]
     total: int
     page: int
-    per_page: int
+    page_size: int
 
 
 class AuditStatsResponse(BaseModel):
@@ -111,7 +111,7 @@ class AuditStatsResponse(BaseModel):
 
 
 @router.get("/actions")
-async def list_actions() -> Any:
+async def list_actions(current_user: CurrentUser) -> Any:
     """Get list of possible audit actions."""
     return {
         "data": [
@@ -152,7 +152,7 @@ async def list_actions() -> Any:
 
 
 @router.get("/entity-types")
-async def list_entity_types() -> Any:
+async def list_entity_types(current_user: CurrentUser) -> Any:
     """Get list of auditable entity types."""
     return [
         "incident",
@@ -290,7 +290,7 @@ async def list_audit_logs(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=100),
+    page_size: int = Query(50, ge=1, le=100),
 ) -> Any:
     """List audit log entries with filters and pagination."""
     tenant_id = current_user.tenant_id
@@ -313,13 +313,13 @@ async def list_audit_logs(
         count_result = await db.execute(select(func.count(AuditLogEntry.id)).where(*conditions))
         total = count_result.scalar() or 0
 
-        offset = (page - 1) * per_page
+        offset = (page - 1) * page_size
         result = await db.execute(
             select(AuditLogEntry)
             .where(*conditions)
             .order_by(desc(AuditLogEntry.timestamp))
             .offset(offset)
-            .limit(per_page)
+            .limit(page_size)
         )
         entries = result.scalars().all()
 
@@ -327,7 +327,7 @@ async def list_audit_logs(
             "items": entries,
             "total": total,
             "page": page,
-            "per_page": per_page,
+            "page_size": page_size,
         }
     except Exception as e:
         logger.error("Failed to list audit logs: %s", e)
@@ -335,7 +335,7 @@ async def list_audit_logs(
             "items": [],
             "total": 0,
             "page": page,
-            "per_page": per_page,
+            "page_size": page_size,
         }
 
 
@@ -404,6 +404,7 @@ async def get_user_activity(
 async def get_audit_entry(
     entry_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Get a single audit log entry with full details."""
     try:
@@ -411,10 +412,10 @@ async def get_audit_entry(
         entry = result.scalar_one_or_none()
     except Exception as e:
         logger.error("Failed to get audit entry %s: %s", entry_id, e)
-        raise HTTPException(status_code=500, detail="Failed to retrieve audit entry")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve audit entry")
 
     if not entry:
-        raise HTTPException(status_code=404, detail="Audit entry not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit entry not found")
 
     return entry
 
@@ -519,7 +520,7 @@ async def verify_chain(
         return verification
     except Exception as e:
         logger.error("Failed to verify chain: %s", e)
-        raise HTTPException(status_code=500, detail="Chain verification failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Chain verification failed")
 
 
 # ============================================================================
@@ -601,4 +602,4 @@ async def export_audit_logs(
         }
     except Exception as e:
         logger.error("Failed to export audit logs: %s", e)
-        raise HTTPException(status_code=500, detail="Export failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Export failed")

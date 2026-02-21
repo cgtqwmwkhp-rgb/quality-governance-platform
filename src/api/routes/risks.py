@@ -25,56 +25,10 @@ from src.api.schemas.risk import (
 )
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.risk_scoring import calculate_risk_level
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
-
-
-# ============== Risk Matrix Configuration ==============
-
-RISK_MATRIX = {
-    1: {
-        1: ("very_low", "#22c55e"),
-        2: ("low", "#84cc16"),
-        3: ("low", "#84cc16"),
-        4: ("medium", "#eab308"),
-        5: ("medium", "#eab308"),
-    },
-    2: {
-        1: ("low", "#84cc16"),
-        2: ("low", "#84cc16"),
-        3: ("medium", "#eab308"),
-        4: ("medium", "#eab308"),
-        5: ("high", "#f97316"),
-    },
-    3: {
-        1: ("low", "#84cc16"),
-        2: ("medium", "#eab308"),
-        3: ("medium", "#eab308"),
-        4: ("high", "#f97316"),
-        5: ("high", "#f97316"),
-    },
-    4: {
-        1: ("medium", "#eab308"),
-        2: ("medium", "#eab308"),
-        3: ("high", "#f97316"),
-        4: ("high", "#f97316"),
-        5: ("critical", "#ef4444"),
-    },
-    5: {
-        1: ("medium", "#eab308"),
-        2: ("high", "#f97316"),
-        3: ("high", "#f97316"),
-        4: ("critical", "#ef4444"),
-        5: ("critical", "#ef4444"),
-    },
-}
-
-
-def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
-    """Calculate risk score and level from likelihood and impact."""
-    score = likelihood * impact
-    level, color = RISK_MATRIX.get(likelihood, {}).get(impact, ("medium", "#eab308"))
-    return score, level, color
 
 
 # ============== Risk Endpoints ==============
@@ -167,6 +121,7 @@ async def create_risk(
     db.add(risk)
     await db.commit()
     await db.refresh(risk)
+    track_metric("risks.created")
 
     return RiskResponse.model_validate(risk)
 
@@ -481,7 +436,7 @@ async def update_control(
 async def delete_control(
     control_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk control."""
     result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))

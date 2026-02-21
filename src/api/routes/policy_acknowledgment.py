@@ -24,6 +24,7 @@ from src.api.schemas.policy_acknowledgment import (
     PolicyAcknowledgmentStatusResponse,
     RecordAcknowledgmentRequest,
 )
+from src.api.utils.entity import get_or_404
 from src.domain.models.policy_acknowledgment import (
     AcknowledgmentStatus,
     PolicyAcknowledgment,
@@ -69,14 +70,7 @@ async def get_acknowledgment_requirement(
     current_user: dict = Depends(get_current_user),
 ):
     """Get an acknowledgment requirement."""
-    result = await db.execute(
-        select(PolicyAcknowledgmentRequirement).where(PolicyAcknowledgmentRequirement.id == requirement_id)
-    )
-    requirement = result.scalar_one_or_none()
-
-    if not requirement:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-
+    requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail="Requirement not found")
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
@@ -97,7 +91,7 @@ async def assign_acknowledgments(
             policy_version=assign_data.policy_version,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return PolicyAcknowledgmentListResponse(
         items=[PolicyAcknowledgmentResponse.from_orm(a) for a in acknowledgments],
@@ -132,12 +126,7 @@ async def get_acknowledgment(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific acknowledgment."""
-    result = await db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
-    ack = result.scalar_one_or_none()
-
-    if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgment not found")
-
+    ack = await get_or_404(db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found")
     return PolicyAcknowledgmentResponse.from_orm(ack)
 
 
@@ -152,7 +141,7 @@ async def record_policy_opened(
     ack = await service.record_policy_opened(acknowledgment_id)
 
     if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found")
 
     return {"message": "Policy opened recorded", "first_opened_at": ack.first_opened_at}
 
@@ -169,7 +158,7 @@ async def update_reading_time(
     ack = await service.update_reading_time(acknowledgment_id, additional_seconds)
 
     if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found")
 
     return {"message": "Reading time updated", "total_seconds": ack.time_spent_seconds}
 
@@ -185,7 +174,6 @@ async def record_acknowledgment(
     """Record a user's acknowledgment of a policy."""
     service = PolicyAcknowledgmentService(db)
 
-    # Get client info
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
@@ -199,7 +187,7 @@ async def record_acknowledgment(
             user_agent=user_agent,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return PolicyAcknowledgmentResponse.from_orm(ack)
 

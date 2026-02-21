@@ -15,11 +15,13 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.iso27001 import (
     AccessControlRecord,
     BusinessContinuityPlan,
@@ -179,7 +181,7 @@ async def list_assets(
     }
 
 
-@router.post("/assets", response_model=dict, status_code=201)
+@router.post("/assets", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_asset(
     asset_data: AssetCreate,
     db: DbSession,
@@ -207,10 +209,7 @@ async def get_asset(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get asset details"""
-    result = await db.execute(select(InformationAsset).where(InformationAsset.id == asset_id))
-    asset = result.scalar_one_or_none()
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+    asset = await get_or_404(db, InformationAsset, asset_id)
 
     return {
         "id": asset.id,
@@ -325,21 +324,13 @@ async def update_control(
     db: DbSession,
 ) -> dict[str, Any]:
     """Update control implementation status"""
-    result = await db.execute(select(ISO27001Control).where(ISO27001Control.id == control_id))
-    control = result.scalar_one_or_none()
-    if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
-
-    update_data = control_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(control, key, value)
+    control = await get_or_404(db, ISO27001Control, control_id)
+    apply_updates(control, control_data)
 
     if control_data.implementation_status == "implemented":
         control.implementation_date = datetime.utcnow()
     if control_data.effectiveness_rating:
         control.last_effectiveness_review = datetime.utcnow()
-
-    control.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Control updated", "id": control.id}
@@ -451,7 +442,7 @@ async def list_security_risks(
     }
 
 
-@router.post("/risks", response_model=dict, status_code=201)
+@router.post("/risks", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_security_risk(
     risk_data: SecurityRiskCreate,
     db: DbSession,
@@ -538,7 +529,7 @@ async def list_security_incidents(
     }
 
 
-@router.post("/incidents", response_model=dict, status_code=201)
+@router.post("/incidents", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_security_incident(
     incident_data: SecurityIncidentCreate,
     db: DbSession,
@@ -567,21 +558,13 @@ async def update_security_incident(
     db: DbSession,
 ) -> dict[str, Any]:
     """Update security incident"""
-    result = await db.execute(select(SecurityIncident).where(SecurityIncident.id == incident_id))
-    incident = result.scalar_one_or_none()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
-
-    update_data = incident_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(incident, key, value)
+    incident = await get_or_404(db, SecurityIncident, incident_id)
+    apply_updates(incident, incident_data)
 
     if incident_data.status == "contained" and not incident.contained_date:
         incident.contained_date = datetime.utcnow()
     if incident_data.status == "closed" and not incident.resolved_date:
         incident.resolved_date = datetime.utcnow()
-
-    incident.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Incident updated", "id": incident.id}
@@ -632,7 +615,7 @@ async def list_supplier_assessments(
     }
 
 
-@router.post("/suppliers", response_model=dict, status_code=201)
+@router.post("/suppliers", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_supplier_assessment(
     assessment_data: SupplierAssessmentCreate,
     db: DbSession,

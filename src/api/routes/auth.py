@@ -31,6 +31,7 @@ from src.core.security import (
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
 from src.domain.services.token_service import TokenService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     access_token = create_access_token(subject=user.id)
     refresh_token = create_refresh_token(subject=user.id)
 
+    track_metric("auth.login")
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -259,6 +261,7 @@ async def logout(
         reason="logout",
     )
 
+    track_metric("auth.logout")
     return {"message": "Successfully logged out"}
 
 

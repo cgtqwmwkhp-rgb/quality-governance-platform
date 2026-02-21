@@ -12,11 +12,13 @@ Provides endpoints for:
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
-from src.api.deps import CurrentUser, DbSession
+from src.api.deps import CurrentSuperuser, CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -178,7 +180,7 @@ async def list_risks(
     }
 
 
-@router.post("/", response_model=dict, status_code=201)
+@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
@@ -203,15 +205,8 @@ async def update_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-
-    update_data = risk_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(risk, key, value)
-
-    risk.updated_at = datetime.utcnow()
+    risk = await get_or_404(db, EnterpriseRisk, risk_id)
+    apply_updates(risk, risk_data)
     await db.commit()
     await db.refresh(risk)
 
@@ -240,16 +235,14 @@ async def assess_risk(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.delete("/{risk_id}", status_code=204)
+@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_risk(
     risk_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Delete a risk (soft delete by changing status)"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+    risk = await get_or_404(db, EnterpriseRisk, risk_id)
 
     risk.status = "closed"
     risk.updated_at = datetime.utcnow()
@@ -331,7 +324,7 @@ async def get_bow_tie(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=201)
+@router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_bow_tie_element(
     risk_id: int,
     element: BowTieElementCreate,
@@ -339,9 +332,7 @@ async def add_bow_tie_element(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add element to bow-tie diagram"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+    await get_or_404(db, EnterpriseRisk, risk_id)
 
     service = BowTieService(db)
     bow_tie_element = await service.add_bow_tie_element(
@@ -361,12 +352,12 @@ async def add_bow_tie_element(
     }
 
 
-@router.delete("/{risk_id}/bowtie/elements/{element_id}", status_code=204)
+@router.delete("/{risk_id}/bowtie/elements/{element_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_bow_tie_element(
     risk_id: int,
     element_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Delete bow-tie element"""
     result = await db.execute(
@@ -394,16 +385,14 @@ async def get_kri_dashboard(
     return await service.get_kri_dashboard()
 
 
-@router.post("/kris", response_model=dict, status_code=201)
+@router.post("/kris", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_kri(
     kri_data: KRICreate,
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == kri_data.risk_id))).scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+    await get_or_404(db, EnterpriseRisk, kri_data.risk_id)
 
     kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
     db.add(kri)
@@ -440,11 +429,7 @@ async def get_kri_history(
     current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Get KRI historical values"""
-    kri = (
-        await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
-    ).scalar_one_or_none()
-    if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+    kri = await get_or_404(db, EnterpriseKeyRiskIndicator, kri_id)
 
     return kri.historical_values or []
 
@@ -479,7 +464,7 @@ async def list_controls(
     ]
 
 
-@router.post("/controls", response_model=dict, status_code=201)
+@router.post("/controls", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_control(
     control_data: ControlCreate,
     db: DbSession,
@@ -500,7 +485,7 @@ async def create_control(
     return {"id": control.id, "reference": reference, "message": "Control created"}
 
 
-@router.post("/{risk_id}/controls/{control_id}", response_model=dict, status_code=201)
+@router.post("/{risk_id}/controls/{control_id}", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def link_control_to_risk(
     risk_id: int,
     control_id: int,
@@ -510,15 +495,8 @@ async def link_control_to_risk(
     reduces_impact: bool = False,
 ) -> dict[str, Any]:
     """Link a control to a risk"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
-    control = (
-        await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id == control_id))
-    ).scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-    if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
+    await get_or_404(db, EnterpriseRisk, risk_id)
+    await get_or_404(db, EnterpriseRiskControl, control_id)
 
     existing = (
         await db.execute(
@@ -654,9 +632,7 @@ async def get_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed risk information"""
-    risk = (await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+    risk = await get_or_404(db, EnterpriseRisk, risk_id)
 
     result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
     control_mappings = result.scalars().all()

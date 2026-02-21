@@ -37,9 +37,12 @@ class TokenService:
         user_id: int,
         reason: str = "admin_revoke",
     ) -> int:
-        """Revoke all tokens for a user. Returns count of affected records."""
-        result = await db.execute(select(TokenBlacklist).where(TokenBlacklist.user_id == user_id))
-        return 0
+        """Revoke all tokens for a user by updating the reason on existing entries."""
+        from sqlalchemy import update
+
+        result = await db.execute(update(TokenBlacklist).where(TokenBlacklist.user_id == user_id).values(reason=reason))
+        await db.commit()
+        return result.rowcount
 
     @staticmethod
     async def cleanup_expired(db: AsyncSession) -> int:

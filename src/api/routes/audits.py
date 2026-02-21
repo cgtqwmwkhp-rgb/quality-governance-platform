@@ -40,6 +40,7 @@ from src.api.schemas.audit import (
     AuditTemplateResponse,
     AuditTemplateUpdate,
 )
+from src.api.utils.entity import get_or_404
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -52,6 +53,7 @@ from src.domain.models.audit import (
 )
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -623,15 +625,7 @@ async def create_section(
     current_user: CurrentUser,
 ) -> AuditSectionResponse:
     """Create a new section in an audit template."""
-    # Verify template exists
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
-    template = result.scalar_one_or_none()
-
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
-        )
+    await get_or_404(db, AuditTemplate, template_id)
 
     section = AuditSection(
         template_id=template_id,
@@ -668,9 +662,9 @@ async def update_section(
             detail="Section not found",
         )
 
-    update_data = section_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(section, field, value)
+    from src.api.utils.update import apply_updates
+
+    apply_updates(section, section_data, set_updated_at=False)
 
     await db.commit()
 
@@ -689,14 +683,7 @@ async def delete_section(
     current_user: CurrentUser,
 ) -> None:
     """Soft delete an audit section."""
-    result = await db.execute(select(AuditSection).where(AuditSection.id == section_id))
-    section = result.scalar_one_or_none()
-
-    if not section:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Section not found",
-        )
+    section = await get_or_404(db, AuditSection, section_id)
 
     section.is_active = False
     await db.commit()
@@ -715,15 +702,7 @@ async def create_question(
     current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Create a new question in an audit template."""
-    # Verify template exists
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
-    template = result.scalar_one_or_none()
-
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
-        )
+    await get_or_404(db, AuditTemplate, template_id)
 
     # Validate section belongs to this template
     if question_data.section_id is not None:
@@ -786,14 +765,7 @@ async def update_question(
     current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Update an audit question."""
-    result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
-    question = result.scalar_one_or_none()
-
-    if not question:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Question not found",
-        )
+    question = await get_or_404(db, AuditQuestion, question_id)
 
     update_data = question_data.model_dump(exclude_unset=True)
 
@@ -825,14 +797,7 @@ async def delete_question(
     current_user: CurrentUser,
 ) -> None:
     """Soft delete an audit question."""
-    result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
-    question = result.scalar_one_or_none()
-
-    if not question:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Question not found",
-        )
+    question = await get_or_404(db, AuditQuestion, question_id)
 
     question.is_active = False
     await db.commit()
@@ -979,14 +944,7 @@ async def update_run(
     current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Update an audit run."""
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
-    run = result.scalar_one_or_none()
-
-    if not run:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
-        )
+    run = await get_or_404(db, AuditRun, run_id)
 
     update_data = run_data.model_dump(exclude_unset=True)
 
@@ -1024,14 +982,7 @@ async def start_run(
     current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Start an audit run."""
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
-    run = result.scalar_one_or_none()
-
-    if not run:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
-        )
+    run = await get_or_404(db, AuditRun, run_id)
 
     if run.status != AuditStatus.SCHEDULED:
         raise HTTPException(
@@ -1090,6 +1041,7 @@ async def complete_run(
 
     await db.commit()
     await db.refresh(run)
+    track_metric("audits.completed")
 
     return AuditRunResponse.model_validate(run)
 
@@ -1105,15 +1057,7 @@ async def create_response(
     current_user: CurrentUser,
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
-    # Verify run exists and is in progress
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
-    run = result.scalar_one_or_none()
-
-    if not run:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
-        )
+    run = await get_or_404(db, AuditRun, run_id)
 
     if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
         raise HTTPException(
@@ -1239,15 +1183,7 @@ async def create_finding(
     current_user: CurrentUser,
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
-    # Verify run exists
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
-    run = result.scalar_one_or_none()
-
-    if not run:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
-        )
+    await get_or_404(db, AuditRun, run_id)
 
     finding_dict = finding_data.model_dump()
 
@@ -1277,6 +1213,7 @@ async def create_finding(
     db.add(finding)
     await db.commit()
     await db.refresh(finding)
+    track_metric("audits.findings")
 
     return AuditFindingResponse.model_validate(finding)
 
@@ -1289,14 +1226,7 @@ async def update_finding(
     current_user: CurrentUser,
 ) -> AuditFindingResponse:
     """Update an audit finding."""
-    result = await db.execute(select(AuditFinding).where(AuditFinding.id == finding_id))
-    finding = result.scalar_one_or_none()
-
-    if not finding:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Finding not found",
-        )
+    finding = await get_or_404(db, AuditFinding, finding_id)
 
     update_data = finding_data.model_dump(exclude_unset=True)
 

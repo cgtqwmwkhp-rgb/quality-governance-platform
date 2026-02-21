@@ -12,12 +12,14 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -167,7 +169,7 @@ async def list_documents(
     }
 
 
-@router.post("/", response_model=dict, status_code=201)
+@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_document(
     document_data: DocumentCreate,
     db: DbSession,
@@ -237,7 +239,7 @@ async def list_workflows(
     ]
 
 
-@router.post("/workflows", response_model=dict, status_code=201)
+@router.post("/workflows", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     workflow_data: WorkflowCreate,
     db: DbSession,
@@ -339,10 +341,7 @@ async def get_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed document information"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
-    document = result.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await get_or_404(db, ControlledDocument, document_id)
 
     versions_result = await db.execute(
         select(ControlledDocumentVersion)
@@ -433,16 +432,8 @@ async def update_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update document metadata"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
-    document = result.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    update_data = document_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(document, key, value)
-
-    document.updated_at = datetime.utcnow()
+    document = await get_or_404(db, ControlledDocument, document_id)
+    apply_updates(document, document_data)
     await db.commit()
     await db.refresh(document)
 
@@ -452,7 +443,7 @@ async def update_document(
 # ============ Version Control Endpoints ============
 
 
-@router.post("/{document_id}/versions", response_model=dict, status_code=201)
+@router.post("/{document_id}/versions", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_new_version(
     document_id: int,
     version_data: VersionCreate,
@@ -460,10 +451,7 @@ async def create_new_version(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
-    document = result.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await get_or_404(db, ControlledDocument, document_id)
 
     if version_data.is_major_version:
         new_major = document.major_version + 1
@@ -559,15 +547,8 @@ async def submit_for_approval(
     workflow_id: int = Query(...),
 ) -> dict[str, Any]:
     """Submit document for approval"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
-    document = result.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    wf_result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id))
-    workflow = wf_result.scalar_one_or_none()
-    if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    document = await get_or_404(db, ControlledDocument, document_id)
+    workflow = await get_or_404(db, DocumentApprovalWorkflow, workflow_id)
 
     instance = DocumentApprovalInstance(
         document_id=document_id,
@@ -601,10 +582,7 @@ async def take_approval_action(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    result = await db.execute(select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id))
-    instance = result.scalar_one_or_none()
-    if not instance:
-        raise HTTPException(status_code=404, detail="Approval instance not found")
+    instance = await get_or_404(db, DocumentApprovalInstance, instance_id)
 
     action = DocumentApprovalAction(
         instance_id=instance_id,
@@ -663,7 +641,7 @@ async def take_approval_action(
 # ============ Distribution Endpoints ============
 
 
-@router.post("/{document_id}/distribute", response_model=dict, status_code=201)
+@router.post("/{document_id}/distribute", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def distribute_document(
     document_id: int,
     distribution: DistributionCreate,
@@ -671,10 +649,7 @@ async def distribute_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
-    document = result.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    await get_or_404(db, ControlledDocument, document_id)
 
     dist = DocumentDistribution(
         document_id=document_id,
@@ -729,10 +704,7 @@ async def mark_document_obsolete(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
-    document = result.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await get_or_404(db, ControlledDocument, document_id)
 
     document.status = "obsolete"
     document.is_current = False

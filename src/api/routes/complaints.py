@@ -1,17 +1,20 @@
 """API routes for complaint management."""
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Complaints"])
 
@@ -32,7 +35,6 @@ async def create_complaint(
     - If external_ref is provided and already exists, returns 409 Conflict
     - This enables ETL/external systems to safely retry imports
     """
-    # Check for duplicate external_ref (idempotency check)
     external_ref = complaint_in.external_ref
     if external_ref:
         existing_query = select(Complaint).where(Complaint.external_ref == external_ref)
@@ -59,8 +61,8 @@ async def create_complaint(
     db.add(complaint)
     await db.commit()
     await db.refresh(complaint)
+    track_metric("complaints.created")
 
-    # Record audit event
     await record_audit_event(
         db=db,
         event_type="complaint.created",
@@ -86,22 +88,13 @@ async def get_complaint(
 
     Requires authentication.
     """
-    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
-    complaint = result.scalar_one_or_none()
-
-    if not complaint:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Complaint with ID {complaint_id} not found",
-        )
-
-    return complaint
+    return await get_or_404(db, Complaint, complaint_id)
 
 
 @router.get("/", response_model=ComplaintListResponse)
 async def list_complaints(
     db: DbSession,
-    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -117,12 +110,9 @@ async def list_complaints(
     unless they have admin permissions.
     """
     import logging
-    import math
 
     logger = logging.getLogger(__name__)
 
-    # SECURITY FIX: If filtering by email, enforce that users can only access their own data
-    # unless they have admin/view-all permissions
     if complainant_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
@@ -131,20 +121,17 @@ async def list_complaints(
         is_superuser = getattr(current_user, "is_superuser", False)
 
         if not has_view_all and not is_superuser:
-            # Non-admin users can only filter by their own email
             if user_email and complainant_email.lower() != user_email.lower():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You can only view your own complaints",
                 )
 
-        # AUDIT: Log email filter usage for security monitoring
-        # Note: We log the filter type but NOT the raw email (privacy compliance)
         await record_audit_event(
             db=db,
             event_type="complaint.list_filtered",
             entity_type="complaint",
-            entity_id="*",  # Wildcard - listing operation
+            entity_id="*",
             action="list",
             description="Complaint list accessed with email filter",
             payload={
@@ -165,25 +152,16 @@ async def list_complaints(
         if status_filter:
             query = query.where(Complaint.status == status_filter)
 
-        # Total count
-        count_query = select(func.count()).select_from(query.subquery())
-        count_result = await db.execute(count_query)
-        total = count_result.scalar() or 0
-
-        # Deterministic ordering: received_date DESC, id ASC
         query = query.order_by(Complaint.received_date.desc(), Complaint.id.asc())
-
-        # Pagination
-        query = query.offset((page - 1) * page_size).limit(page_size)
-        result = await db.execute(query)
-        complaints = result.scalars().all()
+        params = PaginationParams(page=page, page_size=page_size)
+        paginated = await paginate(db, query, params)
 
         return ComplaintListResponse(
-            items=[ComplaintResponse.model_validate(c) for c in complaints],
-            total=total,
-            page=page,
-            page_size=page_size,
-            pages=math.ceil(total / page_size) if total > 0 else 1,
+            items=[ComplaintResponse.model_validate(c) for c in paginated.items],
+            total=paginated.total,
+            page=paginated.page,
+            page_size=paginated.page_size,
+            pages=paginated.pages,
         )
     except Exception as e:
         error_str = str(e).lower()
@@ -217,25 +195,13 @@ async def update_complaint(
 
     Requires authentication.
     """
-    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
-    complaint = result.scalar_one_or_none()
-
-    if not complaint:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Complaint with ID {complaint_id} not found",
-        )
-
-    update_data = complaint_in.model_dump(exclude_unset=True)
+    complaint = await get_or_404(db, Complaint, complaint_id)
     old_status = complaint.status
-
-    for field, value in update_data.items():
-        setattr(complaint, field, value)
+    update_data = apply_updates(complaint, complaint_in, set_updated_at=False)
 
     await db.commit()
     await db.refresh(complaint)
 
-    # Record audit event
     await record_audit_event(
         db=db,
         event_type="complaint.updated",
@@ -269,37 +235,11 @@ async def list_complaint_investigations(
     Returns investigations assigned to this complaint with pagination.
     Deterministic ordering: created_at DESC, id ASC.
     """
-    from math import ceil
-
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    # Verify complaint exists
-    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
-    complaint = result.scalar_one_or_none()
+    await get_or_404(db, Complaint, complaint_id)
 
-    if not complaint:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Complaint with ID {complaint_id} not found",
-        )
-
-    # Get total count
-    count_query = (
-        select(func.count())
-        .select_from(InvestigationRun)
-        .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.COMPLAINT,
-            InvestigationRun.assigned_entity_id == complaint_id,
-        )
-    )
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Calculate total pages
-    total_pages = ceil(total / page_size) if total > 0 else 1
-
-    # Get paginated results
     query = (
         select(InvestigationRun)
         .where(
@@ -307,16 +247,14 @@ async def list_complaint_investigations(
             InvestigationRun.assigned_entity_id == complaint_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
     )
-    result = await db.execute(query)
-    investigations = result.scalars().all()
+    params = PaginationParams(page=page, page_size=page_size)
+    paginated = await paginate(db, query, params)
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": total_pages,
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "total_pages": paginated.pages,
     }

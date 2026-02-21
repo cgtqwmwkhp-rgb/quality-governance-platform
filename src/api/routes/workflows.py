@@ -13,7 +13,7 @@ Features:
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -95,7 +95,7 @@ async def get_workflow_template(template_code: str, db: DbSession, current_user:
     """Get workflow template details."""
     t = await engine.get_template(db, template_code)
     if t is None:
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     return {
         "id": t.id,
         "code": t.code,
@@ -132,7 +132,7 @@ async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_u
             priority=request.priority,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     steps = await engine.get_instance_steps(db, instance.id)
     return {
@@ -157,7 +157,7 @@ async def list_workflow_instances(
     status: Optional[str] = Query(None),
     entity_type: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
+    page_size: int = Query(50, ge=1, le=100),
 ):
     """List workflow instances with filtering and pagination."""
     instances, total = await engine.list_instances(
@@ -165,7 +165,7 @@ async def list_workflow_instances(
         status=status,
         entity_type=entity_type,
         page=page,
-        page_size=size,
+        page_size=page_size,
     )
 
     items = []
@@ -206,7 +206,7 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
     """Get workflow instance details with all steps."""
     inst = await engine.get_instance(db, workflow_id)
     if inst is None:
-        raise HTTPException(status_code=404, detail="Workflow instance not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow instance not found")
 
     steps = await engine.get_instance_steps(db, workflow_id)
     total_steps = len(steps)
@@ -280,7 +280,7 @@ async def advance_workflow(
             notes=notes,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return result
 
 
@@ -295,7 +295,7 @@ async def cancel_workflow(
     try:
         inst = await engine.cancel_workflow(db, workflow_id, current_user.id, reason)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return {
         "workflow_id": inst.id,
         "status": inst.status,
@@ -323,7 +323,7 @@ async def approve_request(step_id: int, response: ApprovalResponse, db: DbSessio
     try:
         result = await engine.approve_step(db, step_id, current_user.id, response.effective_notes)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return result
 
 
@@ -331,11 +331,11 @@ async def approve_request(step_id: int, response: ApprovalResponse, db: DbSessio
 async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Reject a workflow step."""
     if not response.reason:
-        raise HTTPException(status_code=400, detail="Reason required for rejection")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reason required for rejection")
     try:
         result = await engine.reject_step(db, step_id, current_user.id, response.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return result
 
 
@@ -375,7 +375,7 @@ async def escalate_workflow(
             new_priority=request.new_priority,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return result
 
 
@@ -431,7 +431,7 @@ async def cancel_delegation(delegation_id: int, db: DbSession, current_user: Cur
     """Cancel a delegation."""
     success = await engine.cancel_delegation(db, delegation_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Delegation not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegation not found")
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",

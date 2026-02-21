@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_current_user, get_db
+from src.api.deps import CurrentSuperuser, CurrentUser, get_current_user, get_db
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
     EscalationLevelListResponse,
@@ -29,6 +29,8 @@ from src.api.schemas.workflow import (
     WorkflowRuleResponse,
     WorkflowRuleUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
@@ -118,12 +120,7 @@ async def get_workflow_rule(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific workflow rule."""
-    result = await db.execute(select(WorkflowRule).where(WorkflowRule.id == rule_id))
-    rule = result.scalar_one_or_none()
-
-    if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
-
+    rule = await get_or_404(db, WorkflowRule, rule_id)
     return WorkflowRuleResponse.from_orm(rule)
 
 
@@ -135,16 +132,8 @@ async def update_workflow_rule(
     current_user: dict = Depends(get_current_user),
 ):
     """Update a workflow rule."""
-    result = await db.execute(select(WorkflowRule).where(WorkflowRule.id == rule_id))
-    rule = result.scalar_one_or_none()
-
-    if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
-
-    update_data = rule_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(rule, field, value)
-
+    rule = await get_or_404(db, WorkflowRule, rule_id)
+    apply_updates(rule, rule_data)
     rule.updated_by = current_user.get("email")
 
     await db.commit()
@@ -155,16 +144,11 @@ async def update_workflow_rule(
 @router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workflow_rule(
     rule_id: int,
+    current_user: CurrentSuperuser,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
-    """Delete a workflow rule."""
-    result = await db.execute(select(WorkflowRule).where(WorkflowRule.id == rule_id))
-    rule = result.scalar_one_or_none()
-
-    if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
-
+    """Delete a workflow rule (superuser only)."""
+    rule = await get_or_404(db, WorkflowRule, rule_id)
     await db.delete(rule)
     await db.commit()
 
@@ -253,12 +237,7 @@ async def get_sla_configuration(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
-    config = result.scalar_one_or_none()
-
-    if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
-
+    config = await get_or_404(db, SLAConfiguration, config_id)
     return SLAConfigurationResponse.from_orm(config)
 
 
@@ -270,16 +249,8 @@ async def update_sla_configuration(
     current_user: dict = Depends(get_current_user),
 ):
     """Update an SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
-    config = result.scalar_one_or_none()
-
-    if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
-
-    update_data = config_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(config, field, value)
-
+    config = await get_or_404(db, SLAConfiguration, config_id)
+    apply_updates(config, config_data)
     config.updated_by = current_user.get("email")
 
     await db.commit()
@@ -290,16 +261,11 @@ async def update_sla_configuration(
 @router.delete("/sla-configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sla_configuration(
     config_id: int,
+    current_user: CurrentSuperuser,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
-    """Delete an SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
-    config = result.scalar_one_or_none()
-
-    if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
-
+    """Delete an SLA configuration (superuser only)."""
+    config = await get_or_404(db, SLAConfiguration, config_id)
     await db.delete(config)
     await db.commit()
 
@@ -458,12 +424,7 @@ async def get_escalation_level(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
-    level = result.scalar_one_or_none()
-
-    if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
-
+    level = await get_or_404(db, EscalationLevel, level_id)
     return EscalationLevelResponse.from_orm(level)
 
 
@@ -475,16 +436,8 @@ async def update_escalation_level(
     current_user: dict = Depends(get_current_user),
 ):
     """Update an escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
-    level = result.scalar_one_or_none()
-
-    if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
-
-    update_data = level_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(level, field, value)
-
+    level = await get_or_404(db, EscalationLevel, level_id)
+    apply_updates(level, level_data)
     await db.commit()
     await db.refresh(level)
     return EscalationLevelResponse.from_orm(level)
@@ -493,16 +446,11 @@ async def update_escalation_level(
 @router.delete("/escalation-levels/{level_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_escalation_level(
     level_id: int,
+    current_user: CurrentSuperuser,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
-    """Delete an escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
-    level = result.scalar_one_or_none()
-
-    if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
-
+    """Delete an escalation level (superuser only)."""
+    level = await get_or_404(db, EscalationLevel, level_id)
     await db.delete(level)
     await db.commit()
 

@@ -475,3 +475,68 @@ class InvestigationService:
             generated_by_id=generated_by_id,
             generated_by_role=generated_by_role,
         )
+
+
+async def get_or_create_default_template(
+    db: AsyncSession,
+    template_id: int,
+    created_by_id: int,
+) -> InvestigationTemplate:
+    """Get a template or create a default one if it doesn't exist.
+
+    When template_id is 1 and no template exists, auto-creates a default
+    Investigation Report Template with standard RCA sections. For any
+    other template_id, raises HTTP 404.
+    """
+    from fastapi import HTTPException
+    from fastapi import status as http_status
+
+    result = await db.execute(select(InvestigationTemplate).where(InvestigationTemplate.id == template_id))
+    template = result.scalar_one_or_none()
+
+    if template:
+        return template
+
+    if template_id != 1:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={
+                "error_code": "TEMPLATE_NOT_FOUND",
+                "message": f"Investigation template with ID {template_id} not found",
+                "details": {"template_id": template_id},
+            },
+        )
+
+    default_template = InvestigationTemplate(
+        id=1,
+        name="Default Investigation Template",
+        description="Standard investigation template for incidents, RTAs, and complaints",
+        version="1.0",
+        is_active=True,
+        structure={
+            "sections": [
+                {
+                    "id": "rca",
+                    "title": "Root Cause Analysis",
+                    "fields": [
+                        {"id": "problem_statement", "type": "text", "required": True},
+                        {"id": "root_cause", "type": "text", "required": True},
+                        {"id": "contributing_factors", "type": "array", "required": False},
+                        {"id": "corrective_actions", "type": "array", "required": True},
+                    ],
+                }
+            ]
+        },
+        applicable_entity_types=[
+            "road_traffic_collision",
+            "reporting_incident",
+            "complaint",
+            "near_miss",
+        ],
+        created_by_id=created_by_id,
+        updated_by_id=created_by_id,
+    )
+    db.add(default_template)
+    await db.commit()
+    await db.refresh(default_template)
+    return default_template

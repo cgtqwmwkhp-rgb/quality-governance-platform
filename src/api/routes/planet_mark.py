@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.planet_mark import (
     CarbonEvidence,
     CarbonReportingYear,
@@ -267,7 +269,7 @@ async def list_reporting_years(
     }
 
 
-@router.post("/years", response_model=dict, status_code=201)
+@router.post("/years", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_reporting_year(
     year_data: ReportingYearCreate,
     db: DbSession,
@@ -302,10 +304,7 @@ async def get_reporting_year(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get detailed reporting year data"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    year = await get_or_404(db, CarbonReportingYear, year_id)
 
     # Get emission sources
     result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
@@ -364,17 +363,14 @@ async def get_reporting_year(
 # ============ Emission Sources ============
 
 
-@router.post("/years/{year_id}/sources", response_model=dict, status_code=201)
+@router.post("/years/{year_id}/sources", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
     db: DbSession,
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    year = await get_or_404(db, CarbonReportingYear, year_id)
 
     # Auto-calculate emissions using DEFRA factors
     ef_key = source_data.activity_type
@@ -549,17 +545,14 @@ async def list_improvement_actions(
     }
 
 
-@router.post("/years/{year_id}/actions", response_model=dict, status_code=201)
+@router.post("/years/{year_id}/actions", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
     db: DbSession,
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    await get_or_404(db, CarbonReportingYear, year_id)
 
     count_result = await db.execute(
         select(func.count()).select_from(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
@@ -598,10 +591,7 @@ async def update_action_status(
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
 
-    for key, value in status_data.model_dump(exclude_unset=True).items():
-        setattr(action, key, value)
-
-    action.updated_at = datetime.utcnow()
+    apply_updates(action, status_data)
     await db.commit()
 
     return {"message": "Action updated", "id": action.id}
@@ -616,10 +606,7 @@ async def get_data_quality_assessment(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get data quality assessment with recommendations"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    year = await get_or_404(db, CarbonReportingYear, year_id)
 
     result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
     sources = result.scalars().all()
@@ -681,17 +668,14 @@ async def get_data_quality_assessment(
 # ============ Fleet Integration ============
 
 
-@router.post("/years/{year_id}/fleet", response_model=dict, status_code=201)
+@router.post("/years/{year_id}/fleet", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
     db: DbSession,
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    await get_or_404(db, CarbonReportingYear, year_id)
 
     # Calculate emissions
     ef = EMISSION_FACTORS.get(f"{fleet_data.fuel_type.lower()}_litres", EMISSION_FACTORS["diesel_litres"])
@@ -774,17 +758,14 @@ async def get_fleet_summary(
 # ============ Utility Integration ============
 
 
-@router.post("/years/{year_id}/utilities", response_model=dict, status_code=201)
+@router.post("/years/{year_id}/utilities", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
     db: DbSession,
 ) -> dict[str, Any]:
     """Add utility meter reading"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    await get_or_404(db, CarbonReportingYear, year_id)
 
     reading = UtilityMeterReading(
         reporting_year_id=year_id,
@@ -806,10 +787,7 @@ async def get_certification_status(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get certification status and evidence checklist"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
-    year = result.scalar_one_or_none()
-    if not year:
-        raise HTTPException(status_code=404, detail="Reporting year not found")
+    year = await get_or_404(db, CarbonReportingYear, year_id)
 
     result = await db.execute(select(CarbonEvidence).where(CarbonEvidence.reporting_year_id == year_id))
     evidence = result.scalars().all()

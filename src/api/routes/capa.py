@@ -8,9 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import CurrentUser, DbSession
+from src.api.deps import CurrentSuperuser, CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -78,21 +82,9 @@ async def list_capa_actions(
             CAPAAction.status.notin_([CAPAStatus.CLOSED]),
         )
 
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = count_result.scalar_one()
-
-    offset = (page - 1) * page_size
-    query = query.order_by(CAPAAction.created_at.desc()).offset(offset).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
-
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "pages": (total + page_size - 1) // page_size if total > 0 else 0,
-    }
+    query = query.order_by(CAPAAction.created_at.desc())
+    params = PaginationParams(page=page, page_size=page_size)
+    return await paginate(db, query, params)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -111,6 +103,21 @@ async def create_capa_action(
     db.add(action)
     await db.commit()
     await db.refresh(action)
+    track_metric("capa.created")
+
+    from src.domain.services.audit_service import record_audit_event
+
+    await record_audit_event(
+        db=db,
+        event_type="capa.created",
+        entity_type="capa",
+        entity_id=str(action.id),
+        action="create",
+        description=f"CAPA {action.reference_number} created",
+        payload=data.model_dump(mode="json"),
+        user_id=current_user.id,
+    )
+
     return action
 
 
@@ -142,11 +149,7 @@ async def get_capa_action(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    result = await db.execute(select(CAPAAction).where(CAPAAction.id == capa_id))
-    action = result.scalar_one_or_none()
-    if not action:
-        raise HTTPException(status_code=404, detail="CAPA action not found")
-    return action
+    return await get_or_404(db, CAPAAction, capa_id)
 
 
 @router.patch("/{capa_id}")
@@ -156,16 +159,8 @@ async def update_capa_action(
     current_user: CurrentUser,
     data: CAPAUpdate,
 ):
-    result = await db.execute(select(CAPAAction).where(CAPAAction.id == capa_id))
-    action = result.scalar_one_or_none()
-    if not action:
-        raise HTTPException(status_code=404, detail="CAPA action not found")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(action, key, value)
-    action.updated_at = datetime.utcnow()
-
+    action = await get_or_404(db, CAPAAction, capa_id)
+    apply_updates(action, data)
     await db.commit()
     await db.refresh(action)
     return action
@@ -178,10 +173,7 @@ async def transition_capa_status(
     current_user: CurrentUser,
     data: CAPAStatusTransition,
 ):
-    result = await db.execute(select(CAPAAction).where(CAPAAction.id == capa_id))
-    action = result.scalar_one_or_none()
-    if not action:
-        raise HTTPException(status_code=404, detail="CAPA action not found")
+    action = await get_or_404(db, CAPAAction, capa_id)
 
     valid_transitions = {
         CAPAStatus.OPEN: [CAPAStatus.IN_PROGRESS],
@@ -193,7 +185,7 @@ async def transition_capa_status(
     current = action.status
     if data.status not in valid_transitions.get(current, []):
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot transition from {current} to {data.status}",
         )
 
@@ -203,6 +195,20 @@ async def transition_capa_status(
     elif data.status == CAPAStatus.CLOSED:
         action.verified_at = datetime.utcnow()
         action.verified_by_id = current_user.id
+        track_metric("capa.closed")
+
+    from src.domain.services.audit_service import record_audit_event
+
+    await record_audit_event(
+        db=db,
+        event_type="capa.status_changed",
+        entity_type="capa",
+        entity_id=str(action.id),
+        action="update",
+        description=f"CAPA {action.reference_number} transitioned from {current} to {data.status}",
+        payload={"from_status": str(current), "to_status": str(data.status), "comment": data.comment},
+        user_id=current_user.id,
+    )
 
     await db.commit()
     await db.refresh(action)
@@ -213,11 +219,22 @@ async def transition_capa_status(
 async def delete_capa_action(
     capa_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ):
-    result = await db.execute(select(CAPAAction).where(CAPAAction.id == capa_id))
-    action = result.scalar_one_or_none()
-    if not action:
-        raise HTTPException(status_code=404, detail="CAPA action not found")
+    action = await get_or_404(db, CAPAAction, capa_id)
+
+    from src.domain.services.audit_service import record_audit_event
+
+    await record_audit_event(
+        db=db,
+        event_type="capa.deleted",
+        entity_type="capa",
+        entity_id=str(action.id),
+        action="delete",
+        description=f"CAPA {action.reference_number} deleted",
+        payload={"capa_id": capa_id, "reference_number": action.reference_number},
+        user_id=current_user.id,
+    )
+
     await db.delete(action)
     await db.commit()

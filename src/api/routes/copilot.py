@@ -95,9 +95,8 @@ async def create_session(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
-    user_id = 1
+    tenant_id = getattr(current_user, "tenant_id", 1)
+    user_id = current_user.id
 
     session = await service.create_session(
         tenant_id=tenant_id,
@@ -118,8 +117,7 @@ async def get_active_session(db: DbSession, current_user: CurrentUser):
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    user_id = 1
+    user_id = current_user.id
 
     session = await service.get_active_session(user_id)
     return session
@@ -159,8 +157,7 @@ async def list_sessions(
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
 
-    # TODO: Get from auth
-    user_id = 1
+    user_id = current_user.id
 
     stmt = (
         select(CopilotSession)
@@ -191,8 +188,7 @@ async def send_message(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    user_id = 1
+    user_id = current_user.id
 
     try:
         message = await service.send_message(
@@ -233,9 +229,8 @@ async def submit_feedback(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
-    user_id = 1
+    tenant_id = getattr(current_user, "tenant_id", 1)
+    user_id = current_user.id
 
     try:
         feedback = await service.submit_feedback(
@@ -382,8 +377,7 @@ async def search_knowledge(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
+    tenant_id = getattr(current_user, "tenant_id", 1)
 
     results = await service.search_knowledge(
         query=query,
@@ -418,8 +412,7 @@ async def add_knowledge(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
+    tenant_id = getattr(current_user, "tenant_id", 1)
 
     knowledge = await service.add_knowledge(
         title=title,
@@ -459,10 +452,25 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: int):
+async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optional[str] = Query(None)):
     """WebSocket endpoint for real-time chat."""
     from src.domain.services.copilot_service import CopilotService
     from src.infrastructure.database import get_db
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+    try:
+        from src.core.security import decode_token
+
+        payload = decode_token(token)
+        if not payload:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        ws_user_id = int(payload.get("sub", 0))
+    except Exception:
+        await websocket.close(code=4001, reason="Token validation failed")
+        return
 
     await manager.connect(websocket, session_id)
 
@@ -478,7 +486,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         message = await service.send_message(
                             session_id=session_id,
                             content=data["content"],
-                            user_id=data.get("user_id", 1),
+                            user_id=ws_user_id,
                         )
 
                         await manager.send_message(
@@ -503,8 +511,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                     elif data.get("type") == "feedback":
                         await service.submit_feedback(
                             message_id=data["message_id"],
-                            user_id=data.get("user_id", 1),
-                            tenant_id=1,
+                            user_id=ws_user_id,
+                            tenant_id=int(payload.get("tenant_id", 1)),
                             rating=data["rating"],
                             feedback_type=data.get("feedback_type", "other"),
                         )
