@@ -10,9 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
     EscalationLevelListResponse,
@@ -31,6 +28,9 @@ from src.api.schemas.workflow import (
     WorkflowRuleResponse,
     WorkflowRuleUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
