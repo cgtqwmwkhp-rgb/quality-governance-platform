@@ -467,6 +467,81 @@ async def liveness_check(request: Request) -> dict:
     }
 
 
+async def _check_database() -> str:
+    from sqlalchemy import text
+
+    from src.infrastructure.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+        return "healthy"
+    except Exception:
+        return "unhealthy"
+
+
+async def _check_redis() -> str:
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url)
+        await r.ping()
+        await r.aclose()
+        return "healthy"
+    except Exception:
+        return "unavailable"
+
+
+def _check_celery() -> str:
+    celery_url = settings.celery_broker_url or settings.redis_url
+    if not celery_url:
+        return "not_configured"
+    try:
+        from src.infrastructure.tasks.celery_app import celery_app
+
+        inspect = celery_app.control.inspect(timeout=2.0)
+        active = inspect.active()
+        return "ok" if active else "no_workers"
+    except Exception as e:
+        return f"error: {str(e)[:100]}"
+
+
+def _check_azure_storage() -> str:
+    storage_conn = settings.azure_storage_connection_string or None
+    if not storage_conn:
+        return "not_configured"
+    try:
+        from azure.storage.blob import BlobServiceClient
+
+        blob_client = BlobServiceClient.from_connection_string(storage_conn)
+        blob_client.get_account_information()
+        return "ok"
+    except ImportError:
+        return "sdk_not_installed"
+    except Exception as e:
+        return f"error: {str(e)[:100]}"
+
+
+def _collect_circuit_breaker_health() -> list[dict]:
+    result: list[dict] = []
+    modules = [
+        ("src.domain.services.email_service", "_email_circuit"),
+        ("src.domain.services.sms_service", "_sms_circuit"),
+        ("src.domain.services.document_ai_service", "_ai_circuit"),
+        ("src.domain.services.ai_models", "_ai_models_circuit"),
+    ]
+    for mod_path, attr_name in modules:
+        try:
+            import importlib
+
+            mod = importlib.import_module(mod_path)
+            circuit = getattr(mod, attr_name)
+            result.append(circuit.get_health())
+        except Exception:
+            pass
+    return result
+
+
 @app.get("/readyz", tags=["Health"])
 async def readiness_check(request: Request, verbose: bool = False):
     """Readiness probe: Check if application is ready to accept traffic.
@@ -476,96 +551,15 @@ async def readiness_check(request: Request, verbose: bool = False):
 
     Per ADR-0003: Readiness Probe Database Check
     """
-    from sqlalchemy import text
+    checks: dict[str, str] = {
+        "database": await _check_database(),
+        "redis": await _check_redis(),
+        "celery": _check_celery(),
+        "azure_storage": _check_azure_storage(),
+    }
 
-    from src.infrastructure.database import async_session_maker
-
-    checks: dict[str, str] = {}
-
-    # Database check
-    try:
-        async with async_session_maker() as session:
-            await session.execute(text("SELECT 1"))
-        checks["database"] = "healthy"
-    except Exception:
-        checks["database"] = "unhealthy"
-
-    # Redis check
-    try:
-        import redis.asyncio as aioredis
-
-        r = aioredis.from_url(settings.redis_url)
-        await r.ping()
-        await r.aclose()
-        checks["redis"] = "healthy"
-    except Exception:
-        checks["redis"] = "unavailable"
-
-    # Check Celery workers (if configured)
-    celery_url = settings.celery_broker_url or settings.redis_url
-    if celery_url:
-        try:
-            from src.infrastructure.tasks.celery_app import celery_app
-
-            inspect = celery_app.control.inspect(timeout=2.0)
-            active = inspect.active()
-            if active:
-                checks["celery"] = "ok"
-            else:
-                checks["celery"] = "no_workers"
-        except Exception as e:
-            checks["celery"] = f"error: {str(e)[:100]}"
-    else:
-        checks["celery"] = "not_configured"
-
-    # Check Azure Storage (if configured)
-    storage_conn = settings.azure_storage_connection_string or None
-    if storage_conn:
-        try:
-            from azure.storage.blob import BlobServiceClient
-
-            blob_client = BlobServiceClient.from_connection_string(storage_conn)
-            blob_client.get_account_information()
-            checks["azure_storage"] = "ok"
-        except ImportError:
-            checks["azure_storage"] = "sdk_not_installed"
-        except Exception as e:
-            checks["azure_storage"] = f"error: {str(e)[:100]}"
-    else:
-        checks["azure_storage"] = "not_configured"
-
-    # Circuit breaker health
-    circuit_breaker_health: list[dict] = []
-    try:
-        from src.domain.services.email_service import _email_circuit
-
-        circuit_breaker_health.append(_email_circuit.get_health())
-    except Exception:
-        pass
-    try:
-        from src.domain.services.sms_service import _sms_circuit
-
-        circuit_breaker_health.append(_sms_circuit.get_health())
-    except Exception:
-        pass
-    try:
-        from src.domain.services.document_ai_service import _ai_circuit
-
-        circuit_breaker_health.append(_ai_circuit.get_health())
-    except Exception:
-        pass
-    try:
-        from src.domain.services.ai_models import _ai_models_circuit
-
-        circuit_breaker_health.append(_ai_models_circuit.get_health())
-    except Exception:
-        pass
-
-    all_healthy = all(
-        v in ("healthy", "ok")
-        for v in checks.values()
-        if v not in ("unavailable", "not_configured", "sdk_not_installed")
-    )
+    ignored = ("unavailable", "not_configured", "sdk_not_installed")
+    all_healthy = all(v in ("healthy", "ok") for v in checks.values() if v not in ignored)
 
     request_id = getattr(request.state, "request_id", "N/A")
     response: dict[str, object] = {
@@ -577,7 +571,7 @@ async def readiness_check(request: Request, verbose: bool = False):
 
     if verbose:
         response["checks"] = checks
-        response["circuit_breakers"] = circuit_breaker_health
+        response["circuit_breakers"] = _collect_circuit_breaker_health()
 
     status_code = 200 if all_healthy else 503
     return JSONResponse(content=response, status_code=status_code)
