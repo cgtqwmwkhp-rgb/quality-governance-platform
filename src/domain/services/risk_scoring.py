@@ -81,7 +81,8 @@ class RiskScoringService:
                 select(Risk).where(
                     and_(
                         Risk.department == incident.department,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
-                        Risk.is_active == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                        Risk.is_active
+                        == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                     )
                 )
             )
@@ -695,8 +696,10 @@ class KRIService:
         result = await self.db.execute(
             select(KeyRiskIndicator).where(
                 and_(
-                    KeyRiskIndicator.is_active == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
-                    KeyRiskIndicator.auto_calculate == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    KeyRiskIndicator.is_active
+                    == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    KeyRiskIndicator.auto_calculate
+                    == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -757,8 +760,10 @@ class KRIService:
         alert_result = await self.db.execute(
             select(func.count(KRIAlert.id)).where(
                 and_(
-                    KRIAlert.is_acknowledged == False,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
-                    KRIAlert.is_resolved == False,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    KRIAlert.is_acknowledged
+                    == False,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    KRIAlert.is_resolved
+                    == False,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )

@@ -429,7 +429,9 @@ class ABACService:
                     # Handle variable substitution
                     if isinstance(value, str) and value.startswith("$subject."):
                         if subject_context:
-                            value = subject_context.get(value[9:])  # Skip "$subject."  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+                            value = subject_context.get(
+                                value[9:]
+                            )  # Skip "$subject."  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
 
                     if not self._compare(actual, op, value):
                         return False
