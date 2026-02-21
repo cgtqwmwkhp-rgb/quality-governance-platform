@@ -112,9 +112,7 @@ def test_disabled_without_credentials():
 
 def test_enabled_with_credentials():
     """EmailService is enabled when both SMTP_USER and SMTP_PASSWORD are set."""
-    mock_settings = _make_mock_settings(
-        smtp_user="user@example.com", smtp_password="pass"
-    )
+    mock_settings = _make_mock_settings(smtp_user="user@example.com", smtp_password="pass")
     with patch("src.domain.services.email_service.settings", mock_settings):
         svc = EmailService()
     assert svc.enabled is True
