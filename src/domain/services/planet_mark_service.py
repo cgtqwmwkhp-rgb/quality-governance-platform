@@ -6,7 +6,9 @@ data quality scoring, fleet efficiency, and certification readiness.
 
 from __future__ import annotations
 
-EMISSION_FACTORS = {
+from typing import Any
+
+EMISSION_FACTORS: dict[str, dict[str, Any]] = {
     "diesel_litres": {"factor": 2.51229, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
     "petrol_litres": {"factor": 2.16802, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
     "natural_gas_kwh": {"factor": 0.18254, "unit": "kgCO2e/kWh", "source": "DEFRA 2024"},
@@ -19,7 +21,7 @@ EMISSION_FACTORS = {
     "car_average_km": {"factor": 0.17081, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
 }
 
-DATA_QUALITY_CRITERIA = {
+DATA_QUALITY_CRITERIA: dict[str, dict[str, Any]] = {
     "actual": {"score": 4, "label": "Actual metered/verified data"},
     "calculated": {"score": 3, "label": "Calculated from activity data"},
     "estimated": {"score": 2, "label": "Estimates from proxy data"},
