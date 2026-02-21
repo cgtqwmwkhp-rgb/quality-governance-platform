@@ -17,7 +17,11 @@ class TestCeleryConfiguration:
         """Test expected queues are configured."""
         from src.infrastructure.tasks.celery_app import celery_app
 
-        queue_names = {q.name for q in celery_app.conf.task_queues}
+        queues = celery_app.conf.task_queues
+        if isinstance(queues, dict):
+            queue_names = set(queues.keys())
+        else:
+            queue_names = {q.name if hasattr(q, "name") else str(q) for q in queues}
         expected = {"default", "email", "notifications", "reports", "cleanup"}
         assert expected.issubset(queue_names)
 

@@ -9,6 +9,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
 from src.api.schemas.investigation import (
     ClosureValidationResponse,
     CommentCreateRequest,
@@ -26,7 +27,6 @@ from src.api.schemas.investigation import (
     TimelineEventResponse,
     TimelineListResponse,
 )
-from src.api.utils.entity import get_or_404
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -161,7 +161,7 @@ async def list_investigations(
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     entity_id: Optional[int] = Query(None, description="Filter by entity ID"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
 ):
     """List investigation runs with pagination.
 
@@ -195,18 +195,18 @@ async def list_investigations(
     if entity_id is not None:
         query = query.where(InvestigationRun.assigned_entity_id == entity_id)
 
-    if status is not None:
+    if status_filter is not None:
         try:
-            status_enum = InvestigationStatus(status)
+            status_enum = InvestigationStatus(status_filter)
             query = query.where(InvestigationRun.status == status_enum)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error_code": "INVALID_STATUS",
-                    "message": f"Invalid status: {status}",
+                    "message": f"Invalid status: {status_filter}",
                     "details": {
-                        "status": status,
+                        "status": status_filter,
                         "valid_statuses": [s.value for s in InvestigationStatus],
                     },
                     "request_id": request_id,
@@ -556,17 +556,14 @@ async def list_source_records(
         ref_num = getattr(record, "reference_number", f"REF-{record.id}")
 
         # Get status (safe enum value)
-        status = getattr(record, "status", "unknown")
-        if hasattr(status, "value"):
-            status = status.value
+        record_status = getattr(record, "status", "unknown")
+        if hasattr(record_status, "value"):
+            record_status = record_status.value
 
         # Format created_at as date only (no PII)
         created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
 
-        # === SAFE DISPLAY LABEL (NO PII) ===
-        # Format: "{reference_number} — {status} — {date}"
-        # This avoids exposing free-text fields that may contain PII
-        display_label = f"{ref_num} — {status.upper()} — {created_date}"
+        display_label = f"{ref_num} — {record_status.upper()} — {created_date}"
 
         # Check if already investigated
         existing_inv = existing_investigations.get(record.id)
@@ -576,7 +573,7 @@ async def list_source_records(
                 source_id=record.id,
                 display_label=display_label,
                 reference_number=ref_num,
-                status=status,
+                status=record_status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
                 investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
@@ -1275,10 +1272,10 @@ async def validate_investigation_closure(
     # Deduplicate reason codes (keep unique)
     unique_reason_codes = list(dict.fromkeys(reason_codes))
 
-    status = "OK" if not unique_reason_codes else "BLOCKED"
+    closure_status = "OK" if not unique_reason_codes else "BLOCKED"
 
     return ClosureValidationResponse(
-        status=status,
+        status=closure_status,
         reason_codes=unique_reason_codes,
         missing_fields=missing_fields,
         checked_at_utc=checked_at,
