@@ -9,8 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates

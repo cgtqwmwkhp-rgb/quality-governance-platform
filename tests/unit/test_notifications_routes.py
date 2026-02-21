@@ -1,9 +1,9 @@
 """Tests for notification API routes."""
 
 import functools
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def skip_on_import_error(test_func):
@@ -66,8 +66,9 @@ class TestNotificationsRoutes:
     @skip_on_import_error
     def test_notification_response_schema(self):
         """Test NotificationResponse schema."""
-        from src.api.routes.notifications import NotificationResponse
         from datetime import datetime
+
+        from src.api.routes.notifications import NotificationResponse
 
         notif = NotificationResponse(
             id=1,

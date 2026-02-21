@@ -1,9 +1,9 @@
 """Tests for form configuration API routes."""
 
 import functools
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def skip_on_import_error(test_func):

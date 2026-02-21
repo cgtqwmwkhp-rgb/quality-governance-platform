@@ -8,9 +8,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates

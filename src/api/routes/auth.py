@@ -10,7 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.auth import (
     LoginRequest,
     PasswordChangeRequest,
@@ -19,6 +18,7 @@ from src.api.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (

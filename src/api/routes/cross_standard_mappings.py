@@ -136,7 +136,7 @@ async def update_mapping(
     return MappingResponse.model_validate(mapping)
 
 
-@router.delete("/{mapping_id}", response_model=dict, status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{mapping_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_mapping(
     mapping_id: int,
     db: DbSession,

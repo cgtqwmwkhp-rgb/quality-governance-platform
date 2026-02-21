@@ -11,7 +11,6 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.auditor_competence import (
     AuditorProfileCreateResponse,
     AuditorProfileResponse,
@@ -21,12 +20,13 @@ from src.api.schemas.auditor_competence import (
     CompetenceScoreResponse,
     CompetencyAssessmentResponse,
     CompetencyGapsResponse,
-    ExpiringCertificationsResponse,
     ExpiredCertificationsUpdateResponse,
+    ExpiringCertificationsResponse,
     QualifiedAuditorsResponse,
     TrainingCompleteResponse,
     TrainingCreateResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.domain.services.auditor_competence import AuditorCompetenceService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
