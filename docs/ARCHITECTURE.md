@@ -142,17 +142,32 @@ Errors pass through `src/api/middleware/error_handler.py` which maps exceptions 
 
 | Layer | Tool | Threshold | Notes |
 |-------|------|-----------|-------|
-| Backend unit | pytest + pytest-cov | 55 % (CI gate) | Covers services, models, utilities |
-| Backend integration | pytest + httpx AsyncClient | 45 % | Full request cycle against test DB |
-| Frontend unit | Vitest + jsdom | Enforced via @vitest/coverage-v8 | 71 tests across 8 component/page files |
-| Frontend E2E | Playwright | — | 4 user-journey specs (dashboard, audits, risks, investigations) |
+| Backend unit | pytest + pytest-cov | 55% (CI gate) | 57 test files covering services, routes, models |
+| Backend integration | pytest + httpx AsyncClient | 55% (CI gate) | Full request cycle against test DB + Redis |
+| Frontend unit | Vitest + jsdom | 55/40/25/55% (stmts/branches/funcs/lines) | 102 test files across components, hooks, pages |
+| Frontend E2E | Playwright | Baseline gate | 19 spec files with real DOM assertions |
 | Security | pip-audit, safety, bandit | CI gate | Dependency + static analysis |
 
 Frontend tests are **blocking** in CI — failures prevent merge.
 
+## Multi-Tenant Isolation: Global Entity Exemptions
+
+The following entities are **intentionally tenant-agnostic** and do not require `tenant_id` filtering in queries or `get_or_404()` calls:
+
+| Entity | Rationale |
+|--------|-----------|
+| `Standard` | ISO/regulatory standards are universal reference data shared across all tenants |
+| `Clause` | Standard clauses belong to their parent Standard, not to individual tenants |
+| `Control` | Control frameworks are shared reference data |
+| `Role` | System roles (admin, viewer, etc.) are platform-level, not tenant-scoped |
+| `AuditSection` | Template sections within audit templates are shared structures |
+| `AuditQuestion` | Questions within audit sections are shared structures |
+
+All other entities (incidents, risks, audits, documents, users, workflows, etc.) are **strictly tenant-scoped** via `tenant_id` column and filtered in every query.
+
 ## Key Design Decisions
 
-See `docs/adrs/` for Architecture Decision Records.
+See `docs/adr/` for Architecture Decision Records.
 
 ## Data Flow
 

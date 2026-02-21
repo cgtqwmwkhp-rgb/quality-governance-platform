@@ -22,9 +22,13 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar, Union
 
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+_RECOVERY_INTERVAL = int(os.getenv("CACHE_RECOVERY_INTERVAL", "60"))
 
 
 class CacheType(Enum):
@@ -141,6 +145,7 @@ class RedisCache:
         self._fallback = InMemoryCache()
         self._use_fallback = False
         self._consecutive_failures = 0
+        self._recovery_task: Optional[asyncio.Task] = None
 
     async def _get_redis(self):
         """Get or create Redis connection with explicit pool config and retry."""
@@ -168,6 +173,7 @@ class RedisCache:
                 if self._consecutive_failures >= self._MAX_RETRIES:
                     print("[Cache] Max retries reached, falling back to in-memory cache")
                     self._use_fallback = True
+                    self._start_recovery_timer()
         return self._redis
 
     async def reconnect(self) -> bool:
@@ -180,7 +186,82 @@ class RedisCache:
         self._consecutive_failures = 0
         self._redis = None
         conn = await self._get_redis()
+        if conn is not None:
+            self._stop_recovery_timer()
         return conn is not None
+
+    def _start_recovery_timer(self) -> None:
+        """Start background task that periodically attempts Redis reconnection."""
+        if self._recovery_task is not None and not self._recovery_task.done():
+            return
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                self._recovery_task = loop.create_task(self._recovery_loop())
+        except RuntimeError:
+            pass
+
+    def _stop_recovery_timer(self) -> None:
+        """Cancel the recovery background task."""
+        if self._recovery_task is not None and not self._recovery_task.done():
+            self._recovery_task.cancel()
+            self._recovery_task = None
+
+    async def _recovery_loop(self) -> None:
+        """Periodically attempt to reconnect to Redis."""
+        while self._use_fallback:
+            await asyncio.sleep(_RECOVERY_INTERVAL)
+            if not self._use_fallback:
+                break
+            try:
+                import redis.asyncio as aioredis
+                from redis.asyncio.connection import ConnectionPool
+
+                pool = ConnectionPool.from_url(
+                    self._redis_url,
+                    max_connections=20,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                    retry_on_timeout=True,
+                    decode_responses=False,
+                    health_check_interval=30,
+                )
+                client = aioredis.Redis(connection_pool=pool)
+                await client.ping()
+                self._redis = client
+                self._use_fallback = False
+                self._consecutive_failures = 0
+                logger.info("[Cache] Auto-recovery succeeded – switched back to Redis")
+            except Exception as exc:
+                logger.debug("[Cache] Auto-recovery attempt failed: %s", exc)
+
+    async def get_hit_rate(self) -> float:
+        """Calculate and report cache hit-rate percentage.
+
+        Uses Redis INFO keyspace_hits/keyspace_misses when connected,
+        otherwise falls back to in-memory cache stats.
+        """
+        if self._use_fallback:
+            stats = await self._fallback.get_stats()
+            hit_rate = stats.get("hit_rate", 0.0)
+        else:
+            redis = await self._get_redis()
+            if redis is None:
+                stats = await self._fallback.get_stats()
+                hit_rate = stats.get("hit_rate", 0.0)
+            else:
+                try:
+                    info = await redis.info("stats")
+                    hits = info.get("keyspace_hits", 0)
+                    misses = info.get("keyspace_misses", 0)
+                    total = hits + misses
+                    hit_rate = round((hits / total) * 100, 2) if total > 0 else 0.0
+                except Exception as e:
+                    logger.warning("[Cache] Failed to retrieve hit rate: %s", e)
+                    hit_rate = 0.0
+
+        track_metric("cache.hit_rate", hit_rate)
+        return hit_rate
 
     def _make_key(self, key: str) -> str:
         """Create prefixed key."""

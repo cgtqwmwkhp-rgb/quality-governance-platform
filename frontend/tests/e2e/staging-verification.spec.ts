@@ -115,7 +115,7 @@ test.describe('Staging UI Verification (Release Gate)', () => {
       const isAuth = await isAuthPage(page);
       if (isAuth) {
         // Auth page is acceptable
-        expect(true).toBe(true);
+        expect(isAuth).toBe(true);
         return;
       }
       
@@ -268,8 +268,8 @@ test.describe('Staging UI Verification (Release Gate)', () => {
         console.log('Console errors detected:', criticalErrors);
       }
       
-      // This test always passes - it's advisory
-      expect(true).toBe(true);
+      // Fail if any critical console errors were detected
+      expect(criticalErrors).toEqual([]);
     });
   });
 });

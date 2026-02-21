@@ -33,11 +33,13 @@ import {
   FileSignature,
   Bot,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import AICopilot from './copilot/AICopilot'
+import KeyboardShortcutHelp from './KeyboardShortcutHelp'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
 import { cn } from "../helpers/utils"
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 
 interface LayoutProps {
   onLogout: () => void
@@ -115,17 +117,17 @@ export default function Layout({ onLogout }: LayoutProps) {
   const [copilotOpen, setCopilotOpen] = useState(false)
   const navigate = useNavigate()
 
-  // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        navigate('/search')
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate])
+  const shortcuts = useMemo(() => [
+    {
+      key: 'k',
+      modifiers: ['meta' as const],
+      description: 'Open global search',
+      action: () => navigate('/search'),
+      scope: 'Navigation',
+    },
+  ], [navigate])
+
+  useKeyboardShortcuts(shortcuts)
 
   return (
     <div className="min-h-screen bg-background">
@@ -317,6 +319,9 @@ export default function Layout({ onLogout }: LayoutProps) {
         onClose={() => setCopilotOpen(false)}
         currentPage={window.location.pathname}
       />
+
+      {/* Keyboard Shortcut Help (? key) */}
+      <KeyboardShortcutHelp />
     </div>
   )
 }

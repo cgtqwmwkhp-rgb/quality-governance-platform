@@ -52,8 +52,7 @@ describe('SystemSettings', () => {
         <SystemSettings />
       </MemoryRouter>
     );
-    await screen.findByText('System Settings');
-    const brandingElements = screen.getAllByText('Branding');
+    const brandingElements = await screen.findAllByText('Branding');
     expect(brandingElements.length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Contact Details').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Notifications').length).toBeGreaterThanOrEqual(1);

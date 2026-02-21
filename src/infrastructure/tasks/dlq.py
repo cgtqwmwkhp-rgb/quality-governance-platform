@@ -9,8 +9,10 @@ import os
 from datetime import datetime, timezone
 
 from celery.signals import task_failure
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session
+
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -51,20 +53,16 @@ def _persist_failed_task(
             )
             session.add(record)
             session.commit()
+
+            count = session.query(func.count(FailedTask.id)).scalar()
+            track_metric("dlq.size", count)
     except Exception:
         logger.exception("Failed to persist task to DLQ table")
 
 
 @task_failure.connect
 def handle_task_failure(
-    sender=None,
-    task_id=None,
-    exception=None,
-    args=None,
-    kwargs=None,
-    traceback=None,
-    einfo=None,
-    **kw,
+    sender=None, task_id=None, exception=None, args=None, kwargs=None, traceback=None, einfo=None, **kw
 ):
     """Handle permanently failed tasks by logging to database."""
     task_name = sender.name if sender else "unknown"

@@ -71,7 +71,7 @@ test.describe('User Management', () => {
       const hasRoleButton = await roleButton.isVisible().catch(() => false);
       const hasTabs = await tabs.first().isVisible().catch(() => false);
       if (hasRoleFilter || hasRoleButton || hasTabs) {
-        expect(true).toBeTruthy();
+        expect(hasRoleFilter || hasRoleButton || hasTabs).toBeTruthy();
       } else {
         await expect(page.getByRole('heading', { name: /Users|User Management/i })).toBeVisible();
       }

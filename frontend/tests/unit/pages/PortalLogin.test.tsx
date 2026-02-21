@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../src/config/apiBase', () => ({
@@ -41,12 +42,61 @@ vi.mock('../../../src/components/ui/ThemeToggle', () => ({
 import PortalLogin from '../../../src/pages/PortalLogin';
 
 describe('PortalLogin', () => {
-  it('renders without crashing', () => {
+  it('renders the Employee Portal heading', async () => {
     render(
       <MemoryRouter>
         <PortalLogin />
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+    expect(await screen.findByText('Employee Portal')).toBeInTheDocument();
+  });
+
+  it('renders the sign-in subtitle', async () => {
+    render(
+      <MemoryRouter>
+        <PortalLogin />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Sign in with your Plantexpand account')).toBeInTheDocument();
+  });
+
+  it('renders the Microsoft sign-in button', async () => {
+    render(
+      <MemoryRouter>
+        <PortalLogin />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Sign in with Microsoft')).toBeInTheDocument();
+  });
+
+  it('renders the demo login button', async () => {
+    render(
+      <MemoryRouter>
+        <PortalLogin />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Continue as Demo User')).toBeInTheDocument();
+  });
+
+  it('renders the Admin Login link', async () => {
+    render(
+      <MemoryRouter>
+        <PortalLogin />
+      </MemoryRouter>
+    );
+    const adminLink = await screen.findByText('Admin Login →');
+    expect(adminLink).toBeInTheDocument();
+    expect(adminLink.closest('button')).not.toBeNull();
+  });
+
+  it('renders secure sign-in info items', async () => {
+    render(
+      <MemoryRouter>
+        <PortalLogin />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(/Your identity will be recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/Your name and details will be auto-filled/)).toBeInTheDocument();
+    expect(screen.getByText(/Track all your submitted reports/)).toBeInTheDocument();
   });
 });

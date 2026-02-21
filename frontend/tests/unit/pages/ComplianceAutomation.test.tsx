@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
@@ -44,12 +45,66 @@ vi.mock('../../../src/utils/auth', () => ({
 import ComplianceAutomation from '../../../src/pages/ComplianceAutomation';
 
 describe('ComplianceAutomation', () => {
-  it('renders without crashing', () => {
+  it('renders the heading', async () => {
     render(
       <MemoryRouter>
         <ComplianceAutomation />
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+    expect(await screen.findByText('Compliance Automation')).toBeInTheDocument();
+  });
+
+  it('renders the subtitle', async () => {
+    render(
+      <MemoryRouter>
+        <ComplianceAutomation />
+      </MemoryRouter>
+    );
+    expect(
+      await screen.findByText('Monitor regulations, track certificates, and automate compliance')
+    ).toBeInTheDocument();
+  });
+
+  it('renders the Refresh button', async () => {
+    render(
+      <MemoryRouter>
+        <ComplianceAutomation />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Refresh')).toBeInTheDocument();
+  });
+
+  it('renders the overall compliance score', async () => {
+    render(
+      <MemoryRouter>
+        <ComplianceAutomation />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('85.0%')).toBeInTheDocument();
+    expect(screen.getByText('Overall Compliance Score')).toBeInTheDocument();
+  });
+
+  it('renders tab navigation with all tabs', async () => {
+    render(
+      <MemoryRouter>
+        <ComplianceAutomation />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Certificates')).toBeInTheDocument();
+    expect(screen.getByText('Scheduled Audits')).toBeInTheDocument();
+    expect(screen.getByText('Compliance Score')).toBeInTheDocument();
+    expect(screen.getByText('RIDDOR')).toBeInTheDocument();
+  });
+
+  it('shows empty state for regulatory updates', async () => {
+    render(
+      <MemoryRouter>
+        <ComplianceAutomation />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('All caught up')).toBeInTheDocument();
+    expect(
+      screen.getByText('No regulatory updates require your attention.')
+    ).toBeInTheDocument();
   });
 });

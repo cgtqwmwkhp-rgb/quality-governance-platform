@@ -1,13 +1,40 @@
 """Integration Test Configuration."""
 
 import os
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, Generator
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from src.main import app
+
+TEST_JWT_SECRET = os.environ.get("JWT_SECRET_KEY", "test-jwt-secret-min16chars")
+TEST_JWT_ALGORITHM = "HS256"
+
+
+def _generate_test_jwt(
+    user_id: str = "test-user-integration-001",
+    tenant_id: int = 1,
+    role: str = "admin",
+    is_superuser: bool = False,
+) -> str:
+    """Generate a valid JWT for integration testing."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "exp": now + timedelta(hours=1),
+        "iat": now,
+        "type": "access",
+        "jti": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "role": role,
+        "is_superuser": is_superuser,
+    }
+    return jwt.encode(payload, TEST_JWT_SECRET, algorithm=TEST_JWT_ALGORITHM)
 
 
 @pytest.fixture
@@ -17,9 +44,6 @@ def sync_client() -> Generator[TestClient, None, None]:
     DEPRECATED: Prefer async `client` fixture to avoid event loop conflicts.
     See GOVPLAT-ASYNC-001: Mixing sync TestClient with async fixtures
     (asyncpg pools, etc.) causes "attached to a different loop" errors.
-
-    This fixture is kept for compatibility but should not be used in
-    tests that run alongside async tests in the same session.
     """
     with TestClient(app) as c:
         yield c
@@ -42,9 +66,10 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def auth_headers():
-    """Test authentication headers - quarantined."""
-    pytest.skip("QUARANTINED [GOVPLAT-003]: Auth headers require valid JWT. See tests/QUARANTINE_POLICY.yaml")
+def auth_headers() -> dict[str, str]:
+    """Test authentication headers with valid JWT."""
+    token = _generate_test_jwt()
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -54,27 +79,61 @@ def test_user_id() -> str:
 
 
 @pytest.fixture
-def superuser_auth_headers():
-    """Superuser authentication headers - quarantined."""
-    pytest.skip("QUARANTINED [GOVPLAT-003]: Superuser auth requires JWT. See tests/QUARANTINE_POLICY.yaml")
+def superuser_auth_headers() -> dict[str, str]:
+    """Superuser authentication headers with valid JWT."""
+    token = _generate_test_jwt(
+        user_id="test-superuser-001",
+        is_superuser=True,
+        role="superadmin",
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 async def test_session():
-    """Async database session - quarantined."""
-    pytest.skip("QUARANTINED [GOVPLAT-003]: Async DB session not configured. See tests/QUARANTINE_POLICY.yaml")
+    """Async database session -- requires DATABASE_URL in environment."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url or "sqlite" in db_url:
+        pytest.skip("Async DB session requires PostgreSQL DATABASE_URL")
+    try:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+        from sqlalchemy.orm import sessionmaker
+
+        engine = create_async_engine(db_url, echo=False)
+        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            yield session
+            await session.rollback()
+        await engine.dispose()
+    except Exception as exc:
+        pytest.skip(f"DB session setup failed: {exc}")
 
 
 @pytest.fixture
 def test_user():
-    """Test user fixture - quarantined."""
-    pytest.skip("QUARANTINED [GOVPLAT-003]: Test user requires DB session. See tests/QUARANTINE_POLICY.yaml")
+    """Test user fixture -- returns a mock user dict."""
+    return {
+        "id": "test-user-integration-001",
+        "email": "test@example.com",
+        "full_name": "Test User",
+        "tenant_id": 1,
+        "role": "admin",
+        "is_active": True,
+        "is_superuser": False,
+    }
 
 
 @pytest.fixture
 def test_incident():
-    """Test incident fixture - quarantined."""
-    pytest.skip("QUARANTINED [GOVPLAT-003]: Test incident requires DB session. See tests/QUARANTINE_POLICY.yaml")
+    """Test incident fixture -- returns a mock incident dict."""
+    return {
+        "title": "Integration Test Incident",
+        "description": "Created by integration test",
+        "severity": "medium",
+        "status": "open",
+        "tenant_id": 1,
+        "reported_by": "test-user-integration-001",
+    }
 
 
 @pytest.fixture(scope="session")
