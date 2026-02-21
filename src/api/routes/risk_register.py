@@ -16,8 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
+
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
     BowTieResponse,
@@ -28,19 +32,14 @@ from src.api.schemas.risk_register import (
     HeatMapResponse,
     KRICreatedResponse,
     KRIValueUpdatedResponse,
-)
-from src.api.schemas.risk_register import RiskAssessmentResponse as RiskAssessmentResultResponse
-from src.api.schemas.risk_register import RiskCreatedResponse
-from src.api.schemas.risk_register import RiskDetailResponse as RiskDetailResponseSchema
-from src.api.schemas.risk_register import (
+    RiskAssessmentResponse as RiskAssessmentResultResponse,
+    RiskCreatedResponse,
+    RiskDetailResponse as RiskDetailResponseSchema,
     RiskListResponse,
     RiskMatrixConfigResponse,
     RiskSummaryResponse,
     RiskUpdatedResponse,
 )
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -620,7 +619,7 @@ async def get_risk_summary(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get overall risk register summary"""
-    return await RiskRegisterService.get_risk_summary(db, current_user.tenant_id)
+    return await RiskRegisterService.get_risk_summary(db, int(current_user.tenant_id or 0))
 
 
 # ============ Individual Risk Detail (after all literal GET paths) ============

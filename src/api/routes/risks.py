@@ -9,6 +9,9 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
@@ -24,9 +27,6 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
@@ -136,7 +136,7 @@ async def get_risk_statistics(
     current_user: CurrentUser,
 ) -> RiskStatistics:
     """Get risk register statistics."""
-    data = await RiskStatisticsService.get_risk_statistics(db, current_user.tenant_id)
+    data = await RiskStatisticsService.get_risk_statistics(db, int(current_user.tenant_id or 0))
     return RiskStatistics(**data)
 
 
@@ -146,7 +146,7 @@ async def get_risk_matrix(
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
     """Get the risk matrix with risk counts per cell."""
-    data = await RiskStatisticsService.get_risk_matrix(db, current_user.tenant_id)
+    data = await RiskStatisticsService.get_risk_matrix(db, int(current_user.tenant_id or 0))
     return RiskMatrixResponse(**data)
 
 

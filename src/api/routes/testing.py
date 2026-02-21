@@ -229,7 +229,7 @@ async def ensure_test_user(
 @router.get("/health", response_model=TestingHealthResponse)
 async def testing_health() -> TestingHealthResponse:
     """Check if testing endpoints are available."""
-    return {
-        "available": is_staging_env(),
-        "environment": os.environ.get("APP_ENV", settings.app_env),
-    }
+    return TestingHealthResponse(
+        available=is_staging_env(),
+        environment=os.environ.get("APP_ENV", settings.app_env),
+    )
