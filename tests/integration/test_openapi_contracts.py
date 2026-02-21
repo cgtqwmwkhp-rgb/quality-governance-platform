@@ -133,9 +133,7 @@ class TestOpenAPIResponseSchemas:
         data = response.json()
 
         # Check response has error details
-        has_error_info = any(
-            key in data for key in ["detail", "error", "message", "error_code"]
-        )
+        has_error_info = any(key in data for key in ["detail", "error", "message", "error_code"])
         assert has_error_info, "401 response should include error details"
 
     @pytest.mark.asyncio

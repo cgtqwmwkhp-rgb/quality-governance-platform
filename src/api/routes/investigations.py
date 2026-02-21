@@ -103,9 +103,7 @@ async def validate_assigned_entity(
         )
 
 
-@router.post(
-    "/", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation(
     investigation_data: InvestigationRunCreate,
     db: DbSession,
@@ -124,9 +122,7 @@ async def create_investigation(
 
     request_id = "N/A"  # TODO: Get from request context
 
-    template = await get_or_create_default_template(
-        db, investigation_data.template_id, current_user.id
-    )
+    template = await get_or_create_default_template(db, investigation_data.template_id, current_user.id)
 
     # Validate assigned entity exists
     await validate_assigned_entity(
@@ -140,16 +136,12 @@ async def create_investigation(
     # Generate reference number
     from src.domain.services.reference_number import ReferenceNumberService
 
-    reference_number = await ReferenceNumberService.generate(
-        db, "investigation", InvestigationRun
-    )
+    reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
 
     # Create investigation run
     investigation = InvestigationRun(
         template_id=investigation_data.template_id,
-        assigned_entity_type=AssignedEntityType(
-            investigation_data.assigned_entity_type
-        ),
+        assigned_entity_type=AssignedEntityType(investigation_data.assigned_entity_type),
         assigned_entity_id=investigation_data.assigned_entity_id,
         title=investigation_data.title,
         description=investigation_data.description,
@@ -176,9 +168,7 @@ async def list_investigations(
     params: PaginationParams = Depends(),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     entity_id: Optional[int] = Query(None, description="Filter by entity ID"),
-    status_filter: Optional[str] = Query(
-        None, alias="status", description="Filter by status"
-    ),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
 ):
     """List investigation runs with pagination.
 
@@ -202,9 +192,7 @@ async def list_investigations(
     if entity_type is not None:
         try:
             entity_type_enum = AssignedEntityType(entity_type)
-            query = query.where(
-                InvestigationRun.assigned_entity_type == entity_type_enum
-            )
+            query = query.where(InvestigationRun.assigned_entity_type == entity_type_enum)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -241,9 +229,7 @@ async def list_investigations(
             )
 
     # Deterministic ordering: created_at DESC, id ASC
-    query = query.order_by(
-        InvestigationRun.created_at.desc(), InvestigationRun.id.asc()
-    )
+    query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
 
     return await paginate(db, query, params)
 
@@ -255,9 +241,7 @@ async def get_investigation(
     current_user: CurrentUser,
 ):
     """Get a specific investigation run by ID."""
-    return await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    return await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{investigation_id}", response_model=InvestigationRunResponse)
@@ -272,9 +256,7 @@ async def update_investigation(
     Only provided fields will be updated (partial update).
     Can update RCA section fields via the data field.
     """
-    investigation = await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Update fields
     update_data = investigation_data.model_dump(exclude_unset=True)
@@ -290,9 +272,7 @@ async def update_investigation(
     if investigation_data.status:
         if investigation_data.status == "in_progress" and not investigation.started_at:
             setattr(investigation, "started_at", datetime.utcnow())
-        elif (
-            investigation_data.status == "completed" and not investigation.completed_at
-        ):
+        elif investigation_data.status == "completed" and not investigation.completed_at:
             setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
             setattr(investigation, "closed_at", datetime.utcnow())
@@ -345,10 +325,7 @@ async def create_investigation_from_record(
         "request_id": "..."
     }
     """
-    from src.domain.services.investigation_service import (
-        InvestigationService,
-        get_or_create_default_template,
-    )
+    from src.domain.services.investigation_service import InvestigationService, get_or_create_default_template
     from src.domain.services.reference_number import ReferenceNumberService
 
     request_id = "N/A"  # TODO: Get from request context
@@ -388,9 +365,7 @@ async def create_investigation_from_record(
         )
 
     # Get source record
-    record, error = await InvestigationService.get_source_record(
-        db, source_type_enum, source_id
-    )
+    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
     if error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -406,21 +381,15 @@ async def create_investigation_from_record(
         )
 
     # Create source snapshot (immutable)
-    source_snapshot = InvestigationService.create_source_snapshot(
-        record, source_type_enum
-    )
+    source_snapshot = InvestigationService.create_source_snapshot(record, source_type_enum)
 
     # Map source to investigation data
-    data, mapping_log, level = InvestigationService.map_source_to_investigation(
-        record, source_type_enum
-    )
+    data, mapping_log, level = InvestigationService.map_source_to_investigation(record, source_type_enum)
 
     template = await get_or_create_default_template(db, template_id, current_user.id)
 
     # Generate reference number
-    reference_number = await ReferenceNumberService.generate(
-        db, "investigation", InvestigationRun
-    )
+    reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
 
     # Create investigation
     from src.domain.models.investigation import InvestigationLevel as InvLevel
@@ -461,9 +430,7 @@ async def create_investigation_from_record(
     )
 
     # Link source evidence assets to investigation
-    evidence_assets = await InvestigationService.get_source_evidence_assets(
-        db, source_type_enum, source_id
-    )
+    evidence_assets = await InvestigationService.get_source_evidence_assets(db, source_type_enum, source_id)
     for asset in evidence_assets:
         asset.linked_investigation_id = investigation.id
 
@@ -481,9 +448,7 @@ async def list_source_records(
         ...,
         description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)",
     ),
-    q: Optional[str] = Query(
-        None, description="Search query (searches title, reference)"
-    ),
+    q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     params: PaginationParams = Depends(),
 ):
     """List source records available for investigation creation.
@@ -567,9 +532,7 @@ async def list_source_records(
             base_query = base_query.where(or_(*search_conditions))
 
     # Apply deterministic ordering and paginate
-    base_query = base_query.order_by(
-        model_class.created_at.desc(), model_class.id.asc()
-    )
+    base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
     paginated = await paginate(db, base_query, params)
     records = list(paginated.items)
 
@@ -580,9 +543,7 @@ async def list_source_records(
         InvestigationRun.assigned_entity_id.in_(source_ids),
     )
     inv_result = await db.execute(inv_query)
-    existing_investigations = {
-        inv.assigned_entity_id: inv for inv in inv_result.scalars().all()
-    }
+    existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}
 
     # Build response items
     items = []
@@ -596,9 +557,7 @@ async def list_source_records(
             record_status = record_status.value
 
         # Format created_at as date only (no PII)
-        created_date = (
-            record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
-        )
+        created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
 
         display_label = f"{ref_num} — {record_status.upper()} — {created_date}"
 
@@ -613,9 +572,7 @@ async def list_source_records(
                 status=record_status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
-                investigation_reference=(
-                    str(existing_inv.reference_number) if existing_inv else None
-                ),
+                investigation_reference=(str(existing_inv.reference_number) if existing_inv else None),
             )
         )
 
@@ -646,9 +603,7 @@ async def autosave_investigation(
 
     request_id = "N/A"
 
-    investigation = await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Optimistic locking: check version
     if investigation.version != version:
@@ -716,9 +671,7 @@ async def add_comment(
 
     request_id = "N/A"
 
-    investigation = await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Validate parent comment if provided
     if request_body.parent_comment_id:
@@ -795,9 +748,7 @@ async def approve_investigation(
 
     request_id = "N/A"
 
-    investigation = await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Check status allows approval
     if investigation.status not in (
@@ -890,9 +841,7 @@ async def generate_customer_pack(
             },
         )
 
-    investigation = await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset
@@ -905,14 +854,12 @@ async def generate_customer_pack(
     evidence_assets = list(assets_result.scalars().all())
 
     # Generate pack with redaction
-    content, redaction_log, included_assets = (
-        InvestigationService.generate_customer_pack(
-            investigation=investigation,
-            audience=audience_enum,
-            evidence_assets=evidence_assets,
-            generated_by_id=current_user.id,
-            generated_by_role=None,  # TODO: Get user role
-        )
+    content, redaction_log, included_assets = InvestigationService.generate_customer_pack(
+        investigation=investigation,
+        audience=audience_enum,
+        evidence_assets=evidence_assets,
+        generated_by_id=current_user.id,
+        generated_by_role=None,  # TODO: Get user role
     )
 
     # Create pack entity
@@ -1013,14 +960,10 @@ async def get_investigation_timeline(
     Returns events in deterministic order: created_at DESC, then id DESC.
     Supports filtering by event_type and pagination.
     """
-    await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Build query for timeline events
-    query = select(InvestigationRevisionEvent).where(
-        InvestigationRevisionEvent.investigation_id == investigation_id
-    )
+    query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
 
     # Apply event_type filter if provided
     if event_type:
@@ -1062,9 +1005,7 @@ async def get_investigation_comments(
     db: DbSession,
     current_user: CurrentUser,
     params: PaginationParams = Depends(),
-    include_deleted: bool = Query(
-        False, description="Include soft-deleted comments (admin only)"
-    ),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
 ):
     """Get list of comments on an investigation.
 
@@ -1091,14 +1032,10 @@ async def get_investigation_comments(
                 },
             )
 
-    await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Build query for comments
-    query = select(InvestigationComment).where(
-        InvestigationComment.investigation_id == investigation_id
-    )
+    query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
 
     # Exclude soft-deleted by default
     if not include_deleted:
@@ -1144,14 +1081,10 @@ async def get_investigation_packs(
     Returns pack summaries (without full content) in deterministic order:
     created_at DESC, id DESC. Full pack content should be fetched separately.
     """
-    await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Build query for packs
-    query = select(InvestigationCustomerPack).where(
-        InvestigationCustomerPack.investigation_id == investigation_id
-    )
+    query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
 
     # Deterministic ordering: created_at DESC, id DESC
     query = query.order_by(
@@ -1193,9 +1126,7 @@ class ClosureReasonCode:
     STATUS_NOT_COMPLETE = "STATUS_NOT_COMPLETE"
 
 
-@router.get(
-    "/{investigation_id}/closure-validation", response_model=ClosureValidationResponse
-)
+@router.get("/{investigation_id}/closure-validation", response_model=ClosureValidationResponse)
 async def validate_investigation_closure(
     investigation_id: int,
     db: DbSession,
@@ -1216,17 +1147,13 @@ async def validate_investigation_closure(
     """
     checked_at = datetime.now(timezone.utc)
 
-    investigation = await get_or_404(
-        db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id
-    )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     reason_codes: List[str] = []
     missing_fields: List[str] = []
 
     # Get template
-    template_query = select(InvestigationTemplate).where(
-        InvestigationTemplate.id == investigation.template_id
-    )
+    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation.template_id)
     template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
 
@@ -1306,18 +1233,10 @@ async def validate_investigation_closure(
             if field_value is None:
                 reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
                 missing_fields.append(field_path)
-            elif (
-                field_type == "text"
-                and isinstance(field_value, str)
-                and not field_value.strip()
-            ):
+            elif field_type == "text" and isinstance(field_value, str) and not field_value.strip():
                 reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
                 missing_fields.append(field_path)
-            elif (
-                field_type == "array"
-                and isinstance(field_value, list)
-                and len(field_value) == 0
-            ):
+            elif field_type == "array" and isinstance(field_value, list) and len(field_value) == 0:
                 reason_codes.append(ClosureReasonCode.INVALID_ARRAY_EMPTY)
                 missing_fields.append(field_path)
 

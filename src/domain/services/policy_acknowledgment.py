@@ -70,9 +70,7 @@ class PolicyAcknowledgmentService:
     ) -> List[PolicyAcknowledgment]:
         """Assign acknowledgment tasks to users."""
         result = await self.db.execute(
-            select(PolicyAcknowledgmentRequirement).where(
-                PolicyAcknowledgmentRequirement.id == requirement_id
-            )
+            select(PolicyAcknowledgmentRequirement).where(PolicyAcknowledgmentRequirement.id == requirement_id)
         )
         requirement = result.scalar_one_or_none()
 
@@ -131,11 +129,7 @@ class PolicyAcknowledgmentService:
         user_agent: Optional[str] = None,
     ) -> PolicyAcknowledgment:
         """Record a user's acknowledgment of a policy."""
-        result = await self.db.execute(
-            select(PolicyAcknowledgment).where(
-                PolicyAcknowledgment.id == acknowledgment_id
-            )
-        )
+        result = await self.db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
         ack = result.scalar_one_or_none()
 
         if not ack:
@@ -143,9 +137,7 @@ class PolicyAcknowledgmentService:
 
         # Get requirement for quiz validation
         req_result = await self.db.execute(
-            select(PolicyAcknowledgmentRequirement).where(
-                PolicyAcknowledgmentRequirement.id == ack.requirement_id
-            )
+            select(PolicyAcknowledgmentRequirement).where(PolicyAcknowledgmentRequirement.id == ack.requirement_id)
         )
         requirement = req_result.scalar_one_or_none()
 
@@ -181,11 +173,7 @@ class PolicyAcknowledgmentService:
         acknowledgment_id: int,
     ) -> PolicyAcknowledgment:
         """Record when a user first opens a policy for reading."""
-        result = await self.db.execute(
-            select(PolicyAcknowledgment).where(
-                PolicyAcknowledgment.id == acknowledgment_id
-            )
-        )
+        result = await self.db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
         ack = result.scalar_one_or_none()
 
         if ack and not ack.first_opened_at:
@@ -201,11 +189,7 @@ class PolicyAcknowledgmentService:
         additional_seconds: int,
     ) -> PolicyAcknowledgment:
         """Update the time spent reading a policy."""
-        result = await self.db.execute(
-            select(PolicyAcknowledgment).where(
-                PolicyAcknowledgment.id == acknowledgment_id
-            )
-        )
+        result = await self.db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
         ack = result.scalar_one_or_none()
 
         if ack:
@@ -243,23 +227,13 @@ class PolicyAcknowledgmentService:
         policy_id: int,
     ) -> Dict[str, Any]:
         """Get acknowledgment status summary for a policy."""
-        result = await self.db.execute(
-            select(PolicyAcknowledgment).where(
-                PolicyAcknowledgment.policy_id == policy_id
-            )
-        )
+        result = await self.db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.policy_id == policy_id))
         acknowledgments = result.scalars().all()
 
         total = len(acknowledgments)
-        completed = sum(
-            1 for a in acknowledgments if a.status == AcknowledgmentStatus.COMPLETED
-        )
-        pending = sum(
-            1 for a in acknowledgments if a.status == AcknowledgmentStatus.PENDING
-        )
-        overdue = sum(
-            1 for a in acknowledgments if a.status == AcknowledgmentStatus.OVERDUE
-        )
+        completed = sum(1 for a in acknowledgments if a.status == AcknowledgmentStatus.COMPLETED)
+        pending = sum(1 for a in acknowledgments if a.status == AcknowledgmentStatus.PENDING)
+        overdue = sum(1 for a in acknowledgments if a.status == AcknowledgmentStatus.OVERDUE)
 
         return {
             "policy_id": policy_id,
@@ -299,18 +273,14 @@ class PolicyAcknowledgmentService:
 
         # Get all pending acknowledgments
         result = await self.db.execute(
-            select(PolicyAcknowledgment).where(
-                PolicyAcknowledgment.status == AcknowledgmentStatus.PENDING
-            )
+            select(PolicyAcknowledgment).where(PolicyAcknowledgment.status == AcknowledgmentStatus.PENDING)
         )
         pending = result.scalars().all()
 
         for ack in pending:
             # Get requirement for reminder days
             req_result = await self.db.execute(
-                select(PolicyAcknowledgmentRequirement).where(
-                    PolicyAcknowledgmentRequirement.id == ack.requirement_id
-                )
+                select(PolicyAcknowledgmentRequirement).where(PolicyAcknowledgmentRequirement.id == ack.requirement_id)
             )
             requirement = req_result.scalar_one_or_none()
 
@@ -338,11 +308,7 @@ class PolicyAcknowledgmentService:
 
     async def record_reminder_sent(self, acknowledgment_id: int) -> None:
         """Record that a reminder was sent."""
-        result = await self.db.execute(
-            select(PolicyAcknowledgment).where(
-                PolicyAcknowledgment.id == acknowledgment_id
-            )
-        )
+        result = await self.db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
         ack = result.scalar_one_or_none()
 
         if ack:
@@ -353,9 +319,7 @@ class PolicyAcknowledgmentService:
     async def get_compliance_dashboard(self) -> Dict[str, Any]:
         """Get overall policy acknowledgment compliance dashboard."""
         # Overall stats
-        total_result = await self.db.execute(
-            select(func.count(PolicyAcknowledgment.id))
-        )
+        total_result = await self.db.execute(select(func.count(PolicyAcknowledgment.id)))
         total = total_result.scalar() or 0
 
         completed_result = await self.db.execute(

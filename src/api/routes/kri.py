@@ -30,12 +30,7 @@ from src.api.schemas.kri import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
 from src.domain.models.incident import Incident
-from src.domain.models.kri import (
-    KeyRiskIndicator,
-    KRIAlert,
-    KRIMeasurement,
-    RiskScoreHistory,
-)
+from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -54,9 +49,7 @@ async def list_kris(
     current_user: CurrentUser,
     category: Optional[str] = Query(None, description="Filter by category"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    kri_status: Optional[str] = Query(
-        None, alias="status", description="Filter by current status"
-    ),
+    kri_status: Optional[str] = Query(None, alias="status", description="Filter by current status"),
 ):
     """List all KRIs with optional filtering."""
     query = (
@@ -104,9 +97,7 @@ async def create_kri(
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="KRI code already exists"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="KRI code already exists")
 
     kri = KeyRiskIndicator(
         **kri_data.dict(),
@@ -229,9 +220,7 @@ async def calculate_kri(
     result = await kri_service.calculate_kri(kri_id)
 
     if not result:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Could not calculate KRI"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not calculate KRI")
 
     return result
 
@@ -380,9 +369,7 @@ async def get_risk_trend(
 # =============================================================================
 
 
-@router.post(
-    "/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse
-)
+@router.post("/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse)
 async def assess_incident_sif(
     incident_id: int,
     assessment: SIFAssessmentCreate,
@@ -404,9 +391,7 @@ async def assess_incident_sif(
 
     if assessment.is_sif or assessment.is_psif:
         scoring_service = RiskScoringService(db)
-        await scoring_service.recalculate_risk_score_for_incident(
-            incident_id, trigger_type="sif_assessment"
-        )
+        await scoring_service.recalculate_risk_score_for_incident(incident_id, trigger_type="sif_assessment")
 
     await db.commit()
     await db.refresh(incident)
@@ -425,9 +410,7 @@ async def assess_incident_sif(
     )
 
 
-@router.get(
-    "/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse
-)
+@router.get("/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse)
 async def get_incident_sif_assessment(
     incident_id: int,
     db: DbSession,

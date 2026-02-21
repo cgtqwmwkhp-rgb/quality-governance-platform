@@ -207,9 +207,7 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
 
 
 @router.put("/dashboards/{dashboard_id}", response_model=dict)
-async def update_dashboard(
-    dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser
-):
+async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser):
     """Update dashboard configuration."""
     return {
         "id": dashboard_id,
@@ -281,9 +279,7 @@ async def get_kpi_summary(
     time_range: str = Query("last_30_days"),
 ):
     """Get summary KPIs across all modules."""
-    return analytics_service.get_kpi_summary(
-        time_range, tenant_id=current_user.tenant_id
-    )
+    return analytics_service.get_kpi_summary(time_range, tenant_id=current_user.tenant_id)
 
 
 @router.get("/trends/{data_source}", response_model=dict)
@@ -394,9 +390,7 @@ async def get_benchmark_summary(
     industry: str = Query("utilities"),
 ):
     """Get benchmark comparison summary."""
-    return analytics_service.get_benchmark_summary(
-        industry, tenant_id=current_user.tenant_id
-    )
+    return analytics_service.get_benchmark_summary(industry, tenant_id=current_user.tenant_id)
 
 
 @router.get("/benchmarks/{metric}", response_model=dict)
@@ -407,9 +401,7 @@ async def get_benchmark_comparison(
     region: str = Query("uk"),
 ):
     """Get benchmark comparison for a specific metric."""
-    return analytics_service.get_benchmark_comparison(
-        metric, industry, region, tenant_id=current_user.tenant_id
-    )
+    return analytics_service.get_benchmark_comparison(metric, industry, region, tenant_id=current_user.tenant_id)
 
 
 # ============================================================================
@@ -423,9 +415,7 @@ async def get_cost_of_non_compliance(
     time_range: str = Query("last_12_months"),
 ):
     """Calculate cost of non-compliance."""
-    return analytics_service.calculate_cost_of_non_compliance(
-        time_range, tenant_id=current_user.tenant_id
-    )
+    return analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
 
 
 @router.post("/costs/record", response_model=dict)
@@ -447,9 +437,7 @@ async def get_cost_breakdown(
     group_by: str = Query("category"),
 ):
     """Get cost breakdown by category."""
-    costs = analytics_service.calculate_cost_of_non_compliance(
-        time_range, tenant_id=current_user.tenant_id
-    )
+    costs = analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
     return costs.get("breakdown", {})
 
 
@@ -467,9 +455,7 @@ async def get_roi_summary(current_user: CurrentUser):
 @router.get("/roi/{investment_id}", response_model=dict)
 async def get_investment_roi(investment_id: int, current_user: CurrentUser):
     """Get ROI for a specific investment."""
-    return analytics_service.calculate_roi(
-        investment_id, tenant_id=current_user.tenant_id
-    )
+    return analytics_service.calculate_roi(investment_id, tenant_id=current_user.tenant_id)
 
 
 @router.post("/roi/investment", response_model=dict)
@@ -511,9 +497,7 @@ async def get_executive_summary(
     time_range: str = Query("last_month"),
 ):
     """Generate executive summary data."""
-    return analytics_service.generate_executive_summary(
-        time_range, tenant_id=current_user.tenant_id
-    )
+    return analytics_service.generate_executive_summary(time_range, tenant_id=current_user.tenant_id)
 
 
 @router.post("/reports/generate", response_model=dict)

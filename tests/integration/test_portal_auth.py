@@ -94,9 +94,7 @@ class TestPortalAuth:
         Incidents list with email filter should require auth.
         This prevents email enumeration attacks.
         """
-        response = await client.get(
-            "/api/v1/incidents/?reporter_email=test@example.com"
-        )
+        response = await client.get("/api/v1/incidents/?reporter_email=test@example.com")
         assert response.status_code == 401
 
 
@@ -117,17 +115,13 @@ class TestEmailEnumerationPrevention:
     async def test_cannot_enumerate_incidents_by_email(self, client):
         """Users cannot enumerate incidents by guessing emails."""
         # Without auth, should get 401
-        response = await client.get(
-            "/api/v1/incidents/?reporter_email=victim@example.com"
-        )
+        response = await client.get("/api/v1/incidents/?reporter_email=victim@example.com")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_cannot_enumerate_complaints_by_email(self, client):
         """Users cannot enumerate complaints by guessing emails."""
-        response = await client.get(
-            "/api/v1/complaints/?complainant_email=victim@example.com"
-        )
+        response = await client.get("/api/v1/complaints/?complainant_email=victim@example.com")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
@@ -184,9 +178,7 @@ class TestReadYourWritesGuarantee:
             return user, token
 
     @pytest.mark.asyncio
-    async def test_created_incident_appears_in_my_reports(
-        self, client, test_user_with_token
-    ):
+    async def test_created_incident_appears_in_my_reports(self, client, test_user_with_token):
         """
         CRITICAL: A report created via portal MUST immediately appear in My Reports.
 
@@ -209,14 +201,10 @@ class TestReadYourWritesGuarantee:
             },
         )
 
-        assert (
-            create_response.status_code == 201
-        ), f"Create failed: {create_response.text}"
+        assert create_response.status_code == 201, f"Create failed: {create_response.text}"
         created = create_response.json()
         reference_number = created["reference_number"]
-        assert reference_number.startswith(
-            "INC-"
-        ), f"Expected INC- prefix: {reference_number}"
+        assert reference_number.startswith("INC-"), f"Expected INC- prefix: {reference_number}"
 
         # Step 2: IMMEDIATELY fetch My Reports (same request session)
         my_reports_response = await client.get(
@@ -224,9 +212,7 @@ class TestReadYourWritesGuarantee:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        assert (
-            my_reports_response.status_code == 200
-        ), f"My Reports failed: {my_reports_response.text}"
+        assert my_reports_response.status_code == 200, f"My Reports failed: {my_reports_response.text}"
         my_reports = my_reports_response.json()
 
         # Step 3: Verify the created incident appears in the list
@@ -237,9 +223,7 @@ class TestReadYourWritesGuarantee:
         )
 
     @pytest.mark.asyncio
-    async def test_anonymous_report_not_in_my_reports(
-        self, client, test_user_with_token
-    ):
+    async def test_anonymous_report_not_in_my_reports(self, client, test_user_with_token):
         """Anonymous reports should NOT appear in My Reports (no identity linkage)."""
         user, token = test_user_with_token
 
@@ -319,9 +303,7 @@ class TestReadYourWritesGuarantee:
         other_reports = other_reports_response.json()
 
         # Verify other user cannot see this report
-        other_reference_numbers = [
-            r["reference_number"] for r in other_reports["items"]
-        ]
+        other_reference_numbers = [r["reference_number"] for r in other_reports["items"]]
         assert (
             reference_number not in other_reference_numbers
         ), f"SECURITY: Report {reference_number} visible to wrong user!"

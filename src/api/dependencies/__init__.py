@@ -49,9 +49,7 @@ async def get_current_user(
     # Get user from database with roles eagerly loaded
     from sqlalchemy.orm import selectinload
 
-    result = await db.execute(
-        select(User).where(User.id == int(user_id)).options(selectinload(User.roles))
-    )
+    result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     if user is None:
@@ -109,9 +107,7 @@ def require_permission(permission: str):
 
 
 async def get_optional_current_user(
-    credentials: Annotated[
-        Optional[HTTPAuthorizationCredentials], Depends(optional_security)
-    ],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(optional_security)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Optional[User]:
     """Get the current user if valid token provided, otherwise return None.
@@ -142,9 +138,7 @@ async def get_optional_current_user(
     # Get user from database with roles eagerly loaded
     from sqlalchemy.orm import selectinload
 
-    result = await db.execute(
-        select(User).where(User.id == int(user_id)).options(selectinload(User.roles))
-    )
+    result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:

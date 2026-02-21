@@ -28,9 +28,7 @@ class TokenService:
 
     @staticmethod
     async def is_revoked(db: AsyncSession, jti: str) -> bool:
-        result = await db.execute(
-            select(TokenBlacklist.id).where(TokenBlacklist.jti == jti)
-        )
+        result = await db.execute(select(TokenBlacklist.id).where(TokenBlacklist.jti == jti))
         return result.scalar_one_or_none() is not None
 
     @staticmethod
@@ -42,19 +40,13 @@ class TokenService:
         """Revoke all tokens for a user by updating the reason on existing entries."""
         from sqlalchemy import update
 
-        result = await db.execute(
-            update(TokenBlacklist)
-            .where(TokenBlacklist.user_id == user_id)
-            .values(reason=reason)
-        )
+        result = await db.execute(update(TokenBlacklist).where(TokenBlacklist.user_id == user_id).values(reason=reason))
         await db.commit()
         return result.rowcount
 
     @staticmethod
     async def cleanup_expired(db: AsyncSession) -> int:
         """Remove expired blacklist entries."""
-        result = await db.execute(
-            delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow())
-        )
+        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow()))
         await db.commit()
         return result.rowcount

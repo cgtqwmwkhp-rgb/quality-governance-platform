@@ -79,33 +79,21 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     )
 
     # When and where
-    incident_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    reported_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reported_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Who was involved
-    reporter_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    reporter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     reporter_email: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True, index=True
     )  # Portal user email for tracking
-    reporter_name: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )  # Portal user name
-    people_involved: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # Names/details of people involved
+    reporter_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Portal user name
+    people_involved: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Names/details of people involved
     witnesses: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Immediate response
@@ -114,79 +102,45 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     emergency_services_called: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Investigation
-    investigator_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    investigation_started_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    investigation_completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    investigator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    investigation_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    investigation_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     contributing_factors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # RIDDOR classification (UK specific)
     is_riddor_reportable: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    riddor_classification: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    riddor_classification: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     riddor_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Standard mapping
     clause_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Risk linkage
-    linked_risk_ids: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # Comma-separated risk IDs
+    linked_risk_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated risk IDs
 
     # Email ingestion source
-    source_type: Mapped[str] = mapped_column(
-        String(50), default="manual"
-    )  # manual, email, api
+    source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api
     source_email_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Portal form source tracking (for audit traceability)
-    source_form_id: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )  # e.g., portal_incident_v1
+    source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_incident_v1
 
     # Closure
-    closed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    closed_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # SIF (Serious Injury or Fatality) Classification
-    is_sif: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, nullable=True
-    )
-    is_psif: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, nullable=True
-    )  # Potential SIF
-    sif_classification: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )  # SIF, pSIF, Non-SIF
-    sif_assessment_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    sif_assessed_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    is_sif: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
+    is_psif: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)  # Potential SIF
+    sif_classification: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # SIF, pSIF, Non-SIF
+    sif_assessment_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sif_assessed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     sif_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    life_altering_potential: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, nullable=True
-    )
-    precursor_events: Mapped[Optional[list]] = mapped_column(
-        JSON, nullable=True
-    )  # List of precursor indicators
-    control_failures: Mapped[Optional[list]] = mapped_column(
-        JSON, nullable=True
-    )  # List of failed controls
+    life_altering_potential: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
+    precursor_events: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of precursor indicators
+    control_failures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of failed controls
 
     # Relationships
     actions: Mapped[List["IncidentAction"]] = relationship(
@@ -205,50 +159,30 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
     __tablename__ = "incident_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    incident_id: Mapped[int] = mapped_column(
-        ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False
-    )
+    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
 
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    action_type: Mapped[str] = mapped_column(
-        String(50), default="corrective"
-    )  # corrective, preventive, improvement
-    priority: Mapped[str] = mapped_column(
-        String(20), default="medium"
-    )  # critical, high, medium, low
+    action_type: Mapped[str] = mapped_column(String(50), default="corrective")  # corrective, preventive, improvement
+    priority: Mapped[str] = mapped_column(String(20), default="medium")  # critical, high, medium, low
 
     # Assignment
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(
-        SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN
-    )
-    due_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    verified_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    verified_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Evidence
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Effectiveness
-    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     effectiveness_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_effective: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 

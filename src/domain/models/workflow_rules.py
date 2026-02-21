@@ -81,26 +81,18 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Rule identification
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    rule_type: Mapped[RuleType] = mapped_column(
-        SQLEnum(RuleType, native_enum=False), nullable=False
-    )
+    rule_type: Mapped[RuleType] = mapped_column(SQLEnum(RuleType, native_enum=False), nullable=False)
 
     # Applies to which entities
-    entity_type: Mapped[EntityType] = mapped_column(
-        SQLEnum(EntityType, native_enum=False), nullable=False, index=True
-    )
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
 
     # Trigger conditions
-    trigger_event: Mapped[TriggerEvent] = mapped_column(
-        SQLEnum(TriggerEvent, native_enum=False), nullable=False
-    )
+    trigger_event: Mapped[TriggerEvent] = mapped_column(SQLEnum(TriggerEvent, native_enum=False), nullable=False)
 
     # Condition JSON - evaluated to determine if rule fires
     # Example: {"field": "severity", "operator": "equals", "value": "critical"}
@@ -114,9 +106,7 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     )  # e.g., "created_at", "due_date"
 
     # Action to perform
-    action_type: Mapped[ActionType] = mapped_column(
-        SQLEnum(ActionType, native_enum=False), nullable=False
-    )
+    action_type: Mapped[ActionType] = mapped_column(SQLEnum(ActionType, native_enum=False), nullable=False)
 
     # Action configuration JSON
     # For email: {"template": "escalation", "recipients": ["manager"], "subject": "..."}
@@ -125,12 +115,8 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     action_config: Mapped[dict] = mapped_column(JSON, nullable=False)
 
     # Priority and ordering
-    priority: Mapped[int] = mapped_column(
-        Integer, default=100
-    )  # Lower = higher priority
-    stop_processing: Mapped[bool] = mapped_column(
-        Boolean, default=False
-    )  # Stop after this rule
+    priority: Mapped[int] = mapped_column(Integer, default=100)  # Lower = higher priority
+    stop_processing: Mapped[bool] = mapped_column(Boolean, default=False)  # Stop after this rule
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -140,9 +126,7 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     contract: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Audit
-    created_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
     executions: Mapped[List["RuleExecution"]] = relationship(
@@ -150,9 +134,7 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<WorkflowRule(id={self.id}, name='{self.name}', type={self.rule_type})>"
-        )
+        return f"<WorkflowRule(id={self.id}, name='{self.name}', type={self.rule_type})>"
 
 
 class RuleExecution(Base, TimestampMixin):
@@ -167,33 +149,21 @@ class RuleExecution(Base, TimestampMixin):
     )
 
     # What triggered this execution
-    entity_type: Mapped[EntityType] = mapped_column(
-        SQLEnum(EntityType, native_enum=False), nullable=False
-    )
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    trigger_event: Mapped[TriggerEvent] = mapped_column(
-        SQLEnum(TriggerEvent, native_enum=False), nullable=False
-    )
+    trigger_event: Mapped[TriggerEvent] = mapped_column(SQLEnum(TriggerEvent, native_enum=False), nullable=False)
 
     # Execution result
-    executed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, default=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Action taken
-    action_taken: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # Human-readable description
-    action_result: Mapped[Optional[dict]] = mapped_column(
-        JSON, nullable=True
-    )  # Detailed result
+    action_taken: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Human-readable description
+    action_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Detailed result
 
     # Relationships
-    rule: Mapped["WorkflowRule"] = relationship(
-        "WorkflowRule", back_populates="executions"
-    )
+    rule: Mapped["WorkflowRule"] = relationship("WorkflowRule", back_populates="executions")
 
     def __repr__(self) -> str:
         return f"<RuleExecution(id={self.id}, rule_id={self.rule_id}, success={self.success})>"
@@ -206,35 +176,21 @@ class SLAConfiguration(Base, TimestampMixin, AuditTrailMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # What this SLA applies to
-    entity_type: Mapped[EntityType] = mapped_column(
-        SQLEnum(EntityType, native_enum=False), nullable=False, index=True
-    )
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
 
     # Matching criteria (all optional, more specific = higher priority)
-    priority: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )  # critical, high, medium, low
-    category: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )  # complaint type, incident type, etc.
+    priority: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # critical, high, medium, low
+    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # complaint type, incident type, etc.
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     contract: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # SLA targets (in hours)
-    acknowledgment_hours: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )  # Time to acknowledge
-    response_hours: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )  # Time to first response
-    resolution_hours: Mapped[float] = mapped_column(
-        Float, nullable=False
-    )  # Time to resolve
+    acknowledgment_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Time to acknowledge
+    response_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Time to first response
+    resolution_hours: Mapped[float] = mapped_column(Float, nullable=False)  # Time to resolve
 
     # Warning thresholds (percentage of SLA elapsed)
     warning_threshold_percent: Mapped[int] = mapped_column(Integer, default=75)
@@ -264,45 +220,25 @@ class SLATracking(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Entity being tracked
-    entity_type: Mapped[EntityType] = mapped_column(
-        SQLEnum(EntityType, native_enum=False), nullable=False, index=True
-    )
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     # SLA configuration used
-    sla_config_id: Mapped[int] = mapped_column(
-        ForeignKey("sla_configurations.id"), nullable=False
-    )
+    sla_config_id: Mapped[int] = mapped_column(ForeignKey("sla_configurations.id"), nullable=False)
 
     # Tracking timestamps
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    responded_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Target times (calculated from SLA config)
-    acknowledgment_due: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    response_due: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    resolution_due: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    acknowledgment_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    response_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_due: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Status
     acknowledgment_met: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
@@ -316,9 +252,7 @@ class SLATracking(Base, TimestampMixin):
 
     # Pause tracking (e.g., waiting for customer)
     is_paused: Mapped[bool] = mapped_column(Boolean, default=False)
-    paused_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     total_paused_hours: Mapped[float] = mapped_column(Float, default=0)
 
     def __repr__(self) -> str:
@@ -332,14 +266,10 @@ class EscalationLevel(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Entity type this applies to
-    entity_type: Mapped[EntityType] = mapped_column(
-        SQLEnum(EntityType, native_enum=False), nullable=False, index=True
-    )
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
 
     # Level (1 = first escalation, 2 = second, etc.)
     level: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -350,14 +280,10 @@ class EscalationLevel(Base, TimestampMixin):
 
     # Who to escalate to
     escalate_to_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    escalate_to_user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    escalate_to_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Notification settings
-    notification_template: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    notification_template: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     notify_original_assignee: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_reporter: Mapped[bool] = mapped_column(Boolean, default=False)
 

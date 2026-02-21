@@ -92,11 +92,7 @@ async def list_rtas(
     # unless they have admin/view-all permissions
     if reporter_email:
         user_email = getattr(current_user, "email", None)
-        has_view_all = (
-            current_user.has_permission("rta:view_all")
-            if hasattr(current_user, "has_permission")
-            else False
-        )
+        has_view_all = current_user.has_permission("rta:view_all") if hasattr(current_user, "has_permission") else False
         is_superuser = getattr(current_user, "is_superuser", False)
 
         if not has_view_all and not is_superuser:
@@ -115,8 +111,7 @@ async def list_rtas(
             description="RTA list accessed with email filter",
             payload={
                 "filter_type": "reporter_email",
-                "is_own_email": user_email
-                and reporter_email.lower() == user_email.lower(),
+                "is_own_email": user_email and reporter_email.lower() == user_email.lower(),
                 "has_view_all_permission": has_view_all,
                 "is_superuser": is_superuser,
             },
@@ -138,9 +133,7 @@ async def list_rtas(
         if reporter_email:
             query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
 
-        query = query.order_by(
-            RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc()
-        )
+        query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())
 
         paginated = await paginate(db, query, params)
         return {
@@ -183,9 +176,7 @@ async def get_rta(
     current_user: CurrentUser,
 ):
     """Get an RTA by ID."""
-    return await get_or_404(
-        db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id
-    )
+    return await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{rta_id}", response_model=RTAResponse)
@@ -197,9 +188,7 @@ async def update_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
-    rta = await get_or_404(
-        db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id
-    )
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
     update_data = apply_updates(rta, rta_in)
     rta.updated_by_id = current_user.id
 
@@ -230,9 +219,7 @@ async def delete_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    rta = await get_or_404(
-        db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id
-    )
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
     await record_audit_event(
         db=db,
@@ -267,9 +254,7 @@ async def create_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new action for an RTA."""
-    rta = await get_or_404(
-        db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id
-    )
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
     ref_number = await ReferenceNumberService.generate(db, "rta_action", RTAAction)
 
@@ -311,9 +296,7 @@ async def list_rta_actions(
     await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
     query = (
-        select(RTAAction)
-        .where(RTAAction.rta_id == rta_id)
-        .order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
+        select(RTAAction).where(RTAAction.rta_id == rta_id).order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
     )
 
     paginated = await paginate(db, query, params)
@@ -337,9 +320,7 @@ async def update_rta_action(
 ):
     """Update an RTA action."""
     await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
-    action = await get_or_404(
-        db, RTAAction, action_id, tenant_id=current_user.tenant_id
-    )
+    action = await get_or_404(db, RTAAction, action_id, tenant_id=current_user.tenant_id)
     if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -376,9 +357,7 @@ async def delete_rta_action(
 ):
     """Delete an RTA action."""
     await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
-    action = await get_or_404(
-        db, RTAAction, action_id, tenant_id=current_user.tenant_id
-    )
+    action = await get_or_404(db, RTAAction, action_id, tenant_id=current_user.tenant_id)
     if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -422,8 +401,7 @@ async def list_rta_investigations(
     query = (
         select(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type
-            == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
             InvestigationRun.assigned_entity_id == rta_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -431,9 +409,7 @@ async def list_rta_investigations(
 
     paginated = await paginate(db, query, params)
     return {
-        "items": [
-            InvestigationRunResponse.model_validate(inv) for inv in paginated.items
-        ],
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
         "total": paginated.total,
         "page": paginated.page,
         "page_size": paginated.page_size,

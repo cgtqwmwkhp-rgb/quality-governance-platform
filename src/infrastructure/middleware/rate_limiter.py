@@ -55,9 +55,7 @@ class InMemoryRateLimiter:
             window_start = now - window_seconds
 
             # Clean old requests
-            self._requests[key] = [
-                ts for ts in self._requests[key] if ts > window_start
-            ]
+            self._requests[key] = [ts for ts in self._requests[key] if ts > window_start]
 
             current_count = len(self._requests[key])
             remaining = max(0, limit - current_count)
@@ -74,9 +72,7 @@ class InMemoryRateLimiter:
         async with self._lock:
             now = time.time()
             for key in list(self._requests.keys()):
-                self._requests[key] = [
-                    ts for ts in self._requests[key] if ts > now - 3600
-                ]
+                self._requests[key] = [ts for ts in self._requests[key] if ts > now - 3600]
                 if not self._requests[key]:
                     del self._requests[key]
 
@@ -194,11 +190,7 @@ def get_endpoint_key(request: Request) -> str:
     path = request.url.path
     method = request.method
     # Normalize path parameters
-    normalized = hashlib.md5(
-        f"{method}:{path}".encode(), usedforsecurity=False
-    ).hexdigest()[
-        :8
-    ]  # nosec B324
+    normalized = hashlib.md5(f"{method}:{path}".encode(), usedforsecurity=False).hexdigest()[:8]  # nosec B324
     return normalized
 
 
@@ -221,9 +213,7 @@ ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     "/api/notifications/": RateLimitConfig(requests_per_minute=120, burst_limit=30),
     "/api/realtime/": RateLimitConfig(requests_per_minute=300, burst_limit=50),
     # Dashboard endpoints - read-only, cacheable, higher limits
-    "/api/v1/planet-mark/dashboard": RateLimitConfig(
-        requests_per_minute=120, burst_limit=30
-    ),
+    "/api/v1/planet-mark/dashboard": RateLimitConfig(requests_per_minute=120, burst_limit=30),
     "/api/v1/uvdb/dashboard": RateLimitConfig(requests_per_minute=120, burst_limit=30),
     # Telemetry - fire-and-forget, needs high limits for batch events
     "/api/v1/telemetry/": RateLimitConfig(requests_per_minute=300, burst_limit=100),

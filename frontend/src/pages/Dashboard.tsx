@@ -19,7 +19,6 @@ import {
   Lock,
   Bell,
   RefreshCw,
-  Loader2,
 } from 'lucide-react'
 import {
   incidentsApi,

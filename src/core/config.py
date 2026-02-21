@@ -47,14 +47,9 @@ class Settings(BaseSettings):
 
             # Ensure database URL is not localhost/127.0.0.1 (ADR-0002)
             if not self.database_url:
-                raise ValueError(
-                    "CONFIGURATION ERROR: DATABASE_URL must be set in production mode!"
-                )
+                raise ValueError("CONFIGURATION ERROR: DATABASE_URL must be set in production mode!")
 
-            if (
-                "localhost" in self.database_url.lower()
-                or "127.0.0.1" in self.database_url
-            ):
+            if "localhost" in self.database_url.lower() or "127.0.0.1" in self.database_url:
                 raise ValueError(
                     "CONFIGURATION ERROR: DATABASE_URL must not use localhost or 127.0.0.1 in production mode! "
                     "Use a production database hostname."
@@ -74,9 +69,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
 
     # Database
-    database_url: str = (
-        "postgresql+asyncpg://postgres:password@localhost:5432/quality_governance"
-    )
+    database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/quality_governance"
     database_echo: bool = False
 
     # JWT Authentication

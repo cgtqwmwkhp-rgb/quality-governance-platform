@@ -52,57 +52,37 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # KRI identification
-    code: Mapped[str] = mapped_column(
-        String(50), nullable=False, unique=True, index=True
-    )
+    code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[KRICategory] = mapped_column(
-        SQLEnum(KRICategory, native_enum=False), nullable=False
-    )
+    category: Mapped[KRICategory] = mapped_column(SQLEnum(KRICategory, native_enum=False), nullable=False)
 
     # Measurement
-    unit: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # e.g., "count", "percentage", "days"
+    unit: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "count", "percentage", "days"
     measurement_frequency: Mapped[str] = mapped_column(
         String(50), default="monthly"
     )  # daily, weekly, monthly, quarterly
 
     # Data source
-    data_source: Mapped[str] = mapped_column(
-        String(100), nullable=False
-    )  # e.g., "incident_count", "audit_findings"
-    calculation_method: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # Description or formula
+    data_source: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "incident_count", "audit_findings"
+    calculation_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Description or formula
     auto_calculate: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Thresholds (lower_is_better = True means lower values are good)
     lower_is_better: Mapped[bool] = mapped_column(Boolean, default=True)
-    green_threshold: Mapped[float] = mapped_column(
-        Float, nullable=False
-    )  # Acceptable limit
-    amber_threshold: Mapped[float] = mapped_column(
-        Float, nullable=False
-    )  # Warning limit
-    red_threshold: Mapped[float] = mapped_column(
-        Float, nullable=False
-    )  # Critical limit
+    green_threshold: Mapped[float] = mapped_column(Float, nullable=False)  # Acceptable limit
+    amber_threshold: Mapped[float] = mapped_column(Float, nullable=False)  # Warning limit
+    red_threshold: Mapped[float] = mapped_column(Float, nullable=False)  # Critical limit
 
     # Current state
     current_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     current_status: Mapped[Optional[ThresholdStatus]] = mapped_column(
         SQLEnum(ThresholdStatus, native_enum=False), nullable=True
     )
-    last_updated: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_updated: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     trend_direction: Mapped[Optional[KRITrendDirection]] = mapped_column(
         SQLEnum(KRITrendDirection, native_enum=False), nullable=True
     )
@@ -111,9 +91,7 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
     linked_risk_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Ownership
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Status
@@ -126,9 +104,7 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
         cascade="all, delete-orphan",
         order_by="desc(KRIMeasurement.measurement_date)",
     )
-    alerts: Mapped[List["KRIAlert"]] = relationship(
-        "KRIAlert", back_populates="kri", cascade="all, delete-orphan"
-    )
+    alerts: Mapped[List["KRIAlert"]] = relationship("KRIAlert", back_populates="kri", cascade="all, delete-orphan")
 
     def calculate_status(self, value: float) -> ThresholdStatus:
         """Calculate status based on value and thresholds."""
@@ -165,39 +141,25 @@ class KRIMeasurement(Base, TimestampMixin):
     )
 
     # Measurement
-    measurement_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
-    )
+    measurement_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     value: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[ThresholdStatus] = mapped_column(
-        SQLEnum(ThresholdStatus, native_enum=False), nullable=False
-    )
+    status: Mapped[ThresholdStatus] = mapped_column(SQLEnum(ThresholdStatus, native_enum=False), nullable=False)
 
     # Period
-    period_start: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    period_end: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    period_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    period_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Source reference
-    source_data: Mapped[Optional[dict]] = mapped_column(
-        JSON, nullable=True
-    )  # Raw data used for calculation
+    source_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Raw data used for calculation
 
     # Relationships
-    kri: Mapped["KeyRiskIndicator"] = relationship(
-        "KeyRiskIndicator", back_populates="measurements"
-    )
+    kri: Mapped["KeyRiskIndicator"] = relationship("KeyRiskIndicator", back_populates="measurements")
 
     def __repr__(self) -> str:
-        return (
-            f"<KRIMeasurement(id={self.id}, kri_id={self.kri_id}, value={self.value})>"
-        )
+        return f"<KRIMeasurement(id={self.id}, kri_id={self.kri_id}, value={self.value})>"
 
 
 class KRIAlert(Base, TimestampMixin):
@@ -207,9 +169,7 @@ class KRIAlert(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     kri_id: Mapped[int] = mapped_column(
         ForeignKey("key_risk_indicators.id", ondelete="CASCADE"),
         nullable=False,
@@ -217,17 +177,11 @@ class KRIAlert(Base, TimestampMixin):
     )
 
     # Alert details
-    alert_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # threshold_breach, trend_warning
-    severity: Mapped[ThresholdStatus] = mapped_column(
-        SQLEnum(ThresholdStatus, native_enum=False), nullable=False
-    )
+    alert_type: Mapped[str] = mapped_column(String(50), nullable=False)  # threshold_breach, trend_warning
+    severity: Mapped[ThresholdStatus] = mapped_column(SQLEnum(ThresholdStatus, native_enum=False), nullable=False)
 
     # Trigger
-    triggered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     trigger_value: Mapped[float] = mapped_column(Float, nullable=False)
     previous_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     threshold_breached: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -238,33 +192,21 @@ class KRIAlert(Base, TimestampMixin):
 
     # Status
     is_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
-    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    acknowledged_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     acknowledgment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Resolution
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    resolved_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    kri: Mapped["KeyRiskIndicator"] = relationship(
-        "KeyRiskIndicator", back_populates="alerts"
-    )
+    kri: Mapped["KeyRiskIndicator"] = relationship("KeyRiskIndicator", back_populates="alerts")
 
     def __repr__(self) -> str:
-        return (
-            f"<KRIAlert(id={self.id}, kri_id={self.kri_id}, severity={self.severity})>"
-        )
+        return f"<KRIAlert(id={self.id}, kri_id={self.kri_id}, severity={self.severity})>"
 
 
 class RiskScoreHistory(Base, TimestampMixin):
@@ -274,26 +216,18 @@ class RiskScoreHistory(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Score at this point
-    recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
-    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     likelihood: Mapped[int] = mapped_column(Integer, nullable=False)
     impact: Mapped[int] = mapped_column(Integer, nullable=False)
     risk_score: Mapped[int] = mapped_column(Integer, nullable=False)
     risk_level: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # What triggered this update
-    trigger_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # manual, incident, near_miss, audit_finding
-    trigger_entity_type: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
+    trigger_type: Mapped[str] = mapped_column(String(50), nullable=False)  # manual, incident, near_miss, audit_finding
+    trigger_entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     trigger_entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Change details

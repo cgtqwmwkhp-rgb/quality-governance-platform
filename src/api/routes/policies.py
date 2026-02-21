@@ -9,12 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.policy import (
-    PolicyCreate,
-    PolicyListResponse,
-    PolicyResponse,
-    PolicyUpdate,
-)
+from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -53,9 +48,7 @@ async def create_policy(
 
         reference_number = policy_data.reference_number
         # Check for duplicate reference number
-        existing = await db.execute(
-            select(Policy).where(Policy.reference_number == reference_number)
-        )
+        existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

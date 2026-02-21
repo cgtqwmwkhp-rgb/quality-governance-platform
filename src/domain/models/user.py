@@ -12,12 +12,8 @@ from src.infrastructure.database import Base
 user_roles = Table(
     "user_roles",
     Base.metadata,
-    Column(
-        "user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    ),
-    Column(
-        "role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
-    ),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -27,13 +23,9 @@ class Role(Base, TimestampMixin):
     __tablename__ = "roles"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(
-        String(50), unique=True, nullable=False, index=True
-    )
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    permissions: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # JSON string of permissions
+    permissions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string of permissions
     is_system_role: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
@@ -53,9 +45,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
-    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -65,14 +55,10 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    azure_oid: Mapped[Optional[str]] = mapped_column(
-        String(36), nullable=True, index=True
-    )
+    azure_oid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Relationships
     roles: Mapped[List["Role"]] = relationship(

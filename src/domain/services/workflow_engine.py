@@ -257,9 +257,7 @@ async def seed_default_templates(db: AsyncSession) -> int:
     """Insert default templates if they don't already exist. Returns count of newly created."""
     created = 0
     for tpl in DEFAULT_TEMPLATES:
-        result = await db.execute(
-            select(WorkflowTemplate).where(WorkflowTemplate.code == tpl["code"])
-        )
+        result = await db.execute(select(WorkflowTemplate).where(WorkflowTemplate.code == tpl["code"]))
         if result.scalar_one_or_none() is None:
             db.add(
                 WorkflowTemplate(
@@ -281,12 +279,8 @@ async def seed_default_templates(db: AsyncSession) -> int:
     return created
 
 
-async def list_templates(
-    db: AsyncSession, category: Optional[str] = None
-) -> List[WorkflowTemplate]:
-    query = select(WorkflowTemplate).where(
-        WorkflowTemplate.is_active == True
-    )  # noqa: E712
+async def list_templates(db: AsyncSession, category: Optional[str] = None) -> List[WorkflowTemplate]:
+    query = select(WorkflowTemplate).where(WorkflowTemplate.is_active == True)  # noqa: E712
     if category:
         query = query.where(WorkflowTemplate.category == category)
     query = query.order_by(WorkflowTemplate.name)
@@ -294,12 +288,8 @@ async def list_templates(
     return list(result.scalars().all())
 
 
-async def get_template(
-    db: AsyncSession, template_code: str
-) -> Optional[WorkflowTemplate]:
-    result = await db.execute(
-        select(WorkflowTemplate).where(WorkflowTemplate.code == template_code)
-    )
+async def get_template(db: AsyncSession, template_code: str) -> Optional[WorkflowTemplate]:
+    result = await db.execute(select(WorkflowTemplate).where(WorkflowTemplate.code == template_code))
     return result.scalar_one_or_none()
 
 
@@ -361,26 +351,18 @@ async def start_workflow(
         db.add(step)
 
     await db.flush()
-    logger.info(
-        "Started workflow instance %s from template %s", instance.id, template_code
-    )
+    logger.info("Started workflow instance %s from template %s", instance.id, template_code)
     return instance
 
 
-async def get_instance(
-    db: AsyncSession, instance_id: int
-) -> Optional[WorkflowInstance]:
-    result = await db.execute(
-        select(WorkflowInstance).where(WorkflowInstance.id == instance_id)
-    )
+async def get_instance(db: AsyncSession, instance_id: int) -> Optional[WorkflowInstance]:
+    result = await db.execute(select(WorkflowInstance).where(WorkflowInstance.id == instance_id))
     return result.scalar_one_or_none()
 
 
 async def get_instance_steps(db: AsyncSession, instance_id: int) -> List[WorkflowStep]:
     result = await db.execute(
-        select(WorkflowStep)
-        .where(WorkflowStep.instance_id == instance_id)
-        .order_by(WorkflowStep.step_number)
+        select(WorkflowStep).where(WorkflowStep.instance_id == instance_id).order_by(WorkflowStep.step_number)
     )
     return list(result.scalars().all())
 
@@ -723,9 +705,7 @@ async def escalate_workflow(
 # ==================== Delegation ====================
 
 
-async def get_active_delegations(
-    db: AsyncSession, user_id: int
-) -> List[UserDelegation]:
+async def get_active_delegations(db: AsyncSession, user_id: int) -> List[UserDelegation]:
     now = datetime.utcnow()
     result = await db.execute(
         select(UserDelegation).where(
@@ -764,9 +744,7 @@ async def set_delegation(
 
 
 async def cancel_delegation(db: AsyncSession, delegation_id: int) -> bool:
-    result = await db.execute(
-        select(UserDelegation).where(UserDelegation.id == delegation_id)
-    )
+    result = await db.execute(select(UserDelegation).where(UserDelegation.id == delegation_id))
     delegation = result.scalar_one_or_none()
     if delegation is None:
         return False
@@ -787,17 +765,12 @@ async def get_workflow_stats(db: AsyncSession) -> Dict[str, Any]:
     # Total counts by status
     status_counts = {}
     result = await db.execute(
-        select(WorkflowInstance.status, func.count(WorkflowInstance.id)).group_by(
-            WorkflowInstance.status
-        )
+        select(WorkflowInstance.status, func.count(WorkflowInstance.id)).group_by(WorkflowInstance.status)
     )
     for row_status, cnt in result.all():
         status_counts[row_status] = cnt
 
-    active = sum(
-        status_counts.get(s, 0)
-        for s in ["in_progress", "awaiting_approval", "escalated", "pending"]
-    )
+    active = sum(status_counts.get(s, 0) for s in ["in_progress", "awaiting_approval", "escalated", "pending"])
 
     # Overdue
     overdue_res = await db.execute(
@@ -846,11 +819,7 @@ async def get_workflow_stats(db: AsyncSession) -> Dict[str, Any]:
     # By priority
     priority_res = await db.execute(
         select(WorkflowInstance.priority, func.count(WorkflowInstance.id))
-        .where(
-            WorkflowInstance.status.in_(
-                ["in_progress", "awaiting_approval", "escalated", "pending"]
-            )
-        )
+        .where(WorkflowInstance.status.in_(["in_progress", "awaiting_approval", "escalated", "pending"]))
         .group_by(WorkflowInstance.priority)
     )
     by_priority = {p: c for p, c in priority_res.all()}
@@ -904,14 +873,10 @@ class WorkflowEngine:
             return 0
         return await seed_default_templates(self.db)
 
-    async def start(
-        self, template_code: str, entity_type: str, entity_id: str, **kwargs
-    ):
+    async def start(self, template_code: str, entity_type: str, entity_id: str, **kwargs):
         if self.db is None:
             raise RuntimeError("No DB session provided")
-        return await start_workflow(
-            self.db, template_code, entity_type, entity_id, **kwargs
-        )
+        return await start_workflow(self.db, template_code, entity_type, entity_id, **kwargs)
 
     async def list_instances_compat(self, **kwargs):
         if self.db is None:
@@ -1027,9 +992,7 @@ class ActionExecutor:
             return {"success": False, "error": f"Unknown action type: {action_type}"}
 
         try:
-            result = await executor_method(
-                action_config, entity_type, entity_id, entity_data
-            )
+            result = await executor_method(action_config, entity_type, entity_id, entity_data)
             return {"success": True, **result}
         except Exception as e:
             logger.error(f"Error executing action {action_type}: {e}")
@@ -1040,12 +1003,8 @@ class ActionExecutor:
     ) -> Dict:
         template = config.get("template", "default")
         recipients = config.get("recipients", [])
-        subject = config.get(
-            "subject", f"Notification for {entity_type.value} #{entity_id}"
-        )
-        logger.info(
-            f"Would send email: template={template}, recipients={recipients}, subject={subject}"
-        )
+        subject = config.get("subject", f"Notification for {entity_type.value} #{entity_id}")
+        logger.info(f"Would send email: template={template}, recipients={recipients}, subject={subject}")
         return {
             "action": "send_email",
             "template": template,
@@ -1054,9 +1013,7 @@ class ActionExecutor:
             "queued": True,
         }
 
-    async def _execute_send_sms(
-        self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
-    ) -> Dict:
+    async def _execute_send_sms(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         phone = config.get("phone")
         message = config.get("message", f"Alert for {entity_type.value} #{entity_id}")
         logger.info(f"Would send SMS: phone={phone}, message={message}")
@@ -1070,11 +1027,7 @@ class ActionExecutor:
         if model:
             from sqlalchemy import update as sa_update
 
-            await self.db.execute(
-                sa_update(model)
-                .where(model.id == entity_id)
-                .values(assigned_to_id=user_id)
-            )
+            await self.db.execute(sa_update(model).where(model.id == entity_id).values(assigned_to_id=user_id))
             await self.db.commit()
         return {"action": "assign_to_user", "user_id": user_id, "completed": True}
 
@@ -1099,9 +1052,7 @@ class ActionExecutor:
         if model:
             from sqlalchemy import update as sa_update
 
-            await self.db.execute(
-                sa_update(model).where(model.id == entity_id).values(status=new_status)
-            )
+            await self.db.execute(sa_update(model).where(model.id == entity_id).values(status=new_status))
             await self.db.commit()
         return {"action": "change_status", "new_status": new_status, "completed": True}
 
@@ -1113,11 +1064,7 @@ class ActionExecutor:
         if model:
             from sqlalchemy import update as sa_update
 
-            await self.db.execute(
-                sa_update(model)
-                .where(model.id == entity_id)
-                .values(priority=new_priority)
-            )
+            await self.db.execute(sa_update(model).where(model.id == entity_id).values(priority=new_priority))
             await self.db.commit()
         return {
             "action": "change_priority",
@@ -1125,9 +1072,7 @@ class ActionExecutor:
             "completed": True,
         }
 
-    async def _execute_escalate(
-        self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
-    ) -> Dict:
+    async def _execute_escalate(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         current_level = entity_data.get("escalation_level", 0)
         new_level = current_level + 1
 
@@ -1148,9 +1093,7 @@ class ActionExecutor:
                 from sqlalchemy import update as sa_update
 
                 await self.db.execute(
-                    sa_update(model)
-                    .where(model.id == entity_id)
-                    .values(escalation_level=new_level, status="escalated")
+                    sa_update(model).where(model.id == entity_id).values(escalation_level=new_level, status="escalated")
                 )
                 await self.db.commit()
 
@@ -1181,9 +1124,7 @@ class ActionExecutor:
     ) -> Dict:
         risk_id = config.get("risk_id") or entity_data.get("risk_id")
         score_adjustment = config.get("score_adjustment", 0)
-        logger.info(
-            f"Would update risk score: risk_id={risk_id}, adjustment={score_adjustment}"
-        )
+        logger.info(f"Would update risk score: risk_id={risk_id}, adjustment={score_adjustment}")
         return {
             "action": "update_risk_score",
             "risk_id": risk_id,
@@ -1210,9 +1151,7 @@ class ActionExecutor:
             "created": True,
         }
 
-    async def _execute_webhook(
-        self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
-    ) -> Dict:
+    async def _execute_webhook(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         url = config.get("url")
         method = config.get("method", "POST")
         logger.info(f"Would call webhook: {method} {url}")
@@ -1380,27 +1319,18 @@ class RuleEvaluator:
 
         for tracking in trackings:
             config_result = await self.db.execute(
-                select(SLAConfiguration).where(
-                    SLAConfiguration.id == tracking.sla_config_id
-                )
+                select(SLAConfiguration).where(SLAConfiguration.id == tracking.sla_config_id)
             )
             config = config_result.scalar_one_or_none()
 
             if not config:
                 continue
 
-            total_duration = (
-                tracking.resolution_due - tracking.started_at
-            ).total_seconds() / 3600
+            total_duration = (tracking.resolution_due - tracking.started_at).total_seconds() / 3600
             elapsed = (now - tracking.started_at).total_seconds() / 3600
-            percent_elapsed = (
-                (elapsed / total_duration) * 100 if total_duration > 0 else 100
-            )
+            percent_elapsed = (elapsed / total_duration) * 100 if total_duration > 0 else 100
 
-            if (
-                percent_elapsed >= config.warning_threshold_percent
-                and not tracking.warning_sent
-            ):
+            if percent_elapsed >= config.warning_threshold_percent and not tracking.warning_sent:
                 await self.process_event(
                     tracking.entity_type,
                     tracking.entity_id,
@@ -1457,9 +1387,7 @@ class SLAService:
         contract: Optional[str] = None,
     ) -> Optional[SLATracking]:
         """Start SLA tracking for an entity."""
-        config = await self._find_matching_config(
-            entity_type, priority, category, department, contract
-        )
+        config = await self._find_matching_config(entity_type, priority, category, department, contract)
         if not config:
             logger.info(f"No SLA config found for {entity_type.value}")
             return None
@@ -1470,9 +1398,7 @@ class SLAService:
         response_due = None
 
         if config.acknowledgment_hours:
-            acknowledgment_due = self._calculate_due_time(
-                now, config.acknowledgment_hours, config
-            )
+            acknowledgment_due = self._calculate_due_time(now, config.acknowledgment_hours, config)
         if config.response_hours:
             response_due = self._calculate_due_time(now, config.response_hours, config)
 
@@ -1493,37 +1419,25 @@ class SLAService:
         await self.db.refresh(tracking)
         return tracking
 
-    async def mark_acknowledged(
-        self, entity_type: EntityType, entity_id: int
-    ) -> Optional[SLATracking]:
+    async def mark_acknowledged(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.acknowledged_at:
             tracking.acknowledged_at = datetime.utcnow()
             tracking.acknowledgment_met = (
-                tracking.acknowledged_at <= tracking.acknowledgment_due
-                if tracking.acknowledgment_due
-                else True
+                tracking.acknowledged_at <= tracking.acknowledgment_due if tracking.acknowledgment_due else True
             )
             await self.db.commit()
         return tracking
 
-    async def mark_responded(
-        self, entity_type: EntityType, entity_id: int
-    ) -> Optional[SLATracking]:
+    async def mark_responded(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.responded_at:
             tracking.responded_at = datetime.utcnow()
-            tracking.response_met = (
-                tracking.responded_at <= tracking.response_due
-                if tracking.response_due
-                else True
-            )
+            tracking.response_met = tracking.responded_at <= tracking.response_due if tracking.response_due else True
             await self.db.commit()
         return tracking
 
-    async def mark_resolved(
-        self, entity_type: EntityType, entity_id: int
-    ) -> Optional[SLATracking]:
+    async def mark_resolved(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.resolved_at:
             tracking.resolved_at = datetime.utcnow()
@@ -1531,9 +1445,7 @@ class SLAService:
             await self.db.commit()
         return tracking
 
-    async def pause_tracking(
-        self, entity_type: EntityType, entity_id: int, reason: str = ""
-    ) -> Optional[SLATracking]:
+    async def pause_tracking(self, entity_type: EntityType, entity_id: int, reason: str = "") -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.is_paused:
             tracking.is_paused = True
@@ -1541,14 +1453,10 @@ class SLAService:
             await self.db.commit()
         return tracking
 
-    async def resume_tracking(
-        self, entity_type: EntityType, entity_id: int
-    ) -> Optional[SLATracking]:
+    async def resume_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and tracking.is_paused:
-            paused_duration = (
-                datetime.utcnow() - tracking.paused_at
-            ).total_seconds() / 3600
+            paused_duration = (datetime.utcnow() - tracking.paused_at).total_seconds() / 3600
             tracking.total_paused_hours += paused_duration
             tracking.is_paused = False
             tracking.paused_at = None
@@ -1563,9 +1471,7 @@ class SLAService:
             await self.db.commit()
         return tracking
 
-    async def _get_tracking(
-        self, entity_type: EntityType, entity_id: int
-    ) -> Optional[SLATracking]:
+    async def _get_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         result = await self.db.execute(
             select(SLATracking)
             .where(
@@ -1617,9 +1523,7 @@ class SLAService:
 
         return configs[0] if configs else None
 
-    def _calculate_due_time(
-        self, start: datetime, hours: float, config: SLAConfiguration
-    ) -> datetime:
+    def _calculate_due_time(self, start: datetime, hours: float, config: SLAConfiguration) -> datetime:
         """Calculate due time considering business hours."""
         if not config.business_hours_only:
             return start + timedelta(hours=hours)
@@ -1629,21 +1533,15 @@ class SLAService:
 
         while remaining_hours > 0:
             if current.hour < config.business_start_hour:
-                current = current.replace(
-                    hour=config.business_start_hour, minute=0, second=0
-                )
+                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
             elif current.hour >= config.business_end_hour:
                 current = current + timedelta(days=1)
-                current = current.replace(
-                    hour=config.business_start_hour, minute=0, second=0
-                )
+                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
 
             if config.exclude_weekends and current.weekday() >= 5:
                 days_until_monday = 7 - current.weekday()
                 current = current + timedelta(days=days_until_monday)
-                current = current.replace(
-                    hour=config.business_start_hour, minute=0, second=0
-                )
+                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
                 continue
 
             hours_today = config.business_end_hour - current.hour
@@ -1653,9 +1551,7 @@ class SLAService:
             else:
                 remaining_hours -= hours_today
                 current = current + timedelta(days=1)
-                current = current.replace(
-                    hour=config.business_start_hour, minute=0, second=0
-                )
+                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
 
         return current
 
@@ -1891,18 +1787,14 @@ class WorkflowService:
         )
         self._definitions[doc_workflow.id] = doc_workflow
 
-    async def get_workflow_definitions(
-        self, module: Optional[str] = None
-    ) -> List[WorkflowDefinition]:
+    async def get_workflow_definitions(self, module: Optional[str] = None) -> List[WorkflowDefinition]:
         """Get all workflow definitions, optionally filtered by module."""
         definitions = list(self._definitions.values())
         if module:
             definitions = [d for d in definitions if d.module == module]
         return definitions
 
-    async def get_workflow_definition(
-        self, definition_id: str
-    ) -> Optional[WorkflowDefinition]:
+    async def get_workflow_definition(self, definition_id: str) -> Optional[WorkflowDefinition]:
         """Get a specific workflow definition."""
         return self._definitions.get(definition_id)
 
@@ -1945,9 +1837,7 @@ class WorkflowService:
         )
 
         self._instances[instance_id] = instance
-        logger.info(
-            f"Started workflow instance {instance_id} for {entity_type}/{entity_id}"
-        )
+        logger.info(f"Started workflow instance {instance_id} for {entity_type}/{entity_id}")
 
         await self._process_current_step(instance)
         return instance
@@ -1961,9 +1851,7 @@ class WorkflowService:
 
         step = definition.steps[instance.current_step_index]
 
-        if step.conditions and not self._evaluate_conditions(
-            step.conditions, instance.data
-        ):
+        if step.conditions and not self._evaluate_conditions(step.conditions, instance.data):
             instance.history.append(
                 {
                     "action": "step_skipped",
@@ -1996,9 +1884,7 @@ class WorkflowService:
         elif step.step_type == WorkflowStepType.PARALLEL:
             await self._process_parallel_steps(instance, step)
 
-    def _evaluate_conditions(
-        self, conditions: Dict[str, Any], data: Dict[str, Any]
-    ) -> bool:
+    def _evaluate_conditions(self, conditions: Dict[str, Any], data: Dict[str, Any]) -> bool:
         """Evaluate step conditions against workflow data."""
         for key, expected_values in conditions.items():
             actual_value = data.get(key)
@@ -2071,9 +1957,7 @@ class WorkflowService:
         await self._process_current_step(instance)
         return instance
 
-    async def reject_step(
-        self, request_id: str, rejector_id: str, reason: str
-    ) -> WorkflowInstanceState:
+    async def reject_step(self, request_id: str, rejector_id: str, reason: str) -> WorkflowInstanceState:
         """Reject a workflow step."""
         request = self._approvals.get(request_id)
         if not request:
@@ -2098,9 +1982,7 @@ class WorkflowService:
         logger.info(f"Workflow {instance.id} rejected at step {request.step_id}")
         return instance
 
-    async def _send_notifications(
-        self, instance: WorkflowInstanceState, step: WorkflowStepDef
-    ) -> None:
+    async def _send_notifications(self, instance: WorkflowInstanceState, step: WorkflowStepDef) -> None:
         """Send notifications for a workflow step."""
         if not step.actions:
             return
@@ -2108,13 +1990,9 @@ class WorkflowService:
         for action in step.actions:
             action_type = action.get("type")
             if action_type == "email":
-                logger.info(
-                    f"Sending email notification for workflow {instance.id}: {action.get('template')}"
-                )
+                logger.info(f"Sending email notification for workflow {instance.id}: {action.get('template')}")
             elif action_type == "push":
-                logger.info(
-                    f"Sending push notification for workflow {instance.id}: {action.get('message')}"
-                )
+                logger.info(f"Sending push notification for workflow {instance.id}: {action.get('message')}")
 
         instance.history.append(
             {
@@ -2125,18 +2003,14 @@ class WorkflowService:
             }
         )
 
-    async def _execute_automatic_actions(
-        self, instance: WorkflowInstanceState, step: WorkflowStepDef
-    ) -> None:
+    async def _execute_automatic_actions(self, instance: WorkflowInstanceState, step: WorkflowStepDef) -> None:
         """Execute automatic actions for a workflow step."""
         if not step.actions:
             return
 
         for action in step.actions:
             action_type = action.get("type")
-            logger.info(
-                f"Executing automatic action '{action_type}' for workflow {instance.id}"
-            )
+            logger.info(f"Executing automatic action '{action_type}' for workflow {instance.id}")
 
         instance.history.append(
             {
@@ -2147,9 +2021,7 @@ class WorkflowService:
             }
         )
 
-    async def _process_parallel_steps(
-        self, instance: WorkflowInstanceState, step: WorkflowStepDef
-    ) -> None:
+    async def _process_parallel_steps(self, instance: WorkflowInstanceState, step: WorkflowStepDef) -> None:
         """Process parallel workflow steps."""
         if not step.parallel_steps:
             return
@@ -2171,14 +2043,10 @@ class WorkflowService:
         """Mark a workflow as completed."""
         instance.status = WorkflowStatus.COMPLETED
         instance.completed_at = datetime.now()
-        instance.history.append(
-            {"action": "workflow_completed", "timestamp": datetime.now().isoformat()}
-        )
+        instance.history.append({"action": "workflow_completed", "timestamp": datetime.now().isoformat()})
         logger.info(f"Workflow {instance.id} completed successfully")
 
-    async def get_workflow_instance(
-        self, instance_id: str
-    ) -> Optional[WorkflowInstanceState]:
+    async def get_workflow_instance(self, instance_id: str) -> Optional[WorkflowInstanceState]:
         """Get a workflow instance by ID."""
         return self._instances.get(instance_id)
 
@@ -2187,8 +2055,7 @@ class WorkflowService:
         return [
             a
             for a in self._approvals.values()
-            if a.status == "pending"
-            and (a.approver_id == user_id or a.approver_id.endswith(user_id))
+            if a.status == "pending" and (a.approver_id == user_id or a.approver_id.endswith(user_id))
         ]
 
     async def get_workflow_stats(self) -> Dict[str, Any]:
@@ -2196,21 +2063,11 @@ class WorkflowService:
         instances = list(self._instances.values())
         return {
             "total_workflows": len(instances),
-            "active": len(
-                [i for i in instances if i.status == WorkflowStatus.IN_PROGRESS]
-            ),
-            "awaiting_approval": len(
-                [i for i in instances if i.status == WorkflowStatus.AWAITING_APPROVAL]
-            ),
-            "completed": len(
-                [i for i in instances if i.status == WorkflowStatus.COMPLETED]
-            ),
-            "rejected": len(
-                [i for i in instances if i.status == WorkflowStatus.REJECTED]
-            ),
-            "pending_approvals": len(
-                [a for a in self._approvals.values() if a.status == "pending"]
-            ),
+            "active": len([i for i in instances if i.status == WorkflowStatus.IN_PROGRESS]),
+            "awaiting_approval": len([i for i in instances if i.status == WorkflowStatus.AWAITING_APPROVAL]),
+            "completed": len([i for i in instances if i.status == WorkflowStatus.COMPLETED]),
+            "rejected": len([i for i in instances if i.status == WorkflowStatus.REJECTED]),
+            "pending_approvals": len([a for a in self._approvals.values() if a.status == "pending"]),
         }
 
 

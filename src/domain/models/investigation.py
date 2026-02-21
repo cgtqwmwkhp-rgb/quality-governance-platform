@@ -15,17 +15,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    Column,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-)
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
@@ -108,14 +98,10 @@ class InvestigationTemplate(Base, TimestampMixin, AuditTrailMixin):
     structure = Column(JSON, nullable=False)
 
     # Metadata
-    applicable_entity_types = Column(
-        JSON, nullable=False
-    )  # List of AssignedEntityType values
+    applicable_entity_types = Column(JSON, nullable=False)  # List of AssignedEntityType values
 
     # Relationships
-    investigation_runs = relationship(
-        "InvestigationRun", back_populates="template", cascade="all, delete-orphan"
-    )
+    investigation_runs = relationship("InvestigationRun", back_populates="template", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<InvestigationTemplate(id={self.id}, name='{self.name}', version='{self.version}')>"
@@ -139,14 +125,10 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     id = Column(Integer, primary_key=True, index=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Template reference
-    template_id = Column(
-        Integer, ForeignKey("investigation_templates.id"), nullable=False, index=True
-    )
+    template_id = Column(Integer, ForeignKey("investigation_templates.id"), nullable=False, index=True)
 
     # Assignment to entity
     assigned_entity_type: Mapped[AssignedEntityType] = mapped_column(
@@ -173,9 +155,7 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     # === Stage 2: Source Snapshot (Mapping Contract v1) ===
     # Immutable copy of source record at investigation creation
-    source_schema_version: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )
+    source_schema_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     source_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Mapping log with reason codes (SOURCE_MISSING_FIELD, TYPE_MISMATCH, etc.)
     mapping_log: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
@@ -184,12 +164,8 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     # === Stage 2: Approval Workflow ===
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    approved_by_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Completion tracking
@@ -203,9 +179,7 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     reviewer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    template = relationship(
-        "InvestigationTemplate", back_populates="investigation_runs"
-    )
+    template = relationship("InvestigationTemplate", back_populates="investigation_runs")
     assigned_to = relationship("User", foreign_keys=[assigned_to_user_id])
     reviewer = relationship("User", foreign_keys=[reviewer_user_id])
     approved_by = relationship("User", foreign_keys=[approved_by_id])
@@ -270,19 +244,13 @@ class InvestigationComment(Base, TimestampMixin):
     )
 
     # Author
-    author_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False
-    )
+    author_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
 
     # Soft delete
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    investigation: Mapped["InvestigationRun"] = relationship(
-        "InvestigationRun", back_populates="comments"
-    )
+    investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="comments")
     author = relationship("User", foreign_keys=[author_id])
     replies: Mapped[List["InvestigationComment"]] = relationship(
         "InvestigationComment", back_populates="parent", cascade="all, delete-orphan"
@@ -324,17 +292,13 @@ class InvestigationRevisionEvent(Base, TimestampMixin):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Who made the change
-    actor_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False
-    )
+    actor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
 
     # Additional context (named event_metadata to avoid SQLAlchemy reserved name)
     event_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Relationships
-    investigation: Mapped["InvestigationRun"] = relationship(
-        "InvestigationRun", back_populates="revision_events"
-    )
+    investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="revision_events")
     actor = relationship("User", foreign_keys=[actor_id])
 
     def __repr__(self) -> str:
@@ -358,9 +322,7 @@ class InvestigationCustomerPack(Base, TimestampMixin):
     )
 
     # Pack identification
-    pack_uuid: Mapped[str] = mapped_column(
-        String(36), unique=True, nullable=False, index=True
-    )
+    pack_uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
 
     # Audience (determines redaction rules)
     audience: Mapped[CustomerPackAudience] = mapped_column(
@@ -380,20 +342,14 @@ class InvestigationCustomerPack(Base, TimestampMixin):
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
 
     # Generation metadata
-    generated_by_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False
-    )
+    generated_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     generated_by_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Optional expiry
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    investigation: Mapped["InvestigationRun"] = relationship(
-        "InvestigationRun", back_populates="customer_packs"
-    )
+    investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="customer_packs")
     generated_by = relationship("User", foreign_keys=[generated_by_id])
 
     def __repr__(self) -> str:
@@ -433,17 +389,11 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    action_type: Mapped[str] = mapped_column(
-        String(50), default="corrective"
-    )  # corrective, preventive, improvement
-    priority: Mapped[str] = mapped_column(
-        String(20), default="medium"
-    )  # critical, high, medium, low
+    action_type: Mapped[str] = mapped_column(String(50), default="corrective")  # corrective, preventive, improvement
+    priority: Mapped[str] = mapped_column(String(20), default="medium")  # critical, high, medium, low
 
     # Assignment
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Status and dates
     # Use native_enum=False to store as VARCHAR instead of PostgreSQL ENUM.
@@ -452,34 +402,22 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
         Enum(InvestigationActionStatus, native_enum=False, create_constraint=False),
         default=InvestigationActionStatus.OPEN,
     )
-    due_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    verified_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    verified_by_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Evidence
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Effectiveness
-    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     effectiveness_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_effective: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Relationships
-    investigation: Mapped["InvestigationRun"] = relationship(
-        "InvestigationRun", back_populates="actions"
-    )
+    investigation: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="actions")
     owner = relationship("User", foreign_keys=[owner_id])
     verified_by = relationship("User", foreign_keys=[verified_by_id])
 

@@ -19,9 +19,7 @@ class TestPoliciesAuditEventRuntimeContract:
     """Test that Policies module records canonical audit events at runtime."""
 
     @pytest.mark.asyncio
-    async def test_create_policy_records_audit_event(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_create_policy_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
         """Verify that creating a policy records an audit event with canonical schema."""
         # Create a policy
         policy_data = {
@@ -30,9 +28,7 @@ class TestPoliciesAuditEventRuntimeContract:
             "document_type": "policy",
             "status": "draft",
         }
-        response = await client.post(
-            "/api/v1/policies", json=policy_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
         assert response.status_code == 201
 
         policy_id = response.json()["id"]
@@ -61,9 +57,7 @@ class TestPoliciesAuditEventRuntimeContract:
         assert audit_event.timestamp is not None
 
     @pytest.mark.asyncio
-    async def test_update_policy_records_audit_event(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_update_policy_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
         """Verify that updating a policy records an audit event with canonical schema."""
         # Create a policy first
         policy = Policy(
@@ -81,9 +75,7 @@ class TestPoliciesAuditEventRuntimeContract:
 
         # Update the policy
         update_data = {"title": "Updated Policy"}
-        response = await client.put(
-            f"/api/v1/policies/{policy.id}", json=update_data, headers=auth_headers
-        )
+        response = await client.put(f"/api/v1/policies/{policy.id}", json=update_data, headers=auth_headers)
         assert response.status_code == 200
 
         # Verify audit event was recorded
@@ -109,9 +101,7 @@ class TestPoliciesAuditEventRuntimeContract:
         assert len(audit_event.request_id) > 0
 
     @pytest.mark.asyncio
-    async def test_delete_policy_records_audit_event(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_delete_policy_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
         """Verify that deleting a policy records an audit event with canonical schema."""
         # Create a policy first
         policy = Policy(
@@ -129,9 +119,7 @@ class TestPoliciesAuditEventRuntimeContract:
         policy_id = policy.id
 
         # Delete the policy
-        response = await client.delete(
-            f"/api/v1/policies/{policy_id}", headers=auth_headers
-        )
+        response = await client.delete(f"/api/v1/policies/{policy_id}", headers=auth_headers)
         assert response.status_code == 204
 
         # Verify audit event was recorded
@@ -161,9 +149,7 @@ class TestIncidentsAuditEventRuntimeContract:
     """Test that Incidents module records canonical audit events at runtime."""
 
     @pytest.mark.asyncio
-    async def test_create_incident_records_audit_event(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_create_incident_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
         """Verify that creating an incident records an audit event with canonical schema."""
         # Create an incident
         incident_data = {
@@ -176,9 +162,7 @@ class TestIncidentsAuditEventRuntimeContract:
             "location": "Test Location",
             "department": "Test Department",
         }
-        response = await client.post(
-            "/api/v1/incidents", json=incident_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/incidents", json=incident_data, headers=auth_headers)
         assert response.status_code == 201
 
         incident_id = response.json()["id"]
@@ -210,9 +194,7 @@ class TestComplaintsAuditEventRuntimeContract:
     """Test that Complaints module records canonical audit events at runtime."""
 
     @pytest.mark.asyncio
-    async def test_create_complaint_records_audit_event(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_create_complaint_records_audit_event(self, client: AsyncClient, test_session, auth_headers):
         """Verify that creating a complaint records an audit event with canonical schema."""
         # Create a complaint
         complaint_data = {
@@ -224,9 +206,7 @@ class TestComplaintsAuditEventRuntimeContract:
             "complainant_name": "Test User",
             "complainant_email": "test@example.com",
         }
-        response = await client.post(
-            "/api/v1/complaints/", json=complaint_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/complaints/", json=complaint_data, headers=auth_headers)
         assert response.status_code == 201
 
         complaint_id = response.json()["id"]

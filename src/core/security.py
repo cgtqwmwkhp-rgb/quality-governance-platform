@@ -34,9 +34,7 @@ def create_access_token(
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.jwt_access_token_expire_minutes
-        )
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
 
     to_encode = {
         "sub": str(subject),
@@ -59,9 +57,7 @@ def create_access_token(
 
 def create_refresh_token(subject: str | Any) -> str:
     """Create a JWT refresh token."""
-    expire = datetime.now(timezone.utc) + timedelta(
-        days=settings.jwt_refresh_token_expire_days
-    )
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
 
     to_encode = {
         "sub": str(subject),
@@ -156,7 +152,5 @@ async def is_token_revoked(jti: str, db: AsyncSession) -> bool:
     """Check whether a token JTI has been revoked (exists in the blacklist)."""
     from src.domain.models.token_blacklist import TokenBlacklist
 
-    result = await db.execute(
-        select(TokenBlacklist.id).where(TokenBlacklist.jti == jti)
-    )
+    result = await db.execute(select(TokenBlacklist.id).where(TokenBlacklist.jti == jti))
     return result.scalar_one_or_none() is not None

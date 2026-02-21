@@ -24,12 +24,7 @@ from src.domain.models.workflow_rules import (
     TriggerEvent,
     WorkflowRule,
 )
-from src.domain.services.workflow_engine import (
-    ActionExecutor,
-    ConditionEvaluator,
-    RuleEvaluator,
-    SLAService,
-)
+from src.domain.services.workflow_engine import ActionExecutor, ConditionEvaluator, RuleEvaluator, SLAService
 
 
 class TestConditionEvaluator:
@@ -61,14 +56,8 @@ class TestConditionEvaluator:
         """Test contains comparison for strings."""
         conditions = {"field": "description", "operator": "contains", "value": "urgent"}
 
-        assert (
-            ConditionEvaluator.evaluate(conditions, {"description": "This is urgent!"})
-            is True
-        )
-        assert (
-            ConditionEvaluator.evaluate(conditions, {"description": "Normal task"})
-            is False
-        )
+        assert ConditionEvaluator.evaluate(conditions, {"description": "This is urgent!"}) is True
+        assert ConditionEvaluator.evaluate(conditions, {"description": "Normal task"}) is False
 
     def test_in_operator(self):
         """Test in comparison for lists."""
@@ -103,9 +92,7 @@ class TestConditionEvaluator:
 
         assert ConditionEvaluator.evaluate(conditions, {"assigned_to": None}) is True
         assert ConditionEvaluator.evaluate(conditions, {}) is True
-        assert (
-            ConditionEvaluator.evaluate(conditions, {"assigned_to": "user1"}) is False
-        )
+        assert ConditionEvaluator.evaluate(conditions, {"assigned_to": "user1"}) is False
 
     def test_is_not_null_operator(self):
         """Test not null checking."""
@@ -123,24 +110,9 @@ class TestConditionEvaluator:
             ]
         }
 
-        assert (
-            ConditionEvaluator.evaluate(
-                conditions, {"status": "open", "priority": "high"}
-            )
-            is True
-        )
-        assert (
-            ConditionEvaluator.evaluate(
-                conditions, {"status": "open", "priority": "low"}
-            )
-            is False
-        )
-        assert (
-            ConditionEvaluator.evaluate(
-                conditions, {"status": "closed", "priority": "high"}
-            )
-            is False
-        )
+        assert ConditionEvaluator.evaluate(conditions, {"status": "open", "priority": "high"}) is True
+        assert ConditionEvaluator.evaluate(conditions, {"status": "open", "priority": "low"}) is False
+        assert ConditionEvaluator.evaluate(conditions, {"status": "closed", "priority": "high"}) is False
 
     def test_or_conditions(self):
         """Test OR logical operator."""
@@ -157,9 +129,7 @@ class TestConditionEvaluator:
 
     def test_not_condition(self):
         """Test NOT logical operator."""
-        conditions = {
-            "not": {"field": "status", "operator": "equals", "value": "closed"}
-        }
+        conditions = {"not": {"field": "status", "operator": "equals", "value": "closed"}}
 
         assert ConditionEvaluator.evaluate(conditions, {"status": "open"}) is True
         assert ConditionEvaluator.evaluate(conditions, {"status": "closed"}) is False
@@ -184,19 +154,11 @@ class TestConditionEvaluator:
 
         # Open with critical priority
         assert (
-            ConditionEvaluator.evaluate(
-                conditions, {"status": "open", "priority": "critical", "days_open": 1}
-            )
-            is True
+            ConditionEvaluator.evaluate(conditions, {"status": "open", "priority": "critical", "days_open": 1}) is True
         )
 
         # Open with low priority but >7 days
-        assert (
-            ConditionEvaluator.evaluate(
-                conditions, {"status": "open", "priority": "low", "days_open": 10}
-            )
-            is True
-        )
+        assert ConditionEvaluator.evaluate(conditions, {"status": "open", "priority": "low", "days_open": 10}) is True
 
         # Closed should fail
         assert (
@@ -215,16 +177,8 @@ class TestConditionEvaluator:
             "value": "Safety",
         }
 
-        assert (
-            ConditionEvaluator.evaluate(
-                conditions, {"reporter": {"department": "Safety", "name": "John"}}
-            )
-            is True
-        )
-        assert (
-            ConditionEvaluator.evaluate(conditions, {"reporter": {"department": "IT"}})
-            is False
-        )
+        assert ConditionEvaluator.evaluate(conditions, {"reporter": {"department": "Safety", "name": "John"}}) is True
+        assert ConditionEvaluator.evaluate(conditions, {"reporter": {"department": "IT"}}) is False
 
 
 class TestActionExecutor:

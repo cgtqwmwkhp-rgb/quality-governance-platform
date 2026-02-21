@@ -53,15 +53,9 @@ class MappingUpdate(BaseModel):
 async def list_mappings(
     db: DbSession,
     current_user: CurrentUser,
-    source_standard: str | None = Query(
-        None, description="Filter by source/primary standard"
-    ),
-    target_standard: str | None = Query(
-        None, description="Filter by target/mapped standard"
-    ),
-    clause: str | None = Query(
-        None, description="Filter by clause number (matches source or target)"
-    ),
+    source_standard: str | None = Query(None, description="Filter by source/primary standard"),
+    target_standard: str | None = Query(None, description="Filter by target/mapped standard"),
+    clause: str | None = Query(None, description="Filter by clause number (matches source or target)"),
 ) -> list[MappingResponse]:
     """List cross-standard mappings with optional filters."""
     from src.domain.models.ims_unification import CrossStandardMapping
@@ -73,8 +67,7 @@ async def list_mappings(
         query = query.where(CrossStandardMapping.mapped_standard == target_standard)
     if clause:
         query = query.where(
-            (CrossStandardMapping.primary_clause == clause)
-            | (CrossStandardMapping.mapped_clause == clause)
+            (CrossStandardMapping.primary_clause == clause) | (CrossStandardMapping.mapped_clause == clause)
         )
 
     result = await db.execute(query)
@@ -90,13 +83,9 @@ async def list_standards(
     """List all available ISO standards in the mapping database."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    primaries = await db.execute(
-        select(CrossStandardMapping.primary_standard).distinct()
-    )
+    primaries = await db.execute(select(CrossStandardMapping.primary_standard).distinct())
     mapped = await db.execute(select(CrossStandardMapping.mapped_standard).distinct())
-    all_standards = sorted(
-        {s for (s,) in primaries.all()} | {s for (s,) in mapped.all()}
-    )
+    all_standards = sorted({s for (s,) in primaries.all()} | {s for (s,) in mapped.all()})
     return {"standards": all_standards}
 
 

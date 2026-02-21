@@ -129,10 +129,7 @@ class TelemetryEvent(BaseModel):
         if "result" in v and v["result"] not in ALLOWED_LOGIN_RESULTS:
             raise ValueError(f"result '{v['result']}' not in allowlist")
 
-        if (
-            "durationBucket" in v
-            and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS
-        ):
+        if "durationBucket" in v and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS:
             raise ValueError(f"durationBucket '{v['durationBucket']}' not in allowlist")
 
         if "errorCode" in v and v["errorCode"] not in ALLOWED_ERROR_CODES:
@@ -324,9 +321,7 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     Used by the evaluator to check current sample count and metrics.
     """
     if experiment_id != "EXP_001":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
 
     metrics = load_metrics_file()
     return metrics
@@ -338,14 +333,10 @@ async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     Reset metrics for an experiment (staging only, for testing).
     """
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     if experiment_id != "EXP_001":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
 
     metrics_path = METRICS_DIR / "experiment_metrics_EXP_001.json"
     if metrics_path.exists():

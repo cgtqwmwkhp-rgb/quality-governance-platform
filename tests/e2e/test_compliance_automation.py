@@ -44,9 +44,7 @@ class TestRegulatoryMonitoring:
 
     def test_filter_updates_by_source(self, auth_client: Any) -> None:
         """Test filtering updates by source."""
-        response = auth_client.get(
-            "/api/compliance-automation/regulatory-updates?source=hse_uk"
-        )
+        response = auth_client.get("/api/compliance-automation/regulatory-updates?source=hse_uk")
         assert response.status_code == 200
 
         data = response.json()
@@ -55,9 +53,7 @@ class TestRegulatoryMonitoring:
 
     def test_filter_updates_by_impact(self, auth_client: Any) -> None:
         """Test filtering updates by impact level."""
-        response = auth_client.get(
-            "/api/compliance-automation/regulatory-updates?impact=critical"
-        )
+        response = auth_client.get("/api/compliance-automation/regulatory-updates?impact=critical")
         assert response.status_code == 200
 
         data = response.json()
@@ -66,9 +62,7 @@ class TestRegulatoryMonitoring:
 
     def test_filter_unreviewed_updates(self, auth_client: Any) -> None:
         """Test filtering to unreviewed updates only."""
-        response = auth_client.get(
-            "/api/compliance-automation/regulatory-updates?reviewed=false"
-        )
+        response = auth_client.get("/api/compliance-automation/regulatory-updates?reviewed=false")
         assert response.status_code == 200
 
         data = response.json()
@@ -117,9 +111,7 @@ class TestGapAnalysis:
 
     def test_filter_gap_analyses_by_status(self, auth_client: Any) -> None:
         """Test filtering gap analyses by status."""
-        response = auth_client.get(
-            "/api/compliance-automation/gap-analyses?status=pending"
-        )
+        response = auth_client.get("/api/compliance-automation/gap-analyses?status=pending")
         assert response.status_code == 200
 
         data = response.json()
@@ -141,9 +133,7 @@ class TestCertificateTracking:
 
     def test_filter_certificates_by_type(self, auth_client: Any) -> None:
         """Test filtering certificates by type."""
-        response = auth_client.get(
-            "/api/compliance-automation/certificates?certificate_type=training"
-        )
+        response = auth_client.get("/api/compliance-automation/certificates?certificate_type=training")
         assert response.status_code == 200
 
         data = response.json()
@@ -152,9 +142,7 @@ class TestCertificateTracking:
 
     def test_filter_certificates_by_entity(self, auth_client: Any) -> None:
         """Test filtering certificates by entity type."""
-        response = auth_client.get(
-            "/api/compliance-automation/certificates?entity_type=equipment"
-        )
+        response = auth_client.get("/api/compliance-automation/certificates?entity_type=equipment")
         assert response.status_code == 200
 
         data = response.json()
@@ -163,9 +151,7 @@ class TestCertificateTracking:
 
     def test_filter_expiring_certificates(self, auth_client: Any) -> None:
         """Test filtering certificates expiring within days."""
-        response = auth_client.get(
-            "/api/compliance-automation/certificates?expiring_within_days=60"
-        )
+        response = auth_client.get("/api/compliance-automation/certificates?expiring_within_days=60")
         assert response.status_code == 200
 
         data = response.json()
@@ -173,9 +159,7 @@ class TestCertificateTracking:
 
     def test_get_expiring_summary(self, auth_client: Any) -> None:
         """Test getting expiring certificates summary."""
-        response = auth_client.get(
-            "/api/compliance-automation/certificates/expiring-summary"
-        )
+        response = auth_client.get("/api/compliance-automation/certificates/expiring-summary")
         assert response.status_code == 200
 
         summary = response.json()
@@ -200,9 +184,7 @@ class TestScheduledAudits:
 
     def test_filter_overdue_audits(self, auth_client: Any) -> None:
         """Test filtering to overdue audits."""
-        response = auth_client.get(
-            "/api/compliance-automation/scheduled-audits?overdue=true"
-        )
+        response = auth_client.get("/api/compliance-automation/scheduled-audits?overdue=true")
         assert response.status_code == 200
 
         data = response.json()
@@ -211,9 +193,7 @@ class TestScheduledAudits:
 
     def test_filter_upcoming_audits(self, auth_client: Any) -> None:
         """Test filtering audits due within days."""
-        response = auth_client.get(
-            "/api/compliance-automation/scheduled-audits?upcoming_days=30"
-        )
+        response = auth_client.get("/api/compliance-automation/scheduled-audits?upcoming_days=30")
         assert response.status_code == 200
 
         data = response.json()
@@ -236,9 +216,7 @@ class TestComplianceScoring:
 
     def test_get_compliance_score_by_scope(self, auth_client: Any) -> None:
         """Test getting compliance score for specific scope."""
-        response = auth_client.get(
-            "/api/compliance-automation/score?scope_type=department&scope_id=safety"
-        )
+        response = auth_client.get("/api/compliance-automation/score?scope_type=department&scope_id=safety")
         assert response.status_code == 200
 
         score = response.json()
@@ -276,9 +254,7 @@ class TestRIDDORAutomation:
         """Test RIDDOR check for fatality."""
         payload = {"fatality": True, "injury_type": "fatal"}
 
-        response = auth_client.post(
-            "/api/compliance-automation/riddor/check", json=payload
-        )
+        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -290,9 +266,7 @@ class TestRIDDORAutomation:
         """Test RIDDOR check for specified injury."""
         payload = {"fatality": False, "injury_type": "fracture", "days_off_work": 2}
 
-        response = auth_client.post(
-            "/api/compliance-automation/riddor/check", json=payload
-        )
+        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -303,9 +277,7 @@ class TestRIDDORAutomation:
         """Test RIDDOR check for over 7 day incapacitation."""
         payload = {"fatality": False, "injury_type": "sprain", "days_off_work": 10}
 
-        response = auth_client.post(
-            "/api/compliance-automation/riddor/check", json=payload
-        )
+        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -316,9 +288,7 @@ class TestRIDDORAutomation:
         """Test RIDDOR check for non-reportable incident."""
         payload = {"fatality": False, "injury_type": "minor_cut", "days_off_work": 1}
 
-        response = auth_client.post(
-            "/api/compliance-automation/riddor/check", json=payload
-        )
+        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
         assert response.status_code == 200
 
         result = response.json()

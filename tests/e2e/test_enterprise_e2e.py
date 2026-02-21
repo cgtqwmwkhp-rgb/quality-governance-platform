@@ -689,9 +689,7 @@ class TestEdgeCasesE2E:
         # Make multiple rapid requests
         responses = []
         for _ in range(5):
-            response = client.get(
-                "/api/incidents?page=1&per_page=5", headers=auth_headers
-            )
+            response = client.get("/api/incidents?page=1&per_page=5", headers=auth_headers)
             responses.append(response.status_code)
 
         # All should succeed

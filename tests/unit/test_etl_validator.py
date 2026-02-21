@@ -6,12 +6,7 @@ Stage 10: Data Foundation
 import pytest
 
 from scripts.etl.config import INCIDENT_MAPPINGS, EntityType
-from scripts.etl.validator import (
-    ValidationResult,
-    ValidationSeverity,
-    validate_record,
-    validate_records,
-)
+from scripts.etl.validator import ValidationResult, ValidationSeverity, validate_record, validate_records
 
 
 class TestValidateRecord:
@@ -61,9 +56,7 @@ class TestValidateRecord:
         result = validate_record(record, INCIDENT_MAPPINGS, row_number=1)
 
         # Should have warning but still valid
-        warnings = [
-            i for i in result.issues if i.severity == ValidationSeverity.WARNING
-        ]
+        warnings = [i for i in result.issues if i.severity == ValidationSeverity.WARNING]
         assert len(warnings) >= 1
 
 
@@ -86,9 +79,7 @@ class TestValidateRecords:
             {"external_ref": "", "title": "", "incident_date": ""},  # Invalid
         ]
 
-        report = validate_records(
-            records, INCIDENT_MAPPINGS, EntityType.INCIDENT, "test.csv"
-        )
+        report = validate_records(records, INCIDENT_MAPPINGS, EntityType.INCIDENT, "test.csv")
 
         assert report.total_records == 3
         assert report.valid_records == 2
@@ -104,9 +95,7 @@ class TestValidateRecords:
             },
         ]
 
-        report = validate_records(
-            records, INCIDENT_MAPPINGS, EntityType.INCIDENT, "test.csv"
-        )
+        report = validate_records(records, INCIDENT_MAPPINGS, EntityType.INCIDENT, "test.csv")
         result_dict = report.to_dict()
 
         assert "summary" in result_dict

@@ -257,9 +257,7 @@ class TestStandardsAPI:
         assert data["items"][0]["code"] == "ISO-27001"
 
     @pytest.mark.asyncio
-    async def test_unauthorized_create_standard(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_unauthorized_create_standard(self, client: AsyncClient, auth_headers: dict):
         """Test that non-superusers cannot create standards."""
         payload = {
             "code": "ISO-45001",

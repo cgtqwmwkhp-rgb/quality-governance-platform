@@ -30,10 +30,7 @@ class TestProductionFailFast:
                 Settings()
 
             assert "SECRET_KEY" in str(exc_info.value)
-            assert (
-                "placeholder" in str(exc_info.value).lower()
-                or "production" in str(exc_info.value).lower()
-            )
+            assert "placeholder" in str(exc_info.value).lower() or "production" in str(exc_info.value).lower()
 
     def test_production_with_localhost_database_fails(self):
         """APP_ENV=production + localhost DATABASE_URL must fail fast."""
@@ -50,10 +47,7 @@ class TestProductionFailFast:
                 Settings()
 
             assert "DATABASE_URL" in str(exc_info.value)
-            assert (
-                "localhost" in str(exc_info.value).lower()
-                or "production" in str(exc_info.value).lower()
-            )
+            assert "localhost" in str(exc_info.value).lower() or "production" in str(exc_info.value).lower()
 
     def test_production_with_127_0_0_1_database_fails(self):
         """APP_ENV=production + 127.0.0.1 DATABASE_URL must fail fast."""
@@ -70,10 +64,7 @@ class TestProductionFailFast:
                 Settings()
 
             assert "DATABASE_URL" in str(exc_info.value)
-            assert (
-                "127.0.0.1" in str(exc_info.value)
-                or "localhost" in str(exc_info.value).lower()
-            )
+            assert "127.0.0.1" in str(exc_info.value) or "localhost" in str(exc_info.value).lower()
 
     def test_production_with_valid_config_passes(self):
         """APP_ENV=production + valid config must pass validation."""

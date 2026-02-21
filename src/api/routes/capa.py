@@ -13,13 +13,7 @@ from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsRespon
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.capa import (
-    CAPAAction,
-    CAPAPriority,
-    CAPASource,
-    CAPAStatus,
-    CAPAType,
-)
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -138,14 +132,10 @@ async def get_capa_stats(
     tenant_filter = CAPAAction.tenant_id == current_user.tenant_id
     total = await db.execute(select(func.count(CAPAAction.id)).where(tenant_filter))
     open_count = await db.execute(
-        select(func.count(CAPAAction.id)).where(
-            tenant_filter, CAPAAction.status == CAPAStatus.OPEN
-        )
+        select(func.count(CAPAAction.id)).where(tenant_filter, CAPAAction.status == CAPAStatus.OPEN)
     )
     in_progress = await db.execute(
-        select(func.count(CAPAAction.id)).where(
-            tenant_filter, CAPAAction.status == CAPAStatus.IN_PROGRESS
-        )
+        select(func.count(CAPAAction.id)).where(tenant_filter, CAPAAction.status == CAPAStatus.IN_PROGRESS)
     )
     overdue = await db.execute(
         select(func.count(CAPAAction.id)).where(

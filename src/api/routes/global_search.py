@@ -90,9 +90,7 @@ async def global_search(
                     status=inc.status or "Open",
                     date=str(inc.incident_date or inc.created_at or ""),
                     relevance=relevance,
-                    highlights=[
-                        w for w in words if w in title_lower or w in desc_lower
-                    ],
+                    highlights=[w for w in words if w in title_lower or w in desc_lower],
                 )
             )
     except Exception:

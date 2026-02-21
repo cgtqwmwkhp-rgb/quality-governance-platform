@@ -17,21 +17,10 @@ from src.domain.models.analytics import (
     SavedReport,
 )
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
-from src.domain.models.base import (
-    AuditTrailMixin,
-    ReferenceNumberMixin,
-    SoftDeleteMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 
 # CAPA (Corrective and Preventive Action)
-from src.domain.models.capa import (
-    CAPAAction,
-    CAPAPriority,
-    CAPASource,
-    CAPAStatus,
-    CAPAType,
-)
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
 
 # Compliance Automation
@@ -45,10 +34,7 @@ from src.domain.models.compliance_automation import (
 )
 
 # Compliance Evidence Links
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkMethod,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -90,14 +76,7 @@ from src.domain.models.evidence_asset import (
 )
 
 # Form Configuration (Admin Form Builder)
-from src.domain.models.form_config import (
-    Contract,
-    FormField,
-    FormStep,
-    FormTemplate,
-    LookupOption,
-    SystemSetting,
-)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 
 # IMS Unification (Tier 1)
 from src.domain.models.ims_unification import (

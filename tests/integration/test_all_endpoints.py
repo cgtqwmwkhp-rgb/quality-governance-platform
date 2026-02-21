@@ -657,9 +657,7 @@ class TestComplianceAutomationEndpoints:
         """GET /api/compliance-automation/updates returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get(
-            "/api/compliance-automation/updates", headers=auth_headers
-        )
+        response = client.get("/api/compliance-automation/updates", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_scheduled_audits(self, client, auth_headers):

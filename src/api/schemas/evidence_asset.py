@@ -31,39 +31,27 @@ class EvidenceAssetBase(BaseModel):
     source_id: int = Field(..., description="ID of the source record")
     title: Optional[str] = Field(None, max_length=300, description="Asset title")
     description: Optional[str] = Field(None, description="Asset description")
-    captured_at: Optional[datetime] = Field(
-        None, description="When the evidence was captured"
-    )
+    captured_at: Optional[datetime] = Field(None, description="When the evidence was captured")
     captured_by_role: Optional[str] = Field(
         None,
         max_length=100,
         description="Role of person who captured (driver, technician, etc.)",
     )
     latitude: Optional[float] = Field(None, ge=-90, le=90, description="GPS latitude")
-    longitude: Optional[float] = Field(
-        None, ge=-180, le=180, description="GPS longitude"
-    )
-    location_description: Optional[str] = Field(
-        None, max_length=500, description="Location description"
-    )
-    render_hint: Optional[str] = Field(
-        None, max_length=50, description="Render hint (thumbnail, embed, link, gallery)"
-    )
+    longitude: Optional[float] = Field(None, ge=-180, le=180, description="GPS longitude")
+    location_description: Optional[str] = Field(None, max_length=500, description="Location description")
+    render_hint: Optional[str] = Field(None, max_length=50, description="Render hint (thumbnail, embed, link, gallery)")
     visibility: str = Field(
         default="internal_customer",
         description="Visibility for customer packs (internal_only, internal_customer, external_allowed, public)",
     )
-    contains_pii: bool = Field(
-        default=False, description="Whether asset contains PII (faces, plates, etc.)"
-    )
+    contains_pii: bool = Field(default=False, description="Whether asset contains PII (faces, plates, etc.)")
     redaction_required: bool = Field(
         default=False,
         description="Whether asset needs redaction before external sharing",
     )
     retention_policy: str = Field(default="standard", description="Retention policy")
-    metadata_json: Optional[Dict[str, Any]] = Field(
-        None, description="Extended metadata"
-    )
+    metadata_json: Optional[Dict[str, Any]] = Field(None, description="Extended metadata")
 
     @field_validator("asset_type")
     @classmethod
@@ -80,9 +68,7 @@ class EvidenceAssetBase(BaseModel):
         """Validate source module is valid."""
         valid_modules = {e.value for e in EvidenceSourceModule}
         if v not in valid_modules:
-            raise ValueError(
-                f"Invalid source module: {v}. Must be one of {valid_modules}"
-            )
+            raise ValueError(f"Invalid source module: {v}. Must be one of {valid_modules}")
         return v
 
     @field_validator("visibility")
@@ -91,9 +77,7 @@ class EvidenceAssetBase(BaseModel):
         """Validate visibility is valid."""
         valid_visibility = {e.value for e in EvidenceVisibility}
         if v not in valid_visibility:
-            raise ValueError(
-                f"Invalid visibility: {v}. Must be one of {valid_visibility}"
-            )
+            raise ValueError(f"Invalid visibility: {v}. Must be one of {valid_visibility}")
         return v
 
     @field_validator("retention_policy")
@@ -102,9 +86,7 @@ class EvidenceAssetBase(BaseModel):
         """Validate retention policy is valid."""
         valid_policies = {e.value for e in EvidenceRetentionPolicy}
         if v not in valid_policies:
-            raise ValueError(
-                f"Invalid retention policy: {v}. Must be one of {valid_policies}"
-            )
+            raise ValueError(f"Invalid retention policy: {v}. Must be one of {valid_policies}")
         return v
 
 
@@ -142,9 +124,7 @@ class EvidenceAssetCreate(BaseModel):
     def validate_source_module(cls, v: str) -> str:
         valid_modules = {e.value for e in EvidenceSourceModule}
         if v not in valid_modules:
-            raise ValueError(
-                f"Invalid source module: {v}. Must be one of {valid_modules}"
-            )
+            raise ValueError(f"Invalid source module: {v}. Must be one of {valid_modules}")
         return v
 
     @field_validator("visibility")
@@ -152,9 +132,7 @@ class EvidenceAssetCreate(BaseModel):
     def validate_visibility(cls, v: str) -> str:
         valid_visibility = {e.value for e in EvidenceVisibility}
         if v not in valid_visibility:
-            raise ValueError(
-                f"Invalid visibility: {v}. Must be one of {valid_visibility}"
-            )
+            raise ValueError(f"Invalid visibility: {v}. Must be one of {valid_visibility}")
         return v
 
 
@@ -183,9 +161,7 @@ class EvidenceAssetUpdate(BaseModel):
             return v
         valid_visibility = {e.value for e in EvidenceVisibility}
         if v not in valid_visibility:
-            raise ValueError(
-                f"Invalid visibility: {v}. Must be one of {valid_visibility}"
-            )
+            raise ValueError(f"Invalid visibility: {v}. Must be one of {valid_visibility}")
         return v
 
     @field_validator("retention_policy")
@@ -195,9 +171,7 @@ class EvidenceAssetUpdate(BaseModel):
             return v
         valid_policies = {e.value for e in EvidenceRetentionPolicy}
         if v not in valid_policies:
-            raise ValueError(
-                f"Invalid retention policy: {v}. Must be one of {valid_policies}"
-            )
+            raise ValueError(f"Invalid retention policy: {v}. Must be one of {valid_policies}")
         return v
 
 

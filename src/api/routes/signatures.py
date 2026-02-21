@@ -78,9 +78,7 @@ class SignerResponse(BaseModel):
 class SignInput(BaseModel):
     signature_type: str = Field(..., pattern="^(drawn|typed|uploaded)$")
     signature_data: str = Field(..., min_length=1)
-    auth_method: str = Field(
-        default="email", pattern="^(email|sms|password|biometric)$"
-    )
+    auth_method: str = Field(default="email", pattern="^(email|sms|password|biometric)$")
     geo_location: Optional[str] = None
 
 
@@ -227,9 +225,7 @@ async def get_signature_request(
     request = await service.get_request(request_id)
 
     if not request:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
 
     return _format_request(request)
 
@@ -522,12 +518,7 @@ async def get_signature_stats(
     )
     status_counts: dict[str, int] = dict(status_result.all())
 
-    total_signatures = (
-        await db.scalar(
-            select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)
-        )
-        or 0
-    )
+    total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
     this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
     this_month_count = (

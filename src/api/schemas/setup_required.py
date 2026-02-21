@@ -40,18 +40,10 @@ class SetupRequiredResponse(BaseModel):
         default=True,
         description="Flag indicating setup is required. Always true for this response type.",
     )
-    module: str = Field(
-        ..., description="The module that requires setup (e.g., 'planet-mark', 'uvdb')"
-    )
-    message: str = Field(
-        ..., description="Human-readable description of what setup is needed"
-    )
-    next_action: str = Field(
-        ..., description="Specific action the user/admin should take"
-    )
-    request_id: Optional[str] = Field(
-        default=None, description="Request ID for tracing"
-    )
+    module: str = Field(..., description="The module that requires setup (e.g., 'planet-mark', 'uvdb')")
+    message: str = Field(..., description="Human-readable description of what setup is needed")
+    next_action: str = Field(..., description="Specific action the user/admin should take")
+    request_id: Optional[str] = Field(default=None, description="Request ID for tracing")
 
     model_config = {
         "json_schema_extra": {
@@ -67,9 +59,7 @@ class SetupRequiredResponse(BaseModel):
     }
 
 
-def setup_required_response(
-    module: str, message: str, next_action: str, request_id: Optional[str] = None
-) -> dict:
+def setup_required_response(module: str, message: str, next_action: str, request_id: Optional[str] = None) -> dict:
     """Create a standardized setup_required response dict.
 
     Args:

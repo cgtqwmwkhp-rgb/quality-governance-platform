@@ -123,9 +123,7 @@ async def list_tenants(
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
 
-    return await paginate(
-        db, select(Tenant).options(selectinload(Tenant.users)), params
-    )
+    return await paginate(db, select(Tenant).options(selectinload(Tenant.users)), params)
 
 
 @router.get("/current", response_model=TenantResponse)
@@ -138,9 +136,7 @@ async def get_current_tenant(
     tenant = await service.get_tenant(1)
 
     if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     return tenant
 
@@ -157,9 +153,7 @@ async def get_tenant(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     return tenant
 
@@ -202,9 +196,7 @@ async def update_branding(
     service = TenantService(db)
 
     try:
-        tenant = await service.update_branding(
-            tenant_id, **data.model_dump(exclude_unset=True)
-        )
+        tenant = await service.update_branding(tenant_id, **data.model_dump(exclude_unset=True))
         await invalidate_tenant_cache(current_user.tenant_id, "tenants")
         track_metric("tenant.mutation", 1)
         return tenant
@@ -254,9 +246,7 @@ async def add_user_to_tenant(
     service = TenantService(db)
 
     if not await service.can_add_user(tenant_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="User limit reached"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User limit reached")
 
     try:
         tenant_user = await service.add_user_to_tenant(
@@ -355,9 +345,7 @@ async def get_features(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     return tenant.features_enabled
 
@@ -399,9 +387,7 @@ async def get_limits(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     current_users, max_users = await service.check_user_limit(tenant_id)
 

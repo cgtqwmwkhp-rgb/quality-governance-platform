@@ -29,12 +29,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
-from src.domain.services.risk_service import (
-    BowTieService,
-    KRIService,
-    RiskScoringEngine,
-    RiskService,
-)
+from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -47,9 +42,7 @@ router = APIRouter()
 class RiskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=255)
     description: str = Field(..., min_length=10)
-    category: str = Field(
-        ..., description="EnterpriseRisk category (strategic, operational, etc.)"
-    )
+    category: str = Field(..., description="EnterpriseRisk category (strategic, operational, etc.)")
     subcategory: Optional[str] = None
     department: Optional[str] = None
     location: Optional[str] = None
@@ -94,9 +87,7 @@ class ControlCreate(BaseModel):
     name: str = Field(..., min_length=5, max_length=255)
     description: str = Field(..., min_length=10)
     control_type: str = Field(..., description="preventive, detective, corrective")
-    control_nature: str = Field(
-        default="manual", description="manual, automated, hybrid"
-    )
+    control_nature: str = Field(default="manual", description="manual, automated, hybrid")
     control_owner_id: Optional[int] = None
     control_owner_name: Optional[str] = None
     standard_clauses: Optional[list[str]] = None
@@ -122,9 +113,7 @@ class KRIValueUpdate(BaseModel):
 
 
 class BowTieElementCreate(BaseModel):
-    element_type: str = Field(
-        ..., description="cause, consequence, prevention, mitigation"
-    )
+    element_type: str = Field(..., description="cause, consequence, prevention, mitigation")
     title: str = Field(..., min_length=3, max_length=255)
     description: Optional[str] = None
     barrier_type: Optional[str] = None
@@ -188,9 +177,7 @@ async def list_risks(
                 "status": r.status,
                 "is_within_appetite": r.is_within_appetite,
                 "risk_owner_name": r.risk_owner_name,
-                "next_review_date": (
-                    r.next_review_date.isoformat() if r.next_review_date else None
-                ),
+                "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
             }
             for r in paginated.items
         ],
@@ -226,9 +213,7 @@ async def update_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
-    risk = await get_or_404(
-        db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id
-    )
+    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
     apply_updates(risk, risk_data)
     await db.commit()
     await db.refresh(risk)
@@ -249,9 +234,7 @@ async def assess_risk(
     await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
     service = RiskService(db)
     try:
-        risk = await service.update_risk_assessment(
-            risk_id, assessment.model_dump(exclude_unset=True)
-        )
+        risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
         return {
             "message": "EnterpriseRisk assessment updated",
             "inherent_score": risk.inherent_score,
@@ -270,9 +253,7 @@ async def delete_risk(
     current_user: CurrentSuperuser,
 ) -> None:
     """Delete a risk (soft delete by changing status)"""
-    risk = await get_or_404(
-        db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id
-    )
+    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
     risk.status = "closed"
     risk.updated_at = datetime.utcnow()
@@ -389,9 +370,7 @@ async def add_bow_tie_element(
     }
 
 
-@router.delete(
-    "/{risk_id}/bowtie/elements/{element_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{risk_id}/bowtie/elements/{element_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_bow_tie_element(
     risk_id: int,
     element_id: int,
@@ -409,9 +388,7 @@ async def delete_bow_tie_element(
     element = result.scalar_one_or_none()
 
     if not element:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Element not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Element not found")
 
     await db.delete(element)
     await db.commit()
@@ -437,9 +414,7 @@ async def create_kri(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
-    await get_or_404(
-        db, EnterpriseRisk, kri_data.risk_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, EnterpriseRisk, kri_data.risk_id, tenant_id=current_user.tenant_id)
 
     kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
     db.add(kri)
@@ -493,9 +468,7 @@ async def list_controls(
 ) -> list[dict[str, Any]]:
     """List all risk controls"""
     result = await db.execute(
-        select(EnterpriseRiskControl).where(
-            EnterpriseRiskControl.is_active == True
-        )  # noqa: E712
+        select(EnterpriseRiskControl).where(EnterpriseRiskControl.is_active == True)  # noqa: E712
     )
     controls = result.scalars().all()
 
@@ -522,9 +495,7 @@ async def create_control(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a risk control"""
-    count = (
-        await db.scalar(select(func.count()).select_from(EnterpriseRiskControl)) or 0
-    )
+    count = await db.scalar(select(func.count()).select_from(EnterpriseRiskControl)) or 0
     reference = f"CTRL-{(count + 1):04d}"
 
     control = EnterpriseRiskControl(
@@ -594,9 +565,7 @@ async def list_appetite_statements(
 ) -> list[dict[str, Any]]:
     """List risk appetite statements by category"""
     result = await db.execute(
-        select(RiskAppetiteStatement).where(
-            RiskAppetiteStatement.is_active == True
-        )  # noqa: E712
+        select(RiskAppetiteStatement).where(RiskAppetiteStatement.is_active == True)  # noqa: E712
     )
     statements = result.scalars().all()
 
@@ -627,9 +596,7 @@ async def get_risk_summary(
     """Get overall risk register summary"""
     tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
     total_risks = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.status != "closed")
+        select(func.count()).select_from(EnterpriseRisk).where(tenant_filter, EnterpriseRisk.status != "closed")
     )
     critical_risks = await db.scalar(
         select(func.count())
@@ -727,30 +694,18 @@ async def get_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed risk information"""
-    risk = await get_or_404(
-        db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id
-    )
+    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
-    result = await db.execute(
-        select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id)
-    )
+    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
     control_mappings = result.scalars().all()
     control_ids = [m.control_id for m in control_mappings]
     if control_ids:
-        result = await db.execute(
-            select(EnterpriseRiskControl).where(
-                EnterpriseRiskControl.id.in_(control_ids)
-            )
-        )
+        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
         controls = result.scalars().all()
     else:
         controls = []
 
-    result = await db.execute(
-        select(EnterpriseKeyRiskIndicator).where(
-            EnterpriseKeyRiskIndicator.risk_id == risk_id
-        )
-    )
+    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
     kris = result.scalars().all()
 
     result = await db.execute(
@@ -790,18 +745,12 @@ async def get_risk(
         "risk_owner_id": risk.risk_owner_id,
         "risk_owner_name": risk.risk_owner_name,
         "review_frequency_days": risk.review_frequency_days,
-        "last_review_date": (
-            risk.last_review_date.isoformat() if risk.last_review_date else None
-        ),
-        "next_review_date": (
-            risk.next_review_date.isoformat() if risk.next_review_date else None
-        ),
+        "last_review_date": (risk.last_review_date.isoformat() if risk.last_review_date else None),
+        "next_review_date": (risk.next_review_date.isoformat() if risk.next_review_date else None),
         "review_notes": risk.review_notes,
         "is_escalated": risk.is_escalated,
         "escalation_reason": risk.escalation_reason,
-        "identified_date": (
-            risk.identified_date.isoformat() if risk.identified_date else None
-        ),
+        "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
         "controls": [
             {
                 "id": c.id,

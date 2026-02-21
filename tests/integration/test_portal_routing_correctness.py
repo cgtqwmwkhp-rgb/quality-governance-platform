@@ -18,9 +18,7 @@ from httpx import AsyncClient
 class TestPortalRoutingCorrectness:
     """Tests for portal incident routing correctness."""
 
-    async def test_all_portal_types_route_correctly_and_are_deterministic(
-        self, client: AsyncClient
-    ):
+    async def test_all_portal_types_route_correctly_and_are_deterministic(self, client: AsyncClient):
         """Test all report types route to correct tables in a single test.
 
         This test verifies:
@@ -56,9 +54,7 @@ class TestPortalRoutingCorrectness:
             }
 
             response = await client.post("/api/v1/portal/reports/", json=payload)
-            assert (
-                response.status_code == 201
-            ), f"{description}: Expected 201, got {response.status_code}"
+            assert response.status_code == 201, f"{description}: Expected 201, got {response.status_code}"
 
             data = response.json()
             assert data["success"] is True, f"{description}: success should be True"
@@ -69,9 +65,7 @@ class TestPortalRoutingCorrectness:
             all_references.append(data["reference_number"])
 
         # Verify all reference numbers are unique (deterministic routing)
-        assert len(set(all_references)) == len(
-            all_references
-        ), "All reference numbers should be unique"
+        assert len(set(all_references)) == len(all_references), "All reference numbers should be unique"
 
     async def test_unknown_report_type_rejected(self, client: AsyncClient):
         """Test that unknown report_type is rejected per ADR-0002 fail-fast."""
@@ -86,6 +80,4 @@ class TestPortalRoutingCorrectness:
         }
         response = await client.post("/api/v1/portal/reports/", json=payload)
 
-        assert (
-            response.status_code == 400
-        ), f"Expected 400 for unknown report_type, got {response.status_code}"
+        assert response.status_code == 400, f"Expected 400 for unknown report_type, got {response.status_code}"

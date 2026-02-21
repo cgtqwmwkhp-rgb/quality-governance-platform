@@ -8,12 +8,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.near_miss import (
-    NearMissCreate,
-    NearMissListResponse,
-    NearMissResponse,
-    NearMissUpdate,
-)
+from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -120,9 +115,7 @@ async def get_near_miss(
     current_user: CurrentUser,
 ) -> NearMiss:
     """Get a near miss by ID."""
-    return await get_or_404(
-        db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id
-    )
+    return await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{near_miss_id}", response_model=NearMissResponse)
@@ -134,9 +127,7 @@ async def update_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
-    near_miss = await get_or_404(
-        db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id
-    )
+    near_miss = await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
     old_status = near_miss.status
     update_data = apply_updates(near_miss, data, set_updated_at=False)
 
@@ -181,9 +172,7 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
-    near_miss = await get_or_404(
-        db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id
-    )
+    near_miss = await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
 
     await record_audit_event(
         db=db,
@@ -229,9 +218,7 @@ async def list_near_miss_investigations(
     paginated = await paginate(db, query, params)
 
     return {
-        "items": [
-            InvestigationRunResponse.model_validate(inv) for inv in paginated.items
-        ],
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
         "total": paginated.total,
         "page": paginated.page,
         "page_size": paginated.page_size,

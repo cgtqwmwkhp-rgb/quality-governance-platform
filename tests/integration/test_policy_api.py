@@ -37,9 +37,7 @@ async def test_create_policy(client: AsyncClient, test_user: User, auth_headers:
 
 
 @pytest.mark.asyncio
-async def test_get_policy_by_id(
-    client: AsyncClient, test_user: User, auth_headers: dict, test_session
-):
+async def test_get_policy_by_id(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test getting a policy by ID."""
     # Create a policy directly in the database
     policy = Policy(
@@ -193,9 +191,7 @@ async def test_list_policies_pagination(
 
 
 @pytest.mark.asyncio
-async def test_update_policy(
-    client: AsyncClient, test_user: User, auth_headers: dict, test_session
-):
+async def test_update_policy(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test updating a policy."""
     # Create a policy
     policy = Policy(
@@ -245,9 +241,7 @@ async def test_update_policy_not_found(client: AsyncClient, auth_headers: dict):
 
 
 @pytest.mark.asyncio
-async def test_delete_policy(
-    client: AsyncClient, test_user: User, auth_headers: dict, test_session
-):
+async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test deleting a policy."""
     # Create a policy
     policy = Policy(
@@ -289,9 +283,7 @@ async def test_delete_policy_not_found(client: AsyncClient, auth_headers: dict):
 
 
 @pytest.mark.asyncio
-async def test_full_crud_flow(
-    client: AsyncClient, test_user: User, auth_headers: dict, test_session
-):
+async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test the full CRUD flow: create -> get -> list -> update -> delete."""
     # 1. Create
     create_data = {

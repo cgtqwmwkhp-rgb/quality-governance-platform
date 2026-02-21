@@ -78,9 +78,7 @@ class TestNearMissInvestigationValidation:
             response = await client.post("/api/v1/investigations/", json=data)
 
             # Should NOT get 422 validation error
-            assert (
-                response.status_code != 422
-            ), f"Entity type '{entity_type}' was rejected as invalid"
+            assert response.status_code != 422, f"Entity type '{entity_type}' was rejected as invalid"
 
 
 @pytest.mark.asyncio
@@ -136,9 +134,7 @@ class TestEvidenceAssetValidation:
             # Will get 401 (auth) instead
             assert response.status_code == 401
 
-    async def test_evidence_asset_invalid_source_module_rejected(
-        self, client: AsyncClient
-    ):
+    async def test_evidence_asset_invalid_source_module_rejected(self, client: AsyncClient):
         """Test that invalid source modules are rejected."""
         files = {"file": ("test.jpg", b"fake", "image/jpeg")}
         data = {

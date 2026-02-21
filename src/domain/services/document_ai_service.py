@@ -72,15 +72,11 @@ When analyzing documents:
 Always respond with valid JSON matching the requested schema."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(
-            settings, "ANTHROPIC_API_KEY", None
-        )
+        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(settings, "ANTHROPIC_API_KEY", None)
         self.model = "claude-sonnet-4-20250514"
         self.base_url = "https://api.anthropic.com/v1"
 
-    async def analyze_document(
-        self, content: str, file_name: str, file_type: str
-    ) -> DocumentAnalysis:
+    async def analyze_document(self, content: str, file_name: str, file_type: str) -> DocumentAnalysis:
         """Analyze document content and extract metadata."""
 
         if not self.api_key:
@@ -187,9 +183,7 @@ Respond with JSON matching this schema:
             }:
                 word_freq[word] = word_freq.get(word, 0) + 1
 
-        keywords = sorted(word_freq.keys(), key=lambda x: word_freq[x], reverse=True)[
-            :10
-        ]
+        keywords = sorted(word_freq.keys(), key=lambda x: word_freq[x], reverse=True)[:10]
 
         # Detect document type from filename/content
         doc_type = "other"
@@ -244,9 +238,7 @@ Respond with JSON matching this schema:
 
                 # If section is too large, split further
                 if len(section_content) > max_chunk_size:
-                    sub_chunks = self._split_by_size(
-                        section_content, max_chunk_size, overlap
-                    )
+                    sub_chunks = self._split_by_size(section_content, max_chunk_size, overlap)
                     for sub_idx, sub_content in enumerate(sub_chunks):
                         chunks.append(
                             DocumentChunk(
@@ -345,9 +337,7 @@ class EmbeddingService:
     """Service for generating document embeddings."""
 
     def __init__(self):
-        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(
-            settings, "VOYAGE_API_KEY", None
-        )
+        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(settings, "VOYAGE_API_KEY", None)
         self.model = "voyage-large-2"
         self.base_url = "https://api.voyageai.com/v1"
 
@@ -416,9 +406,7 @@ class VectorSearchService:
     """Service for semantic search using Pinecone."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(
-            settings, "PINECONE_API_KEY", None
-        )
+        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(settings, "PINECONE_API_KEY", None)
         self.index_name = getattr(settings, "pinecone_index", "qgp-documents")
         self.environment = getattr(settings, "pinecone_environment", "gcp-starter")
         self.embedding_service = EmbeddingService()
@@ -468,9 +456,7 @@ class VectorSearchService:
             logger.error(f"Vector upsert failed: {e}")
             return False
 
-    async def search(
-        self, query: str, top_k: int = 10, filter_dict: Optional[dict] = None
-    ) -> list[dict]:
+    async def search(self, query: str, top_k: int = 10, filter_dict: Optional[dict] = None) -> list[dict]:
         """Semantic search for documents."""
 
         if not self.api_key:

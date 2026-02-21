@@ -159,11 +159,7 @@ async def ensure_test_user(
         )
 
     # Check if user exists - EAGER LOAD roles to avoid MissingGreenlet
-    result = await db.execute(
-        select(User)
-        .where(User.email == request.email)
-        .options(selectinload(User.roles))
-    )
+    result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     created = False
@@ -185,9 +181,7 @@ async def ensure_test_user(
         await db.commit()
         await db.refresh(user)
         created = True
-        logger.info(
-            f"Created test user with ID: {user.id} (is_superuser={request.is_superuser})"
-        )
+        logger.info(f"Created test user with ID: {user.id} (is_superuser={request.is_superuser})")
     else:
         # Update password but do NOT change is_superuser flag
         user.hashed_password = get_password_hash(request.password)

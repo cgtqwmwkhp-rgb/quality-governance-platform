@@ -62,9 +62,7 @@ class SignatureService:
         metadata: Optional[dict] = None,
     ) -> SignatureRequest:
         """Create a new signature request."""
-        reference = (
-            f"SIG-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
-        )
+        reference = f"SIG-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
 
         document_hash = None
         if document_content:
@@ -121,20 +119,12 @@ class SignatureService:
 
     async def get_request(self, request_id: int) -> Optional[SignatureRequest]:
         """Get a signature request by ID."""
-        result = await self.db.execute(
-            select(SignatureRequest).where(SignatureRequest.id == request_id)
-        )
+        result = await self.db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
         return result.scalar_one_or_none()
 
-    async def get_request_by_reference(
-        self, reference: str
-    ) -> Optional[SignatureRequest]:
+    async def get_request_by_reference(self, reference: str) -> Optional[SignatureRequest]:
         """Get a signature request by reference number."""
-        result = await self.db.execute(
-            select(SignatureRequest).where(
-                SignatureRequest.reference_number == reference
-            )
-        )
+        result = await self.db.execute(select(SignatureRequest).where(SignatureRequest.reference_number == reference))
         return result.scalar_one_or_none()
 
     async def send_request(self, request_id: int) -> SignatureRequest:
@@ -211,9 +201,7 @@ class SignatureService:
         user_agent: str,
     ) -> SignatureRequestSigner:
         """Record that a signer viewed the document."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id)
-        )
+        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
         signer = result.scalar_one_or_none()
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
@@ -257,9 +245,7 @@ class SignatureService:
         geo_location: Optional[str] = None,
     ) -> Signature:
         """Apply a signature."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id)
-        )
+        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
         signer = result.scalar_one_or_none()
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
@@ -355,9 +341,7 @@ class SignatureService:
         user_agent: str,
     ) -> SignatureRequestSigner:
         """Decline to sign."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id)
-        )
+        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
         signer = result.scalar_one_or_none()
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
@@ -476,9 +460,7 @@ class SignatureService:
         metadata: Optional[dict] = None,
     ) -> SignatureRequest:
         """Create a signature request from a template."""
-        result = await self.db.execute(
-            select(SignatureTemplate).where(SignatureTemplate.id == template_id)
-        )
+        result = await self.db.execute(select(SignatureTemplate).where(SignatureTemplate.id == template_id))
         template = result.scalar_one_or_none()
         if not template:
             raise ValueError(f"Template {template_id} not found")
@@ -581,9 +563,7 @@ class SignatureService:
                 if days_since_created < 1:
                     continue
 
-            pending_signers = [
-                s for s in request.signers if s.status in ["pending", "viewed"]
-            ]
+            pending_signers = [s for s in request.signers if s.status in ["pending", "viewed"]]
 
             if pending_signers:
                 request.last_reminder_at = now

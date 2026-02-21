@@ -94,9 +94,7 @@ class EnterpriseRisk(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Identification
     reference: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
@@ -114,18 +112,14 @@ class EnterpriseRisk(Base):
     affected_objectives: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Organizational placement
-    department: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True, index=True
-    )
+    department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     process: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Inherent Risk (before controls)
     inherent_likelihood: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
     inherent_impact: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
-    inherent_score: Mapped[int] = mapped_column(
-        Integer, nullable=False
-    )  # likelihood × impact
+    inherent_score: Mapped[int] = mapped_column(Integer, nullable=False)  # likelihood × impact
 
     # Residual Risk (after controls)
     residual_likelihood: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -139,9 +133,7 @@ class EnterpriseRisk(Base):
 
     # Risk Appetite
     risk_appetite: Mapped[str] = mapped_column(String(50), default="cautious")
-    appetite_threshold: Mapped[int] = mapped_column(
-        Integer, default=12
-    )  # Max acceptable score
+    appetite_threshold: Mapped[int] = mapped_column(Integer, default=12)  # Max acceptable score
     is_within_appetite: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Treatment
@@ -152,23 +144,15 @@ class EnterpriseRisk(Base):
     treatment_benefit: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Ownership
-    risk_owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    risk_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     risk_owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    delegate_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    delegate_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Review
     status: Mapped[str] = mapped_column(String(50), default="identified", index=True)
     review_frequency_days: Mapped[int] = mapped_column(Integer, default=90)
-    last_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    last_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Escalation
@@ -184,12 +168,8 @@ class EnterpriseRisk(Base):
     # Timestamps
     identified_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-    created_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     def __repr__(self) -> str:
         return f"<Risk(ref={self.reference}, title={self.title[:30]})>"
@@ -208,26 +188,16 @@ class EnterpriseRiskControl(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Control type
-    control_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # preventive, detective, corrective
-    control_nature: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # manual, automated, hybrid
+    control_type: Mapped[str] = mapped_column(String(50), nullable=False)  # preventive, detective, corrective
+    control_nature: Mapped[str] = mapped_column(String(50), nullable=False)  # manual, automated, hybrid
 
     # Effectiveness
-    effectiveness: Mapped[str] = mapped_column(
-        String(50), default="effective"
-    )  # effective, partially, ineffective
+    effectiveness: Mapped[str] = mapped_column(String(50), default="effective")  # effective, partially, ineffective
     effectiveness_score: Mapped[int] = mapped_column(Integer, default=3)  # 1-5
 
     # Ownership
-    control_owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    control_owner_name: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
+    control_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    control_owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Testing
     last_test_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -243,15 +213,11 @@ class EnterpriseRiskControl(Base):
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    implementation_status: Mapped[str] = mapped_column(
-        String(50), default="implemented"
-    )
+    implementation_status: Mapped[str] = mapped_column(String(50), default="implemented")
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
         return f"<EnterpriseRiskControl(ref={self.reference}, name={self.name[:30]})>"
@@ -263,9 +229,7 @@ class RiskControlMapping(Base):
     __tablename__ = "risk_control_mappings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
     control_id: Mapped[int] = mapped_column(
         ForeignKey("enterprise_risk_controls.id", ondelete="CASCADE"),
         nullable=False,
@@ -273,14 +237,10 @@ class RiskControlMapping(Base):
     )
 
     # Mapping details
-    contribution: Mapped[str] = mapped_column(
-        String(50), default="partial"
-    )  # full, partial, minimal
+    contribution: Mapped[str] = mapped_column(String(50), default="partial")  # full, partial, minimal
     reduces_likelihood: Mapped[bool] = mapped_column(Boolean, default=True)
     reduces_impact: Mapped[bool] = mapped_column(Boolean, default=False)
-    reduction_value: Mapped[int] = mapped_column(
-        Integer, default=1
-    )  # How much it reduces score
+    reduction_value: Mapped[int] = mapped_column(Integer, default=1)  # How much it reduces score
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -293,33 +253,21 @@ class BowTieElement(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Element type
-    element_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # cause, consequence, prevention, mitigation
-    position: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # left (causes), right (consequences)
+    element_type: Mapped[str] = mapped_column(String(50), nullable=False)  # cause, consequence, prevention, mitigation
+    position: Mapped[str] = mapped_column(String(50), nullable=False)  # left (causes), right (consequences)
 
     # Content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # For barriers
-    barrier_type: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )  # hard, soft
-    linked_control_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("enterprise_risk_controls.id"), nullable=True
-    )
+    barrier_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # hard, soft
+    linked_control_id: Mapped[Optional[int]] = mapped_column(ForeignKey("enterprise_risk_controls.id"), nullable=True)
     effectiveness: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Ordering
@@ -337,30 +285,22 @@ class EnterpriseKeyRiskIndicator(Base):
     __tablename__ = "enterprise_key_risk_indicators"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # KRI definition
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metric_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # count, percentage, ratio, value
+    metric_type: Mapped[str] = mapped_column(String(50), nullable=False)  # count, percentage, ratio, value
 
     # Thresholds
     green_threshold: Mapped[float] = mapped_column(Float, nullable=False)  # Good
     amber_threshold: Mapped[float] = mapped_column(Float, nullable=False)  # Warning
     red_threshold: Mapped[float] = mapped_column(Float, nullable=False)  # Critical
-    threshold_direction: Mapped[str] = mapped_column(
-        String(20), default="above"
-    )  # above, below
+    threshold_direction: Mapped[str] = mapped_column(String(20), default="above")  # above, below
 
     # Current value
     current_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    current_status: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # green, amber, red
+    current_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # green, amber, red
     last_updated: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Data source
@@ -377,9 +317,7 @@ class EnterpriseKeyRiskIndicator(Base):
     last_alert_sent: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Ownership
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -391,15 +329,11 @@ class RiskAssessmentHistory(Base):
     __tablename__ = "risk_assessment_history"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Assessment snapshot
     assessment_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    assessed_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    assessed_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Scores at time of assessment
     inherent_likelihood: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -432,9 +366,7 @@ class RiskAppetiteStatement(Base):
     category: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
 
     # Appetite level
-    appetite_level: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # averse, minimal, cautious, open, hungry
+    appetite_level: Mapped[str] = mapped_column(String(50), nullable=False)  # averse, minimal, cautious, open, hungry
 
     # Thresholds
     max_inherent_score: Mapped[int] = mapped_column(Integer, default=25)
@@ -448,12 +380,8 @@ class RiskAppetiteStatement(Base):
     # Approval
     approved_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     approved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

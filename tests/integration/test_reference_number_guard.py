@@ -90,9 +90,7 @@ class TestReferenceNumberGuard:
         await test_session.flush()
 
         # Assign role to user using the association table
-        await test_session.execute(
-            insert(user_roles).values(user_id=test_user.id, role_id=role.id)
-        )
+        await test_session.execute(insert(user_roles).values(user_id=test_user.id, role_id=role.id))
         await test_session.commit()
 
         # Create policy with explicit reference_number

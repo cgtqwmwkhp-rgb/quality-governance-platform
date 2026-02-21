@@ -129,9 +129,7 @@ async def get_five_whys_analysis(
     analysis = await service.get_analysis(analysis_id)
 
     if not analysis:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
 
     return {
         "id": analysis.id,
@@ -292,9 +290,7 @@ async def get_fishbone_diagram(
     diagram = await service.get_diagram(diagram_id)
 
     if not diagram:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Diagram not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Diagram not found")
 
     return {
         "id": diagram.id,

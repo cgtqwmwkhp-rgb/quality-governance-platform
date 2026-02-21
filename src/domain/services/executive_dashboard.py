@@ -15,10 +15,7 @@ from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, ThresholdStatus
 from src.domain.models.near_miss import NearMiss
-from src.domain.models.policy_acknowledgment import (
-    AcknowledgmentStatus,
-    PolicyAcknowledgment,
-)
+from src.domain.models.policy_acknowledgment import AcknowledgmentStatus, PolicyAcknowledgment
 from src.domain.models.risk import Risk, RiskStatus
 from src.domain.models.rta import RTA
 from src.domain.models.workflow_rules import SLATracking
@@ -77,20 +74,12 @@ class ExecutiveDashboardService:
             self._get_incident_summary(cutoff),
             {**empty_summary, "by_severity": {}, "high_severity": 0},
         )
-        near_miss_summary = await self._safe_call(
-            self._get_near_miss_summary(cutoff), empty_summary
-        )
-        complaint_summary = await self._safe_call(
-            self._get_complaint_summary(cutoff), empty_summary
-        )
-        rta_summary = await self._safe_call(
-            self._get_rta_summary(cutoff), empty_summary
-        )
+        near_miss_summary = await self._safe_call(self._get_near_miss_summary(cutoff), empty_summary)
+        complaint_summary = await self._safe_call(self._get_complaint_summary(cutoff), empty_summary)
+        rta_summary = await self._safe_call(self._get_rta_summary(cutoff), empty_summary)
         risk_summary = await self._safe_call(self._get_risk_summary(), empty_risk)
         kri_summary = await self._safe_call(self._get_kri_summary(), empty_kri)
-        compliance_summary = await self._safe_call(
-            self._get_compliance_summary(), empty_compliance
-        )
+        compliance_summary = await self._safe_call(self._get_compliance_summary(), empty_compliance)
         sla_summary = await self._safe_call(self._get_sla_summary(), empty_sla)
 
         health_score = self._calculate_health_score(
@@ -125,9 +114,7 @@ class ExecutiveDashboardService:
     async def _get_incident_summary(self, cutoff: datetime) -> Dict[str, Any]:
         """Get incident summary statistics."""
         # Total in period
-        total_result = await self.db.execute(
-            select(func.count(Incident.id)).where(Incident.incident_date >= cutoff)
-        )
+        total_result = await self.db.execute(select(func.count(Incident.id)).where(Incident.incident_date >= cutoff))
         total = total_result.scalar() or 0
 
         # By severity
@@ -185,15 +172,12 @@ class ExecutiveDashboardService:
             "by_severity": severity_counts,
             "sif_count": sif_count,
             "psif_count": psif_count,
-            "critical_high": severity_counts.get("critical", 0)
-            + severity_counts.get("high", 0),
+            "critical_high": severity_counts.get("critical", 0) + severity_counts.get("high", 0),
         }
 
     async def _get_near_miss_summary(self, cutoff: datetime) -> Dict[str, Any]:
         """Get near-miss summary statistics."""
-        total_result = await self.db.execute(
-            select(func.count(NearMiss.id)).where(NearMiss.created_at >= cutoff)
-        )
+        total_result = await self.db.execute(select(func.count(NearMiss.id)).where(NearMiss.created_at >= cutoff))
         total = total_result.scalar() or 0
 
         # Compare to previous period
@@ -223,9 +207,7 @@ class ExecutiveDashboardService:
 
     async def _get_complaint_summary(self, cutoff: datetime) -> Dict[str, Any]:
         """Get complaint summary statistics."""
-        total_result = await self.db.execute(
-            select(func.count(Complaint.id)).where(Complaint.created_at >= cutoff)
-        )
+        total_result = await self.db.execute(select(func.count(Complaint.id)).where(Complaint.created_at >= cutoff))
         total = total_result.scalar() or 0
 
         # Open complaints
@@ -258,16 +240,12 @@ class ExecutiveDashboardService:
             "total_in_period": total,
             "open": open_count,
             "closed_in_period": closed_count,
-            "resolution_rate": (
-                round((closed_count / total * 100), 1) if total > 0 else 100
-            ),
+            "resolution_rate": (round((closed_count / total * 100), 1) if total > 0 else 100),
         }
 
     async def _get_rta_summary(self, cutoff: datetime) -> Dict[str, Any]:
         """Get RTA summary statistics."""
-        total_result = await self.db.execute(
-            select(func.count(RTA.id)).where(RTA.created_at >= cutoff)
-        )
+        total_result = await self.db.execute(select(func.count(RTA.id)).where(RTA.created_at >= cutoff))
         total = total_result.scalar() or 0
 
         return {
@@ -277,9 +255,7 @@ class ExecutiveDashboardService:
     async def _get_risk_summary(self) -> Dict[str, Any]:
         """Get risk summary statistics."""
         # Total active risks
-        total_result = await self.db.execute(
-            select(func.count(Risk.id)).where(Risk.is_active == True)
-        )
+        total_result = await self.db.execute(select(func.count(Risk.id)).where(Risk.is_active == True))
         total = total_result.scalar() or 0
 
         # By risk level
@@ -296,24 +272,19 @@ class ExecutiveDashboardService:
             level_counts[level] = count_result.scalar() or 0
 
         # Average risk score
-        avg_result = await self.db.execute(
-            select(func.avg(Risk.risk_score)).where(Risk.is_active == True)
-        )
+        avg_result = await self.db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True))
         avg_score = avg_result.scalar() or 0
 
         return {
             "total_active": total,
             "by_level": level_counts,
-            "high_critical": level_counts.get("critical", 0)
-            + level_counts.get("high", 0),
+            "high_critical": level_counts.get("critical", 0) + level_counts.get("high", 0),
             "average_score": round(avg_score, 1),
         }
 
     async def _get_kri_summary(self) -> Dict[str, Any]:
         """Get KRI summary statistics."""
-        result = await self.db.execute(
-            select(KeyRiskIndicator).where(KeyRiskIndicator.is_active == True)
-        )
+        result = await self.db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.is_active == True))
         kris = result.scalars().all()
 
         status_counts = {"green": 0, "amber": 0, "red": 0, "not_measured": 0}
@@ -343,9 +314,7 @@ class ExecutiveDashboardService:
 
     async def _get_compliance_summary(self) -> Dict[str, Any]:
         """Get compliance/policy acknowledgment summary."""
-        total_result = await self.db.execute(
-            select(func.count(PolicyAcknowledgment.id))
-        )
+        total_result = await self.db.execute(select(func.count(PolicyAcknowledgment.id)))
         total = total_result.scalar() or 0
 
         completed_result = await self.db.execute(
@@ -366,9 +335,7 @@ class ExecutiveDashboardService:
             "total_assigned": total,
             "completed": completed,
             "overdue": overdue,
-            "completion_rate": (
-                round((completed / total * 100), 1) if total > 0 else 100
-            ),
+            "completion_rate": (round((completed / total * 100), 1) if total > 0 else 100),
         }
 
     async def _get_sla_summary(self) -> Dict[str, Any]:
@@ -376,9 +343,7 @@ class ExecutiveDashboardService:
         total_result = await self.db.execute(select(func.count(SLATracking.id)))
         total = total_result.scalar() or 0
 
-        met_result = await self.db.execute(
-            select(func.count(SLATracking.id)).where(SLATracking.resolution_met == True)
-        )
+        met_result = await self.db.execute(select(func.count(SLATracking.id)).where(SLATracking.resolution_met == True))
         met = met_result.scalar() or 0
 
         breached_result = await self.db.execute(

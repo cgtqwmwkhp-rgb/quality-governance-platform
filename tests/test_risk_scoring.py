@@ -223,9 +223,7 @@ class TestKRIService:
             MagicMock(value=11),
         ]
         mock_result = MagicMock()
-        mock_result.scalars = MagicMock(
-            return_value=MagicMock(all=MagicMock(return_value=measurements))
-        )
+        mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=measurements)))
         mock_db.execute.return_value = mock_result
 
         # Current value is significantly lower (better)
@@ -256,9 +254,7 @@ class TestKRIService:
             MagicMock(value=6),
         ]
         mock_result = MagicMock()
-        mock_result.scalars = MagicMock(
-            return_value=MagicMock(all=MagicMock(return_value=measurements))
-        )
+        mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=measurements)))
         mock_db.execute.return_value = mock_result
 
         # Current value is significantly higher (worse)

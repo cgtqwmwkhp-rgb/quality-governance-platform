@@ -223,10 +223,7 @@ class TestCORSExposedHeaders:
             headers={"Origin": PROD_ORIGIN},
         )
         expose_headers = response.headers.get("access-control-expose-headers", "")
-        assert (
-            "X-RateLimit-Limit" in expose_headers
-            or "x-ratelimit-limit" in expose_headers.lower()
-        )
+        assert "X-RateLimit-Limit" in expose_headers or "x-ratelimit-limit" in expose_headers.lower()
 
     def test_expose_request_id_header(self, client):
         """CORS should expose X-Request-Id header."""
@@ -235,6 +232,4 @@ class TestCORSExposedHeaders:
             headers={"Origin": PROD_ORIGIN},
         )
         expose_headers = response.headers.get("access-control-expose-headers", "")
-        assert (
-            "X-Request-Id" in expose_headers or "x-request-id" in expose_headers.lower()
-        )
+        assert "X-Request-Id" in expose_headers or "x-request-id" in expose_headers.lower()

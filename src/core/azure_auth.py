@@ -115,11 +115,7 @@ def extract_user_info_from_azure_token(payload: dict[str, Any]) -> dict[str, Any
     return {
         "oid": payload.get("oid"),  # Object ID (unique user identifier)
         "sub": payload.get("sub"),  # Subject (can differ from oid)
-        "email": (
-            payload.get("email")
-            or payload.get("preferred_username")
-            or payload.get("upn")
-        ),
+        "email": (payload.get("email") or payload.get("preferred_username") or payload.get("upn")),
         "name": payload.get("name", ""),
         "given_name": payload.get("given_name", ""),
         "family_name": payload.get("family_name", ""),

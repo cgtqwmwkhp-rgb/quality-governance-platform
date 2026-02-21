@@ -138,8 +138,7 @@ class AnalyticsService:
                 "min": min(values),
                 "max": max(values),
                 "trend_direction": "up" if values[-1] > values[0] else "down",
-                "trend_percentage": ((values[-1] - values[0]) / max(values[0], 1))
-                * 100,
+                "trend_percentage": ((values[-1] - values[0]) / max(values[0], 1)) * 100,
             },
         }
 
@@ -312,9 +311,7 @@ class AnalyticsService:
             "overall_percentile": total_percentile / len(metrics),
             "above_average_count": above_average_count,
             "total_metrics": len(metrics),
-            "performance_rating": self._get_performance_rating(
-                total_percentile / len(metrics)
-            ),
+            "performance_rating": self._get_performance_rating(total_percentile / len(metrics)),
         }
 
     def _get_performance_rating(self, percentile: float) -> str:
@@ -455,9 +452,7 @@ class AnalyticsService:
         ]
 
         if investment_id:
-            investment = next(
-                (i for i in investments if i["id"] == investment_id), None
-            )
+            investment = next((i for i in investments if i["id"] == investment_id), None)
             if investment:
                 return {"investment": investment}
             return {"error": "Investment not found"}
@@ -540,8 +535,7 @@ class AnalyticsService:
                 "cost_of_non_compliance": costs["total_cost"],
                 "total_investment": roi["summary"]["total_investment"],
                 "total_savings": roi["summary"]["total_annual_savings"],
-                "net_benefit": roi["summary"]["total_annual_savings"]
-                - costs["total_cost"],
+                "net_benefit": roi["summary"]["total_annual_savings"] - costs["total_cost"],
             },
             "benchmarks": {
                 "overall_percentile": benchmarks["overall_percentile"],

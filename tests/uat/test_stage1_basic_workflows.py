@@ -30,13 +30,9 @@ class TestEmployeePortalWorkflows:
     @pytest.mark.asyncio
     async def test_uat_001_submit_incident_report(self, client, valid_incident_report):
         """UAT-001: Employee can submit an incident report via portal."""
-        response = await client.post(
-            "/api/v1/portal/reports/", json=valid_incident_report
-        )
+        response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
 
-        assert (
-            response.status_code == 201
-        ), f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
         data = response.json()
         assert data["success"] is True
         assert "reference_number" in data
@@ -45,17 +41,11 @@ class TestEmployeePortalWorkflows:
         assert len(data["tracking_code"]) > 0
 
     @pytest.mark.asyncio
-    async def test_uat_002_submit_complaint_report(
-        self, client, valid_complaint_report
-    ):
+    async def test_uat_002_submit_complaint_report(self, client, valid_complaint_report):
         """UAT-002: Employee can submit a complaint via portal."""
-        response = await client.post(
-            "/api/v1/portal/reports/", json=valid_complaint_report
-        )
+        response = await client.post("/api/v1/portal/reports/", json=valid_complaint_report)
 
-        assert (
-            response.status_code == 201
-        ), f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
         data = response.json()
         assert data["success"] is True
         assert data["reference_number"].startswith("COMP-")
@@ -72,14 +62,10 @@ class TestEmployeePortalWorkflows:
         assert "tracking_code" in data
 
     @pytest.mark.asyncio
-    async def test_uat_004_track_report_by_reference(
-        self, client, valid_incident_report
-    ):
+    async def test_uat_004_track_report_by_reference(self, client, valid_incident_report):
         """UAT-004: Employee can track report status by reference number."""
         # First submit a report
-        submit_response = await client.post(
-            "/api/v1/portal/reports/", json=valid_incident_report
-        )
+        submit_response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
         assert submit_response.status_code == 201
         ref_number = submit_response.json()["reference_number"]
 
@@ -117,9 +103,7 @@ class TestEmployeePortalWorkflows:
     async def test_uat_007_generate_qr_code_data(self, client, valid_incident_report):
         """UAT-007: QR code data can be generated for report tracking."""
         # Submit report
-        submit_response = await client.post(
-            "/api/v1/portal/reports/", json=valid_incident_report
-        )
+        submit_response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
         ref_number = submit_response.json()["reference_number"]
 
         # Get QR data
@@ -218,9 +202,7 @@ class TestIncidentManagementWorkflows:
     @pytest.mark.asyncio
     async def test_uat_016_incident_email_filter_requires_auth(self, client):
         """UAT-016: Email filter on incidents requires authentication (security fix)."""
-        response = await client.get(
-            "/api/v1/incidents/?reporter_email=test@example.com"
-        )
+        response = await client.get("/api/v1/incidents/?reporter_email=test@example.com")
 
         assert response.status_code == 401
 
@@ -301,9 +283,7 @@ class TestComplaintManagementWorkflows:
     @pytest.mark.asyncio
     async def test_uat_025_complaint_email_filter_requires_auth(self, client):
         """UAT-025: Email filter on complaints requires authentication (security fix)."""
-        response = await client.get(
-            "/api/v1/complaints/?complainant_email=test@example.com"
-        )
+        response = await client.get("/api/v1/complaints/?complainant_email=test@example.com")
 
         assert response.status_code == 401
 

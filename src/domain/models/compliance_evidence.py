@@ -36,9 +36,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     __tablename__ = "compliance_evidence_links"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     entity_type: Mapped[str] = mapped_column(
         String(50),
@@ -70,9 +68,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_cel_entity", "entity_type", "entity_id"),
         Index("ix_cel_clause", "clause_id"),
-        Index(
-            "ix_cel_entity_clause", "entity_type", "entity_id", "clause_id", unique=True
-        ),
+        Index("ix_cel_entity_clause", "entity_type", "entity_id", "clause_id", unique=True),
     )
 
     def __repr__(self) -> str:

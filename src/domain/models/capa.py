@@ -47,9 +47,7 @@ class CAPAAction(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     capa_type = Column(Enum(CAPAType), nullable=False)
-    status = Column(
-        Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True
-    )
+    status = Column(Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True)
     priority = Column(Enum(CAPAPriority), default=CAPAPriority.MEDIUM, nullable=False)
     source_type = Column(Enum(CAPASource), nullable=True)
     source_id = Column(Integer, nullable=True)

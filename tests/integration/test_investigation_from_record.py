@@ -31,9 +31,7 @@ class TestFromRecordEndpoint:
         # This proves the endpoint accepts POST with JSON body
         assert response.status_code == 401
 
-    async def test_from_record_rejects_empty_body(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_from_record_rejects_empty_body(self, client: AsyncClient, auth_headers: dict):
         """Test from-record rejects requests without body (returns 422)."""
         headers = {**auth_headers, "Content-Type": "application/json"}
         response = await client.post(
@@ -43,9 +41,7 @@ class TestFromRecordEndpoint:
         # Should get 422 validation error for missing body
         assert response.status_code == 422
 
-    async def test_from_record_validates_source_type(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_from_record_validates_source_type(self, client: AsyncClient, auth_headers: dict):
         """Test from-record validates source_type against enum."""
         response = await client.post(
             "/api/v1/investigations/from-record",
@@ -61,9 +57,7 @@ class TestFromRecordEndpoint:
         data = response.json()
         assert "detail" in data
 
-    async def test_from_record_validates_source_id_positive(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_from_record_validates_source_id_positive(self, client: AsyncClient, auth_headers: dict):
         """Test from-record requires source_id > 0."""
         response = await client.post(
             "/api/v1/investigations/from-record",
@@ -76,9 +70,7 @@ class TestFromRecordEndpoint:
         )
         assert response.status_code == 422
 
-    async def test_from_record_validates_title_not_empty(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_from_record_validates_title_not_empty(self, client: AsyncClient, auth_headers: dict):
         """Test from-record requires non-empty title."""
         response = await client.post(
             "/api/v1/investigations/from-record",
@@ -96,9 +88,7 @@ class TestFromRecordEndpoint:
 class TestFromRecordErrorResponses:
     """Test error responses are JSON with stable error codes."""
 
-    async def test_source_not_found_returns_json(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_source_not_found_returns_json(self, client: AsyncClient, auth_headers: dict):
         """Test 404 SOURCE_NOT_FOUND returns JSON with error_code."""
         response = await client.post(
             "/api/v1/investigations/from-record",
@@ -136,9 +126,7 @@ class TestFromRecordErrorResponses:
         assert response.status_code == 409
         data = response.json()
         assert data["detail"]["error_code"] == "INV_ALREADY_EXISTS"
-        assert (
-            data["detail"]["details"]["existing_investigation_id"] == investigation.id
-        )
+        assert data["detail"]["details"]["existing_investigation_id"] == investigation.id
         assert "existing_reference_number" in data["detail"]["details"]
 
 
@@ -146,9 +134,7 @@ class TestFromRecordErrorResponses:
 class TestSourceRecordsEndpoint:
     """Tests for GET /api/v1/investigations/source-records."""
 
-    async def test_source_records_requires_source_type(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_source_records_requires_source_type(self, client: AsyncClient, auth_headers: dict):
         """Test source-records requires source_type query param."""
         response = await client.get(
             "/api/v1/investigations/source-records",
@@ -157,9 +143,7 @@ class TestSourceRecordsEndpoint:
         # Should get 422 for missing required query param
         assert response.status_code == 422
 
-    async def test_source_records_validates_source_type(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_source_records_validates_source_type(self, client: AsyncClient, auth_headers: dict):
         """Test source-records validates source_type."""
         response = await client.get(
             "/api/v1/investigations/source-records",
@@ -169,9 +153,7 @@ class TestSourceRecordsEndpoint:
         # Should get 400 for invalid source type
         assert response.status_code == 400
 
-    async def test_source_records_returns_paginated_list(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_source_records_returns_paginated_list(self, client: AsyncClient, auth_headers: dict):
         """Test source-records returns paginated list with investigation status."""
         response = await client.get(
             "/api/v1/investigations/source-records",
@@ -205,19 +187,12 @@ class TestSourceRecordsEndpoint:
         data = response.json()
 
         # Find the investigated near miss in results
-        investigated_record = next(
-            (item for item in data["items"] if item["source_id"] == near_miss.id), None
-        )
+        investigated_record = next((item for item in data["items"] if item["source_id"] == near_miss.id), None)
         assert investigated_record is not None
         assert investigated_record["investigation_id"] == investigation.id
-        assert (
-            investigated_record["investigation_reference"]
-            == investigation.reference_number
-        )
+        assert investigated_record["investigation_reference"] == investigation.reference_number
 
-    async def test_source_records_supports_search(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_source_records_supports_search(self, client: AsyncClient, auth_headers: dict):
         """Test source-records supports search query."""
         response = await client.get(
             "/api/v1/investigations/source-records",
@@ -244,24 +219,19 @@ class TestDuplicatePrevention:
         table = mapper.local_table
 
         # Check for unique index on (assigned_entity_type, assigned_entity_id)
-        unique_indexes = [
-            idx for idx in table.indexes if idx.unique and len(idx.columns) == 2
-        ]
+        unique_indexes = [idx for idx in table.indexes if idx.unique and len(idx.columns) == 2]
         source_index = next(
             (
                 idx
                 for idx in unique_indexes
-                if any("entity_type" in str(c) for c in idx.columns)
-                and any("entity_id" in str(c) for c in idx.columns)
+                if any("entity_type" in str(c) for c in idx.columns) and any("entity_id" in str(c) for c in idx.columns)
             ),
             None,
         )
         # Note: This may not find the index if it was added via migration
         # The actual enforcement is tested in the 409 test
 
-    async def test_application_level_duplicate_check(
-        self, client: AsyncClient, auth_headers: dict, near_miss_factory
-    ):
+    async def test_application_level_duplicate_check(self, client: AsyncClient, auth_headers: dict, near_miss_factory):
         """Test application-level duplicate check before DB constraint."""
         # Create a near miss
         near_miss = await near_miss_factory()
@@ -301,14 +271,10 @@ class TestValidSourceTypes:
         "source_type",
         ["near_miss", "road_traffic_collision", "complaint", "reporting_incident"],
     )
-    async def test_all_source_types_accepted(
-        self, client: AsyncClient, source_type: str
-    ):
+    async def test_all_source_types_accepted(self, client: AsyncClient, source_type: str):
         """Test all valid source types are accepted in schema."""
         from src.api.schemas.investigation import CreateFromRecordRequest
 
         # Should not raise
-        request = CreateFromRecordRequest(
-            source_type=source_type, source_id=1, title="Test"
-        )
+        request = CreateFromRecordRequest(source_type=source_type, source_id=1, title="Test")
         assert request.source_type == source_type

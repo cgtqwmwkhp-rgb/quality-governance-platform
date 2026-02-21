@@ -48,21 +48,15 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     risk_level: Mapped[str] = mapped_column(String(50), default="medium")
 
     # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Risk ownership
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Review cycle
     review_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Standard mapping (JSON arrays)
     clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -70,28 +64,20 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Linkages (JSON arrays)
     linked_audit_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_incident_ids_json: Mapped[Optional[list]] = mapped_column(
-        JSON, nullable=True
-    )
+    linked_incident_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     linked_policy_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Treatment
     treatment_strategy: Mapped[str] = mapped_column(String(50), default="mitigate")
     treatment_plan: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    treatment_due_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    treatment_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
-    status: Mapped[RiskStatus] = mapped_column(
-        SQLEnum(RiskStatus, native_enum=False), default=RiskStatus.IDENTIFIED
-    )
+    status: Mapped[RiskStatus] = mapped_column(SQLEnum(RiskStatus, native_enum=False), default=RiskStatus.IDENTIFIED)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership
-    created_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
     controls: Mapped[List["OperationalRiskControl"]] = relationship(
@@ -116,9 +102,7 @@ class OperationalRiskControl(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "risk_controls"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks.id", ondelete="CASCADE"), nullable=False
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False)
 
     # Control details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -131,21 +115,15 @@ class OperationalRiskControl(Base, TimestampMixin, AuditTrailMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Standard mapping (JSON arrays)
     clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Testing
-    last_tested_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    next_test_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_tested_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_test_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     test_frequency_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Relationships
@@ -161,14 +139,10 @@ class RiskAssessment(Base, TimestampMixin):
     __tablename__ = "risk_assessments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(
-        ForeignKey("risks.id", ondelete="CASCADE"), nullable=False
-    )
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False)
 
     # Assessment details
-    assessment_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    assessment_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     assessment_type: Mapped[str] = mapped_column(String(50), default="periodic")
 
     # Inherent risk (before controls)
@@ -191,14 +165,10 @@ class RiskAssessment(Base, TimestampMixin):
 
     # Notes
     assessment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    control_effectiveness_notes: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )
+    control_effectiveness_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Assessor
-    assessed_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    assessed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
     risk: Mapped["Risk"] = relationship("Risk", back_populates="assessments")

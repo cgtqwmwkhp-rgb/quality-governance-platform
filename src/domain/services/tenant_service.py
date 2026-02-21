@@ -135,18 +135,14 @@ class TenantService:
     async def get_user_tenants(self, user_id: int) -> list[TenantUser]:
         """Get all tenants a user belongs to."""
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.user_id == user_id, TenantUser.is_active == True
-            )
+            select(TenantUser).where(TenantUser.user_id == user_id, TenantUser.is_active == True)
         )
         return result.scalars().all()
 
     async def get_tenant_users(self, tenant_id: int) -> list[TenantUser]:
         """Get all users in a tenant."""
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.tenant_id == tenant_id, TenantUser.is_active == True
-            )
+            select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
         )
         return result.scalars().all()
 
@@ -160,9 +156,7 @@ class TenantService:
     ) -> TenantUser:
         """Add a user to a tenant."""
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id
-            )
+            select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
         )
         existing = result.scalar_one_or_none()
 
@@ -190,9 +184,7 @@ class TenantService:
     async def remove_user_from_tenant(self, tenant_id: int, user_id: int) -> bool:
         """Remove a user from a tenant."""
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id
-            )
+            select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
         )
         tenant_user = result.scalar_one_or_none()
 
@@ -217,14 +209,10 @@ class TenantService:
         await self.db.commit()
         return True
 
-    async def update_user_role(
-        self, tenant_id: int, user_id: int, new_role: str
-    ) -> TenantUser:
+    async def update_user_role(self, tenant_id: int, user_id: int, new_role: str) -> TenantUser:
         """Update a user's role in a tenant."""
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id
-            )
+            select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
         )
         tenant_user = result.scalar_one_or_none()
 
@@ -240,17 +228,13 @@ class TenantService:
     async def set_primary_tenant(self, user_id: int, tenant_id: int) -> TenantUser:
         """Set the primary tenant for a user."""
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.user_id == user_id, TenantUser.is_primary == True
-            )
+            select(TenantUser).where(TenantUser.user_id == user_id, TenantUser.is_primary == True)
         )
         for tu in result.scalars().all():
             tu.is_primary = False
 
         result = await self.db.execute(
-            select(TenantUser).where(
-                TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id
-            )
+            select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
         )
         tenant_user = result.scalar_one_or_none()
 
@@ -296,9 +280,7 @@ class TenantService:
     async def accept_invitation(self, token: str, user_id: int) -> TenantUser:
         """Accept a tenant invitation."""
         result = await self.db.execute(
-            select(TenantInvitation).where(
-                TenantInvitation.token == token, TenantInvitation.status == "pending"
-            )
+            select(TenantInvitation).where(TenantInvitation.token == token, TenantInvitation.status == "pending")
         )
         invitation = result.scalar_one_or_none()
 
@@ -310,9 +292,7 @@ class TenantService:
             await self.db.commit()
             raise ValueError("Invitation has expired")
 
-        tenant_user = await self.add_user_to_tenant(
-            invitation.tenant_id, user_id, invitation.role
-        )
+        tenant_user = await self.add_user_to_tenant(invitation.tenant_id, user_id, invitation.role)
 
         invitation.status = "accepted"
         invitation.accepted_at = datetime.utcnow()

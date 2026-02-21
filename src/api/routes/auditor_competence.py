@@ -127,9 +127,7 @@ async def get_auditor_profile(
     profile = await service.get_profile(user_id)
 
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Auditor profile not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Auditor profile not found")
 
     return {
         "id": profile.id,
@@ -161,9 +159,7 @@ async def update_auditor_profile(
     profile = await service.update_profile(user_id, **updates)
 
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Auditor profile not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Auditor profile not found")
 
     return {
         "id": profile.id,
@@ -172,9 +168,7 @@ async def update_auditor_profile(
     }
 
 
-@router.post(
-    "/profiles/{user_id}/calculate-score", response_model=CompetenceScoreResponse
-)
+@router.post("/profiles/{user_id}/calculate-score", response_model=CompetenceScoreResponse)
 async def calculate_competence_score(
     user_id: int,
     db: DbSession,
@@ -231,9 +225,7 @@ async def add_certification(
     }
 
 
-@router.get(
-    "/profiles/{user_id}/certifications", response_model=CertificationListResponse
-)
+@router.get("/profiles/{user_id}/certifications", response_model=CertificationListResponse)
 async def get_certifications(
     user_id: int,
     db: DbSession,
@@ -279,9 +271,7 @@ async def get_expiring_certifications(
     }
 
 
-@router.post(
-    "/certifications/update-expired", response_model=ExpiredCertificationsUpdateResponse
-)
+@router.post("/certifications/update-expired", response_model=ExpiredCertificationsUpdateResponse)
 async def update_expired_certifications(
     db: DbSession,
     current_user: CurrentUser,
@@ -334,9 +324,7 @@ async def add_training(
     }
 
 
-@router.post(
-    "/training/{training_id}/complete", response_model=TrainingCompleteResponse
-)
+@router.post("/training/{training_id}/complete", response_model=TrainingCompleteResponse)
 async def complete_training(
     training_id: int,
     request: CompleteTrainingRequest,

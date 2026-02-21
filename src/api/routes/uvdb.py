@@ -548,9 +548,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Section not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
 
     return {
         "section_number": section_data["number"],
@@ -723,9 +721,7 @@ async def get_audit_responses(
     """Get all responses for an audit"""
     await get_or_404(db, UVDBAudit, audit_id)
 
-    result = await db.execute(
-        select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id)
-    )
+    result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
     responses = result.scalars().all()
 
     return {
@@ -748,9 +744,7 @@ async def get_audit_responses(
 # ============ KPI Management ============
 
 
-@router.post(
-    "/audits/{audit_id}/kpis", response_model=dict, status_code=status.HTTP_201_CREATED
-)
+@router.post("/audits/{audit_id}/kpis", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
@@ -785,9 +779,7 @@ async def get_audit_kpis(
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
     result = await db.execute(
-        select(UVDBKPIRecord)
-        .where(UVDBKPIRecord.audit_id == audit_id)
-        .order_by(UVDBKPIRecord.year.desc())
+        select(UVDBKPIRecord).where(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc())
     )
     kpis = result.scalars().all()
 
@@ -830,9 +822,7 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
                         "uvdb_section": section["number"],
                         "uvdb_question": question["number"],
                         "uvdb_text": (
-                            question["text"][:100] + "..."
-                            if len(question["text"]) > 100
-                            else question["text"]
+                            question["text"][:100] + "..." if len(question["text"]) > 100 else question["text"]
                         ),
                         "iso_9001": question["iso_mapping"].get("9001", []),
                         "iso_14001": question["iso_mapping"].get("14001", []),
@@ -867,26 +857,20 @@ async def get_uvdb_dashboard(
     active_audits = (
         await db.scalar(
             select(func.count()).select_from(
-                select(UVDBAudit)
-                .where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
-                .subquery()
+                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()
             )
         )
         or 0
     )
     completed_audits = (
         await db.scalar(
-            select(func.count()).select_from(
-                select(UVDBAudit).where(UVDBAudit.status == "completed").subquery()
-            )
+            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())
         )
         or 0
     )
 
     result = await db.execute(
-        select(UVDBAudit).where(
-            UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)
-        )
+        select(UVDBAudit).where(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None))
     )
     completed = result.scalars().all()
 

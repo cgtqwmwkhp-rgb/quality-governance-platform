@@ -29,10 +29,7 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgment,
     PolicyAcknowledgmentRequirement,
 )
-from src.domain.services.policy_acknowledgment import (
-    DocumentReadLogService,
-    PolicyAcknowledgmentService,
-)
+from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
 
@@ -69,9 +66,7 @@ async def create_acknowledgment_requirement(
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
-@router.get(
-    "/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse
-)
+@router.get("/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse)
 async def get_acknowledgment_requirement(
     requirement_id: int,
     db: DbSession,
@@ -142,9 +137,7 @@ async def get_acknowledgment(
     current_user: CurrentUser,
 ):
     """Get a specific acknowledgment."""
-    ack = await get_or_404(
-        db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found"
-    )
+    ack = await get_or_404(db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found")
     return PolicyAcknowledgmentResponse.from_orm(ack)
 
 
@@ -159,9 +152,7 @@ async def record_policy_opened(
     ack = await service.record_policy_opened(acknowledgment_id)
 
     if not ack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found")
 
     return {"message": "Policy opened recorded", "first_opened_at": ack.first_opened_at}
 
@@ -178,16 +169,12 @@ async def update_reading_time(
     ack = await service.update_reading_time(acknowledgment_id, additional_seconds)
 
     if not ack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found")
 
     return {"message": "Reading time updated", "total_seconds": ack.time_spent_seconds}
 
 
-@router.post(
-    "/{acknowledgment_id}/acknowledge", response_model=PolicyAcknowledgmentResponse
-)
+@router.post("/{acknowledgment_id}/acknowledge", response_model=PolicyAcknowledgmentResponse)
 async def record_acknowledgment(
     acknowledgment_id: int,
     ack_data: RecordAcknowledgmentRequest,
@@ -221,9 +208,7 @@ async def record_acknowledgment(
 # =============================================================================
 
 
-@router.get(
-    "/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse
-)
+@router.get("/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse)
 async def get_policy_acknowledgment_status(
     policy_id: int,
     db: DbSession,

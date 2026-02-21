@@ -17,11 +17,7 @@ from typing import Any, Optional
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.audit_log import (
-    AuditLogEntry,
-    AuditLogExport,
-    AuditLogVerification,
-)
+from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
 
 
 class AuditLogService:
@@ -86,9 +82,7 @@ class AuditLogService:
         changed_fields = None
         if old_values and new_values:
             changed_fields = [
-                k
-                for k in set(old_values.keys()) | set(new_values.keys())
-                if old_values.get(k) != new_values.get(k)
+                k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
             ]
 
         timestamp = datetime.utcnow()
@@ -475,9 +469,7 @@ class AuditLogService:
             )
 
         # Compute hash of export for integrity
-        export_hash = hashlib.sha256(
-            json.dumps(data, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        export_hash = hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
         # Record the export
         export_record = AuditLogExport(

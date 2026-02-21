@@ -27,9 +27,7 @@ class TestTelemetryCORSConfig:
 
         # Should NOT match other domains
         assert not re.match(pattern, "https://example.com")
-        assert not re.match(
-            pattern, "http://blue-sky-123.azurestaticapps.net"
-        )  # HTTP not HTTPS
+        assert not re.match(pattern, "http://blue-sky-123.azurestaticapps.net")  # HTTP not HTTPS
 
     def test_cors_pattern_documented(self):
         """Test CORS pattern is documented in main.py."""
@@ -40,9 +38,7 @@ class TestTelemetryCORSConfig:
             with open(main_py_path) as f:
                 content = f.read()
             # CORS should be configured with SWA regex
-            assert (
-                "azurestaticapps" in content.lower()
-            ), "main.py should reference SWA domains"
+            assert "azurestaticapps" in content.lower(), "main.py should reference SWA domains"
 
 
 class TestFrontendTelemetryContract:
@@ -128,9 +124,7 @@ class TestTelemetryQuarantinePolicy:
 
         assert "TELEMETRY_ENABLED" in content, "ADR-0004 must document feature flag"
         assert "silentLog" in content, "ADR-0004 must document silent logging"
-        assert (
-            "DISABLED in production" in content
-        ), "ADR-0004 must document production disabled"
+        assert "DISABLED in production" in content, "ADR-0004 must document production disabled"
 
     def test_adr_0004_has_proof_plan(self):
         """Test ADR-0004 has testing proof plan."""

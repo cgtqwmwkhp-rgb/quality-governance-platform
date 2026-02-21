@@ -91,15 +91,11 @@ async def list_workflow_templates(db: DbSession, current_user: CurrentUser):
 
 
 @router.get("/templates/{template_code}")
-async def get_workflow_template(
-    template_code: str, db: DbSession, current_user: CurrentUser
-):
+async def get_workflow_template(template_code: str, db: DbSession, current_user: CurrentUser):
     """Get workflow template details."""
     t = await engine.get_template(db, template_code)
     if t is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     return {
         "id": t.id,
         "code": t.code,
@@ -123,9 +119,7 @@ async def get_workflow_template(
 
 
 @router.post("/start")
-async def start_workflow(
-    request: WorkflowStartRequest, db: DbSession, current_user: CurrentUser
-):
+async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_user: CurrentUser):
     """Start a new workflow instance."""
     try:
         instance = await engine.start_workflow(
@@ -208,15 +202,11 @@ async def list_workflow_instances(
 
 
 @router.get("/instances/{workflow_id}")
-async def get_workflow_instance(
-    workflow_id: int, db: DbSession, current_user: CurrentUser
-):
+async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: CurrentUser):
     """Get workflow instance details with all steps."""
     inst = await engine.get_instance(db, workflow_id)
     if inst is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Workflow instance not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow instance not found")
 
     steps = await engine.get_instance_steps(db, workflow_id)
     total_steps = len(steps)
@@ -328,23 +318,17 @@ async def get_pending_approvals(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/approvals/{step_id}/approve")
-async def approve_request(
-    step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser
-):
+async def approve_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Approve a workflow step."""
     try:
-        result = await engine.approve_step(
-            db, step_id, current_user.id, response.effective_notes
-        )
+        result = await engine.approve_step(db, step_id, current_user.id, response.effective_notes)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return result
 
 
 @router.post("/approvals/{step_id}/reject")
-async def reject_request(
-    step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser
-):
+async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Reject a workflow step."""
     if not response.reason:
         raise HTTPException(
@@ -359,13 +343,9 @@ async def reject_request(
 
 
 @router.post("/approvals/bulk-approve")
-async def bulk_approve_requests(
-    request: BulkApprovalRequest, db: DbSession, current_user: CurrentUser
-):
+async def bulk_approve_requests(request: BulkApprovalRequest, db: DbSession, current_user: CurrentUser):
     """Bulk approve multiple workflow steps."""
-    result = await engine.bulk_approve(
-        db, request.approval_ids, current_user.id, request.notes
-    )
+    result = await engine.bulk_approve(db, request.approval_ids, current_user.id, request.notes)
     return result
 
 
@@ -427,9 +407,7 @@ async def get_my_delegations(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/delegations")
-async def create_delegation(
-    request: DelegationRequest, db: DbSession, current_user: CurrentUser
-):
+async def create_delegation(request: DelegationRequest, db: DbSession, current_user: CurrentUser):
     """Set up out-of-office delegation."""
     d = await engine.set_delegation(
         db,
@@ -452,15 +430,11 @@ async def create_delegation(
 
 
 @router.delete("/delegations/{delegation_id}")
-async def cancel_delegation(
-    delegation_id: int, db: DbSession, current_user: CurrentUser
-):
+async def cancel_delegation(delegation_id: int, db: DbSession, current_user: CurrentUser):
     """Cancel a delegation."""
     success = await engine.cancel_delegation(db, delegation_id)
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Delegation not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegation not found")
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",

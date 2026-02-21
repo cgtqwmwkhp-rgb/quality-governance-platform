@@ -102,9 +102,7 @@ class NotificationService:
             await self.db.refresh(notification)
 
         # Determine delivery channels
-        delivery_channels = channels or await self._get_delivery_channels(
-            user_id, notification_type, priority
-        )
+        delivery_channels = channels or await self._get_delivery_channels(user_id, notification_type, priority)
 
         # Deliver to each channel
         for channel in delivery_channels:
@@ -173,9 +171,7 @@ class NotificationService:
         # Get user preferences
         if self.db:
             result = await self.db.execute(
-                select(NotificationPreference).where(
-                    NotificationPreference.user_id == user_id
-                )
+                select(NotificationPreference).where(NotificationPreference.user_id == user_id)
             )
             prefs = result.scalar_one_or_none()
 
@@ -223,9 +219,7 @@ class NotificationService:
         # Get user's phone number
         if self.db:
             result = await self.db.execute(
-                select(NotificationPreference).where(
-                    NotificationPreference.user_id == notification.user_id
-                )
+                select(NotificationPreference).where(NotificationPreference.user_id == notification.user_id)
             )
             prefs = result.scalar_one_or_none()
 
@@ -375,11 +369,7 @@ class NotificationService:
             entity_id=entity_id,
             action_url=f"/{entity_type}s/{entity_id}",
             sender_id=assigned_by_user_id,
-            priority=(
-                NotificationPriority.MEDIUM
-                if priority == "medium"
-                else NotificationPriority.HIGH
-            ),
+            priority=(NotificationPriority.MEDIUM if priority == "medium" else NotificationPriority.HIGH),
         )
 
         return assignment
@@ -392,9 +382,7 @@ class NotificationService:
             return False
 
         result = await self.db.execute(
-            select(Notification).where(
-                Notification.id == notification_id, Notification.user_id == user_id
-            )
+            select(Notification).where(Notification.id == notification_id, Notification.user_id == user_id)
         )
         notification = result.scalar_one_or_none()
 
@@ -412,9 +400,7 @@ class NotificationService:
             return 0
 
         result = await self.db.execute(
-            select(Notification).where(
-                Notification.user_id == user_id, Notification.is_read == False
-            )  # noqa: E712
+            select(Notification).where(Notification.user_id == user_id, Notification.is_read == False)  # noqa: E712
         )
         notifications = result.scalars().all()
 

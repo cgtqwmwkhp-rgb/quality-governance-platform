@@ -58,9 +58,7 @@ class TestInvestigationRBAC:
         # Without auth headers, should get 401
         assert response.status_code == 401
 
-    async def test_create_template_authenticated_201(
-        self, client: AsyncClient, auth_headers, test_session
-    ):
+    async def test_create_template_authenticated_201(self, client: AsyncClient, auth_headers, test_session):
         """Test that creating a template with authentication returns 201."""
         data = {
             "name": "Authenticated Template",
@@ -68,9 +66,7 @@ class TestInvestigationRBAC:
             "structure": {"sections": [{"name": "Overview", "fields": []}]},
             "applicable_entity_types": ["reporting_incident", "complaint"],
         }
-        response = await client.post(
-            "/api/v1/investigation-templates/", json=data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/investigation-templates/", json=data, headers=auth_headers)
 
         assert response.status_code == 201
         body = response.json()
@@ -107,9 +103,7 @@ class TestInvestigationDeterminism:
                 "assigned_entity_id": test_incident.id,
                 "title": f"Investigation {i}",
             }
-            response = await client.post(
-                "/api/v1/investigations/", json=data, headers=auth_headers
-            )
+            response = await client.post("/api/v1/investigations/", json=data, headers=auth_headers)
             assert response.status_code == 201
 
         # List investigations twice and verify same order
@@ -128,9 +122,7 @@ class TestInvestigationDeterminism:
         # Ordered by created_at DESC, id ASC
         assert items1[0]["id"] > items1[-1]["id"]  # Most recent first
 
-    async def test_list_investigations_pagination(
-        self, client: AsyncClient, auth_headers, test_session, test_incident
-    ):
+    async def test_list_investigations_pagination(self, client: AsyncClient, auth_headers, test_session, test_incident):
         """Test that list investigations supports pagination."""
         # Create a template
         template_data = {
@@ -153,15 +145,11 @@ class TestInvestigationDeterminism:
                 "assigned_entity_id": test_incident.id,
                 "title": f"Investigation {i}",
             }
-            response = await client.post(
-                "/api/v1/investigations/", json=data, headers=auth_headers
-            )
+            response = await client.post("/api/v1/investigations/", json=data, headers=auth_headers)
             assert response.status_code == 201
 
         # Get page 1 with page_size=2
-        response = await client.get(
-            "/api/v1/investigations/?page=1&page_size=2", headers=auth_headers
-        )
+        response = await client.get("/api/v1/investigations/?page=1&page_size=2", headers=auth_headers)
 
         assert response.status_code == 200
         body = response.json()
@@ -201,18 +189,12 @@ class TestIncidentsInvestigationLinkage:
                 "assigned_entity_id": test_incident.id,
                 "title": f"Investigation {i}",
             }
-            response = await client.post(
-                "/api/v1/investigations/", json=data, headers=auth_headers
-            )
+            response = await client.post("/api/v1/investigations/", json=data, headers=auth_headers)
             assert response.status_code == 201
 
         # Get investigations for this incident twice
-        response1 = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers
-        )
-        response2 = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers
-        )
+        response1 = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers)
+        response2 = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers)
 
         assert response1.status_code == 200
         assert response2.status_code == 200
@@ -248,9 +230,7 @@ class TestIncidentsInvestigationLinkage:
         self, client: AsyncClient, auth_headers, test_session, test_incident
     ):
         """Test that incident with no investigations returns empty paginated response."""
-        response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers
-        )
+        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -261,9 +241,7 @@ class TestIncidentsInvestigationLinkage:
         assert data["page_size"] == 25
         assert data["total_pages"] == 1
 
-    async def test_create_template_inactive_user_403(
-        self, client: AsyncClient, test_session
-    ):
+    async def test_create_template_inactive_user_403(self, client: AsyncClient, test_session):
         """Test that an inactive user cannot create a template (403 Forbidden)."""
         from src.core.security import create_access_token, get_password_hash
         from src.domain.models.user import User
@@ -291,18 +269,13 @@ class TestIncidentsInvestigationLinkage:
             "structure": {"sections": []},
             "applicable_entity_types": ["reporting_incident"],
         }
-        response = await client.post(
-            "/api/v1/investigation-templates/", json=data, headers=headers
-        )
+        response = await client.post("/api/v1/investigation-templates/", json=data, headers=headers)
 
         # Should get 403 Forbidden
         assert response.status_code == 403
         body = response.json()
         assert "message" in body
-        assert (
-            "disabled" in body["message"].lower()
-            or "inactive" in body["message"].lower()
-        )
+        assert "disabled" in body["message"].lower() or "inactive" in body["message"].lower()
 
     async def test_create_investigation_inactive_user_403(
         self, client: AsyncClient, test_session, test_incident, auth_headers
@@ -348,18 +321,13 @@ class TestIncidentsInvestigationLinkage:
             "assigned_entity_id": test_incident.id,
             "title": "Should Fail Investigation",
         }
-        response = await client.post(
-            "/api/v1/investigations/", json=data, headers=headers
-        )
+        response = await client.post("/api/v1/investigations/", json=data, headers=headers)
 
         # Should get 403 Forbidden
         assert response.status_code == 403
         body = response.json()
         assert "message" in body
-        assert (
-            "disabled" in body["message"].lower()
-            or "inactive" in body["message"].lower()
-        )
+        assert "disabled" in body["message"].lower() or "inactive" in body["message"].lower()
 
     async def test_incident_investigations_pagination_fields(
         self, client: AsyncClient, auth_headers, test_session, test_incident
@@ -386,15 +354,11 @@ class TestIncidentsInvestigationLinkage:
                 "assigned_entity_id": test_incident.id,
                 "title": f"Investigation {i}",
             }
-            response = await client.post(
-                "/api/v1/investigations/", json=data, headers=auth_headers
-            )
+            response = await client.post("/api/v1/investigations/", json=data, headers=auth_headers)
             assert response.status_code == 201
 
         # Test page 1 (default page_size=25)
-        response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers
-        )
+        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 30
@@ -476,7 +440,5 @@ class TestIncidentsInvestigationLinkage:
         self, client: AsyncClient, auth_headers, test_session
     ):
         """Test that requesting investigations for nonexistent incident returns 404."""
-        response = await client.get(
-            "/api/v1/incidents/999999/investigations", headers=auth_headers
-        )
+        response = await client.get("/api/v1/incidents/999999/investigations", headers=auth_headers)
         assert response.status_code == 404

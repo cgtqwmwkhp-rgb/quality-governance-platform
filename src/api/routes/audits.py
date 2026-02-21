@@ -99,8 +99,7 @@ async def list_templates(
     if search:
         search_filter = f"%{search}%"
         query = query.where(
-            (AuditTemplate.name.ilike(search_filter))
-            | (AuditTemplate.description.ilike(search_filter))
+            (AuditTemplate.name.ilike(search_filter)) | (AuditTemplate.description.ilike(search_filter))
         )
     if category:
         query = query.where(AuditTemplate.category == category)
@@ -133,9 +132,7 @@ async def create_template(
         tenant_id=current_user.tenant_id,
     )
 
-    template.reference_number = await ReferenceNumberService.generate(
-        db, "audit_template", AuditTemplate
-    )
+    template.reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
 
     db.add(template)
     await db.commit()
@@ -256,9 +253,7 @@ async def update_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Update an audit template."""
-    template = await get_or_404(
-        db, AuditTemplate, template_id, tenant_id=current_user.tenant_id
-    )
+    template = await get_or_404(db, AuditTemplate, template_id, tenant_id=current_user.tenant_id)
 
     # Increment version if published template is modified
     if template.is_published:
@@ -266,9 +261,7 @@ async def update_template(
         template.is_published = False
 
     update_data = template_data.model_dump(exclude_unset=True, exclude={"standard_ids"})
-    safe_data = {
-        k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS
-    }
+    safe_data = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}
 
     # Handle standard_ids → standard_ids_json mapping
     raw = template_data.model_dump(exclude_unset=True)
@@ -378,9 +371,7 @@ async def clone_template(
             detail="Template not found",
         )
 
-    reference_number = await ReferenceNumberService.generate(
-        db, "audit_template", AuditTemplate
-    )
+    reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
 
     cloned_template = AuditTemplate(
         name=f"Copy of {original.name}",
@@ -485,9 +476,7 @@ async def clone_template(
     return AuditTemplateResponse.model_validate(cloned_template)
 
 
-@router.delete(
-    "/templates/{template_id}", status_code=status.HTTP_200_OK, response_model=dict
-)
+@router.delete("/templates/{template_id}", status_code=status.HTTP_200_OK, response_model=dict)
 async def archive_template(
     template_id: int,
     db: DbSession,
@@ -578,9 +567,7 @@ async def restore_template(
     return AuditTemplateResponse.model_validate(template)
 
 
-@router.delete(
-    "/templates/{template_id}/permanent", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/templates/{template_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
 async def permanently_delete_template(
     template_id: int,
     db: DbSession,
@@ -647,9 +634,7 @@ async def create_section(
     await db.commit()
 
     refreshed = await db.execute(
-        select(AuditSection)
-        .options(selectinload(AuditSection.questions))
-        .where(AuditSection.id == section.id)
+        select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
     )
     section = refreshed.scalar_one()
 
@@ -665,9 +650,7 @@ async def update_section(
 ) -> AuditSectionResponse:
     """Update an audit section."""
     result = await db.execute(
-        select(AuditSection)
-        .options(selectinload(AuditSection.questions))
-        .where(AuditSection.id == section_id)
+        select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section_id)
     )
     section = result.scalar_one_or_none()
 
@@ -677,18 +660,14 @@ async def update_section(
             detail="Section not found",
         )
 
-    await get_or_404(
-        db, AuditTemplate, section.template_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, AuditTemplate, section.template_id, tenant_id=current_user.tenant_id)
 
     apply_updates(section, section_data, set_updated_at=False)
 
     await db.commit()
 
     refreshed = await db.execute(
-        select(AuditSection)
-        .options(selectinload(AuditSection.questions))
-        .where(AuditSection.id == section.id)
+        select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
     )
     section = refreshed.scalar_one()
 
@@ -703,9 +682,7 @@ async def delete_section(
 ) -> None:
     """Soft delete an audit section."""
     section = await get_or_404(db, AuditSection, section_id)
-    await get_or_404(
-        db, AuditTemplate, section.template_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, AuditTemplate, section.template_id, tenant_id=current_user.tenant_id)
 
     section.is_active = False
     await db.commit()
@@ -746,22 +723,18 @@ async def create_question(
     question_dict = question_data.model_dump()
     if question_dict.get("options"):
         question_dict["options_json"] = [
-            opt.model_dump() if hasattr(opt, "model_dump") else opt
-            for opt in question_dict["options"]
+            opt.model_dump() if hasattr(opt, "model_dump") else opt for opt in question_dict["options"]
         ]
     del question_dict["options"]
 
     if question_dict.get("evidence_requirements"):
         er = question_dict["evidence_requirements"]
-        question_dict["evidence_requirements_json"] = (
-            er.model_dump() if hasattr(er, "model_dump") else er
-        )
+        question_dict["evidence_requirements_json"] = er.model_dump() if hasattr(er, "model_dump") else er
     del question_dict["evidence_requirements"]
 
     if question_dict.get("conditional_logic"):
         question_dict["conditional_logic_json"] = [
-            cl.model_dump() if hasattr(cl, "model_dump") else cl
-            for cl in question_dict["conditional_logic"]
+            cl.model_dump() if hasattr(cl, "model_dump") else cl for cl in question_dict["conditional_logic"]
         ]
     del question_dict["conditional_logic"]
 
@@ -794,9 +767,7 @@ async def update_question(
 ) -> AuditQuestionResponse:
     """Update an audit question."""
     question = await get_or_404(db, AuditQuestion, question_id)
-    await get_or_404(
-        db, AuditTemplate, question.template_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, AuditTemplate, question.template_id, tenant_id=current_user.tenant_id)
 
     update_data = question_data.model_dump(exclude_unset=True)
 
@@ -812,9 +783,7 @@ async def update_question(
         if schema_field in update_data:
             setattr(question, model_field, update_data[schema_field])
 
-    apply_updates(
-        question, question_data, set_updated_at=False, exclude=set(_JSON_REMAP)
-    )
+    apply_updates(question, question_data, set_updated_at=False, exclude=set(_JSON_REMAP))
 
     await db.commit()
     await db.refresh(question)
@@ -830,9 +799,7 @@ async def delete_question(
 ) -> None:
     """Soft delete an audit question."""
     question = await get_or_404(db, AuditQuestion, question_id)
-    await get_or_404(
-        db, AuditTemplate, question.template_id, tenant_id=current_user.tenant_id
-    )
+    await get_or_404(db, AuditTemplate, question.template_id, tenant_id=current_user.tenant_id)
 
     question.is_active = False
     await db.commit()
@@ -865,9 +832,7 @@ async def list_runs(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_run(
     run_data: AuditRunCreate,
     db: DbSession,
@@ -901,9 +866,7 @@ async def create_run(
     )
 
     # Generate reference number
-    run.reference_number = await ReferenceNumberService.generate(
-        db, "audit_run", AuditRun
-    )
+    run.reference_number = await ReferenceNumberService.generate(db, "audit_run", AuditRun)
 
     db.add(run)
     await db.commit()
@@ -1059,9 +1022,7 @@ async def complete_run(
     run.score_percentage = (total_score / max_score * 100) if max_score > 0 else 0
 
     # Get template to check passing score
-    template_result = await db.execute(
-        select(AuditTemplate).where(AuditTemplate.id == run.template_id)
-    )
+    template_result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
     template = template_result.scalar_one_or_none()
 
     if template and template.passing_score is not None:
@@ -1141,16 +1102,12 @@ async def update_response(
 ) -> AuditResponseResponse:
     """Update an audit response."""
     result = await db.execute(
-        select(AuditResponse)
-        .options(selectinload(AuditResponse.run))
-        .where(AuditResponse.id == response_id)
+        select(AuditResponse).options(selectinload(AuditResponse.run)).where(AuditResponse.id == response_id)
     )
     response = result.scalar_one_or_none()
 
     if response:
-        await get_or_404(
-            db, AuditRun, response.run_id, tenant_id=current_user.tenant_id
-        )
+        await get_or_404(db, AuditRun, response.run_id, tenant_id=current_user.tenant_id)
 
     if not response:
         raise HTTPException(
@@ -1237,9 +1194,7 @@ async def create_finding(
         finding.risk_ids_json = risk_ids
 
     # Generate reference number
-    finding.reference_number = await ReferenceNumberService.generate(
-        db, "audit_finding", AuditFinding
-    )
+    finding.reference_number = await ReferenceNumberService.generate(db, "audit_finding", AuditFinding)
 
     db.add(finding)
     await db.commit()
@@ -1258,9 +1213,7 @@ async def update_finding(
     current_user: CurrentUser,
 ) -> AuditFindingResponse:
     """Update an audit finding."""
-    finding = await get_or_404(
-        db, AuditFinding, finding_id, tenant_id=current_user.tenant_id
-    )
+    finding = await get_or_404(db, AuditFinding, finding_id, tenant_id=current_user.tenant_id)
 
     update_data = finding_data.model_dump(exclude_unset=True)
 

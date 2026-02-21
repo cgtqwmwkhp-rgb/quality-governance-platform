@@ -9,12 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.incident import (
-    IncidentCreate,
-    IncidentListResponse,
-    IncidentResponse,
-    IncidentUpdate,
-)
+from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -54,18 +49,14 @@ async def create_incident(
 
         reference_number = incident_data.reference_number
         # Check for duplicate reference number
-        existing = await db.execute(
-            select(Incident).where(Incident.reference_number == reference_number)
-        )
+        existing = await db.execute(select(Incident).where(Incident.reference_number == reference_number))
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Incident with reference number {reference_number} already exists",
             )
     else:
-        reference_number = await ReferenceNumberService.generate(
-            db, "incident", Incident
-        )
+        reference_number = await ReferenceNumberService.generate(db, "incident", Incident)
 
     # Create new incident
     incident = Incident(
@@ -146,9 +137,7 @@ async def list_incidents(
     if reporter_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
-            current_user.has_permission("incident:view_all")
-            if hasattr(current_user, "has_permission")
-            else False
+            current_user.has_permission("incident:view_all") if hasattr(current_user, "has_permission") else False
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
@@ -168,8 +157,7 @@ async def list_incidents(
             description="Incident list accessed with email filter",
             payload={
                 "filter_type": "reporter_email",
-                "is_own_email": user_email
-                and reporter_email.lower() == user_email.lower(),
+                "is_own_email": user_email and reporter_email.lower() == user_email.lower(),
                 "has_view_all_permission": has_view_all,
                 "is_superuser": is_superuser,
             },
@@ -183,9 +171,7 @@ async def list_incidents(
 
     try:
         query = (
-            select(Incident)
-            .options(selectinload(Incident.actions))
-            .where(Incident.tenant_id == current_user.tenant_id)
+            select(Incident).options(selectinload(Incident.actions)).where(Incident.tenant_id == current_user.tenant_id)
         )
 
         if reporter_email:
@@ -245,8 +231,7 @@ async def list_incident_investigations(
     query = (
         select(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type
-            == AssignedEntityType.REPORTING_INCIDENT,
+            InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -268,9 +253,7 @@ async def update_incident(
 
     Requires authentication.
     """
-    incident = await get_or_404(
-        db, Incident, incident_id, tenant_id=current_user.tenant_id
-    )
+    incident = await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
 
     update_dict = apply_updates(incident, incident_data, set_updated_at=False)
 
@@ -307,9 +290,7 @@ async def delete_incident(
 
     Requires authentication.
     """
-    incident = await get_or_404(
-        db, Incident, incident_id, tenant_id=current_user.tenant_id
-    )
+    incident = await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
 
     # Record audit event
     await record_audit_event(

@@ -13,11 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.evidence_asset import (
-    EvidenceAsset,
-    EvidenceSourceModule,
-    EvidenceVisibility,
-)
+from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.investigation import (
     AssignedEntityType,
     CustomerPackAudience,
@@ -193,9 +189,7 @@ class InvestigationService:
             map_field("reference_number", "section_1_details", "reference_number")
             map_field("event_date", "section_1_details", "incident_date")
             map_field("location", "section_1_details", "location")
-            map_field(
-                "location_coordinates", "section_1_details", "location_coordinates"
-            )
+            map_field("location_coordinates", "section_1_details", "location_coordinates")
             map_field("description", "section_1_details", "description")
             map_field("persons_involved", "section_1_details", "persons_involved")
             map_field("witness_names", "section_1_details", "witnesses")
@@ -226,9 +220,7 @@ class InvestigationService:
             map_field("postcode", "addendum_rta", "postcode")
             map_field("weather_conditions", "addendum_rta", "weather_conditions")
             map_field("road_conditions", "addendum_rta", "road_conditions")
-            map_field(
-                "company_vehicle_registration", "addendum_rta", "company_vehicle_reg"
-            )
+            map_field("company_vehicle_registration", "addendum_rta", "company_vehicle_reg")
             map_field("driver_injured", "addendum_rta", "driver_injured")
             map_field("driver_injury_details", "addendum_rta", "driver_injury_details")
             map_field("police_attended", "addendum_rta", "police_attended")
@@ -242,12 +234,8 @@ class InvestigationService:
             # Determine level from severity
             severity = getattr(record, "severity", None)
             if severity:
-                severity_value = (
-                    severity.value if hasattr(severity, "value") else str(severity)
-                )
-                level = cls.RTA_SEVERITY_MAP.get(
-                    severity_value, InvestigationLevel.MEDIUM
-                )
+                severity_value = severity.value if hasattr(severity, "value") else str(severity)
+                level = cls.RTA_SEVERITY_MAP.get(severity_value, InvestigationLevel.MEDIUM)
 
         elif source_type == AssignedEntityType.COMPLAINT:
             map_field("reference_number", "section_1_details", "reference_number")
@@ -259,26 +247,16 @@ class InvestigationService:
             # Complaint addendum
             data["sections"]["addendum_complaint"] = {}
             map_field("complaint_type", "addendum_complaint", "complaint_type")
-            map_field(
-                "complainant_company", "addendum_complaint", "complainant_company"
-            )
+            map_field("complainant_company", "addendum_complaint", "complainant_company")
             map_field("related_reference", "addendum_complaint", "related_reference")
-            map_field(
-                "customer_satisfied", "addendum_complaint", "customer_satisfaction"
-            )
-            map_field(
-                "compensation_offered", "addendum_complaint", "compensation_offered"
-            )
+            map_field("customer_satisfied", "addendum_complaint", "customer_satisfaction")
+            map_field("compensation_offered", "addendum_complaint", "compensation_offered")
 
             # Determine level from priority
             priority = getattr(record, "priority", None)
             if priority:
-                priority_value = (
-                    priority.value if hasattr(priority, "value") else str(priority)
-                )
-                level = cls.COMPLAINT_PRIORITY_MAP.get(
-                    priority_value, InvestigationLevel.MEDIUM
-                )
+                priority_value = priority.value if hasattr(priority, "value") else str(priority)
+                level = cls.COMPLAINT_PRIORITY_MAP.get(priority_value, InvestigationLevel.MEDIUM)
 
         elif source_type == AssignedEntityType.REPORTING_INCIDENT:
             map_field("reference_number", "section_1_details", "reference_number")
@@ -289,9 +267,7 @@ class InvestigationService:
             # Determine level from severity
             severity = getattr(record, "severity", None)
             if severity:
-                severity_value = (
-                    severity.value if hasattr(severity, "value") else str(severity)
-                )
+                severity_value = severity.value if hasattr(severity, "value") else str(severity)
                 if severity_value in ["critical", "high"]:
                     level = InvestigationLevel.HIGH
                 elif severity_value == "medium":
@@ -399,9 +375,7 @@ class InvestigationService:
         }
 
         # Process sections with redaction
-        source_data: Dict[str, Any] = (
-            investigation.data if isinstance(investigation.data, dict) else {}
-        )
+        source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
         for section_id, section_data in source_data.get("sections", {}).items():
             content["sections"][section_id] = {}  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
 
@@ -476,14 +450,10 @@ class InvestigationService:
                 {
                     "asset_id": asset.id,
                     "title": asset.title,
-                    "asset_type": (
-                        asset.asset_type.value if asset.asset_type else "other"
-                    ),
+                    "asset_type": (asset.asset_type.value if asset.asset_type else "other"),
                     "included": can_include,
                     "exclusion_reason": exclusion_reason,
-                    "visibility": (
-                        asset.visibility.value if asset.visibility else "unknown"
-                    ),
+                    "visibility": (asset.visibility.value if asset.visibility else "unknown"),
                     "contains_pii": asset.contains_pii,
                     "redaction_required": asset.redaction_required,
                 }
@@ -534,9 +504,7 @@ async def get_or_create_default_template(
     from fastapi import HTTPException
     from fastapi import status as http_status
 
-    result = await db.execute(
-        select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
-    )
+    result = await db.execute(select(InvestigationTemplate).where(InvestigationTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
     if template:

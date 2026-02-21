@@ -18,12 +18,7 @@ from sqlalchemy import func, select, update
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.notification import (
-    Notification,
-    NotificationPreference,
-    NotificationPriority,
-    NotificationType,
-)
+from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
 from src.domain.models.user import User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -166,9 +161,7 @@ async def get_unread_count(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/{notification_id}/read")
-async def mark_notification_read(
-    notification_id: int, db: DbSession, current_user: CurrentUser
-):
+async def mark_notification_read(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Mark a specific notification as read."""
     result = await db.execute(
         select(Notification).where(
@@ -178,9 +171,7 @@ async def mark_notification_read(
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     notification.is_read = True
     notification.read_at = datetime.utcnow()
@@ -191,9 +182,7 @@ async def mark_notification_read(
 
 
 @router.post("/{notification_id}/unread")
-async def mark_notification_unread(
-    notification_id: int, db: DbSession, current_user: CurrentUser
-):
+async def mark_notification_unread(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Mark a specific notification as unread."""
     result = await db.execute(
         select(Notification).where(
@@ -203,9 +192,7 @@ async def mark_notification_unread(
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     notification.is_read = False
     notification.read_at = None
@@ -233,9 +220,7 @@ async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(
-    notification_id: int, db: DbSession, current_user: CurrentUser
-):
+async def delete_notification(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Delete a specific notification."""
     result = await db.execute(
         select(Notification).where(
@@ -245,9 +230,7 @@ async def delete_notification(
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     await db.delete(notification)
     await db.commit()
@@ -259,11 +242,7 @@ async def delete_notification(
 @router.get("/preferences")
 async def get_notification_preferences(db: DbSession, current_user: CurrentUser):
     """Get notification preferences for the current user."""
-    result = await db.execute(
-        select(NotificationPreference).where(
-            NotificationPreference.user_id == current_user.id
-        )
-    )
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
     if not prefs:
@@ -301,11 +280,7 @@ async def update_notification_preferences(
     current_user: CurrentUser,
 ):
     """Update notification preferences for the current user."""
-    result = await db.execute(
-        select(NotificationPreference).where(
-            NotificationPreference.user_id == current_user.id
-        )
-    )
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
     if not prefs:

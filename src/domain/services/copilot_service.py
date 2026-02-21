@@ -240,9 +240,7 @@ class CopilotService:
 
     async def get_session(self, session_id: int) -> Optional[CopilotSession]:
         """Get a session by ID."""
-        result = await self.db.execute(
-            select(CopilotSession).where(CopilotSession.id == session_id)
-        )
+        result = await self.db.execute(select(CopilotSession).where(CopilotSession.id == session_id))
         return result.scalar_one_or_none()
 
     async def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
@@ -254,9 +252,7 @@ class CopilotService:
         )
         return result.scalars().first()
 
-    async def get_session_messages(
-        self, session_id: int, limit: int = 50
-    ) -> list[CopilotMessage]:
+    async def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
         """Get messages for a session."""
         result = await self.db.execute(
             select(CopilotMessage)
@@ -309,9 +305,7 @@ class CopilotService:
 
         # Generate AI response
         start_time = time.time()
-        response_content, action_data = await self._generate_response(
-            content, history, context
-        )
+        response_content, action_data = await self._generate_response(content, history, context)
         latency_ms = int((time.time() - start_time) * 1000)
 
         # Save assistant message
@@ -370,9 +364,7 @@ class CopilotService:
 
         # In production, this would call the actual AI API
         # For now, we'll use pattern matching for demo
-        response_content, action_data = self._simulate_ai_response(
-            user_message, context
-        )
+        response_content, action_data = self._simulate_ai_response(user_message, context)
 
         return response_content, action_data
 
@@ -488,9 +480,7 @@ class CopilotService:
             return (explanation, None)
 
         # Navigation
-        if any(
-            word in message_lower for word in ["go to", "open", "show me", "navigate"]
-        ):
+        if any(word in message_lower for word in ["go to", "open", "show me", "navigate"]):
             destinations = {
                 "dashboard": "/",
                 "incidents": "/incidents",
@@ -588,9 +578,7 @@ class CopilotService:
         feedback_text: Optional[str] = None,
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
-        result = await self.db.execute(
-            select(CopilotMessage).where(CopilotMessage.id == message_id)
-        )
+        result = await self.db.execute(select(CopilotMessage).where(CopilotMessage.id == message_id))
         message = result.scalar_one_or_none()
 
         if not message:
@@ -647,18 +635,12 @@ class CopilotService:
         )
 
         if tenant_id:
-            stmt = stmt.where(
-                (CopilotKnowledge.tenant_id == tenant_id)
-                | (CopilotKnowledge.tenant_id == None)
-            )
+            stmt = stmt.where((CopilotKnowledge.tenant_id == tenant_id) | (CopilotKnowledge.tenant_id == None))
 
         if category:
             stmt = stmt.where(CopilotKnowledge.category == category)
 
-        stmt = stmt.where(
-            CopilotKnowledge.content.ilike(f"%{query}%")
-            | CopilotKnowledge.title.ilike(f"%{query}%")
-        )
+        stmt = stmt.where(CopilotKnowledge.content.ilike(f"%{query}%") | CopilotKnowledge.title.ilike(f"%{query}%"))
 
         stmt = stmt.limit(limit)
 

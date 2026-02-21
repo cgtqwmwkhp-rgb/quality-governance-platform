@@ -25,9 +25,7 @@ class TestHealthEndpointStability:
         """
         response = await client.get("/health")
 
-        assert (
-            response.status_code == 200
-        ), f"Run {run_number}: Expected 200, got {response.status_code}"
+        assert response.status_code == 200, f"Run {run_number}: Expected 200, got {response.status_code}"
         data = response.json()
         assert data["status"] == "healthy", f"Run {run_number}: Expected healthy status"
         assert "request_id" in data, f"Run {run_number}: Missing request_id"
@@ -38,9 +36,7 @@ class TestHealthEndpointStability:
         """Liveness probe should be stable across 10 repeated runs."""
         response = await client.get("/healthz")
 
-        assert (
-            response.status_code == 200
-        ), f"Run {run_number}: Expected 200, got {response.status_code}"
+        assert response.status_code == 200, f"Run {run_number}: Expected 200, got {response.status_code}"
         data = response.json()
         assert data["status"] == "ok", f"Run {run_number}: Expected ok status"
 
@@ -66,9 +62,7 @@ class TestHealthEndpointStability:
 
         # Filter out known pytest-asyncio infrastructure tasks
         suspicious_pending = [
-            t
-            for t in pending
-            if "pytest" not in str(t.get_coro()) and "anyio" not in str(t.get_coro())
+            t for t in pending if "pytest" not in str(t.get_coro()) and "anyio" not in str(t.get_coro())
         ]
 
         assert len(suspicious_pending) == 0, (

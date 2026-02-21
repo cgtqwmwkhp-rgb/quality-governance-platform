@@ -99,18 +99,14 @@ class TestMultiStepEntityWorkflows:
         track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
 
         if track_response.status_code != 200:
-            TestResult.record(
-                "SUAT-001", "PARTIAL", "Submission works but tracking fails"
-            )
+            TestResult.record("SUAT-001", "PARTIAL", "Submission works but tracking fails")
             pytest.fail(f"Tracking failed: {track_response.text}")
 
         track_data = track_response.json()
 
         # Step 4: Verify timeline
         assert "timeline" in track_data, "Missing timeline in tracking response"
-        assert (
-            len(track_data["timeline"]) >= 1
-        ), "Timeline should have at least submission event"
+        assert len(track_data["timeline"]) >= 1, "Timeline should have at least submission event"
 
         TestResult.record("SUAT-001", "WORKING", "Full lifecycle works")
 
@@ -159,9 +155,7 @@ class TestMultiStepEntityWorkflows:
             "is_anonymous": True,
         }
 
-        submit_response = await client.post(
-            "/api/v1/portal/reports/", json=anonymous_report
-        )
+        submit_response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
         assert submit_response.status_code == 201
         ref_number = submit_response.json()["reference_number"]
 
@@ -236,9 +230,7 @@ class TestMultiStepEntityWorkflows:
 
         assert len(reference_numbers) == 5, "Should have 5 unique references"
 
-        TestResult.record(
-            "SUAT-005", "WORKING", f"Created {len(reports)} unique reports"
-        )
+        TestResult.record("SUAT-005", "WORKING", f"Created {len(reports)} unique reports")
 
 
 # ============================================================================
@@ -271,11 +263,7 @@ class TestConcurrentOperations:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         successes = [r for r in results if isinstance(r, tuple) and r[0] == 201]
-        failures = [
-            r
-            for r in results
-            if isinstance(r, Exception) or (isinstance(r, tuple) and r[0] != 201)
-        ]
+        failures = [r for r in results if isinstance(r, Exception) or (isinstance(r, tuple) and r[0] != 201)]
 
         if len(failures) > 0:
             TestResult.record(
@@ -284,13 +272,9 @@ class TestConcurrentOperations:
                 f"{len(successes)}/10 succeeded, {len(failures)} failed",
             )
         else:
-            TestResult.record(
-                "SUAT-006", "WORKING", "All 10 concurrent submissions succeeded"
-            )
+            TestResult.record("SUAT-006", "WORKING", "All 10 concurrent submissions succeeded")
 
-        assert (
-            len(successes) >= 8
-        ), f"At least 80% should succeed, got {len(successes)}/10"
+        assert len(successes) >= 8, f"At least 80% should succeed, got {len(successes)}/10"
 
     @pytest.mark.asyncio
     async def test_suat_007_concurrent_health_checks(self, client):
@@ -307,9 +291,7 @@ class TestConcurrentOperations:
 
         successes = [r for r in results if r == 200]
 
-        assert (
-            len(successes) == 20
-        ), f"All health checks should pass, got {len(successes)}/20"
+        assert len(successes) == 20, f"All health checks should pass, got {len(successes)}/20"
         TestResult.record("SUAT-007", "WORKING")
 
     @pytest.mark.asyncio
@@ -377,9 +359,7 @@ class TestErrorHandlingEdgeCases:
         elif response.status_code == 422:
             TestResult.record("SUAT-009", "WORKING", "Properly validates max length")
         else:
-            TestResult.record(
-                "SUAT-009", "NOT_WORKING", f"Unexpected: {response.status_code}"
-            )
+            TestResult.record("SUAT-009", "NOT_WORKING", f"Unexpected: {response.status_code}")
             pytest.fail(f"Unexpected response: {response.status_code}")
 
     @pytest.mark.asyncio
@@ -422,18 +402,12 @@ class TestErrorHandlingEdgeCases:
 
             # The API stores data as-is; XSS protection is frontend's responsibility
             # This is acceptable behavior for a JSON API
-            TestResult.record(
-                "SUAT-010", "WORKING", "API stores special chars, frontend must escape"
-            )
+            TestResult.record("SUAT-010", "WORKING", "API stores special chars, frontend must escape")
         elif response.status_code == 422:
             # Also acceptable: API validates and rejects potentially dangerous input
-            TestResult.record(
-                "SUAT-010", "WORKING", "API validates and rejects dangerous input"
-            )
+            TestResult.record("SUAT-010", "WORKING", "API validates and rejects dangerous input")
         else:
-            TestResult.record(
-                "SUAT-010", "NOT_WORKING", f"Unexpected: {response.status_code}"
-            )
+            TestResult.record("SUAT-010", "NOT_WORKING", f"Unexpected: {response.status_code}")
             pytest.fail(f"Unexpected response: {response.status_code}")
 
     @pytest.mark.asyncio
@@ -453,9 +427,7 @@ class TestErrorHandlingEdgeCases:
 
         response = await client.post("/api/v1/portal/reports/", json=unicode_report)
 
-        assert (
-            response.status_code == 201
-        ), f"Unicode submission failed: {response.text}"
+        assert response.status_code == 201, f"Unicode submission failed: {response.text}"
 
         ref = response.json()["reference_number"]
         track = await client.get(f"/api/v1/portal/reports/{ref}/")
@@ -528,17 +500,13 @@ class TestErrorHandlingEdgeCases:
             responses.append(response)
 
         # Should see rate limit headers
-        has_rate_limit_header = any(
-            "x-ratelimit" in str(r.headers).lower() for r in responses
-        )
+        has_rate_limit_header = any("x-ratelimit" in str(r.headers).lower() for r in responses)
 
         # Note: Rate limiting might not trigger 429 in test mode
         if has_rate_limit_header:
             TestResult.record("SUAT-015", "WORKING", "Rate limit headers present")
         else:
-            TestResult.record(
-                "SUAT-015", "PARTIAL", "Rate limiting may be disabled in test mode"
-            )
+            TestResult.record("SUAT-015", "PARTIAL", "Rate limiting may be disabled in test mode")
 
 
 # ============================================================================
@@ -566,11 +534,7 @@ class TestAPIContractVerification:
             "/api/v1/portal/report-types/",
         ]
 
-        missing = [
-            p
-            for p in expected_paths
-            if p not in paths and not any(p in path for path in paths)
-        ]
+        missing = [p for p in expected_paths if p not in paths and not any(p in path for path in paths)]
 
         if missing:
             TestResult.record("SUAT-016", "PARTIAL", f"Missing paths: {missing}")
@@ -601,11 +565,7 @@ class TestAPIContractVerification:
         for name, response in error_responses:
             if response.status_code >= 400:
                 data = response.json()
-                if (
-                    "detail" not in data
-                    and "error" not in data
-                    and "message" not in data
-                ):
+                if "detail" not in data and "error" not in data and "message" not in data:
                     all_have_detail = False
 
         if all_have_detail:
@@ -634,9 +594,7 @@ class TestAPIContractVerification:
         if not missing_request_id:
             TestResult.record("SUAT-018", "WORKING")
         else:
-            TestResult.record(
-                "SUAT-018", "PARTIAL", f"Missing on: {missing_request_id}"
-            )
+            TestResult.record("SUAT-018", "PARTIAL", f"Missing on: {missing_request_id}")
 
     @pytest.mark.asyncio
     async def test_suat_019_pagination_fields_consistent(self, client):
@@ -695,9 +653,7 @@ class TestAPIContractVerification:
         if valid_format:
             TestResult.record("SUAT-020", "WORKING")
         else:
-            TestResult.record(
-                "SUAT-020", "PARTIAL", "Some datetime fields not ISO 8601"
-            )
+            TestResult.record("SUAT-020", "PARTIAL", "Some datetime fields not ISO 8601")
 
 
 # ============================================================================
@@ -726,9 +682,7 @@ def generate_test_summary(request):
     for item in TestResult.NOT_WORKING:
         print(f"   - {item['id']}: {item.get('details', '')}")
 
-    total = (
-        len(TestResult.WORKING) + len(TestResult.PARTIAL) + len(TestResult.NOT_WORKING)
-    )
+    total = len(TestResult.WORKING) + len(TestResult.PARTIAL) + len(TestResult.NOT_WORKING)
     if total > 0:
         health = len(TestResult.WORKING) / total * 100
         print(f"\n📊 Overall Health: {health:.1f}%")

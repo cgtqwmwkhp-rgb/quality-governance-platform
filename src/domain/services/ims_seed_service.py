@@ -1535,9 +1535,7 @@ async def _seed_standards_library(db: AsyncSession) -> None:
         for num in leaf_clauses:
             clause_id = clause_map.get(num)
             if clause_id:
-                title_for_clause = next(
-                    t for n, t, _d, _l, _p in clause_data if n == num
-                )
+                title_for_clause = next(t for n, t, _d, _l, _p in clause_data if n == num)
                 control = Control(
                     clause_id=clause_id,
                     control_number=f"{num}.1",
@@ -1969,12 +1967,8 @@ async def _seed_cross_standard_mappings(db: AsyncSession) -> None:
     req_cache: Dict[Tuple[str, str], int] = {}
 
     for m in _CROSS_STANDARD_MAPPINGS:
-        primary_req_id = await _ensure_ims_requirement(
-            db, m["source_standard"], m["source_clause"], req_cache
-        )
-        mapped_req_id = await _ensure_ims_requirement(
-            db, m["target_standard"], m["target_clause"], req_cache
-        )
+        primary_req_id = await _ensure_ims_requirement(db, m["source_standard"], m["source_clause"], req_cache)
+        mapped_req_id = await _ensure_ims_requirement(db, m["target_standard"], m["target_clause"], req_cache)
 
         mapping = CrossStandardMapping(
             primary_requirement_id=primary_req_id,

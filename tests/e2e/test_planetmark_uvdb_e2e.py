@@ -72,9 +72,7 @@ class TestPlanetMarkE2E:
         """GET /api/v1/planet-mark/dashboard should exist (returns 401, not 404)."""
         response = client.get("/api/v1/planet-mark/dashboard")
         # Should return 401 (auth required), not 404 (missing)
-        assert (
-            response.status_code != 404
-        ), "Planet Mark dashboard endpoint should exist"
+        assert response.status_code != 404, "Planet Mark dashboard endpoint should exist"
         assert response.status_code in [200, 401, 403]
 
     def test_planet_mark_years_endpoint_exists(self, client):
@@ -119,9 +117,7 @@ class TestPlanetMarkE2E:
 
         if response1.status_code == 200 and response2.status_code == 200:
             # Same request should return same order
-            assert (
-                response1.json() == response2.json()
-            ), "Years ordering should be deterministic"
+            assert response1.json() == response2.json(), "Years ordering should be deterministic"
 
 
 # ============================================================================
@@ -173,9 +169,7 @@ class TestUVDBE2E:
         if not auth_headers:
             pytest.skip("Auth not available in test environment")
 
-        response = client.get(
-            "/api/v1/uvdb/audits?page=1&size=10", headers=auth_headers
-        )
+        response = client.get("/api/v1/uvdb/audits?page=1&size=10", headers=auth_headers)
         assert response.status_code in [200, 404]
 
         if response.status_code == 200:
@@ -194,9 +188,7 @@ class TestUVDBE2E:
         response2 = client.get("/api/v1/uvdb/sections", headers=auth_headers)
 
         if response1.status_code == 200 and response2.status_code == 200:
-            assert (
-                response1.json() == response2.json()
-            ), "Sections ordering should be deterministic"
+            assert response1.json() == response2.json(), "Sections ordering should be deterministic"
 
 
 # ============================================================================
@@ -215,12 +207,7 @@ class TestFrontendBackendIntegration:
         if response.status_code == 401:
             data = response.json()
             # Should have error structure
-            has_error = (
-                "detail" in data
-                or "message" in data
-                or "error" in data
-                or "error_code" in data
-            )
+            has_error = "detail" in data or "message" in data or "error" in data or "error_code" in data
             assert has_error, "401 response should have error message"
 
     def test_cors_headers_present(self, client):

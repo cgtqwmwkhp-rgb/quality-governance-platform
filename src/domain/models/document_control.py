@@ -14,17 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    LargeBinary,
-    String,
-    Text,
-)
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.database import Base
@@ -70,9 +60,7 @@ class ControlledDocument(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Identification
-    document_number: Mapped[str] = mapped_column(
-        String(50), unique=True, nullable=False, index=True
-    )
+    document_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -83,9 +71,7 @@ class ControlledDocument(Base):
     tags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Version control
-    current_version: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="1.0"
-    )
+    current_version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0")
     major_version: Mapped[int] = mapped_column(Integer, default=1)
     minor_version: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -94,20 +80,14 @@ class ControlledDocument(Base):
     is_current: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership
-    author_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    author_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     author_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Review & Approval
-    approver_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    approver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approver_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     approved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -115,12 +95,8 @@ class ControlledDocument(Base):
     effective_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     review_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
-    last_review_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # File details
     file_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -149,9 +125,7 @@ class ControlledDocument(Base):
 
     # Obsolete handling
     obsolete_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    superseded_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("controlled_documents.id"), nullable=True
-    )
+    superseded_by: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_documents.id"), nullable=True)
     obsolete_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metrics
@@ -160,9 +134,7 @@ class ControlledDocument(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
         return f"<ControlledDocument({self.document_number}: {self.title[:30]})>"
@@ -189,16 +161,12 @@ class ControlledDocumentVersion(Base):
     # Change details
     change_summary: Mapped[str] = mapped_column(Text, nullable=False)
     change_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    change_type: Mapped[str] = mapped_column(
-        String(50), default="revision"
-    )  # new, revision, amendment
+    change_type: Mapped[str] = mapped_column(String(50), default="revision")  # new, revision, amendment
 
     # File snapshot
     file_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     file_path: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    file_content: Mapped[Optional[bytes]] = mapped_column(
-        LargeBinary, nullable=True
-    )  # For small files/diffs
+    file_content: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)  # For small files/diffs
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
@@ -210,13 +178,9 @@ class ControlledDocumentVersion(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Authors
-    created_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_by_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    approved_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    approved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approved_by_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     approved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -247,17 +211,13 @@ class DocumentApprovalWorkflow(Base):
     # Settings
     allow_parallel_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     require_all_approvals: Mapped[bool] = mapped_column(Boolean, default=True)
-    auto_escalate_after_days: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True
-    )
+    auto_escalate_after_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notify_on_approval: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_rejection: Mapped[bool] = mapped_column(Boolean, default=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class DocumentApprovalInstance(Base):
@@ -267,26 +227,16 @@ class DocumentApprovalInstance(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
-    workflow_id: Mapped[int] = mapped_column(
-        ForeignKey("document_approval_workflows.id"), nullable=False
-    )
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("document_versions.id"), nullable=True
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("document_approval_workflows.id"), nullable=False)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 
     # Current state
     current_step: Mapped[int] = mapped_column(Integer, default=1)
-    status: Mapped[str] = mapped_column(
-        String(50), default="pending"
-    )  # pending, approved, rejected, cancelled
+    status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, approved, rejected, cancelled
 
     # Initiation
-    initiated_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    initiated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     initiated_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Completion
@@ -299,9 +249,7 @@ class DocumentApprovalInstance(Base):
     is_overdue: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class DocumentApprovalAction(Base):
@@ -323,16 +271,12 @@ class DocumentApprovalAction(Base):
     approver_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Decision
-    action: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # approved, rejected, returned, delegated
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # approved, rejected, returned, delegated
     comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     conditions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Delegation
-    delegated_to: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    delegated_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     delegation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     action_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -345,28 +289,18 @@ class DocumentDistribution(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("document_versions.id"), nullable=True
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 
     # Recipient
-    recipient_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # user, department, role, external
+    recipient_type: Mapped[str] = mapped_column(String(50), nullable=False)  # user, department, role, external
     recipient_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     recipient_name: Mapped[str] = mapped_column(String(255), nullable=False)
     recipient_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Distribution details
-    distribution_type: Mapped[str] = mapped_column(
-        String(50), default="controlled"
-    )  # controlled, uncontrolled, info
-    copy_number: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )  # For controlled copies
+    distribution_type: Mapped[str] = mapped_column(String(50), default="controlled")  # controlled, uncontrolled, info
+    copy_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # For controlled copies
     is_holder_of_record: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Notification
@@ -375,9 +309,7 @@ class DocumentDistribution(Base):
 
     # Acknowledgment
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
-    acknowledged_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    acknowledged_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     acknowledgment_required: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Access
@@ -400,16 +332,12 @@ class DocumentTrainingLink(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
 
     # Training details
     training_title: Mapped[str] = mapped_column(String(255), nullable=False)
     training_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    training_type: Mapped[str] = mapped_column(
-        String(50), default="awareness"
-    )  # awareness, competency, certification
+    training_type: Mapped[str] = mapped_column(String(50), default="awareness")  # awareness, competency, certification
 
     # Target audience
     target_roles: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -418,9 +346,7 @@ class DocumentTrainingLink(Base):
 
     # Completion requirements
     completion_deadline_days: Mapped[int] = mapped_column(Integer, default=30)
-    retraining_frequency_months: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True
-    )
+    retraining_frequency_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Auto-trigger
     trigger_on_new_version: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -442,21 +368,15 @@ class DocumentAccessLog(Base):
         nullable=False,
         index=True,
     )
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("document_versions.id"), nullable=True
-    )
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 
     # User
-    user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     user_name: Mapped[str] = mapped_column(String(255), nullable=False)
     user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Action
-    action: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # view, download, print, email, edit
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # view, download, print, email, edit
     action_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Context
@@ -464,9 +384,7 @@ class DocumentAccessLog(Base):
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, index=True
-    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class ObsoleteDocumentRecord(Base):
@@ -476,25 +394,17 @@ class ObsoleteDocumentRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
 
     # Obsolescence details
     obsolete_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     obsolete_reason: Mapped[str] = mapped_column(Text, nullable=False)
-    obsoleted_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    obsoleted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     obsoleted_by_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Supersession
-    superseded_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("controlled_documents.id"), nullable=True
-    )
-    superseded_by_number: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
+    superseded_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_documents.id"), nullable=True)
+    superseded_by_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Handling
     watermark_applied: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -503,14 +413,10 @@ class ObsoleteDocumentRecord(Base):
 
     # Retention
     retention_required: Mapped[bool] = mapped_column(Boolean, default=True)
-    retention_end_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    retention_end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     disposal_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     disposal_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    disposal_confirmed_by: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
+    disposal_confirmed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Archive location
     archive_location: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

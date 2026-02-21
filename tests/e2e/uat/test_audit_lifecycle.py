@@ -13,13 +13,7 @@ Uses deterministic seed data for repeatability.
 from typing import Any, Dict
 
 import pytest
-from conftest import (
-    UATApiClient,
-    UATConfig,
-    assert_no_pii,
-    assert_stable_ordering,
-    assert_uat_reference,
-)
+from conftest import UATApiClient, UATConfig, assert_no_pii, assert_stable_ordering, assert_uat_reference
 
 pytestmark = [
     pytest.mark.e2e,
@@ -69,9 +63,7 @@ class TestAuditLifecycle:
     """Test complete audit lifecycle."""
 
     @pytest.mark.asyncio
-    async def test_schedule_audit_from_template(
-        self, admin_client: UATApiClient, seed_generator
-    ):
+    async def test_schedule_audit_from_template(self, admin_client: UATApiClient, seed_generator):
         """Auditor can schedule an audit from a template."""
         template_id = seed_generator.audit_templates[0].id
         auditor_id = seed_generator.users[2].id  # uat_auditor
@@ -94,9 +86,7 @@ class TestAuditLifecycle:
         assert response["status"] in ("created", "ok")
 
     @pytest.mark.asyncio
-    async def test_get_audit_by_id(
-        self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]
-    ):
+    async def test_get_audit_by_id(self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]):
         """Can retrieve audit by ID."""
         audit_id = uat_audit_ids["scheduled"]
 
@@ -111,9 +101,7 @@ class TestAuditLifecycle:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_start_audit(
-        self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]
-    ):
+    async def test_start_audit(self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]):
         """Auditor can start a scheduled audit."""
         audit_id = uat_audit_ids["scheduled"]
 
@@ -130,9 +118,7 @@ class TestAuditLifecycle:
         assert response["status"] == "updated"
 
     @pytest.mark.asyncio
-    async def test_complete_audit(
-        self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]
-    ):
+    async def test_complete_audit(self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]):
         """Auditor can complete an in-progress audit."""
         audit_id = uat_audit_ids["in_progress"]
 
@@ -152,9 +138,7 @@ class TestAuditLifecycle:
         assert response["status"] == "updated"
 
     @pytest.mark.asyncio
-    async def test_completed_audit_in_report_view(
-        self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]
-    ):
+    async def test_completed_audit_in_report_view(self, admin_client: UATApiClient, uat_audit_ids: Dict[str, str]):
         """Completed audit appears in report view."""
         response = await admin_client.get("/api/v1/audits?status=completed")
 
@@ -170,9 +154,7 @@ class TestAuditLifecycle:
     @pytest.mark.asyncio
     async def test_list_audits_stable_ordering(self, admin_client: UATApiClient):
         """Audit list has stable, deterministic ordering."""
-        response = await admin_client.get(
-            "/api/v1/audits?sort=scheduled_date&order=asc"
-        )
+        response = await admin_client.get("/api/v1/audits?sort=scheduled_date&order=asc")
 
         # In real test:
         # assert response.status_code == 200
@@ -189,9 +171,7 @@ class TestAuditRoleRestrictions:
     """Test role-based access for audits."""
 
     @pytest.mark.asyncio
-    async def test_regular_user_cannot_create_audit(
-        self, user_client: UATApiClient, seed_generator
-    ):
+    async def test_regular_user_cannot_create_audit(self, user_client: UATApiClient, seed_generator):
         """Regular user cannot create audits."""
         template_id = seed_generator.audit_templates[0].id
 
@@ -210,9 +190,7 @@ class TestAuditRoleRestrictions:
         assert True
 
     @pytest.mark.asyncio
-    async def test_auditor_can_complete_assigned_audit(
-        self, uat_config: UATConfig, uat_audit_ids: Dict[str, str]
-    ):
+    async def test_auditor_can_complete_assigned_audit(self, uat_config: UATConfig, uat_audit_ids: Dict[str, str]):
         """Auditor can complete their assigned audits."""
         from conftest import UATApiClient
 

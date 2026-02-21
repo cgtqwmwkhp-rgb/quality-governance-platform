@@ -35,14 +35,7 @@ from src.api.schemas.form_config import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.form_config import (
-    Contract,
-    FormField,
-    FormStep,
-    FormTemplate,
-    LookupOption,
-    SystemSetting,
-)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -87,9 +80,7 @@ async def create_form_template(
 ) -> FormTemplate:
     """Create a new form template."""
     # Check for duplicate slug
-    existing = await db.execute(
-        select(FormTemplate).where(FormTemplate.slug == data.slug)
-    )
+    existing = await db.execute(select(FormTemplate).where(FormTemplate.slug == data.slug))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -479,9 +470,7 @@ async def list_contracts(
     )
 
 
-@router.post(
-    "/contracts", response_model=ContractResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/contracts", response_model=ContractResponse, status_code=status.HTTP_201_CREATED)
 async def create_contract(
     data: ContractCreate,
     db: DbSession,
@@ -609,9 +598,7 @@ async def list_system_settings(
     category: Optional[str] = Query(None),
 ) -> SystemSettingListResponse:
     """List all system settings."""
-    query = select(SystemSetting).where(
-        SystemSetting.tenant_id == current_user.tenant_id
-    )
+    query = select(SystemSetting).where(SystemSetting.tenant_id == current_user.tenant_id)
 
     if category:
         query = query.where(SystemSetting.category == category)
@@ -638,9 +625,7 @@ async def create_system_setting(
 ) -> SystemSetting:
     """Create a new system setting."""
     # Check for duplicate key
-    existing = await db.execute(
-        select(SystemSetting).where(SystemSetting.key == data.key)
-    )
+    existing = await db.execute(select(SystemSetting).where(SystemSetting.key == data.key))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -776,9 +761,7 @@ async def update_lookup_option(
 ) -> LookupOption:
     """Update a lookup option."""
     result = await db.execute(
-        select(LookupOption)
-        .where(LookupOption.id == option_id)
-        .where(LookupOption.category == category)
+        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
     )
     option = result.scalar_one_or_none()
 
@@ -807,9 +790,7 @@ async def delete_lookup_option(
 ) -> None:
     """Delete a lookup option."""
     result = await db.execute(
-        select(LookupOption)
-        .where(LookupOption.id == option_id)
-        .where(LookupOption.category == category)
+        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
     )
     option = result.scalar_one_or_none()
 

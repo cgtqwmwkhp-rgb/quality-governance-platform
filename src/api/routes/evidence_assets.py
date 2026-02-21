@@ -12,16 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    HTTPException,
-    Query,
-    UploadFile,
-    status,
-)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,29 +116,17 @@ async def upload_evidence_asset(
     db: DbSession,
     current_user: CurrentUser,
     file: UploadFile = File(..., description="File to upload"),
-    source_module: str = Form(
-        ..., description="Source module (near_miss, road_traffic_collision, etc.)"
-    ),
+    source_module: str = Form(..., description="Source module (near_miss, road_traffic_collision, etc.)"),
     source_id: int = Form(..., description="ID of the source record"),
-    asset_type: Optional[str] = Form(
-        None, description="Asset type (auto-detected if not provided)"
-    ),
+    asset_type: Optional[str] = Form(None, description="Asset type (auto-detected if not provided)"),
     title: Optional[str] = Form(None, description="Asset title"),
     description: Optional[str] = Form(None, description="Asset description"),
-    captured_at: Optional[str] = Form(
-        None, description="When evidence was captured (ISO datetime)"
-    ),
-    captured_by_role: Optional[str] = Form(
-        None, description="Role of person who captured"
-    ),
+    captured_at: Optional[str] = Form(None, description="When evidence was captured (ISO datetime)"),
+    captured_by_role: Optional[str] = Form(None, description="Role of person who captured"),
     latitude: Optional[float] = Form(None, description="GPS latitude"),
     longitude: Optional[float] = Form(None, description="GPS longitude"),
-    location_description: Optional[str] = Form(
-        None, description="Location description"
-    ),
-    visibility: str = Form(
-        "internal_customer", description="Visibility for customer packs"
-    ),
+    location_description: Optional[str] = Form(None, description="Location description"),
+    visibility: str = Form("internal_customer", description="Visibility for customer packs"),
     contains_pii: bool = Form(False, description="Whether asset contains PII"),
     redaction_required: bool = Form(False, description="Whether redaction is required"),
 ):
@@ -257,9 +236,7 @@ async def upload_evidence_asset(
     parsed_captured_at = None
     if captured_at:
         try:
-            parsed_captured_at = datetime.fromisoformat(
-                captured_at.replace("Z", "+00:00")
-            )
+            parsed_captured_at = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
         except ValueError:
             pass  # Ignore invalid datetime
 
@@ -319,9 +296,7 @@ async def list_evidence_assets(
     source_module: Optional[str] = Query(None, description="Filter by source module"),
     source_id: Optional[int] = Query(None, description="Filter by source ID"),
     asset_type: Optional[str] = Query(None, description="Filter by asset type"),
-    linked_investigation_id: Optional[int] = Query(
-        None, description="Filter by linked investigation"
-    ),
+    linked_investigation_id: Optional[int] = Query(None, description="Filter by linked investigation"),
     include_deleted: bool = Query(False, description="Include soft-deleted assets"),
 ):
     """List evidence assets with filtering and pagination.
@@ -329,9 +304,7 @@ async def list_evidence_assets(
     Returns assets in deterministic order (created_at DESC, id ASC).
     Excludes soft-deleted assets by default.
     """
-    query = select(EvidenceAsset).where(
-        EvidenceAsset.tenant_id == current_user.tenant_id
-    )
+    query = select(EvidenceAsset).where(EvidenceAsset.tenant_id == current_user.tenant_id)
 
     if not include_deleted:
         query = query.where(EvidenceAsset.deleted_at.is_(None))
@@ -346,9 +319,7 @@ async def list_evidence_assets(
                 detail={
                     "error_code": "INVALID_SOURCE_MODULE",
                     "message": f"Invalid source module: {source_module}",
-                    "details": {
-                        "valid_modules": [e.value for e in EvidenceSourceModule]
-                    },
+                    "details": {"valid_modules": [e.value for e in EvidenceSourceModule]},
                 },
             )
 
@@ -370,9 +341,7 @@ async def list_evidence_assets(
             )
 
     if linked_investigation_id is not None:
-        query = query.where(
-            EvidenceAsset.linked_investigation_id == linked_investigation_id
-        )
+        query = query.where(EvidenceAsset.linked_investigation_id == linked_investigation_id)
 
     query = query.order_by(EvidenceAsset.created_at.desc(), EvidenceAsset.id.asc())
 
@@ -539,9 +508,7 @@ async def get_signed_download_url(
     asset_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    expires_in: int = Query(
-        3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"
-    ),
+    expires_in: int = Query(3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"),
 ):
     """Get a signed URL for downloading an evidence asset.
 
@@ -567,9 +534,7 @@ async def get_signed_download_url(
     # Generate signed URL
     from src.infrastructure.storage import storage_service
 
-    content_disposition = (
-        f'attachment; filename="{asset.original_filename or "download"}"'
-    )
+    content_disposition = f'attachment; filename="{asset.original_filename or "download"}"'
     signed_url = storage_service().get_signed_url(
         storage_key=asset.storage_key,
         expires_in_seconds=expires_in,
@@ -600,11 +565,7 @@ async def download_file_direct(
 
     from fastapi.responses import Response
 
-    from src.infrastructure.storage import (
-        LocalFileStorageService,
-        StorageError,
-        storage_service,
-    )
+    from src.infrastructure.storage import LocalFileStorageService, StorageError, storage_service
 
     # Only allow this endpoint for local storage
     svc = storage_service()
