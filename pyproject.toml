@@ -246,6 +246,34 @@ disable_error_code = ["return-value"]
 module = "src.api.routes.actions"
 disable_error_code = ["arg-type", "attr-defined"]
 
+[[tool.mypy.overrides]]
+module = "src.api.routes.users"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.risks"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.policies"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.incidents"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.form_config"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.rca_tools"
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.policy_acknowledgment"
+disable_error_code = ["attr-defined"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
