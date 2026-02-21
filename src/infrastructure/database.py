@@ -44,6 +44,7 @@ engine = create_async_engine(settings.database_url, **engine_kwargs)
 # Slow-query logging via sync_engine events
 # ---------------------------------------------------------------------------
 
+
 @event.listens_for(engine.sync_engine, "before_cursor_execute")
 def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     conn.info.setdefault("query_start_time", []).append(time.time())
@@ -54,6 +55,7 @@ def _after_cursor_execute(conn, cursor, statement, parameters, context, executem
     total = time.time() - conn.info["query_start_time"].pop()
     if total > 0.5:
         logger.warning("Slow query (%.3fs): %s", total, statement[:200])
+
 
 # Create async session factory
 async_session_maker = async_sessionmaker(

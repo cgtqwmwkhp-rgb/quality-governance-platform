@@ -54,6 +54,8 @@ celery_app.conf.beat_schedule = {
     },
 }
 
-celery_app.autodiscover_tasks([
-    "src.infrastructure.tasks",
-])
+celery_app.autodiscover_tasks(
+    [
+        "src.infrastructure.tasks",
+    ]
+)

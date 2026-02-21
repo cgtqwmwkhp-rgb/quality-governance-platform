@@ -151,7 +151,5 @@ async def is_token_revoked(jti: str, db: AsyncSession) -> bool:
     """Check whether a token JTI has been revoked (exists in the blacklist)."""
     from src.domain.models.token_blacklist import TokenBlacklist
 
-    result = await db.execute(
-        select(TokenBlacklist.id).where(TokenBlacklist.jti == jti)
-    )
+    result = await db.execute(select(TokenBlacklist.id).where(TokenBlacklist.jti == jti))
     return result.scalar_one_or_none() is not None

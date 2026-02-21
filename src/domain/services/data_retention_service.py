@@ -20,11 +20,7 @@ class DataRetentionService:
 
     @staticmethod
     async def cleanup_expired_tokens(db: AsyncSession) -> int:
-        result = await db.execute(
-            delete(TokenBlacklist).where(
-                TokenBlacklist.expires_at < datetime.utcnow()
-            )
-        )
+        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow()))
         await db.commit()
         return result.rowcount
 

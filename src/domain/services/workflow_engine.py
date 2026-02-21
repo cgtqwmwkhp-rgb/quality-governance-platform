@@ -947,9 +947,7 @@ class ActionExecutor:
             "queued": True,
         }
 
-    async def _execute_send_sms(
-        self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
-    ) -> Dict:
+    async def _execute_send_sms(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         phone = config.get("phone")
         message = config.get("message", f"Alert for {entity_type.value} #{entity_id}")
         logger.info(f"Would send SMS: phone={phone}, message={message}")
@@ -999,9 +997,7 @@ class ActionExecutor:
             await self.db.commit()
         return {"action": "change_priority", "new_priority": new_priority, "completed": True}
 
-    async def _execute_escalate(
-        self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
-    ) -> Dict:
+    async def _execute_escalate(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         current_level = entity_data.get("escalation_level", 0)
         new_level = current_level + 1
 
@@ -1022,9 +1018,7 @@ class ActionExecutor:
                 from sqlalchemy import update as sa_update
 
                 await self.db.execute(
-                    sa_update(model)
-                    .where(model.id == entity_id)
-                    .values(escalation_level=new_level, status="escalated")
+                    sa_update(model).where(model.id == entity_id).values(escalation_level=new_level, status="escalated")
                 )
                 await self.db.commit()
 
@@ -1040,7 +1034,12 @@ class ActionExecutor:
                 "completed": True,
             }
 
-        return {"action": "escalate", "new_level": new_level, "completed": False, "reason": "No escalation level configured"}
+        return {
+            "action": "escalate",
+            "new_level": new_level,
+            "completed": False,
+            "reason": "No escalation level configured",
+        }
 
     async def _execute_update_risk_score(
         self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
@@ -1065,9 +1064,7 @@ class ActionExecutor:
         logger.info(f"Would create task: {title}, due in {due_days} days")
         return {"action": "create_task", "title": title, "due_days": due_days, "created": True}
 
-    async def _execute_webhook(
-        self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
-    ) -> Dict:
+    async def _execute_webhook(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         url = config.get("url")
         method = config.get("method", "POST")
         logger.info(f"Would call webhook: {method} {url}")
@@ -1952,9 +1949,7 @@ class WorkflowService:
         """Mark a workflow as completed."""
         instance.status = WorkflowStatus.COMPLETED
         instance.completed_at = datetime.now()
-        instance.history.append(
-            {"action": "workflow_completed", "timestamp": datetime.now().isoformat()}
-        )
+        instance.history.append({"action": "workflow_completed", "timestamp": datetime.now().isoformat()})
         logger.info(f"Workflow {instance.id} completed successfully")
 
     async def get_workflow_instance(self, instance_id: str) -> Optional[WorkflowInstanceState]:

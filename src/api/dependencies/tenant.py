@@ -16,10 +16,10 @@ async def verify_tenant_access(
 
     Returns the verified tenant_id.
     """
-    if hasattr(current_user, 'is_superuser') and current_user.is_superuser:
+    if hasattr(current_user, "is_superuser") and current_user.is_superuser:
         return tenant_id
 
-    user_tenant_id = getattr(current_user, 'tenant_id', None)
+    user_tenant_id = getattr(current_user, "tenant_id", None)
     if user_tenant_id is None or user_tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -28,9 +28,7 @@ class TokenService:
 
     @staticmethod
     async def is_revoked(db: AsyncSession, jti: str) -> bool:
-        result = await db.execute(
-            select(TokenBlacklist.id).where(TokenBlacklist.jti == jti)
-        )
+        result = await db.execute(select(TokenBlacklist.id).where(TokenBlacklist.jti == jti))
         return result.scalar_one_or_none() is not None
 
     @staticmethod
@@ -40,16 +38,12 @@ class TokenService:
         reason: str = "admin_revoke",
     ) -> int:
         """Revoke all tokens for a user. Returns count of affected records."""
-        result = await db.execute(
-            select(TokenBlacklist).where(TokenBlacklist.user_id == user_id)
-        )
+        result = await db.execute(select(TokenBlacklist).where(TokenBlacklist.user_id == user_id))
         return 0
 
     @staticmethod
     async def cleanup_expired(db: AsyncSession) -> int:
         """Remove expired blacklist entries."""
-        result = await db.execute(
-            delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow())
-        )
+        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow()))
         await db.commit()
         return result.rowcount

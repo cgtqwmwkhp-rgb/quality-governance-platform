@@ -17,10 +17,10 @@ from src.domain.models.analytics import (
     SavedReport,
 )
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 
 # CAPA (Corrective and Preventive Action)
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
 
 # Compliance Automation

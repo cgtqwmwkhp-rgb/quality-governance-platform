@@ -162,12 +162,7 @@ class TestMonitoring:
 
     def test_monitoring_import(self):
         """Monitoring module can be imported."""
-        from src.infrastructure.monitoring.azure_monitor import (
-            get_tracer,
-            logger,
-            setup_telemetry,
-            track_metric,
-        )
+        from src.infrastructure.monitoring.azure_monitor import get_tracer, logger, setup_telemetry, track_metric
 
         assert logger is not None
         assert setup_telemetry is not None

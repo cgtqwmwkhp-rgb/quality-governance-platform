@@ -120,12 +120,8 @@ async def get_capa_stats(
     current_user: CurrentUser,
 ):
     total = await db.execute(select(func.count(CAPAAction.id)))
-    open_count = await db.execute(
-        select(func.count(CAPAAction.id)).where(CAPAAction.status == CAPAStatus.OPEN)
-    )
-    in_progress = await db.execute(
-        select(func.count(CAPAAction.id)).where(CAPAAction.status == CAPAStatus.IN_PROGRESS)
-    )
+    open_count = await db.execute(select(func.count(CAPAAction.id)).where(CAPAAction.status == CAPAStatus.OPEN))
+    in_progress = await db.execute(select(func.count(CAPAAction.id)).where(CAPAAction.status == CAPAStatus.IN_PROGRESS))
     overdue = await db.execute(
         select(func.count(CAPAAction.id)).where(
             CAPAAction.due_date < datetime.utcnow(),

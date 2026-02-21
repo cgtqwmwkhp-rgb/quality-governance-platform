@@ -4,7 +4,7 @@ import json
 import os
 import random
 
-from locust import HttpUser, between, task, tag
+from locust import HttpUser, between, tag, task
 
 
 class QualityPlatformUser(HttpUser):
@@ -15,10 +15,13 @@ class QualityPlatformUser(HttpUser):
 
     def on_start(self):
         """Authenticate and get JWT token."""
-        response = self.client.post("/api/v1/auth/login", json={
-            "email": os.getenv("TEST_USER_EMAIL", "test@example.com"),
-            "password": os.getenv("TEST_USER_PASSWORD", "testpassword"),
-        })
+        response = self.client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": os.getenv("TEST_USER_EMAIL", "test@example.com"),
+                "password": os.getenv("TEST_USER_PASSWORD", "testpassword"),
+            },
+        )
         if response.status_code == 200:
             data = response.json()
             self.token = data.get("access_token", "")
@@ -155,10 +158,13 @@ class AdminUser(HttpUser):
     host = os.getenv("TARGET_HOST", "http://localhost:8000")
 
     def on_start(self):
-        response = self.client.post("/api/v1/auth/login", json={
-            "email": os.getenv("ADMIN_EMAIL", "admin@example.com"),
-            "password": os.getenv("ADMIN_PASSWORD", "adminpassword"),
-        })
+        response = self.client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": os.getenv("ADMIN_EMAIL", "admin@example.com"),
+                "password": os.getenv("ADMIN_PASSWORD", "adminpassword"),
+            },
+        )
         if response.status_code == 200:
             data = response.json()
             self.headers = {"Authorization": f"Bearer {data.get('access_token', '')}"}

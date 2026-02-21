@@ -271,7 +271,7 @@ jobs:
       - name: Store previous deployment info
         id: previous
         run: |
-          echo "image=$(az containerapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group $AZURE_RESOURCE_GROUP --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || echo 'none')" >> $GITHUB_OUTPUT
+          echo "image=$(az containerapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group "$AZURE_RESOURCE_GROUP" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || echo 'none')" >> "$GITHUB_OUTPUT"
 
       - name: Create database backup
         run: |
@@ -295,13 +295,13 @@ jobs:
           for i in {1..5}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "smoke_passed=true" >> $GITHUB_OUTPUT
+              echo "smoke_passed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "Attempt $i: status=$STATUS, retrying..."
             sleep 10
           done
-          echo "smoke_passed=false" >> $GITHUB_OUTPUT
+          echo "smoke_passed=false" >> "$GITHUB_OUTPUT"
           exit 1
 
       - name: Configure App Service environment

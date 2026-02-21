@@ -6,22 +6,35 @@ from typing import BinaryIO
 from fastapi import HTTPException, UploadFile, status
 
 ALLOWED_EXTENSIONS = {
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp",
-    ".csv", ".txt", ".json", ".xml",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".csv",
+    ".txt",
+    ".json",
+    ".xml",
     ".zip",
 }
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 MAGIC_NUMBERS = {
-    b'%PDF': '.pdf',
-    b'\x89PNG': '.png',
-    b'\xff\xd8\xff': '.jpg',
-    b'GIF87a': '.gif',
-    b'GIF89a': '.gif',
-    b'PK\x03\x04': '.zip',
-    b'PK\x05\x06': '.zip',
+    b"%PDF": ".pdf",
+    b"\x89PNG": ".png",
+    b"\xff\xd8\xff": ".jpg",
+    b"GIF87a": ".gif",
+    b"GIF89a": ".gif",
+    b"PK\x03\x04": ".zip",
+    b"PK\x05\x06": ".zip",
 }
 
 
@@ -72,14 +85,14 @@ def verify_magic_number(content: bytes, declared_extension: str) -> bool:
     declared_ext = declared_extension.lower()
 
     for magic, ext in MAGIC_NUMBERS.items():
-        if content[:len(magic)] == magic:
-            if declared_ext in ('.zip', '.docx', '.xlsx', '.pptx'):
-                if ext == '.zip':
+        if content[: len(magic)] == magic:
+            if declared_ext in (".zip", ".docx", ".xlsx", ".pptx"):
+                if ext == ".zip":
                     return True
-            return ext == declared_ext or (
-                ext == '.jpg' and declared_ext == '.jpeg'
-            ) or (
-                declared_ext in ('.doc', '.xls', '.ppt') and ext == '.zip'
+            return (
+                ext == declared_ext
+                or (ext == ".jpg" and declared_ext == ".jpeg")
+                or (declared_ext in (".doc", ".xls", ".ppt") and ext == ".zip")
             )
 
     return True

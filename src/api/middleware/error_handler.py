@@ -16,9 +16,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers on the FastAPI app."""
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         request_id = str(uuid.uuid4())
         return JSONResponse(
             status_code=exc.status_code,
@@ -30,18 +28,18 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(
-        request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
         request_id = str(uuid.uuid4())
         details = []
         for error in exc.errors():
             field = " -> ".join(str(loc) for loc in error.get("loc", []))
-            details.append({
-                "field": field,
-                "message": error.get("msg", ""),
-                "code": error.get("type", ""),
-            })
+            details.append(
+                {
+                    "field": field,
+                    "message": error.get("msg", ""),
+                    "code": error.get("type", ""),
+                }
+            )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
@@ -53,9 +51,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         request_id = str(uuid.uuid4())
         logger.error(
             "Unhandled exception [%s]: %s\n%s",

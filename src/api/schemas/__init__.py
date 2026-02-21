@@ -1,13 +1,5 @@
 """Pydantic schemas for API request/response validation."""
 
-from src.api.schemas.responses import (
-    ErrorDetail,
-    ErrorResponse,
-    HealthResponse,
-    PaginatedMeta,
-    PaginatedResponse,
-    SuccessResponse,
-)
 from src.api.schemas.audit import (
     AuditFindingBase,
     AuditFindingCreate,
@@ -49,6 +41,14 @@ from src.api.schemas.auth import (
     PasswordResetRequest,
     RefreshTokenRequest,
     TokenResponse,
+)
+from src.api.schemas.responses import (
+    ErrorDetail,
+    ErrorResponse,
+    HealthResponse,
+    PaginatedMeta,
+    PaginatedResponse,
+    SuccessResponse,
 )
 from src.api.schemas.risk import (
     RiskAssessmentBase,

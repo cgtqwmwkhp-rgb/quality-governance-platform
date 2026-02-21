@@ -87,7 +87,9 @@ router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet M
 # IMS (Integrated Management System) Dashboard
 router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
 # Cross-Standard ISO Mappings
-router.include_router(cross_standard_mappings.router, prefix="/cross-standard-mappings", tags=["Cross-Standard Mappings"])
+router.include_router(
+    cross_standard_mappings.router, prefix="/cross-standard-mappings", tags=["Cross-Standard Mappings"]
+)
 # AI Copilot (Tier 2)
 router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
 # Digital Signatures (Tier 2)

@@ -10,6 +10,7 @@ T = TypeVar("T")
 
 class ErrorDetail(BaseModel):
     """Structured error detail."""
+
     field: str | None = None
     message: str
     code: str | None = None
@@ -17,6 +18,7 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standard error response format."""
+
     error: str
     message: str
     details: list[ErrorDetail] | None = None
@@ -26,6 +28,7 @@ class ErrorResponse(BaseModel):
 
 class SuccessResponse(BaseModel):
     """Standard success response wrapper."""
+
     data: Any
     message: str | None = None
     meta: dict[str, Any] | None = None
@@ -33,6 +36,7 @@ class SuccessResponse(BaseModel):
 
 class PaginatedMeta(BaseModel):
     """Pagination metadata."""
+
     total: int
     page: int
     page_size: int
@@ -43,12 +47,14 @@ class PaginatedMeta(BaseModel):
 
 class PaginatedResponse(BaseModel):
     """Standard paginated response."""
+
     items: list[Any]
     meta: PaginatedMeta
 
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: str
     version: str | None = None
     uptime_seconds: float | None = None
