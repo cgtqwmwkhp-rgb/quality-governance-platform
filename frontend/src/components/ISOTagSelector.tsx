@@ -104,8 +104,8 @@ export default function ISOTagSelector({
 
   // Render a clause badge
   const renderClauseBadge = (clause: ISOClause, removable = true) => {
-    const Icon = standardIcons[clause.standard];
-    const colors = standardColors[clause.standard];
+    const Icon = standardIcons[clause.standard]!;
+    const colors = standardColors[clause.standard]!;
 
     return (
       <span
@@ -167,8 +167,8 @@ export default function ISOTagSelector({
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredClauses.map(clause => {
                 const isSelected = selectedClauses.includes(clause.id);
-                const Icon = standardIcons[clause.standard];
-                const colors = standardColors[clause.standard];
+                const Icon = standardIcons[clause.standard]!;
+                const colors = standardColors[clause.standard]!;
 
                 return (
                   <div
@@ -254,8 +254,8 @@ export default function ISOTagSelector({
               const isAlreadySelected = selectedClauses.includes(clause.id);
               if (isAlreadySelected) return null;
 
-              const Icon = standardIcons[clause.standard];
-              const colors = standardColors[clause.standard];
+              const Icon = standardIcons[clause.standard]!;
+              const colors = standardColors[clause.standard]!;
 
               return (
                 <button
@@ -308,8 +308,8 @@ export default function ISOTagSelector({
             {filteredClauses.length > 0 ? (
               filteredClauses.map(clause => {
                 const isSelected = selectedClauses.includes(clause.id);
-                const Icon = standardIcons[clause.standard];
-                const colors = standardColors[clause.standard];
+                const Icon = standardIcons[clause.standard]!;
+                const colors = standardColors[clause.standard]!;
 
                 return (
                   <div

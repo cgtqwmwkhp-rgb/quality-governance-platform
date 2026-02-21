@@ -264,7 +264,7 @@ export default function Documents() {
             { label: 'Total Documents', value: stats.total_documents, icon: FileText, variant: 'primary' as const },
             { label: 'AI Indexed', value: stats.indexed_documents, icon: Brain, variant: 'info' as const },
             { label: 'Semantic Chunks', value: stats.total_chunks.toLocaleString(), icon: Zap, variant: 'warning' as const },
-            { label: 'Processing', value: stats.by_status?.processing || 0, icon: Loader2, variant: 'success' as const },
+            { label: 'Processing', value: stats.by_status?.['processing'] || 0, icon: Loader2, variant: 'success' as const },
           ].map((stat) => (
             <Card key={stat.label} hoverable className="p-5">
               <div className={cn(

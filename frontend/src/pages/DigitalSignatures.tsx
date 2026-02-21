@@ -124,12 +124,12 @@ const DigitalSignatures: React.FC = () => {
       ]);
       setSignatureRequests((reqRes.data || []).map(mapApiRequest));
       setTemplates(((tplRes.data || []) as Record<string, unknown>[]).map((t) => ({
-        id: Number(t.id),
-        name: String(t.name || ''),
-        description: t.description ? String(t.description) : undefined,
-        signerRoles: (t.signer_roles as { role: string; order: number }[]) || [],
-        workflowType: String(t.workflow_type || 'sequential'),
-        expiryDays: Number(t.expiry_days || 30),
+        id: Number(t['id']),
+        name: String(t['name'] || ''),
+        description: t['description'] ? String(t['description']) : undefined,
+        signerRoles: (t['signer_roles'] as { role: string; order: number }[]) || [],
+        workflowType: String(t['workflow_type'] || 'sequential'),
+        expiryDays: Number(t['expiry_days'] || 30),
       })));
     } catch {
       console.error('Failed to load signatures');

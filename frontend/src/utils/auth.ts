@@ -82,7 +82,7 @@ export function decodeTokenPayload(token: string): Record<string, unknown> | nul
     if (parts.length !== 3) {
       return null;
     }
-    const payload = parts[1];
+    const payload = parts[1]!;
     const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
     return JSON.parse(decoded);
   } catch {
@@ -98,12 +98,11 @@ export function decodeTokenPayload(token: string): Record<string, unknown> | nul
  */
 export function isTokenExpired(token: string): boolean {
   const payload = decodeTokenPayload(token);
-  if (!payload || typeof payload.exp !== 'number') {
+  if (!payload || typeof payload['exp'] !== 'number') {
     return true;
   }
-  // Add 30 second buffer to account for clock skew
   const now = Math.floor(Date.now() / 1000);
-  return payload.exp < now - 30;
+  return payload['exp'] < now - 30;
 }
 
 /**

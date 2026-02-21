@@ -115,9 +115,9 @@ function OptionsEditor({ questionId, options: initial, onSaved }: OptionsEditorP
 
   const updateOption = (index: number, field: string, value: string | number | boolean) => {
     const updated = [...opts];
-    updated[index] = { ...updated[index], [field]: value };
+    updated[index] = { ...updated[index]!, [field]: value };
     if (field === 'label') {
-      updated[index].value = String(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `option_${index + 1}`;
+      updated[index]!.value = String(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `option_${index + 1}`;
     }
     setOpts(updated);
   };
@@ -296,13 +296,13 @@ const QuestionEditor = React.memo(function QuestionEditor({
       const update: Record<string, unknown> = { question_type: newType };
       const defaults = SCORE_DEFAULTS[newType];
       if (defaults) {
-        update.min_value = defaults.min;
-        update.max_value = defaults.max;
-        update.max_score = defaults.max;
+        update['min_value'] = defaults.min;
+        update['max_value'] = defaults.max;
+        update['max_score'] = defaults.max;
       }
       if (newType === 'yes_no' || newType === 'pass_fail') {
-        update.max_score = 1;
-        update.options = [
+        update['max_score'] = 1;
+        update['options'] = [
           { value: newType === 'yes_no' ? 'yes' : 'pass', label: newType === 'yes_no' ? 'Yes' : 'Pass', score: 1, triggers_finding: false },
           { value: newType === 'yes_no' ? 'no' : 'fail', label: newType === 'yes_no' ? 'No' : 'Fail', score: 0, triggers_finding: true },
         ];
@@ -1381,7 +1381,7 @@ export default function AuditTemplateBuilder() {
             let failures = 0;
             try {
               for (let i = 0; i < generatedSections.length; i++) {
-                const gs = generatedSections[i];
+                const gs = generatedSections[i]!;
                 try {
                   const sectionRes = await auditsApi.createSection(template.id, {
                     title: gs.title,
@@ -1389,7 +1389,7 @@ export default function AuditTemplateBuilder() {
                     sort_order: baseOrder + i,
                   });
                   for (let qi = 0; qi < gs.questions.length; qi++) {
-                    const q = gs.questions[qi];
+                    const q = gs.questions[qi]!;
                     const sanitizedType = VALID_QUESTION_TYPES.has(q.type) ? q.type : 'yes_no';
                     await auditsApi.createQuestion(template.id, {
                       section_id: sectionRes.data.id,

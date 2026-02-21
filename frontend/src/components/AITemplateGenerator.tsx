@@ -124,19 +124,19 @@ const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[
       const data = res.data as Array<Record<string, unknown>>;
       if (Array.isArray(data) && data.length > 0) {
         return data.map((section, sIdx: number) => ({
-          id: String(section.id || `sec-${sIdx}`),
-          title: String(section.title || section.clause || `Section ${sIdx + 1}`),
-          description: String(section.description || ''),
-          questions: (Array.isArray(section.questions) ? section.questions as Array<Record<string, unknown>> : []).map((q, qIdx: number) => ({
-            id: String(q.id || `q-${sIdx}-${qIdx}`),
-            text: String(q.text || q.question_text || ''),
-            type: String(q.type || q.question_type || 'yes_no'),
-            required: q.required !== false,
-            weight: Number(q.weight ?? 1),
-            riskLevel: String(q.risk_level || q.riskLevel || 'medium'),
-            evidenceRequired: Boolean(q.evidence_required || q.evidenceRequired),
-            isoClause: q.iso_clause ? String(q.iso_clause) : q.isoClause ? String(q.isoClause) : undefined,
-            guidance: q.guidance ? String(q.guidance) : undefined,
+          id: String(section['id'] || `sec-${sIdx}`),
+          title: String(section['title'] || section['clause'] || `Section ${sIdx + 1}`),
+          description: String(section['description'] || ''),
+          questions: (Array.isArray(section['questions']) ? section['questions'] as Array<Record<string, unknown>> : []).map((q, qIdx: number) => ({
+            id: String(q['id'] || `q-${sIdx}-${qIdx}`),
+            text: String(q['text'] || q['question_text'] || ''),
+            type: String(q['type'] || q['question_type'] || 'yes_no'),
+            required: q['required'] !== false,
+            weight: Number(q['weight'] ?? 1),
+            riskLevel: String(q['risk_level'] || q['riskLevel'] || 'medium'),
+            evidenceRequired: Boolean(q['evidence_required'] || q['evidenceRequired']),
+            isoClause: q['iso_clause'] ? String(q['iso_clause']) : q['isoClause'] ? String(q['isoClause']) : undefined,
+            guidance: q['guidance'] ? String(q['guidance']) : undefined,
           })),
         }));
       }

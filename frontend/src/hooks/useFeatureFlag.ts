@@ -47,7 +47,7 @@ function getFeatureFlagValue(flagName: string): boolean {
   // Check runtime-injected flags
   if (typeof window !== 'undefined' && window.__FEATURE_FLAGS__) {
     if (flagName in window.__FEATURE_FLAGS__) {
-      return window.__FEATURE_FLAGS__[flagName];
+      return window.__FEATURE_FLAGS__[flagName] ?? false;
     }
   }
   

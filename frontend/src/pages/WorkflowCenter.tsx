@@ -122,19 +122,19 @@ export default function WorkflowCenter() {
 
       if (approvalsRes.status === 'fulfilled') {
         const raw = approvalsRes.value.data as unknown as Record<string, unknown>;
-        const items = Array.isArray(raw) ? raw : ((raw?.approvals as Record<string, unknown>[]) || []);
+        const items = Array.isArray(raw) ? raw : ((raw?.['approvals'] as Record<string, unknown>[]) || []);
         setApprovals(items.map((a: Record<string, unknown>) => ({
-          id: String(a.id),
-          workflow_id: String(a.workflow_id || ''),
-          workflow_name: String(a.workflow_name || a.template_name || 'Workflow'),
-          step_name: String(a.step_name || a.current_step || ''),
-          entity_type: String(a.entity_type || ''),
-          entity_id: String(a.entity_id || ''),
-          entity_title: String(a.entity_title || a.title || ''),
-          requested_at: String(a.requested_at || a.created_at || ''),
-          due_at: String(a.due_at || ''),
-          priority: String(a.priority || 'normal'),
-          sla_status: String(a.sla_status || 'ok'),
+          id: String(a['id']),
+          workflow_id: String(a['workflow_id'] || ''),
+          workflow_name: String(a['workflow_name'] || a['template_name'] || 'Workflow'),
+          step_name: String(a['step_name'] || a['current_step'] || ''),
+          entity_type: String(a['entity_type'] || ''),
+          entity_id: String(a['entity_id'] || ''),
+          entity_title: String(a['entity_title'] || a['title'] || ''),
+          requested_at: String(a['requested_at'] || a['created_at'] || ''),
+          due_at: String(a['due_at'] || ''),
+          priority: String(a['priority'] || 'normal'),
+          sla_status: String(a['sla_status'] || 'ok'),
         })));
       }
 
@@ -142,39 +142,39 @@ export default function WorkflowCenter() {
         const data = workflowsRes.value.data;
         const items = Array.isArray(data) ? data : (data?.items || []);
         setWorkflows(items.map((w: Record<string, unknown>) => ({
-          id: String(w.id),
-          template_code: String(w.template_code || ''),
-          template_name: String(w.template_name || ''),
-          entity_type: String(w.entity_type || ''),
-          entity_id: String(w.entity_id || ''),
-          status: String(w.status || 'pending'),
-          priority: String(w.priority || 'normal'),
-          current_step: String(w.current_step || ''),
-          progress: Number(w.progress || 0),
-          sla_status: String(w.sla_status || 'ok'),
-          started_at: String(w.started_at || w.created_at || ''),
+          id: String(w['id']),
+          template_code: String(w['template_code'] || ''),
+          template_name: String(w['template_name'] || ''),
+          entity_type: String(w['entity_type'] || ''),
+          entity_id: String(w['entity_id'] || ''),
+          status: String(w['status'] || 'pending'),
+          priority: String(w['priority'] || 'normal'),
+          current_step: String(w['current_step'] || ''),
+          progress: Number(w['progress'] || 0),
+          sla_status: String(w['sla_status'] || 'ok'),
+          started_at: String(w['started_at'] || w['created_at'] || ''),
         })));
       }
 
       if (templatesRes.status === 'fulfilled') {
         const raw = templatesRes.value.data as unknown as Record<string, unknown>;
-        const items = Array.isArray(raw) ? raw : ((raw?.templates as Record<string, unknown>[]) || []);
+        const items = Array.isArray(raw) ? raw : ((raw?.['templates'] as Record<string, unknown>[]) || []);
         setTemplates(items.map((t: Record<string, unknown>) => ({
-          code: String(t.code || t.template_code || ''),
-          name: String(t.name || ''),
-          description: String(t.description || ''),
-          category: String(t.category || 'general'),
-          steps_count: Number(t.steps_count) || (Array.isArray(t.steps) ? t.steps.length : 0),
+          code: String(t['code'] || t['template_code'] || ''),
+          name: String(t['name'] || ''),
+          description: String(t['description'] || ''),
+          category: String(t['category'] || 'general'),
+          steps_count: Number(t['steps_count']) || (Array.isArray(t['steps']) ? (t['steps'] as unknown[]).length : 0),
         })));
       }
 
       if (statsRes.status === 'fulfilled' && statsRes.value.data) {
         const s = statsRes.value.data;
         setStats({
-          pending_approvals: Number(s.pending_approvals ?? 0),
-          active_workflows: Number(s.active_workflows ?? 0),
-          overdue: Number(s.overdue ?? 0),
-          completed_today: Number(s.completed_today ?? 0),
+          pending_approvals: Number(s['pending_approvals'] ?? 0),
+          active_workflows: Number(s['active_workflows'] ?? 0),
+          overdue: Number(s['overdue'] ?? 0),
+          completed_today: Number(s['completed_today'] ?? 0),
         });
       } else {
         setStats({

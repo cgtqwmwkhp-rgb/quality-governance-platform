@@ -27,10 +27,10 @@ export function isSetupRequired(data: unknown): data is SetupRequiredResponse {
   if (!data || typeof data !== 'object') return false
   const obj = data as Record<string, unknown>
   return (
-    obj.error_class === 'SETUP_REQUIRED' &&
-    obj.setup_required === true &&
-    typeof obj.module === 'string' &&
-    typeof obj.message === 'string'
+    obj['error_class'] === 'SETUP_REQUIRED' &&
+    obj['setup_required'] === true &&
+    typeof obj['module'] === 'string' &&
+    typeof obj['message'] === 'string'
   )
 }
 

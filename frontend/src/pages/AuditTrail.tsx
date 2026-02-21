@@ -243,9 +243,9 @@ export default function AuditTrail() {
             )}
             
             {/* Timeline Dot */}
-            <div className={`absolute left-0 top-3 w-6 h-6 rounded-full flex items-center justify-center ${actionIcons[entry.action].bg}`}>
-              <div className={actionIcons[entry.action].color}>
-                {actionIcons[entry.action].icon}
+            <div className={`absolute left-0 top-3 w-6 h-6 rounded-full flex items-center justify-center ${actionIcons[entry.action]!.bg}`}>
+              <div className={actionIcons[entry.action]!.color}>
+                {actionIcons[entry.action]!.icon}
               </div>
             </div>
             
@@ -268,7 +268,7 @@ export default function AuditTrail() {
                       <div>
                         <span className="font-medium text-foreground">{entry.user.name}</span>
                         <span className="text-muted-foreground mx-2">•</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionIcons[entry.action].bg} ${actionIcons[entry.action].color}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionIcons[entry.action]!.bg} ${actionIcons[entry.action]!.color}`}>
                           {entry.action}
                         </span>
                       </div>

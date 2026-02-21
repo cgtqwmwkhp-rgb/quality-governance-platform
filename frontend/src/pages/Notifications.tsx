@@ -278,13 +278,13 @@ export default function Notifications() {
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     "p-2.5 rounded-xl",
-                    typeStyles[notification.type].variant === 'destructive' && "bg-destructive/10 text-destructive",
-                    typeStyles[notification.type].variant === 'warning' && "bg-warning/10 text-warning",
-                    typeStyles[notification.type].variant === 'success' && "bg-success/10 text-success",
-                    typeStyles[notification.type].variant === 'info' && "bg-info/10 text-info",
-                    typeStyles[notification.type].variant === 'primary' && "bg-primary/10 text-primary",
+                    typeStyles[notification.type]!.variant === 'destructive' && "bg-destructive/10 text-destructive",
+                    typeStyles[notification.type]!.variant === 'warning' && "bg-warning/10 text-warning",
+                    typeStyles[notification.type]!.variant === 'success' && "bg-success/10 text-success",
+                    typeStyles[notification.type]!.variant === 'info' && "bg-info/10 text-info",
+                    typeStyles[notification.type]!.variant === 'primary' && "bg-primary/10 text-primary",
                   )}>
-                    {typeStyles[notification.type].icon}
+                    {typeStyles[notification.type]!.icon}
                   </div>
                   
                   <div className="flex-1 min-w-0">

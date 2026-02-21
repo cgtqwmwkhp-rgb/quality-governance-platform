@@ -3,9 +3,9 @@ import { API_BASE_URL } from '../config/apiBase';
 
 // Microsoft Entra ID (Azure AD) configuration
 const MSAL_CONFIG = {
-  clientId: import.meta.env.VITE_AZURE_CLIENT_ID || '',
-  authority: import.meta.env.VITE_AZURE_AUTHORITY || '',
-  redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin + '/portal',
+  clientId: import.meta.env['VITE_AZURE_CLIENT_ID'] || '',
+  authority: import.meta.env['VITE_AZURE_AUTHORITY'] || '',
+  redirectUri: import.meta.env['VITE_AZURE_REDIRECT_URI'] || window.location.origin + '/portal',
 };
 
 // API base URL for token exchange (environment-aware)

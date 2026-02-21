@@ -273,14 +273,14 @@ const AICopilot: React.FC<AICopilotProps> = ({
       setIsListening(true);
       // Start speech recognition
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognitionCtor = ((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition) as { new(): { continuous: boolean; interimResults: boolean; lang: string; onresult: ((event: { results: { [index: number]: { [index: number]: { transcript: string } } } }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void } };
+        const SpeechRecognitionCtor = ((window as unknown as Record<string, unknown>)['SpeechRecognition'] || (window as unknown as Record<string, unknown>)['webkitSpeechRecognition']) as { new(): { continuous: boolean; interimResults: boolean; lang: string; onresult: ((event: { results: { [index: number]: { [index: number]: { transcript: string } } } }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void } };
         const recognition = new SpeechRecognitionCtor();
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = 'en-GB';
         
         recognition.onresult = (event: { results: { [index: number]: { [index: number]: { transcript: string } } } }) => {
-          const transcript = event.results[0][0].transcript;
+          const transcript = event.results[0]![0]!.transcript;
           setInput(prev => prev + transcript);
           setIsListening(false);
         };

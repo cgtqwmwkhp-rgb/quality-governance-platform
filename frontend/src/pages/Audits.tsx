@@ -39,7 +39,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
   location: '',
-  scheduled_date: new Date().toISOString().split('T')[0], // Default to today
+  scheduled_date: new Date().toISOString().split('T')[0]!,
 }
 
 export default function Audits() {

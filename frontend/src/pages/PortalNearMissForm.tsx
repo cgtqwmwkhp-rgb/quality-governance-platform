@@ -165,7 +165,7 @@ export default function PortalNearMissForm() {
     contractOther: '',
     location: '',
     locationCoordinates: '',
-    eventDate: new Date().toISOString().split('T')[0],
+    eventDate: new Date().toISOString().split('T')[0]!,
     eventTime: new Date().toTimeString().slice(0, 5),
     description: '',
     potentialConsequences: '',

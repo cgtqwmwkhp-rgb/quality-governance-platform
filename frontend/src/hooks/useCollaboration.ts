@@ -62,7 +62,7 @@ const generateUserColor = (): string => {
     '#06B6D4', // cyan
     '#84CC16', // lime
   ];
-  return colors[Math.floor(Math.random() * colors.length)];
+  return colors[Math.floor(Math.random() * colors.length)]!;
 };
 
 /**
@@ -182,22 +182,22 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
 
   // Handle incoming messages
   const handleMessage = useCallback((message: Record<string, unknown>) => {
-    switch (message.type) {
+    switch (message['type']) {
       case 'sync':
         setState(prev => ({ ...prev, isSynced: true }));
         onSync?.();
         break;
 
       case 'update':
-        if (message.update) {
-          const update = new Uint8Array(message.update as ArrayBuffer | ArrayLike<number>);
+        if (message['update']) {
+          const update = new Uint8Array(message['update'] as ArrayBuffer | ArrayLike<number>);
           onUpdate?.(update);
         }
         break;
 
       case 'awareness':
-        if (message.users) {
-          const users = message.users as CollaboratorInfo[];
+        if (message['users']) {
+          const users = message['users'] as CollaboratorInfo[];
           const collaborators = users
             .filter((u) => u.id !== userId)
             .map((u) => ({
@@ -209,8 +209,8 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
         break;
 
       case 'cursor': {
-        const cursorUserId = message.userId as string;
-        const cursor = message.cursor as CollaboratorInfo['cursor'];
+        const cursorUserId = message['userId'] as string;
+        const cursor = message['cursor'] as CollaboratorInfo['cursor'];
         setState(prev => ({
           ...prev,
           collaborators: prev.collaborators.map(c =>
@@ -221,7 +221,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       }
 
       default:
-        console.log('[Collaboration] Unknown message type:', message.type);
+        console.log('[Collaboration] Unknown message type:', message['type']);
     }
   }, [userId, onSync, onUpdate]);
 

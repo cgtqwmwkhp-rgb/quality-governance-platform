@@ -142,11 +142,11 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
           break;
 
         case 'subscribed':
-          console.log(`Subscribed to channel: ${message.data?.channel}`);
+          console.log(`Subscribed to channel: ${message.data?.['channel']}`);
           break;
 
         case 'unsubscribed':
-          console.log(`Unsubscribed from channel: ${message.data?.channel}`);
+          console.log(`Unsubscribed from channel: ${message.data?.['channel']}`);
           break;
 
         case 'presence_update':

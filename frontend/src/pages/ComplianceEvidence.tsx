@@ -114,7 +114,7 @@ export default function ComplianceEvidence() {
 
         const items: EvidenceItem[] = [];
         grouped.forEach((groupLinks, key) => {
-          const first = groupLinks[0];
+          const first = groupLinks[0]!;
           items.push({
             id: key,
             dbId: first.id,
@@ -135,15 +135,15 @@ export default function ComplianceEvidence() {
         const items: EvidenceItem[] = [];
         if (coverageRes.status === 'fulfilled' && coverageRes.value) {
           const data = coverageRes.value.data as Record<string, unknown>;
-          if (data?.covered_clauses && Array.isArray(data.covered_clauses)) {
-            data.covered_clauses.forEach((link: Record<string, string | number | boolean | null>, idx: number) => {
+          if (data?.['covered_clauses'] && Array.isArray(data['covered_clauses'])) {
+            data['covered_clauses'].forEach((link: Record<string, string | number | boolean | null>, idx: number) => {
               items.push({
-                id: `ev-${idx}`, type: (String(link.entity_type || 'document')) as EvidenceType,
-                title: String(link.entity_name || link.entity_type || 'Linked Evidence'),
-                description: `Evidence linked to clause ${String(link.clause_id)}`,
-                date: String(link.created_at || new Date().toISOString().split('T')[0]),
-                status: 'active', linkedClauses: [String(link.clause_id)],
-                autoTagged: link.linked_by === 'auto', confidence: link.confidence ? Number(link.confidence) * 100 : undefined,
+                id: `ev-${idx}`, type: (String(link['entity_type'] || 'document')) as EvidenceType,
+                title: String(link['entity_name'] || link['entity_type'] || 'Linked Evidence'),
+                description: `Evidence linked to clause ${String(link['clause_id'])}`,
+                date: String(link['created_at'] || new Date().toISOString().split('T')[0]),
+                status: 'active', linkedClauses: [String(link['clause_id'])],
+                autoTagged: link['linked_by'] === 'auto', confidence: link['confidence'] ? Number(link['confidence']) * 100 : undefined,
                 link: '#',
               });
             });
@@ -414,10 +414,10 @@ export default function ComplianceEvidence() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {ISO_STANDARDS.map(standard => {
             const stats = complianceStats[standard.id];
-            const percentage = stats?.total > 0
+            const percentage = stats && stats.total > 0
               ? Math.round((stats.covered + stats.partial * 0.5) / stats.total * 100) : 0;
-            const Icon = standardIcons[standard.id];
-            const color = standardColors[standard.id];
+            const Icon = standardIcons[standard.id]!;
+            const color = standardColors[standard.id]!
             return (
               <div
                 key={standard.id}
@@ -497,7 +497,7 @@ export default function ComplianceEvidence() {
                 ISO_STANDARDS.map(standard => (
                   <div key={standard.id} className="mb-6">
                     <h3 className="text-md font-semibold text-foreground mb-3 flex items-center gap-2">
-                      {React.createElement(standardIcons[standard.id], { className: `w-4 h-4 text-${standardColors[standard.id]}-400` })}
+                      {React.createElement(standardIcons[standard.id]!, { className: `w-4 h-4 text-${standardColors[standard.id]!}-400` })}
                       {standard.code}
                     </h3>
                     {renderClauseTree(undefined, 0, standard.id)}
@@ -578,8 +578,8 @@ export default function ComplianceEvidence() {
                   })
                   .filter(c => selectedStandard === 'all' || c.standard === selectedStandard)
                   .map(clause => {
-                    const Icon = standardIcons[clause.standard];
-                    const color = standardColors[clause.standard];
+                    const Icon = standardIcons[clause.standard]!;
+                    const color = standardColors[clause.standard]!;
                     return (
                       <div key={clause.id}
                         className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
@@ -621,11 +621,11 @@ export default function ComplianceEvidence() {
               <div className="space-y-4">
                 <div className="p-4 bg-surface/50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
-                    {React.createElement(standardIcons[selectedClause.standard], {
-                      className: `w-5 h-5 text-${standardColors[selectedClause.standard]}-400`
+                    {React.createElement(standardIcons[selectedClause.standard]!, {
+                      className: `w-5 h-5 text-${standardColors[selectedClause.standard]!}-400`
                     })}
                     <span className="font-bold text-foreground">{selectedClause.clauseNumber}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full bg-${standardColors[selectedClause.standard]}-500/20 text-${standardColors[selectedClause.standard]}-400`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full bg-${standardColors[selectedClause.standard]!}-500/20 text-${standardColors[selectedClause.standard]!}-400`}>
                       {ISO_STANDARDS.find(s => s.id === selectedClause.standard)?.code}
                     </span>
                   </div>
@@ -838,8 +838,8 @@ export default function ComplianceEvidence() {
                 </h3>
                 <div className="space-y-2">
                   {autoTagResults.map(clause => {
-                    const Icon = standardIcons[clause.standard];
-                    const color = standardColors[clause.standard];
+                    const Icon = standardIcons[clause.standard]!;
+                    const color = standardColors[clause.standard]!;
                     const apiResult = apiTagResults.find(r => r.clause_id === clause.id);
                     return (
                       <div key={clause.id} className="p-3 bg-surface/50 rounded-lg flex items-center gap-3">

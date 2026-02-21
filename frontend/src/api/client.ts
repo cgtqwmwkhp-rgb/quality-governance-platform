@@ -266,7 +266,7 @@ api.interceptors.response.use(
       (error as ClassifiedAxiosError).classifiedMessage = "You don't have permission to perform this action."
     } else if (status === 422) {
       const data = error.response?.data as Record<string, unknown> | undefined
-      (error as ClassifiedAxiosError).classifiedMessage = (data?.detail as string) || (data?.message as string) || 'Validation error. Please check your input.'
+      (error as ClassifiedAxiosError).classifiedMessage = (data?.['detail'] as string) || (data?.['message'] as string) || 'Validation error. Please check your input.'
     } else if (status && status >= 500) {
       (error as ClassifiedAxiosError).classifiedMessage = 'Server error. Please try again later.'
     } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
@@ -291,11 +291,11 @@ export function getApiErrorMessage(error: unknown): string {
       return classified.classifiedMessage
     }
     const data = error.response?.data as Record<string, unknown> | undefined
-    if (data?.message) {
-      return data.message as string
+    if (data?.['message']) {
+      return data['message'] as string
     }
-    if (data?.detail) {
-      return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
+    if (data?.['detail']) {
+      return typeof data['detail'] === 'string' ? data['detail'] : JSON.stringify(data['detail'])
     }
     // Last resort - use axios error message
     return error.message

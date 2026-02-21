@@ -582,7 +582,7 @@ export default function MobileAuditExecution() {
           id: String(sec.id),
           title: String(sec.title || ''),
           description: sec.description ? String(sec.description) : undefined,
-          color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
+          color: SECTION_COLORS[sIdx % SECTION_COLORS.length]!,
           questions: (sec.questions || []).map(
             (q: MobileTemplateApiQuestion) => ({
               id: String(q.id),
@@ -713,15 +713,16 @@ export default function MobileAuditExecution() {
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
     if (!currentQuestion || !runId) return;
     const questionId = currentQuestion.id;
-    setResponses(prev => ({
-      ...prev,
-      [questionId]: {
-        ...prev[questionId],
+    setResponses(prev => {
+      const existing = prev[questionId];
+      const updated: QuestionResponse = {
+        ...(existing ?? { questionId, timestamp: new Date().toISOString() } as QuestionResponse),
         ...updates,
         questionId,
         timestamp: new Date().toISOString(),
-      },
-    }));
+      };
+      return { ...prev, [questionId]: updated };
+    });
     setIsSynced(false);
 
     const numericRunId = parseInt(runId, 10);
@@ -736,8 +737,8 @@ export default function MobileAuditExecution() {
       notes: updates.notes,
       flagged: updates.flagged,
     };
-    if (updates.response === 'pass' || updates.response === 'yes') payload.score = 1;
-    if (updates.response === 'fail' || updates.response === 'no') payload.score = 0;
+    if (updates.response === 'pass' || updates.response === 'yes') payload['score'] = 1;
+    if (updates.response === 'fail' || updates.response === 'no') payload['score'] = 0;
 
     const syncToApi = async () => {
       try {
@@ -775,7 +776,7 @@ export default function MobileAuditExecution() {
       setCurrentQuestionIndex(prev => prev - 1);
     } else if (currentSectionIndex > 0) {
       setCurrentSectionIndex(prev => prev - 1);
-      setCurrentQuestionIndex(audit?.sections[currentSectionIndex - 1]?.questions.length ? audit.sections[currentSectionIndex - 1].questions.length - 1 : 0);
+      setCurrentQuestionIndex(audit?.sections[currentSectionIndex - 1]?.questions.length ? audit.sections[currentSectionIndex - 1]!.questions.length - 1 : 0);
     }
   };
 
