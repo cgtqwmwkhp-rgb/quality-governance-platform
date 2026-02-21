@@ -43,7 +43,6 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -268,7 +267,7 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
         "priority": inst.priority,
         "current_step": inst.current_step,
         "current_step_name": inst.current_step_name,
-        "total_steps": total_steps,
+        "total_steps": len(steps),
         "progress": progress,
         "sla_due_at": inst.sla_due_at.isoformat() if inst.sla_due_at else None,
         "sla_status": sla_status,
