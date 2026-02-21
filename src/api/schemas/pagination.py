@@ -15,6 +15,7 @@ T = TypeVar("T")
 
 class PaginationParams:
     """Dependency for extracting pagination parameters."""
+
     def __init__(
         self,
         page: int = Query(1, ge=1, description="Page number"),
@@ -27,6 +28,7 @@ class PaginationParams:
 
 class PaginationMeta(BaseModel):
     """Pagination metadata for list responses."""
+
     total: int
     page: int
     per_page: int
@@ -35,10 +37,12 @@ class PaginationMeta(BaseModel):
 
 class PaginatedResponse(BaseModel, Generic[T]):
     """Standardized paginated response."""
+
     data: list
     meta: PaginationMeta
 
 
 class DataListResponse(BaseModel, Generic[T]):
     """Standardized wrapper for non-paginated list responses."""
+
     data: list

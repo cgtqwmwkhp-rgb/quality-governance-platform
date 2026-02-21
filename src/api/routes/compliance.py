@@ -16,12 +16,12 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.pagination import DataListResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+from src.domain.models.user import User
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

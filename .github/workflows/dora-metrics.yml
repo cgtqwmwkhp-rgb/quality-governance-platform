@@ -14,25 +14,29 @@ jobs:
 
       - name: Calculate Deployment Frequency
         if: github.event.workflow.name == 'Deploy to Azure Production'
+        shell: bash
         run: |
-          echo "## DORA Metrics" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Count deployments in last 30 days
-          DEPLOY_COUNT=$(gh run list --workflow=deploy-production.yml --created=">$(date -d '30 days ago' +%Y-%m-%d)" --status=success --json conclusion -q length 2>/dev/null || echo "N/A")
-          echo "- **Deployment Frequency (30d):** $DEPLOY_COUNT deploys" >> $GITHUB_STEP_SUMMARY
-
-          # Record workflow metadata
-          echo "- **Workflow:** ${{ github.event.workflow.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status:** ${{ github.event.workflow_run.conclusion }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Timestamp:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## DORA Metrics"
+            echo ""
+            # Count deployments in last 30 days
+            DEPLOY_COUNT=$(gh run list --workflow=deploy-production.yml --created=">$(date -d '30 days ago' +%Y-%m-%d)" --status=success --json conclusion -q length 2>/dev/null || echo "N/A")
+            echo "- **Deployment Frequency (30d):** ${DEPLOY_COUNT} deploys"
+            # Record workflow metadata
+            echo "- **Workflow:** ${{ github.event.workflow.name }}"
+            echo "- **Status:** ${{ github.event.workflow_run.conclusion }}"
+            echo "- **Timestamp:** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_STEP_SUMMARY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Track Change Failure Rate
         if: github.event.workflow_run.conclusion == 'failure'
+        shell: bash
         run: |
-          echo "### Change Failure" >> $GITHUB_STEP_SUMMARY
-          echo "- **Failed workflow:** ${{ github.event.workflow.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Run ID:** ${{ github.event.workflow_run.id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch:** ${{ github.event.workflow_run.head_branch }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### Change Failure"
+            echo "- **Failed workflow:** ${{ github.event.workflow.name }}"
+            echo "- **Run ID:** ${{ github.event.workflow_run.id }}"
+            echo "- **Branch:** ${{ github.event.workflow_run.head_branch }}"
+          } >> "$GITHUB_STEP_SUMMARY"

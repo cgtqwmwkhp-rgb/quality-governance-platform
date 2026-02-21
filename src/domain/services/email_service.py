@@ -219,9 +219,7 @@ class EmailService:
             return False
 
         try:
-            return await _email_circuit.call(
-                self._do_send, to, subject, html_content, cc, bcc, attachments
-            )
+            return await _email_circuit.call(self._do_send, to, subject, html_content, cc, bcc, attachments)
         except CircuitBreakerOpenError:
             logger.warning("Email circuit breaker OPEN – skipping send")
             return False

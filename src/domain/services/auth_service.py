@@ -126,9 +126,7 @@ class AuthService:
 
         exp_timestamp = payload.get("exp")
         expires_at = (
-            datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
-            if exp_timestamp
-            else datetime.now(timezone.utc)
+            datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else datetime.now(timezone.utc)
         )
 
         user_id_raw = payload.get("sub")

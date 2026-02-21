@@ -20,7 +20,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.core.config import settings
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.push_notification import (
     GetNotificationPreferencesResponse,
@@ -31,6 +30,7 @@ from src.api.schemas.push_notification import (
     UpdateNotificationPreferencesResponse,
 )
 from src.api.utils.update import apply_updates
+from src.core.config import settings
 from src.infrastructure.database import Base
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

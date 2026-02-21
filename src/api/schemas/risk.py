@@ -187,8 +187,14 @@ class RiskBase(BaseModel):
     treatment_due_date: Optional[datetime] = None
 
     @field_validator(
-        "title", "description", "subcategory", "risk_source", "risk_event",
-        "risk_consequence", "department", "treatment_plan",
+        "title",
+        "description",
+        "subcategory",
+        "risk_source",
+        "risk_event",
+        "risk_consequence",
+        "department",
+        "treatment_plan",
         mode="before",
     )
     @classmethod
@@ -230,8 +236,14 @@ class RiskUpdate(BaseModel):
     is_active: Optional[bool] = None
 
     @field_validator(
-        "title", "description", "subcategory", "risk_source", "risk_event",
-        "risk_consequence", "department", "treatment_plan",
+        "title",
+        "description",
+        "subcategory",
+        "risk_source",
+        "risk_event",
+        "risk_consequence",
+        "department",
+        "treatment_plan",
         mode="before",
     )
     @classmethod

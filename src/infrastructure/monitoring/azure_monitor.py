@@ -61,7 +61,9 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     )
 
     default_sample_rate = 0.1 if settings.is_production else 1.0
-    sample_rate = settings.otel_trace_sample_rate if settings.otel_trace_sample_rate is not None else default_sample_rate
+    sample_rate = (
+        settings.otel_trace_sample_rate if settings.otel_trace_sample_rate is not None else default_sample_rate
+    )
     sampler = ParentBased(root=TraceIdRatioBased(sample_rate))
 
     tracer_provider = TracerProvider(resource=resource, sampler=sampler)

@@ -137,9 +137,7 @@ class OpenAIClient(AIClient):
         messages.append({"role": "user", "content": prompt})
 
         async with _ai_models_semaphore:
-            return await _ai_models_circuit.call(
-                self._openai_complete, messages, temperature, max_tokens
-            )
+            return await _ai_models_circuit.call(self._openai_complete, messages, temperature, max_tokens)
 
     async def _openai_complete(
         self,
@@ -240,9 +238,7 @@ class AnthropicClient(AIClient):
     ) -> str:
         """Generate completion using Claude."""
         async with _ai_models_semaphore:
-            return await _ai_models_circuit.call(
-                self._anthropic_complete, prompt, system_prompt, max_tokens
-            )
+            return await _ai_models_circuit.call(self._anthropic_complete, prompt, system_prompt, max_tokens)
 
     async def _anthropic_complete(
         self,

@@ -179,7 +179,11 @@ async def get_unread_count(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/{notification_id}/read", response_model=MarkNotificationReadResponse)
-async def mark_notification_read(notification_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]):
+async def mark_notification_read(
+    notification_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("notification:update"))],
+):
     """Mark a specific notification as read."""
     result = await db.execute(
         select(Notification).where(
@@ -200,7 +204,11 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
 
 
 @router.post("/{notification_id}/unread", response_model=MarkNotificationUnreadResponse)
-async def mark_notification_unread(notification_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]):
+async def mark_notification_unread(
+    notification_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("notification:update"))],
+):
     """Mark a specific notification as unread."""
     result = await db.execute(
         select(Notification).where(
@@ -221,7 +229,9 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
 
 
 @router.post("/read-all", response_model=MarkAllReadResponse)
-async def mark_all_notifications_read(db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]):
+async def mark_all_notifications_read(
+    db: DbSession, current_user: Annotated[User, Depends(require_permission("notification:update"))]
+):
     """Mark all notifications as read for the current user."""
     _span = tracer.start_span("mark_all_notifications_read") if tracer else None
     result = await db.execute(

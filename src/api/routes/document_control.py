@@ -672,7 +672,9 @@ async def take_approval_action(
                 document.status = "approved"
                 document.approved_date = datetime.now(timezone.utc)
                 document.effective_date = datetime.now(timezone.utc)
-                document.next_review_date = datetime.now(timezone.utc) + timedelta(days=document.review_frequency_months * 30)
+                document.next_review_date = datetime.now(timezone.utc) + timedelta(
+                    days=document.review_frequency_months * 30
+                )
         else:
             instance.current_step += 1
 

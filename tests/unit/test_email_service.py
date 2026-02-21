@@ -1,5 +1,6 @@
 """Unit tests for Email Service - can run standalone."""
 
+import asyncio
 import os
 import sys
 from datetime import datetime
@@ -10,7 +11,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 try:
-    from src.domain.services.email_service import EmailService
+    from src.domain.services.email_service import EmailService, _email_circuit
+    from src.infrastructure.resilience.circuit_breaker import CircuitState
 
     IMPORTS_AVAILABLE = True
 except ImportError:
@@ -24,10 +26,40 @@ pytestmark = pytest.mark.skipif(not IMPORTS_AVAILABLE, reason="Imports not avail
 # ---------------------------------------------------------------------------
 
 
+def _make_mock_settings(**overrides):
+    """Build a mock settings object with email-related defaults."""
+    defaults = {
+        "smtp_host": "smtp.office365.com",
+        "smtp_port": 587,
+        "smtp_user": "",
+        "smtp_password": "",
+        "from_email": "noreply@test.com",
+        "from_name": "Test Platform",
+    }
+    defaults.update(overrides)
+    m = MagicMock()
+    for k, v in defaults.items():
+        setattr(m, k, v)
+    return m
+
+
+@pytest.fixture(autouse=True)
+def _reset_email_circuit():
+    """Reset the module-level circuit breaker between tests."""
+    if not IMPORTS_AVAILABLE:
+        yield
+        return
+    _email_circuit._failure_count = 0
+    _email_circuit._half_open_calls = 0
+    _email_circuit._state = CircuitState.CLOSED
+    _email_circuit._lock = asyncio.Lock()
+    yield
+
+
 @pytest.fixture
 def email_svc():
     """Return an EmailService with SMTP disabled (no credentials)."""
-    with patch.dict(os.environ, {"SMTP_USER": "", "SMTP_PASSWORD": ""}, clear=False):
+    with patch("src.domain.services.email_service.settings", _make_mock_settings()):
         svc = EmailService()
     assert svc.enabled is False
     return svc
@@ -36,10 +68,9 @@ def email_svc():
 @pytest.fixture
 def email_svc_enabled():
     """Return an EmailService with SMTP credentials set."""
-    with patch.dict(
-        os.environ,
-        {"SMTP_USER": "test@example.com", "SMTP_PASSWORD": "secret"},
-        clear=False,
+    with patch(
+        "src.domain.services.email_service.settings",
+        _make_mock_settings(smtp_user="test@example.com", smtp_password="secret"),
     ):
         svc = EmailService()
     assert svc.enabled is True
@@ -52,18 +83,16 @@ def email_svc_enabled():
 
 
 def test_defaults_from_env_vars():
-    """EmailService reads SMTP config from environment variables."""
-    with patch.dict(
-        os.environ,
-        {
-            "SMTP_HOST": "mail.test.com",
-            "SMTP_PORT": "465",
-            "SMTP_USER": "user@test.com",
-            "SMTP_PASSWORD": "pw",
-            "FROM_EMAIL": "noreply@test.com",
-            "FROM_NAME": "Test Platform",
-        },
-    ):
+    """EmailService reads SMTP config from settings (backed by env vars)."""
+    mock_settings = _make_mock_settings(
+        smtp_host="mail.test.com",
+        smtp_port=465,
+        smtp_user="user@test.com",
+        smtp_password="pw",
+        from_email="noreply@test.com",
+        from_name="Test Platform",
+    )
+    with patch("src.domain.services.email_service.settings", mock_settings):
         svc = EmailService()
 
     assert svc.smtp_host == "mail.test.com"
@@ -76,18 +105,17 @@ def test_defaults_from_env_vars():
 
 def test_disabled_without_credentials():
     """EmailService is disabled when SMTP_USER or SMTP_PASSWORD is empty."""
-    with patch.dict(os.environ, {"SMTP_USER": "", "SMTP_PASSWORD": ""}, clear=False):
+    with patch("src.domain.services.email_service.settings", _make_mock_settings()):
         svc = EmailService()
     assert svc.enabled is False
 
 
 def test_enabled_with_credentials():
     """EmailService is enabled when both SMTP_USER and SMTP_PASSWORD are set."""
-    with patch.dict(
-        os.environ,
-        {"SMTP_USER": "user@example.com", "SMTP_PASSWORD": "pass"},
-        clear=False,
-    ):
+    mock_settings = _make_mock_settings(
+        smtp_user="user@example.com", smtp_password="pass"
+    )
+    with patch("src.domain.services.email_service.settings", mock_settings):
         svc = EmailService()
     assert svc.enabled is True
 

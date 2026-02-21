@@ -80,9 +80,7 @@ class CircuitBreaker:
             self._last_failure_time = time.monotonic()
             if self._failure_count >= self.failure_threshold:
                 self._state = CircuitState.OPEN
-                logger.error(
-                    f"Circuit breaker '{self.name}' OPENED after {self._failure_count} failures"
-                )
+                logger.error(f"Circuit breaker '{self.name}' OPENED after {self._failure_count} failures")
 
     def get_health(self) -> dict:
         return {

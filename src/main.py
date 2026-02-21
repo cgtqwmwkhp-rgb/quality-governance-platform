@@ -207,7 +207,10 @@ def create_application() -> FastAPI:
             {"name": "Incidents", "description": "Incident reporting, tracking, and resolution"},
             {"name": "Risk Register", "description": "Risk assessment, controls, and mitigation"},
             {"name": "Audits & Inspections", "description": "Audit templates, runs, findings, and scoring"},
-            {"name": "ISO Compliance & Evidence", "description": "ISO clause mapping, evidence links, and gap analysis"},
+            {
+                "name": "ISO Compliance & Evidence",
+                "description": "ISO clause mapping, evidence links, and gap analysis",
+            },
             {"name": "Standards Library", "description": "ISO standards, clauses, and controls catalogue"},
             {"name": "Document Library", "description": "Document upload, AI analysis, and semantic search"},
             {"name": "Policy Library", "description": "Policy lifecycle management and acknowledgments"},
@@ -535,21 +538,25 @@ async def readiness_check(request: Request, verbose: bool = False):
     circuit_breaker_health: list[dict] = []
     try:
         from src.domain.services.email_service import _email_circuit
+
         circuit_breaker_health.append(_email_circuit.get_health())
     except Exception:
         pass
     try:
         from src.domain.services.sms_service import _sms_circuit
+
         circuit_breaker_health.append(_sms_circuit.get_health())
     except Exception:
         pass
     try:
         from src.domain.services.document_ai_service import _ai_circuit
+
         circuit_breaker_health.append(_ai_circuit.get_health())
     except Exception:
         pass
     try:
         from src.domain.services.ai_models import _ai_models_circuit
+
         circuit_breaker_health.append(_ai_models_circuit.get_health())
     except Exception:
         pass

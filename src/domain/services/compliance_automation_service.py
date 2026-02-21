@@ -540,7 +540,9 @@ class ComplianceAutomationService:
         submission = existing.scalar_one_or_none()
 
         if not submission:
-            deadline = datetime.now(timezone.utc) + timedelta(days=10 if riddor_type in ("death", "specified_injury") else 15)
+            deadline = datetime.now(timezone.utc) + timedelta(
+                days=10 if riddor_type in ("death", "specified_injury") else 15
+            )
             submission = RIDDORSubmission(
                 incident_id=incident_id,
                 riddor_type=riddor_type,

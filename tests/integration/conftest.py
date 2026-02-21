@@ -32,6 +32,7 @@ TEST_JWT_ALGORITHM = settings.jwt_algorithm
 # Mock User / Role (no SQLAlchemy session required)
 # ---------------------------------------------------------------------------
 
+
 class _MockRole:
     """Lightweight role stand-in for integration tests."""
 
@@ -88,38 +89,72 @@ class _MockUser:
 # Permission sets
 # ---------------------------------------------------------------------------
 
-_ADMIN_PERMS = ",".join([
-    "incident:create", "incident:read", "incident:update", "incident:delete",
-    "complaint:create", "complaint:read", "complaint:update", "complaint:delete",
-    "rta:create", "rta:read", "rta:update", "rta:delete",
-    "policy:create", "policy:read", "policy:update", "policy:delete",
-    "action:create", "action:read", "action:update", "action:delete",
-    "investigation:create", "investigation:read", "investigation:update",
-    "audit:create", "audit:read", "audit:update", "audit:delete",
-    "standard:create", "standard:read", "standard:update",
-    "risk:create", "risk:read", "risk:update",
-    "near_miss:create", "near_miss:read", "near_miss:update",
-    "audit_template:create", "audit_template:read", "audit_template:update", "audit_template:delete",
-])
+_ADMIN_PERMS = ",".join(
+    [
+        "incident:create",
+        "incident:read",
+        "incident:update",
+        "incident:delete",
+        "complaint:create",
+        "complaint:read",
+        "complaint:update",
+        "complaint:delete",
+        "rta:create",
+        "rta:read",
+        "rta:update",
+        "rta:delete",
+        "policy:create",
+        "policy:read",
+        "policy:update",
+        "policy:delete",
+        "action:create",
+        "action:read",
+        "action:update",
+        "action:delete",
+        "investigation:create",
+        "investigation:read",
+        "investigation:update",
+        "audit:create",
+        "audit:read",
+        "audit:update",
+        "audit:delete",
+        "standard:create",
+        "standard:read",
+        "standard:update",
+        "risk:create",
+        "risk:read",
+        "risk:update",
+        "near_miss:create",
+        "near_miss:read",
+        "near_miss:update",
+        "audit_template:create",
+        "audit_template:read",
+        "audit_template:update",
+        "audit_template:delete",
+    ]
+)
 
-_VIEWER_PERMS = ",".join([
-    "incident:read",
-    "complaint:read",
-    "rta:read",
-    "policy:read",
-    "action:read",
-    "investigation:read",
-    "audit:read",
-    "standard:read",
-    "risk:read",
-    "near_miss:read",
-    "audit_template:read",
-])
+_VIEWER_PERMS = ",".join(
+    [
+        "incident:read",
+        "complaint:read",
+        "rta:read",
+        "policy:read",
+        "action:read",
+        "investigation:read",
+        "audit:read",
+        "standard:read",
+        "risk:read",
+        "near_miss:read",
+        "audit_template:read",
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
+
 
 def _generate_test_jwt(
     user_id: str = "1",
@@ -166,6 +201,7 @@ def _mock_user_from_jwt(payload: dict) -> _MockUser:
 # Dependency override – validates JWT but skips DB user lookup
 # ---------------------------------------------------------------------------
 
+
 async def _test_get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> _MockUser:
@@ -192,6 +228,7 @@ async def _test_get_current_user(
 # Autouse fixture – install override for every integration test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _override_auth():
     """Replace ``get_current_user`` with a DB-free mock for all integration tests."""
@@ -203,6 +240,7 @@ def _override_auth():
 # ---------------------------------------------------------------------------
 # Test clients
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def sync_client() -> Generator[TestClient, None, None]:
@@ -282,6 +320,7 @@ async def superuser_client() -> AsyncGenerator[AsyncClient, None]:
 # Auth header fixtures (for tests using client + auth_headers separately)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
     """Test authentication headers with valid JWT (admin role, NOT superuser)."""
@@ -310,6 +349,7 @@ def superuser_auth_headers() -> dict[str, str]:
 # Database fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def test_session():
     """Async database session – requires DATABASE_URL pointing at PostgreSQL."""
@@ -333,6 +373,7 @@ async def test_session():
 # ---------------------------------------------------------------------------
 # Data fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def test_user():
@@ -373,6 +414,7 @@ def database_url() -> str:
 # ---------------------------------------------------------------------------
 # Pytest hooks
 # ---------------------------------------------------------------------------
+
 
 def pytest_configure(config):
     """Register custom markers."""

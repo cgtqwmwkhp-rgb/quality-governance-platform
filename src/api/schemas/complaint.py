@@ -24,7 +24,10 @@ class ComplaintBase(BaseModel):
     related_reference: Optional[str] = Field(None, max_length=100)
 
     @field_validator(
-        "title", "description", "complainant_name", "complainant_company",
+        "title",
+        "description",
+        "complainant_name",
+        "complainant_company",
         "related_reference",
         mode="before",
     )
@@ -76,7 +79,10 @@ class ComplaintUpdate(BaseModel):
     customer_satisfied: Optional[bool] = None
 
     @field_validator(
-        "title", "description", "investigation_notes", "root_cause",
+        "title",
+        "description",
+        "investigation_notes",
+        "root_cause",
         "resolution_summary",
         mode="before",
     )

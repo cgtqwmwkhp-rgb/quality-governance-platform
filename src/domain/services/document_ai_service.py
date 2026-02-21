@@ -122,9 +122,7 @@ Respond with JSON matching this schema:
 
         try:
             async with _ai_semaphore:
-                return await _ai_circuit.call(
-                    self._call_anthropic, prompt, file_name, content
-                )
+                return await _ai_circuit.call(self._call_anthropic, prompt, file_name, content)
         except CircuitBreakerOpenError:
             logger.warning("AI circuit breaker OPEN – using fallback analysis")
             return self._fallback_analysis(content, file_name)
@@ -132,9 +130,7 @@ Respond with JSON matching this schema:
             logger.error(f"AI analysis failed: {e}")
             return self._fallback_analysis(content, file_name)
 
-    async def _call_anthropic(
-        self, prompt: str, file_name: str, content: str
-    ) -> DocumentAnalysis:
+    async def _call_anthropic(self, prompt: str, file_name: str, content: str) -> DocumentAnalysis:
         """Execute the Anthropic API call (wrapped by circuit breaker)."""
         async with httpx.AsyncClient() as client:
             response = await client.post(

@@ -19,7 +19,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.pagination import DataListResponse
 from src.api.utils.entity import get_or_404
@@ -34,6 +33,7 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
+from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.infrastructure.storage import StorageError, storage_service
 

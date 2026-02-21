@@ -23,7 +23,6 @@ from pydantic import BaseModel, Field, validator
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser
-from src.core.config import settings
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.telemetry import (
     GetExperimentMetricsResponse,
@@ -31,6 +30,7 @@ from src.api.schemas.telemetry import (
     ReceiveEventResponse,
     ResetMetricsResponse,
 )
+from src.core.config import settings
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])

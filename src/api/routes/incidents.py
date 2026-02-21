@@ -121,9 +121,7 @@ async def list_incidents(
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not await service.check_reporter_email_access(
-            reporter_email, user_email, has_view_all, is_superuser
-        ):
+        if not await service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ErrorCode.PERMISSION_DENIED,
@@ -202,6 +200,7 @@ async def list_incident_investigations(
     Deterministic ordering: created_at DESC, id ASC.
     """
     from sqlalchemy import select
+
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
     await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)

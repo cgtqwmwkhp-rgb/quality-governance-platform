@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
@@ -201,21 +201,21 @@ async def test_check_riddor_deadline_calculation():
 
     service = ComplianceAutomationService()
 
-    before = datetime.utcnow()
+    before = datetime.now(timezone.utc)
     result_death = await service.check_riddor_required({"fatality": True})
     deadline_death = datetime.fromisoformat(result_death["deadline"])
     days_death = (deadline_death - before).days
     assert 9 <= days_death <= 10, f"Death deadline should be ~10 days, got {days_death}"
     print(f"✓ Death deadline: {days_death} days (~10 expected)")
 
-    before = datetime.utcnow()
+    before = datetime.now(timezone.utc)
     result_fracture = await service.check_riddor_required({"injury_type": "fracture"})
     deadline_fracture = datetime.fromisoformat(result_fracture["deadline"])
     days_fracture = (deadline_fracture - before).days
     assert 9 <= days_fracture <= 10, f"Specified injury deadline should be ~10 days, got {days_fracture}"
     print(f"✓ Specified injury deadline: {days_fracture} days (~10 expected)")
 
-    before = datetime.utcnow()
+    before = datetime.now(timezone.utc)
     result_7day = await service.check_riddor_required({"days_off_work": 10})
     deadline_7day = datetime.fromisoformat(result_7day["deadline"])
     days_7day = (deadline_7day - before).days
@@ -250,7 +250,7 @@ async def test_check_riddor_multiple_types():
     print(f"✓ Multiple RIDDOR types detected: {result['riddor_types']}")
 
     deadline = datetime.fromisoformat(result["deadline"])
-    days = (deadline - datetime.utcnow()).days
+    days = (deadline - datetime.now(timezone.utc)).days
     assert days <= 10, "Deadline should be 10 days (death takes precedence)"
     print(f"✓ Deadline uses most urgent category ({days} days)")
 

@@ -58,9 +58,7 @@ class OptimisticLockMixin:
     updates target the same row, the second will raise StaleDataError.
     """
 
-    version: Mapped[int] = mapped_column(
-        Integer, default=1, nullable=False, server_default="1"
-    )
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
 
     __mapper_args__ = {"version_id_col": version}
 

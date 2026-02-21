@@ -813,7 +813,9 @@ async def list_runs(
     assigned_to_id: Optional[int] = None,
 ) -> AuditRunListResponse:
     """List all audit runs with pagination and filtering."""
-    query = select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == current_user.tenant_id)
+    query = (
+        select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == current_user.tenant_id)
+    )
 
     if status_filter:
         query = query.where(AuditRun.status == status_filter)

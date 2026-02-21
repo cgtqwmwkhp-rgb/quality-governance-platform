@@ -8,18 +8,16 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
+from src.domain.services.document_ai_service import DocumentAIService, DocumentAnalysis  # noqa: E402
 from src.infrastructure.file_validation import (  # noqa: E402
     ALLOWED_EXTENSIONS,
-    MAX_FILE_SIZE,
     MAGIC_NUMBERS,
-    validate_file_extension,
+    MAX_FILE_SIZE,
     validate_file_content,
-    verify_magic_number,
+    validate_file_extension,
     validate_upload,
+    verify_magic_number,
 )
-
-from src.domain.services.document_ai_service import DocumentAIService, DocumentAnalysis  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # File extension validation

@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from src.domain.services.collaboration_service import CollaborationService  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -213,7 +212,8 @@ if __name__ == "__main__":
     print("COLLABORATION SERVICE UNIT TESTS")
     print("=" * 60)
 
-    from unittest.mock import AsyncMock as AM, MagicMock as MM
+    from unittest.mock import AsyncMock as AM
+    from unittest.mock import MagicMock as MM
 
     db = AM()
     s = CollaborationService(db=db)
