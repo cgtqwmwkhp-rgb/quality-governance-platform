@@ -96,7 +96,7 @@ async def create_session(
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id
+    tenant_id = current_user.tenant_id or 0 or 0
     user_id = current_user.id
 
     session = await service.create_session(
@@ -230,7 +230,7 @@ async def submit_feedback(
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id
+    tenant_id = current_user.tenant_id or 0 or 0
     user_id = current_user.id
 
     try:
@@ -378,7 +378,7 @@ async def search_knowledge(
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id
+    tenant_id = current_user.tenant_id or 0
 
     results = await service.search_knowledge(
         query=query,
@@ -413,7 +413,7 @@ async def add_knowledge(
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id
+    tenant_id = current_user.tenant_id or 0
 
     knowledge = await service.add_knowledge(
         title=title,
@@ -463,7 +463,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
         return
     try:
         from src.core.security import decode_token, is_token_revoked
-
         payload = decode_token(token)
         if not payload:
             await websocket.close(code=4001, reason="Invalid token")
