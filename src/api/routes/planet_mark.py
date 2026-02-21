@@ -22,8 +22,16 @@ from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.planet_mark import (
     ActionCreatedResponse,
     ActionListResponse,
@@ -57,7 +65,6 @@ from src.domain.models.planet_mark import (
     UtilityMeterReading,
 )
 from src.domain.services.planet_mark_service import PlanetMarkService
-from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -296,6 +303,7 @@ async def create_reporting_year(
     db: DbSession,
 ) -> dict[str, Any]:
     """Create a new carbon reporting year"""
+    _span = tracer.start_span("create_reporting_year") if tracer else None
     year = CarbonReportingYear(
         **year_data.model_dump(),
     )
@@ -316,6 +324,9 @@ async def create_reporting_year(
         db.add(scope3)
     await db.commit()
 
+    track_metric("planet_mark.reporting_year_created", 1)
+    if _span:
+        _span.end()
     return {"id": year.id, "year_label": year.year_label, "message": "Reporting year created"}
 
 
@@ -323,9 +334,10 @@ async def create_reporting_year(
 async def get_reporting_year(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed reporting year data"""
-    year = await get_or_404(db, CarbonReportingYear, year_id)
+    year = await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     # Get emission sources
     result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
@@ -384,20 +396,18 @@ async def get_reporting_year(
 # ============ Emission Sources ============
 
 
-@router.post(
-    "/years/{year_id}/sources", response_model=EmissionSourceCreatedResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/years/{year_id}/sources", response_model=EmissionSourceCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
-    year = await get_or_404(db, CarbonReportingYear, year_id)
+    year = await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     co2e_kg, co2e_tonnes, emission_factor = PlanetMarkService.calculate_co2e(
-        source_data.activity_value,
-        source_data.activity_type,
+        source_data.activity_value, source_data.activity_type,
     )
     dq_score = PlanetMarkService.get_data_quality_score(source_data.data_quality_level)
 
@@ -569,9 +579,10 @@ async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
-    await get_or_404(db, CarbonReportingYear, year_id)
+    await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     count_result = await db.execute(
         select(func.count()).select_from(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
@@ -623,9 +634,10 @@ async def update_action_status(
 async def get_data_quality_assessment(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get data quality assessment with recommendations"""
-    year = await get_or_404(db, CarbonReportingYear, year_id)
+    year = await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
     sources = result.scalars().all()
@@ -665,9 +677,10 @@ async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
-    await get_or_404(db, CarbonReportingYear, year_id)
+    await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     co2e_kg, _ = PlanetMarkService.calculate_fleet_co2e(fleet_data.fuel_litres, fleet_data.fuel_type)
     l_per_100km = PlanetMarkService.calculate_fuel_efficiency(fleet_data.fuel_litres, fleet_data.mileage)
@@ -741,16 +754,15 @@ async def get_fleet_summary(
 # ============ Utility Integration ============
 
 
-@router.post(
-    "/years/{year_id}/utilities", response_model=UtilityReadingCreatedResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/years/{year_id}/utilities", response_model=UtilityReadingCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add utility meter reading"""
-    await get_or_404(db, CarbonReportingYear, year_id)
+    await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     reading = UtilityMeterReading(
         reporting_year_id=year_id,
@@ -770,9 +782,10 @@ async def add_utility_reading(
 async def get_certification_status(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get certification status and evidence checklist"""
-    year = await get_or_404(db, CarbonReportingYear, year_id)
+    year = await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     result = await db.execute(select(CarbonEvidence).where(CarbonEvidence.reporting_year_id == year_id))
     evidence = result.scalars().all()

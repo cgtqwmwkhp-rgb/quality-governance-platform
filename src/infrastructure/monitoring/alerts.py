@@ -4,7 +4,6 @@ These thresholds are consumed by Azure Monitor alert rules or any
 compatible alerting system. They define the conditions under which
 alerts should fire.
 """
-
 import json
 from dataclasses import dataclass, field
 from enum import Enum
@@ -93,6 +92,51 @@ ALERT_RULES: list[AlertRule] = [
         severity=AlertSeverity.MEDIUM,
         description="Disk usage exceeds 85%",
     ),
+    AlertRule(
+        name="incident_creation_spike",
+        metric="incidents.created",
+        condition="gt",
+        threshold=50,
+        window_minutes=60,
+        severity=AlertSeverity.HIGH,
+        description="More than 50 incidents created in 1 hour",
+    ),
+    AlertRule(
+        name="audit_completion_drop",
+        metric="audits.completed",
+        condition="lt",
+        threshold=1,
+        window_minutes=1440,
+        severity=AlertSeverity.MEDIUM,
+        description="No audits completed in 24 hours",
+    ),
+    AlertRule(
+        name="compliance_score_drop",
+        metric="compliance.score_checked",
+        condition="lt",
+        threshold=1,
+        window_minutes=1440,
+        severity=AlertSeverity.MEDIUM,
+        description="No compliance checks in 24 hours",
+    ),
+    AlertRule(
+        name="overdue_capa_count",
+        metric="capa.overdue",
+        condition="gt",
+        threshold=10,
+        window_minutes=1440,
+        severity=AlertSeverity.HIGH,
+        description="More than 10 overdue CAPA items",
+    ),
+    AlertRule(
+        name="failed_signature_rate",
+        metric="signatures.failed",
+        condition="gt",
+        threshold=5,
+        window_minutes=60,
+        severity=AlertSeverity.HIGH,
+        description="More than 5 failed signatures in 1 hour",
+    ),
 ]
 
 
@@ -122,33 +166,29 @@ class AlertProvisioner:
         resources = []
         for rule in alert_rules:
             operator = _CONDITION_TO_OPERATOR.get(rule.condition, "GreaterThan")
-            resources.append(
-                {
-                    "type": "Microsoft.Insights/metricAlerts",
-                    "apiVersion": "2018-03-01",
-                    "name": rule.name,
-                    "location": "global",
-                    "properties": {
-                        "description": rule.description,
-                        "severity": rule.severity.value,
-                        "enabled": True,
-                        "evaluationFrequency": f"PT{rule.window_minutes}M",
-                        "windowSize": f"PT{rule.window_minutes}M",
-                        "criteria": {
-                            "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
-                            "allOf": [
-                                {
-                                    "name": f"{rule.name}_condition",
-                                    "metricName": rule.metric,
-                                    "operator": operator,
-                                    "threshold": rule.threshold,
-                                    "timeAggregation": "Average",
-                                }
-                            ],
-                        },
+            resources.append({
+                "type": "Microsoft.Insights/metricAlerts",
+                "apiVersion": "2018-03-01",
+                "name": rule.name,
+                "location": "global",
+                "properties": {
+                    "description": rule.description,
+                    "severity": rule.severity.value,
+                    "enabled": True,
+                    "evaluationFrequency": f"PT{rule.window_minutes}M",
+                    "windowSize": f"PT{rule.window_minutes}M",
+                    "criteria": {
+                        "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                        "allOf": [{
+                            "name": f"{rule.name}_condition",
+                            "metricName": rule.metric,
+                            "operator": operator,
+                            "threshold": rule.threshold,
+                            "timeAggregation": "Average",
+                        }],
                     },
-                }
-            )
+                },
+            })
         return {
             "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
             "contentVersion": "1.0.0.0",

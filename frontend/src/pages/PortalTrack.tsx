@@ -22,6 +22,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { cn } from '../helpers/utils';
+import { TableSkeleton } from '../components/ui/SkeletonLoader';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import ReportChat from '../components/ReportChat';
 import { API_BASE_URL } from '../config/apiBase';
@@ -570,9 +571,8 @@ export default function PortalTrack() {
         {isAuthenticated && (
           <div className="mb-8">
             {isLoadingMyReports ? (
-              <div className="text-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
-                <p className="text-muted-foreground">Loading your reports...</p>
+              <div className="py-4">
+                <TableSkeleton rows={4} columns={3} />
               </div>
             ) : error && myReports.length === 0 ? (
               <Card className="p-8 text-center border-destructive/20">

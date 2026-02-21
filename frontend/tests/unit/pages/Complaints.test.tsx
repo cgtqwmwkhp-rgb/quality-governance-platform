@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Complaints from '../../../src/pages/Complaints';
 
@@ -38,14 +39,45 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('Complaints', () => {
-  it('renders without crashing', async () => {
+  it('renders the page subtitle', async () => {
     render(
       <MemoryRouter>
         <Complaints />
       </MemoryRouter>
     );
+    expect(await screen.findByText('Manage customer complaints and feedback')).toBeInTheDocument();
+  });
 
-    const heading = await screen.findByText('Manage customer complaints and feedback');
-    expect(heading).toBeTruthy();
+  it('renders the New Complaint button', async () => {
+    render(
+      <MemoryRouter>
+        <Complaints />
+      </MemoryRouter>
+    );
+    await screen.findByText('Manage customer complaints and feedback');
+    expect(screen.getByText('New Complaint')).toBeInTheDocument();
+  });
+
+  it('renders search input', async () => {
+    render(
+      <MemoryRouter>
+        <Complaints />
+      </MemoryRouter>
+    );
+    await screen.findByText('Manage customer complaints and feedback');
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+  });
+
+  it('New Complaint button is clickable', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Complaints />
+      </MemoryRouter>
+    );
+    await screen.findByText('Manage customer complaints and feedback');
+    const btn = screen.getByText('New Complaint');
+    await user.click(btn);
+    expect(btn).toBeInTheDocument();
   });
 });

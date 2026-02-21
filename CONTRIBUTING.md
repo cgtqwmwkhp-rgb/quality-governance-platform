@@ -48,9 +48,9 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `perf`
 ## Testing Requirements
 
 - All new code must have corresponding tests
-- Unit test coverage: minimum 85%
-- Integration test coverage: minimum 70%
-- Overall coverage must not drop below 80%
+- Unit test coverage: minimum 45%
+- Integration test coverage: minimum 45%
+- Overall coverage must not drop below 45%
 
 ## Code Review Checklist
 

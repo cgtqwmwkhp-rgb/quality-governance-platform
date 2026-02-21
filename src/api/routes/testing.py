@@ -48,6 +48,13 @@ class TestUserResponse(BaseModel):
     created: bool
 
 
+class TestingHealthResponse(BaseModel):
+    """Response for testing endpoint availability check."""
+
+    available: bool
+    environment: str
+
+
 def is_staging_env() -> bool:
     """Check if running in staging environment."""
     app_env = os.environ.get("APP_ENV", settings.app_env).lower()
@@ -219,8 +226,8 @@ async def ensure_test_user(
     )
 
 
-@router.get("/health", response_model=dict)
-async def testing_health() -> dict:
+@router.get("/health", response_model=TestingHealthResponse)
+async def testing_health() -> TestingHealthResponse:
     """Check if testing endpoints are available."""
     return {
         "available": is_staging_env(),

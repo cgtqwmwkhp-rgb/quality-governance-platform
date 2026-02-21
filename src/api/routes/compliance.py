@@ -23,6 +23,12 @@ from src.domain.models.compliance_evidence import ComplianceEvidenceLink, Eviden
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
 router = APIRouter()
 
 
@@ -131,6 +137,18 @@ class EvidenceLinkDeleteResponse(BaseModel):
     message: str
 
 
+class ComplianceCoverageResponse(BaseModel):
+    model_config = {"extra": "allow"}
+
+    total_clauses: int = 0
+    coverage_percentage: float = 0.0
+    gaps: int = 0
+
+
+class ComplianceReportResponse(BaseModel):
+    model_config = {"extra": "allow"}
+
+
 class ComplianceGapsResponse(BaseModel):
     total_gaps: int
     gap_clauses: List[Any]
@@ -149,9 +167,7 @@ class StandardInfo(BaseModel):
 # ============================================================================
 
 
-async def _load_evidence_links(
-    db, tenant_id: int | None = None, standard: Optional[ISOStandard] = None
-) -> list[EvidenceLink]:
+async def _load_evidence_links(db, tenant_id: int | None = None, standard: Optional[ISOStandard] = None) -> list[EvidenceLink]:
     """Query all active evidence links from the database and convert to
     the EvidenceLink dataclass used by the ISOComplianceService."""
     query = select(ComplianceEvidenceLink).where(
@@ -261,6 +277,7 @@ async def link_evidence(
     current_user: CurrentUser,
 ):
     """Link an entity to one or more ISO clauses. Persisted to database."""
+    _span = tracer.start_span("link_evidence") if tracer else None
     for clause_id in request.clause_ids:
         if not iso_compliance_service.get_clause(clause_id):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
@@ -314,6 +331,9 @@ async def link_evidence(
             }
         )
 
+    track_metric("compliance.score_checked", 1)
+    if _span:
+        _span.end()
     return {
         "status": "success",
         "message": f"Created {len(created)} evidence link(s)",
@@ -382,7 +402,7 @@ async def delete_evidence_link(
     return {"status": "success", "message": "Evidence link deleted"}
 
 
-@router.get("/coverage", response_model=dict)
+@router.get("/coverage", response_model=ComplianceCoverageResponse)
 async def get_compliance_coverage(
     db: DbSession,
     current_user: CurrentUser,
@@ -419,7 +439,7 @@ async def get_compliance_gaps(
     return {"total_gaps": coverage["gaps"], "gap_clauses": coverage["gap_clauses"]}
 
 
-@router.get("/report", response_model=dict)
+@router.get("/report", response_model=ComplianceReportResponse)
 async def generate_compliance_report(
     db: DbSession,
     current_user: CurrentUser,

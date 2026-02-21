@@ -152,3 +152,23 @@ class ComplianceDashboardResponse(BaseModel):
     overdue: int
     completion_rate: float
     overdue_rate: float
+
+
+class RecordPolicyOpenedResponse(BaseModel):
+    message: str
+    first_opened_at: Optional[datetime] = None
+
+
+class UpdateReadingTimeResponse(BaseModel):
+    message: str
+    total_seconds: Optional[int] = None
+
+
+class CheckOverdueAcknowledgmentsResponse(BaseModel):
+    message: str
+    newly_overdue: int
+
+
+class GetRemindersNeededResponse(BaseModel):
+    reminders_needed: int
+    details: List[Any]

@@ -11,6 +11,24 @@ from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.rca_tools import (
+    AddFishboneCauseResponse,
+    AddWhyIterationResponse,
+    CompleteFishboneResponse,
+    CompleteFiveWhysResponse,
+    CreateCAPAResponse,
+    CreateFishboneResponse,
+    CreateFiveWhysResponse,
+    EntityFiveWhysListResponse,
+    FishboneDetailResponse,
+    FiveWhysDetailResponse,
+    InvestigationCAPAListResponse,
+    OverdueCAPAListResponse,
+    SetFishboneRootCauseResponse,
+    SetFiveWhysRootCauseResponse,
+    UpdateCAPAStatusResponse,
+    VerifyCAPAResponse,
+)
 from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -92,7 +110,7 @@ class VerifyCAPARequest(BaseModel):
 # =============================================================================
 
 
-@router.post("/five-whys", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/five-whys", response_model=CreateFiveWhysResponse, status_code=status.HTTP_201_CREATED)
 async def create_five_whys_analysis(
     request: CreateFiveWhysRequest,
     db: DbSession,
@@ -108,6 +126,7 @@ async def create_five_whys_analysis(
     )
     await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
     track_metric("rca.mutation", 1)
+    track_metric("rca.analysis_started", 1)
     return {
         "id": analysis.id,
         "problem_statement": analysis.problem_statement,
@@ -116,7 +135,7 @@ async def create_five_whys_analysis(
     }
 
 
-@router.get("/five-whys/{analysis_id}", response_model=dict)
+@router.get("/five-whys/{analysis_id}", response_model=FiveWhysDetailResponse)
 async def get_five_whys_analysis(
     analysis_id: int,
     db: DbSession,
@@ -143,7 +162,7 @@ async def get_five_whys_analysis(
     }
 
 
-@router.post("/five-whys/{analysis_id}/add-why", response_model=dict)
+@router.post("/five-whys/{analysis_id}/add-why", response_model=AddWhyIterationResponse)
 async def add_why_iteration(
     analysis_id: int,
     request: AddWhyRequest,
@@ -170,7 +189,7 @@ async def add_why_iteration(
     }
 
 
-@router.post("/five-whys/{analysis_id}/set-root-cause", response_model=dict)
+@router.post("/five-whys/{analysis_id}/set-root-cause", response_model=SetFiveWhysRootCauseResponse)
 async def set_five_whys_root_cause(
     analysis_id: int,
     request: SetRootCauseRequest,
@@ -196,7 +215,7 @@ async def set_five_whys_root_cause(
     }
 
 
-@router.post("/five-whys/{analysis_id}/complete", response_model=dict)
+@router.post("/five-whys/{analysis_id}/complete", response_model=CompleteFiveWhysResponse)
 async def complete_five_whys_analysis(
     analysis_id: int,
     request: CompleteAnalysisRequest,
@@ -222,7 +241,7 @@ async def complete_five_whys_analysis(
     }
 
 
-@router.get("/five-whys/entity/{entity_type}/{entity_id}", response_model=dict)
+@router.get("/five-whys/entity/{entity_type}/{entity_id}", response_model=EntityFiveWhysListResponse)
 async def get_five_whys_for_entity(
     entity_type: str,
     entity_id: int,
@@ -253,7 +272,7 @@ async def get_five_whys_for_entity(
 # =============================================================================
 
 
-@router.post("/fishbone", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/fishbone", response_model=CreateFishboneResponse, status_code=status.HTTP_201_CREATED)
 async def create_fishbone_diagram(
     request: CreateFishboneRequest,
     db: DbSession,
@@ -277,7 +296,7 @@ async def create_fishbone_diagram(
     }
 
 
-@router.get("/fishbone/{diagram_id}", response_model=dict)
+@router.get("/fishbone/{diagram_id}", response_model=FishboneDetailResponse)
 async def get_fishbone_diagram(
     diagram_id: int,
     db: DbSession,
@@ -303,7 +322,7 @@ async def get_fishbone_diagram(
     }
 
 
-@router.post("/fishbone/{diagram_id}/add-cause", response_model=dict)
+@router.post("/fishbone/{diagram_id}/add-cause", response_model=AddFishboneCauseResponse)
 async def add_fishbone_cause(
     diagram_id: int,
     request: AddCauseRequest,
@@ -330,7 +349,7 @@ async def add_fishbone_cause(
     }
 
 
-@router.post("/fishbone/{diagram_id}/set-root-cause", response_model=dict)
+@router.post("/fishbone/{diagram_id}/set-root-cause", response_model=SetFishboneRootCauseResponse)
 async def set_fishbone_root_cause(
     diagram_id: int,
     request: SetFishboneRootCauseRequest,
@@ -357,7 +376,7 @@ async def set_fishbone_root_cause(
     }
 
 
-@router.post("/fishbone/{diagram_id}/complete", response_model=dict)
+@router.post("/fishbone/{diagram_id}/complete", response_model=CompleteFishboneResponse)
 async def complete_fishbone_diagram(
     diagram_id: int,
     request: CompleteAnalysisRequest,
@@ -388,7 +407,7 @@ async def complete_fishbone_diagram(
 # =============================================================================
 
 
-@router.post("/capa", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/capa", response_model=CreateCAPAResponse, status_code=status.HTTP_201_CREATED)
 async def create_capa(
     request: CreateCAPARequest,
     db: DbSession,
@@ -419,7 +438,7 @@ async def create_capa(
     }
 
 
-@router.patch("/capa/{capa_id}/status", response_model=dict)
+@router.patch("/capa/{capa_id}/status", response_model=UpdateCAPAStatusResponse)
 async def update_capa_status(
     capa_id: int,
     request: UpdateCAPAStatusRequest,
@@ -445,7 +464,7 @@ async def update_capa_status(
     }
 
 
-@router.post("/capa/{capa_id}/verify", response_model=dict)
+@router.post("/capa/{capa_id}/verify", response_model=VerifyCAPAResponse)
 async def verify_capa(
     capa_id: int,
     request: VerifyCAPARequest,
@@ -473,7 +492,7 @@ async def verify_capa(
     }
 
 
-@router.get("/capa/investigation/{investigation_id}", response_model=dict)
+@router.get("/capa/investigation/{investigation_id}", response_model=InvestigationCAPAListResponse)
 async def get_capas_for_investigation(
     investigation_id: int,
     db: DbSession,
@@ -499,7 +518,7 @@ async def get_capas_for_investigation(
     }
 
 
-@router.get("/capa/overdue", response_model=dict)
+@router.get("/capa/overdue", response_model=OverdueCAPAListResponse)
 async def get_overdue_capas(
     db: DbSession,
     current_user: CurrentUser,

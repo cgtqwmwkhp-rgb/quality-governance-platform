@@ -22,12 +22,85 @@ from typing import Any
 
 import pytest
 
-# Quarantine marker - skip all tests in this module (not runnable yet)
-pytestmark = pytest.mark.skip(reason="Requires database migration infrastructure - pending environment setup")
+
+# ---------------------------------------------------------------------------
+# Mock-based tests that run without database infrastructure
+# ---------------------------------------------------------------------------
+
+
+class TestComplianceSchemaValidation:
+    """Verify compliance automation schemas import and validate correctly."""
+
+    def test_compliance_schemas_importable(self) -> None:
+        """Verify all compliance automation schemas can be imported."""
+        from src.api.schemas.compliance_automation import (
+            RIDDORCheckRequest,
+            RIDDORCheckResponse,
+            ComplianceScoreResponse,
+            CertificateListResponse,
+            RegulatoryUpdateResponse,
+            GapAnalysisListResponse,
+        )
+
+        assert RIDDORCheckRequest is not None
+        assert RIDDORCheckResponse is not None
+        assert ComplianceScoreResponse is not None
+
+    def test_riddor_check_request_schema(self) -> None:
+        """Validate RIDDORCheckRequest schema with fatality data."""
+        from src.api.schemas.compliance_automation import RIDDORCheckRequest
+
+        req = RIDDORCheckRequest(
+            incident_type="workplace",
+            severity="critical",
+            injury_type="fatal",
+            is_fatal=True,
+        )
+        assert req.is_fatal is True
+        assert req.incident_type == "workplace"
+
+    def test_riddor_check_request_defaults(self) -> None:
+        """Validate RIDDORCheckRequest default values."""
+        from src.api.schemas.compliance_automation import RIDDORCheckRequest
+
+        req = RIDDORCheckRequest(incident_type="workplace")
+        assert req.is_fatal is False
+        assert req.days_absent is None
+        assert req.severity is None
+
+    def test_compliance_score_response_defaults(self) -> None:
+        """Validate ComplianceScoreResponse default values."""
+        from src.api.schemas.compliance_automation import ComplianceScoreResponse
+
+        score = ComplianceScoreResponse(scope_type="organization")
+        assert score.overall_score == 0.0
+        assert score.scope_type == "organization"
+        assert score.breakdown == {}
+
+    def test_certificate_create_schema(self) -> None:
+        """Validate CertificateCreate schema with required fields."""
+        from src.api.schemas.compliance_automation import CertificateCreate
+
+        cert = CertificateCreate(
+            certificate_type="training",
+            entity_type="employee",
+            name="First Aid Certificate",
+        )
+        assert cert.certificate_type == "training"
+        assert cert.entity_type == "employee"
+        assert cert.name == "First Aid Certificate"
+
+    def test_compliance_routes_module_importable(self) -> None:
+        """Verify compliance automation routes module imports cleanly."""
+        from src.api.routes import compliance_automation
+
+        assert hasattr(compliance_automation, "router")
 
 
 class TestRegulatoryMonitoring:
     """Test regulatory update monitoring."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_list_regulatory_updates(self, auth_client: Any) -> None:
         """Test listing regulatory updates."""
@@ -82,6 +155,8 @@ class TestRegulatoryMonitoring:
 class TestGapAnalysis:
     """Test gap analysis functionality."""
 
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+
     def test_run_gap_analysis(self, auth_client: Any) -> None:
         """Test running automated gap analysis."""
         response = auth_client.post("/api/compliance-automation/gap-analysis/run", params={"regulatory_update_id": 1})
@@ -115,6 +190,8 @@ class TestGapAnalysis:
 
 class TestCertificateTracking:
     """Test certificate expiry tracking."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_list_certificates(self, auth_client: Any) -> None:
         """Test listing all certificates."""
@@ -167,6 +244,8 @@ class TestCertificateTracking:
 class TestScheduledAudits:
     """Test scheduled audit management."""
 
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+
     def test_list_scheduled_audits(self, auth_client: Any) -> None:
         """Test listing scheduled audits."""
         response = auth_client.get("/api/compliance-automation/scheduled-audits")
@@ -196,6 +275,8 @@ class TestScheduledAudits:
 
 class TestComplianceScoring:
     """Test compliance score calculation."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_get_compliance_score(self, auth_client: Any) -> None:
         """Test getting current compliance score."""
@@ -243,6 +324,8 @@ class TestComplianceScoring:
 
 class TestRIDDORAutomation:
     """Test RIDDOR automation features."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_check_riddor_required_death(self, auth_client: Any) -> None:
         """Test RIDDOR check for fatality."""

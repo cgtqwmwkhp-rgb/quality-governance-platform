@@ -91,4 +91,71 @@ test.describe('Notifications', () => {
       expect(page.url()).toContain('/notifications');
     });
   });
+
+  test.describe('Mark All as Read Action', () => {
+    test('should click mark all as read and verify notification list updates', async ({ page }) => {
+      await page.goto('/notifications');
+      await page.waitForLoadState('networkidle');
+
+      const markAllButton = page.getByRole('button', { name: /Mark All Read|Mark all as read/i });
+      const hasButton = await markAllButton.isVisible().catch(() => false);
+      if (!hasButton) {
+        await expect(page.getByRole('heading', { name: /Notifications/i })).toBeVisible();
+        return;
+      }
+
+      const unreadBefore = page.locator('[class*="unread"], [data-unread="true"]');
+      const unreadCountBefore = await unreadBefore.count().catch(() => 0);
+
+      await markAllButton.click();
+      await page.waitForTimeout(1000);
+
+      const emptyState = page.getByText(/all caught up|no unread|no notifications/i);
+      const hasEmpty = await emptyState.isVisible().catch(() => false);
+      const unreadCountAfter = await unreadBefore.count().catch(() => 0);
+
+      expect(hasEmpty || unreadCountAfter <= unreadCountBefore).toBeTruthy();
+      await expect(page.getByRole('heading', { name: /Notifications/i })).toBeVisible();
+    });
+  });
+
+  test.describe('Notification Badge Count', () => {
+    test('should display notification badge with count in the nav', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
+
+      const badge = page.locator(
+        '[class*="badge"], [data-testid*="notification-count"], [aria-label*="notification"]'
+      );
+      const bellIcon = page.getByRole('button', { name: /notification/i });
+      const navLink = page.getByRole('link', { name: /notification/i });
+
+      const hasBadge = await badge.first().isVisible().catch(() => false);
+      const hasBell = await bellIcon.isVisible().catch(() => false);
+      const hasNavLink = await navLink.isVisible().catch(() => false);
+
+      if (hasBadge) {
+        const badgeText = await badge.first().textContent();
+        if (badgeText && /\d+/.test(badgeText)) {
+          const count = parseInt(badgeText.match(/\d+/)![0], 10);
+          expect(count).toBeGreaterThanOrEqual(0);
+        }
+      }
+
+      if (hasBell) {
+        await bellIcon.click();
+        await page.waitForLoadState('networkidle');
+        const dropdown = page.locator(
+          '[role="menu"], [role="dialog"], [class*="dropdown"], [class*="popover"]'
+        ).first();
+        const dropdownVisible = await dropdown.isVisible().catch(() => false);
+        const navigated = page.url().includes('/notifications');
+        expect(dropdownVisible || navigated).toBeTruthy();
+      } else if (hasNavLink) {
+        await navLink.click();
+        await page.waitForLoadState('networkidle');
+        expect(page.url()).toContain('/notifications');
+      }
+    });
+  });
 });

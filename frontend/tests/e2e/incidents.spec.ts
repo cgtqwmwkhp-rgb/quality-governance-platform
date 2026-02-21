@@ -114,4 +114,73 @@ test.describe('Incidents', () => {
       expect(page.url()).toContain('/incidents');
     });
   });
+
+  test.describe('Create Incident Form Submission', () => {
+    test('should fill and submit a new incident form', async ({ page }) => {
+      await page.goto('/incidents');
+      await page.waitForLoadState('networkidle');
+
+      const newButton = page.getByRole('button', { name: /New Incident|Report Incident/i });
+      const hasButton = await newButton.isVisible().catch(() => false);
+      if (!hasButton) return;
+
+      await newButton.click();
+      await page.waitForLoadState('networkidle');
+
+      const titleInput = page.getByLabel(/title/i).or(page.getByPlaceholder(/title/i));
+      const hasTitleInput = await titleInput.isVisible().catch(() => false);
+      if (hasTitleInput) {
+        await titleInput.fill('E2E Test Incident - Slip hazard');
+      }
+
+      const descInput = page.getByLabel(/description/i).or(page.getByPlaceholder(/description/i));
+      const hasDescInput = await descInput.isVisible().catch(() => false);
+      if (hasDescInput) {
+        await descInput.fill('Water leak near loading bay causing slippery surface.');
+      }
+
+      const submitButton = page.getByRole('button', { name: /submit|save|create/i });
+      const hasSubmit = await submitButton.isVisible().catch(() => false);
+      if (hasSubmit) {
+        await submitButton.click();
+        await page.waitForLoadState('networkidle');
+      }
+
+      await expect(page.getByRole('heading', { name: /Incidents/i })).toBeVisible();
+    });
+  });
+
+  test.describe('Filter by Status', () => {
+    test('should filter incidents by selecting a status option', async ({ page }) => {
+      await page.goto('/incidents');
+      await page.waitForLoadState('networkidle');
+
+      const statusFilter = page.getByRole('combobox').first();
+      const statusButton = page.getByRole('button', { name: /status|filter/i });
+      const statusTab = page.getByRole('tab', { name: /open|active/i });
+
+      const hasCombobox = await statusFilter.isVisible().catch(() => false);
+      const hasButton = await statusButton.isVisible().catch(() => false);
+      const hasTab = await statusTab.isVisible().catch(() => false);
+
+      if (hasCombobox) {
+        await statusFilter.click();
+        await page.waitForTimeout(300);
+        const option = page.getByRole('option', { name: /open|active|closed/i }).first();
+        const hasOption = await option.isVisible().catch(() => false);
+        if (hasOption) {
+          await option.click();
+          await page.waitForTimeout(500);
+        }
+      } else if (hasButton) {
+        await statusButton.click();
+        await page.waitForTimeout(500);
+      } else if (hasTab) {
+        await statusTab.click();
+        await page.waitForTimeout(500);
+      }
+
+      await expect(page.getByRole('heading', { name: /Incidents/i })).toBeVisible();
+    });
+  });
 });

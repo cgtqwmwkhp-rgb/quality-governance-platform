@@ -490,5 +490,16 @@ class AuditFindingListResponse(BaseModel):
     pages: int
 
 
+class PurgeExpiredTemplatesResponse(BaseModel):
+    purged_count: int
+    purged_templates: List[str]
+
+
+class ArchiveTemplateResponse(BaseModel):
+    message: str
+    archived_at: str
+    expires_at: str
+
+
 # Forward references for nested models
 AuditRunDetailResponse.model_rebuild()

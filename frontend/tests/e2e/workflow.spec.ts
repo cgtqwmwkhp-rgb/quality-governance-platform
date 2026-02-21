@@ -93,4 +93,72 @@ test.describe('Workflow Center', () => {
       }
     });
   });
+
+  test.describe('Start New Workflow Instance', () => {
+    test('should open the workflow creation dialog and fill in details', async ({ page }) => {
+      await page.goto('/workflow');
+      await page.waitForLoadState('networkidle');
+
+      const createButton = page.getByRole('button', { name: /Create|New|Add|Start/i }).first();
+      const hasCreate = await createButton.isVisible().catch(() => false);
+      if (!hasCreate) {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+        return;
+      }
+
+      await createButton.click();
+      await page.waitForLoadState('networkidle');
+
+      const dialog = page.locator('[role="dialog"], [class*="modal"], [class*="drawer"], form').first();
+      const routeChanged = page.url().includes('/new') || page.url().includes('/create');
+      const hasDialog = await dialog.isVisible().catch(() => false);
+
+      if (hasDialog || routeChanged) {
+        const nameInput = page.getByLabel(/name|title/i).or(page.getByPlaceholder(/name|title/i));
+        const hasNameInput = await nameInput.isVisible().catch(() => false);
+        if (hasNameInput) {
+          await nameInput.fill('E2E Test Workflow');
+          await expect(nameInput).toHaveValue('E2E Test Workflow');
+        }
+      }
+
+      await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+    });
+  });
+
+  test.describe('Approval Step Display', () => {
+    test('should verify approval steps are visible in workflow detail', async ({ page }) => {
+      await page.goto('/workflow');
+      await page.waitForLoadState('networkidle');
+
+      const rows = page.locator('table tbody tr');
+      const cards = page.locator('[class*="card"], [class*="workflow-item"]');
+      const links = page.getByRole('link', { name: /workflow|CAPA|RIDDOR|NCR/i });
+
+      const rowCount = await rows.count().catch(() => 0);
+      const cardCount = await cards.count().catch(() => 0);
+      const linkCount = await links.count().catch(() => 0);
+
+      if (rowCount > 0) {
+        await rows.first().click();
+        await page.waitForLoadState('networkidle');
+      } else if (cardCount > 0) {
+        await cards.first().click();
+        await page.waitForLoadState('networkidle');
+      } else if (linkCount > 0) {
+        await links.first().click();
+        await page.waitForLoadState('networkidle');
+      } else {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+        return;
+      }
+
+      const approvalStep = page.getByText(/approval|approve|review|sign.?off/i).first();
+      const stepIndicator = page.locator('[class*="step"], [class*="progress"], [class*="timeline"]').first();
+      const hasApproval = await approvalStep.isVisible().catch(() => false);
+      const hasSteps = await stepIndicator.isVisible().catch(() => false);
+
+      expect(hasApproval || hasSteps).toBeTruthy();
+    });
+  });
 });

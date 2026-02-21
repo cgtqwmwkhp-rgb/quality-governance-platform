@@ -30,12 +30,12 @@ from src.api.utils.update import apply_updates
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
+from src.domain.services.risk_statistics_service import RiskStatisticsService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -135,71 +135,8 @@ async def get_risk_statistics(
     current_user: CurrentUser,
 ) -> RiskStatistics:
     """Get risk register statistics."""
-    tenant_filter = Risk.tenant_id == current_user.tenant_id
-
-    # Total and active risks
-    total_result = await db.execute(select(func.count()).select_from(Risk).where(tenant_filter))
-    total_risks = total_result.scalar() or 0
-
-    active_result = await db.execute(
-        select(func.count()).select_from(Risk).where(Risk.is_active == True, tenant_filter)
-    )
-    active_risks = active_result.scalar() or 0
-
-    # Risks by category
-    category_result = await db.execute(
-        select(Risk.category, func.count()).where(Risk.is_active == True, tenant_filter).group_by(Risk.category)
-    )
-    risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
-
-    # Risks by level
-    level_result = await db.execute(
-        select(Risk.risk_level, func.count()).where(Risk.is_active == True, tenant_filter).group_by(Risk.risk_level)
-    )
-    risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
-
-    # Risks requiring review (next_review_date in past)
-    review_result = await db.execute(
-        select(func.count())
-        .select_from(Risk)
-        .where(
-            and_(
-                Risk.is_active == True,
-                Risk.next_review_date <= datetime.now(timezone.utc),
-                tenant_filter,
-            )
-        )
-    )
-    risks_requiring_review = review_result.scalar() or 0
-
-    # Overdue treatments
-    overdue_result = await db.execute(
-        select(func.count())
-        .select_from(Risk)
-        .where(
-            and_(
-                Risk.is_active == True,
-                Risk.treatment_due_date <= datetime.now(timezone.utc),
-                Risk.status != RiskStatus.CLOSED,
-                tenant_filter,
-            )
-        )
-    )
-    overdue_treatments = overdue_result.scalar() or 0
-
-    # Average risk score
-    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True, tenant_filter))
-    average_risk_score = float(avg_result.scalar() or 0)
-
-    return RiskStatistics(
-        total_risks=total_risks,
-        active_risks=active_risks,
-        risks_by_category=risks_by_category,
-        risks_by_level=risks_by_level,
-        risks_requiring_review=risks_requiring_review,
-        overdue_treatments=overdue_treatments,
-        average_risk_score=round(average_risk_score, 2),
-    )
+    data = await RiskStatisticsService.get_risk_statistics(db, current_user.tenant_id)
+    return RiskStatistics(**data)
 
 
 @router.get("/matrix", response_model=RiskMatrixResponse)
@@ -208,45 +145,8 @@ async def get_risk_matrix(
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
     """Get the risk matrix with risk counts per cell."""
-    # Get risk counts by likelihood and impact
-    result = await db.execute(
-        select(Risk.likelihood, Risk.impact, func.count())
-        .where(Risk.is_active == True, Risk.tenant_id == current_user.tenant_id)
-        .group_by(Risk.likelihood, Risk.impact)
-    )
-    risk_counts = {(row[0], row[1]): row[2] for row in result.all()}
-
-    # Build matrix
-    matrix = []
-    risks_by_level = {"very_low": 0, "low": 0, "medium": 0, "high": 0, "critical": 0}
-    total_risks = 0
-
-    for likelihood in range(5, 0, -1):  # 5 to 1 (top to bottom)
-        row = []
-        for impact in range(1, 6):  # 1 to 5 (left to right)
-            score, level, color = calculate_risk_level(likelihood, impact)
-            count = risk_counts.get((likelihood, impact), 0)
-
-            row.append(
-                RiskMatrixCell(
-                    likelihood=likelihood,
-                    impact=impact,
-                    score=score,
-                    level=level,
-                    color=color,
-                    risk_count=count,
-                )
-            )
-
-            risks_by_level[level] += count
-            total_risks += count
-        matrix.append(row)
-
-    return RiskMatrixResponse(
-        matrix=matrix,
-        total_risks=total_risks,
-        risks_by_level=risks_by_level,
-    )
+    data = await RiskStatisticsService.get_risk_matrix(db, current_user.tenant_id)
+    return RiskMatrixResponse(**data)
 
 
 @router.get("/{risk_id}", response_model=RiskDetailResponse)
@@ -293,12 +193,17 @@ async def update_risk(
 
     update_data = risk_data.model_dump(exclude_unset=True)
 
-    # setattr kept: schema→model field remapping (e.g. clause_ids → clause_ids_json)
-    # can't use apply_updates() because the model column name differs from the schema field.
     _json_fields = {"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
-    for field in _json_fields:
-        if field in update_data:
-            setattr(risk, f"{field}_json", update_data[field])
+    if "clause_ids" in update_data:
+        risk.clause_ids_json = update_data["clause_ids"]
+    if "control_ids" in update_data:
+        risk.control_ids_json = update_data["control_ids"]
+    if "linked_audit_ids" in update_data:
+        risk.linked_audit_ids_json = update_data["linked_audit_ids"]
+    if "linked_incident_ids" in update_data:
+        risk.linked_incident_ids_json = update_data["linked_incident_ids"]
+    if "linked_policy_ids" in update_data:
+        risk.linked_policy_ids_json = update_data["linked_policy_ids"]
 
     # Recalculate risk score if likelihood or impact changed
     likelihood = update_data.get("likelihood", risk.likelihood)
@@ -397,7 +302,7 @@ async def update_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Update a risk control."""
-    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found")
+    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id)
     await get_or_404(db, Risk, control.risk_id, "Risk not found", tenant_id=current_user.tenant_id)
 
     update_data = control_data.model_dump(exclude_unset=True)
@@ -423,7 +328,7 @@ async def delete_control(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk control."""
-    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found")
+    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id)
     await get_or_404(db, Risk, control.risk_id, "Risk not found", tenant_id=current_user.tenant_id)
 
     control.is_active = False

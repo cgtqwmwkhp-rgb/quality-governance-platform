@@ -70,6 +70,7 @@ import {
 import { cn } from '../helpers/utils'
 import { getStatusDisplay } from '../utils/investigationStatusFilter'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 
 // Tab definitions
 const TABS = [
@@ -545,11 +546,10 @@ export default function InvestigationDetail() {
     return ENTITY_ICONS[type] || AlertTriangle
   }
 
-  // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="p-6">
+        <CardSkeleton count={2} />
       </div>
     )
   }

@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
@@ -26,6 +27,13 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ims", tags=["IMS Dashboard"])
+
+
+class IMSDashboardResponse(BaseModel):
+    model_config = {"extra": "allow"}
+
+    generated_at: str
+    overall_compliance: float = 0
 
 
 async def _get_standards_compliance(db: Any) -> list[dict]:
@@ -382,7 +390,7 @@ async def _get_audit_schedule(db: Any) -> list[dict]:
     return audits
 
 
-@router.get("/dashboard", response_model=dict)
+@router.get("/dashboard", response_model=IMSDashboardResponse)
 async def get_ims_dashboard(
     db: DbSession,
     current_user: CurrentUser,

@@ -16,14 +16,33 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.workflows import (
+    AdvanceWorkflowResponse,
+    ApproveStepResponse,
+    BulkApproveResponse,
+    CancelDelegationResponse,
+    CancelWorkflowResponse,
+    CreateDelegationResponse,
+    EscalateWorkflowResponse,
+    GetInstanceResponse,
+    GetTemplateResponse,
+    GetWorkflowStatsResponse,
+    ListDelegationsResponse,
+    ListInstancesResponse,
+    ListPendingApprovalsResponse,
+    ListPendingEscalationsResponse,
+    ListTemplatesResponse,
+    RejectStepResponse,
+    StartWorkflowResponse,
+)
 from src.domain.services import workflow_engine as engine
+from src.domain.services.workflow_calculation_service import WorkflowCalculationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -78,7 +97,7 @@ class EscalationRequest(BaseModel):
 # ============================================================================
 
 
-@router.get("/templates", response_model=dict)
+@router.get("/templates", response_model=ListTemplatesResponse)
 async def list_workflow_templates(db: DbSession, current_user: CurrentUser):
     """List available workflow templates, seeding defaults if empty."""
     await engine.seed_default_templates(db)
@@ -99,7 +118,7 @@ async def list_workflow_templates(db: DbSession, current_user: CurrentUser):
     }
 
 
-@router.get("/templates/{template_code}", response_model=dict)
+@router.get("/templates/{template_code}", response_model=GetTemplateResponse)
 async def get_workflow_template(template_code: str, db: DbSession, current_user: CurrentUser):
     """Get workflow template details."""
     t = await engine.get_template(db, template_code)
@@ -127,7 +146,7 @@ async def get_workflow_template(template_code: str, db: DbSession, current_user:
 # ============================================================================
 
 
-@router.post("/start", response_model=dict)
+@router.post("/start", response_model=StartWorkflowResponse)
 async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_user: CurrentUser):
     """Start a new workflow instance."""
     _span = tracer.start_span("start_workflow") if tracer else None
@@ -165,7 +184,7 @@ async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_u
     }
 
 
-@router.get("/instances", response_model=dict)
+@router.get("/instances", response_model=ListInstancesResponse)
 async def list_workflow_instances(
     db: DbSession,
     current_user: CurrentUser,
@@ -183,20 +202,12 @@ async def list_workflow_instances(
         page_size=page_size,
     )
 
+    now = datetime.utcnow()
     items = []
     for inst in instances:
         steps = await engine.get_instance_steps(db, inst.id)
-        total_steps = len(steps)
-        completed_steps = sum(1 for s in steps if s.status == "completed")
-        progress = int((completed_steps / total_steps) * 100) if total_steps else 0
-
-        now = datetime.utcnow()
-        sla_status = "ok"
-        if inst.sla_due_at:
-            if now > inst.sla_due_at:
-                sla_status = "breached"
-            elif inst.sla_warning_at and now > inst.sla_warning_at:
-                sla_status = "warning"
+        progress = WorkflowCalculationService.calculate_progress(steps)
+        sla_status = WorkflowCalculationService.calculate_sla_status(inst, now)
 
         items.append(
             {
@@ -216,7 +227,7 @@ async def list_workflow_instances(
     return {"items": items, "total": total}
 
 
-@router.get("/instances/{workflow_id}", response_model=dict)
+@router.get("/instances/{workflow_id}", response_model=GetInstanceResponse)
 async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: CurrentUser):
     """Get workflow instance details with all steps."""
     inst = await engine.get_instance(db, workflow_id)
@@ -224,17 +235,8 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     steps = await engine.get_instance_steps(db, workflow_id)
-    total_steps = len(steps)
-    completed_steps = sum(1 for s in steps if s.status == "completed")
-    progress = int((completed_steps / total_steps) * 100) if total_steps else 0
-
-    now = datetime.utcnow()
-    sla_status = "ok"
-    if inst.sla_due_at:
-        if now > inst.sla_due_at:
-            sla_status = "breached"
-        elif inst.sla_warning_at and now > inst.sla_warning_at:
-            sla_status = "warning"
+    progress = WorkflowCalculationService.calculate_progress(steps)
+    sla_status = WorkflowCalculationService.calculate_sla_status(inst)
 
     step_data = []
     for s in steps:
@@ -277,7 +279,7 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
     }
 
 
-@router.post("/instances/{workflow_id}/advance", response_model=dict)
+@router.post("/instances/{workflow_id}/advance", response_model=AdvanceWorkflowResponse)
 async def advance_workflow(
     workflow_id: int,
     db: DbSession,
@@ -299,7 +301,7 @@ async def advance_workflow(
     return result
 
 
-@router.post("/instances/{workflow_id}/cancel", response_model=dict)
+@router.post("/instances/{workflow_id}/cancel", response_model=CancelWorkflowResponse)
 async def cancel_workflow(
     workflow_id: int,
     db: DbSession,
@@ -325,14 +327,14 @@ async def cancel_workflow(
 # ============================================================================
 
 
-@router.get("/approvals/pending", response_model=dict)
+@router.get("/approvals/pending", response_model=ListPendingApprovalsResponse)
 async def get_pending_approvals(db: DbSession, current_user: CurrentUser):
     """Get pending approvals for current user."""
     approvals = await engine.get_pending_approvals(db, current_user.id)
     return {"approvals": approvals, "total": len(approvals)}
 
 
-@router.post("/approvals/{step_id}/approve", response_model=dict)
+@router.post("/approvals/{step_id}/approve", response_model=ApproveStepResponse)
 async def approve_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Approve a workflow step."""
     try:
@@ -342,7 +344,7 @@ async def approve_request(step_id: int, response: ApprovalResponse, db: DbSessio
     return result
 
 
-@router.post("/approvals/{step_id}/reject", response_model=dict)
+@router.post("/approvals/{step_id}/reject", response_model=RejectStepResponse)
 async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Reject a workflow step."""
     if not response.reason:
@@ -354,7 +356,7 @@ async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession
     return result
 
 
-@router.post("/approvals/bulk-approve", response_model=dict)
+@router.post("/approvals/bulk-approve", response_model=BulkApproveResponse)
 async def bulk_approve_requests(request: BulkApprovalRequest, db: DbSession, current_user: CurrentUser):
     """Bulk approve multiple workflow steps."""
     result = await engine.bulk_approve(db, request.approval_ids, current_user.id, request.notes)
@@ -366,14 +368,14 @@ async def bulk_approve_requests(request: BulkApprovalRequest, db: DbSession, cur
 # ============================================================================
 
 
-@router.get("/escalations/pending", response_model=dict)
+@router.get("/escalations/pending", response_model=ListPendingEscalationsResponse)
 async def get_pending_escalations(db: DbSession, current_user: CurrentUser):
     """Get workflows pending escalation."""
     escalations = await engine.check_escalations(db)
     return {"escalations": escalations, "total": len(escalations)}
 
 
-@router.post("/instances/{workflow_id}/escalate", response_model=dict)
+@router.post("/instances/{workflow_id}/escalate", response_model=EscalateWorkflowResponse)
 async def escalate_workflow(
     workflow_id: int,
     request: EscalationRequest,
@@ -399,7 +401,7 @@ async def escalate_workflow(
 # ============================================================================
 
 
-@router.get("/delegations", response_model=dict)
+@router.get("/delegations", response_model=ListDelegationsResponse)
 async def get_my_delegations(db: DbSession, current_user: CurrentUser):
     """Get current user's delegations."""
     delegations = await engine.get_active_delegations(db, current_user.id)
@@ -418,7 +420,7 @@ async def get_my_delegations(db: DbSession, current_user: CurrentUser):
     }
 
 
-@router.post("/delegations", response_model=dict)
+@router.post("/delegations", response_model=CreateDelegationResponse)
 async def create_delegation(request: DelegationRequest, db: DbSession, current_user: CurrentUser):
     """Set up out-of-office delegation."""
     d = await engine.set_delegation(
@@ -441,8 +443,8 @@ async def create_delegation(request: DelegationRequest, db: DbSession, current_u
     }
 
 
-@router.delete("/delegations/{delegation_id}", response_model=dict)
-async def cancel_delegation(delegation_id: int, db: DbSession, current_user: CurrentUser):
+@router.delete("/delegations/{delegation_id}", response_model=CancelDelegationResponse)
+async def cancel_delegation(delegation_id: int, db: DbSession, current_user: CurrentSuperuser):
     """Cancel a delegation."""
     success = await engine.cancel_delegation(db, delegation_id)
     if not success:
@@ -459,7 +461,7 @@ async def cancel_delegation(delegation_id: int, db: DbSession, current_user: Cur
 # ============================================================================
 
 
-@router.get("/stats", response_model=dict)
+@router.get("/stats", response_model=GetWorkflowStatsResponse)
 async def get_workflow_stats(db: DbSession, current_user: CurrentUser):
     """Get live workflow statistics from the database."""
     return await engine.get_workflow_stats(db)

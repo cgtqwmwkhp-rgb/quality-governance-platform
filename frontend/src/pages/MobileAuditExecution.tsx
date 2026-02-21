@@ -32,6 +32,7 @@ import {
   ThumbsDown,
   Send,
 } from 'lucide-react';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 
 // ============================================================================
@@ -893,8 +894,8 @@ export default function MobileAuditExecution() {
 
   if (loading || !audit) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+      <div className="min-h-screen bg-slate-950 p-6">
+        <CardSkeleton count={2} />
       </div>
     );
   }
@@ -996,8 +997,8 @@ export default function MobileAuditExecution() {
 
   if (!currentQuestion) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+      <div className="min-h-screen bg-slate-950 p-6">
+        <CardSkeleton count={1} />
       </div>
     );
   }

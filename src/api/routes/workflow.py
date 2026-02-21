@@ -7,7 +7,7 @@ escalation levels, and status checking.
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -19,6 +19,7 @@ from src.api.schemas.workflow import (
     EscalationLevelUpdate,
     RuleExecutionListResponse,
     RuleExecutionResponse,
+    SLACheckResponse,
     SLAConfigurationCreate,
     SLAConfigurationListResponse,
     SLAConfigurationResponse,
@@ -63,11 +64,7 @@ async def list_workflow_rules(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflow rules with optional filtering."""
-    query = (
-        select(WorkflowRule)
-        .options(selectinload(WorkflowRule.executions))
-        .where(WorkflowRule.tenant_id == current_user.tenant_id)
-    )
+    query = select(WorkflowRule).options(selectinload(WorkflowRule.executions)).where(WorkflowRule.tenant_id == current_user.tenant_id)
 
     filters = []
     if entity_type:
@@ -152,26 +149,18 @@ async def get_rule_executions(
     rule_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    limit: int = Query(50, ge=1, le=200),
+    params: PaginationParams = Depends(),
 ):
     """Get execution history for a workflow rule."""
     await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
 
-    result = await db.execute(
+    query = (
         select(RuleExecution)
         .where(RuleExecution.rule_id == rule_id)
         .order_by(RuleExecution.executed_at.desc())
-        .limit(limit)
     )
-    executions = result.scalars().all()
 
-    count_result = await db.execute(select(func.count(RuleExecution.id)).where(RuleExecution.rule_id == rule_id))
-    total = count_result.scalar()
-
-    return RuleExecutionListResponse(
-        items=[RuleExecutionResponse.from_orm(e) for e in executions],
-        total=total,
-    )
+    return await paginate(db, query, params)
 
 
 # =============================================================================
@@ -183,6 +172,7 @@ async def get_rule_executions(
 async def list_sla_configurations(
     db: DbSession,
     current_user: CurrentUser,
+    params: PaginationParams = Depends(),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
@@ -200,13 +190,7 @@ async def list_sla_configurations(
 
     query = query.order_by(SLAConfiguration.entity_type, SLAConfiguration.match_priority.desc())
 
-    result = await db.execute(query)
-    configs = result.scalars().all()
-
-    return SLAConfigurationListResponse(
-        items=[SLAConfigurationResponse.from_orm(c) for c in configs],
-        total=len(configs),
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/sla-configs", response_model=SLAConfigurationResponse, status_code=status.HTTP_201_CREATED)
@@ -379,6 +363,7 @@ async def resume_sla_tracking(
 async def list_escalation_levels(
     db: DbSession,
     current_user: CurrentUser,
+    params: PaginationParams = Depends(),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
@@ -396,13 +381,7 @@ async def list_escalation_levels(
 
     query = query.order_by(EscalationLevel.entity_type, EscalationLevel.level)
 
-    result = await db.execute(query)
-    levels = result.scalars().all()
-
-    return EscalationLevelListResponse(
-        items=[EscalationLevelResponse.from_orm(l) for l in levels],
-        total=len(levels),
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/escalation-levels", response_model=EscalationLevelResponse, status_code=status.HTTP_201_CREATED)
@@ -465,7 +444,7 @@ async def delete_escalation_level(
 # =============================================================================
 
 
-@router.post("/trigger-check", response_model=dict)
+@router.post("/trigger-check", response_model=SLACheckResponse)
 async def trigger_sla_check(
     db: DbSession,
     current_user: CurrentUser,

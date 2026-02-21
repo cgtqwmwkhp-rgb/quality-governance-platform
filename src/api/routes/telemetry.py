@@ -23,8 +23,14 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentSuperuser, CurrentUser
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.telemetry import (
+    GetExperimentMetricsResponse,
+    ReceiveBatchEventResponse,
+    ReceiveEventResponse,
+    ResetMetricsResponse,
+)
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
@@ -253,7 +259,7 @@ def aggregate_event(event: TelemetryEvent) -> None:
 # ============================================================================
 
 
-@router.post("/events", response_model=dict)
+@router.post("/events", response_model=ReceiveEventResponse)
 async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     """
     Receive a single telemetry event.
@@ -285,10 +291,10 @@ async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
         # Log but don't fail - telemetry should never block clients
         logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 
-    return {"status": "ok"}
+    return ReceiveEventResponse(status="ok")
 
 
-@router.post("/events/batch", response_model=dict)
+@router.post("/events/batch", response_model=ReceiveBatchEventResponse)
 async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser):
     """
     Receive a batch of telemetry events (for offline buffer flush).
@@ -314,10 +320,10 @@ async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser)
             # Log but don't fail - telemetry should never block clients
             logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 
-    return {"status": "ok", "count": processed}
+    return ReceiveBatchEventResponse(status="ok", count=processed)
 
 
-@router.get("/metrics/{experiment_id}", response_model=dict)
+@router.get("/metrics/{experiment_id}", response_model=GetExperimentMetricsResponse)
 async def get_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Get aggregated metrics for an experiment.
@@ -331,8 +337,8 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     return metrics
 
 
-@router.delete("/metrics/{experiment_id}", response_model=dict)
-async def reset_metrics(experiment_id: str, current_user: CurrentUser):
+@router.delete("/metrics/{experiment_id}", response_model=ResetMetricsResponse)
+async def reset_metrics(experiment_id: str, current_user: CurrentSuperuser):
     """
     Reset metrics for an experiment (staging only, for testing).
     """
@@ -346,4 +352,4 @@ async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     if metrics_path.exists():
         metrics_path.unlink()
 
-    return {"status": "reset"}
+    return ResetMetricsResponse(status="reset")

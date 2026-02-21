@@ -124,4 +124,82 @@ test.describe('Documents', () => {
       await expect(heading).toBeVisible();
     });
   });
+
+  test.describe('Upload Document', () => {
+    test('should open upload dialog and attach a file', async ({ page }) => {
+      await page.goto('/documents');
+      await page.waitForLoadState('networkidle');
+
+      const uploadButton = page.getByRole('button', { name: /Upload|Add Document|New/i });
+      const hasUpload = await uploadButton.isVisible().catch(() => false);
+      if (!hasUpload) {
+        await expect(page.getByRole('heading', { name: /Documents/i })).toBeVisible();
+        return;
+      }
+
+      await uploadButton.click();
+      await page.waitForLoadState('networkidle');
+
+      const dialog = page.locator('[role="dialog"], [class*="modal"], [class*="drawer"]').first();
+      const routeChanged = page.url().includes('/upload') || page.url().includes('/new');
+      const hasDialog = await dialog.isVisible().catch(() => false);
+
+      if (hasDialog || routeChanged) {
+        const fileInput = page.locator('input[type="file"]');
+        const hasFileInput = await fileInput.isVisible().catch(() => false);
+        if (hasFileInput) {
+          await expect(fileInput).toBeAttached();
+        }
+
+        const nameInput = page.getByLabel(/name|title/i).or(page.getByPlaceholder(/name|title/i));
+        const hasNameInput = await nameInput.isVisible().catch(() => false);
+        if (hasNameInput) {
+          await nameInput.fill('E2E Test Document');
+          await expect(nameInput).toHaveValue('E2E Test Document');
+        }
+      }
+
+      await expect(page.getByRole('heading', { name: /Documents/i })).toBeVisible();
+    });
+  });
+
+  test.describe('View Toggle', () => {
+    test('should toggle between grid and list views', async ({ page }) => {
+      await page.goto('/documents');
+      await page.waitForLoadState('networkidle');
+
+      const gridButton = page.getByRole('button', { name: /grid/i });
+      const listButton = page.getByRole('button', { name: /list/i });
+      const viewToggle = page.locator('[aria-label*="view"], [class*="view-toggle"], [data-testid*="view"]');
+
+      const hasGrid = await gridButton.isVisible().catch(() => false);
+      const hasList = await listButton.isVisible().catch(() => false);
+      const hasToggle = await viewToggle.first().isVisible().catch(() => false);
+
+      if (hasGrid && hasList) {
+        await listButton.click();
+        await page.waitForTimeout(500);
+
+        const table = page.locator('table');
+        const listView = page.locator('[class*="list"]');
+        const hasTableView = await table.isVisible().catch(() => false);
+        const hasListView = await listView.first().isVisible().catch(() => false);
+
+        await gridButton.click();
+        await page.waitForTimeout(500);
+
+        const grid = page.locator('[role="grid"], [class*="grid"], [class*="card"]');
+        const hasGridView = await grid.first().isVisible().catch(() => false);
+
+        expect(hasTableView || hasListView || hasGridView).toBeTruthy();
+      } else if (hasToggle) {
+        await viewToggle.first().click();
+        await page.waitForTimeout(500);
+        await viewToggle.first().click();
+        await page.waitForTimeout(500);
+      }
+
+      await expect(page.getByRole('heading', { name: /Documents/i })).toBeVisible();
+    });
+  });
 });

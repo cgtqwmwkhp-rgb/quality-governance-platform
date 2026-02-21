@@ -16,6 +16,7 @@ from src.api.schemas.investigation import (
     CommentListResponse,
     CommentResponse,
     CreateFromRecordRequest,
+    CustomerPackGeneratedResponse,
     CustomerPackSummaryResponse,
     InvestigationRunCreate,
     InvestigationRunListResponse,
@@ -35,7 +36,6 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -194,15 +194,11 @@ async def list_investigations(
     request_id = "N/A"  # TODO: Get from request context
 
     # Build query
-    query = (
-        select(InvestigationRun)
-        .options(
-            selectinload(InvestigationRun.template),
-            selectinload(InvestigationRun.comments),
-            selectinload(InvestigationRun.actions),
-        )
-        .where(InvestigationRun.tenant_id == current_user.tenant_id)
-    )
+    query = select(InvestigationRun).options(
+        selectinload(InvestigationRun.template),
+        selectinload(InvestigationRun.comments),
+        selectinload(InvestigationRun.actions),
+    ).where(InvestigationRun.tenant_id == current_user.tenant_id)
 
     # Apply filters
     if entity_type is not None:
@@ -274,10 +270,9 @@ async def update_investigation(
     """
     investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
-    # setattr kept for status: requires enum conversion (str → InvestigationStatus)
     update_data = investigation_data.model_dump(exclude_unset=True)
     if "status" in update_data and update_data["status"] is not None:
-        setattr(investigation, "status", InvestigationStatus(update_data["status"]))
+        investigation.status = InvestigationStatus(update_data["status"])
 
     apply_updates(investigation, investigation_data, exclude={"status"})
     investigation.updated_by_id = current_user.id
@@ -804,7 +799,7 @@ async def approve_investigation(
     return investigation
 
 
-@router.post("/{investigation_id}/customer-pack", response_model=dict)
+@router.post("/{investigation_id}/customer-pack", response_model=CustomerPackGeneratedResponse)
 async def generate_customer_pack(
     investigation_id: int,
     audience: str,

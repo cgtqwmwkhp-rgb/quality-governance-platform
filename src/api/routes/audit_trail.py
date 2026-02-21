@@ -24,6 +24,7 @@ from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -92,6 +93,20 @@ class AuditLogListResponse(BaseModel):
     page_size: int
 
 
+class AuditActionsResponse(BaseModel):
+    data: list[str]
+    auth: list[str]
+    admin: list[str]
+    system: list[str]
+
+
+class AuditLogExportDataResponse(BaseModel):
+    export_id: int
+    entries_count: int
+    file_hash: str
+    data: Optional[list[dict]] = None
+
+
 class AuditStatsResponse(BaseModel):
     total_entries: int
     by_action: dict
@@ -113,7 +128,7 @@ class AuditStatsResponse(BaseModel):
 # ============================================================================
 
 
-@router.get("/actions", response_model=dict)
+@router.get("/actions", response_model=AuditActionsResponse)
 async def list_actions(current_user: CurrentUser) -> Any:
     """Get list of possible audit actions."""
     return {
@@ -313,6 +328,7 @@ async def list_audit_logs(
             conditions.append(AuditLogEntry.timestamp <= date_to)
 
         query = select(AuditLogEntry).where(*conditions).order_by(desc(AuditLogEntry.timestamp))
+        track_metric("audit_trail.accessed", 1)
         return await paginate(db, query, params)
     except SQLAlchemyError as e:
         logger.exception("Failed to list audit logs: %s", e)
@@ -513,7 +529,7 @@ async def verify_chain(
 # ============================================================================
 
 
-@router.post("/export", response_model=dict)
+@router.post("/export", response_model=AuditLogExportDataResponse)
 async def export_audit_logs(
     data: ExportRequest,
     db: DbSession,
@@ -561,7 +577,7 @@ async def export_audit_logs(
         export_record = AuditLogExport(
             tenant_id=tenant_id,
             export_format=data.format,
-            export_type=("filtered" if (data.date_from or data.date_to or data.entity_type) else "full"),
+            export_type="filtered" if (data.date_from or data.date_to or data.entity_type) else "full",
             filters={
                 "entity_type": data.entity_type,
                 "date_from": data.date_from.isoformat() if data.date_from else None,

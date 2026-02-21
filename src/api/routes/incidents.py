@@ -12,6 +12,7 @@ from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
+from src.api.schemas.investigation import InvestigationRunListResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -23,7 +24,6 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -184,9 +184,7 @@ async def list_incidents(
     logger = logging.getLogger(__name__)
 
     try:
-        query = (
-            select(Incident).options(selectinload(Incident.actions)).where(Incident.tenant_id == current_user.tenant_id)
-        )
+        query = select(Incident).options(selectinload(Incident.actions)).where(Incident.tenant_id == current_user.tenant_id)
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)
@@ -224,7 +222,7 @@ async def list_incidents(
         )
 
 
-@router.get("/{incident_id}/investigations", response_model=dict)
+@router.get("/{incident_id}/investigations", response_model=InvestigationRunListResponse)
 async def list_incident_investigations(
     incident_id: int,
     db: DbSession,

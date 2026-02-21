@@ -15,14 +15,18 @@ from src.api.schemas.policy_acknowledgment import (
     AcknowledgmentRequirementCreate,
     AcknowledgmentRequirementResponse,
     AssignAcknowledgmentRequest,
+    CheckOverdueAcknowledgmentsResponse,
     ComplianceDashboardResponse,
     DocumentReadLogListResponse,
     DocumentReadLogResponse,
+    GetRemindersNeededResponse,
     LogDocumentReadRequest,
     PolicyAcknowledgmentListResponse,
     PolicyAcknowledgmentResponse,
     PolicyAcknowledgmentStatusResponse,
     RecordAcknowledgmentRequest,
+    RecordPolicyOpenedResponse,
+    UpdateReadingTimeResponse,
 )
 from src.api.utils.entity import get_or_404
 from src.domain.models.policy_acknowledgment import (
@@ -32,6 +36,12 @@ from src.domain.models.policy_acknowledgment import (
 )
 from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
 
@@ -71,7 +81,7 @@ async def get_acknowledgment_requirement(
     current_user: CurrentUser,
 ):
     """Get an acknowledgment requirement."""
-    requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail="Requirement not found")
+    requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail=ErrorCode.ENTITY_NOT_FOUND)
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
@@ -127,11 +137,11 @@ async def get_acknowledgment(
     current_user: CurrentUser,
 ):
     """Get a specific acknowledgment."""
-    ack = await get_or_404(db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found")
+    ack = await get_or_404(db, PolicyAcknowledgment, acknowledgment_id, detail=ErrorCode.ENTITY_NOT_FOUND)
     return PolicyAcknowledgmentResponse.from_orm(ack)
 
 
-@router.post("/{acknowledgment_id}/open", response_model=dict)
+@router.post("/{acknowledgment_id}/open", response_model=RecordPolicyOpenedResponse)
 async def record_policy_opened(
     acknowledgment_id: int,
     db: DbSession,
@@ -147,7 +157,7 @@ async def record_policy_opened(
     return {"message": "Policy opened recorded", "first_opened_at": ack.first_opened_at}
 
 
-@router.post("/{acknowledgment_id}/reading-time", response_model=dict)
+@router.post("/{acknowledgment_id}/reading-time", response_model=UpdateReadingTimeResponse)
 async def update_reading_time(
     acknowledgment_id: int,
     db: DbSession,
@@ -173,6 +183,7 @@ async def record_acknowledgment(
     current_user: CurrentUser,
 ):
     """Record a user's acknowledgment of a policy."""
+    _span = tracer.start_span("record_acknowledgment") if tracer else None
     service = PolicyAcknowledgmentService(db)
 
     ip_address = request.client.host if request.client else None
@@ -191,6 +202,9 @@ async def record_acknowledgment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
 
     track_metric("policy_acknowledgment.recorded")
+    track_metric("policy.acknowledged", 1)
+    if _span:
+        _span.end()
     return PolicyAcknowledgmentResponse.from_orm(ack)
 
 
@@ -227,7 +241,7 @@ async def get_compliance_dashboard(
     return ComplianceDashboardResponse(**dashboard)
 
 
-@router.post("/check-overdue", response_model=dict)
+@router.post("/check-overdue", response_model=CheckOverdueAcknowledgmentsResponse)
 async def check_overdue_acknowledgments(
     db: DbSession,
     current_user: CurrentUser,
@@ -242,7 +256,7 @@ async def check_overdue_acknowledgments(
     }
 
 
-@router.get("/reminders-needed", response_model=dict)
+@router.get("/reminders-needed", response_model=GetRemindersNeededResponse)
 async def get_reminders_needed(
     db: DbSession,
     current_user: CurrentUser,

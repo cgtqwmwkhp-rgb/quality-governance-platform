@@ -112,6 +112,36 @@ class MyReportsResponse(BaseModel):
     page_size: int
 
 
+class QRCodeResponse(BaseModel):
+    """QR code data for report tracking."""
+
+    reference_number: str
+    tracking_url: str
+    qr_data: str
+
+
+class ReportTypeItem(BaseModel):
+    id: str
+    label: str
+    description: str
+    icon: str
+    color: str
+
+
+class SeverityLevelItem(BaseModel):
+    id: str
+    label: str
+    description: str
+    color: str
+
+
+class ReportTypesResponse(BaseModel):
+    """Available report types and severity levels."""
+
+    report_types: list[ReportTypeItem]
+    severity_levels: list[SeverityLevelItem]
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -187,6 +217,7 @@ async def submit_quick_report(
     Anonymous reports can be tracked using the returned tracking_code.
     """
     track_metric("portal.submission", 1, {"report_type": report.report_type})
+    track_metric("portal.reports_submitted", 1)
     tracking_code = generate_tracking_code()
     # Hash stored for future secure lookup functionality
     _ = hash_tracking_code(tracking_code)  # noqa: F841
@@ -598,7 +629,7 @@ async def get_portal_stats(db: DbSession):
 
 @router.get(
     "/qr/{reference_number}/",
-    response_model=dict,
+    response_model=QRCodeResponse,
     summary="Generate QR Code",
     description="Generate a QR code for quick access to report status.",
 )
@@ -620,7 +651,7 @@ async def generate_qr_code(reference_number: str):
 
 @router.get(
     "/report-types/",
-    response_model=dict,
+    response_model=ReportTypesResponse,
     summary="Get Report Types",
     description="Get available report types and categories.",
 )

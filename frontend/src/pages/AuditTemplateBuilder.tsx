@@ -27,6 +27,7 @@ import {
   AuditQuestion as ApiQuestion, AuditTemplateUpdate,
 } from '../api/client';
 import AITemplateGenerator from '../components/AITemplateGenerator';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 
 // ============================================================================
 // CONSTANTS
@@ -1166,14 +1167,10 @@ export default function AuditTemplateBuilder() {
     [template?.sections]
   );
 
-  // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">{isEditing ? 'Loading template...' : 'Creating template...'}</p>
-        </div>
+      <div className="p-6">
+        <CardSkeleton count={2} />
       </div>
     );
   }

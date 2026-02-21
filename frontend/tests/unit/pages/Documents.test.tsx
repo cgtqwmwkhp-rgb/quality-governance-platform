@@ -47,14 +47,33 @@ vi.mock('../../../src/components/ui/Select', () => ({
 }));
 
 describe('Documents', () => {
-  it('renders without crashing', async () => {
+  it('renders the Document Library heading', async () => {
     render(
       <MemoryRouter>
         <Documents />
       </MemoryRouter>
     );
+    expect(await screen.findByText('Document Library')).toBeInTheDocument();
+  });
 
-    const heading = await screen.findByText('Document Library');
-    expect(heading).toBeTruthy();
+  it('renders search input', async () => {
+    render(
+      <MemoryRouter>
+        <Documents />
+      </MemoryRouter>
+    );
+    await screen.findByText('Document Library');
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+  });
+
+  it('renders Upload Document button', async () => {
+    render(
+      <MemoryRouter>
+        <Documents />
+      </MemoryRouter>
+    );
+    await screen.findByText('Document Library');
+    const uploads = screen.getAllByText(/Upload/i);
+    expect(uploads.length).toBeGreaterThanOrEqual(1);
   });
 });

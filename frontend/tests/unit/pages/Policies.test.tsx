@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Policies from '../../../src/pages/Policies';
 
@@ -38,14 +39,45 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('Policies', () => {
-  it('renders without crashing', async () => {
+  it('renders the Policies & Documents heading', async () => {
     render(
       <MemoryRouter>
         <Policies />
       </MemoryRouter>
     );
+    expect(await screen.findByText('Policies & Documents')).toBeInTheDocument();
+  });
 
-    const heading = await screen.findByText('Policies & Documents');
-    expect(heading).toBeTruthy();
+  it('renders the New Policy button', async () => {
+    render(
+      <MemoryRouter>
+        <Policies />
+      </MemoryRouter>
+    );
+    await screen.findByText('Policies & Documents');
+    expect(screen.getByText('New Document')).toBeInTheDocument();
+  });
+
+  it('renders search input', async () => {
+    render(
+      <MemoryRouter>
+        <Policies />
+      </MemoryRouter>
+    );
+    await screen.findByText('Policies & Documents');
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+  });
+
+  it('opens create dialog when New Document is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Policies />
+      </MemoryRouter>
+    );
+    await screen.findByText('Policies & Documents');
+    await user.click(screen.getByText('New Document'));
+    const matches = screen.getAllByText(/New Document/);
+    expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 });

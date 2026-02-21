@@ -20,6 +20,7 @@ import {
 import { Card } from '../../components/ui/Card';
 import { cn } from '../../helpers/utils';
 import { useToast, ToastContainer } from '../../components/ui/Toast';
+import { CardSkeleton } from '../../components/ui/SkeletonLoader';
 import { usersApi, auditTrailApi, actionsApi } from '../../api/client';
 
 interface QuickAction {
@@ -150,8 +151,8 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="p-6">
+        <CardSkeleton count={3} />
       </div>
     );
   }

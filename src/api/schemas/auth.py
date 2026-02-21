@@ -42,3 +42,27 @@ class PasswordResetConfirm(BaseModel):
 
     token: str
     new_password: str = Field(..., min_length=8, max_length=100)
+
+
+class LogoutResponse(BaseModel):
+    """Response after successfully revoking tokens."""
+
+    message: str
+
+
+class ChangePasswordResponse(BaseModel):
+    """Response after password change."""
+
+    message: str
+
+
+class RequestPasswordResetResponse(BaseModel):
+    """Response after requesting a password reset email."""
+
+    message: str
+
+
+class ConfirmPasswordResetResponse(BaseModel):
+    """Response after confirming a password reset."""
+
+    message: str

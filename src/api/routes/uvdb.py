@@ -19,6 +19,21 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.uvdb import (
+    AddKPIResponse,
+    CreateAuditResponse,
+    CreateAuditResponseResponse,
+    GetAuditKPIsResponse,
+    GetAuditResponse,
+    GetAuditResponsesResponse,
+    GetDashboardResponse,
+    GetISOCrossMappingResponse,
+    GetSectionQuestionsResponse,
+    ListAuditsResponse,
+    ListSectionsResponse,
+    ProtocolResponse,
+    UpdateAuditResponse,
+)
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -444,7 +459,7 @@ class KPICreate(BaseModel):
 # ============ Protocol Structure Endpoints ============
 
 
-@router.get("/protocol", response_model=dict)
+@router.get("/protocol", response_model=ProtocolResponse)
 async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
     """Get the complete UVDB B2 Audit Protocol structure"""
     return {
@@ -469,7 +484,7 @@ async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
     }
 
 
-@router.get("/sections", response_model=dict)
+@router.get("/sections", response_model=ListSectionsResponse)
 async def list_sections(
     current_user: CurrentUser,
     db: DbSession,
@@ -494,7 +509,7 @@ async def list_sections(
     }
 
 
-@router.get("/sections/{section_number}/questions", response_model=dict)
+@router.get("/sections/{section_number}/questions", response_model=GetSectionQuestionsResponse)
 async def get_section_questions(
     section_number: str,
     current_user: CurrentUser,
@@ -522,7 +537,7 @@ async def get_section_questions(
 # ============ Audit Management ============
 
 
-@router.get("/audits", response_model=dict)
+@router.get("/audits", response_model=ListAuditsResponse)
 async def list_audits(
     current_user: CurrentUser,
     db: DbSession,
@@ -531,7 +546,9 @@ async def list_audits(
     company_name: Optional[str] = Query(None),
 ) -> dict[str, Any]:
     """List UVDB audits"""
-    stmt = select(UVDBAudit).options(selectinload(UVDBAudit.responses))
+    stmt = select(UVDBAudit).options(selectinload(UVDBAudit.responses)).where(
+        UVDBAudit.tenant_id == current_user.tenant_id
+    )
 
     if status:
         stmt = stmt.where(UVDBAudit.status == status)
@@ -562,7 +579,7 @@ async def list_audits(
     }
 
 
-@router.post("/audits", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/audits", response_model=CreateAuditResponse, status_code=status.HTTP_201_CREATED)
 async def create_audit(
     audit_data: AuditCreate,
     current_user: CurrentUser,
@@ -589,14 +606,14 @@ async def create_audit(
     }
 
 
-@router.get("/audits/{audit_id}", response_model=dict)
+@router.get("/audits/{audit_id}", response_model=GetAuditResponse)
 async def get_audit(
     audit_id: int,
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict[str, Any]:
     """Get audit details"""
-    audit = await get_or_404(db, UVDBAudit, audit_id)
+    audit = await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
     return {
         "id": audit.id,
@@ -629,7 +646,7 @@ async def get_audit(
     }
 
 
-@router.put("/audits/{audit_id}", response_model=dict)
+@router.put("/audits/{audit_id}", response_model=UpdateAuditResponse)
 async def update_audit(
     audit_id: int,
     audit_data: AuditUpdate,
@@ -637,7 +654,7 @@ async def update_audit(
     db: DbSession,
 ) -> dict[str, Any]:
     """Update audit"""
-    audit = await get_or_404(db, UVDBAudit, audit_id)
+    audit = await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
     apply_updates(audit, audit_data)
     await db.flush()
@@ -648,7 +665,7 @@ async def update_audit(
 # ============ Audit Responses ============
 
 
-@router.post("/audits/{audit_id}/responses", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/audits/{audit_id}/responses", response_model=CreateAuditResponseResponse, status_code=status.HTTP_201_CREATED)
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
@@ -656,7 +673,7 @@ async def create_response(
     db: DbSession,
 ) -> dict[str, Any]:
     """Record an audit response"""
-    await get_or_404(db, UVDBAudit, audit_id)
+    await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
     response = UVDBAuditResponse(
         audit_id=audit_id,
@@ -669,14 +686,14 @@ async def create_response(
     return {"id": response.id, "message": "Response recorded"}
 
 
-@router.get("/audits/{audit_id}/responses", response_model=dict)
+@router.get("/audits/{audit_id}/responses", response_model=GetAuditResponsesResponse)
 async def get_audit_responses(
     audit_id: int,
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict[str, Any]:
     """Get all responses for an audit"""
-    await get_or_404(db, UVDBAudit, audit_id)
+    await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
     result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
     responses = result.scalars().all()
@@ -701,7 +718,7 @@ async def get_audit_responses(
 # ============ KPI Management ============
 
 
-@router.post("/audits/{audit_id}/kpis", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/audits/{audit_id}/kpis", response_model=AddKPIResponse, status_code=status.HTTP_201_CREATED)
 async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
@@ -709,7 +726,7 @@ async def add_kpi_record(
     db: DbSession,
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
-    await get_or_404(db, UVDBAudit, audit_id)
+    await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
     ltifr = UVDBService.calculate_ltifr(
         kpi_data.lost_time_incidents_1_7_days,
@@ -729,7 +746,7 @@ async def add_kpi_record(
     return {"id": kpi.id, "message": "KPI record added", "ltifr": ltifr}
 
 
-@router.get("/audits/{audit_id}/kpis", response_model=dict)
+@router.get("/audits/{audit_id}/kpis", response_model=GetAuditKPIsResponse)
 async def get_audit_kpis(
     audit_id: int,
     current_user: CurrentUser,
@@ -767,7 +784,7 @@ async def get_audit_kpis(
 # ============ ISO Cross-Mapping ============
 
 
-@router.get("/iso-mapping", response_model=dict)
+@router.get("/iso-mapping", response_model=GetISOCrossMappingResponse)
 async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     """Get cross-mapping between UVDB sections and ISO standards"""
     mappings = []
@@ -805,7 +822,7 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
 # ============ Dashboard ============
 
 
-@router.get("/dashboard", response_model=dict)
+@router.get("/dashboard", response_model=GetDashboardResponse)
 async def get_uvdb_dashboard(
     current_user: CurrentUser,
     db: DbSession,

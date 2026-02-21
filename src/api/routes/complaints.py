@@ -9,7 +9,13 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
+from src.api.schemas.complaint import (
+    ComplaintCreate,
+    ComplaintInvestigationsResponse,
+    ComplaintListResponse,
+    ComplaintResponse,
+    ComplaintUpdate,
+)
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
@@ -22,7 +28,6 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -163,11 +168,7 @@ async def list_complaints(
         )
 
     try:
-        query = (
-            select(Complaint)
-            .options(selectinload(Complaint.actions))
-            .where(Complaint.tenant_id == current_user.tenant_id)
-        )
+        query = select(Complaint).options(selectinload(Complaint.actions)).where(Complaint.tenant_id == current_user.tenant_id)
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -243,7 +244,7 @@ async def update_complaint(
     return complaint
 
 
-@router.get("/{complaint_id}/investigations", response_model=dict)
+@router.get("/{complaint_id}/investigations", response_model=ComplaintInvestigationsResponse)
 async def list_complaint_investigations(
     complaint_id: int,
     db: DbSession,

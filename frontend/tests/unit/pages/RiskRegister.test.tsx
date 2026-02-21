@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import RiskRegister from '../../../src/pages/RiskRegister';
 
@@ -71,15 +72,13 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('RiskRegister', () => {
-  it('renders without crashing', async () => {
+  it('renders the Enterprise Risk Register heading', async () => {
     render(
       <MemoryRouter>
         <RiskRegister />
       </MemoryRouter>
     );
-
-    const heading = await screen.findByText('Enterprise Risk Register', {}, { timeout: 5000 });
-    expect(heading).toBeTruthy();
+    expect(await screen.findByText('Enterprise Risk Register', {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('renders the Add Risk button', async () => {
@@ -88,8 +87,28 @@ describe('RiskRegister', () => {
         <RiskRegister />
       </MemoryRouter>
     );
+    expect(await screen.findByText('Add Risk', {}, { timeout: 5000 })).toBeInTheDocument();
+  });
 
+  it('renders the Heat Map view toggle', async () => {
+    render(
+      <MemoryRouter>
+        <RiskRegister />
+      </MemoryRouter>
+    );
+    await screen.findByText('Enterprise Risk Register', {}, { timeout: 5000 });
+    expect(screen.getByText(/Heat Map/i)).toBeInTheDocument();
+  });
+
+  it('opens Add Risk dialog when button is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <RiskRegister />
+      </MemoryRouter>
+    );
     const addBtn = await screen.findByText('Add Risk', {}, { timeout: 5000 });
-    expect(addBtn).toBeTruthy();
+    await user.click(addBtn);
+    expect(screen.getByText(/Add New Risk/i)).toBeInTheDocument();
   });
 });

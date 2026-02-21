@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.schemas.investigation import InvestigationRunListResponse
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
@@ -85,15 +86,11 @@ async def list_near_misses(
 
     Ordered by event_date DESC, id ASC for deterministic results.
     """
-    query = (
-        select(NearMiss)
-        .where(NearMiss.tenant_id == current_user.tenant_id)
-        .options(
-            selectinload(NearMiss.assigned_to),
-            selectinload(NearMiss.created_by),
-            selectinload(NearMiss.updated_by),
-            selectinload(NearMiss.closed_by),
-        )
+    query = select(NearMiss).where(NearMiss.tenant_id == current_user.tenant_id).options(
+        selectinload(NearMiss.assigned_to),
+        selectinload(NearMiss.created_by),
+        selectinload(NearMiss.updated_by),
+        selectinload(NearMiss.closed_by),
     )
 
     if reporter_email:
@@ -158,11 +155,7 @@ async def update_near_miss(
         entity_id=str(near_miss.id),
         action="update",
         description=f"Near Miss {near_miss.reference_number} updated",
-        payload={
-            "updates": update_data,
-            "old_status": old_status,
-            "new_status": near_miss.status,
-        },
+        payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
         user_id=current_user.id,
         request_id=request_id,
     )
@@ -178,7 +171,7 @@ async def update_near_miss(
 async def delete_near_miss(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
@@ -202,7 +195,7 @@ async def delete_near_miss(
     track_metric("near_miss.mutation", 1)
 
 
-@router.get("/{near_miss_id}/investigations", response_model=dict)
+@router.get("/{near_miss_id}/investigations", response_model=InvestigationRunListResponse)
 async def list_near_miss_investigations(
     near_miss_id: int,
     db: DbSession,

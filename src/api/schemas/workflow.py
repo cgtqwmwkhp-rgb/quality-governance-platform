@@ -129,6 +129,9 @@ class RuleExecutionListResponse(BaseModel):
 
     items: List[RuleExecutionResponse]
     total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 # SLA Configuration Schemas
@@ -193,6 +196,9 @@ class SLAConfigurationListResponse(BaseModel):
 
     items: List[SLAConfigurationResponse]
     total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 # SLA Tracking Schemas
@@ -288,6 +294,9 @@ class EscalationLevelListResponse(BaseModel):
 
     items: List[EscalationLevelResponse]
     total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 # Condition Builder Helper Schema
@@ -305,3 +314,13 @@ class ConditionGroupSchema(BaseModel):
     and_conditions: Optional[List["ConditionSchema"]] = Field(None, alias="and")
     or_conditions: Optional[List["ConditionSchema"]] = Field(None, alias="or")
     not_condition: Optional["ConditionSchema"] = Field(None, alias="not")
+
+
+class SLACheckResponse(BaseModel):
+    """Response for manual SLA/escalation check trigger."""
+
+    message: str
+    escalations_processed: int
+    sla_events: int
+    escalation_details: List[Any] = []
+    sla_details: List[Any] = []

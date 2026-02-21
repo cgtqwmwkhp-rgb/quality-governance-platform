@@ -17,6 +17,7 @@ from src.api.schemas.auditor_competence import (
     AuditorProfileUpdateResponse,
     CertificationCreateResponse,
     CertificationListResponse,
+    CompetenceDashboardResponse,
     CompetenceScoreResponse,
     CompetencyAssessmentResponse,
     CompetencyGapsResponse,
@@ -187,11 +188,7 @@ async def calculate_competence_score(
 # =============================================================================
 
 
-@router.post(
-    "/profiles/{user_id}/certifications",
-    status_code=status.HTTP_201_CREATED,
-    response_model=CertificationCreateResponse,
-)
+@router.post("/profiles/{user_id}/certifications", status_code=status.HTTP_201_CREATED, response_model=CertificationCreateResponse)
 async def add_certification(
     user_id: int,
     request: AddCertificationRequest,
@@ -432,7 +429,7 @@ async def find_qualified_auditors(
 # =============================================================================
 
 
-@router.get("/dashboard", response_model=dict)
+@router.get("/dashboard", response_model=CompetenceDashboardResponse)
 async def get_competence_dashboard(
     db: DbSession,
     current_user: CurrentUser,

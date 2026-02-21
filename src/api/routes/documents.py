@@ -37,7 +37,6 @@ from src.infrastructure.storage import StorageError, storage_service
 
 try:
     from opentelemetry import trace
-
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -120,6 +119,14 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
     total: int
     latency_ms: int
+
+
+class DocumentStatsResponse(BaseModel):
+    total_documents: int
+    indexed_documents: int
+    total_chunks: int
+    by_status: dict
+    by_type: dict
 
 
 class AnnotationCreate(BaseModel):
@@ -333,16 +340,12 @@ async def list_documents(
 ):
     """List documents with filtering and pagination."""
 
-    query = (
-        select(Document)
-        .options(
-            selectinload(Document.annotations),
-            selectinload(Document.versions),
-        )
-        .where(
-            Document.is_active == True,
-            Document.tenant_id == current_user.tenant_id,
-        )
+    query = select(Document).options(
+        selectinload(Document.annotations),
+        selectinload(Document.versions),
+    ).where(
+        Document.is_active == True,
+        Document.tenant_id == current_user.tenant_id,
     )
 
     if search:
@@ -542,7 +545,7 @@ async def create_annotation(
 # =============================================================================
 
 
-@router.get("/stats/overview", response_model=dict)
+@router.get("/stats/overview", response_model=DocumentStatsResponse)
 async def get_document_stats(
     db: DbSession,
     current_user: CurrentUser,

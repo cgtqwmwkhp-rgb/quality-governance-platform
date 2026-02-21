@@ -11,9 +11,23 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.copilot import (
+    ActionDetailResponse,
+    AddKnowledgeResponse,
+    CloseSessionResponse,
+    ExecuteActionResponse,
+    SearchKnowledgeResponse,
+    SubmitFeedbackResponse,
+)
 from src.api.schemas.error_codes import ErrorCode
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -93,6 +107,7 @@ async def create_session(
     current_user: CurrentUser,
 ):
     """Create a new copilot conversation session."""
+    _span = tracer.start_span("create_copilot_session") if tracer else None
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
@@ -101,6 +116,7 @@ async def create_session(
     user_id = current_user.id
 
     track_metric("copilot.session_created")
+    track_metric("copilot.sessions_created", 1)
     session = await service.create_session(
         tenant_id=tenant_id,
         user_id=user_id,
@@ -110,6 +126,8 @@ async def create_session(
         current_page=data.current_page,
     )
 
+    if _span:
+        _span.end()
     return session
 
 
@@ -140,15 +158,15 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     return session
 
 
-@router.delete("/sessions/{session_id}", response_model=dict)
-async def close_session(session_id: int, db: DbSession, current_user: CurrentUser):
+@router.delete("/sessions/{session_id}", response_model=CloseSessionResponse)
+async def close_session(session_id: int, db: DbSession, current_user: CurrentSuperuser):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
     await service.close_session(session_id)
 
-    return {"status": "closed"}
+    return CloseSessionResponse(status="closed")
 
 
 @router.get("/sessions", response_model=list[SessionResponse])
@@ -220,7 +238,7 @@ async def get_messages(
     return messages
 
 
-@router.post("/messages/{message_id}/feedback", response_model=dict)
+@router.post("/messages/{message_id}/feedback", response_model=SubmitFeedbackResponse)
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
@@ -244,7 +262,7 @@ async def submit_feedback(
             feedback_type=data.feedback_type,
             feedback_text=data.feedback_text,
         )
-        return {"status": "submitted", "feedback_id": feedback.id}
+        return SubmitFeedbackResponse(status="submitted", feedback_id=feedback.id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
@@ -254,7 +272,7 @@ async def submit_feedback(
 # ============================================================================
 
 
-@router.get("/actions", response_model=list[dict])
+@router.get("/actions", response_model=list[ActionDetailResponse])
 async def list_actions(current_user: CurrentUser, category: Optional[str] = None):
     """List available copilot actions."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
@@ -267,7 +285,7 @@ async def list_actions(current_user: CurrentUser, category: Optional[str] = None
     return actions
 
 
-@router.post("/actions/execute", response_model=dict)
+@router.post("/actions/execute", response_model=ExecuteActionResponse)
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
@@ -279,12 +297,12 @@ async def execute_action(
     if data.action_name not in COPILOT_ACTIONS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
-    return {
-        "status": "executed",
-        "action": data.action_name,
-        "parameters": data.parameters,
-        "result": {"success": True},
-    }
+    return ExecuteActionResponse(
+        status="executed",
+        action=data.action_name,
+        parameters=data.parameters,
+        result={"success": True},
+    )
 
 
 @router.get("/actions/suggest", response_model=list[SuggestedAction])
@@ -367,7 +385,7 @@ async def suggest_actions(
 # ============================================================================
 
 
-@router.get("/knowledge/search", response_model=list[dict])
+@router.get("/knowledge/search", response_model=list[SearchKnowledgeResponse])
 async def search_knowledge(
     db: DbSession,
     current_user: CurrentUser,
@@ -390,18 +408,18 @@ async def search_knowledge(
     )
 
     return [
-        {
-            "id": r.id,
-            "title": r.title,
-            "content": r.content[:500],
-            "category": r.category,
-            "tags": r.tags,
-        }
+        SearchKnowledgeResponse(
+            id=r.id,
+            title=r.title,
+            content=r.content[:500],
+            category=r.category,
+            tags=r.tags,
+        )
         for r in results
     ]
 
 
-@router.post("/knowledge", response_model=dict)
+@router.post("/knowledge", response_model=AddKnowledgeResponse)
 async def add_knowledge(
     title: str,
     content: str,
@@ -425,7 +443,7 @@ async def add_knowledge(
         tags=tags,
     )
 
-    return {"id": knowledge.id, "title": knowledge.title}
+    return AddKnowledgeResponse(id=knowledge.id, title=knowledge.title)
 
 
 # ============================================================================
@@ -465,7 +483,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
         return
     try:
         from src.core.security import decode_token, is_token_revoked
-
         payload = decode_token(token)
         if not payload:
             await websocket.close(code=4001, reason="Invalid token")

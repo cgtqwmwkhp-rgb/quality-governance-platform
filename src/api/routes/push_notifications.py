@@ -22,9 +22,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.push_notification import (
+    GetNotificationPreferencesResponse,
+    SendNotificationResponse,
+    SubscribePushNotificationResponse,
+    TestNotificationResponse,
+    UnsubscribePushNotificationResponse,
+    UpdateNotificationPreferencesResponse,
+)
 from src.api.utils.update import apply_updates
 from src.infrastructure.database import Base
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter(tags=["Push Notifications"])
 
@@ -342,7 +356,7 @@ class PushNotificationService:
 # ============================================================================
 
 
-@router.post("/subscribe", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/subscribe", response_model=SubscribePushNotificationResponse, status_code=status.HTTP_201_CREATED)
 async def subscribe_to_push(
     subscription: PushSubscriptionCreate,
     db: DbSession,
@@ -364,7 +378,7 @@ async def subscribe_to_push(
     }
 
 
-@router.delete("/unsubscribe", response_model=dict)
+@router.delete("/unsubscribe", response_model=UnsubscribePushNotificationResponse)
 async def unsubscribe_from_push(
     endpoint: str,
     db: DbSession,
@@ -379,7 +393,7 @@ async def unsubscribe_from_push(
     return {"success": True, "message": "Unsubscribed from push notifications"}
 
 
-@router.get("/preferences", response_model=dict)
+@router.get("/preferences", response_model=GetNotificationPreferencesResponse)
 async def get_notification_preferences(
     db: DbSession,
     current_user: CurrentUser,
@@ -416,7 +430,7 @@ async def get_notification_preferences(
     }
 
 
-@router.put("/preferences", response_model=dict)
+@router.put("/preferences", response_model=UpdateNotificationPreferencesResponse)
 async def update_notification_preferences(
     updates: NotificationPreferenceUpdate,
     db: DbSession,
@@ -437,13 +451,14 @@ async def update_notification_preferences(
     return {"success": True, "message": "Preferences updated"}
 
 
-@router.post("/send", response_model=dict)
+@router.post("/send", response_model=SendNotificationResponse)
 async def send_notification(
     request: SendNotificationRequest,
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
+    _span = tracer.start_span("send_push_notification") if tracer else None
     track_metric("push_notifications.sent")
 
     service = PushNotificationService(db)
@@ -477,13 +492,15 @@ async def send_notification(
             notification_type=request.notification_type,
         )
 
+    if _span:
+        _span.end()
     return {
         "success": True,
         "results": results,
     }
 
 
-@router.get("/test", response_model=dict)
+@router.get("/test", response_model=TestNotificationResponse)
 async def test_push_notification(
     db: DbSession,
     current_user: CurrentUser,

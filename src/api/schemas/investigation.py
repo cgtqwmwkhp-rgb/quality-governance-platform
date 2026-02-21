@@ -181,8 +181,7 @@ class CreateFromRecordRequest(BaseModel):
     """Request schema for creating investigation from source record."""
 
     source_type: str = Field(
-        ...,
-        description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)",
+        ..., description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)"
     )
     source_id: int = Field(..., gt=0, description="Source record ID")
     title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
@@ -311,6 +310,21 @@ class PackListResponse(BaseModel):
     page: int
     page_size: int
     investigation_id: int
+
+
+class CustomerPackGeneratedResponse(BaseModel):
+    """Response schema for a generated customer pack."""
+
+    pack_id: int
+    pack_uuid: str
+    audience: str
+    investigation_id: int
+    investigation_reference: Optional[str] = None
+    generated_at: Optional[str] = None
+    content: Optional[Dict[str, Any]] = None
+    redaction_log: Optional[List[Any]] = None
+    included_assets: Optional[List[Any]] = None
+    checksum: Optional[str] = None
 
 
 class AutosaveRequest(BaseModel):

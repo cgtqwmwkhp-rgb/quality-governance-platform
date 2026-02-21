@@ -106,3 +106,7 @@ class QualifiedAuditorsResponse(BaseModel):
     qualified_count: int
     qualified_auditors: List[Any]
     not_qualified_auditors: List[Any]
+
+
+class CompetenceDashboardResponse(BaseModel):
+    model_config = {"extra": "allow"}
