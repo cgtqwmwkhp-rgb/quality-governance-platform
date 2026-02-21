@@ -874,7 +874,10 @@ class AuditReportGenerator:
 
     async def generate_executive_summary(self, audit_id: int) -> str:
         """Generate executive summary for audit"""
-        from src.domain.models.audit import Audit, AuditFinding  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+        from src.domain.models.audit import (  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            Audit,
+            AuditFinding,
+        )
 
         result = await self.db.execute(select(Audit).where(Audit.id == audit_id))
         audit = result.scalar_one_or_none()
@@ -975,7 +978,10 @@ class AuditTrendAnalyzer:
 
     async def get_finding_trends(self, months: int = 24) -> dict[str, Any]:
         """Analyze finding trends over time"""
-        from src.domain.models.audit import Audit, AuditFinding  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+        from src.domain.models.audit import (  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            Audit,
+            AuditFinding,
+        )
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
 
