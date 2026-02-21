@@ -35,11 +35,13 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     global _audits_completed, _audit_findings
     global _api_response_time, _db_query_time, _cache_hit_rate
 
-    resource = Resource.create({
-        "service.name": service_name,
-        "service.version": os.getenv("APP_VERSION", "1.0.0"),
-        "deployment.environment": os.getenv("ENVIRONMENT", "development"),
-    })
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.version": os.getenv("APP_VERSION", "1.0.0"),
+            "deployment.environment": os.getenv("ENVIRONMENT", "development"),
+        }
+    )
 
     tracer_provider = TracerProvider(resource=resource)
 
@@ -50,6 +52,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
                 AzureMonitorMetricExporter,
                 AzureMonitorTraceExporter,
             )
+
             trace_exporter = AzureMonitorTraceExporter(connection_string=connection_string)
             tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
 
@@ -68,37 +71,29 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     _tracer = trace.get_tracer(__name__)
     _meter = metrics.get_meter(__name__)
 
-    _incidents_created = _meter.create_counter(
-        "incidents.created", description="Number of incidents created"
-    )
-    _incidents_resolved = _meter.create_counter(
-        "incidents.resolved", description="Number of incidents resolved"
-    )
-    _audits_completed = _meter.create_counter(
-        "audits.completed", description="Number of audits completed"
-    )
-    _audit_findings = _meter.create_counter(
-        "audits.findings", description="Number of audit findings"
-    )
+    _incidents_created = _meter.create_counter("incidents.created", description="Number of incidents created")
+    _incidents_resolved = _meter.create_counter("incidents.resolved", description="Number of incidents resolved")
+    _audits_completed = _meter.create_counter("audits.completed", description="Number of audits completed")
+    _audit_findings = _meter.create_counter("audits.findings", description="Number of audit findings")
     _api_response_time = _meter.create_histogram(
         "api.response_time_ms", description="API response time in milliseconds", unit="ms"
     )
     _db_query_time = _meter.create_histogram(
         "db.query_time_ms", description="Database query time in milliseconds", unit="ms"
     )
-    _cache_hit_rate = _meter.create_up_down_counter(
-        "cache.operations", description="Cache hit/miss counter"
-    )
+    _cache_hit_rate = _meter.create_up_down_counter("cache.operations", description="Cache hit/miss counter")
 
     if app:
         FastAPIInstrumentor.instrument_app(app)
         try:
             from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
             SQLAlchemyInstrumentor().instrument()
         except ImportError:
             pass
         try:
             from opentelemetry.instrumentation.redis import RedisInstrumentor
+
             RedisInstrumentor().instrument()
         except ImportError:
             pass
