@@ -19,6 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.document import (
@@ -33,6 +34,13 @@ from src.domain.models.document import (
 )
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.infrastructure.storage import StorageError, storage_service
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -150,11 +158,7 @@ class AnnotationResponse(BaseModel):
 # =============================================================================
 
 
-@router.post(
-    "/upload",
-    response_model=DocumentUploadResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     db: DbSession,
     current_user: CurrentUser,
@@ -167,6 +171,9 @@ async def upload_document(
     sensitivity: str = Form("internal"),
 ):
     """Upload and process a new document."""
+    _span = tracer.start_span("upload_document") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(getattr(current_user, "tenant_id", 0) or 0))
 
     file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
     try:
@@ -174,7 +181,7 @@ async def upload_document(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     content = await file.read()
@@ -295,6 +302,8 @@ async def upload_document(
         doc.indexing_error = str(e)
         await db.commit()
 
+    if _span:
+        _span.end()
     return DocumentUploadResponse(
         id=doc.id,
         reference_number=doc.reference_number,
@@ -381,7 +390,7 @@ async def get_document(
     current_user: CurrentUser,
 ):
     """Get document details."""
-    document = await get_or_404(db, Document, document_id)
+    document = await get_or_404(db, Document, document_id, tenant_id=current_user.tenant_id)
 
     document.view_count += 1
     document.last_accessed_at = datetime.utcnow()
@@ -507,7 +516,7 @@ async def create_annotation(
     current_user: CurrentUser,
 ):
     """Create an annotation on a document."""
-    await get_or_404(db, Document, document_id)
+    await get_or_404(db, Document, document_id, tenant_id=current_user.tenant_id)
 
     annotation = DocumentAnnotation(
         document_id=document_id,
@@ -533,7 +542,7 @@ async def create_annotation(
 # =============================================================================
 
 
-@router.get("/stats/overview")
+@router.get("/stats/overview", response_model=dict)
 async def get_document_stats(
     db: DbSession,
     current_user: CurrentUser,

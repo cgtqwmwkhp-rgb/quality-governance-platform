@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.rta import (
     RTAActionCreate,
     RTAActionListResponse,
@@ -100,7 +101,7 @@ async def list_rtas(
             if user_email and reporter_email.lower() != user_email.lower():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only view your own RTAs",
+                    detail=ErrorCode.PERMISSION_DENIED,
                 )
 
         await record_audit_event(
@@ -148,25 +149,18 @@ async def list_rtas(
         error_str = str(e).lower()
         logger.exception(f"Error listing RTAs: {e}")
 
-        column_errors = [
-            "reporter_email",
-            "column",
-            "does not exist",
-            "unknown column",
-            "programmingerror",
-            "relation",
-        ]
+        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database migration pending. Please wait for migrations to complete.",
+                detail=ErrorCode.INTERNAL_ERROR,
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing RTAs: {type(e).__name__}: {str(e)[:200]}",
+            detail=ErrorCode.INTERNAL_ERROR,
         )
 
 
@@ -242,11 +236,7 @@ async def delete_rta(
 # RTA Actions endpoints
 
 
-@router.post(
-    "/{rta_id}/actions",
-    response_model=RTAActionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{rta_id}/actions", response_model=RTAActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,
@@ -325,7 +315,7 @@ async def update_rta_action(
     if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Action with id {action_id} not found for RTA {rta_id}",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     update_data = apply_updates(action, action_in)
@@ -362,7 +352,7 @@ async def delete_rta_action(
     if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Action with id {action_id} not found for RTA {rta_id}",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     await record_audit_event(

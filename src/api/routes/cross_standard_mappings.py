@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class MappingUpdate(BaseModel):
     annex_sl_element: str | None = None
 
 
-@router.get("")
+@router.get("", response_model=dict)
 async def list_mappings(
     db: DbSession,
     current_user: CurrentUser,
@@ -72,10 +73,11 @@ async def list_mappings(
 
     result = await db.execute(query)
     rows = result.scalars().all()
+    track_metric("cross_standard_mappings.accessed")
     return [MappingResponse.model_validate(r) for r in rows]
 
 
-@router.get("/standards")
+@router.get("/standards", response_model=dict)
 async def list_standards(
     db: DbSession,
     current_user: CurrentUser,
@@ -89,7 +91,7 @@ async def list_standards(
     return {"standards": all_standards}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_mapping(
     data: MappingCreate,
     db: DbSession,

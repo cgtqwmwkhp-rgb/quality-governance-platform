@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import (
     RoleCreate,
     RoleResponse,
@@ -24,6 +25,13 @@ from src.domain.models.user import Role, User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
 router = APIRouter()
 
 
@@ -34,11 +42,7 @@ router = APIRouter()
 async def search_users(
     db: DbSession,
     current_user: CurrentUser,
-    q: str = Query(
-        ...,
-        min_length=1,
-        description="Search query for email, first name, or last name",
-    ),
+    q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
     search_filter = f"%{q}%"
@@ -98,12 +102,17 @@ async def create_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Create a new user (superuser only)."""
-    # Check if email already exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
+    _span = tracer.start_span("create_user") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
+    # Check if email already exists within this tenant
+    result = await db.execute(
+        select(User).where(User.email == user_data.email, User.tenant_id == current_user.tenant_id)
+    )
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     # Create user
@@ -115,6 +124,7 @@ async def create_user(
         job_title=user_data.job_title,
         department=user_data.department,
         phone=user_data.phone,
+        tenant_id=current_user.tenant_id,
     )
 
     # Assign roles if provided
@@ -139,13 +149,17 @@ async def get_user(
     current_user: CurrentUser,
 ) -> UserResponse:
     """Get a specific user by ID."""
-    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.roles))
+        .where(User.id == user_id, User.tenant_id == current_user.tenant_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     return UserResponse.model_validate(user)
@@ -159,13 +173,17 @@ async def update_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Update a user (superuser only)."""
-    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.roles))
+        .where(User.id == user_id, User.tenant_id == current_user.tenant_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     # Handle role assignment separately
@@ -194,12 +212,12 @@ async def delete_user(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a user (superuser only)."""
-    user = await get_or_404(db, User, user_id)
+    user = await get_or_404(db, User, user_id, tenant_id=current_user.tenant_id)
 
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete your own account",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     user.is_active = False
@@ -234,7 +252,7 @@ async def create_role(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role name already exists",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     role = Role(**role_data.model_dump())
@@ -258,7 +276,7 @@ async def update_role(
     if role.is_system_role:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot modify system roles",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     apply_updates(role, role_data)

@@ -16,15 +16,12 @@ from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.investigation import InvestigationTemplate
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
 
-@router.post(
-    "/",
-    response_model=InvestigationTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/", response_model=InvestigationTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: InvestigationTemplateCreate,
     db: DbSession,
@@ -72,6 +69,7 @@ async def list_templates(
     query = query.order_by(InvestigationTemplate.id)
 
     paginated = await paginate(db, query, params)
+    track_metric("investigation_templates.accessed")
 
     return InvestigationTemplateListResponse(
         items=[InvestigationTemplateResponse.model_validate(t) for t in paginated.items],

@@ -29,6 +29,16 @@ from src.api.schemas.investigation import (
 )
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -38,7 +48,6 @@ from src.domain.models.investigation import (
     InvestigationStatus,
     InvestigationTemplate,
 )
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
 router = APIRouter()
 
@@ -119,6 +128,9 @@ async def create_investigation(
 
     Returns 400 for invalid entity type, 404 for missing template or entity.
     """
+    _span = tracer.start_span("create_investigation") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
     from src.domain.services.investigation_service import get_or_create_default_template
 
     request_id = "N/A"  # TODO: Get from request context
@@ -158,6 +170,9 @@ async def create_investigation(
     await db.commit()
     await db.refresh(investigation)
     await invalidate_tenant_cache(current_user.tenant_id, "investigations")
+    track_metric("investigations.started", 1, {"tenant_id": str(current_user.tenant_id)})
+    if _span:
+        _span.end()
 
     return investigation
 
@@ -259,14 +274,12 @@ async def update_investigation(
     """
     investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
-    # Update fields
+    # setattr kept for status: requires enum conversion (str → InvestigationStatus)
     update_data = investigation_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        if field == "status" and value is not None:
-            setattr(investigation, field, InvestigationStatus(value))
-        else:
-            setattr(investigation, field, value)
+    if "status" in update_data and update_data["status"] is not None:
+        setattr(investigation, "status", InvestigationStatus(update_data["status"]))
 
+    apply_updates(investigation, investigation_data, exclude={"status"})
     investigation.updated_by_id = current_user.id
 
     if investigation_data.status:
@@ -284,11 +297,7 @@ async def update_investigation(
 # === Stage 2 Endpoints ===
 
 
-@router.post(
-    "/from-record",
-    response_model=InvestigationRunResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/from-record", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation_from_record(
     request_body: CreateFromRecordRequest,
     db: DbSession,
@@ -442,8 +451,7 @@ async def list_source_records(
     db: DbSession,
     current_user: CurrentUser,
     source_type: str = Query(
-        ...,
-        description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)",
+        ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
     ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     params: PaginationParams = Depends(),
@@ -569,7 +577,7 @@ async def list_source_records(
                 status=record_status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
-                investigation_reference=(str(existing_inv.reference_number) if existing_inv else None),
+                investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
             )
         )
 
@@ -640,11 +648,7 @@ async def autosave_investigation(
     return investigation
 
 
-@router.post(
-    "/{investigation_id}/comments",
-    status_code=status.HTTP_201_CREATED,
-    response_model=CommentResponse,
-)
+@router.post("/{investigation_id}/comments", status_code=status.HTTP_201_CREATED, response_model=CommentResponse)
 async def add_comment(
     investigation_id: int,
     request_body: CommentCreateRequest,
@@ -747,10 +751,7 @@ async def approve_investigation(
     investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Check status allows approval
-    if investigation.status not in (
-        InvestigationStatus.UNDER_REVIEW,
-        InvestigationStatus.IN_PROGRESS,
-    ):
+    if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={

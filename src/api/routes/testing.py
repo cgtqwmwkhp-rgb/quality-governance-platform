@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.core.config import settings
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
@@ -139,7 +140,7 @@ async def ensure_test_user(
         logger.warning("Attempt to access testing endpoint in non-staging environment")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This endpoint is only available in staging environment",
+            detail=ErrorCode.PERMISSION_DENIED,
         )
 
     # Security check 2: Require CI secret
@@ -148,14 +149,14 @@ async def ensure_test_user(
         logger.warning("CI_TEST_SECRET not configured in staging")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Testing endpoints not configured",
+            detail=ErrorCode.INTERNAL_ERROR,
         )
 
     if not x_ci_secret or x_ci_secret != ci_secret:
         logger.warning("Invalid or missing X-CI-Secret header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid CI secret",
+            detail=ErrorCode.PERMISSION_DENIED,
         )
 
     # Check if user exists - EAGER LOAD roles to avoid MissingGreenlet
@@ -218,7 +219,7 @@ async def ensure_test_user(
     )
 
 
-@router.get("/health")
+@router.get("/health", response_model=dict)
 async def testing_health() -> dict:
     """Check if testing endpoints are available."""
     return {

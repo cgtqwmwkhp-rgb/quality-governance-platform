@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -99,6 +100,7 @@ async def create_session(
     tenant_id = current_user.tenant_id or 0 or 0
     user_id = current_user.id
 
+    track_metric("copilot.session_created")
     session = await service.create_session(
         tenant_id=tenant_id,
         user_id=user_id,
@@ -477,7 +479,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
                     return
 
         ws_user_id = int(payload.get("sub", 0))
-    except Exception:
+    except (WebSocketDisconnect, ConnectionError):
         await websocket.close(code=4001, reason="Token validation failed")
         return
 

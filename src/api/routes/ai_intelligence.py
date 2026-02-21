@@ -16,6 +16,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.ai_intelligence import (
+    AIHealthResponse,
+    AuditTrendsResponse,
+    ExecutiveSummaryResponse,
+    FindingClassificationResponse,
+    FiveWhysResponse,
+    FrequencyAnomalyResponse,
+    TextAnalysisResponse,
+)
 from src.domain.services.ai_audit_service import (
     AuditQuestionGenerator,
     AuditReportGenerator,
@@ -30,6 +39,7 @@ from src.domain.services.ai_predictive_service import (
     RootCauseAnalyzer,
     TextAnalyzer,
 )
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -73,12 +83,13 @@ class BatchFindingRequest(BaseModel):
 # ============ Predictive Analytics Endpoints ============
 
 
-@router.post("/analyze/text", response_model=dict)
+@router.post("/analyze/text", response_model=TextAnalysisResponse)
 async def analyze_text(
     request: TextAnalysisRequest,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Analyze text for keywords, severity, and entities"""
+    track_metric("ai.analysis")
     keywords = TextAnalyzer.extract_keywords(request.text)
     severity = TextAnalyzer.estimate_severity(request.text)
     entities = TextAnalyzer.extract_entities(request.text)
@@ -116,7 +127,7 @@ async def find_similar_incidents(
 # ============ Anomaly Detection Endpoints ============
 
 
-@router.get("/anomalies/frequency", response_model=dict)
+@router.get("/anomalies/frequency", response_model=FrequencyAnomalyResponse)
 async def detect_frequency_anomalies(
     db: DbSession,
     current_user: CurrentUser,
@@ -171,7 +182,7 @@ async def get_incident_clusters(
     return await analyzer.cluster_incidents(lookback_days)
 
 
-@router.post("/root-cause/5-whys", response_model=dict)
+@router.post("/root-cause/5-whys", response_model=FiveWhysResponse)
 async def analyze_5_whys(
     request: FiveWhysRequest,
     db: DbSession,
@@ -237,7 +248,7 @@ async def get_evidence_gaps(
     return await matcher.suggest_evidence_gaps(audit_id)
 
 
-@router.post("/audit/classify-finding", response_model=dict)
+@router.post("/audit/classify-finding", response_model=FindingClassificationResponse)
 async def classify_finding(
     request: FindingClassificationRequest,
     db: DbSession,
@@ -259,7 +270,7 @@ async def classify_findings_batch(
     return classifier.batch_classify(request.findings)
 
 
-@router.get("/audit/{audit_id}/executive-summary", response_model=dict)
+@router.get("/audit/{audit_id}/executive-summary", response_model=ExecutiveSummaryResponse)
 async def generate_executive_summary(
     audit_id: int,
     db: DbSession,
@@ -285,7 +296,7 @@ async def generate_findings_report(
 # ============ Audit Trends Endpoints ============
 
 
-@router.get("/audit/trends", response_model=dict)
+@router.get("/audit/trends", response_model=AuditTrendsResponse)
 async def get_audit_trends(
     db: DbSession,
     current_user: CurrentUser,
@@ -310,7 +321,7 @@ async def get_recurring_findings(
 # ============ AI Health Check ============
 
 
-@router.get("/health", response_model=dict)
+@router.get("/health", response_model=AIHealthResponse)
 async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
     """Check AI service availability"""
     import os

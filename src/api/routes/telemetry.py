@@ -24,6 +24,8 @@ from pydantic import BaseModel, Field, validator
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser
+from src.api.schemas.error_codes import ErrorCode
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
@@ -264,6 +266,7 @@ async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     This endpoint is fault-tolerant: file I/O errors are logged but do not
     return 500 to avoid blocking client telemetry.
     """
+    track_metric("telemetry.event_received", 1, {"event_name": event.name})
     # Log to structured logger (goes to Azure Log Analytics)
     logger.info(
         f"TELEMETRY_EVENT: {event.name}",
@@ -322,7 +325,7 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     Used by the evaluator to check current sample count and metrics.
     """
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     metrics = load_metrics_file()
     return metrics
@@ -334,10 +337,10 @@ async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     Reset metrics for an experiment (staging only, for testing).
     """
     if not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ErrorCode.PERMISSION_DENIED)
 
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     metrics_path = METRICS_DIR / "experiment_metrics_EXP_001.json"
     if metrics_path.exists():

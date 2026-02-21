@@ -26,6 +26,7 @@ from src.api.schemas.evidence_asset import (
 )
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.core.config import settings
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
@@ -98,20 +99,11 @@ async def validate_source_exists(
     module = __import__(module_path, fromlist=[class_name])
     model_class = getattr(module, class_name)
 
-    await get_or_404(
-        db,
-        model_class,
-        source_id,
-        detail=f"Source {source_module} with ID {source_id} not found",
-    )
+    await get_or_404(db, model_class, source_id, detail=f"Source {source_module} with ID {source_id} not found")
     return True
 
 
-@router.post(
-    "/upload",
-    response_model=EvidenceAssetUploadResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_evidence_asset(
     db: DbSession,
     current_user: CurrentUser,
@@ -400,16 +392,16 @@ async def update_evidence_asset(
             },
         )
 
-    # Update fields
+    # setattr kept for enum fields: visibility and retention_policy require
+    # str → enum conversion that apply_updates() doesn't handle.
+    _enum_fields = {"visibility", "retention_policy"}
     update_data = asset_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        if field == "visibility" and value is not None:
-            setattr(asset, field, EvidenceVisibility(value))
-        elif field == "retention_policy" and value is not None:
-            setattr(asset, field, EvidenceRetentionPolicy(value))
-        else:
-            setattr(asset, field, value)
+    if "visibility" in update_data and update_data["visibility"] is not None:
+        setattr(asset, "visibility", EvidenceVisibility(update_data["visibility"]))
+    if "retention_policy" in update_data and update_data["retention_policy"] is not None:
+        setattr(asset, "retention_policy", EvidenceRetentionPolicy(update_data["retention_policy"]))
 
+    apply_updates(asset, asset_data, exclude=_enum_fields)
     asset.updated_by_id = current_user.id
 
     await db.commit()
@@ -491,7 +483,7 @@ async def link_asset_to_investigation(
 
     from src.domain.models.investigation import InvestigationRun
 
-    await get_or_404(db, InvestigationRun, investigation_id)
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Link asset to investigation
     asset.linked_investigation_id = investigation_id
@@ -503,7 +495,7 @@ async def link_asset_to_investigation(
     return asset
 
 
-@router.get("/{asset_id}/signed-url")
+@router.get("/{asset_id}/signed-url", response_model=dict)
 async def get_signed_download_url(
     asset_id: int,
     db: DbSession,
@@ -550,7 +542,7 @@ async def get_signed_download_url(
     }
 
 
-@router.get("/download")
+@router.get("/download", response_model=dict)
 async def download_file_direct(
     key: str = Query(..., description="Storage key"),
     expires: int = Query(..., description="Expiry timestamp"),
@@ -572,10 +564,7 @@ async def download_file_direct(
     if not isinstance(svc, LocalFileStorageService):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_code": "NOT_AVAILABLE",
-                "message": "Direct download not available in production",
-            },
+            detail={"error_code": "NOT_AVAILABLE", "message": "Direct download not available in production"},
         )
 
     # Validate expiry
@@ -597,10 +586,7 @@ async def download_file_direct(
     if not hmac_lib.compare_digest(sig, expected_sig):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error_code": "INVALID_SIGNATURE",
-                "message": "Invalid download signature",
-            },
+            detail={"error_code": "INVALID_SIGNATURE", "message": "Invalid download signature"},
         )
 
     # Download and serve

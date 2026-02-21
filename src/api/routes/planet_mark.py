@@ -23,6 +23,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.planet_mark import (
+    ActionCreatedResponse,
+    ActionListResponse,
+    ActionUpdatedResponse,
+    CarbonDashboardResponse,
+    CertificationStatusResponse,
+    DataQualityAssessmentResponse,
+    EmissionSourceCreatedResponse,
+    EmissionSourceListResponse,
+    FleetRecordCreatedResponse,
+    FleetSummaryResponse,
+    ISO14001MappingResponse,
+    ReportingYearCreatedResponse,
+    ReportingYearDetailResponse,
+    ReportingYearListResponse,
+    Scope3BreakdownResponse,
+    UtilityReadingCreatedResponse,
+)
 from src.api.schemas.setup_required import setup_required_response
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
@@ -37,6 +56,8 @@ from src.domain.models.planet_mark import (
     SupplierEmissionData,
     UtilityMeterReading,
 )
+from src.domain.services.planet_mark_service import PlanetMarkService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +117,7 @@ SCOPE3_CATEGORIES = [
         "name": "Processing of sold products",
         "description": "Processing of intermediate products sold by downstream companies",
     },
-    {
-        "number": 11,
-        "name": "Use of sold products",
-        "description": "End use of goods and services sold",
-    },
+    {"number": 11, "name": "Use of sold products", "description": "End use of goods and services sold"},
     {
         "number": 12,
         "name": "End-of-life treatment of sold products",
@@ -117,41 +134,13 @@ SCOPE3_CATEGORIES = [
 
 # DEFRA 2024 Emission Factors (simplified)
 EMISSION_FACTORS = {
-    "diesel_litres": {
-        "factor": 2.51229,
-        "unit": "kgCO2e/litre",
-        "source": "DEFRA 2024",
-    },
-    "petrol_litres": {
-        "factor": 2.16802,
-        "unit": "kgCO2e/litre",
-        "source": "DEFRA 2024",
-    },
-    "natural_gas_kwh": {
-        "factor": 0.18254,
-        "unit": "kgCO2e/kWh",
-        "source": "DEFRA 2024",
-    },
-    "electricity_kwh_uk": {
-        "factor": 0.20705,
-        "unit": "kgCO2e/kWh",
-        "source": "DEFRA 2024 (location)",
-    },
-    "electricity_kwh_market": {
-        "factor": 0.43360,
-        "unit": "kgCO2e/kWh",
-        "source": "DEFRA 2024 (market)",
-    },
-    "waste_general_kg": {
-        "factor": 0.44672,
-        "unit": "kgCO2e/kg",
-        "source": "DEFRA 2024",
-    },
-    "waste_recycled_kg": {
-        "factor": 0.02140,
-        "unit": "kgCO2e/kg",
-        "source": "DEFRA 2024",
-    },
+    "diesel_litres": {"factor": 2.51229, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
+    "petrol_litres": {"factor": 2.16802, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
+    "natural_gas_kwh": {"factor": 0.18254, "unit": "kgCO2e/kWh", "source": "DEFRA 2024"},
+    "electricity_kwh_uk": {"factor": 0.20705, "unit": "kgCO2e/kWh", "source": "DEFRA 2024 (location)"},
+    "electricity_kwh_market": {"factor": 0.43360, "unit": "kgCO2e/kWh", "source": "DEFRA 2024 (market)"},
+    "waste_general_kg": {"factor": 0.44672, "unit": "kgCO2e/kg", "source": "DEFRA 2024"},
+    "waste_recycled_kg": {"factor": 0.02140, "unit": "kgCO2e/kg", "source": "DEFRA 2024"},
     "rail_km": {"factor": 0.03549, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
     "flight_short_km": {"factor": 0.24587, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
     "car_average_km": {"factor": 0.17081, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
@@ -243,7 +232,7 @@ class UtilityReadingCreate(BaseModel):
 # ============ Reporting Years ============
 
 
-@router.get("/years", response_model=dict)
+@router.get("/years", response_model=ReportingYearListResponse)
 async def list_reporting_years(
     request: Request,
     db: DbSession,
@@ -301,7 +290,7 @@ async def list_reporting_years(
     }
 
 
-@router.post("/years", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/years", response_model=ReportingYearCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_reporting_year(
     year_data: ReportingYearCreate,
     db: DbSession,
@@ -327,14 +316,10 @@ async def create_reporting_year(
         db.add(scope3)
     await db.commit()
 
-    return {
-        "id": year.id,
-        "year_label": year.year_label,
-        "message": "Reporting year created",
-    }
+    return {"id": year.id, "year_label": year.year_label, "message": "Reporting year created"}
 
 
-@router.get("/years/{year_id}", response_model=dict)
+@router.get("/years/{year_id}", response_model=ReportingYearDetailResponse)
 async def get_reporting_year(
     year_id: int,
     db: DbSession,
@@ -390,7 +375,7 @@ async def get_reporting_year(
         "certification": {
             "status": year.certification_status,
             "certificate_number": year.certificate_number,
-            "certification_date": (year.certification_date.isoformat() if year.certification_date else None),
+            "certification_date": year.certification_date.isoformat() if year.certification_date else None,
             "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         },
     }
@@ -399,7 +384,9 @@ async def get_reporting_year(
 # ============ Emission Sources ============
 
 
-@router.post("/years/{year_id}/sources", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/years/{year_id}/sources", response_model=EmissionSourceCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
@@ -408,15 +395,11 @@ async def add_emission_source(
     """Add an emission source with auto-calculation"""
     year = await get_or_404(db, CarbonReportingYear, year_id)
 
-    # Auto-calculate emissions using DEFRA factors
-    ef_key = source_data.activity_type
-    emission_factor = EMISSION_FACTORS.get(ef_key, {"factor": 0, "unit": "", "source": ""})
-
-    co2e_kg = source_data.activity_value * emission_factor["factor"]
-    co2e_tonnes = co2e_kg / 1000
-
-    # Get data quality score
-    dq_score = DATA_QUALITY_CRITERIA.get(source_data.data_quality_level, {"score": 2})["score"]
+    co2e_kg, co2e_tonnes, emission_factor = PlanetMarkService.calculate_co2e(
+        source_data.activity_value,
+        source_data.activity_type,
+    )
+    dq_score = PlanetMarkService.get_data_quality_score(source_data.data_quality_level)
 
     source = EmissionSource(
         reporting_year_id=year_id,
@@ -443,7 +426,7 @@ async def add_emission_source(
     }
 
 
-@router.get("/years/{year_id}/sources", response_model=dict)
+@router.get("/years/{year_id}/sources", response_model=EmissionSourceListResponse)
 async def list_emission_sources(
     year_id: int,
     db: DbSession,
@@ -472,7 +455,7 @@ async def list_emission_sources(
                 "activity_value": s.activity_value,
                 "activity_unit": s.activity_unit,
                 "co2e_tonnes": s.co2e_tonnes,
-                "percentage": (round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0),
+                "percentage": round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0,
                 "data_quality": s.data_quality_level,
             }
             for s in sources
@@ -483,7 +466,7 @@ async def list_emission_sources(
 # ============ Scope 3 Categories ============
 
 
-@router.get("/years/{year_id}/scope3", response_model=dict)
+@router.get("/years/{year_id}/scope3", response_model=Scope3BreakdownResponse)
 async def get_scope3_breakdown(
     year_id: int,
     db: DbSession,
@@ -520,7 +503,7 @@ async def get_scope3_breakdown(
                 "is_relevant": c.is_relevant,
                 "is_measured": c.is_measured,
                 "total_co2e": c.total_co2e,
-                "percentage": (round((c.total_co2e / total * 100), 1) if total > 0 else 0),
+                "percentage": round((c.total_co2e / total * 100), 1) if total > 0 else 0,
                 "data_quality_score": c.data_quality_score,
                 "calculation_method": c.calculation_method,
                 "exclusion_reason": c.exclusion_reason,
@@ -533,7 +516,7 @@ async def get_scope3_breakdown(
 # ============ Improvement Actions ============
 
 
-@router.get("/years/{year_id}/actions", response_model=dict)
+@router.get("/years/{year_id}/actions", response_model=ActionListResponse)
 async def list_improvement_actions(
     year_id: int,
     db: DbSession,
@@ -560,7 +543,7 @@ async def list_improvement_actions(
             "completed": completed,
             "in_progress": in_progress,
             "overdue": overdue,
-            "completion_rate": (round((completed / len(actions) * 100), 1) if actions else 0),
+            "completion_rate": round((completed / len(actions) * 100), 1) if actions else 0,
         },
         "actions": [
             {
@@ -581,7 +564,7 @@ async def list_improvement_actions(
     }
 
 
-@router.post("/years/{year_id}/actions", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/years/{year_id}/actions", response_model=ActionCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
@@ -606,14 +589,10 @@ async def create_improvement_action(
     await db.commit()
     await db.refresh(action)
 
-    return {
-        "id": action.id,
-        "action_id": action_id,
-        "message": "Improvement action created",
-    }
+    return {"id": action.id, "action_id": action_id, "message": "Improvement action created"}
 
 
-@router.put("/years/{year_id}/actions/{action_id}", response_model=dict)
+@router.put("/years/{year_id}/actions/{action_id}", response_model=ActionUpdatedResponse)
 async def update_action_status(
     year_id: int,
     action_id: int,
@@ -623,14 +602,13 @@ async def update_action_status(
     """Update improvement action status"""
     result = await db.execute(
         select(ImprovementAction).where(
-            ImprovementAction.id == action_id,
-            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.id == action_id, ImprovementAction.reporting_year_id == year_id
         )
     )
     action = result.scalar_one_or_none()
 
     if not action:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     apply_updates(action, status_data)
     await db.commit()
@@ -641,7 +619,7 @@ async def update_action_status(
 # ============ Data Quality ============
 
 
-@router.get("/years/{year_id}/data-quality", response_model=dict)
+@router.get("/years/{year_id}/data-quality", response_model=DataQualityAssessmentResponse)
 async def get_data_quality_assessment(
     year_id: int,
     db: DbSession,
@@ -652,42 +630,11 @@ async def get_data_quality_assessment(
     result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
     sources = result.scalars().all()
 
-    # Calculate quality by scope
-    def calc_scope_quality(scope_sources):
-        if not scope_sources:
-            return {
-                "score": 0,
-                "actual_pct": 0,
-                "recommendations": ["No data recorded"],
-            }
+    scope1 = PlanetMarkService.calculate_scope_quality([s for s in sources if s.scope == "scope_1"])
+    scope2 = PlanetMarkService.calculate_scope_quality([s for s in sources if s.scope == "scope_2"])
+    scope3 = PlanetMarkService.calculate_scope_quality([s for s in sources if s.scope == "scope_3"])
 
-        total_emissions = sum(s.co2e_tonnes for s in scope_sources)
-        weighted_score = sum(s.data_quality_score * s.co2e_tonnes for s in scope_sources)
-        avg_score = (weighted_score / total_emissions) if total_emissions > 0 else 0
-
-        actual_count = len([s for s in scope_sources if s.data_quality_level == "actual"])
-        actual_pct = (actual_count / len(scope_sources) * 100) if scope_sources else 0
-
-        recommendations = []
-        if avg_score < 3:
-            recommendations.append("Increase use of actual metered data")
-        if actual_pct < 80:
-            recommendations.append("Install smart meters for automatic readings")
-        if any(s.data_quality_level == "extrapolated" for s in scope_sources):
-            recommendations.append("Replace extrapolated data with calculated values")
-
-        return {
-            "score": round(avg_score * 4, 0),  # Scale to 0-16
-            "actual_pct": round(actual_pct, 1),
-            "source_count": len(scope_sources),
-            "recommendations": recommendations or ["Data quality is good"],
-        }
-
-    scope1 = calc_scope_quality([s for s in sources if s.scope == "scope_1"])
-    scope2 = calc_scope_quality([s for s in sources if s.scope == "scope_2"])
-    scope3 = calc_scope_quality([s for s in sources if s.scope == "scope_3"])
-
-    overall = round((scope1["score"] + scope2["score"] + scope3["score"]) / 3, 0)
+    overall = PlanetMarkService.calculate_overall_data_quality(scope1["score"], scope2["score"], scope3["score"])
 
     return {
         "year_id": year_id,
@@ -699,18 +646,9 @@ async def get_data_quality_assessment(
             "scope_3": scope3,
         },
         "priority_improvements": [
-            {
-                "action": "Complete fuel-card audit for 100% fleet coverage",
-                "impact": "Scope 1 +2 points",
-            },
-            {
-                "action": "Install smart electricity meters",
-                "impact": "Scope 2 +3 points",
-            },
-            {
-                "action": "Engage top 10 suppliers for specific data",
-                "impact": "Scope 3 +2 points",
-            },
+            {"action": "Complete fuel-card audit for 100% fleet coverage", "impact": "Scope 1 +2 points"},
+            {"action": "Install smart electricity meters", "impact": "Scope 2 +3 points"},
+            {"action": "Engage top 10 suppliers for specific data", "impact": "Scope 3 +2 points"},
         ],
         "target_scores": {
             "scope_1_2": "≥12/16 (Planet Mark requirement)",
@@ -722,7 +660,7 @@ async def get_data_quality_assessment(
 # ============ Fleet Integration ============
 
 
-@router.post("/years/{year_id}/fleet", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/years/{year_id}/fleet", response_model=FleetRecordCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
@@ -731,14 +669,8 @@ async def add_fleet_record(
     """Add fleet fuel consumption record"""
     await get_or_404(db, CarbonReportingYear, year_id)
 
-    # Calculate emissions
-    ef = EMISSION_FACTORS.get(f"{fleet_data.fuel_type.lower()}_litres", EMISSION_FACTORS["diesel_litres"])
-    co2e_kg = fleet_data.fuel_litres * ef["factor"]
-
-    # Calculate efficiency if mileage provided
-    l_per_100km = None
-    if fleet_data.mileage and fleet_data.mileage > 0:
-        l_per_100km = (fleet_data.fuel_litres / fleet_data.mileage) * 100
+    co2e_kg, _ = PlanetMarkService.calculate_fleet_co2e(fleet_data.fuel_litres, fleet_data.fuel_type)
+    l_per_100km = PlanetMarkService.calculate_fuel_efficiency(fleet_data.fuel_litres, fleet_data.mileage)
 
     record = FleetEmissionRecord(
         reporting_year_id=year_id,
@@ -758,7 +690,7 @@ async def add_fleet_record(
     }
 
 
-@router.get("/years/{year_id}/fleet/summary", response_model=dict)
+@router.get("/years/{year_id}/fleet/summary", response_model=FleetSummaryResponse)
 async def get_fleet_summary(
     year_id: int,
     db: DbSession,
@@ -787,12 +719,9 @@ async def get_fleet_summary(
         if r.mileage:
             vehicles[r.vehicle_registration]["total_mileage"] += r.mileage
 
-    # Calculate efficiency
     for v in vehicles.values():
-        if v["total_mileage"] > 0:
-            v["litres_per_100km"] = round((v["total_litres"] / v["total_mileage"]) * 100, 2)
-        else:
-            v["litres_per_100km"] = None
+        efficiency = PlanetMarkService.calculate_fuel_efficiency(v["total_litres"], v["total_mileage"])
+        v["litres_per_100km"] = round(efficiency, 2) if efficiency is not None else None
 
     # Sort by emissions (worst first)
     sorted_vehicles = sorted(vehicles.values(), key=lambda x: x["total_co2e_kg"], reverse=True)
@@ -813,9 +742,7 @@ async def get_fleet_summary(
 
 
 @router.post(
-    "/years/{year_id}/utilities",
-    response_model=dict,
-    status_code=status.HTTP_201_CREATED,
+    "/years/{year_id}/utilities", response_model=UtilityReadingCreatedResponse, status_code=status.HTTP_201_CREATED
 )
 async def add_utility_reading(
     year_id: int,
@@ -839,7 +766,7 @@ async def add_utility_reading(
 # ============ Certification ============
 
 
-@router.get("/years/{year_id}/certification", response_model=dict)
+@router.get("/years/{year_id}/certification", response_model=CertificationStatusResponse)
 async def get_certification_status(
     year_id: int,
     db: DbSession,
@@ -861,30 +788,15 @@ async def get_certification_status(
             "description": "Electricity bills (12 months)",
             "required": True,
         },
-        {
-            "type": "utility_bill",
-            "category": "scope_1",
-            "description": "Gas bills (12 months)",
-            "required": True,
-        },
+        {"type": "utility_bill", "category": "scope_1", "description": "Gas bills (12 months)", "required": True},
         {
             "type": "fuel_card_report",
             "category": "scope_1",
             "description": "Fleet fuel card statements",
             "required": True,
         },
-        {
-            "type": "waste_manifest",
-            "category": "scope_3",
-            "description": "Waste transfer notes",
-            "required": False,
-        },
-        {
-            "type": "travel_expense",
-            "category": "scope_3",
-            "description": "Business travel records",
-            "required": False,
-        },
+        {"type": "waste_manifest", "category": "scope_3", "description": "Waste transfer notes", "required": False},
+        {"type": "travel_expense", "category": "scope_3", "description": "Business travel records", "required": False},
         {
             "type": "improvement_action",
             "category": "certification",
@@ -898,17 +810,14 @@ async def get_certification_status(
         req["uploaded"] = len(matching) > 0
         req["verified"] = any(e.is_verified for e in matching)
 
-    # Calculate readiness
-    required_complete = sum(1 for r in required_evidence if r["required"] and r["uploaded"])
-    required_total = sum(1 for r in required_evidence if r["required"])
-    readiness = (required_complete / required_total * 100) if required_total > 0 else 0
+    readiness = PlanetMarkService.calculate_certification_readiness(required_evidence)
 
     return {
         "year_id": year_id,
         "year_label": year.year_label,
         "status": year.certification_status,
         "certificate_number": year.certificate_number,
-        "certification_date": (year.certification_date.isoformat() if year.certification_date else None),
+        "certification_date": year.certification_date.isoformat() if year.certification_date else None,
         "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         "readiness_percent": round(readiness, 0),
         "evidence_checklist": required_evidence,
@@ -931,7 +840,7 @@ async def get_certification_status(
 # ============ Dashboard ============
 
 
-@router.get("/dashboard", response_model=dict)
+@router.get("/dashboard", response_model=CarbonDashboardResponse)
 async def get_carbon_dashboard(
     request: Request,
     db: DbSession,
@@ -1005,14 +914,8 @@ async def get_carbon_dashboard(
             "on_track": yoy_change is not None and yoy_change <= -5,
         },
         "emissions_breakdown": {
-            "scope_1": {
-                "value": current_year.scope_1_total,
-                "label": "Direct (Fleet, Gas)",
-            },
-            "scope_2": {
-                "value": current_year.scope_2_market,
-                "label": "Indirect (Electricity)",
-            },
+            "scope_1": {"value": current_year.scope_1_total, "label": "Direct (Fleet, Gas)"},
+            "scope_2": {"value": current_year.scope_2_market, "label": "Indirect (Electricity)"},
             "scope_3": {"value": current_year.scope_3_total, "label": "Value Chain"},
         },
         "data_quality": {
@@ -1022,7 +925,7 @@ async def get_carbon_dashboard(
         },
         "certification": {
             "status": current_year.certification_status,
-            "expiry_date": (current_year.expiry_date.isoformat() if current_year.expiry_date else None),
+            "expiry_date": current_year.expiry_date.isoformat() if current_year.expiry_date else None,
         },
         "actions": {
             "total": len(actions),
@@ -1034,12 +937,7 @@ async def get_carbon_dashboard(
             "target_per_fte": current_year.target_emissions_per_fte,
         },
         "historical_years": [
-            {
-                "label": y.year_label,
-                "total": y.total_emissions,
-                "per_fte": y.emissions_per_fte,
-            }
-            for y in years
+            {"label": y.year_label, "total": y.total_emissions, "per_fte": y.emissions_per_fte} for y in years
         ],
     }
 
@@ -1047,7 +945,7 @@ async def get_carbon_dashboard(
 # ============ ISO 14001 Cross-Mapping ============
 
 
-@router.get("/iso14001-mapping", response_model=dict)
+@router.get("/iso14001-mapping", response_model=ISO14001MappingResponse)
 async def get_iso14001_mapping() -> dict[str, Any]:
     """Get Planet Mark to ISO 14001 cross-mapping"""
     return {
@@ -1129,32 +1027,17 @@ async def _recalculate_year_totals(db: AsyncSession, year: CarbonReportingYear) 
     result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year.id))
     sources = result.scalars().all()
 
-    scope1 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_1")
-    scope2 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_2")
-    scope3 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_3")
+    totals = PlanetMarkService.calculate_year_totals(sources)
 
-    year.scope_1_total = scope1
-    year.scope_2_market = scope2
-    year.scope_3_total = scope3
-    year.total_emissions = scope1 + scope2 + scope3
+    year.scope_1_total = totals["scope_1_total"]
+    year.scope_2_market = totals["scope_2_market"]
+    year.scope_3_total = totals["scope_3_total"]
+    year.total_emissions = totals["total_emissions"]
 
     if year.average_fte > 0:
         year.emissions_per_fte = year.total_emissions / year.average_fte
 
-    # Update data quality scores (simplified)
-    s1_sources = [s for s in sources if s.scope == "scope_1"]
-    s2_sources = [s for s in sources if s.scope == "scope_2"]
-    s3_sources = [s for s in sources if s.scope == "scope_3"]
-
-    year.scope_1_data_quality = _calc_avg_quality(s1_sources)
-    year.scope_2_data_quality = _calc_avg_quality(s2_sources)
-    year.scope_3_data_quality = _calc_avg_quality(s3_sources)
-    year.overall_data_quality = (year.scope_1_data_quality + year.scope_2_data_quality + year.scope_3_data_quality) // 3
-
-
-def _calc_avg_quality(sources: list) -> int:
-    """Calculate average data quality score"""
-    if not sources:
-        return 0
-    total = sum(s.data_quality_score for s in sources)
-    return int((total / len(sources)) * 4)  # Scale to 0-16
+    year.scope_1_data_quality = totals["scope_1_data_quality"]
+    year.scope_2_data_quality = totals["scope_2_data_quality"]
+    year.scope_3_data_quality = totals["scope_3_data_quality"]
+    year.overall_data_quality = totals["overall_data_quality"]

@@ -19,6 +19,7 @@ from src.api.schemas.executive_dashboard import (
     RiskDashboardResponse,
 )
 from src.domain.services.executive_dashboard import ExecutiveDashboardService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
 
@@ -40,6 +41,7 @@ async def get_executive_dashboard(
     - Trend data for charts
     - Active alerts requiring attention
     """
+    track_metric("executive_dashboard.loaded")
     service = ExecutiveDashboardService(db)
     dashboard = await service.get_full_dashboard(period_days)
     return dashboard

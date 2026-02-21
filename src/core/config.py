@@ -1,9 +1,12 @@
 """Application configuration settings."""
 
+import logging
 from functools import lru_cache
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -22,17 +25,29 @@ class Settings(BaseSettings):
 
     def _validate_production_settings(self) -> None:
         """Validate critical settings, especially for production."""
+        placeholder_keys = [
+            "change-me-in-production",
+            "__CHANGE_ME__",
+            "changeme",
+            "your-secret-key-here",
+            "secret",
+            "dev-secret",
+            "",
+        ]
+
+        if not self.is_production:
+            if self.secret_key in placeholder_keys:
+                logger.warning(
+                    "SECRET_KEY is using a placeholder value. "
+                    "This is acceptable for development but MUST be changed before deploying to production."
+                )
+            if self.jwt_secret_key in placeholder_keys:
+                logger.warning(
+                    "JWT_SECRET_KEY is using a placeholder value. "
+                    "This is acceptable for development but MUST be changed before deploying to production."
+                )
+
         if self.is_production:
-            # Check for placeholder secret keys (ADR-0002)
-            placeholder_keys = [
-                "change-me-in-production",
-                "__CHANGE_ME__",
-                "changeme",
-                "your-secret-key-here",
-                "secret",
-                "dev-secret",
-                "",
-            ]
             if self.secret_key in placeholder_keys:
                 raise ValueError(
                     "SECURITY ERROR: SECRET_KEY contains a placeholder value in production! "

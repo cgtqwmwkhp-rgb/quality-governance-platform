@@ -7,10 +7,11 @@ from typing import Any, Optional, Union
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, literal, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
@@ -52,8 +53,7 @@ class ActionUpdate(BaseModel):
     action_type: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = Field(
-        None,
-        description="One of: open, in_progress, pending_verification, completed, cancelled",
+        None, description="One of: open, in_progress, pending_verification, completed, cancelled"
     )
     due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
@@ -107,7 +107,7 @@ def _action_to_response(
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
+        status=action.status.value if hasattr(action.status, "value") else str(action.status),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=source_type,
@@ -249,7 +249,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     # Find owner by email if provided
@@ -351,7 +351,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     try:
@@ -369,25 +369,25 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Source entity {src_type} with id {src_id} not found or was deleted",
+                detail=ErrorCode.ENTITY_NOT_FOUND,
             )
         elif "unique" in error_msg.lower() or "duplicate" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="An action with this reference number already exists",
+                detail=ErrorCode.DUPLICATE_ENTITY,
             )
         else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database error while creating action: {error_msg[:200]}",
+                detail=ErrorCode.INTERNAL_ERROR,
             )
-    except Exception as e:
+    except SQLAlchemyError as e:
         await db.rollback()
         # Log the FULL exception with traceback for diagnosis
         logger.exception(f"Unexpected exception creating action: type={type(e).__name__}, msg={str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error creating action: {type(e).__name__}: {str(e)[:200]}",
+            detail=ErrorCode.INTERNAL_ERROR,
         )
 
     return ActionResponse(
@@ -397,7 +397,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
+        status=action.status.value if hasattr(action.status, "value") else str(action.status),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=src_type,
@@ -436,7 +436,7 @@ async def get_action(
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail="Action not found",
+        detail=ErrorCode.ENTITY_NOT_FOUND,
     )
 
 
@@ -459,7 +459,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if src_type not in ("incident", "rta", "complaint", "investigation"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     # Bounded error class: validate status if provided
@@ -469,7 +469,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if action_data.status and action_data.status.lower() not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid status: {action_data.status}. Must be one of: {', '.join(sorted(valid_statuses))}",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     # Bounded error class: validate priority if provided
@@ -477,7 +477,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if action_data.priority and action_data.priority.lower() not in valid_priorities:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid priority: {action_data.priority}. Must be one of: {', '.join(sorted(valid_priorities))}",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     # Find the action by type
@@ -502,7 +502,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Action not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     # Apply updates - only update fields that were provided

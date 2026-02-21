@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
@@ -16,6 +17,7 @@ from src.api.utils.update import apply_updates
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -43,7 +45,7 @@ async def create_policy(
         if not current_user.has_permission("policy:set_reference_number"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission 'policy:set_reference_number' required to set explicit reference number",
+                detail=ErrorCode.PERMISSION_DENIED,
             )
 
         reference_number = policy_data.reference_number
@@ -52,7 +54,7 @@ async def create_policy(
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Policy with reference number {reference_number} already exists",
+                detail=ErrorCode.DUPLICATE_ENTITY,
             )
     else:
         # Generate reference number (format: POL-YYYY-NNNN)
@@ -77,6 +79,7 @@ async def create_policy(
     await db.commit()
     await db.refresh(policy)
     await invalidate_tenant_cache(current_user.tenant_id, "policies")
+    track_metric("policies.accessed", 1, {"tenant_id": str(current_user.tenant_id)})
 
     # Record audit event
     await record_audit_event(

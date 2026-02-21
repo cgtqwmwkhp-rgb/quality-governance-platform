@@ -17,6 +17,24 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.risk_register import (
+    BowTieElementCreatedResponse,
+    ControlCreatedResponse,
+    ControlLinkedResponse,
+    ControlListItem,
+    KRICreatedResponse,
+    KRIValueUpdatedResponse,
+)
+from src.api.schemas.risk_register import RiskAssessmentResponse as RiskAssessmentResultResponse
+from src.api.schemas.risk_register import RiskCreatedResponse
+from src.api.schemas.risk_register import RiskDetailResponse as RiskDetailResponseSchema
+from src.api.schemas.risk_register import (
+    RiskListResponse,
+    RiskMatrixConfigResponse,
+    RiskSummaryResponse,
+    RiskUpdatedResponse,
+)
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -125,7 +143,7 @@ class BowTieElementCreate(BaseModel):
 # ============ EnterpriseRisk CRUD Endpoints ============
 
 
-@router.get("/", response_model=dict)
+@router.get("/", response_model=RiskListResponse)
 async def list_risks(
     db: DbSession,
     current_user: CurrentUser,
@@ -177,14 +195,14 @@ async def list_risks(
                 "status": r.status,
                 "is_within_appetite": r.is_within_appetite,
                 "risk_owner_name": r.risk_owner_name,
-                "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
+                "next_review_date": r.next_review_date.isoformat() if r.next_review_date else None,
             }
             for r in paginated.items
         ],
     }
 
 
-@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RiskCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
@@ -205,7 +223,7 @@ async def create_risk(
     }
 
 
-@router.put("/{risk_id}", response_model=dict)
+@router.put("/{risk_id}", response_model=RiskUpdatedResponse)
 async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
@@ -223,7 +241,7 @@ async def update_risk(
     return {"message": "EnterpriseRisk updated successfully", "id": risk.id}
 
 
-@router.post("/{risk_id}/assess", response_model=dict)
+@router.post("/{risk_id}/assess", response_model=RiskAssessmentResultResponse)
 async def assess_risk(
     risk_id: int,
     assessment: RiskAssessmentUpdate,
@@ -243,7 +261,7 @@ async def assess_risk(
             "is_within_appetite": risk.is_within_appetite,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
 
 
 @router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -265,7 +283,7 @@ async def delete_risk(
 # ============ Heat Map & Matrix Endpoints ============
 
 
-@router.get("/matrix/config", response_model=dict)
+@router.get("/matrix/config", response_model=RiskMatrixConfigResponse)
 async def get_risk_matrix_config(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
@@ -323,7 +341,7 @@ async def get_risk_forecast(
 # ============ Bow-Tie Analysis Endpoints ============
 
 
-@router.get("/{risk_id}/bowtie", response_model=dict)
+@router.get("/{risk_id}/bowtie", response_model=dict)  # dynamic bow-tie structure from service
 async def get_bow_tie(
     risk_id: int,
     db: DbSession,
@@ -335,13 +353,11 @@ async def get_bow_tie(
     try:
         return await service.get_bow_tie(risk_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
 
 
 @router.post(
-    "/{risk_id}/bowtie/elements",
-    response_model=dict,
-    status_code=status.HTTP_201_CREATED,
+    "/{risk_id}/bowtie/elements", response_model=BowTieElementCreatedResponse, status_code=status.HTTP_201_CREATED
 )
 async def add_bow_tie_element(
     risk_id: int,
@@ -388,7 +404,7 @@ async def delete_bow_tie_element(
     element = result.scalar_one_or_none()
 
     if not element:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Element not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     await db.delete(element)
     await db.commit()
@@ -397,7 +413,7 @@ async def delete_bow_tie_element(
 # ============ KRI Endpoints ============
 
 
-@router.get("/kris/dashboard", response_model=dict)
+@router.get("/kris/dashboard", response_model=dict)  # dynamic KRI dashboard from service
 async def get_kri_dashboard(
     db: DbSession,
     current_user: CurrentUser,
@@ -407,7 +423,7 @@ async def get_kri_dashboard(
     return await service.get_kri_dashboard()
 
 
-@router.post("/kris", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/kris", response_model=KRICreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_kri(
     kri_data: KRICreate,
     db: DbSession,
@@ -426,7 +442,7 @@ async def create_kri(
     return {"id": kri.id, "message": "KRI created successfully"}
 
 
-@router.put("/kris/{kri_id}/value", response_model=dict)
+@router.put("/kris/{kri_id}/value", response_model=KRIValueUpdatedResponse)
 async def update_kri_value(
     kri_id: int,
     value_update: KRIValueUpdate,
@@ -443,7 +459,7 @@ async def update_kri_value(
             "current_status": kri.current_status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
 
 
 @router.get("/kris/{kri_id}/history", response_model=list)
@@ -461,7 +477,7 @@ async def get_kri_history(
 # ============ Controls Endpoints ============
 
 
-@router.get("/controls", response_model=list)
+@router.get("/controls", response_model=list[ControlListItem])
 async def list_controls(
     db: DbSession,
     current_user: CurrentUser,
@@ -488,7 +504,7 @@ async def list_controls(
     ]
 
 
-@router.post("/controls", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/controls", response_model=ControlCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     control_data: ControlCreate,
     db: DbSession,
@@ -512,9 +528,7 @@ async def create_control(
 
 
 @router.post(
-    "/{risk_id}/controls/{control_id}",
-    response_model=dict,
-    status_code=status.HTTP_201_CREATED,
+    "/{risk_id}/controls/{control_id}", response_model=ControlLinkedResponse, status_code=status.HTTP_201_CREATED
 )
 async def link_control_to_risk(
     risk_id: int,
@@ -538,10 +552,7 @@ async def link_control_to_risk(
     ).scalar_one_or_none()
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Control already linked to this risk",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.DUPLICATE_ENTITY)
 
     mapping = RiskControlMapping(
         risk_id=risk_id,
@@ -588,7 +599,7 @@ async def list_appetite_statements(
 # ============ Summary & Statistics ============
 
 
-@router.get("/summary", response_model=dict)
+@router.get("/summary", response_model=RiskSummaryResponse)
 async def get_risk_summary(
     db: DbSession,
     current_user: CurrentUser,
@@ -601,65 +612,39 @@ async def get_risk_summary(
     critical_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter,
-            EnterpriseRisk.residual_score > 16,
-            EnterpriseRisk.status != "closed",
-        )
+        .where(tenant_filter, EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed")
     )
     high_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter,
-            EnterpriseRisk.residual_score.between(12, 16),
-            EnterpriseRisk.status != "closed",
-        )
+        .where(tenant_filter, EnterpriseRisk.residual_score.between(12, 16), EnterpriseRisk.status != "closed")
     )
     medium_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter,
-            EnterpriseRisk.residual_score.between(5, 11),
-            EnterpriseRisk.status != "closed",
-        )
+        .where(tenant_filter, EnterpriseRisk.residual_score.between(5, 11), EnterpriseRisk.status != "closed")
     )
     low_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter,
-            EnterpriseRisk.residual_score <= 4,
-            EnterpriseRisk.status != "closed",
-        )
+        .where(tenant_filter, EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed")
     )
     outside_appetite = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
         .where(
-            tenant_filter,
-            EnterpriseRisk.is_within_appetite == False,
-            EnterpriseRisk.status != "closed",
+            tenant_filter, EnterpriseRisk.is_within_appetite == False, EnterpriseRisk.status != "closed"
         )  # noqa: E712
     )
     overdue_review = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter,
-            EnterpriseRisk.next_review_date < datetime.utcnow(),
-            EnterpriseRisk.status != "closed",
-        )
+        .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.utcnow(), EnterpriseRisk.status != "closed")
     )
     escalated = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter,
-            EnterpriseRisk.is_escalated == True,
-            EnterpriseRisk.status != "closed",
-        )  # noqa: E712
+        .where(tenant_filter, EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed")  # noqa: E712
     )
 
     result = await db.execute(
@@ -687,7 +672,7 @@ async def get_risk_summary(
 # ============ Individual Risk Detail (after all literal GET paths) ============
 
 
-@router.get("/{risk_id}", response_model=dict)
+@router.get("/{risk_id}", response_model=RiskDetailResponseSchema)
 async def get_risk(
     risk_id: int,
     db: DbSession,
@@ -745,12 +730,12 @@ async def get_risk(
         "risk_owner_id": risk.risk_owner_id,
         "risk_owner_name": risk.risk_owner_name,
         "review_frequency_days": risk.review_frequency_days,
-        "last_review_date": (risk.last_review_date.isoformat() if risk.last_review_date else None),
-        "next_review_date": (risk.next_review_date.isoformat() if risk.next_review_date else None),
+        "last_review_date": risk.last_review_date.isoformat() if risk.last_review_date else None,
+        "next_review_date": risk.next_review_date.isoformat() if risk.next_review_date else None,
         "review_notes": risk.review_notes,
         "is_escalated": risk.is_escalated,
         "escalation_reason": risk.escalation_reason,
-        "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
+        "identified_date": risk.identified_date.isoformat() if risk.identified_date else None,
         "controls": [
             {
                 "id": c.id,

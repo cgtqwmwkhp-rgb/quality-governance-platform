@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -392,6 +393,7 @@ async def get_ims_dashboard(
     Returns compliance scores, ISMS data, UVDB audit status, Planet Mark carbon data,
     compliance evidence coverage, and upcoming audit schedule.
     """
+    track_metric("ims_dashboard.loaded")
     response: dict[str, Any] = {
         "generated_at": datetime.utcnow().isoformat(),
     }

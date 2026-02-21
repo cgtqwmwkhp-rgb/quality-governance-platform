@@ -18,7 +18,24 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser
+from src.api.schemas.analytics import (
+    CostRecordResponse,
+    DashboardCreatedResponse,
+    DashboardDeletedResponse,
+    DashboardDetailResponse,
+    DashboardListResponse,
+    DashboardUpdatedResponse,
+    DrillDownResponse,
+    ForecastResponse,
+    InvestmentActualsResponse,
+    InvestmentCreatedResponse,
+    ReportGeneratedResponse,
+    ReportStatusResponse,
+    WidgetDataResponse,
+    WidgetPreviewResponse,
+)
 from src.domain.services.analytics_service import analytics_service
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -107,7 +124,7 @@ class ROIInvestmentCreate(BaseModel):
 # ============================================================================
 
 
-@router.get("/dashboards", response_model=dict)
+@router.get("/dashboards", response_model=DashboardListResponse)
 async def list_dashboards(current_user: CurrentUser):
     """List all dashboards for the current user."""
     # Mock dashboards
@@ -147,7 +164,7 @@ async def list_dashboards(current_user: CurrentUser):
     }
 
 
-@router.post("/dashboards", response_model=dict)
+@router.post("/dashboards", response_model=DashboardCreatedResponse)
 async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser):
     """Create a new custom dashboard."""
     return {
@@ -160,7 +177,7 @@ async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser
     }
 
 
-@router.get("/dashboards/{dashboard_id}", response_model=dict)
+@router.get("/dashboards/{dashboard_id}", response_model=DashboardDetailResponse)
 async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     """Get dashboard with widgets."""
     return {
@@ -206,7 +223,7 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     }
 
 
-@router.put("/dashboards/{dashboard_id}", response_model=dict)
+@router.put("/dashboards/{dashboard_id}", response_model=DashboardUpdatedResponse)
 async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser):
     """Update dashboard configuration."""
     return {
@@ -216,7 +233,7 @@ async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, curren
     }
 
 
-@router.delete("/dashboards/{dashboard_id}", response_model=dict)
+@router.delete("/dashboards/{dashboard_id}", response_model=DashboardDeletedResponse)
 async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
     """Delete a dashboard."""
     return {"success": True, "id": dashboard_id}
@@ -227,7 +244,7 @@ async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
 # ============================================================================
 
 
-@router.get("/widgets/{widget_id}/data", response_model=dict)
+@router.get("/widgets/{widget_id}/data", response_model=WidgetDataResponse)
 async def get_widget_data(
     widget_id: int,
     current_user: CurrentUser,
@@ -251,7 +268,7 @@ async def get_widget_data(
     }
 
 
-@router.post("/widgets/preview", response_model=dict)
+@router.post("/widgets/preview", response_model=WidgetPreviewResponse)
 async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
     """Preview widget data without saving."""
     trend_data = analytics_service.get_trend_data(
@@ -279,6 +296,7 @@ async def get_kpi_summary(
     time_range: str = Query("last_30_days"),
 ):
     """Get summary KPIs across all modules."""
+    track_metric("analytics.query", 1, {"time_range": time_range})
     return analytics_service.get_kpi_summary(time_range, tenant_id=current_user.tenant_id)
 
 
@@ -302,7 +320,7 @@ async def get_trend_data(
     )
 
 
-@router.get("/drill-down/{data_source}", response_model=dict)
+@router.get("/drill-down/{data_source}", response_model=DrillDownResponse)
 async def get_drill_down_data(
     data_source: str,
     current_user: CurrentUser,
@@ -348,7 +366,7 @@ async def get_drill_down_data(
 # ============================================================================
 
 
-@router.post("/forecast", response_model=dict)
+@router.post("/forecast", response_model=ForecastResponse)
 async def generate_forecast(request: ForecastRequest, current_user: CurrentUser):
     """Generate trend forecast with confidence intervals."""
     # Get historical data
@@ -418,7 +436,7 @@ async def get_cost_of_non_compliance(
     return analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
 
 
-@router.post("/costs/record", response_model=dict)
+@router.post("/costs/record", response_model=CostRecordResponse)
 async def record_cost(cost: CostRecord, current_user: CurrentUser):
     """Record a cost entry."""
     return {
@@ -458,7 +476,7 @@ async def get_investment_roi(investment_id: int, current_user: CurrentUser):
     return analytics_service.calculate_roi(investment_id, tenant_id=current_user.tenant_id)
 
 
-@router.post("/roi/investment", response_model=dict)
+@router.post("/roi/investment", response_model=InvestmentCreatedResponse)
 async def create_investment(investment: ROIInvestmentCreate, current_user: CurrentUser):
     """Create a new investment record."""
     return {
@@ -470,7 +488,7 @@ async def create_investment(investment: ROIInvestmentCreate, current_user: Curre
     }
 
 
-@router.put("/roi/{investment_id}/actual", response_model=dict)
+@router.put("/roi/{investment_id}/actual", response_model=InvestmentActualsResponse)
 async def update_investment_actuals(
     investment_id: int,
     actual_savings: float,
@@ -500,7 +518,7 @@ async def get_executive_summary(
     return analytics_service.generate_executive_summary(time_range, tenant_id=current_user.tenant_id)
 
 
-@router.post("/reports/generate", response_model=dict)
+@router.post("/reports/generate", response_model=ReportGeneratedResponse)
 async def generate_report(
     report_type: str,
     current_user: CurrentUser,
@@ -518,7 +536,7 @@ async def generate_report(
     }
 
 
-@router.get("/reports/{report_id}/status", response_model=dict)
+@router.get("/reports/{report_id}/status", response_model=ReportStatusResponse)
 async def get_report_status(report_id: str, current_user: CurrentUser):
     """Check report generation status."""
     return {

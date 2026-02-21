@@ -17,7 +17,16 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.domain.services import workflow_engine as engine
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -69,7 +78,7 @@ class EscalationRequest(BaseModel):
 # ============================================================================
 
 
-@router.get("/templates")
+@router.get("/templates", response_model=dict)
 async def list_workflow_templates(db: DbSession, current_user: CurrentUser):
     """List available workflow templates, seeding defaults if empty."""
     await engine.seed_default_templates(db)
@@ -90,12 +99,12 @@ async def list_workflow_templates(db: DbSession, current_user: CurrentUser):
     }
 
 
-@router.get("/templates/{template_code}")
+@router.get("/templates/{template_code}", response_model=dict)
 async def get_workflow_template(template_code: str, db: DbSession, current_user: CurrentUser):
     """Get workflow template details."""
     t = await engine.get_template(db, template_code)
     if t is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
     return {
         "id": t.id,
         "code": t.code,
@@ -118,9 +127,12 @@ async def get_workflow_template(template_code: str, db: DbSession, current_user:
 # ============================================================================
 
 
-@router.post("/start")
+@router.post("/start", response_model=dict)
 async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_user: CurrentUser):
     """Start a new workflow instance."""
+    _span = tracer.start_span("start_workflow") if tracer else None
+    if _span:
+        _span.set_attribute("template_code", request.template_code)
     try:
         instance = await engine.start_workflow(
             db,
@@ -132,8 +144,11 @@ async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_u
             priority=request.priority,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
 
+    track_metric("workflow.started", 1, {"template": request.template_code})
+    if _span:
+        _span.end()
     steps = await engine.get_instance_steps(db, instance.id)
     return {
         "id": instance.id,
@@ -150,7 +165,7 @@ async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_u
     }
 
 
-@router.get("/instances")
+@router.get("/instances", response_model=dict)
 async def list_workflow_instances(
     db: DbSession,
     current_user: CurrentUser,
@@ -201,12 +216,12 @@ async def list_workflow_instances(
     return {"items": items, "total": total}
 
 
-@router.get("/instances/{workflow_id}")
+@router.get("/instances/{workflow_id}", response_model=dict)
 async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: CurrentUser):
     """Get workflow instance details with all steps."""
     inst = await engine.get_instance(db, workflow_id)
     if inst is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow instance not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     steps = await engine.get_instance_steps(db, workflow_id)
     total_steps = len(steps)
@@ -262,7 +277,7 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
     }
 
 
-@router.post("/instances/{workflow_id}/advance")
+@router.post("/instances/{workflow_id}/advance", response_model=dict)
 async def advance_workflow(
     workflow_id: int,
     db: DbSession,
@@ -280,11 +295,11 @@ async def advance_workflow(
             notes=notes,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
     return result
 
 
-@router.post("/instances/{workflow_id}/cancel")
+@router.post("/instances/{workflow_id}/cancel", response_model=dict)
 async def cancel_workflow(
     workflow_id: int,
     db: DbSession,
@@ -295,7 +310,7 @@ async def cancel_workflow(
     try:
         inst = await engine.cancel_workflow(db, workflow_id, current_user.id, reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
     return {
         "workflow_id": inst.id,
         "status": inst.status,
@@ -310,39 +325,36 @@ async def cancel_workflow(
 # ============================================================================
 
 
-@router.get("/approvals/pending")
+@router.get("/approvals/pending", response_model=dict)
 async def get_pending_approvals(db: DbSession, current_user: CurrentUser):
     """Get pending approvals for current user."""
     approvals = await engine.get_pending_approvals(db, current_user.id)
     return {"approvals": approvals, "total": len(approvals)}
 
 
-@router.post("/approvals/{step_id}/approve")
+@router.post("/approvals/{step_id}/approve", response_model=dict)
 async def approve_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Approve a workflow step."""
     try:
         result = await engine.approve_step(db, step_id, current_user.id, response.effective_notes)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
     return result
 
 
-@router.post("/approvals/{step_id}/reject")
+@router.post("/approvals/{step_id}/reject", response_model=dict)
 async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Reject a workflow step."""
     if not response.reason:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reason required for rejection",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
     try:
         result = await engine.reject_step(db, step_id, current_user.id, response.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
     return result
 
 
-@router.post("/approvals/bulk-approve")
+@router.post("/approvals/bulk-approve", response_model=dict)
 async def bulk_approve_requests(request: BulkApprovalRequest, db: DbSession, current_user: CurrentUser):
     """Bulk approve multiple workflow steps."""
     result = await engine.bulk_approve(db, request.approval_ids, current_user.id, request.notes)
@@ -354,14 +366,14 @@ async def bulk_approve_requests(request: BulkApprovalRequest, db: DbSession, cur
 # ============================================================================
 
 
-@router.get("/escalations/pending")
+@router.get("/escalations/pending", response_model=dict)
 async def get_pending_escalations(db: DbSession, current_user: CurrentUser):
     """Get workflows pending escalation."""
     escalations = await engine.check_escalations(db)
     return {"escalations": escalations, "total": len(escalations)}
 
 
-@router.post("/instances/{workflow_id}/escalate")
+@router.post("/instances/{workflow_id}/escalate", response_model=dict)
 async def escalate_workflow(
     workflow_id: int,
     request: EscalationRequest,
@@ -378,7 +390,7 @@ async def escalate_workflow(
             new_priority=request.new_priority,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
     return result
 
 
@@ -387,7 +399,7 @@ async def escalate_workflow(
 # ============================================================================
 
 
-@router.get("/delegations")
+@router.get("/delegations", response_model=dict)
 async def get_my_delegations(db: DbSession, current_user: CurrentUser):
     """Get current user's delegations."""
     delegations = await engine.get_active_delegations(db, current_user.id)
@@ -406,7 +418,7 @@ async def get_my_delegations(db: DbSession, current_user: CurrentUser):
     }
 
 
-@router.post("/delegations")
+@router.post("/delegations", response_model=dict)
 async def create_delegation(request: DelegationRequest, db: DbSession, current_user: CurrentUser):
     """Set up out-of-office delegation."""
     d = await engine.set_delegation(
@@ -429,12 +441,12 @@ async def create_delegation(request: DelegationRequest, db: DbSession, current_u
     }
 
 
-@router.delete("/delegations/{delegation_id}")
+@router.delete("/delegations/{delegation_id}", response_model=dict)
 async def cancel_delegation(delegation_id: int, db: DbSession, current_user: CurrentUser):
     """Cancel a delegation."""
     success = await engine.cancel_delegation(db, delegation_id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegation not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",
@@ -447,7 +459,7 @@ async def cancel_delegation(delegation_id: int, db: DbSession, current_user: Cur
 # ============================================================================
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=dict)
 async def get_workflow_stats(db: DbSession, current_user: CurrentUser):
     """Get live workflow statistics from the database."""
     return await engine.get_workflow_stats(db)

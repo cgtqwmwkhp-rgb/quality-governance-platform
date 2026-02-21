@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.standard import (
     ClauseCreate,
     ClauseResponse,
@@ -26,6 +27,7 @@ from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.standard import Clause, Control, Standard
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -58,6 +60,7 @@ async def list_standards(
     query = query.order_by(Standard.code)
     params = PaginationParams(page=page, page_size=page_size)
     paginated = await paginate(db, query, params)
+    track_metric("standards.accessed")
 
     return StandardListResponse(
         items=[StandardResponse.model_validate(s) for s in paginated.items],
@@ -79,7 +82,7 @@ async def create_standard(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Standard code already exists",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     standard = Standard(**standard_data.model_dump())
@@ -107,7 +110,7 @@ async def get_standard(
     if not standard:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Standard not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     return StandardDetailResponse.model_validate(standard)
@@ -121,7 +124,7 @@ async def update_standard(
     current_user: CurrentSuperuser,
 ) -> StandardResponse:
     """Update a standard (superuser only)."""
-    standard = await get_or_404(db, Standard, standard_id, detail="Standard not found")
+    standard = await get_or_404(db, Standard, standard_id, detail=ErrorCode.ENTITY_NOT_FOUND)
     apply_updates(standard, standard_data, set_updated_at=False)
 
     await db.commit()
@@ -146,7 +149,7 @@ async def get_compliance_score(
 
     Returns setup_required=true if no applicable controls exist.
     """
-    standard = await get_or_404(db, Standard, standard_id, detail="Standard not found")
+    standard = await get_or_404(db, Standard, standard_id, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     control_query = (
         select(Control)
@@ -202,7 +205,7 @@ async def list_standard_controls(
     Returns controls with clause reference, ordered deterministically by:
     clause.sort_order, clause.clause_number, control.control_number, control.id
     """
-    await get_or_404(db, Standard, standard_id, detail="Standard not found")
+    await get_or_404(db, Standard, standard_id, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     query = (
         select(Control, Clause.clause_number, Clause.sort_order)
@@ -245,7 +248,7 @@ async def list_clauses(
     parent_clause_id: Optional[int] = None,
 ) -> list[ClauseResponse]:
     """List clauses for a standard."""
-    await get_or_404(db, Standard, standard_id, detail="Standard not found")
+    await get_or_404(db, Standard, standard_id, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     query = (
         select(Clause)
@@ -267,11 +270,7 @@ async def list_clauses(
     return [ClauseResponse.model_validate(c) for c in clauses]
 
 
-@router.post(
-    "/{standard_id}/clauses",
-    response_model=ClauseResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{standard_id}/clauses", response_model=ClauseResponse, status_code=status.HTTP_201_CREATED)
 async def create_clause(
     standard_id: int,
     clause_data: ClauseCreate,
@@ -279,7 +278,7 @@ async def create_clause(
     current_user: CurrentSuperuser,
 ) -> ClauseResponse:
     """Create a new clause for a standard (superuser only)."""
-    await get_or_404(db, Standard, standard_id, detail="Standard not found")
+    await get_or_404(db, Standard, standard_id, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     clause = Clause(
         standard_id=standard_id,
@@ -307,7 +306,7 @@ async def get_clause(
     if not clause:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clause not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     return ClauseResponse.model_validate(clause)
@@ -321,7 +320,7 @@ async def update_clause(
     current_user: CurrentSuperuser,
 ) -> ClauseResponse:
     """Update a clause (superuser only)."""
-    clause = await get_or_404(db, Clause, clause_id, detail="Clause not found")
+    clause = await get_or_404(db, Clause, clause_id, detail=ErrorCode.ENTITY_NOT_FOUND)
     apply_updates(clause, clause_data, set_updated_at=False)
 
     await db.commit()
@@ -333,11 +332,7 @@ async def update_clause(
 # ============== Control Endpoints ==============
 
 
-@router.post(
-    "/clauses/{clause_id}/controls",
-    response_model=ControlResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/clauses/{clause_id}/controls", response_model=ControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     clause_id: int,
     control_data: ControlCreate,
@@ -345,7 +340,7 @@ async def create_control(
     current_user: CurrentSuperuser,
 ) -> ControlResponse:
     """Create a new control for a clause (superuser only)."""
-    await get_or_404(db, Clause, clause_id, detail="Clause not found")
+    await get_or_404(db, Clause, clause_id, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     control = Control(
         clause_id=clause_id,
@@ -365,7 +360,7 @@ async def get_control(
     current_user: CurrentUser,
 ) -> ControlResponse:
     """Get a specific control."""
-    control = await get_or_404(db, Control, control_id, detail="Control not found")
+    control = await get_or_404(db, Control, control_id, detail=ErrorCode.ENTITY_NOT_FOUND)
     return ControlResponse.model_validate(control)
 
 
@@ -377,7 +372,7 @@ async def update_control(
     current_user: CurrentSuperuser,
 ) -> ControlResponse:
     """Update a control (superuser only)."""
-    control = await get_or_404(db, Control, control_id, detail="Control not found")
+    control = await get_or_404(db, Control, control_id, detail=ErrorCode.ENTITY_NOT_FOUND)
     apply_updates(control, control_data, set_updated_at=False)
 
     await db.commit()

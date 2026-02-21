@@ -35,6 +35,7 @@ from src.api.schemas.document_control import (
     VersionDiffResponse,
     WorkflowCreateResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -179,8 +180,8 @@ async def list_documents(
                 "status": d.status,
                 "department": d.department,
                 "owner_name": d.owner_name,
-                "effective_date": (d.effective_date.isoformat() if d.effective_date else None),
-                "next_review_date": (d.next_review_date.isoformat() if d.next_review_date else None),
+                "effective_date": d.effective_date.isoformat() if d.effective_date else None,
+                "next_review_date": d.next_review_date.isoformat() if d.next_review_date else None,
                 "is_overdue": (d.next_review_date < datetime.utcnow() if d.next_review_date else False),
             }
             for d in result.items
@@ -269,11 +270,7 @@ async def list_workflows(
     ]
 
 
-@router.post(
-    "/workflows",
-    response_model=WorkflowCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/workflows", response_model=WorkflowCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     workflow_data: WorkflowCreate,
     db: DbSession,
@@ -309,33 +306,21 @@ async def get_document_summary(
     active_result = await db.execute(
         select(func.count())
         .select_from(ControlledDocument)
-        .where(
-            ControlledDocument.status == "active",
-            ControlledDocument.is_current == True,
-            tenant_filter,
-        )
+        .where(ControlledDocument.status == "active", ControlledDocument.is_current == True, tenant_filter)
     )
     active = active_result.scalar_one()
 
     draft_result = await db.execute(
         select(func.count())
         .select_from(ControlledDocument)
-        .where(
-            ControlledDocument.status == "draft",
-            ControlledDocument.is_current == True,
-            tenant_filter,
-        )
+        .where(ControlledDocument.status == "draft", ControlledDocument.is_current == True, tenant_filter)
     )
     draft = draft_result.scalar_one()
 
     pending_result = await db.execute(
         select(func.count())
         .select_from(ControlledDocument)
-        .where(
-            ControlledDocument.status == "pending_approval",
-            ControlledDocument.is_current == True,
-            tenant_filter,
-        )
+        .where(ControlledDocument.status == "pending_approval", ControlledDocument.is_current == True, tenant_filter)
     )
     pending_approval = pending_result.scalar_one()
 
@@ -364,10 +349,7 @@ async def get_document_summary(
     pending_ack_result = await db.execute(
         select(func.count())
         .select_from(DocumentDistribution)
-        .where(
-            DocumentDistribution.acknowledged == False,
-            DocumentDistribution.acknowledgment_required == True,
-        )
+        .where(DocumentDistribution.acknowledged == False, DocumentDistribution.acknowledgment_required == True)
     )
     pending_ack = pending_ack_result.scalar_one()
 
@@ -437,12 +419,12 @@ async def get_document(
         "author_name": document.author_name,
         "owner_name": document.owner_name,
         "approver_name": document.approver_name,
-        "approved_date": (document.approved_date.isoformat() if document.approved_date else None),
-        "effective_date": (document.effective_date.isoformat() if document.effective_date else None),
-        "expiry_date": (document.expiry_date.isoformat() if document.expiry_date else None),
+        "approved_date": document.approved_date.isoformat() if document.approved_date else None,
+        "effective_date": document.effective_date.isoformat() if document.effective_date else None,
+        "expiry_date": document.expiry_date.isoformat() if document.expiry_date else None,
         "review_frequency_months": document.review_frequency_months,
-        "next_review_date": (document.next_review_date.isoformat() if document.next_review_date else None),
-        "last_review_date": (document.last_review_date.isoformat() if document.last_review_date else None),
+        "next_review_date": document.next_review_date.isoformat() if document.next_review_date else None,
+        "last_review_date": document.last_review_date.isoformat() if document.last_review_date else None,
         "file_name": document.file_name,
         "file_path": document.file_path,
         "file_size": document.file_size,
@@ -464,7 +446,7 @@ async def get_document(
                 "created_by_name": v.created_by_name,
                 "created_at": v.created_at.isoformat() if v.created_at else None,
                 "approved_by_name": v.approved_by_name,
-                "approved_date": (v.approved_date.isoformat() if v.approved_date else None),
+                "approved_date": v.approved_date.isoformat() if v.approved_date else None,
             }
             for v in versions
         ],
@@ -476,7 +458,7 @@ async def get_document(
                 "distribution_type": d.distribution_type,
                 "copy_number": d.copy_number,
                 "acknowledged": d.acknowledged,
-                "acknowledged_date": (d.acknowledged_date.isoformat() if d.acknowledged_date else None),
+                "acknowledged_date": d.acknowledged_date.isoformat() if d.acknowledged_date else None,
             }
             for d in distributions
         ],
@@ -504,11 +486,7 @@ async def update_document(
 # ============ Version Control Endpoints ============
 
 
-@router.post(
-    "/{document_id}/versions",
-    response_model=VersionCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{document_id}/versions", response_model=VersionCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_version(
     document_id: int,
     version_data: VersionCreate,
@@ -574,7 +552,7 @@ async def get_version_diff(
     version = result.scalar_one_or_none()
 
     if not version:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     response = {
         "version": {
@@ -712,11 +690,7 @@ async def take_approval_action(
 # ============ Distribution Endpoints ============
 
 
-@router.post(
-    "/{document_id}/distribute",
-    response_model=DistributeResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{document_id}/distribute", response_model=DistributeResponse, status_code=status.HTTP_201_CREATED)
 async def distribute_document(
     document_id: int,
     distribution: DistributionCreate,
@@ -744,10 +718,7 @@ async def distribute_document(
     }
 
 
-@router.post(
-    "/{document_id}/distributions/{distribution_id}/acknowledge",
-    response_model=AcknowledgmentResponse,
-)
+@router.post("/{document_id}/distributions/{distribution_id}/acknowledge", response_model=AcknowledgmentResponse)
 async def acknowledge_distribution(
     document_id: int,
     distribution_id: int,
@@ -764,7 +735,7 @@ async def acknowledge_distribution(
     dist = result.scalar_one_or_none()
 
     if not dist:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Distribution not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     dist.acknowledged = True
     dist.acknowledged_date = datetime.utcnow()
@@ -807,7 +778,7 @@ async def mark_document_obsolete(
 
     return {
         "message": "Document marked as obsolete",
-        "retention_end_date": (record.retention_end_date.isoformat() if record.retention_end_date else None),
+        "retention_end_date": record.retention_end_date.isoformat() if record.retention_end_date else None,
     }
 
 

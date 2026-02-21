@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -17,6 +18,13 @@ from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPASta
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -95,6 +103,9 @@ async def create_capa_action(
     current_user: CurrentUser,
     data: CAPACreate,
 ):
+    _span = tracer.start_span("create_capa") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(getattr(current_user, "tenant_id", 0) or 0))
     ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
     action = CAPAAction(
         reference_number=ref,
@@ -107,6 +118,8 @@ async def create_capa_action(
     await db.refresh(action)
     await invalidate_tenant_cache(current_user.tenant_id, "capa")
     track_metric("capa.created")
+    if _span:
+        _span.end()
 
     from src.domain.services.audit_service import record_audit_event
 
@@ -196,7 +209,7 @@ async def transition_capa_status(
     if data.status not in valid_transitions.get(current, []):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot transition from {current} to {data.status}",
+            detail=ErrorCode.INVALID_STATE_TRANSITION,
         )
 
     action.status = data.status
@@ -216,11 +229,7 @@ async def transition_capa_status(
         entity_id=str(action.id),
         action="update",
         description=f"CAPA {action.reference_number} transitioned from {current} to {data.status}",
-        payload={
-            "from_status": str(current),
-            "to_status": str(data.status),
-            "comment": data.comment,
-        },
+        payload={"from_status": str(current), "to_status": str(data.status), "comment": data.comment},
         user_id=current_user.id,
     )
 

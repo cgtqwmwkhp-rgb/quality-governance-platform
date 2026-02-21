@@ -32,6 +32,7 @@ from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
+from src.domain.services.kri_calculation_service import KRICalculationService
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -148,11 +149,7 @@ async def get_kri(
 ):
     """Get a specific KRI."""
     kri = await get_or_404(
-        db,
-        KeyRiskIndicator,
-        kri_id,
-        detail="KRI not found",
-        tenant_id=current_user.tenant_id,
+        db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
     return KRIResponse.from_orm(kri)
 
@@ -166,11 +163,7 @@ async def update_kri(
 ):
     """Update a KRI."""
     kri = await get_or_404(
-        db,
-        KeyRiskIndicator,
-        kri_id,
-        detail="KRI not found",
-        tenant_id=current_user.tenant_id,
+        db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
     apply_updates(kri, kri_data, set_updated_at=False)
     kri.updated_by = current_user.email
@@ -191,11 +184,7 @@ async def delete_kri(
 ):
     """Delete a KRI (superuser only)."""
     kri = await get_or_404(
-        db,
-        KeyRiskIndicator,
-        kri_id,
-        detail="KRI not found",
-        tenant_id=current_user.tenant_id,
+        db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
     await db.delete(kri)
     await db.commit()
@@ -210,13 +199,7 @@ async def calculate_kri(
     current_user: CurrentUser,
 ):
     """Trigger calculation for a specific KRI."""
-    await get_or_404(
-        db,
-        KeyRiskIndicator,
-        kri_id,
-        detail="KRI not found",
-        tenant_id=current_user.tenant_id,
-    )
+    await get_or_404(db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id)
     kri_service = KRIService(db)
     result = await kri_service.calculate_kri(kri_id)
 
@@ -239,13 +222,7 @@ async def get_kri_measurements(
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get measurement history for a KRI."""
-    await get_or_404(
-        db,
-        KeyRiskIndicator,
-        kri_id,
-        detail="KRI not found",
-        tenant_id=current_user.tenant_id,
-    )
+    await get_or_404(db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id)
 
     result = await db.execute(
         select(KRIMeasurement)
@@ -300,11 +277,7 @@ async def acknowledge_alert(
 ):
     """Acknowledge a KRI alert."""
     alert = await get_or_404(
-        db,
-        KRIAlert,
-        alert_id,
-        detail="Alert not found",
-        tenant_id=current_user.tenant_id,
+        db, KRIAlert, alert_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
 
     alert.is_acknowledged = True
@@ -326,11 +299,7 @@ async def resolve_alert(
 ):
     """Resolve a KRI alert."""
     alert = await get_or_404(
-        db,
-        KRIAlert,
-        alert_id,
-        detail="Alert not found",
-        tenant_id=current_user.tenant_id,
+        db, KRIAlert, alert_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
 
     alert.is_resolved = True
@@ -378,17 +347,11 @@ async def assess_incident_sif(
     current_user: CurrentUser,
 ):
     """Assess an incident for SIF/pSIF classification."""
-    incident = await get_or_404(db, Incident, incident_id, detail="Incident not found")
+    incident = await get_or_404(
+        db, Incident, incident_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
+    )
 
-    incident.is_sif = assessment.is_sif
-    incident.is_psif = assessment.is_psif
-    incident.sif_classification = assessment.sif_classification
-    incident.sif_assessment_date = datetime.utcnow()
-    incident.sif_assessed_by_id = current_user.id
-    incident.sif_rationale = assessment.sif_rationale
-    incident.life_altering_potential = assessment.life_altering_potential
-    incident.precursor_events = assessment.precursor_events
-    incident.control_failures = assessment.control_failures
+    KRICalculationService.apply_sif_assessment(incident, assessment, current_user.id)
 
     if assessment.is_sif or assessment.is_psif:
         scoring_service = RiskScoringService(db)
@@ -418,13 +381,12 @@ async def get_incident_sif_assessment(
     current_user: CurrentUser,
 ):
     """Get SIF assessment for an incident."""
-    incident = await get_or_404(db, Incident, incident_id, detail="Incident not found")
+    incident = await get_or_404(
+        db, Incident, incident_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
+    )
 
     if not incident.sif_classification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No SIF assessment found for this incident",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return SIFAssessmentResponse(
         incident_id=incident.id,

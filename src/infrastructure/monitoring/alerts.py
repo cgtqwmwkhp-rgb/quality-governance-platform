@@ -5,6 +5,7 @@ compatible alerting system. They define the conditions under which
 alerts should fire.
 """
 
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -101,3 +102,66 @@ def get_critical_alerts() -> list[AlertRule]:
 
 def get_alerts_by_severity(severity: AlertSeverity) -> list[AlertRule]:
     return [r for r in ALERT_RULES if r.severity == severity]
+
+
+_CONDITION_TO_OPERATOR = {
+    "greater_than": "GreaterThan",
+    "less_than": "LessThan",
+    "greater_than_or_equal": "GreaterThanOrEqual",
+    "less_than_or_equal": "LessThanOrEqual",
+    "percentile_95_greater_than": "GreaterThan",
+}
+
+
+class AlertProvisioner:
+    """Exports alert rules as Azure Monitor Bicep/ARM templates."""
+
+    @staticmethod
+    def export_arm_template(alert_rules: list[AlertRule]) -> dict:
+        """Convert alert rules to ARM template format for Azure deployment."""
+        resources = []
+        for rule in alert_rules:
+            operator = _CONDITION_TO_OPERATOR.get(rule.condition, "GreaterThan")
+            resources.append(
+                {
+                    "type": "Microsoft.Insights/metricAlerts",
+                    "apiVersion": "2018-03-01",
+                    "name": rule.name,
+                    "location": "global",
+                    "properties": {
+                        "description": rule.description,
+                        "severity": rule.severity.value,
+                        "enabled": True,
+                        "evaluationFrequency": f"PT{rule.window_minutes}M",
+                        "windowSize": f"PT{rule.window_minutes}M",
+                        "criteria": {
+                            "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                            "allOf": [
+                                {
+                                    "name": f"{rule.name}_condition",
+                                    "metricName": rule.metric,
+                                    "operator": operator,
+                                    "threshold": rule.threshold,
+                                    "timeAggregation": "Average",
+                                }
+                            ],
+                        },
+                    },
+                }
+            )
+        return {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": resources,
+        }
+
+    @staticmethod
+    def export_to_file(
+        alert_rules: list[AlertRule],
+        output_path: str = "infrastructure/alerts.json",
+    ) -> str:
+        """Export alert rules to a JSON file for deployment."""
+        template = AlertProvisioner.export_arm_template(alert_rules)
+        with open(output_path, "w") as f:
+            json.dump(template, f, indent=2)
+        return output_path
