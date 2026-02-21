@@ -310,7 +310,7 @@ def get_cache() -> Union[InMemoryCache, RedisCache]:
     return _cache
 
 
-async def invalidate_tenant_cache(tenant_id: int, entity_type: str) -> int:
+async def invalidate_tenant_cache(tenant_id: int | None, entity_type: str) -> int:
     """Invalidate all cached entries for a tenant's entity type.
 
     Uses pattern-based key deletion for namespace isolation.

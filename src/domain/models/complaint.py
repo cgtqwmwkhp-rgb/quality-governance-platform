@@ -91,6 +91,9 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     related_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     related_product_service: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Assignment
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

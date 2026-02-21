@@ -14,6 +14,7 @@ from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
 router = APIRouter()
 
@@ -68,11 +69,13 @@ async def create_policy(
         reference_number=reference_number,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(policy)
     await db.commit()
     await db.refresh(policy)
+    await invalidate_tenant_cache(current_user.tenant_id, "policies")
 
     # Record audit event
     await record_audit_event(
@@ -104,7 +107,7 @@ async def get_policy(
 
     Requires authentication.
     """
-    return await get_or_404(db, Policy, policy_id)
+    return await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
 
 
 @router.get(
@@ -126,7 +129,11 @@ async def list_policies(
 
     Requires authentication.
     """
-    query = select(Policy).order_by(Policy.reference_number.desc(), Policy.id.asc())
+    query = (
+        select(Policy)
+        .where(Policy.tenant_id == current_user.tenant_id)
+        .order_by(Policy.reference_number.desc(), Policy.id.asc())
+    )
 
     return await paginate(db, query, params)
 
@@ -148,7 +155,7 @@ async def update_policy(
 
     Requires authentication.
     """
-    policy = await get_or_404(db, Policy, policy_id)
+    policy = await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
 
     update_data = apply_updates(policy, policy_data, set_updated_at=False)
 
@@ -156,6 +163,7 @@ async def update_policy(
 
     await db.commit()
     await db.refresh(policy)
+    await invalidate_tenant_cache(current_user.tenant_id, "policies")
 
     # Record audit event
     await record_audit_event(
@@ -188,7 +196,7 @@ async def delete_policy(
 
     Requires authentication.
     """
-    policy = await get_or_404(db, Policy, policy_id)
+    policy = await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
 
     # Record audit event
     await record_audit_event(
@@ -203,3 +211,4 @@ async def delete_policy(
     )
     await db.delete(policy)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "policies")

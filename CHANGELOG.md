@@ -4,6 +4,30 @@ All notable changes to the Quality Governance Platform will be documented in thi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.5.0] - 2026-02-20
+
+### Added
+- tenant_id column on Incident, Risk, AuditTemplate, AuditRun, AuditFinding, Policy, Complaint models
+- Tenant isolation filtering on incidents, risks, audits, policies, complaints routes (49 endpoints)
+- Cache invalidation (invalidate_tenant_cache) wired into 8 route files on all mutation endpoints
+- FailedTask model for DLQ database persistence
+- ErrorCode integration in error handler middleware for structured API responses
+- response_model on all endpoints in auditor_competence (14), executive_dashboard (5), compliance (7)
+- Response schemas: auditor_competence.py, executive_dashboard.py (new schema files)
+- 8 new frontend component/page test files (71 tests total)
+- 4 Playwright E2E test files (dashboard, audits, risks, investigations user journeys)
+- Frontend coverage enforcement with @vitest/coverage-v8 and thresholds
+- Resource limits for flower and pgadmin Docker services
+
+### Changed
+- paginate() adopted in investigations.py, document_control.py, uvdb.py, tenants.py (8 patterns)
+- apply_updates() adopted in audits.py, users.py, risks.py (6 patterns)
+- get_or_404() adopted in audits.py, compliance.py (3 patterns)
+- capa.py import fixed: src.api.deps -> src.api.dependencies
+- Frontend tests now blocking in CI (continue-on-error removed)
+- Backend unit test coverage threshold raised to 55%
+- cleanup_old_telemetry documented as intentionally deferred
+
 ## [Unreleased]
 
 ### Added

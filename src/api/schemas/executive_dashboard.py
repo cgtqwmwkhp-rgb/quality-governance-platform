@@ -146,3 +146,32 @@ class DashboardSummaryResponse(BaseModel):
     pending_actions: int
     overdue_items: int
     kri_alerts: int
+
+
+class IncidentDashboardResponse(BaseModel):
+    """Incident-specific dashboard data."""
+
+    period_days: int
+    summary: Dict[str, Any]
+    trends: List[Any]
+
+
+class RiskDashboardResponse(BaseModel):
+    """Risk-specific dashboard data."""
+
+    risks: Dict[str, Any]
+    kris: Dict[str, Any]
+
+
+class ComplianceDashboardResponse(BaseModel):
+    """Compliance-specific dashboard data."""
+
+    policy_acknowledgments: Dict[str, Any]
+    sla_performance: Dict[str, Any]
+
+
+class AlertsResponse(BaseModel):
+    """Active alerts response."""
+
+    total: int
+    alerts: List[Any]

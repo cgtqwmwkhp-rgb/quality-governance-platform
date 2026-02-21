@@ -40,12 +40,18 @@ class DataRetentionService:
 
     @staticmethod
     async def cleanup_old_telemetry(db: AsyncSession) -> int:
-        """Delete telemetry events older than 90 days.
+        """Intentional no-op: telemetry retention is deferred.
 
-        No dedicated telemetry table exists yet; logs a warning and returns 0.
+        Telemetry data is currently exported directly to Azure Monitor via
+        OpenTelemetry and is not persisted in the application database.
+        Retention cleanup will be implemented once a TelemetryEvent model is
+        created for local telemetry storage.  This is an acceptable gap —
+        the 90-day retention policy defined in RETENTION_POLICIES is reserved
+        for future use and does not represent missing functionality.
         """
         logger.warning(
-            "Telemetry cleanup skipped: no telemetry table exists. " "Implement when a TelemetryEvent model is added."
+            "Telemetry cleanup skipped: no TelemetryEvent model exists yet. "
+            "Retention is deferred until local telemetry storage is implemented."
         )
         return 0
 

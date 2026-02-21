@@ -14,6 +14,7 @@ from src.api.utils.update import apply_updates
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Complaints"])
@@ -56,11 +57,13 @@ async def create_complaint(
     complaint = Complaint(
         **complaint_in.model_dump(),
         reference_number=ref_num,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(complaint)
     await db.commit()
     await db.refresh(complaint)
+    await invalidate_tenant_cache(current_user.tenant_id, "complaints")
     track_metric("complaints.created")
 
     await record_audit_event(
@@ -88,7 +91,7 @@ async def get_complaint(
 
     Requires authentication.
     """
-    return await get_or_404(db, Complaint, complaint_id)
+    return await get_or_404(db, Complaint, complaint_id, tenant_id=current_user.tenant_id)
 
 
 @router.get("/", response_model=ComplaintListResponse)
@@ -145,7 +148,7 @@ async def list_complaints(
         )
 
     try:
-        query = select(Complaint)
+        query = select(Complaint).where(Complaint.tenant_id == current_user.tenant_id)
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -195,12 +198,13 @@ async def update_complaint(
 
     Requires authentication.
     """
-    complaint = await get_or_404(db, Complaint, complaint_id)
+    complaint = await get_or_404(db, Complaint, complaint_id, tenant_id=current_user.tenant_id)
     old_status = complaint.status
     update_data = apply_updates(complaint, complaint_in, set_updated_at=False)
 
     await db.commit()
     await db.refresh(complaint)
+    await invalidate_tenant_cache(current_user.tenant_id, "complaints")
 
     await record_audit_event(
         db=db,
@@ -238,7 +242,7 @@ async def list_complaint_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    await get_or_404(db, Complaint, complaint_id)
+    await get_or_404(db, Complaint, complaint_id, tenant_id=current_user.tenant_id)
 
     query = (
         select(InvestigationRun)

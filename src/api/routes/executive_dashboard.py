@@ -9,7 +9,15 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.executive_dashboard import DashboardSummaryResponse, ExecutiveDashboardResponse
+from src.api.schemas.executive_dashboard import (
+    AlertsResponse,
+    ComplianceDashboardResponse,
+    DashboardSummaryResponse,
+    ExecutiveDashboardResponse,
+    HealthScore,
+    IncidentDashboardResponse,
+    RiskDashboardResponse,
+)
 from src.domain.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
@@ -65,7 +73,7 @@ async def get_dashboard_summary(
     )
 
 
-@router.get("/incidents")
+@router.get("/incidents", response_model=IncidentDashboardResponse)
 async def get_incident_dashboard(
     db: DbSession,
     current_user: CurrentUser,
@@ -87,7 +95,7 @@ async def get_incident_dashboard(
     }
 
 
-@router.get("/risks")
+@router.get("/risks", response_model=RiskDashboardResponse)
 async def get_risk_dashboard(
     db: DbSession,
     current_user: CurrentUser,
@@ -104,7 +112,7 @@ async def get_risk_dashboard(
     }
 
 
-@router.get("/compliance")
+@router.get("/compliance", response_model=ComplianceDashboardResponse)
 async def get_compliance_dashboard(
     db: DbSession,
     current_user: CurrentUser,
@@ -121,7 +129,7 @@ async def get_compliance_dashboard(
     }
 
 
-@router.get("/alerts")
+@router.get("/alerts", response_model=AlertsResponse)
 async def get_active_alerts(
     db: DbSession,
     current_user: CurrentUser,
@@ -136,7 +144,7 @@ async def get_active_alerts(
     }
 
 
-@router.get("/health-score")
+@router.get("/health-score", response_model=HealthScore)
 async def get_health_score(
     db: DbSession,
     current_user: CurrentUser,

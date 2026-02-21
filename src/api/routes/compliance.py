@@ -9,13 +9,14 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
@@ -97,6 +98,48 @@ class GapClause(BaseModel):
     clause_number: str
     title: str
     standard: str
+
+
+class EvidenceLinkCreateItem(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: str
+    clause_id: str
+    linked_by: str
+    confidence: Optional[float] = None
+    created_at: str
+
+
+class EvidenceLinkCreateResponse(BaseModel):
+    status: str
+    message: str
+    links: List[EvidenceLinkCreateItem]
+
+
+class EvidenceLinkListResponse(BaseModel):
+    items: List[EvidenceLinkResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class EvidenceLinkDeleteResponse(BaseModel):
+    status: str
+    message: str
+
+
+class ComplianceGapsResponse(BaseModel):
+    total_gaps: int
+    gap_clauses: List[Any]
+
+
+class StandardInfo(BaseModel):
+    id: str
+    code: str
+    name: str
+    description: str
+    clause_count: int
 
 
 # ============================================================================
@@ -208,7 +251,7 @@ async def auto_tag_content(request: AutoTagRequest):
     return [AutoTagResponse(**result) for result in results]
 
 
-@router.post("/evidence/link")
+@router.post("/evidence/link", response_model=EvidenceLinkCreateResponse)
 async def link_evidence(
     request: EvidenceLinkRequest,
     db: DbSession,
@@ -275,7 +318,7 @@ async def link_evidence(
     }
 
 
-@router.get("/evidence/links")
+@router.get("/evidence/links", response_model=EvidenceLinkListResponse)
 async def list_evidence_links(
     db: DbSession,
     current_user: CurrentUser,
@@ -323,28 +366,20 @@ async def list_evidence_links(
     }
 
 
-@router.delete("/evidence/link/{link_id}")
+@router.delete("/evidence/link/{link_id}", response_model=EvidenceLinkDeleteResponse)
 async def delete_evidence_link(
     link_id: int,
     db: DbSession,
     current_user: CurrentSuperuser,
 ):
     """Soft-delete an evidence link."""
-    result = await db.execute(
-        select(ComplianceEvidenceLink).where(
-            ComplianceEvidenceLink.id == link_id,
-            ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
-        )
-    )
-    link = result.scalar_one_or_none()
-    if not link:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
+    link = await get_or_404(db, ComplianceEvidenceLink, link_id, tenant_id=current_user.tenant_id)
     link.deleted_at = datetime.now(timezone.utc)
     await db.flush()
     return {"status": "success", "message": "Evidence link deleted"}
 
 
-@router.get("/coverage")
+@router.get("/coverage", response_model=dict)
 async def get_compliance_coverage(
     db: DbSession,
     current_user: CurrentUser,
@@ -362,7 +397,7 @@ async def get_compliance_coverage(
     return iso_compliance_service.calculate_compliance_coverage(links, std_enum)
 
 
-@router.get("/gaps")
+@router.get("/gaps", response_model=ComplianceGapsResponse)
 async def get_compliance_gaps(
     db: DbSession,
     current_user: CurrentUser,
@@ -381,7 +416,7 @@ async def get_compliance_gaps(
     return {"total_gaps": coverage["gaps"], "gap_clauses": coverage["gap_clauses"]}
 
 
-@router.get("/report")
+@router.get("/report", response_model=dict)
 async def generate_compliance_report(
     db: DbSession,
     current_user: CurrentUser,
@@ -400,7 +435,7 @@ async def generate_compliance_report(
     return iso_compliance_service.generate_audit_report(links, std_enum, include_evidence)
 
 
-@router.get("/standards")
+@router.get("/standards", response_model=List[StandardInfo])
 async def list_standards():
     """List all supported ISO standards."""
     return [

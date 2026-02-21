@@ -8,13 +8,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
@@ -104,6 +105,7 @@ async def create_capa_action(
     db.add(action)
     await db.commit()
     await db.refresh(action)
+    await invalidate_tenant_cache(current_user.tenant_id, "capa")
     track_metric("capa.created")
 
     from src.domain.services.audit_service import record_audit_event
@@ -170,6 +172,7 @@ async def update_capa_action(
     apply_updates(action, data)
     await db.commit()
     await db.refresh(action)
+    await invalidate_tenant_cache(current_user.tenant_id, "capa")
     return action
 
 
@@ -245,3 +248,4 @@ async def delete_capa_action(
 
     await db.delete(action)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "capa")

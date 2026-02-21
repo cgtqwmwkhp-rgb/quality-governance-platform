@@ -40,6 +40,7 @@ from src.domain.models.workflow_rules import (
     WorkflowRule,
 )
 from src.domain.services.workflow_engine import RuleEvaluator, SLAService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
 router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
 
@@ -93,6 +94,7 @@ async def create_workflow_rule(
     db.add(rule)
     await db.commit()
     await db.refresh(rule)
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
     return WorkflowRuleResponse.from_orm(rule)
 
 
@@ -121,6 +123,7 @@ async def update_workflow_rule(
 
     await db.commit()
     await db.refresh(rule)
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
     return WorkflowRuleResponse.from_orm(rule)
 
 
@@ -134,6 +137,7 @@ async def delete_workflow_rule(
     rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     await db.delete(rule)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
 
 
 @router.get("/rules/{rule_id}/executions", response_model=RuleExecutionListResponse)
@@ -213,6 +217,7 @@ async def create_sla_configuration(
     db.add(config)
     await db.commit()
     await db.refresh(config)
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
     return SLAConfigurationResponse.from_orm(config)
 
 
@@ -241,6 +246,7 @@ async def update_sla_configuration(
 
     await db.commit()
     await db.refresh(config)
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
     return SLAConfigurationResponse.from_orm(config)
 
 
@@ -254,6 +260,7 @@ async def delete_sla_configuration(
     config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     await db.delete(config)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
 
 
 # =============================================================================
@@ -401,6 +408,7 @@ async def create_escalation_level(
     db.add(level)
     await db.commit()
     await db.refresh(level)
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
     return EscalationLevelResponse.from_orm(level)
 
 
@@ -427,6 +435,7 @@ async def update_escalation_level(
     apply_updates(level, level_data)
     await db.commit()
     await db.refresh(level)
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
     return EscalationLevelResponse.from_orm(level)
 
 
@@ -440,6 +449,7 @@ async def delete_escalation_level(
     level = await get_or_404(db, EscalationLevel, level_id, tenant_id=current_user.tenant_id)
     await db.delete(level)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "workflow")
 
 
 # =============================================================================

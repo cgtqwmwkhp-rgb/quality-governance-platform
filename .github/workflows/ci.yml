@@ -226,7 +226,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=50 --junit-xml=junit-unit.xml
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=53 --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -247,7 +247,6 @@ jobs:
   frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
-    continue-on-error: true
     
     steps:
       - name: Checkout code
@@ -264,7 +263,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: npx vitest run
+        run: npx vitest run --coverage
 
   integration-tests:
     name: Integration Tests

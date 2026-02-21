@@ -159,19 +159,16 @@ async def update_user(
             detail="User not found",
         )
 
-    # Update fields
-    update_data = user_data.model_dump(exclude_unset=True)
-
     # Handle role assignment separately
-    role_ids = update_data.pop("role_ids", None)
+    update_data = user_data.model_dump(exclude_unset=True)
+    role_ids = update_data.get("role_ids")
     if role_ids is not None:
         result = await db.execute(select(Role).where(Role.id.in_(role_ids)))
         roles = result.scalars().all()
         user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
 
     # Update other fields
-    for field, value in update_data.items():
-        setattr(user, field, value)
+    apply_updates(user, user_data, exclude={"role_ids"})
 
     await db.commit()
     await db.refresh(user)
