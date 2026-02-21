@@ -1,8 +1,8 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  AlertTriangle, 
-  FileText, 
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import {
+  LayoutDashboard,
+  AlertTriangle,
+  FileText,
   Shield,
   Car,
   MessageSquare,
@@ -32,102 +32,117 @@ import {
   Leaf,
   FileSignature,
   Bot,
-} from 'lucide-react'
-import { useState, useMemo } from 'react'
-import AICopilot from './copilot/AICopilot'
-import KeyboardShortcutHelp from './KeyboardShortcutHelp'
-import { ThemeToggle } from './ui/ThemeToggle'
-import { Button } from './ui/Button'
-import { cn } from "../helpers/utils"
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+} from "lucide-react";
+import { useState, useMemo } from "react";
+import AICopilot from "./copilot/AICopilot";
+import KeyboardShortcutHelp from "./KeyboardShortcutHelp";
+import { ThemeToggle } from "./ui/ThemeToggle";
+import { Button } from "./ui/Button";
+import { cn } from "../helpers/utils";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
 interface LayoutProps {
-  onLogout: () => void
+  onLogout: () => void;
 }
 
 const navSections = [
   {
-    title: 'Core',
+    title: "Core",
     items: [
-      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { path: '/incidents', icon: AlertTriangle, label: 'Incidents' },
-      { path: '/rtas', icon: Car, label: 'RTAs' },
-      { path: '/complaints', icon: MessageSquare, label: 'Complaints' },
-    ]
+      { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+      { path: "/incidents", icon: AlertTriangle, label: "Incidents" },
+      { path: "/rtas", icon: Car, label: "RTAs" },
+      { path: "/complaints", icon: MessageSquare, label: "Complaints" },
+    ],
   },
   {
-    title: 'Governance',
+    title: "Governance",
     items: [
-      { path: '/audits', icon: ClipboardCheck, label: 'Audits' },
-      { path: '/audit-templates', icon: Sparkles, label: 'Audit Builder' },
-      { path: '/risk-register', icon: Target, label: 'Risk Register' },
-      { path: '/compliance', icon: Shield, label: 'ISO Compliance' },
-      { path: '/uvdb', icon: Award, label: 'UVDB Achilles' },
-      { path: '/planet-mark', icon: Leaf, label: 'Planet Mark' },
-      { path: '/investigations', icon: FlaskConical, label: 'Investigations' },
-      { path: '/standards', icon: BookOpen, label: 'Standards' },
-      { path: '/actions', icon: ListTodo, label: 'Actions' },
-    ]
+      { path: "/audits", icon: ClipboardCheck, label: "Audits" },
+      { path: "/audit-templates", icon: Sparkles, label: "Audit Builder" },
+      { path: "/risk-register", icon: Target, label: "Risk Register" },
+      { path: "/compliance", icon: Shield, label: "ISO Compliance" },
+      { path: "/uvdb", icon: Award, label: "UVDB Achilles" },
+      { path: "/planet-mark", icon: Leaf, label: "Planet Mark" },
+      { path: "/investigations", icon: FlaskConical, label: "Investigations" },
+      { path: "/standards", icon: BookOpen, label: "Standards" },
+      { path: "/actions", icon: ListTodo, label: "Actions" },
+    ],
   },
   {
-    title: 'Library',
+    title: "Library",
     items: [
-      { path: '/documents', icon: FolderOpen, label: 'Documents' },
-      { path: '/policies', icon: FileText, label: 'Policies' },
-    ]
+      { path: "/documents", icon: FolderOpen, label: "Documents" },
+      { path: "/policies", icon: FileText, label: "Policies" },
+    ],
   },
   {
-    title: 'Enterprise',
+    title: "Enterprise",
     items: [
-      { path: '/ims', icon: GitMerge, label: 'IMS Dashboard' },
-      { path: '/ai-intelligence', icon: Brain, label: 'AI Intelligence' },
-    ]
+      { path: "/ims", icon: GitMerge, label: "IMS Dashboard" },
+      { path: "/ai-intelligence", icon: Brain, label: "AI Intelligence" },
+    ],
   },
   {
-    title: 'Analytics',
+    title: "Analytics",
     items: [
-      { path: '/analytics', icon: BarChart3, label: 'Overview' },
-      { path: '/analytics/advanced', icon: BarChart3, label: 'Advanced Analytics' },
-      { path: '/analytics/dashboards', icon: LayoutDashboard, label: 'Dashboard Builder' },
-      { path: '/analytics/reports', icon: FileText, label: 'Report Generator' },
-      { path: '/calendar', icon: Calendar, label: 'Calendar' },
-      { path: '/exports', icon: Download, label: 'Export Center' },
-    ]
+      { path: "/analytics", icon: BarChart3, label: "Overview" },
+      {
+        path: "/analytics/advanced",
+        icon: BarChart3,
+        label: "Advanced Analytics",
+      },
+      {
+        path: "/analytics/dashboards",
+        icon: LayoutDashboard,
+        label: "Dashboard Builder",
+      },
+      { path: "/analytics/reports", icon: FileText, label: "Report Generator" },
+      { path: "/calendar", icon: Calendar, label: "Calendar" },
+      { path: "/exports", icon: Download, label: "Export Center" },
+    ],
   },
   {
-    title: 'Automation',
+    title: "Automation",
     items: [
-      { path: '/workflows', icon: GitBranch, label: 'Workflow Center' },
-      { path: '/compliance-automation', icon: Shield, label: 'Compliance Automation' },
-      { path: '/signatures', icon: FileSignature, label: 'Digital Signatures' },
-    ]
+      { path: "/workflows", icon: GitBranch, label: "Workflow Center" },
+      {
+        path: "/compliance-automation",
+        icon: Shield,
+        label: "Compliance Automation",
+      },
+      { path: "/signatures", icon: FileSignature, label: "Digital Signatures" },
+    ],
   },
   {
-    title: 'Admin',
+    title: "Admin",
     items: [
-      { path: '/users', icon: Users, label: 'User Management' },
-      { path: '/audit-trail', icon: History, label: 'Audit Trail' },
-    ]
-  }
-]
+      { path: "/users", icon: Users, label: "User Management" },
+      { path: "/audit-trail", icon: History, label: "Audit Trail" },
+    ],
+  },
+];
 
 export default function Layout({ onLogout }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [unreadNotifications] = useState(3)
-  const [copilotOpen, setCopilotOpen] = useState(false)
-  const navigate = useNavigate()
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadNotifications] = useState(3);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const navigate = useNavigate();
 
-  const shortcuts = useMemo(() => [
-    {
-      key: 'k',
-      modifiers: ['meta' as const],
-      description: 'Open global search',
-      action: () => navigate('/search'),
-      scope: 'Navigation',
-    },
-  ], [navigate])
+  const shortcuts = useMemo(
+    () => [
+      {
+        key: "k",
+        modifiers: ["meta" as const],
+        description: "Open global search",
+        action: () => navigate("/search"),
+        scope: "Navigation",
+      },
+    ],
+    [navigate],
+  );
 
-  useKeyboardShortcuts(shortcuts)
+  useKeyboardShortcuts(shortcuts);
 
   return (
     <div className="min-h-screen bg-background">
@@ -139,16 +154,20 @@ export default function Layout({ onLogout }: LayoutProps) {
       </a>
 
       {/* Top Bar */}
-      <header role="banner" aria-label="Site header" className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
+      <header
+        role="banner"
+        aria-label="Site header"
+        className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6"
+      >
         {/* Search Bar */}
         <button
-          onClick={() => navigate('/search')}
+          onClick={() => navigate("/search")}
           aria-label="Open global search"
           className={cn(
             "flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground",
             "bg-surface border border-border",
             "hover:text-foreground hover:border-border-strong transition-all",
-            "w-full max-w-md"
+            "w-full max-w-md",
           )}
         >
           <Search className="w-4 h-4" />
@@ -158,18 +177,18 @@ export default function Layout({ onLogout }: LayoutProps) {
             <span>K</span>
           </div>
         </button>
-        
+
         {/* Right Actions */}
         <div className="flex items-center gap-2">
           {/* Theme Toggle */}
           <ThemeToggle />
-          
+
           <NavLink
             to="/notifications"
-            aria-label={`Notifications${unreadNotifications > 0 ? ` (${unreadNotifications} unread)` : ''}`}
+            aria-label={`Notifications${unreadNotifications > 0 ? ` (${unreadNotifications} unread)` : ""}`}
             className={cn(
               "relative p-2 rounded-lg transition-colors",
-              "text-muted-foreground hover:text-foreground hover:bg-surface"
+              "text-muted-foreground hover:text-foreground hover:bg-surface",
             )}
           >
             <Bell className="w-5 h-5" />
@@ -179,7 +198,7 @@ export default function Layout({ onLogout }: LayoutProps) {
               </span>
             )}
           </NavLink>
-          
+
           <NavLink
             to="/users"
             aria-label="Settings"
@@ -187,16 +206,13 @@ export default function Layout({ onLogout }: LayoutProps) {
           >
             <Settings className="w-5 h-5" />
           </NavLink>
-          
+
           {/* AI Copilot Toggle */}
           <Button
             onClick={() => setCopilotOpen(!copilotOpen)}
-            variant={copilotOpen ? 'default' : 'ghost'}
+            variant={copilotOpen ? "default" : "ghost"}
             size="sm"
-            className={cn(
-              "gap-2",
-              copilotOpen && "shadow-glow"
-            )}
+            className={cn("gap-2", copilotOpen && "shadow-glow")}
           >
             <Bot className="w-4 h-4" />
             <span className="hidden sm:inline">Copilot</span>
@@ -207,7 +223,9 @@ export default function Layout({ onLogout }: LayoutProps) {
       {/* Mobile menu button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-label={
+          sidebarOpen ? "Close navigation menu" : "Open navigation menu"
+        }
         aria-expanded={sidebarOpen}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border text-foreground shadow-sm"
       >
@@ -215,12 +233,15 @@ export default function Layout({ onLogout }: LayoutProps) {
       </button>
 
       {/* Sidebar */}
-      <aside aria-label="Main navigation" className={cn(
-        "fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border",
-        "transform transition-transform duration-300 ease-in-out",
-        "lg:translate-x-0",
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
+      <aside
+        aria-label="Main navigation"
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border",
+          "transform transition-transform duration-300 ease-in-out",
+          "lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-border">
@@ -236,13 +257,18 @@ export default function Layout({ onLogout }: LayoutProps) {
                     PRO
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">Quality Governance Platform</p>
+                <p className="text-xs text-muted-foreground">
+                  Quality Governance Platform
+                </p>
               </div>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav aria-label="Main navigation" className="flex-1 p-4 overflow-y-auto">
+          <nav
+            aria-label="Main navigation"
+            className="flex-1 p-4 overflow-y-auto"
+          >
             {navSections.map((section) => (
               <div key={section.title} className="mb-6">
                 <h3 className="px-4 text-2xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
@@ -254,20 +280,26 @@ export default function Layout({ onLogout }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) => cn(
-                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium",
-                        "transition-all duration-200 group",
-                        isActive
-                          ? "bg-primary/10 text-primary border border-primary/20"
-                          : "text-muted-foreground hover:text-foreground hover:bg-surface"
-                      )}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium",
+                          "transition-all duration-200 group",
+                          isActive
+                            ? "bg-primary/10 text-primary border border-primary/20"
+                            : "text-muted-foreground hover:text-foreground hover:bg-surface",
+                        )
+                      }
                     >
                       {({ isActive }) => (
                         <>
-                          <item.icon className={cn(
-                            "w-5 h-5 transition-colors",
-                            isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                          )} />
+                          <item.icon
+                            className={cn(
+                              "w-5 h-5 transition-colors",
+                              isActive
+                                ? "text-primary"
+                                : "text-muted-foreground group-hover:text-foreground",
+                            )}
+                          />
                           {item.label}
                           {isActive && (
                             <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
@@ -287,7 +319,7 @@ export default function Layout({ onLogout }: LayoutProps) {
               onClick={onLogout}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium",
-                "text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
+                "text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200",
               )}
             >
               <LogOut size={20} />
@@ -312,10 +344,10 @@ export default function Layout({ onLogout }: LayoutProps) {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
       {/* AI Copilot */}
-      <AICopilot 
-        isOpen={copilotOpen} 
+      <AICopilot
+        isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
         currentPage={window.location.pathname}
       />
@@ -323,5 +355,5 @@ export default function Layout({ onLogout }: LayoutProps) {
       {/* Keyboard Shortcut Help (? key) */}
       <KeyboardShortcutHelp />
     </div>
-  )
+  );
 }

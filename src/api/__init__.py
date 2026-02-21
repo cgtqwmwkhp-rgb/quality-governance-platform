@@ -16,6 +16,7 @@ from src.api.routes import (
     compliance_automation,
     copilot,
     cross_standard_mappings,
+    dlq_admin,
     document_control,
     documents,
     employee_portal,
@@ -23,6 +24,7 @@ from src.api.routes import (
     executive_dashboard,
     form_config,
     global_search,
+    health,
     ims_dashboard,
     incidents,
     investigation_templates,
@@ -139,5 +141,9 @@ router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging
 router.include_router(telemetry.router, tags=["Telemetry"])
 # SLO/SLI Observability
 router.include_router(slo.router, tags=["SLO Metrics"])
+# Health sub-routes (circuit breakers)
+router.include_router(health.router, tags=["Health"])
+# DLQ Admin
+router.include_router(dlq_admin.router, tags=["Admin"])
 
 __all__ = ["router"]

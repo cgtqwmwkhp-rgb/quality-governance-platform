@@ -1,6 +1,6 @@
 /**
  * MentionInput - Rich text input with @mention support
- * 
+ *
  * Features:
  * - @mention autocomplete popup
  * - Fuzzy search for users
@@ -9,9 +9,15 @@
  * - Accessible
  */
 
-import React, { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
-import { User, Search } from 'lucide-react';
-import { usersApi } from '../../api/client';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  KeyboardEvent,
+  useCallback,
+} from "react";
+import { User, Search } from "lucide-react";
+import { usersApi } from "../../api/client";
 
 interface MentionUser {
   id: number;
@@ -35,19 +41,21 @@ const MentionInput: React.FC<MentionInputProps> = ({
   value,
   onChange,
   onMention,
-  placeholder = 'Type @ to mention someone...',
-  className = '',
+  placeholder = "Type @ to mention someone...",
+  className = "",
   rows = 3,
   disabled = false,
   maxLength = 5000,
 }) => {
   const [showPopup, setShowPopup] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
-  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
+  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(
+    null,
+  );
   const [users, setUsers] = useState<MentionUser[]>([]);
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +63,7 @@ const MentionInput: React.FC<MentionInputProps> = ({
     let cancelled = false;
     const fetchUsers = async () => {
       try {
-        const query = searchQuery || '';
+        const query = searchQuery || "";
         const res = await usersApi.search(query);
         if (cancelled) return;
         const rawData = res.data;
@@ -63,10 +71,10 @@ const MentionInput: React.FC<MentionInputProps> = ({
         setUsers(
           items.slice(0, 8).map((u) => ({
             id: u.id,
-            display_name: u.display_name || u.full_name || u.email || 'Unknown',
-            email: u.email || '',
+            display_name: u.display_name || u.full_name || u.email || "Unknown",
+            email: u.email || "",
             avatar_url: u.avatar_url,
-          }))
+          })),
         );
       } catch {
         if (!cancelled) setUsers([]);
@@ -74,7 +82,9 @@ const MentionInput: React.FC<MentionInputProps> = ({
       setSelectedIndex(0);
     };
     fetchUsers();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [searchQuery]);
 
   // Calculate popup position
@@ -83,33 +93,38 @@ const MentionInput: React.FC<MentionInputProps> = ({
 
     const textarea = textareaRef.current;
     const { selectionStart } = textarea;
-    
+
     // Create a hidden div to measure text
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.style.cssText = window.getComputedStyle(textarea, null).cssText;
-    div.style.height = 'auto';
-    div.style.position = 'absolute';
-    div.style.visibility = 'hidden';
-    div.style.whiteSpace = 'pre-wrap';
-    div.style.wordWrap = 'break-word';
+    div.style.height = "auto";
+    div.style.position = "absolute";
+    div.style.visibility = "hidden";
+    div.style.whiteSpace = "pre-wrap";
+    div.style.wordWrap = "break-word";
     div.textContent = value.substring(0, selectionStart);
-    
+
     // Add a span for cursor position
-    const span = document.createElement('span');
-    span.textContent = '|';
+    const span = document.createElement("span");
+    span.textContent = "|";
     div.appendChild(span);
-    
+
     document.body.appendChild(div);
-    
+
     const spanRect = span.getBoundingClientRect();
     const textareaRect = textarea.getBoundingClientRect();
-    
+
     document.body.removeChild(div);
-    
+
     // Position popup below cursor
     setPopupPosition({
-      top: Math.min(spanRect.height, textarea.scrollHeight - textarea.scrollTop) + 4,
-      left: Math.min(spanRect.width - div.offsetWidth + textareaRect.width, textareaRect.width - 250),
+      top:
+        Math.min(spanRect.height, textarea.scrollHeight - textarea.scrollTop) +
+        4,
+      left: Math.min(
+        spanRect.width - div.offsetWidth + textareaRect.width,
+        textareaRect.width - 250,
+      ),
     });
   }, [value]);
 
@@ -117,21 +132,21 @@ const MentionInput: React.FC<MentionInputProps> = ({
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     const cursorPos = e.target.selectionStart;
-    
+
     onChange(newValue);
 
     // Check for @ trigger
     const textBeforeCursor = newValue.substring(0, cursorPos);
-    const atIndex = textBeforeCursor.lastIndexOf('@');
-    
+    const atIndex = textBeforeCursor.lastIndexOf("@");
+
     if (atIndex !== -1) {
       // Check if @ is at start or preceded by whitespace
-      const charBefore = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' ';
-      if (charBefore === ' ' || charBefore === '\n' || atIndex === 0) {
+      const charBefore = atIndex > 0 ? textBeforeCursor[atIndex - 1] : " ";
+      if (charBefore === " " || charBefore === "\n" || atIndex === 0) {
         const query = textBeforeCursor.substring(atIndex + 1);
-        
+
         // Check if query doesn't contain spaces (still typing mention)
-        if (!query.includes(' ') && !query.includes('\n')) {
+        if (!query.includes(" ") && !query.includes("\n")) {
           setMentionStartIndex(atIndex);
           setSearchQuery(query);
           setShowPopup(true);
@@ -140,7 +155,7 @@ const MentionInput: React.FC<MentionInputProps> = ({
         }
       }
     }
-    
+
     setShowPopup(false);
     setMentionStartIndex(null);
   };
@@ -150,22 +165,22 @@ const MentionInput: React.FC<MentionInputProps> = ({
     if (!showPopup) return;
 
     switch (e.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, users.length - 1));
+        setSelectedIndex((prev) => Math.min(prev + 1, users.length - 1));
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
+        setSelectedIndex((prev) => Math.max(prev - 1, 0));
         break;
-      case 'Enter':
-      case 'Tab':
+      case "Enter":
+      case "Tab":
         e.preventDefault();
         if (users[selectedIndex]) {
           insertMention(users[selectedIndex]);
         }
         break;
-      case 'Escape':
+      case "Escape":
         e.preventDefault();
         setShowPopup(false);
         break;
@@ -179,15 +194,15 @@ const MentionInput: React.FC<MentionInputProps> = ({
     const cursorPos = textareaRef.current.selectionStart;
     const beforeMention = value.substring(0, mentionStartIndex);
     const afterMention = value.substring(cursorPos);
-    
+
     // Format: @[Display Name]
     const mentionText = `@[${user.display_name}] `;
     const newValue = beforeMention + mentionText + afterMention;
-    
+
     onChange(newValue);
     setShowPopup(false);
     setMentionStartIndex(null);
-    
+
     // Notify parent
     if (onMention) {
       onMention(user);
@@ -207,18 +222,27 @@ const MentionInput: React.FC<MentionInputProps> = ({
   // Close popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node) &&
-          textareaRef.current && !textareaRef.current.contains(e.target as Node)) {
+      if (
+        popupRef.current &&
+        !popupRef.current.contains(e.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(e.target as Node)
+      ) {
         setShowPopup(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -254,13 +278,16 @@ const MentionInput: React.FC<MentionInputProps> = ({
         <div
           ref={popupRef}
           className="absolute z-50 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden animate-fade-in"
-          style={{ top: `${popupPosition.top}px`, left: `${Math.max(0, popupPosition.left)}px` }}
+          style={{
+            top: `${popupPosition.top}px`,
+            left: `${Math.max(0, popupPosition.left)}px`,
+          }}
         >
           {/* Search indicator */}
           <div className="px-3 py-2 bg-slate-900 border-b border-slate-700 flex items-center gap-2">
             <Search className="w-4 h-4 text-gray-500" />
             <span className="text-sm text-gray-400">
-              {searchQuery ? `Searching: "${searchQuery}"` : 'Mention someone'}
+              {searchQuery ? `Searching: "${searchQuery}"` : "Mention someone"}
             </span>
           </div>
 
@@ -272,28 +299,38 @@ const MentionInput: React.FC<MentionInputProps> = ({
                 onClick={() => insertMention(user)}
                 className={`
                   w-full px-3 py-2 flex items-center gap-3 text-left transition-colors
-                  ${index === selectedIndex ? 'bg-emerald-600 text-white' : 'hover:bg-slate-700 text-gray-300'}
+                  ${index === selectedIndex ? "bg-emerald-600 text-white" : "hover:bg-slate-700 text-gray-300"}
                 `}
               >
-                  {/* Avatar */}
-                  <div className={`
+                {/* Avatar */}
+                <div
+                  className={`
                     w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
-                    ${index === selectedIndex ? 'bg-emerald-700' : 'bg-slate-600'}
-                  `}>
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={user.display_name} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      getInitials(user.display_name)
-                    )}
-                  </div>
+                    ${index === selectedIndex ? "bg-emerald-700" : "bg-slate-600"}
+                  `}
+                >
+                  {user.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.display_name}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    getInitials(user.display_name)
+                  )}
+                </div>
 
-                  {/* Info */}
-                  <div className="flex-grow min-w-0">
-                    <div className="text-sm font-medium truncate">{user.display_name}</div>
-                    <div className={`text-xs truncate ${index === selectedIndex ? 'text-emerald-200' : 'text-gray-500'}`}>
-                      {user.email}
-                    </div>
+                {/* Info */}
+                <div className="flex-grow min-w-0">
+                  <div className="text-sm font-medium truncate">
+                    {user.display_name}
                   </div>
+                  <div
+                    className={`text-xs truncate ${index === selectedIndex ? "text-emerald-200" : "text-gray-500"}`}
+                  >
+                    {user.email}
+                  </div>
+                </div>
               </button>
             ))}
           </div>
@@ -312,7 +349,10 @@ const MentionInput: React.FC<MentionInputProps> = ({
         <div
           ref={popupRef}
           className="absolute z-50 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-4 text-center text-gray-400"
-          style={{ top: `${popupPosition.top}px`, left: `${Math.max(0, popupPosition.left)}px` }}
+          style={{
+            top: `${popupPosition.top}px`,
+            left: `${Math.max(0, popupPosition.left)}px`,
+          }}
         >
           <User className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No users found for "{searchQuery}"</p>

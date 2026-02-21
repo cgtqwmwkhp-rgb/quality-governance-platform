@@ -1,8 +1,8 @@
 """Main FastAPI application entry point."""
 
+import asyncio
 import logging
 import secrets
-import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -10,7 +10,6 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
@@ -20,23 +19,32 @@ from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
-from src.infrastructure.logging.pii_filter import PIIFilter
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 
 
 class APIVersionMiddleware(BaseHTTPMiddleware):
-    """Track API version usage for future migration."""
+    """Enforce API versioning and advertise current version."""
+
+    CURRENT_VERSION = "1.0"
+    SUPPORTED_VERSIONS = {"v1", "1.0"}
 
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-API-Version"] = "v1"
-        requested_version = request.headers.get("X-API-Version", "v1")
-        if requested_version != "v1":
-            logging.getLogger(__name__).info(
-                "Client requested API version: %s",
-                requested_version,
-                extra={"requested_api_version": requested_version},
+        accept_version = request.headers.get("Accept-Version")
+        if accept_version and accept_version not in self.SUPPORTED_VERSIONS:
+            return JSONResponse(
+                status_code=406,
+                content={
+                    "detail": f"API version '{accept_version}' is not supported. "
+                    f"Current version: {self.CURRENT_VERSION}. "
+                    "Use Accept-Version: v1 or omit the header.",
+                    "supported_versions": sorted(self.SUPPORTED_VERSIONS),
+                    "deprecated": True,
+                },
+                headers={"X-API-Version": self.CURRENT_VERSION},
             )
+
+        response = await call_next(request)
+        response.headers["X-API-Version"] = self.CURRENT_VERSION
         return response
 
 
@@ -149,44 +157,55 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             extra={"error": str(e)},
         )
 
+    # Track in-flight requests for graceful shutdown
+    app.state.inflight = 0
+    app.state.shutting_down = False
+
     yield
-    # Shutdown
+
+    # --- Graceful shutdown ---
+    logger.info("Shutdown signal received – draining in-flight requests")
+    app.state.shutting_down = True
+
+    # Wait up to 30s for in-flight requests to complete
+    shutdown_deadline = 30.0
+    poll_interval = 0.25
+    waited = 0.0
+    while getattr(app.state, "inflight", 0) > 0 and waited < shutdown_deadline:
+        await asyncio.sleep(poll_interval)
+        waited += poll_interval
+    if waited >= shutdown_deadline:
+        logger.warning(
+            "Shutdown timeout reached with %d in-flight requests still pending",
+            getattr(app.state, "inflight", 0),
+        )
+
+    # Close database connections
     await close_db()
+
+    # Close Redis connections
+    try:
+        from src.infrastructure.cache.redis_cache import close_redis
+
+        await close_redis()
+    except Exception:
+        logger.debug("Redis close skipped (not available or already closed)")
+
+    # Cancel background tasks
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task() and not task.done():
+            task.cancel()
+
+    logger.info("Graceful shutdown complete")
 
 
 def configure_logging():
-    """Configure structured JSON logging."""
-    logger = logging.getLogger()
-    logger.setLevel(settings.log_level)
+    """Configure structured JSON logging with correlation context."""
+    from src.infrastructure.logging import configure_structured_logging
 
-    # Remove default handler
-    if logger.handlers:
-        logger.handlers = []
-
-    # Add JSON handler
-    json_handler = logging.StreamHandler(sys.stdout)
-    # Use a format string that includes common fields. jsonlogger will handle the rest.
-    formatter = jsonlogger.JsonFormatter(
-        "%(asctime)s %(levelname)s %(name)s %(module)s %(funcName)s %(lineno)d %(message)s"
-    )
-    json_handler.setFormatter(formatter)
-    json_handler.addFilter(PIIFilter())
-    logger.addHandler(json_handler)
-
-    # Configure uvicorn logging to use the same handler
-    uvicorn_logger = logging.getLogger("uvicorn")
-    uvicorn_logger.handlers = []
-    uvicorn_logger.addHandler(json_handler)
-    uvicorn_logger.setLevel(settings.log_level)
-
-    # Configure uvicorn.access logging to use the same handler
-    uvicorn_access_logger = logging.getLogger("uvicorn.access")
-    uvicorn_access_logger.handlers = []
-    uvicorn_access_logger.addHandler(json_handler)
-    uvicorn_access_logger.setLevel(settings.log_level)
-
-    # Example log to confirm configuration
-    logger.info("Logging configured successfully", extra={"app_name": settings.app_name})
+    log_dir = getattr(settings, "log_dir", None)
+    configure_structured_logging(level=settings.log_level, log_dir=log_dir)
+    logging.getLogger(__name__).info("Logging configured successfully", extra={"app_name": settings.app_name})
 
 
 def create_application() -> FastAPI:
@@ -232,6 +251,11 @@ def create_application() -> FastAPI:
 
     # Initialize OpenTelemetry instrumentation
     setup_telemetry(app)
+
+    # SLO metrics middleware (outermost to capture full latency)
+    from src.api.routes.slo import SLOMetricsMiddleware
+
+    app.add_middleware(SLOMetricsMiddleware)
 
     # Add Request State Middleware (must be first for request_id propagation)
     app.add_middleware(RequestStateMiddleware)

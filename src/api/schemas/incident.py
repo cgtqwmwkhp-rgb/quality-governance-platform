@@ -99,6 +99,7 @@ class IncidentResponse(IncidentBase):
     reporter_name: Optional[str] = None
     investigator_id: Optional[int] = None
     closed_at: Optional[datetime] = None
+    links: Optional[dict] = None
 
     class Config:
         """Pydantic config."""
@@ -114,3 +115,4 @@ class IncidentListResponse(BaseModel):
     page: int = 1
     page_size: int = 50
     pages: int = Field(..., description="Total number of pages")
+    links: Optional[dict] = None

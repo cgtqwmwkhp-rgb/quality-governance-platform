@@ -1,7 +1,7 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { useEffect, useRef, useCallback, useState } from "react";
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
-export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
+export type ToastVariant = "success" | "error" | "warning" | "info";
 
 export interface ToastData {
   id: string;
@@ -18,27 +18,26 @@ const ICONS: Record<ToastVariant, typeof CheckCircle2> = {
 
 const VARIANT_STYLES: Record<ToastVariant, string> = {
   success:
-    'bg-card border-success/30 text-foreground shadow-[0_0_0_1px_hsl(var(--success)/0.1)]',
+    "bg-card border-success/30 text-foreground shadow-[0_0_0_1px_hsl(var(--success)/0.1)]",
   error:
-    'bg-card border-destructive/30 text-foreground shadow-[0_0_0_1px_hsl(var(--destructive)/0.1)]',
+    "bg-card border-destructive/30 text-foreground shadow-[0_0_0_1px_hsl(var(--destructive)/0.1)]",
   warning:
-    'bg-card border-warning/30 text-foreground shadow-[0_0_0_1px_hsl(var(--warning)/0.1)]',
-  info:
-    'bg-card border-border text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.5)]',
+    "bg-card border-warning/30 text-foreground shadow-[0_0_0_1px_hsl(var(--warning)/0.1)]",
+  info: "bg-card border-border text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.5)]",
 };
 
 const ICON_STYLES: Record<ToastVariant, string> = {
-  success: 'text-success',
-  error: 'text-destructive',
-  warning: 'text-warning',
-  info: 'text-info',
+  success: "text-success",
+  error: "text-destructive",
+  warning: "text-warning",
+  info: "text-info",
 };
 
 const PROGRESS_STYLES: Record<ToastVariant, string> = {
-  success: 'bg-success',
-  error: 'bg-destructive',
-  warning: 'bg-warning',
-  info: 'bg-info',
+  success: "bg-success",
+  error: "bg-destructive",
+  warning: "bg-warning",
+  info: "bg-info",
 };
 
 function ToastItem({
@@ -86,19 +85,21 @@ function ToastItem({
 
   const Icon = ICONS[toast.variant];
 
+  const isUrgent = toast.variant === "error" || toast.variant === "warning";
+
   return (
     <div
       role="alert"
-      aria-live="polite"
+      aria-live={isUrgent ? "assertive" : "polite"}
       className={`
         pointer-events-auto w-[380px] max-w-[calc(100vw-2rem)]
         flex items-start gap-3 rounded-xl border px-4 py-3.5
         shadow-lg backdrop-blur-sm
         ${VARIANT_STYLES[toast.variant]}
-        ${exiting ? 'animate-toast-out' : 'animate-toast-in'}
+        ${exiting ? "animate-toast-out" : "animate-toast-in"}
       `}
       style={{
-        animationFillMode: 'forwards',
+        animationFillMode: "forwards",
       }}
     >
       <div
@@ -170,10 +171,13 @@ export function useToast() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const show = useCallback((message: string, variant: ToastVariant = 'success') => {
-    const id = `toast-${++toastCounter}-${Date.now()}`;
-    setToasts((prev) => [...prev, { id, message, variant }]);
-  }, []);
+  const show = useCallback(
+    (message: string, variant: ToastVariant = "success") => {
+      const id = `toast-${++toastCounter}-${Date.now()}`;
+      setToasts((prev) => [...prev, { id, message, variant }]);
+    },
+    [],
+  );
 
   return { toasts, show, dismiss };
 }

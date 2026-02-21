@@ -1,6 +1,6 @@
 /**
  * NotificationCenter - Real-time notification dropdown
- * 
+ *
  * Features:
  * - Fetches real notifications from the API
  * - Unread badge count
@@ -8,8 +8,8 @@
  * - Quick actions per notification
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CheckCheck,
@@ -25,13 +25,13 @@ import {
   ChevronRight,
   Settings,
   Loader2,
-} from 'lucide-react';
-import { notificationsApi } from '../../api/client';
+} from "lucide-react";
+import { notificationsApi } from "../../api/client";
 
 interface Notification {
   id: number;
   type: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
+  priority: "critical" | "high" | "medium" | "low";
   title: string;
   message: string;
   entity_type?: string;
@@ -47,7 +47,9 @@ interface NotificationCenterProps {
   className?: string;
 }
 
-const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' }) => {
+const NotificationCenter: React.FC<NotificationCenterProps> = ({
+  className = "",
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -63,28 +65,30 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
         notificationsApi.getUnreadCount(),
       ]);
 
-      if (listRes.status === 'fulfilled') {
+      if (listRes.status === "fulfilled") {
         const items = listRes.value.data.items || [];
-        setNotifications(items.map((n) => ({
-          id: n.id,
-          type: n.type || 'info',
-          priority: (n.priority || 'medium') as Notification['priority'],
-          title: n.title || 'Notification',
-          message: n.message || '',
-          entity_type: n.entity_type,
-          entity_id: n.entity_id,
-          action_url: n.action_url,
-          sender_name: n.sender_name,
-          is_read: n.is_read ?? false,
-          created_at: n.created_at || new Date().toISOString(),
-        })));
+        setNotifications(
+          items.map((n) => ({
+            id: n.id,
+            type: n.type || "info",
+            priority: (n.priority || "medium") as Notification["priority"],
+            title: n.title || "Notification",
+            message: n.message || "",
+            entity_type: n.entity_type,
+            entity_id: n.entity_id,
+            action_url: n.action_url,
+            sender_name: n.sender_name,
+            is_read: n.is_read ?? false,
+            created_at: n.created_at || new Date().toISOString(),
+          })),
+        );
       }
 
-      if (countRes.status === 'fulfilled') {
+      if (countRes.status === "fulfilled") {
         setUnreadCount(countRes.value.data.unread_count || 0);
       }
     } catch (err) {
-      console.error('Failed to fetch notifications:', err);
+      console.error("Failed to fetch notifications:", err);
     } finally {
       setLoading(false);
     }
@@ -98,37 +102,41 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const getNotificationIcon = (type: string, priority: string) => {
-    const iconClass = priority === 'critical' 
-      ? 'text-red-500 animate-pulse' 
-      : priority === 'high' 
-        ? 'text-orange-500' 
-        : 'text-muted-foreground';
+    const iconClass =
+      priority === "critical"
+        ? "text-red-500 animate-pulse"
+        : priority === "high"
+          ? "text-orange-500"
+          : "text-muted-foreground";
 
     switch (type) {
-      case 'sos_alert':
+      case "sos_alert":
         return <Siren className={`w-5 h-5 ${iconClass}`} />;
-      case 'riddor_incident':
+      case "riddor_incident":
         return <AlertTriangle className={`w-5 h-5 ${iconClass}`} />;
-      case 'mention':
+      case "mention":
         return <MessageSquare className={`w-5 h-5 ${iconClass}`} />;
-      case 'assignment':
+      case "assignment":
         return <ClipboardList className={`w-5 h-5 ${iconClass}`} />;
-      case 'action_due_soon':
-      case 'action_overdue':
+      case "action_due_soon":
+      case "action_overdue":
         return <Calendar className={`w-5 h-5 ${iconClass}`} />;
-      case 'audit_completed':
+      case "audit_completed":
         return <Shield className={`w-5 h-5 ${iconClass}`} />;
-      case 'approval_requested':
+      case "approval_requested":
         return <FileText className={`w-5 h-5 ${iconClass}`} />;
       default:
         return <Bell className={`w-5 h-5 ${iconClass}`} />;
@@ -140,10 +148,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (seconds < 60) return 'Just now';
+    if (seconds < 60) return "Just now";
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 172800) return 'Yesterday';
+    if (seconds < 172800) return "Yesterday";
     return date.toLocaleDateString();
   };
 
@@ -151,12 +159,14 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
     if (!notification.is_read) {
       try {
         await notificationsApi.markRead(notification.id);
-        setNotifications(prev =>
-          prev.map(n => (n.id === notification.id ? { ...n, is_read: true } : n))
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === notification.id ? { ...n, is_read: true } : n,
+          ),
         );
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        setUnreadCount((prev) => Math.max(0, prev - 1));
       } catch (err) {
-        console.error('Failed to mark notification as read:', err);
+        console.error("Failed to mark notification as read:", err);
       }
     }
 
@@ -169,10 +179,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
   const markAllAsRead = async () => {
     try {
       await notificationsApi.markAllRead();
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
     } catch (err) {
-      console.error('Failed to mark all as read:', err);
+      console.error("Failed to mark all as read:", err);
     }
   };
 
@@ -180,26 +190,26 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
     e.stopPropagation();
     try {
       await notificationsApi.delete(id);
-      const notification = notifications.find(n => n.id === id);
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      const notification = notifications.find((n) => n.id === id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
       if (notification && !notification.is_read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        setUnreadCount((prev) => Math.max(0, prev - 1));
       }
     } catch (err) {
-      console.error('Failed to delete notification:', err);
+      console.error("Failed to delete notification:", err);
     }
   };
 
   const getPriorityBorder = (priority: string) => {
     switch (priority) {
-      case 'critical':
-        return 'border-l-4 border-l-destructive';
-      case 'high':
-        return 'border-l-4 border-l-warning';
-      case 'medium':
-        return 'border-l-4 border-l-info';
+      case "critical":
+        return "border-l-4 border-l-destructive";
+      case "high":
+        return "border-l-4 border-l-warning";
+      case "medium":
+        return "border-l-4 border-l-info";
       default:
-        return 'border-l-4 border-l-border';
+        return "border-l-4 border-l-border";
     }
   };
 
@@ -213,7 +223,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] text-xs font-bold text-destructive-foreground bg-destructive rounded-full px-1 animate-pulse">
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
       </button>
@@ -241,7 +251,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                 </button>
               )}
               <button
-                onClick={() => navigate('/settings/notifications')}
+                onClick={() => navigate("/settings/notifications")}
                 className="text-muted-foreground hover:text-foreground"
                 title="Notification settings"
               >
@@ -270,18 +280,23 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                     className={`
                       p-4 cursor-pointer transition-all duration-200 
                       hover:bg-surface group
-                      ${!notification.is_read ? 'bg-primary/5' : ''}
+                      ${!notification.is_read ? "bg-primary/5" : ""}
                       ${getPriorityBorder(notification.priority)}
                     `}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 mt-0.5">
-                        {getNotificationIcon(notification.type, notification.priority)}
+                        {getNotificationIcon(
+                          notification.type,
+                          notification.priority,
+                        )}
                       </div>
 
                       <div className="flex-grow min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className={`text-sm font-medium truncate ${!notification.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          <h4
+                            className={`text-sm font-medium truncate ${!notification.is_read ? "text-foreground" : "text-muted-foreground"}`}
+                          >
                             {notification.title}
                           </h4>
                           <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -301,10 +316,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
 
                       <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {!notification.is_read && (
-                          <div className="w-2 h-2 bg-primary rounded-full" title="Unread" />
+                          <div
+                            className="w-2 h-2 bg-primary rounded-full"
+                            title="Unread"
+                          />
                         )}
                         <button
-                          onClick={(e) => deleteNotification(notification.id, e)}
+                          onClick={(e) =>
+                            deleteNotification(notification.id, e)
+                          }
                           className="p-1 text-muted-foreground hover:text-destructive rounded"
                           title="Delete"
                         >
@@ -321,7 +341,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
           <div className="px-4 py-3 bg-background border-t border-border">
             <button
               onClick={() => {
-                navigate('/notifications');
+                navigate("/notifications");
                 setIsOpen(false);
               }}
               className="w-full text-center text-sm text-primary hover:text-primary/80 flex items-center justify-center gap-1"

@@ -1,88 +1,119 @@
-import { useEffect, useState } from 'react'
-import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2, Link2, X } from 'lucide-react'
-import { ToastContainer, useToast } from '../components/ui/Toast'
-import { standardsApi, complianceApi, Standard, Clause, ControlListItem, ComplianceScore, getApiErrorMessage } from '../api/client'
-import { Input } from '../components/ui/Input'
-import { Card } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
-import { cn } from "../helpers/utils"
-import { TableSkeleton } from '../components/ui/SkeletonLoader'
+import { useEffect, useState } from "react";
+import {
+  Search,
+  BookOpen,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle2,
+  Circle,
+  AlertCircle,
+  Shield,
+  Award,
+  Loader2,
+  Link2,
+  X,
+} from "lucide-react";
+import { ToastContainer, useToast } from "../components/ui/Toast";
+import {
+  standardsApi,
+  complianceApi,
+  Standard,
+  Clause,
+  ControlListItem,
+  ComplianceScore,
+  getApiErrorMessage,
+} from "../api/client";
+import { Input } from "../components/ui/Input";
+import { Card } from "../components/ui/Card";
+import { Badge } from "../components/ui/Badge";
+import { cn } from "../helpers/utils";
+import { TableSkeleton } from "../components/ui/SkeletonLoader";
 
 interface ExpandedState {
-  [key: number]: boolean
+  [key: number]: boolean;
 }
 
 const ISO_ICONS: Record<string, string> = {
-  'ISO9001': '🏆',
-  'ISO14001': '🌍',
-  'ISO27001': '🔐',
-  'ISO45001': '⛑️',
-  'ISO22000': '🍽️',
-}
+  ISO9001: "🏆",
+  ISO14001: "🌍",
+  ISO27001: "🔐",
+  ISO45001: "⛑️",
+  ISO22000: "🍽️",
+};
 
 export default function Standards() {
-  const [standards, setStandards] = useState<Standard[]>([])
-  const [selectedStandard, setSelectedStandard] = useState<Standard | null>(null)
-  const [clauses, setClauses] = useState<Clause[]>([])
-  const [controls, setControls] = useState<ControlListItem[]>([])
-  const [complianceScores, setComplianceScores] = useState<Record<number, ComplianceScore>>({})
-  const [loading, setLoading] = useState(true)
-  const [loadingClauses, setLoadingClauses] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [expanded, setExpanded] = useState<ExpandedState>({})
-  const [showLinkModal, setShowLinkModal] = useState(false)
-  const [linkClauseId, setLinkClauseId] = useState<string | null>(null)
-  const [linkClauseLabel, setLinkClauseLabel] = useState('')
-  const [linkForm, setLinkForm] = useState({ entity_type: 'document', entity_id: '' })
-  const [linkSubmitting, setLinkSubmitting] = useState(false)
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+  const [standards, setStandards] = useState<Standard[]>([]);
+  const [selectedStandard, setSelectedStandard] = useState<Standard | null>(
+    null,
+  );
+  const [clauses, setClauses] = useState<Clause[]>([]);
+  const [controls, setControls] = useState<ControlListItem[]>([]);
+  const [complianceScores, setComplianceScores] = useState<
+    Record<number, ComplianceScore>
+  >({});
+  const [loading, setLoading] = useState(true);
+  const [loadingClauses, setLoadingClauses] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkClauseId, setLinkClauseId] = useState<string | null>(null);
+  const [linkClauseLabel, setLinkClauseLabel] = useState("");
+  const [linkForm, setLinkForm] = useState({
+    entity_type: "document",
+    entity_id: "",
+  });
+  const [linkSubmitting, setLinkSubmitting] = useState(false);
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
   const openLinkModal = (clauseId: string, label: string) => {
-    setLinkClauseId(clauseId)
-    setLinkClauseLabel(label)
-    setLinkForm({ entity_type: 'document', entity_id: '' })
-    setShowLinkModal(true)
-  }
+    setLinkClauseId(clauseId);
+    setLinkClauseLabel(label);
+    setLinkForm({ entity_type: "document", entity_id: "" });
+    setShowLinkModal(true);
+  };
 
   const handleLinkEvidence = async () => {
     if (!linkForm.entity_id.trim() || !linkClauseId) {
-      showToast('Reference ID is required', 'error'); return
+      showToast("Reference ID is required", "error");
+      return;
     }
     try {
-      setLinkSubmitting(true)
+      setLinkSubmitting(true);
       await complianceApi.linkEvidence({
         entity_type: linkForm.entity_type,
         entity_id: linkForm.entity_id,
         clause_ids: [linkClauseId],
-        linked_by: 'manual',
+        linked_by: "manual",
         title: `${linkForm.entity_type} ${linkForm.entity_id}`,
-      })
-      showToast('Evidence linked successfully')
-      setShowLinkModal(false)
+      });
+      showToast("Evidence linked successfully");
+      setShowLinkModal(false);
     } catch (err) {
-      showToast(getApiErrorMessage(err), 'error')
+      showToast(getApiErrorMessage(err), "error");
     } finally {
-      setLinkSubmitting(false)
+      setLinkSubmitting(false);
     }
-  }
+  };
 
   useEffect(() => {
-    loadStandards()
-  }, [])
+    loadStandards();
+  }, []);
 
   const loadStandards = async () => {
     try {
-      const response = await standardsApi.list(1, 50)
-      const loadedStandards = response.data.items || []
-      setStandards(loadedStandards)
-      
+      const response = await standardsApi.list(1, 50);
+      const loadedStandards = response.data.items || [];
+      setStandards(loadedStandards);
+
       // Load compliance scores for all standards
-      const scores: Record<number, ComplianceScore> = {}
+      const scores: Record<number, ComplianceScore> = {};
       await Promise.all(
         loadedStandards.map(async (standard) => {
           try {
-            const scoreResponse = await standardsApi.getComplianceScore(standard.id)
-            scores[standard.id] = scoreResponse.data
+            const scoreResponse = await standardsApi.getComplianceScore(
+              standard.id,
+            );
+            scores[standard.id] = scoreResponse.data;
           } catch (err) {
             // If compliance score fails, set setup_required
             scores[standard.id] = {
@@ -94,69 +125,77 @@ export default function Standards() {
               not_implemented_count: 0,
               compliance_percentage: 0,
               setup_required: true,
-            }
+            };
           }
-        })
-      )
-      setComplianceScores(scores)
+        }),
+      );
+      setComplianceScores(scores);
     } catch (err) {
-      console.error('Failed to load standards:', err)
-      setStandards([])
+      console.error("Failed to load standards:", err);
+      setStandards([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadClauses = async (standard: Standard) => {
-    setLoadingClauses(true)
-    setSelectedStandard(standard)
+    setLoadingClauses(true);
+    setSelectedStandard(standard);
     try {
       const [clauseResponse, controlResponse] = await Promise.all([
         standardsApi.get(standard.id),
         standardsApi.getControls(standard.id),
-      ])
-      setClauses(clauseResponse.data.clauses || [])
-      setControls(controlResponse.data || [])
+      ]);
+      setClauses(clauseResponse.data.clauses || []);
+      setControls(controlResponse.data || []);
     } catch (err) {
-      console.error('Failed to load clauses/controls:', err)
-      setClauses([])
-      setControls([])
+      console.error("Failed to load clauses/controls:", err);
+      setClauses([]);
+      setControls([]);
     } finally {
-      setLoadingClauses(false)
+      setLoadingClauses(false);
     }
-  }
+  };
 
   const toggleExpanded = (id: number) => {
-    setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
-  }
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Helper to get clause status from controls
   const getClauseStatus = (clauseId: number): string => {
-    const clauseControls = controls.filter(c => c.clause_id === clauseId)
-    if (clauseControls.length === 0) return 'not_implemented'
-    
+    const clauseControls = controls.filter((c) => c.clause_id === clauseId);
+    if (clauseControls.length === 0) return "not_implemented";
+
     const hasNotImplemented = clauseControls.some(
-      c => !c.implementation_status || c.implementation_status === 'not_implemented' || c.implementation_status === 'planned'
-    )
-    const hasPartial = clauseControls.some(c => c.implementation_status === 'partial')
-    
-    if (hasNotImplemented) return 'not_implemented'
-    if (hasPartial) return 'partial'
-    return 'implemented'
-  }
+      (c) =>
+        !c.implementation_status ||
+        c.implementation_status === "not_implemented" ||
+        c.implementation_status === "planned",
+    );
+    const hasPartial = clauseControls.some(
+      (c) => c.implementation_status === "partial",
+    );
+
+    if (hasNotImplemented) return "not_implemented";
+    if (hasPartial) return "partial";
+    return "implemented";
+  };
 
   const filteredStandards = standards.filter(
-    s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         s.code.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+    (s) =>
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.code.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   // Group clauses by level
-  const topLevelClauses = clauses.filter(c => c.level === 1)
+  const topLevelClauses = clauses.filter((c) => c.level === 1);
 
   if (loading) {
     return (
-      <div className="p-6"><TableSkeleton rows={5} columns={4} /></div>
-    )
+      <div className="p-6">
+        <TableSkeleton rows={5} columns={4} />
+      </div>
+    );
   }
 
   return (
@@ -167,9 +206,14 @@ export default function Standards() {
       {showLinkModal && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          role="dialog" aria-modal="true"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowLinkModal(false) }}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkModal(false) }}
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowLinkModal(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowLinkModal(false);
+          }}
         >
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-4">
@@ -177,23 +221,32 @@ export default function Standards() {
                 <Link2 className="w-5 h-5 text-primary" />
                 Link Evidence
               </h2>
-              <button onClick={() => setShowLinkModal(false)} className="text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setShowLinkModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {linkClauseLabel && (
               <div className="mb-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
-                <p className="text-sm font-medium text-foreground">{linkClauseLabel}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {linkClauseLabel}
+                </p>
               </div>
             )}
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Evidence Type</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Evidence Type
+                </label>
                 <select
                   value={linkForm.entity_type}
-                  onChange={(e) => setLinkForm(f => ({ ...f, entity_type: e.target.value }))}
+                  onChange={(e) =>
+                    setLinkForm((f) => ({ ...f, entity_type: e.target.value }))
+                  }
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
                 >
                   <option value="policy">Policy</option>
@@ -206,11 +259,15 @@ export default function Standards() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Reference ID</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Reference ID
+                </label>
                 <input
                   type="text"
                   value={linkForm.entity_id}
-                  onChange={(e) => setLinkForm(f => ({ ...f, entity_id: e.target.value }))}
+                  onChange={(e) =>
+                    setLinkForm((f) => ({ ...f, entity_id: e.target.value }))
+                  }
                   placeholder="e.g. DOC-001, POL-2026-003"
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
                 />
@@ -220,8 +277,12 @@ export default function Standards() {
                 disabled={linkSubmitting || !linkForm.entity_id.trim()}
                 className="w-full py-3 bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
-                {linkSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Link2 className="w-5 h-5" />}
-                {linkSubmitting ? 'Linking...' : 'Link Evidence'}
+                {linkSubmitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Link2 className="w-5 h-5" />
+                )}
+                {linkSubmitting ? "Linking..." : "Link Evidence"}
               </button>
             </div>
           </div>
@@ -231,8 +292,12 @@ export default function Standards() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Standards & Compliance</h1>
-          <p className="text-muted-foreground mt-1">ISO standards library, clauses & implementation tracking</p>
+          <h1 className="text-3xl font-bold text-foreground">
+            Standards & Compliance
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            ISO standards library, clauses & implementation tracking
+          </p>
         </div>
       </div>
 
@@ -260,11 +325,11 @@ export default function Standards() {
               </Card>
             ) : (
               filteredStandards.map((standard) => {
-                const scoreData = complianceScores[standard.id]
-                const compliance = scoreData?.compliance_percentage ?? 0
-                const setupRequired = scoreData?.setup_required ?? true
-                const isSelected = selectedStandard?.id === standard.id
-                
+                const scoreData = complianceScores[standard.id];
+                const compliance = scoreData?.compliance_percentage ?? 0;
+                const setupRequired = scoreData?.setup_required ?? true;
+                const isSelected = selectedStandard?.id === standard.id;
+
                 return (
                   <Card
                     key={standard.id}
@@ -272,57 +337,78 @@ export default function Standards() {
                     onClick={() => loadClauses(standard)}
                     className={cn(
                       "p-5 cursor-pointer",
-                      isSelected && "border-primary shadow-lg"
+                      isSelected && "border-primary shadow-lg",
                     )}
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl flex-shrink-0">
-                        {ISO_ICONS[standard.code] || '📋'}
+                        {ISO_ICONS[standard.code] || "📋"}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-sm text-primary">{standard.code}</span>
+                          <span className="font-mono text-sm text-primary">
+                            {standard.code}
+                          </span>
                           {standard.is_active && (
                             <Badge variant="success" className="text-[10px]">
                               Active
                             </Badge>
                           )}
                         </div>
-                        <h3 className="font-semibold text-foreground truncate">{standard.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1">Version {standard.version}</p>
+                        <h3 className="font-semibold text-foreground truncate">
+                          {standard.name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Version {standard.version}
+                        </p>
                       </div>
                     </div>
 
                     {/* Compliance Bar */}
                     <div className="mt-4">
                       <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="text-muted-foreground">Compliance</span>
+                        <span className="text-muted-foreground">
+                          Compliance
+                        </span>
                         {setupRequired ? (
-                          <span className="text-muted-foreground italic">Setup Required</span>
+                          <span className="text-muted-foreground italic">
+                            Setup Required
+                          </span>
                         ) : (
-                          <span className={cn(
-                            "font-bold",
-                            compliance >= 90 ? "text-success" :
-                            compliance >= 70 ? "text-warning" : "text-destructive"
-                          )}>
+                          <span
+                            className={cn(
+                              "font-bold",
+                              compliance >= 90
+                                ? "text-success"
+                                : compliance >= 70
+                                  ? "text-warning"
+                                  : "text-destructive",
+                            )}
+                          >
                             {compliance}%
                           </span>
                         )}
                       </div>
                       <div className="h-2 bg-surface rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={cn(
                             "h-full transition-all duration-500 rounded-full",
-                            setupRequired ? "bg-muted" :
-                            compliance >= 90 ? "bg-success" :
-                            compliance >= 70 ? "bg-warning" : "bg-destructive"
+                            setupRequired
+                              ? "bg-muted"
+                              : compliance >= 90
+                                ? "bg-success"
+                                : compliance >= 70
+                                  ? "bg-warning"
+                                  : "bg-destructive",
                           )}
-                          style={{ width: setupRequired ? '0%' : `${compliance}%` }}
+                          style={{
+                            width: setupRequired ? "0%" : `${compliance}%`,
+                          }}
                         />
                       </div>
                     </div>
                   </Card>
-                )
+                );
               })
             )}
           </div>
@@ -335,9 +421,12 @@ export default function Standards() {
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
                 <Award className="w-10 h-10 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Select a Standard</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                Select a Standard
+              </h3>
               <p className="text-muted-foreground max-w-md">
-                Choose a standard from the list to view its clauses, controls, and implementation status.
+                Choose a standard from the list to view its clauses, controls,
+                and implementation status.
               </p>
             </Card>
           ) : loadingClauses ? (
@@ -350,11 +439,15 @@ export default function Standards() {
               <div className="p-6 border-b border-border bg-primary/5">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-xl">
-                    {ISO_ICONS[selectedStandard.code] || '📋'}
+                    {ISO_ICONS[selectedStandard.code] || "📋"}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-foreground">{selectedStandard.name}</h2>
-                    <p className="text-sm text-muted-foreground">{selectedStandard.full_name}</p>
+                    <h2 className="text-xl font-bold text-foreground">
+                      {selectedStandard.name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedStandard.full_name}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -369,22 +462,29 @@ export default function Standards() {
                 ) : (
                   <div className="space-y-2">
                     {topLevelClauses.map((clause) => {
-                      const isExpanded = expanded[clause.id]
+                      const isExpanded = expanded[clause.id];
                       // Fix: Filter sub-clauses by parent_clause_id, not just level
-                      const subClauses = clauses.filter(c => c.parent_clause_id === clause.id)
-                      const clauseControls = controls.filter(c => c.clause_id === clause.id)
-                      const hasChildren = subClauses.length > 0 || clauseControls.length > 0
-                      
+                      const subClauses = clauses.filter(
+                        (c) => c.parent_clause_id === clause.id,
+                      );
+                      const clauseControls = controls.filter(
+                        (c) => c.clause_id === clause.id,
+                      );
+                      const hasChildren =
+                        subClauses.length > 0 || clauseControls.length > 0;
+
                       // Real implementation status computed from controls
-                      const clauseStatus = getClauseStatus(clause.id)
-                      
+                      const clauseStatus = getClauseStatus(clause.id);
+
                       return (
                         <div key={clause.id}>
-                          <div 
-                            onClick={() => hasChildren && toggleExpanded(clause.id)}
+                          <div
+                            onClick={() =>
+                              hasChildren && toggleExpanded(clause.id)
+                            }
                             className={cn(
                               "flex items-center gap-3 p-4 rounded-xl transition-all duration-200",
-                              hasChildren && "cursor-pointer hover:bg-surface"
+                              hasChildren && "cursor-pointer hover:bg-surface",
                             )}
                           >
                             {hasChildren ? (
@@ -396,15 +496,20 @@ export default function Standards() {
                             ) : (
                               <div className="w-5" />
                             )}
-                            
-                            <div className={cn(
-                              "w-8 h-8 rounded-lg flex items-center justify-center",
-                              clauseStatus === 'implemented' ? 'bg-success/10' :
-                              clauseStatus === 'partial' ? 'bg-warning/10' : 'bg-destructive/10'
-                            )}>
-                              {clauseStatus === 'implemented' ? (
+
+                            <div
+                              className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center",
+                                clauseStatus === "implemented"
+                                  ? "bg-success/10"
+                                  : clauseStatus === "partial"
+                                    ? "bg-warning/10"
+                                    : "bg-destructive/10",
+                              )}
+                            >
+                              {clauseStatus === "implemented" ? (
                                 <CheckCircle2 className="w-4 h-4 text-success" />
-                              ) : clauseStatus === 'partial' ? (
+                              ) : clauseStatus === "partial" ? (
                                 <Circle className="w-4 h-4 text-warning" />
                               ) : (
                                 <AlertCircle className="w-4 h-4 text-destructive" />
@@ -413,16 +518,25 @@ export default function Standards() {
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm text-primary">{clause.clause_number}</span>
-                                <h4 className="font-medium text-foreground truncate">{clause.title}</h4>
+                                <span className="font-mono text-sm text-primary">
+                                  {clause.clause_number}
+                                </span>
+                                <h4 className="font-medium text-foreground truncate">
+                                  {clause.title}
+                                </h4>
                               </div>
                             </div>
 
-                            <Badge variant={
-                              clauseStatus === 'implemented' ? 'resolved' :
-                              clauseStatus === 'partial' ? 'in-progress' : 'destructive'
-                            }>
-                              {clauseStatus.replace('_', ' ')}
+                            <Badge
+                              variant={
+                                clauseStatus === "implemented"
+                                  ? "resolved"
+                                  : clauseStatus === "partial"
+                                    ? "in-progress"
+                                    : "destructive"
+                              }
+                            >
+                              {clauseStatus.replace("_", " ")}
                             </Badge>
                           </div>
 
@@ -431,51 +545,80 @@ export default function Standards() {
                             <div className="ml-8 pl-4 border-l-2 border-border space-y-1 mt-2">
                               {/* Sub-clauses */}
                               {subClauses.map((subClause) => (
-                                <div 
+                                <div
                                   key={`clause-${subClause.id}`}
                                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
                                 >
                                   <BookOpen className="w-4 h-4 text-muted-foreground" />
-                                  <span className="font-mono text-xs text-primary">{subClause.clause_number}</span>
-                                  <span className="text-sm text-foreground truncate">{subClause.title}</span>
+                                  <span className="font-mono text-xs text-primary">
+                                    {subClause.clause_number}
+                                  </span>
+                                  <span className="text-sm text-foreground truncate">
+                                    {subClause.title}
+                                  </span>
                                 </div>
                               ))}
                               {/* Controls */}
                               {clauseControls.map((control) => (
-                                <div 
+                                <div
                                   key={`control-${control.id}`}
                                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
                                 >
-                                  <Shield className={cn(
-                                    "w-4 h-4",
-                                    control.implementation_status === 'implemented' ? 'text-success' :
-                                    control.implementation_status === 'partial' ? 'text-warning' : 'text-muted-foreground'
-                                  )} />
-                                  <span className="font-mono text-xs text-primary">{control.control_number}</span>
-                                  <span className="text-sm text-foreground truncate flex-1">{control.title}</span>
+                                  <Shield
+                                    className={cn(
+                                      "w-4 h-4",
+                                      control.implementation_status ===
+                                        "implemented"
+                                        ? "text-success"
+                                        : control.implementation_status ===
+                                            "partial"
+                                          ? "text-warning"
+                                          : "text-muted-foreground",
+                                    )}
+                                  />
+                                  <span className="font-mono text-xs text-primary">
+                                    {control.control_number}
+                                  </span>
+                                  <span className="text-sm text-foreground truncate flex-1">
+                                    {control.title}
+                                  </span>
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); openLinkModal(String(control.clause_id), `${control.control_number} - ${control.title}`) }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openLinkModal(
+                                        String(control.clause_id),
+                                        `${control.control_number} - ${control.title}`,
+                                      );
+                                    }}
                                     className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 rounded-md transition-colors flex-shrink-0"
                                     title="Link Evidence"
                                   >
                                     <Link2 className="w-3 h-3" />
                                     Link Evidence
                                   </button>
-                                  <Badge 
+                                  <Badge
                                     variant={
-                                      control.implementation_status === 'implemented' ? 'resolved' :
-                                      control.implementation_status === 'partial' ? 'in-progress' : 'destructive'
+                                      control.implementation_status ===
+                                      "implemented"
+                                        ? "resolved"
+                                        : control.implementation_status ===
+                                            "partial"
+                                          ? "in-progress"
+                                          : "destructive"
                                     }
                                     className="text-[10px]"
                                   >
-                                    {control.implementation_status?.replace('_', ' ') || 'not set'}
+                                    {control.implementation_status?.replace(
+                                      "_",
+                                      " ",
+                                    ) || "not set"}
                                   </Badge>
                                 </div>
                               ))}
                             </div>
                           )}
                         </div>
-                      )
+                      );
                     })}
                   </div>
                 )}
@@ -485,5 +628,5 @@ export default function Standards() {
         </div>
       </div>
     </div>
-  )
+  );
 }

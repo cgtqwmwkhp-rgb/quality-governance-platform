@@ -8,38 +8,39 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from src.infrastructure.logging.context import set_request_id
+from src.infrastructure.logging.trace_context import build_traceparent, get_trace_flags, get_trace_id, parse_traceparent
 
 
 class RequestStateMiddleware(BaseHTTPMiddleware):
     """
-    Middleware to propagate request_id via request.state and contextvars.
+    Middleware to propagate request_id and W3C Trace Context.
 
-    This middleware ensures request_id is available via request.state.request_id
-    for all request handlers, dependencies, and services. This approach works
-    reliably with both synchronous TestClient and asynchronous AsyncClient.
-
-    The request_id is sourced from:
-    1. X-Request-ID header (set by starlette-context RequestIdPlugin)
-    2. Generated UUID if header is missing
-
-    The request_id is then:
-    - Stored in request.state.request_id for handler access
-    - Stored in a contextvar for access anywhere in the call stack
-    - Added to response headers as X-Request-ID
+    Handles:
+    - ``X-Request-ID`` extraction / generation and contextvar storage
+    - ``traceparent`` header parsing (W3C Trace Context) with trace_id / span_id
+      stored in contextvars for downstream logging and outgoing HTTP propagation
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Process request and set request_id in request.state."""
         request_id = request.headers.get("X-Request-ID")
         if not request_id:
-            request_id = str(uuid.uuid4().hex)
+            request_id = uuid.uuid4().hex
 
         request.state.request_id = request_id
         set_request_id(request_id)
+
+        traceparent = request.headers.get("traceparent")
+        parse_traceparent(traceparent)
 
         response = await call_next(request)
 
         if "X-Request-ID" not in response.headers:
             response.headers["X-Request-ID"] = request_id
+
+        trace_id = get_trace_id()
+        if trace_id:
+            new_span = uuid.uuid4().hex[:16]
+            flags = get_trace_flags() or "01"
+            response.headers["traceparent"] = build_traceparent(trace_id, new_span, flags)
 
         return response  # type: ignore[no-any-return]  # TYPE-IGNORE: MYPY-003 Starlette middleware call_next returns Any

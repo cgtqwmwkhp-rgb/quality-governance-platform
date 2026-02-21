@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import {
   Bell,
   BellOff,
@@ -15,19 +15,19 @@ import {
   MessageSquare,
   Smartphone,
   Volume2,
-} from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Switch } from '../components/ui/Switch';
+} from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Badge } from "../components/ui/Badge";
+import { Switch } from "../components/ui/Switch";
 import { cn } from "../helpers/utils";
-import { TableSkeleton } from '../components/ui/SkeletonLoader';
-import { notificationsApi, NotificationEntry } from '../api/client';
-import { useToast, ToastContainer } from '../components/ui/Toast';
+import { TableSkeleton } from "../components/ui/SkeletonLoader";
+import { notificationsApi, NotificationEntry } from "../api/client";
+import { useToast, ToastContainer } from "../components/ui/Toast";
 
 interface Notification {
   id: string;
-  type: 'alert' | 'info' | 'success' | 'warning' | 'reminder';
+  type: "alert" | "info" | "success" | "warning" | "reminder";
   title: string;
   message: string;
   timestamp: string;
@@ -46,24 +46,25 @@ interface NotificationPreference {
   inApp: boolean;
 }
 
-const TYPE_MAP: Record<string, Notification['type']> = {
-  mention: 'info',
-  assignment: 'alert',
-  sos_alert: 'alert',
-  action_due_soon: 'warning',
-  action_overdue: 'warning',
-  system_announcement: 'info',
-  audit_scheduled: 'reminder',
-  risk_assessment: 'success',
+const TYPE_MAP: Record<string, Notification["type"]> = {
+  mention: "info",
+  assignment: "alert",
+  sos_alert: "alert",
+  action_due_soon: "warning",
+  action_overdue: "warning",
+  system_announcement: "info",
+  audit_scheduled: "reminder",
+  risk_assessment: "success",
 };
 
 function mapApiNotification(n: NotificationEntry): Notification {
-  const mapped: Notification['type'] = TYPE_MAP[n.type] || (n.priority === 'high' ? 'alert' : 'info');
+  const mapped: Notification["type"] =
+    TYPE_MAP[n.type] || (n.priority === "high" ? "alert" : "info");
   const created = new Date(n.created_at);
   const diffMs = Date.now() - created.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   let timestamp: string;
-  if (diffMin < 1) timestamp = 'Just now';
+  if (diffMin < 1) timestamp = "Just now";
   else if (diffMin < 60) timestamp = `${diffMin} min ago`;
   else if (diffMin < 1440) timestamp = `${Math.floor(diffMin / 60)}h ago`;
   else timestamp = `${Math.floor(diffMin / 1440)}d ago`;
@@ -75,26 +76,72 @@ function mapApiNotification(n: NotificationEntry): Notification {
     message: n.message,
     timestamp,
     read: n.is_read,
-    module: n.entity_type ? n.entity_type.charAt(0).toUpperCase() + n.entity_type.slice(1) + 's' : undefined,
+    module: n.entity_type
+      ? n.entity_type.charAt(0).toUpperCase() + n.entity_type.slice(1) + "s"
+      : undefined,
     actionUrl: n.action_url || undefined,
-    actionLabel: n.action_url ? 'View' : undefined,
+    actionLabel: n.action_url ? "View" : undefined,
   };
 }
 
 export default function Notifications() {
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'notifications' | 'settings'>('notifications');
-  const [filter, setFilter] = useState<'all' | 'unread' | 'alerts'>('all');
+  const [activeTab, setActiveTab] = useState<"notifications" | "settings">(
+    "notifications",
+  );
+  const [filter, setFilter] = useState<"all" | "unread" | "alerts">("all");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [preferences, setPreferences] = useState<NotificationPreference[]>([
-    { id: 'PREF001', label: 'High Priority Alerts', description: 'Critical incidents, severe risks, and urgent actions', email: true, push: true, inApp: true },
-    { id: 'PREF002', label: 'Action Reminders', description: 'Due dates and overdue action items', email: true, push: true, inApp: true },
-    { id: 'PREF003', label: 'Audit Notifications', description: 'Upcoming audits, findings, and results', email: true, push: false, inApp: true },
-    { id: 'PREF004', label: 'Document Updates', description: 'New documents, version changes, and reviews', email: false, push: false, inApp: true },
-    { id: 'PREF005', label: 'Weekly Summaries', description: 'Weekly digest of IMS activities', email: true, push: false, inApp: false },
-    { id: 'PREF006', label: 'Assignment Notifications', description: 'When tasks or items are assigned to you', email: true, push: true, inApp: true },
+    {
+      id: "PREF001",
+      label: "High Priority Alerts",
+      description: "Critical incidents, severe risks, and urgent actions",
+      email: true,
+      push: true,
+      inApp: true,
+    },
+    {
+      id: "PREF002",
+      label: "Action Reminders",
+      description: "Due dates and overdue action items",
+      email: true,
+      push: true,
+      inApp: true,
+    },
+    {
+      id: "PREF003",
+      label: "Audit Notifications",
+      description: "Upcoming audits, findings, and results",
+      email: true,
+      push: false,
+      inApp: true,
+    },
+    {
+      id: "PREF004",
+      label: "Document Updates",
+      description: "New documents, version changes, and reviews",
+      email: false,
+      push: false,
+      inApp: true,
+    },
+    {
+      id: "PREF005",
+      label: "Weekly Summaries",
+      description: "Weekly digest of IMS activities",
+      email: true,
+      push: false,
+      inApp: false,
+    },
+    {
+      id: "PREF006",
+      label: "Assignment Notifications",
+      description: "When tasks or items are assigned to you",
+      email: true,
+      push: true,
+      inApp: true,
+    },
   ]);
 
   const loadNotifications = useCallback(async () => {
@@ -105,8 +152,8 @@ export default function Notifications() {
       const items = Array.isArray(data?.items) ? data.items : [];
       setNotifications(items.map(mapApiNotification));
     } catch (err) {
-      console.error('Failed to load notifications', err);
-      showToast('Failed to load notifications. Please try again.', 'error');
+      console.error("Failed to load notifications", err);
+      showToast("Failed to load notifications. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -116,49 +163,58 @@ export default function Notifications() {
     loadNotifications();
   }, [loadNotifications]);
 
-  const typeStyles: Record<string, { icon: React.ReactNode; variant: string }> = {
-    alert: { icon: <AlertTriangle className="w-5 h-5" />, variant: 'destructive' },
-    warning: { icon: <Clock className="w-5 h-5" />, variant: 'warning' },
-    success: { icon: <CheckCircle2 className="w-5 h-5" />, variant: 'success' },
-    info: { icon: <Info className="w-5 h-5" />, variant: 'info' },
-    reminder: { icon: <Bell className="w-5 h-5" />, variant: 'primary' }
-  };
+  const typeStyles: Record<string, { icon: React.ReactNode; variant: string }> =
+    {
+      alert: {
+        icon: <AlertTriangle className="w-5 h-5" />,
+        variant: "destructive",
+      },
+      warning: { icon: <Clock className="w-5 h-5" />, variant: "warning" },
+      success: {
+        icon: <CheckCircle2 className="w-5 h-5" />,
+        variant: "success",
+      },
+      info: { icon: <Info className="w-5 h-5" />, variant: "info" },
+      reminder: { icon: <Bell className="w-5 h-5" />, variant: "primary" },
+    };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.read;
-    if (filter === 'alerts') return n.type === 'alert' || n.type === 'warning';
+  const filteredNotifications = notifications.filter((n) => {
+    if (filter === "unread") return !n.read;
+    if (filter === "alerts") return n.type === "alert" || n.type === "warning";
     return true;
   });
 
   const markAsRead = async (id: string) => {
     try {
       await notificationsApi.markRead(Number(id));
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+      );
     } catch (err) {
-      console.error('Failed to mark notification as read', err);
-      showToast('Failed to mark notification as read.', 'error');
+      console.error("Failed to mark notification as read", err);
+      showToast("Failed to mark notification as read.", "error");
     }
   };
 
   const markAllAsRead = async () => {
     try {
       await notificationsApi.markAllRead();
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (err) {
-      console.error('Failed to mark all as read', err);
-      showToast('Failed to mark all notifications as read.', 'error');
+      console.error("Failed to mark all as read", err);
+      showToast("Failed to mark all notifications as read.", "error");
     }
   };
 
   const deleteNotification = async (id: string) => {
     try {
       await notificationsApi.delete(Number(id));
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (err) {
-      console.error('Failed to delete notification', err);
-      showToast('Failed to delete notification.', 'error');
+      console.error("Failed to delete notification", err);
+      showToast("Failed to delete notification.", "error");
     }
   };
 
@@ -167,13 +223,18 @@ export default function Notifications() {
       await notificationsApi.markAllRead();
       setNotifications([]);
     } catch (err) {
-      console.error('Failed to clear notifications', err);
-      showToast('Failed to clear notifications.', 'error');
+      console.error("Failed to clear notifications", err);
+      showToast("Failed to clear notifications.", "error");
     }
   };
 
-  const togglePreference = (id: string, channel: 'email' | 'push' | 'inApp') => {
-    setPreferences(prev => prev.map(p => p.id === id ? { ...p, [channel]: !p[channel] } : p));
+  const togglePreference = (
+    id: string,
+    channel: "email" | "push" | "inApp",
+  ) => {
+    setPreferences((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [channel]: !p[channel] } : p)),
+    );
   };
 
   if (loading) {
@@ -196,19 +257,21 @@ export default function Notifications() {
             </div>
             Notifications
           </h1>
-          <p className="text-muted-foreground mt-1">Stay updated with important alerts and reminders</p>
+          <p className="text-muted-foreground mt-1">
+            Stay updated with important alerts and reminders
+          </p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-border">
         <button
-          onClick={() => setActiveTab('notifications')}
+          onClick={() => setActiveTab("notifications")}
           className={cn(
             "px-6 py-3 font-medium transition-all border-b-2",
-            activeTab === 'notifications'
-              ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+            activeTab === "notifications"
+              ? "text-primary border-primary"
+              : "text-muted-foreground border-transparent hover:text-foreground",
           )}
         >
           <span className="flex items-center gap-2">
@@ -220,12 +283,12 @@ export default function Notifications() {
           </span>
         </button>
         <button
-          onClick={() => setActiveTab('settings')}
+          onClick={() => setActiveTab("settings")}
           className={cn(
             "px-6 py-3 font-medium transition-all border-b-2",
-            activeTab === 'settings'
-              ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+            activeTab === "settings"
+              ? "text-primary border-primary"
+              : "text-muted-foreground border-transparent hover:text-foreground",
           )}
         >
           <span className="flex items-center gap-2">
@@ -236,29 +299,41 @@ export default function Notifications() {
       </div>
 
       {/* Notifications Tab */}
-      {activeTab === 'notifications' && (
+      {activeTab === "notifications" && (
         <>
           {/* Actions Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              {['all', 'unread', 'alerts'].map((f) => (
+              {["all", "unread", "alerts"].map((f) => (
                 <Button
                   key={f}
-                  variant={filter === f ? 'default' : 'outline'}
+                  variant={filter === f ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFilter(f as typeof filter)}
                 >
-                  {f === 'unread' ? `Unread (${unreadCount})` : f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f === "unread"
+                    ? `Unread (${unreadCount})`
+                    : f.charAt(0).toUpperCase() + f.slice(1)}
                 </Button>
               ))}
             </div>
-            
+
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={markAllAsRead} disabled={unreadCount === 0}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={markAllAsRead}
+                disabled={unreadCount === 0}
+              >
                 <CheckCheck className="w-4 h-4" />
                 Mark All Read
               </Button>
-              <Button variant="ghost" size="sm" onClick={clearAll} className="text-destructive hover:text-destructive">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAll}
+                className="text-destructive hover:text-destructive"
+              >
                 <Trash2 className="w-4 h-4" />
                 Clear All
               </Button>
@@ -272,28 +347,39 @@ export default function Notifications() {
                 key={notification.id}
                 className={cn(
                   "p-4",
-                  !notification.read && "border-primary/30 bg-primary/5"
+                  !notification.read && "border-primary/30 bg-primary/5",
                 )}
               >
                 <div className="flex items-start gap-4">
-                  <div className={cn(
-                    "p-2.5 rounded-xl",
-                    typeStyles[notification.type]!.variant === 'destructive' && "bg-destructive/10 text-destructive",
-                    typeStyles[notification.type]!.variant === 'warning' && "bg-warning/10 text-warning",
-                    typeStyles[notification.type]!.variant === 'success' && "bg-success/10 text-success",
-                    typeStyles[notification.type]!.variant === 'info' && "bg-info/10 text-info",
-                    typeStyles[notification.type]!.variant === 'primary' && "bg-primary/10 text-primary",
-                  )}>
+                  <div
+                    className={cn(
+                      "p-2.5 rounded-xl",
+                      typeStyles[notification.type]!.variant ===
+                        "destructive" && "bg-destructive/10 text-destructive",
+                      typeStyles[notification.type]!.variant === "warning" &&
+                        "bg-warning/10 text-warning",
+                      typeStyles[notification.type]!.variant === "success" &&
+                        "bg-success/10 text-success",
+                      typeStyles[notification.type]!.variant === "info" &&
+                        "bg-info/10 text-info",
+                      typeStyles[notification.type]!.variant === "primary" &&
+                        "bg-primary/10 text-primary",
+                    )}
+                  >
                     {typeStyles[notification.type]!.icon}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className={cn(
-                          "font-semibold",
-                          notification.read ? 'text-muted-foreground' : 'text-foreground'
-                        )}>
+                        <h3
+                          className={cn(
+                            "font-semibold",
+                            notification.read
+                              ? "text-muted-foreground"
+                              : "text-foreground",
+                          )}
+                        >
                           {notification.title}
                         </h3>
                         {notification.module && (
@@ -302,7 +388,7 @@ export default function Notifications() {
                           </span>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {notification.timestamp}
@@ -312,25 +398,37 @@ export default function Notifications() {
                         )}
                       </div>
                     </div>
-                    
+
                     <p className="text-muted-foreground mt-2 text-sm">
                       {notification.message}
                     </p>
-                    
+
                     <div className="flex items-center gap-3 mt-3">
                       {notification.actionUrl && (
-                        <a href={notification.actionUrl} className="text-sm text-primary hover:underline font-medium">
+                        <a
+                          href={notification.actionUrl}
+                          className="text-sm text-primary hover:underline font-medium"
+                        >
                           {notification.actionLabel} →
                         </a>
                       )}
-                      
+
                       <div className="flex items-center gap-2 ml-auto">
                         {!notification.read && (
-                          <Button variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => markAsRead(notification.id)}
+                          >
                             <Check className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => deleteNotification(notification.id)} className="text-muted-foreground hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteNotification(notification.id)}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
@@ -347,9 +445,13 @@ export default function Notifications() {
               <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
                 <BellOff className="w-10 h-10 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">No notifications</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                No notifications
+              </h3>
               <p className="text-muted-foreground">
-                {filter === 'unread' ? "You're all caught up!" : "Nothing to show here"}
+                {filter === "unread"
+                  ? "You're all caught up!"
+                  : "Nothing to show here"}
               </p>
             </div>
           )}
@@ -357,18 +459,22 @@ export default function Notifications() {
       )}
 
       {/* Settings Tab */}
-      {activeTab === 'settings' && (
+      {activeTab === "settings" && (
         <Card className="overflow-hidden">
           <div className="p-6 border-b border-border">
-            <h2 className="text-lg font-semibold text-foreground">Notification Preferences</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Notification Preferences
+            </h2>
             <p className="text-sm text-muted-foreground mt-1">
               Choose how and when you want to be notified
             </p>
           </div>
-          
+
           {/* Channel Headers */}
           <div className="grid grid-cols-[1fr,80px,80px,80px] gap-4 px-6 py-3 bg-surface border-b border-border">
-            <div className="text-sm font-medium text-muted-foreground">Notification Type</div>
+            <div className="text-sm font-medium text-muted-foreground">
+              Notification Type
+            </div>
             <div className="text-sm font-medium text-muted-foreground text-center flex items-center justify-center gap-1">
               <Mail className="w-4 h-4" />
               Email
@@ -382,7 +488,7 @@ export default function Notifications() {
               In-App
             </div>
           </div>
-          
+
           {/* Preference Rows */}
           {preferences.map((pref) => (
             <div
@@ -391,44 +497,65 @@ export default function Notifications() {
             >
               <div>
                 <p className="font-medium text-foreground">{pref.label}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{pref.description}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {pref.description}
+                </p>
               </div>
-              
+
               <div className="flex items-center justify-center">
-                <Switch checked={pref.email} onCheckedChange={() => togglePreference(pref.id, 'email')} />
+                <Switch
+                  checked={pref.email}
+                  onCheckedChange={() => togglePreference(pref.id, "email")}
+                />
               </div>
-              
+
               <div className="flex items-center justify-center">
-                <Switch checked={pref.push} onCheckedChange={() => togglePreference(pref.id, 'push')} />
+                <Switch
+                  checked={pref.push}
+                  onCheckedChange={() => togglePreference(pref.id, "push")}
+                />
               </div>
-              
+
               <div className="flex items-center justify-center">
-                <Switch checked={pref.inApp} onCheckedChange={() => togglePreference(pref.id, 'inApp')} />
+                <Switch
+                  checked={pref.inApp}
+                  onCheckedChange={() => togglePreference(pref.id, "inApp")}
+                />
               </div>
             </div>
           ))}
-          
+
           {/* Sound Settings */}
           <div className="p-6 border-t border-border">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Sound & Alerts</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              Sound & Alerts
+            </h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Volume2 className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium text-foreground">Notification Sounds</p>
-                    <p className="text-sm text-muted-foreground">Play sound for in-app notifications</p>
+                    <p className="font-medium text-foreground">
+                      Notification Sounds
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Play sound for in-app notifications
+                    </p>
                   </div>
                 </div>
                 <Switch defaultChecked />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium text-foreground">Desktop Notifications</p>
-                    <p className="text-sm text-muted-foreground">Show browser notifications</p>
+                    <p className="font-medium text-foreground">
+                      Desktop Notifications
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Show browser notifications
+                    </p>
                   </div>
                 </div>
                 <Switch />

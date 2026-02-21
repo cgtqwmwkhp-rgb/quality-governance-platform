@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
-import { Search, Check, ChevronDown, X } from 'lucide-react';
-import { cn } from '../helpers/utils';
+import { useState, useRef, useEffect } from "react";
+import { Search, Check, ChevronDown, X } from "lucide-react";
+import { cn } from "../helpers/utils";
 
 interface Option {
   value: string;
@@ -24,14 +24,14 @@ export default function FuzzySearchDropdown({
   options,
   value,
   onChange,
-  placeholder = 'Search or select...',
+  placeholder = "Search or select...",
   label,
   required,
   allowCustom = false,
   disabled = false,
 }: FuzzySearchDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -39,10 +39,14 @@ export default function FuzzySearchDropdown({
   const fuzzyMatch = (text: string, pattern: string): boolean => {
     const lowerText = text.toLowerCase();
     const lowerPattern = pattern.toLowerCase();
-    
+
     // Simple fuzzy: check if all characters exist in order
     let patternIdx = 0;
-    for (let i = 0; i < lowerText.length && patternIdx < lowerPattern.length; i++) {
+    for (
+      let i = 0;
+      i < lowerText.length && patternIdx < lowerPattern.length;
+      i++
+    ) {
       if (lowerText[i] === lowerPattern[patternIdx]) {
         patternIdx++;
       }
@@ -54,20 +58,23 @@ export default function FuzzySearchDropdown({
     (opt) =>
       fuzzyMatch(opt.label, search) ||
       (opt.sublabel && fuzzyMatch(opt.sublabel, search)) ||
-      fuzzyMatch(opt.value, search)
+      fuzzyMatch(opt.value, search),
   );
 
   const selectedOption = options.find((opt) => opt.value === value);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
-        setSearch('');
+        setSearch("");
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -79,13 +86,13 @@ export default function FuzzySearchDropdown({
   const handleSelect = (optionValue: string) => {
     onChange(optionValue);
     setIsOpen(false);
-    setSearch('');
+    setSearch("");
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange('');
-    setSearch('');
+    onChange("");
+    setSearch("");
   };
 
   return (
@@ -96,7 +103,7 @@ export default function FuzzySearchDropdown({
           {required && <span className="text-destructive ml-1">*</span>}
         </label>
       )}
-      
+
       <div className="relative">
         {/* Selected value display / Trigger */}
         <button
@@ -107,8 +114,10 @@ export default function FuzzySearchDropdown({
             "w-full flex items-center justify-between gap-2 px-4 py-3",
             "bg-card border border-border rounded-xl text-left",
             "transition-all duration-200",
-            disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-surface hover:border-border-strong",
-            isOpen && "border-primary ring-2 ring-primary/20"
+            disabled
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-surface hover:border-border-strong",
+            isOpen && "border-primary ring-2 ring-primary/20",
           )}
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -116,9 +125,13 @@ export default function FuzzySearchDropdown({
             <div className="flex-1 min-w-0">
               {selectedOption ? (
                 <div>
-                  <div className="text-foreground font-medium truncate">{selectedOption.label}</div>
+                  <div className="text-foreground font-medium truncate">
+                    {selectedOption.label}
+                  </div>
                   {selectedOption.sublabel && (
-                    <div className="text-muted-foreground text-xs truncate">{selectedOption.sublabel}</div>
+                    <div className="text-muted-foreground text-xs truncate">
+                      {selectedOption.sublabel}
+                    </div>
                   )}
                 </div>
               ) : (
@@ -126,7 +139,7 @@ export default function FuzzySearchDropdown({
               )}
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
             {value && !disabled && (
               <button
@@ -137,7 +150,12 @@ export default function FuzzySearchDropdown({
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
-            <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+            <ChevronDown
+              className={cn(
+                "w-5 h-5 text-muted-foreground transition-transform",
+                isOpen && "rotate-180",
+              )}
+            />
           </div>
         </button>
 
@@ -157,7 +175,7 @@ export default function FuzzySearchDropdown({
                   className={cn(
                     "w-full pl-10 pr-4 py-2.5 bg-surface border border-border rounded-lg",
                     "text-foreground placeholder-muted-foreground text-sm",
-                    "focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    "focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20",
                   )}
                 />
               </div>
@@ -173,14 +191,22 @@ export default function FuzzySearchDropdown({
                     onClick={() => handleSelect(option.value)}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-                      value === option.value ? "bg-primary/10" : "hover:bg-surface"
+                      value === option.value
+                        ? "bg-primary/10"
+                        : "hover:bg-surface",
                     )}
                   >
-                    {option.icon && <div className="flex-shrink-0">{option.icon}</div>}
+                    {option.icon && (
+                      <div className="flex-shrink-0">{option.icon}</div>
+                    )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-foreground font-medium truncate">{option.label}</div>
+                      <div className="text-foreground font-medium truncate">
+                        {option.label}
+                      </div>
                       {option.sublabel && (
-                        <div className="text-muted-foreground text-xs truncate">{option.sublabel}</div>
+                        <div className="text-muted-foreground text-xs truncate">
+                          {option.sublabel}
+                        </div>
                       )}
                     </div>
                     {value === option.value && (
@@ -199,7 +225,7 @@ export default function FuzzySearchDropdown({
                       Use "{search}"
                     </button>
                   ) : (
-                    'No matches found'
+                    "No matches found"
                   )}
                 </div>
               )}

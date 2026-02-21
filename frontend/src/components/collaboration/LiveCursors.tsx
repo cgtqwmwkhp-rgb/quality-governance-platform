@@ -1,10 +1,10 @@
 /**
  * Live Cursors Component
- * 
+ *
  * Shows real-time cursor positions of other users editing the same document.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 
 interface CursorPosition {
   userId: string;
@@ -22,7 +22,10 @@ interface LiveCursorsProps {
   containerRef: React.RefObject<HTMLElement>;
 }
 
-export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCursorsProps) {
+export function LiveCursors({
+  documentId,
+  containerRef: _containerRef,
+}: LiveCursorsProps) {
   const [cursors, setCursors] = useState<CursorPosition[]>([]);
 
   useEffect(() => {
@@ -30,17 +33,17 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
     // For now, we simulate with mock data
     const mockCursors: CursorPosition[] = [
       {
-        userId: '1',
-        userName: 'Sarah Johnson',
-        userColor: '#3B82F6',
+        userId: "1",
+        userName: "Sarah Johnson",
+        userColor: "#3B82F6",
         position: { x: 200, y: 150 },
         isTyping: true,
         lastUpdate: Date.now(),
       },
       {
-        userId: '2',
-        userName: 'Mike Chen',
-        userColor: '#10B981',
+        userId: "2",
+        userName: "Mike Chen",
+        userColor: "#10B981",
         position: { x: 450, y: 320 },
         lastUpdate: Date.now(),
       },
@@ -48,14 +51,16 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
 
     // Simulate cursor movement
     const interval = setInterval(() => {
-      setCursors(prev => prev.map(c => ({
-        ...c,
-        position: {
-          x: c.position.x + (Math.random() - 0.5) * 10,
-          y: c.position.y + (Math.random() - 0.5) * 10,
-        },
-        lastUpdate: Date.now(),
-      })));
+      setCursors((prev) =>
+        prev.map((c) => ({
+          ...c,
+          position: {
+            x: c.position.x + (Math.random() - 0.5) * 10,
+            y: c.position.y + (Math.random() - 0.5) * 10,
+          },
+          lastUpdate: Date.now(),
+        })),
+      );
     }, 100);
 
     setCursors(mockCursors);
@@ -65,14 +70,14 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
 
   return (
     <>
-      {cursors.map(cursor => (
+      {cursors.map((cursor) => (
         <div
           key={cursor.userId}
           className="pointer-events-none absolute z-50 transition-all duration-75"
           style={{
             left: cursor.position.x,
             top: cursor.position.y,
-            transform: 'translate(-2px, -2px)',
+            transform: "translate(-2px, -2px)",
           }}
         >
           {/* Cursor arrow */}
@@ -81,7 +86,7 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
             height="24"
             viewBox="0 0 24 24"
             fill="none"
-            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+            style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }}
           >
             <path
               d="M5.5 3.5L18.5 12L12 13.5L8.5 20.5L5.5 3.5Z"
@@ -99,9 +104,24 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
             {cursor.userName}
             {cursor.isTyping && (
               <span className="ml-1 inline-flex gap-0.5">
-                <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
-                <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
-                <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+                <span
+                  className="animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                >
+                  .
+                </span>
+                <span
+                  className="animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                >
+                  .
+                </span>
+                <span
+                  className="animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                >
+                  .
+                </span>
               </span>
             )}
           </div>
@@ -142,18 +162,27 @@ export function PresenceAvatars({ users, max = 5 }: PresenceAvatarsProps) {
             className={`
               flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-800 
               text-xs font-bold text-white shadow-lg
-              ${user.isEditing ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-800' : ''}
+              ${user.isEditing ? "ring-2 ring-white ring-offset-2 ring-offset-slate-800" : ""}
             `}
             style={{ backgroundColor: user.color }}
             title={user.name}
           >
             {user.avatar ? (
-              <img src={user.avatar} alt={user.name} className="h-full w-full rounded-full object-cover" />
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="h-full w-full rounded-full object-cover"
+              />
             ) : (
-              user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+              user.name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()
             )}
           </div>
-          
+
           {/* Online indicator */}
           <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-800 bg-emerald-500" />
         </div>
@@ -192,13 +221,13 @@ export function TypingIndicator({ users }: TypingIndicatorProps) {
   return (
     <div className="flex items-center gap-2 text-sm text-slate-400">
       <div className="flex gap-1">
-        {[0, 1, 2].map(i => (
+        {[0, 1, 2].map((i) => (
           <div
             key={i}
             className="h-2 w-2 rounded-full bg-slate-400 animate-bounce"
             style={{
               animationDelay: `${i * 150}ms`,
-              backgroundColor: users[0]?.color || '#64748b',
+              backgroundColor: users[0]?.color || "#64748b",
             }}
           />
         ))}
@@ -224,13 +253,18 @@ interface CollaborationBannerProps {
   onStartCollaboration?: () => void;
 }
 
-export function CollaborationBanner({ users, onStartCollaboration }: CollaborationBannerProps) {
-  const editingUsers = users.filter(u => u.isEditing);
+export function CollaborationBanner({
+  users,
+  onStartCollaboration,
+}: CollaborationBannerProps) {
+  const editingUsers = users.filter((u) => u.isEditing);
 
   if (users.length === 0) {
     return (
       <div className="flex items-center justify-between rounded-lg bg-slate-800/50 p-3">
-        <span className="text-sm text-slate-400">No one else is viewing this document</span>
+        <span className="text-sm text-slate-400">
+          No one else is viewing this document
+        </span>
         {onStartCollaboration && (
           <button
             onClick={onStartCollaboration}
@@ -249,11 +283,12 @@ export function CollaborationBanner({ users, onStartCollaboration }: Collaborati
         <PresenceAvatars users={users} max={4} />
         <div>
           <p className="text-sm font-medium text-white">
-            {users.length} {users.length === 1 ? 'person' : 'people'} viewing
+            {users.length} {users.length === 1 ? "person" : "people"} viewing
           </p>
           {editingUsers.length > 0 && (
             <p className="text-xs text-slate-400">
-              {editingUsers.map(u => u.name).join(', ')} {editingUsers.length === 1 ? 'is' : 'are'} editing
+              {editingUsers.map((u) => u.name).join(", ")}{" "}
+              {editingUsers.length === 1 ? "is" : "are"} editing
             </p>
           )}
         </div>

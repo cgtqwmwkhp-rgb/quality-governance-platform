@@ -1,18 +1,24 @@
 /**
  * EnvironmentMismatchGuard - Blocks API calls if frontend/API environments don't match.
- * 
+ *
  * This prevents accidental cross-environment data access (e.g., staging UI -> prod API).
  */
 
-import { useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { validateEnvironmentMatch, getExpectedEnvironment, getApiBaseUrl } from '../config/apiBase';
+import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import {
+  validateEnvironmentMatch,
+  getExpectedEnvironment,
+  getApiBaseUrl,
+} from "../config/apiBase";
 
 interface EnvironmentMismatchGuardProps {
   children: React.ReactNode;
 }
 
-export function EnvironmentMismatchGuard({ children }: EnvironmentMismatchGuardProps) {
+export function EnvironmentMismatchGuard({
+  children,
+}: EnvironmentMismatchGuardProps) {
   const [mismatchError, setMismatchError] = useState<string | null>(null);
   const [_isChecking, setIsChecking] = useState(true);
 
@@ -23,10 +29,10 @@ export function EnvironmentMismatchGuard({ children }: EnvironmentMismatchGuardP
       setMismatchError(error);
       setIsChecking(false);
     }
-    
+
     checkEnvironment();
   }, []);
-  
+
   // Note: _isChecking is available for loading state if needed in future
 
   // Show mismatch warning if detected
@@ -40,21 +46,25 @@ export function EnvironmentMismatchGuard({ children }: EnvironmentMismatchGuardP
               Environment Mismatch Detected
             </h1>
           </div>
-          
+
           <p className="text-gray-700 dark:text-gray-300 mb-4">
             {mismatchError}
           </p>
-          
+
           <div className="bg-gray-100 dark:bg-gray-700 rounded p-3 text-sm font-mono mb-4">
-            <div><strong>Expected:</strong> {getExpectedEnvironment()}</div>
-            <div><strong>API URL:</strong> {getApiBaseUrl()}</div>
+            <div>
+              <strong>Expected:</strong> {getExpectedEnvironment()}
+            </div>
+            <div>
+              <strong>API URL:</strong> {getApiBaseUrl()}
+            </div>
           </div>
-          
+
           <p className="text-sm text-gray-500 dark:text-gray-400">
             This is a safety measure to prevent cross-environment data access.
             Please ensure you're using the correct URL for your environment.
           </p>
-          
+
           <div className="mt-4 flex gap-2">
             <button
               onClick={() => window.location.reload()}

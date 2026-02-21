@@ -1,50 +1,65 @@
-import { cn } from '../../helpers/utils'
+import { cn } from "../../helpers/utils";
 
 interface SkeletonProps {
-  className?: string
-  lines?: number
-  variant?: 'text' | 'card' | 'table'
+  className?: string;
+  lines?: number;
+  variant?: "text" | "card" | "table";
 }
 
-export function Skeleton({ className = '', lines = 3, variant = 'text' }: SkeletonProps) {
-  if (variant === 'card') {
-    return <CardSkeleton count={1} className={className} />
+export function Skeleton({
+  className = "",
+  lines = 3,
+  variant = "text",
+}: SkeletonProps) {
+  if (variant === "card") {
+    return <CardSkeleton count={1} className={className} />;
   }
 
-  if (variant === 'table') {
-    return <TableSkeleton className={className} />
+  if (variant === "table") {
+    return <TableSkeleton className={className} />;
   }
 
   return (
-    <div className={cn('space-y-3', className)} role="status" aria-busy="true" aria-label="Loading">
+    <div
+      className={cn("space-y-3", className)}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading"
+    >
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
           className={cn(
-            'h-4 rounded bg-muted animate-pulse',
-            i === lines - 1 ? 'w-2/3' : 'w-full'
+            "h-4 rounded bg-muted animate-pulse",
+            i === lines - 1 ? "w-2/3" : "w-full",
           )}
         />
       ))}
     </div>
-  )
+  );
 }
 
 interface TableSkeletonProps {
-  rows?: number
-  columns?: number
-  className?: string
+  rows?: number;
+  columns?: number;
+  className?: string;
 }
 
-export function TableSkeleton({ rows = 5, columns = 4, className = '' }: TableSkeletonProps) {
+export function TableSkeleton({
+  rows = 5,
+  columns = 4,
+  className = "",
+}: TableSkeletonProps) {
   return (
-    <div className={cn('w-full', className)} role="status" aria-busy="true" aria-label="Loading table">
+    <div
+      className={cn("w-full", className)}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading table"
+    >
       <div className="flex gap-4 mb-4 pb-3 border-b border-border">
         {Array.from({ length: columns }).map((_, i) => (
-          <div
-            key={i}
-            className="h-4 rounded bg-muted animate-pulse flex-1"
-          />
+          <div key={i} className="h-4 rounded bg-muted animate-pulse flex-1" />
         ))}
       </div>
       <div className="space-y-3">
@@ -54,8 +69,8 @@ export function TableSkeleton({ rows = 5, columns = 4, className = '' }: TableSk
               <div
                 key={col}
                 className={cn(
-                  'h-4 rounded bg-muted/70 animate-pulse flex-1',
-                  col === 0 && 'max-w-[140px]'
+                  "h-4 rounded bg-muted/70 animate-pulse flex-1",
+                  col === 0 && "max-w-[140px]",
                 )}
                 style={{ animationDelay: `${(row * columns + col) * 50}ms` }}
               />
@@ -64,17 +79,25 @@ export function TableSkeleton({ rows = 5, columns = 4, className = '' }: TableSk
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 interface CardSkeletonProps {
-  count?: number
-  className?: string
+  count?: number;
+  className?: string;
 }
 
-export function CardSkeleton({ count = 3, className = '' }: CardSkeletonProps) {
+export function CardSkeleton({ count = 3, className = "" }: CardSkeletonProps) {
   return (
-    <div className={cn('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4', className)} role="status" aria-busy="true" aria-label="Loading cards">
+    <div
+      className={cn(
+        "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+        className,
+      )}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading cards"
+    >
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -99,5 +122,5 @@ export function CardSkeleton({ count = 3, className = '' }: CardSkeletonProps) {
         </div>
       ))}
     </div>
-  )
+  );
 }

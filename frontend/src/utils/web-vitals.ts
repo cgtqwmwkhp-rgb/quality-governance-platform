@@ -1,10 +1,12 @@
-import type { Metric } from 'web-vitals';
+import type { Metric } from "web-vitals";
 
 function reportMetric(metric: Metric) {
   const isProd = import.meta.env.PROD;
 
   if (!isProd) {
-    console.debug(`[Web Vitals] ${metric.name}: ${metric.value.toFixed(2)} (${metric.rating})`);
+    console.debug(
+      `[Web Vitals] ${metric.name}: ${metric.value.toFixed(2)} (${metric.rating})`,
+    );
     return;
   }
 
@@ -20,19 +22,19 @@ function reportMetric(metric: Metric) {
 
   // Use sendBeacon for reliable delivery during page unload
   if (navigator.sendBeacon) {
-    navigator.sendBeacon('/api/telemetry/web-vitals', body);
+    navigator.sendBeacon("/api/telemetry/web-vitals", body);
   } else {
-    fetch('/api/telemetry/web-vitals', {
-      method: 'POST',
+    fetch("/api/telemetry/web-vitals", {
+      method: "POST",
       body,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
       keepalive: true,
     }).catch(() => {});
   }
 }
 
 export function initWebVitals() {
-  import('web-vitals').then(({ onCLS, onINP, onLCP, onFCP, onTTFB }) => {
+  import("web-vitals").then(({ onCLS, onINP, onLCP, onFCP, onTTFB }) => {
     onCLS(reportMetric);
     onINP(reportMetric);
     onLCP(reportMetric);
