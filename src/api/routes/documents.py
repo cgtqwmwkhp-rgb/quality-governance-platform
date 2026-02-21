@@ -150,7 +150,11 @@ class AnnotationResponse(BaseModel):
 # =============================================================================
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_document(
     db: DbSession,
     current_user: CurrentUser,

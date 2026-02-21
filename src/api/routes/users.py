@@ -34,7 +34,11 @@ router = APIRouter()
 async def search_users(
     db: DbSession,
     current_user: CurrentUser,
-    q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
+    q: str = Query(
+        ...,
+        min_length=1,
+        description="Search query for email, first name, or last name",
+    ),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
     search_filter = f"%{q}%"

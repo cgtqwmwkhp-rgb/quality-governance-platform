@@ -143,7 +143,10 @@ async def get_online_users(current_user: CurrentUser):
 
     Returns list of user IDs with active WebSocket connections.
     """
-    return {"online_users": connection_manager.get_online_users(), "count": len(connection_manager.get_online_users())}
+    return {
+        "online_users": connection_manager.get_online_users(),
+        "count": len(connection_manager.get_online_users()),
+    }
 
 
 @router.get("/presence/{user_id}", response_model=Optional[PresenceResponse])

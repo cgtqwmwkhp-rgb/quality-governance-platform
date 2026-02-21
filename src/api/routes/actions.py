@@ -52,7 +52,8 @@ class ActionUpdate(BaseModel):
     action_type: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = Field(
-        None, description="One of: open, in_progress, pending_verification, completed, cancelled"
+        None,
+        description="One of: open, in_progress, pending_verification, completed, cancelled",
     )
     due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
@@ -106,7 +107,7 @@ def _action_to_response(
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=action.status.value if hasattr(action.status, "value") else str(action.status),
+        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=source_type,
@@ -396,7 +397,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=action.status.value if hasattr(action.status, "value") else str(action.status),
+        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=src_type,

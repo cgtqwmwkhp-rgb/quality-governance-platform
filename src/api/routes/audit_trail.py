@@ -561,7 +561,7 @@ async def export_audit_logs(
         export_record = AuditLogExport(
             tenant_id=tenant_id,
             export_format=data.format,
-            export_type="filtered" if (data.date_from or data.date_to or data.entity_type) else "full",
+            export_type=("filtered" if (data.date_from or data.date_to or data.entity_type) else "full"),
             filters={
                 "entity_type": data.entity_type,
                 "date_from": data.date_from.isoformat() if data.date_from else None,

@@ -158,7 +158,11 @@ async def update_near_miss(
         entity_id=str(near_miss.id),
         action="update",
         description=f"Near Miss {near_miss.reference_number} updated",
-        payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
+        payload={
+            "updates": update_data,
+            "old_status": old_status,
+            "new_status": near_miss.status,
+        },
         user_id=current_user.id,
         request_id=request_id,
     )

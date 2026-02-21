@@ -284,7 +284,11 @@ async def update_investigation(
 # === Stage 2 Endpoints ===
 
 
-@router.post("/from-record", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/from-record",
+    response_model=InvestigationRunResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_investigation_from_record(
     request_body: CreateFromRecordRequest,
     db: DbSession,
@@ -438,7 +442,8 @@ async def list_source_records(
     db: DbSession,
     current_user: CurrentUser,
     source_type: str = Query(
-        ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+        ...,
+        description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)",
     ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     params: PaginationParams = Depends(),
@@ -564,7 +569,7 @@ async def list_source_records(
                 status=record_status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
-                investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
+                investigation_reference=(str(existing_inv.reference_number) if existing_inv else None),
             )
         )
 
@@ -635,7 +640,11 @@ async def autosave_investigation(
     return investigation
 
 
-@router.post("/{investigation_id}/comments", status_code=status.HTTP_201_CREATED, response_model=CommentResponse)
+@router.post(
+    "/{investigation_id}/comments",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CommentResponse,
+)
 async def add_comment(
     investigation_id: int,
     request_body: CommentCreateRequest,
@@ -738,7 +747,10 @@ async def approve_investigation(
     investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Check status allows approval
-    if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
+    if investigation.status not in (
+        InvestigationStatus.UNDER_REVIEW,
+        InvestigationStatus.IN_PROGRESS,
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={

@@ -176,7 +176,14 @@ async def list_complaints(
         error_str = str(e).lower()
         logger.exception(f"Error listing complaints: {e}")
 
-        column_errors = ["email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        column_errors = [
+            "email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
+        ]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:

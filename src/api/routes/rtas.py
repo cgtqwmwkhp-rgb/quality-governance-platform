@@ -148,7 +148,14 @@ async def list_rtas(
         error_str = str(e).lower()
         logger.exception(f"Error listing RTAs: {e}")
 
-        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        column_errors = [
+            "reporter_email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
+        ]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
@@ -235,7 +242,11 @@ async def delete_rta(
 # RTA Actions endpoints
 
 
-@router.post("/{rta_id}/actions", response_model=RTAActionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{rta_id}/actions",
+    response_model=RTAActionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,

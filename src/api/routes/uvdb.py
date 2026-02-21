@@ -55,7 +55,11 @@ UVDB_B2_SECTIONS = [
                     "Where 3rd party accreditation has not been sought, can the company demonstrate that its Quality Management Systems are based on a recognised Standard?",
                 ],
                 "iso_mapping": {"9001": ["4.4", "5.1", "9.2"]},
-                "evidence": ["ISO 9001 certificate", "UKAS accreditation", "Quality Manual"],
+                "evidence": [
+                    "ISO 9001 certificate",
+                    "UKAS accreditation",
+                    "Quality Manual",
+                ],
             },
             {
                 "number": "1.2",
@@ -67,7 +71,11 @@ UVDB_B2_SECTIONS = [
                     "Where 3rd party accreditation has not been sought, can the company demonstrate that its Health and Safety Management Systems are based on a recognised Standard?",
                 ],
                 "iso_mapping": {"45001": ["4.4", "5.1", "9.2"]},
-                "evidence": ["ISO 45001 certificate", "UKAS accreditation", "H&S Policy"],
+                "evidence": [
+                    "ISO 45001 certificate",
+                    "UKAS accreditation",
+                    "H&S Policy",
+                ],
             },
             {
                 "number": "1.3",
@@ -79,7 +87,11 @@ UVDB_B2_SECTIONS = [
                     "Where 3rd party accreditation has not been sought, can the company demonstrate that its Environmental Systems are based on a recognised Standard?",
                 ],
                 "iso_mapping": {"14001": ["4.4", "5.1", "9.2"]},
-                "evidence": ["ISO 14001 certificate", "UKAS accreditation", "Environmental Policy"],
+                "evidence": [
+                    "ISO 14001 certificate",
+                    "UKAS accreditation",
+                    "Environmental Policy",
+                ],
             },
             {
                 "number": "1.4",
@@ -90,7 +102,11 @@ UVDB_B2_SECTIONS = [
                     "Can the company demonstrate that appropriate documented information relating to construction works is retained (i.e. Construction Phase Plan, H&S File, F10 Notification)?",
                 ],
                 "iso_mapping": {"45001": ["6.1", "8.1"]},
-                "evidence": ["CDM duties register", "Construction Phase Plan template", "F10 records"],
+                "evidence": [
+                    "CDM duties register",
+                    "Construction Phase Plan template",
+                    "F10 records",
+                ],
                 "site_applicable": True,
             },
             {
@@ -138,7 +154,11 @@ UVDB_B2_SECTIONS = [
                     "Is there a process or system in place for the secure disposal of confidential documentation?",
                 ],
                 "iso_mapping": {"9001": ["7.5"], "27001": ["7.5"]},
-                "evidence": ["Document control procedure", "Master document list", "Retention schedule"],
+                "evidence": [
+                    "Document control procedure",
+                    "Master document list",
+                    "Retention schedule",
+                ],
             },
             {
                 "number": "2.3",
@@ -151,7 +171,11 @@ UVDB_B2_SECTIONS = [
                     "Does the company have a process or procedure relating to the back up of confidential data?",
                 ],
                 "iso_mapping": {"27001": ["5.1", "8.1", "A.8"]},
-                "evidence": ["ISO 27001 certificate", "Backup procedures", "IT security policy"],
+                "evidence": [
+                    "ISO 27001 certificate",
+                    "Backup procedures",
+                    "IT security policy",
+                ],
             },
             {
                 "number": "2.4",
@@ -162,7 +186,11 @@ UVDB_B2_SECTIONS = [
                     "Does the company have a documented process that demonstrates the controlled hand over of completed works or services?",
                 ],
                 "iso_mapping": {"9001": ["8.5", "8.6"]},
-                "evidence": ["ITP templates", "Handover certificates", "Commissioning reports"],
+                "evidence": [
+                    "ITP templates",
+                    "Handover certificates",
+                    "Commissioning reports",
+                ],
                 "site_applicable": True,
             },
             {
@@ -197,7 +225,11 @@ UVDB_B2_SECTIONS = [
                     "Is there a process for ongoing monitoring of sub-contractor performance?",
                 ],
                 "iso_mapping": {"9001": ["8.4.1", "8.4.2"]},
-                "evidence": ["Supplier approval procedure", "Approved contractor list", "Due diligence forms"],
+                "evidence": [
+                    "Supplier approval procedure",
+                    "Approved contractor list",
+                    "Due diligence forms",
+                ],
             },
             {
                 "number": "12.2",
@@ -212,7 +244,11 @@ UVDB_B2_SECTIONS = [
                     "Does the company have a process to investigate contractor/supplier, Accidents/Incidents and track actions?",
                 ],
                 "iso_mapping": {"9001": ["8.4.3"], "45001": ["8.1.4"]},
-                "evidence": ["Supplier performance reviews", "Audit reports", "Incident tracking"],
+                "evidence": [
+                    "Supplier performance reviews",
+                    "Audit reports",
+                    "Incident tracking",
+                ],
             },
         ],
     },
@@ -234,7 +270,11 @@ UVDB_B2_SECTIONS = [
                     "For companies working in the Nuclear Industry, have CFSI examples been notified to ONR?",
                 ],
                 "iso_mapping": {"9001": ["8.4.2", "8.5.2"]},
-                "evidence": ["CFSI procedure", "Material traceability records", "Supplier audits"],
+                "evidence": [
+                    "CFSI procedure",
+                    "Material traceability records",
+                    "Supplier audits",
+                ],
             },
             {
                 "number": "13.2",
@@ -289,7 +329,11 @@ UVDB_B2_SECTIONS = [
                     "Where applicable, are records of thorough examination/certificates for statutory inspections and tests available?",
                 ],
                 "iso_mapping": {"45001": ["7.1.3", "8.1"]},
-                "evidence": ["Maintenance schedules", "LOLER/PUWER records", "Calibration certificates"],
+                "evidence": [
+                    "Maintenance schedules",
+                    "LOLER/PUWER records",
+                    "Calibration certificates",
+                ],
                 "site_applicable": True,
             },
         ],
@@ -644,7 +688,11 @@ async def update_audit(
 # ============ Audit Responses ============
 
 
-@router.post("/audits/{audit_id}/responses", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/audits/{audit_id}/responses",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
