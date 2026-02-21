@@ -1141,7 +1141,7 @@ jobs:
       - name: Rollback to previous version
         run: |
           echo "Rolling back to previous image: ${{ needs.build-and-deploy.outputs.previous_image }}"
-          # az containerapp update --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group $AZURE_RESOURCE_GROUP --image ${{ needs.build-and-deploy.outputs.previous_image }}
+          az containerapp update --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group $AZURE_RESOURCE_GROUP --image ${{ needs.build-and-deploy.outputs.previous_image }}
           echo "Rollback completed"
 
       - name: Verify rollback

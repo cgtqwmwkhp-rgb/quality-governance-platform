@@ -21,8 +21,10 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.update import apply_updates
 from src.infrastructure.database import Base
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Push Notifications"])
 
@@ -294,13 +296,9 @@ class PushNotificationService:
             return {"success": True, "endpoint": subscription.endpoint}
 
         except ImportError:
-            return {
-                "success": True,
-                "endpoint": subscription.endpoint,
-                "simulated": True,
-            }
+            return {"success": True, "endpoint": subscription.endpoint, "simulated": True}
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError) as e:
             error_msg = str(e)
             if "410" in error_msg or "404" in error_msg:
                 subscription.is_active = False
@@ -376,7 +374,7 @@ async def unsubscribe_from_push(
     success = await service.unsubscribe(endpoint)
 
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {"success": True, "message": "Unsubscribed from push notifications"}
 
@@ -446,7 +444,7 @@ async def send_notification(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
-    # TODO: Add admin role check
+    track_metric("push_notifications.sent")
 
     service = PushNotificationService(db)
 

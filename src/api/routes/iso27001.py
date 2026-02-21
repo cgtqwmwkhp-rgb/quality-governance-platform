@@ -50,6 +50,8 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+from src.domain.services.iso27001_service import ISO27001Service
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -65,14 +67,8 @@ async def _generate_asset_id(db) -> str:
 
 
 def _calculate_risk_scores(likelihood: int, impact: int) -> tuple[int, int]:
-    """Calculate inherent and residual risk scores.
-
-    Returns (inherent_score, residual_score) where residual assumes
-    one level of mitigation on both likelihood and impact axes.
-    """
-    inherent = likelihood * impact
-    residual = max((likelihood - 1) * (impact - 1), 1)
-    return inherent, residual
+    """Delegate to ISO27001Service."""
+    return ISO27001Service.calculate_risk_scores(likelihood, impact)
 
 
 # ============ Pydantic Schemas ============
@@ -251,7 +247,7 @@ async def get_asset(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get asset details"""
-    asset = await get_or_404(db, InformationAsset, asset_id)
+    asset = await get_or_404(db, InformationAsset, asset_id, tenant_id=current_user.tenant_id)
 
     return {
         "id": asset.id,
@@ -277,8 +273,8 @@ async def get_asset(
         "dependent_processes": asset.dependent_processes,
         "applied_controls": asset.applied_controls,
         "status": asset.status,
-        "last_review_date": (asset.last_review_date.isoformat() if asset.last_review_date else None),
-        "next_review_date": (asset.next_review_date.isoformat() if asset.next_review_date else None),
+        "last_review_date": asset.last_review_date.isoformat() if asset.last_review_date else None,
+        "next_review_date": asset.next_review_date.isoformat() if asset.next_review_date else None,
     }
 
 
@@ -306,6 +302,7 @@ async def list_controls(
 
     query = stmt.order_by(ISO27001Control.control_id)
     paginated = await paginate(db, query, params)
+    track_metric("iso27001.controls_accessed")
 
     # Summary
     result = await db.execute(
@@ -340,7 +337,9 @@ async def list_controls(
             "partially_implemented": partial,
             "not_implemented": not_impl,
             "excluded": excluded,
-            "implementation_percentage": round((implemented / max(paginated.total - excluded, 1)) * 100, 1),
+            "implementation_percentage": ISO27001Service.calculate_implementation_percentage(
+                implemented, paginated.total, excluded
+            ),
         },
         "controls": [
             {
@@ -403,10 +402,7 @@ async def get_current_soa(
         result = await db.execute(
             select(func.count())
             .select_from(ISO27001Control)
-            .where(
-                ISO27001Control.is_applicable == True,
-                ISO27001Control.implementation_status == "implemented",
-            )
+            .where(ISO27001Control.is_applicable == True, ISO27001Control.implementation_status == "implemented")
         )
         implemented = result.scalar_one()
 
@@ -417,13 +413,13 @@ async def get_current_soa(
             "applicable_controls": applicable,
             "excluded_controls": total - applicable,
             "implemented_controls": implemented,
-            "implementation_percentage": round((implemented / max(applicable, 1)) * 100, 1),
+            "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(implemented, applicable),
         }
 
     return {
         "id": soa.id,
         "version": soa.version,
-        "effective_date": (soa.effective_date.isoformat() if soa.effective_date else None),
+        "effective_date": soa.effective_date.isoformat() if soa.effective_date else None,
         "approved_by": soa.approved_by,
         "approved_date": soa.approved_date.isoformat() if soa.approved_date else None,
         "scope_description": soa.scope_description,
@@ -433,7 +429,9 @@ async def get_current_soa(
         "implemented_controls": soa.implemented_controls,
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
-        "implementation_percentage": round((soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1),
+        "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
+            soa.implemented_controls, soa.applicable_controls
+        ),
         "status": soa.status,
         "document_link": soa.document_link,
     }
@@ -452,7 +450,10 @@ async def list_security_risks(
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List information security risks"""
-    stmt = select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+    stmt = select(InformationSecurityRisk).where(
+        InformationSecurityRisk.status != "closed",
+        InformationSecurityRisk.tenant_id == current_user.tenant_id,
+    )
 
     if status:
         stmt = stmt.where(InformationSecurityRisk.status == status)
@@ -487,11 +488,7 @@ async def list_security_risks(
     }
 
 
-@router.post(
-    "/risks",
-    response_model=SecurityRiskCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/risks", response_model=SecurityRiskCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_security_risk(
     risk_data: SecurityRiskCreate,
     db: DbSession,
@@ -532,7 +529,9 @@ async def list_security_incidents(
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List security incidents"""
-    stmt = select(SecurityIncident)
+    stmt = select(SecurityIncident).where(
+        SecurityIncident.tenant_id == current_user.tenant_id,
+    )
 
     if status:
         stmt = stmt.where(SecurityIncident.status == status)
@@ -546,12 +545,16 @@ async def list_security_incidents(
 
     # Summary
     result = await db.execute(
-        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.status == "open")
+        select(func.count())
+        .select_from(SecurityIncident)
+        .where(SecurityIncident.tenant_id == current_user.tenant_id, SecurityIncident.status == "open")
     )
     open_count = result.scalar_one()
 
     result = await db.execute(
-        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.severity == "critical")
+        select(func.count())
+        .select_from(SecurityIncident)
+        .where(SecurityIncident.tenant_id == current_user.tenant_id, SecurityIncident.severity == "critical")
     )
     critical_count = result.scalar_one()
 
@@ -570,7 +573,7 @@ async def list_security_incidents(
                 "incident_type": i.incident_type,
                 "severity": i.severity,
                 "status": i.status,
-                "detected_date": (i.detected_date.isoformat() if i.detected_date else None),
+                "detected_date": i.detected_date.isoformat() if i.detected_date else None,
                 "assigned_to_name": i.assigned_to_name,
                 "data_compromised": i.data_compromised,
             }
@@ -579,11 +582,7 @@ async def list_security_incidents(
     }
 
 
-@router.post(
-    "/incidents",
-    response_model=SecurityIncidentCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/incidents", response_model=SecurityIncidentCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_security_incident(
     incident_data: SecurityIncidentCreate,
     db: DbSession,
@@ -604,11 +603,7 @@ async def create_security_incident(
     await db.commit()
     await db.refresh(incident)
 
-    return {
-        "id": incident.id,
-        "incident_id": incident_id,
-        "message": "Security incident created",
-    }
+    return {"id": incident.id, "incident_id": incident_id, "message": "Security incident created"}
 
 
 @router.put("/incidents/{incident_id}", response_model=IncidentUpdateResponse)
@@ -619,7 +614,7 @@ async def update_security_incident(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update security incident"""
-    incident = await get_or_404(db, SecurityIncident, incident_id)
+    incident = await get_or_404(db, SecurityIncident, incident_id, tenant_id=current_user.tenant_id)
     apply_updates(incident, incident_data)
 
     if incident_data.status == "contained" and not incident.contained_date:
@@ -643,7 +638,10 @@ async def list_supplier_assessments(
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List supplier security assessments"""
-    stmt = select(SupplierSecurityAssessment).where(SupplierSecurityAssessment.status == "active")
+    stmt = select(SupplierSecurityAssessment).where(
+        SupplierSecurityAssessment.status == "active",
+        SupplierSecurityAssessment.tenant_id == current_user.tenant_id,
+    )
 
     if rating:
         stmt = stmt.where(SupplierSecurityAssessment.overall_rating == rating)
@@ -669,18 +667,14 @@ async def list_supplier_assessments(
                 "iso27001_certified": s.iso27001_certified,
                 "soc2_certified": s.soc2_certified,
                 "risk_level": s.risk_level,
-                "next_assessment_date": (s.next_assessment_date.isoformat() if s.next_assessment_date else None),
+                "next_assessment_date": s.next_assessment_date.isoformat() if s.next_assessment_date else None,
             }
             for s in paginated.items
         ],
     }
 
 
-@router.post(
-    "/suppliers",
-    response_model=SupplierAssessmentCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/suppliers", response_model=SupplierAssessmentCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_supplier_assessment(
     assessment_data: SupplierAssessmentCreate,
     db: DbSession,
@@ -718,7 +712,9 @@ async def get_isms_dashboard(
     """Get ISMS dashboard summary"""
     # Assets
     result = await db.execute(
-        select(func.count()).select_from(InformationAsset).where(InformationAsset.is_active == True)
+        select(func.count())
+        .select_from(InformationAsset)
+        .where(InformationAsset.is_active == True, InformationAsset.tenant_id == current_user.tenant_id)
     )
     total_assets = result.scalar_one()
 
@@ -727,6 +723,7 @@ async def get_isms_dashboard(
         .select_from(InformationAsset)
         .where(
             InformationAsset.is_active == True,
+            InformationAsset.tenant_id == current_user.tenant_id,
             InformationAsset.criticality == "critical",
         )
     )
@@ -748,7 +745,12 @@ async def get_isms_dashboard(
 
     # Risks
     result = await db.execute(
-        select(func.count()).select_from(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+        select(func.count())
+        .select_from(InformationSecurityRisk)
+        .where(
+            InformationSecurityRisk.tenant_id == current_user.tenant_id,
+            InformationSecurityRisk.status != "closed",
+        )
     )
     open_risks = result.scalar_one()
 
@@ -756,6 +758,7 @@ async def get_isms_dashboard(
         select(func.count())
         .select_from(InformationSecurityRisk)
         .where(
+            InformationSecurityRisk.tenant_id == current_user.tenant_id,
             InformationSecurityRisk.residual_risk_score > 16,
             InformationSecurityRisk.status != "closed",
         )
@@ -764,14 +767,22 @@ async def get_isms_dashboard(
 
     # Incidents
     result = await db.execute(
-        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.status == "open")
+        select(func.count())
+        .select_from(SecurityIncident)
+        .where(
+            SecurityIncident.tenant_id == current_user.tenant_id,
+            SecurityIncident.status == "open",
+        )
     )
     open_incidents = result.scalar_one()
 
     result = await db.execute(
         select(func.count())
         .select_from(SecurityIncident)
-        .where(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
+        .where(
+            SecurityIncident.tenant_id == current_user.tenant_id,
+            SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30),
+        )
     )
     incidents_30d = result.scalar_one()
 
@@ -780,6 +791,7 @@ async def get_isms_dashboard(
         select(func.count())
         .select_from(SupplierSecurityAssessment)
         .where(
+            SupplierSecurityAssessment.tenant_id == current_user.tenant_id,
             SupplierSecurityAssessment.risk_level == "high",
             SupplierSecurityAssessment.status == "active",
         )
@@ -795,7 +807,9 @@ async def get_isms_dashboard(
             "total": total_controls,
             "applicable": applicable_controls,
             "implemented": implemented_controls,
-            "implementation_percentage": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+            "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
+                implemented_controls, applicable_controls
+            ),
         },
         "risks": {
             "open": open_risks,
@@ -808,5 +822,7 @@ async def get_isms_dashboard(
         "suppliers": {
             "high_risk": high_risk_suppliers,
         },
-        "compliance_score": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+        "compliance_score": ISO27001Service.calculate_soa_compliance_percentage(
+            implemented_controls, applicable_controls
+        ),
     }

@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from src.api.dependencies import CurrentUser
 from src.api.schemas.error_codes import ErrorCode
 from src.core.security import decode_token, is_token_revoked
+from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
         if token_user_id is not None and int(token_user_id) != user_id:
             await websocket.close(code=4003, reason="User ID mismatch")
             return
-    except Exception:
+    except (WebSocketDisconnect, ConnectionError):
         await websocket.close(code=4001, reason="Token validation failed")
         return
 
@@ -115,7 +116,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
 
     except WebSocketDisconnect:
         await connection_manager.disconnect(connection)
-    except Exception as e:
+    except (WebSocketDisconnect, ConnectionError) as e:
         logger.error(f"WebSocket error for user {user_id}: {e}")
         await connection_manager.disconnect(connection)
 
@@ -127,6 +128,7 @@ async def get_connection_stats(current_user: CurrentUser):
 
     Returns current connection counts and channel information.
     """
+    track_metric("realtime.connections", 1)
     stats = connection_manager.get_stats()
     return ConnectionStats(
         total_users=stats["total_users"],
@@ -143,10 +145,7 @@ async def get_online_users(current_user: CurrentUser):
 
     Returns list of user IDs with active WebSocket connections.
     """
-    return {
-        "online_users": connection_manager.get_online_users(),
-        "count": len(connection_manager.get_online_users()),
-    }
+    return {"online_users": connection_manager.get_online_users(), "count": len(connection_manager.get_online_users())}
 
 
 @router.get("/presence/{user_id}", response_model=Optional[PresenceResponse])

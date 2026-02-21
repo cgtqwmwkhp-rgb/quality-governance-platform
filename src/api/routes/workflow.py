@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
     EscalationLevelListResponse,
@@ -42,6 +43,7 @@ from src.domain.models.workflow_rules import (
 )
 from src.domain.services.workflow_engine import RuleEvaluator, SLAService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
 
@@ -207,11 +209,7 @@ async def list_sla_configurations(
     )
 
 
-@router.post(
-    "/sla-configs",
-    response_model=SLAConfigurationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/sla-configs", response_model=SLAConfigurationResponse, status_code=status.HTTP_201_CREATED)
 async def create_sla_configuration(
     config_data: SLAConfigurationCreate,
     db: DbSession,
@@ -285,6 +283,7 @@ async def get_sla_status(
     current_user: CurrentUser,
 ):
     """Get current SLA status for an entity."""
+    track_metric("workflow.sla_check", 1, {"entity_type": entity_type})
     from datetime import datetime
 
     result = await db.execute(
@@ -302,10 +301,7 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="SLA tracking not found for this entity",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     now = datetime.utcnow()
 
@@ -352,7 +348,7 @@ async def pause_sla_tracking(
     tracking = await sla_service.pause_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA tracking not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -369,7 +365,7 @@ async def resume_sla_tracking(
     tracking = await sla_service.resume_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA tracking not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -409,11 +405,7 @@ async def list_escalation_levels(
     )
 
 
-@router.post(
-    "/escalation-levels",
-    response_model=EscalationLevelResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/escalation-levels", response_model=EscalationLevelResponse, status_code=status.HTTP_201_CREATED)
 async def create_escalation_level(
     level_data: EscalationLevelCreate,
     db: DbSession,

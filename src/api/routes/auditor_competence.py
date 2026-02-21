@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.auditor_competence import (
     AuditorProfileCreateResponse,
     AuditorProfileResponse,
@@ -20,13 +21,14 @@ from src.api.schemas.auditor_competence import (
     CompetenceScoreResponse,
     CompetencyAssessmentResponse,
     CompetencyGapsResponse,
-    ExpiredCertificationsUpdateResponse,
     ExpiringCertificationsResponse,
+    ExpiredCertificationsUpdateResponse,
     QualifiedAuditorsResponse,
     TrainingCompleteResponse,
     TrainingCreateResponse,
 )
 from src.domain.services.auditor_competence import AuditorCompetenceService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
 
@@ -90,11 +92,7 @@ class AssessCompetencyRequest(BaseModel):
 # =============================================================================
 
 
-@router.post(
-    "/profiles",
-    status_code=status.HTTP_201_CREATED,
-    response_model=AuditorProfileCreateResponse,
-)
+@router.post("/profiles", status_code=status.HTTP_201_CREATED, response_model=AuditorProfileCreateResponse)
 async def create_auditor_profile(
     request: CreateProfileRequest,
     db: DbSession,
@@ -127,7 +125,7 @@ async def get_auditor_profile(
     profile = await service.get_profile(user_id)
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Auditor profile not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": profile.id,
@@ -159,7 +157,7 @@ async def update_auditor_profile(
     profile = await service.update_profile(user_id, **updates)
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Auditor profile not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": profile.id,
@@ -215,7 +213,7 @@ async def add_certification(
             certification_level=request.certification_level,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": cert.id,
@@ -291,11 +289,7 @@ async def update_expired_certifications(
 # =============================================================================
 
 
-@router.post(
-    "/profiles/{user_id}/training",
-    status_code=status.HTTP_201_CREATED,
-    response_model=TrainingCreateResponse,
-)
+@router.post("/profiles/{user_id}/training", status_code=status.HTTP_201_CREATED, response_model=TrainingCreateResponse)
 async def add_training(
     user_id: int,
     request: AddTrainingRequest,
@@ -315,7 +309,7 @@ async def add_training(
             duration_hours=request.duration_hours,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": training.id,
@@ -343,7 +337,7 @@ async def complete_training(
             cpd_hours_earned=request.cpd_hours_earned,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": training.id,
@@ -366,6 +360,7 @@ async def assess_competency(
     current_user: CurrentUser,
 ):
     """Record a competency assessment for an auditor."""
+    track_metric("auditor_competence.review")
     service = AuditorCompetenceService(db)
 
     try:
@@ -378,7 +373,7 @@ async def assess_competency(
             evidence_summary=request.evidence_summary,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": competency.id,

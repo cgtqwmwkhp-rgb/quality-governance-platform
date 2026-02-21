@@ -28,13 +28,13 @@ T = TypeVar("T")
 
 
 class CacheType(Enum):
-    """Cache categories with default TTLs."""
+    """Cache categories with default TTLs (configurable via environment)."""
 
-    SHORT = 60  # 1 minute - for frequently changing data
-    MEDIUM = 300  # 5 minutes - for moderately stable data
-    LONG = 3600  # 1 hour - for stable reference data
-    DAILY = 86400  # 24 hours - for very stable data
-    SESSION = 1800  # 30 minutes - for session data
+    SHORT = int(os.getenv("CACHE_TTL_SHORT", "60"))
+    MEDIUM = int(os.getenv("CACHE_TTL_MEDIUM", "300"))
+    LONG = int(os.getenv("CACHE_TTL_LONG", "3600"))
+    DAILY = int(os.getenv("CACHE_TTL_DAILY", "86400"))
+    SESSION = int(os.getenv("CACHE_TTL_SESSION", "1800"))
 
 
 @dataclass
@@ -42,7 +42,7 @@ class CacheConfig:
     """Cache configuration."""
 
     redis_url: Optional[str] = None
-    default_ttl: int = 300
+    default_ttl: int = int(os.getenv("CACHE_TTL_DEFAULT", "300"))
     max_memory_items: int = 1000
     enable_stats: bool = True
     key_prefix: str = "qgp:"

@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -52,10 +53,7 @@ class CreateFishboneRequest(BaseModel):
 
 
 class AddCauseRequest(BaseModel):
-    category: str = Field(
-        ...,
-        description="manpower, method, machine, material, measurement, mother_nature",
-    )
+    category: str = Field(..., description="manpower, method, machine, material, measurement, mother_nature")
     cause: str
     sub_causes: Optional[List[str]] = None
 
@@ -94,7 +92,7 @@ class VerifyCAPARequest(BaseModel):
 # =============================================================================
 
 
-@router.post("/five-whys", status_code=status.HTTP_201_CREATED)
+@router.post("/five-whys", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_five_whys_analysis(
     request: CreateFiveWhysRequest,
     db: DbSession,
@@ -118,7 +116,7 @@ async def create_five_whys_analysis(
     }
 
 
-@router.get("/five-whys/{analysis_id}")
+@router.get("/five-whys/{analysis_id}", response_model=dict)
 async def get_five_whys_analysis(
     analysis_id: int,
     db: DbSession,
@@ -129,7 +127,7 @@ async def get_five_whys_analysis(
     analysis = await service.get_analysis(analysis_id)
 
     if not analysis:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -145,7 +143,7 @@ async def get_five_whys_analysis(
     }
 
 
-@router.post("/five-whys/{analysis_id}/add-why")
+@router.post("/five-whys/{analysis_id}/add-why", response_model=dict)
 async def add_why_iteration(
     analysis_id: int,
     request: AddWhyRequest,
@@ -163,7 +161,7 @@ async def add_why_iteration(
             evidence=request.evidence,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -172,7 +170,7 @@ async def add_why_iteration(
     }
 
 
-@router.post("/five-whys/{analysis_id}/set-root-cause")
+@router.post("/five-whys/{analysis_id}/set-root-cause", response_model=dict)
 async def set_five_whys_root_cause(
     analysis_id: int,
     request: SetRootCauseRequest,
@@ -189,7 +187,7 @@ async def set_five_whys_root_cause(
             contributing_factors=request.contributing_factors,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -198,7 +196,7 @@ async def set_five_whys_root_cause(
     }
 
 
-@router.post("/five-whys/{analysis_id}/complete")
+@router.post("/five-whys/{analysis_id}/complete", response_model=dict)
 async def complete_five_whys_analysis(
     analysis_id: int,
     request: CompleteAnalysisRequest,
@@ -215,7 +213,7 @@ async def complete_five_whys_analysis(
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -224,7 +222,7 @@ async def complete_five_whys_analysis(
     }
 
 
-@router.get("/five-whys/entity/{entity_type}/{entity_id}")
+@router.get("/five-whys/entity/{entity_type}/{entity_id}", response_model=dict)
 async def get_five_whys_for_entity(
     entity_type: str,
     entity_id: int,
@@ -255,7 +253,7 @@ async def get_five_whys_for_entity(
 # =============================================================================
 
 
-@router.post("/fishbone", status_code=status.HTTP_201_CREATED)
+@router.post("/fishbone", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_fishbone_diagram(
     request: CreateFishboneRequest,
     db: DbSession,
@@ -279,7 +277,7 @@ async def create_fishbone_diagram(
     }
 
 
-@router.get("/fishbone/{diagram_id}")
+@router.get("/fishbone/{diagram_id}", response_model=dict)
 async def get_fishbone_diagram(
     diagram_id: int,
     db: DbSession,
@@ -290,7 +288,7 @@ async def get_fishbone_diagram(
     diagram = await service.get_diagram(diagram_id)
 
     if not diagram:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Diagram not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": diagram.id,
@@ -305,7 +303,7 @@ async def get_fishbone_diagram(
     }
 
 
-@router.post("/fishbone/{diagram_id}/add-cause")
+@router.post("/fishbone/{diagram_id}/add-cause", response_model=dict)
 async def add_fishbone_cause(
     diagram_id: int,
     request: AddCauseRequest,
@@ -323,7 +321,7 @@ async def add_fishbone_cause(
             sub_causes=request.sub_causes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": diagram.id,
@@ -332,7 +330,7 @@ async def add_fishbone_cause(
     }
 
 
-@router.post("/fishbone/{diagram_id}/set-root-cause")
+@router.post("/fishbone/{diagram_id}/set-root-cause", response_model=dict)
 async def set_fishbone_root_cause(
     diagram_id: int,
     request: SetFishboneRootCauseRequest,
@@ -350,7 +348,7 @@ async def set_fishbone_root_cause(
             primary_causes=request.primary_causes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": diagram.id,
@@ -359,7 +357,7 @@ async def set_fishbone_root_cause(
     }
 
 
-@router.post("/fishbone/{diagram_id}/complete")
+@router.post("/fishbone/{diagram_id}/complete", response_model=dict)
 async def complete_fishbone_diagram(
     diagram_id: int,
     request: CompleteAnalysisRequest,
@@ -376,7 +374,7 @@ async def complete_fishbone_diagram(
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": diagram.id,
@@ -390,7 +388,7 @@ async def complete_fishbone_diagram(
 # =============================================================================
 
 
-@router.post("/capa", status_code=status.HTTP_201_CREATED)
+@router.post("/capa", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_capa(
     request: CreateCAPARequest,
     db: DbSession,
@@ -421,7 +419,7 @@ async def create_capa(
     }
 
 
-@router.patch("/capa/{capa_id}/status")
+@router.patch("/capa/{capa_id}/status", response_model=dict)
 async def update_capa_status(
     capa_id: int,
     request: UpdateCAPAStatusRequest,
@@ -438,7 +436,7 @@ async def update_capa_status(
             notes=request.notes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": capa.id,
@@ -447,7 +445,7 @@ async def update_capa_status(
     }
 
 
-@router.post("/capa/{capa_id}/verify")
+@router.post("/capa/{capa_id}/verify", response_model=dict)
 async def verify_capa(
     capa_id: int,
     request: VerifyCAPARequest,
@@ -465,7 +463,7 @@ async def verify_capa(
             is_effective=request.is_effective,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": capa.id,
@@ -475,7 +473,7 @@ async def verify_capa(
     }
 
 
-@router.get("/capa/investigation/{investigation_id}")
+@router.get("/capa/investigation/{investigation_id}", response_model=dict)
 async def get_capas_for_investigation(
     investigation_id: int,
     db: DbSession,
@@ -501,7 +499,7 @@ async def get_capas_for_investigation(
     }
 
 
-@router.get("/capa/overdue")
+@router.get("/capa/overdue", response_model=dict)
 async def get_overdue_capas(
     db: DbSession,
     current_user: CurrentUser,

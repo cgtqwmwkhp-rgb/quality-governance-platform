@@ -18,6 +18,17 @@ export default defineConfig({
     __BUILD_VERSION__: JSON.stringify(getGitCommitSha()),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-toast', '@radix-ui/react-tooltip'],
+          'vendor-state': ['zustand', 'axios'],
+        }
+      }
+    }
+  },
   server: {
     proxy: {
       '/api': {

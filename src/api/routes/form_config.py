@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.form_config import (
     ContractCreate,
     ContractListResponse,
@@ -72,11 +73,7 @@ async def list_form_templates(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/templates",
-    response_model=FormTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/templates", response_model=FormTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_form_template(
     data: FormTemplateCreate,
     db: DbSession,
@@ -89,7 +86,7 @@ async def create_form_template(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Form template with slug '{data.slug}' already exists",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     template = FormTemplate(
@@ -177,7 +174,7 @@ async def get_form_template(
     current_user: CurrentUser,
 ) -> FormTemplate:
     """Get a form template by ID."""
-    return await get_or_404(db, FormTemplate, template_id)
+    return await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
 
 @router.get("/templates/by-slug/{slug}", response_model=FormTemplateResponse)
@@ -197,7 +194,7 @@ async def get_form_template_by_slug(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template '{slug}' not found or not published",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     return template
@@ -212,7 +209,7 @@ async def update_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Update a form template."""
-    template = await get_or_404(db, FormTemplate, template_id)
+    template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
     update_data = apply_updates(template, data)
     template.updated_by_id = current_user.id
@@ -244,7 +241,7 @@ async def publish_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Publish a form template to make it available in the portal."""
-    template = await get_or_404(db, FormTemplate, template_id)
+    template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
     template.is_published = True
     template.published_at = datetime.now(timezone.utc)
@@ -274,7 +271,7 @@ async def delete_form_template(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a form template."""
-    template = await get_or_404(db, FormTemplate, template_id)
+    template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
     await record_audit_event(
         db=db,
@@ -295,11 +292,7 @@ async def delete_form_template(
 # ==================== Form Step Routes ====================
 
 
-@router.post(
-    "/templates/{template_id}/steps",
-    response_model=FormStepResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/templates/{template_id}/steps", response_model=FormStepResponse, status_code=status.HTTP_201_CREATED)
 async def create_form_step(
     template_id: int,
     data: FormStepCreate,
@@ -307,7 +300,7 @@ async def create_form_step(
     current_user: CurrentUser,
 ) -> FormStep:
     """Create a new step in a form template."""
-    await get_or_404(db, FormTemplate, template_id)
+    await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
     step = FormStep(
         template_id=template_id,
@@ -378,11 +371,7 @@ async def delete_form_step(
 # ==================== Form Field Routes ====================
 
 
-@router.post(
-    "/steps/{step_id}/fields",
-    response_model=FormFieldResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/steps/{step_id}/fields", response_model=FormFieldResponse, status_code=status.HTTP_201_CREATED)
 async def create_form_field(
     step_id: int,
     data: FormFieldCreate,
@@ -488,7 +477,7 @@ async def create_contract(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Contract with code '{data.code}' already exists",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     contract = Contract(
@@ -532,7 +521,7 @@ async def get_contract(
     current_user: CurrentUser,
 ) -> Contract:
     """Get a contract by ID."""
-    return await get_or_404(db, Contract, contract_id)
+    return await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/contracts/{contract_id}", response_model=ContractResponse)
@@ -544,7 +533,7 @@ async def update_contract(
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Update a contract."""
-    contract = await get_or_404(db, Contract, contract_id)
+    contract = await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
 
     update_data = apply_updates(contract, data)
     contract.updated_by_id = current_user.id
@@ -575,7 +564,7 @@ async def delete_contract(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a contract."""
-    contract = await get_or_404(db, Contract, contract_id)
+    contract = await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
 
     await record_audit_event(
         db=db,
@@ -618,11 +607,7 @@ async def list_system_settings(
     )
 
 
-@router.post(
-    "/settings",
-    response_model=SystemSettingResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/settings", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
 async def create_system_setting(
     data: SystemSettingCreate,
     db: DbSession,
@@ -634,7 +619,7 @@ async def create_system_setting(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Setting with key '{data.key}' already exists",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     setting = SystemSetting(
@@ -672,13 +657,13 @@ async def update_system_setting(
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Setting '{key}' not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     if not setting.is_editable:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Setting '{key}' is not editable",
+            detail=ErrorCode.PERMISSION_DENIED,
         )
 
     apply_updates(setting, data)
@@ -721,11 +706,7 @@ async def list_lookup_options(
     )
 
 
-@router.post(
-    "/lookup/{category}",
-    response_model=LookupOptionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/lookup/{category}", response_model=LookupOptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_lookup_option(
     category: str,
     data: LookupOptionCreate,
@@ -773,7 +754,7 @@ async def update_lookup_option(
     if not option:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lookup option {option_id} not found in category '{category}'",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     apply_updates(option, data, set_updated_at=False)
@@ -802,7 +783,7 @@ async def delete_lookup_option(
     if not option:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lookup option {option_id} not found in category '{category}'",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     await db.delete(option)

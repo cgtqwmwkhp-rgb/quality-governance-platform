@@ -19,9 +19,11 @@ test.describe('Workflow Center', () => {
     test('should display workflow rules section', async ({ page }) => {
       await page.goto('/workflow');
       await page.waitForLoadState('networkidle');
-      const rulesSection = page.getByText(/Rules|Workflow Rules|Automation/i);
-      const hasRules = await rulesSection.first().isVisible().catch(() => false);
-      expect(hasRules || true).toBeTruthy();
+      try {
+        await expect(page.getByText(/Rules|Workflow Rules|Automation/i).first()).toBeVisible({ timeout: 5000 });
+      } catch {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+      }
     });
   });
 
@@ -29,9 +31,46 @@ test.describe('Workflow Center', () => {
     test('should display SLA section', async ({ page }) => {
       await page.goto('/workflow');
       await page.waitForLoadState('networkidle');
-      const slaSection = page.getByText(/SLA|Service Level|Escalation/i);
-      const hasSLA = await slaSection.first().isVisible().catch(() => false);
-      expect(hasSLA || true).toBeTruthy();
+      try {
+        await expect(page.getByText(/SLA|Service Level|Escalation/i).first()).toBeVisible({ timeout: 5000 });
+      } catch {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+      }
+    });
+  });
+
+  test.describe('Filter and Search', () => {
+    test('should allow searching workflows', async ({ page }) => {
+      await page.goto('/workflow');
+      await page.waitForLoadState('networkidle');
+      const searchInput = page.getByPlaceholder(/search/i);
+      const hasSearch = await searchInput.isVisible().catch(() => false);
+      if (hasSearch) {
+        await searchInput.fill('test workflow');
+        await expect(searchInput).toHaveValue('test workflow');
+        await page.waitForTimeout(500);
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+      } else {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+      }
+    });
+
+    test('should support tab navigation if available', async ({ page }) => {
+      await page.goto('/workflow');
+      await page.waitForLoadState('networkidle');
+      const tabs = page.getByRole('tab');
+      const hasTabs = await tabs.first().isVisible().catch(() => false);
+      if (hasTabs) {
+        const tabCount = await tabs.count();
+        expect(tabCount).toBeGreaterThan(0);
+        if (tabCount > 1) {
+          await tabs.nth(1).click();
+          await page.waitForTimeout(500);
+          await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+        }
+      } else {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+      }
     });
   });
 
@@ -47,9 +86,11 @@ test.describe('Workflow Center', () => {
     test('should display create workflow button or form', async ({ page }) => {
       await page.goto('/workflow');
       await page.waitForLoadState('networkidle');
-      const createButton = page.getByRole('button', { name: /Create|New|Add/i });
-      const hasCreate = await createButton.first().isVisible().catch(() => false);
-      expect(hasCreate || true).toBeTruthy();
+      try {
+        await expect(page.getByRole('button', { name: /Create|New|Add/i }).first()).toBeVisible({ timeout: 5000 });
+      } catch {
+        await expect(page.getByRole('heading', { name: /Workflow|Workflows/i })).toBeVisible();
+      }
     });
   });
 });

@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
 import { useToast, ToastContainer } from '../../components/ui/Toast';
+import { CardSkeleton } from '../../components/ui/SkeletonLoader';
 import { settingsApi } from '../../api/client';
 
 interface SettingCategory {
@@ -264,9 +265,7 @@ export default function SystemSettings() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {loading && (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
+          <div className="p-6"><CardSkeleton count={4} /></div>
         )}
         {error && !loading && (
           <Card className="p-6 text-center">

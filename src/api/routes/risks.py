@@ -8,6 +8,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
@@ -31,6 +32,13 @@ from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None
 
 router = APIRouter()
 
@@ -76,17 +84,14 @@ async def create_risk(
     current_user: CurrentUser,
 ) -> RiskResponse:
     """Create a new risk."""
+    _span = tracer.start_span("create_risk") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
     # Calculate risk score and level
     score, level, _ = calculate_risk_level(risk_data.likelihood, risk_data.impact)
 
     risk_dict = risk_data.model_dump(
-        exclude={
-            "clause_ids",
-            "control_ids",
-            "linked_audit_ids",
-            "linked_incident_ids",
-            "linked_policy_ids",
-        }
+        exclude={"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
     )
 
     risk = Risk(
@@ -118,6 +123,8 @@ async def create_risk(
     await db.refresh(risk)
     await invalidate_tenant_cache(current_user.tenant_id, "risks")
     track_metric("risks.created")
+    if _span:
+        _span.end()
 
     return RiskResponse.model_validate(risk)
 
@@ -262,7 +269,7 @@ async def get_risk(
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     response = RiskDetailResponse.model_validate(risk)
@@ -286,14 +293,9 @@ async def update_risk(
 
     update_data = risk_data.model_dump(exclude_unset=True)
 
-    # Handle JSON array fields (schema → model field remapping)
-    _json_fields = {
-        "clause_ids",
-        "control_ids",
-        "linked_audit_ids",
-        "linked_incident_ids",
-        "linked_policy_ids",
-    }
+    # setattr kept: schema→model field remapping (e.g. clause_ids → clause_ids_json)
+    # can't use apply_updates() because the model column name differs from the schema field.
+    _json_fields = {"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
     for field in _json_fields:
         if field in update_data:
             setattr(risk, f"{field}_json", update_data[field])
@@ -333,11 +335,7 @@ async def delete_risk(
 # ============== Risk Control Endpoints ==============
 
 
-@router.post(
-    "/{risk_id}/controls",
-    response_model=RiskControlResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{risk_id}/controls", response_model=RiskControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     risk_id: int,
     control_data: RiskControlCreate,
@@ -435,11 +433,7 @@ async def delete_control(
 # ============== Risk Assessment Endpoints ==============
 
 
-@router.post(
-    "/{risk_id}/assessments",
-    response_model=RiskAssessmentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{risk_id}/assessments", response_model=RiskAssessmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_assessment(
     risk_id: int,
     assessment_data: RiskAssessmentCreate,

@@ -16,11 +16,13 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
+from src.api.schemas.error_codes import ErrorCode
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Employee Portal"])
 
@@ -184,6 +186,7 @@ async def submit_quick_report(
     This endpoint is public and doesn't require authentication.
     Anonymous reports can be tracked using the returned tracking_code.
     """
+    track_metric("portal.submission", 1, {"report_type": report.report_type})
     tracking_code = generate_tracking_code()
     # Hash stored for future secure lookup functionality
     _ = hash_tracking_code(tracking_code)  # noqa: F841
@@ -207,7 +210,7 @@ async def submit_quick_report(
             reported_date=datetime.now(timezone.utc),
             tenant_id=1,
             # CRITICAL: Set reporter info for My Reports identity linkage
-            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
+            reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_incident_v1",
@@ -240,9 +243,9 @@ async def submit_quick_report(
             status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
             tenant_id=1,
-            complainant_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
-            complainant_email=(report.reporter_email if not report.is_anonymous else None),
-            complainant_phone=(report.reporter_phone if not report.is_anonymous else None),
+            complainant_name=report.reporter_name if not report.is_anonymous else "Anonymous",
+            complainant_email=report.reporter_email if not report.is_anonymous else None,
+            complainant_phone=report.reporter_phone if not report.is_anonymous else None,
             # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_complaint_v1",
             source_type="portal",
@@ -284,9 +287,9 @@ async def submit_quick_report(
             collision_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=1,
-            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
+            reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             reporter_email=report.reporter_email if not report.is_anonymous else None,
-            driver_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
+            driver_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_rta_v1",
         )
@@ -319,7 +322,7 @@ async def submit_quick_report(
         # Create Near Miss record
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
+            reporter_name=report.reporter_name if not report.is_anonymous else "Anonymous",
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             contract=report.department or "Not specified",
             location=report.location or "Not specified",
@@ -349,7 +352,7 @@ async def submit_quick_report(
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid report_type. Must be 'incident', 'complaint', 'rta', or 'near_miss'.",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
 
@@ -378,7 +381,7 @@ async def track_report(
         if not incident:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Report not found. Please check your reference number.",
+                detail=ErrorCode.ENTITY_NOT_FOUND,
             )
 
         # Build timeline
@@ -420,7 +423,7 @@ async def track_report(
         if not complaint:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Report not found. Please check your reference number.",
+                detail=ErrorCode.ENTITY_NOT_FOUND,
             )
 
         timeline = [
@@ -462,7 +465,7 @@ async def track_report(
         if not rta:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Report not found. Please check your reference number.",
+                detail=ErrorCode.ENTITY_NOT_FOUND,
             )
 
         timeline = [
@@ -503,7 +506,7 @@ async def track_report(
         if not near_miss:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Report not found. Please check your reference number.",
+                detail=ErrorCode.ENTITY_NOT_FOUND,
             )
 
         timeline = [
@@ -539,7 +542,7 @@ async def track_report(
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid reference number format.",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
 
@@ -643,24 +646,9 @@ async def get_report_types():
             },
         ],
         "severity_levels": [
-            {
-                "id": "low",
-                "label": "Low",
-                "description": "Minor issue, no immediate action needed",
-                "color": "#22c55e",
-            },
-            {
-                "id": "medium",
-                "label": "Medium",
-                "description": "Moderate issue, attention needed",
-                "color": "#eab308",
-            },
-            {
-                "id": "high",
-                "label": "High",
-                "description": "Serious issue, prompt action required",
-                "color": "#f97316",
-            },
+            {"id": "low", "label": "Low", "description": "Minor issue, no immediate action needed", "color": "#22c55e"},
+            {"id": "medium", "label": "Medium", "description": "Moderate issue, attention needed", "color": "#eab308"},
+            {"id": "high", "label": "High", "description": "Serious issue, prompt action required", "color": "#f97316"},
             {
                 "id": "critical",
                 "label": "Critical",
@@ -715,7 +703,7 @@ async def get_my_reports(
                 reference_number=inc.reference_number,
                 report_type="incident",
                 title=inc.title,
-                status=(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
+                status=inc.status.value if hasattr(inc.status, "value") else str(inc.status),
                 status_label=get_status_label(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
                 submitted_at=inc.reported_date or inc.created_at,
                 updated_at=inc.updated_at or inc.created_at,
@@ -733,7 +721,7 @@ async def get_my_reports(
                 reference_number=comp.reference_number,
                 report_type="complaint",
                 title=comp.title,
-                status=(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
+                status=comp.status.value if hasattr(comp.status, "value") else str(comp.status),
                 status_label=get_status_label(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
                 submitted_at=comp.received_date or comp.created_at,
                 updated_at=comp.updated_at or comp.created_at,
@@ -751,7 +739,7 @@ async def get_my_reports(
                 reference_number=rta.reference_number,
                 report_type="rta",
                 title=rta.title,
-                status=(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
+                status=rta.status.value if hasattr(rta.status, "value") else str(rta.status),
                 status_label=get_status_label(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
                 submitted_at=rta.reported_date or rta.created_at,
                 updated_at=rta.updated_at or rta.created_at,

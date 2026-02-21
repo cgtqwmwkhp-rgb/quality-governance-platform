@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.api.utils.entity import get_or_404
@@ -18,6 +19,13 @@ from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None
 
 router = APIRouter(tags=["Complaints"])
 
@@ -38,6 +46,9 @@ async def create_complaint(
     - If external_ref is provided and already exists, returns 409 Conflict
     - This enables ETL/external systems to safely retry imports
     """
+    _span = tracer.start_span("create_complaint") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
     external_ref = complaint_in.external_ref
     if external_ref:
         existing_query = select(Complaint).where(Complaint.external_ref == external_ref)
@@ -67,6 +78,8 @@ async def create_complaint(
     await db.refresh(complaint)
     await invalidate_tenant_cache(current_user.tenant_id, "complaints")
     track_metric("complaints.created")
+    if _span:
+        _span.end()
 
     await record_audit_event(
         db=db,
@@ -129,7 +142,7 @@ async def list_complaints(
             if user_email and complainant_email.lower() != user_email.lower():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only view your own complaints",
+                    detail=ErrorCode.PERMISSION_DENIED,
                 )
 
         await record_audit_event(
@@ -176,25 +189,18 @@ async def list_complaints(
         error_str = str(e).lower()
         logger.exception(f"Error listing complaints: {e}")
 
-        column_errors = [
-            "email",
-            "column",
-            "does not exist",
-            "unknown column",
-            "programmingerror",
-            "relation",
-        ]
+        column_errors = ["email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database migration pending. Please wait for migrations to complete.",
+                detail=ErrorCode.INTERNAL_ERROR,
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing complaints: {type(e).__name__}: {str(e)[:200]}",
+            detail=ErrorCode.INTERNAL_ERROR,
         )
 
 

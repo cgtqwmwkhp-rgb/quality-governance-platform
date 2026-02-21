@@ -40,6 +40,7 @@ from src.api.schemas.audit import (
     AuditTemplateResponse,
     AuditTemplateUpdate,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -58,6 +59,13 @@ from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None
 
 router = APIRouter()
 
@@ -114,11 +122,7 @@ async def list_templates(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/templates",
-    response_model=AuditTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
@@ -226,17 +230,14 @@ async def get_template(
             selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
             selectinload(AuditTemplate.questions),
         )
-        .where(
-            AuditTemplate.id == template_id,
-            AuditTemplate.tenant_id == current_user.tenant_id,
-        )
+        .where(AuditTemplate.id == template_id, AuditTemplate.tenant_id == current_user.tenant_id)
     )
     template = result.scalar_one_or_none()
 
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     response = AuditTemplateDetailResponse.model_validate(template)
@@ -269,6 +270,8 @@ async def update_template(
     if "standard_ids" in raw:
         safe_data["standard_ids_json"] = raw["standard_ids"]
 
+    # setattr kept: change-tracking requires comparing old vs new values
+    # before assignment, which apply_updates() doesn't support.
     changed_fields = []
     for field, value in safe_data.items():
         old_value = getattr(template, field, None)
@@ -305,24 +308,21 @@ async def publish_template(
     result = await db.execute(
         select(AuditTemplate)
         .options(selectinload(AuditTemplate.questions))
-        .where(
-            AuditTemplate.id == template_id,
-            AuditTemplate.tenant_id == current_user.tenant_id,
-        )
+        .where(AuditTemplate.id == template_id, AuditTemplate.tenant_id == current_user.tenant_id)
     )
     template = result.scalar_one_or_none()
 
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     question_count = len(template.questions)
     if question_count == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Template must have at least one question before publishing",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     template.is_published = True
@@ -343,9 +343,7 @@ async def publish_template(
 
 
 @router.post(
-    "/templates/{template_id}/clone",
-    response_model=AuditTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/templates/{template_id}/clone", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
 )
 async def clone_template(
     template_id: int,
@@ -359,17 +357,14 @@ async def clone_template(
             selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
             selectinload(AuditTemplate.questions),
         )
-        .where(
-            AuditTemplate.id == template_id,
-            AuditTemplate.tenant_id == current_user.tenant_id,
-        )
+        .where(AuditTemplate.id == template_id, AuditTemplate.tenant_id == current_user.tenant_id)
     )
     original = result.scalar_one_or_none()
 
     if not original:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
@@ -501,7 +496,7 @@ async def archive_template(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found or already archived",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     template.archived_at = datetime.now(timezone.utc)
@@ -546,7 +541,7 @@ async def restore_template(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Archived template not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     template.archived_at = None
@@ -590,7 +585,7 @@ async def permanently_delete_template(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Archived template not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     template_name = template.name
@@ -613,9 +608,7 @@ async def permanently_delete_template(
 
 
 @router.post(
-    "/templates/{template_id}/sections",
-    response_model=AuditSectionResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/templates/{template_id}/sections", response_model=AuditSectionResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_section(
     template_id: int,
@@ -658,7 +651,7 @@ async def update_section(
     if not section:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Section not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     await get_or_404(db, AuditTemplate, section.template_id, tenant_id=current_user.tenant_id)
@@ -693,9 +686,7 @@ async def delete_section(
 
 
 @router.post(
-    "/templates/{template_id}/questions",
-    response_model=AuditQuestionResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/templates/{template_id}/questions", response_model=AuditQuestionResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_question(
     template_id: int,
@@ -717,7 +708,7 @@ async def create_question(
         if not section_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Section does not belong to this template",
+                detail=ErrorCode.VALIDATION_ERROR,
             )
 
     # Convert options to JSON if provided
@@ -772,7 +763,8 @@ async def update_question(
 
     update_data = question_data.model_dump(exclude_unset=True)
 
-    # Handle JSON fields (schema → model field remapping)
+    # setattr kept: schema→model field remapping (e.g. options → options_json)
+    # can't use apply_updates() because the model column name differs from the schema field.
     _JSON_REMAP = {
         "options": "options_json",
         "evidence_requirements": "evidence_requirements_json",
@@ -840,6 +832,9 @@ async def create_run(
     current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Create a new audit run from a template."""
+    _span = tracer.start_span("create_audit_run") if tracer else None
+    if _span:
+        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
     # Verify template exists and is published
     result = await db.execute(
         select(AuditTemplate).where(
@@ -855,7 +850,7 @@ async def create_run(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Published template not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     run = AuditRun(
@@ -873,6 +868,8 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
     await invalidate_tenant_cache(current_user.tenant_id, "audits")
+    if _span:
+        _span.end()
 
     return AuditRunResponse.model_validate(run)
 
@@ -898,7 +895,7 @@ async def get_run(
     if not run:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     response = AuditRunDetailResponse.model_validate(run)
@@ -942,14 +939,14 @@ async def update_run(
         if new_status == AuditStatus.COMPLETED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Use POST /runs/{id}/complete to finish an audit with score calculation",
+                detail=ErrorCode.VALIDATION_ERROR,
             )
         try:
             validated = AuditStatus(new_status)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid status. Must be one of: {[s.value for s in AuditStatus]}",
+                detail=ErrorCode.VALIDATION_ERROR,
             )
         if validated == AuditStatus.IN_PROGRESS and run.started_at is None:
             run.started_at = datetime.now(timezone.utc)
@@ -976,7 +973,7 @@ async def start_run(
     if run.status != AuditStatus.SCHEDULED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Audit run can only be started from scheduled status",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     run.status = AuditStatus.IN_PROGRESS
@@ -1005,13 +1002,13 @@ async def complete_run(
     if not run:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     if run.status != AuditStatus.IN_PROGRESS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Audit run must be in progress to complete",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     score = AuditScoringService.calculate_run_score(run.responses)
@@ -1039,11 +1036,7 @@ async def complete_run(
 # ============== Response Endpoints ==============
 
 
-@router.post(
-    "/runs/{run_id}/responses",
-    response_model=AuditResponseResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/runs/{run_id}/responses", response_model=AuditResponseResponse, status_code=status.HTTP_201_CREATED)
 async def create_response(
     run_id: int,
     response_data: AuditResponseCreate,
@@ -1056,7 +1049,7 @@ async def create_response(
     if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot submit responses to a completed audit",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     # Auto-start if scheduled
@@ -1076,7 +1069,7 @@ async def create_response(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Response already exists for this question. Use PATCH to update.",
+            detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
     response = AuditResponse(
@@ -1110,13 +1103,13 @@ async def update_response(
     if not response:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Response not found",
+            detail=ErrorCode.ENTITY_NOT_FOUND,
         )
 
     if response.run.status == AuditStatus.COMPLETED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update responses on a completed audit",
+            detail=ErrorCode.VALIDATION_ERROR,
         )
 
     apply_updates(response, response_data, set_updated_at=False)
@@ -1154,11 +1147,7 @@ async def list_findings(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/runs/{run_id}/findings",
-    response_model=AuditFindingResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)
 async def create_finding(
     run_id: int,
     finding_data: AuditFindingCreate,
@@ -1223,12 +1212,7 @@ async def update_finding(
     if "risk_ids" in update_data:
         finding.risk_ids_json = update_data["risk_ids"]
 
-    apply_updates(
-        finding,
-        finding_data,
-        set_updated_at=False,
-        exclude={"clause_ids", "control_ids", "risk_ids"},
-    )
+    apply_updates(finding, finding_data, set_updated_at=False, exclude={"clause_ids", "control_ids", "risk_ids"})
 
     await db.commit()
     await db.refresh(finding)

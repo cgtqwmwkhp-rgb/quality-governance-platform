@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -57,6 +58,7 @@ async def global_search(
 
     _ = date_from, date_to  # reserved for future date filtering
 
+    track_metric("search.query", 1, {"module": module or "all"})
     query_lower = q.lower()
     all_results: list[SearchResultItem] = []
 

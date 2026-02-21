@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -29,6 +30,8 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.domain.services.uvdb_service import UVDBService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -55,11 +58,7 @@ UVDB_B2_SECTIONS = [
                     "Where 3rd party accreditation has not been sought, can the company demonstrate that its Quality Management Systems are based on a recognised Standard?",
                 ],
                 "iso_mapping": {"9001": ["4.4", "5.1", "9.2"]},
-                "evidence": [
-                    "ISO 9001 certificate",
-                    "UKAS accreditation",
-                    "Quality Manual",
-                ],
+                "evidence": ["ISO 9001 certificate", "UKAS accreditation", "Quality Manual"],
             },
             {
                 "number": "1.2",
@@ -71,11 +70,7 @@ UVDB_B2_SECTIONS = [
                     "Where 3rd party accreditation has not been sought, can the company demonstrate that its Health and Safety Management Systems are based on a recognised Standard?",
                 ],
                 "iso_mapping": {"45001": ["4.4", "5.1", "9.2"]},
-                "evidence": [
-                    "ISO 45001 certificate",
-                    "UKAS accreditation",
-                    "H&S Policy",
-                ],
+                "evidence": ["ISO 45001 certificate", "UKAS accreditation", "H&S Policy"],
             },
             {
                 "number": "1.3",
@@ -87,11 +82,7 @@ UVDB_B2_SECTIONS = [
                     "Where 3rd party accreditation has not been sought, can the company demonstrate that its Environmental Systems are based on a recognised Standard?",
                 ],
                 "iso_mapping": {"14001": ["4.4", "5.1", "9.2"]},
-                "evidence": [
-                    "ISO 14001 certificate",
-                    "UKAS accreditation",
-                    "Environmental Policy",
-                ],
+                "evidence": ["ISO 14001 certificate", "UKAS accreditation", "Environmental Policy"],
             },
             {
                 "number": "1.4",
@@ -102,11 +93,7 @@ UVDB_B2_SECTIONS = [
                     "Can the company demonstrate that appropriate documented information relating to construction works is retained (i.e. Construction Phase Plan, H&S File, F10 Notification)?",
                 ],
                 "iso_mapping": {"45001": ["6.1", "8.1"]},
-                "evidence": [
-                    "CDM duties register",
-                    "Construction Phase Plan template",
-                    "F10 records",
-                ],
+                "evidence": ["CDM duties register", "Construction Phase Plan template", "F10 records"],
                 "site_applicable": True,
             },
             {
@@ -154,11 +141,7 @@ UVDB_B2_SECTIONS = [
                     "Is there a process or system in place for the secure disposal of confidential documentation?",
                 ],
                 "iso_mapping": {"9001": ["7.5"], "27001": ["7.5"]},
-                "evidence": [
-                    "Document control procedure",
-                    "Master document list",
-                    "Retention schedule",
-                ],
+                "evidence": ["Document control procedure", "Master document list", "Retention schedule"],
             },
             {
                 "number": "2.3",
@@ -171,11 +154,7 @@ UVDB_B2_SECTIONS = [
                     "Does the company have a process or procedure relating to the back up of confidential data?",
                 ],
                 "iso_mapping": {"27001": ["5.1", "8.1", "A.8"]},
-                "evidence": [
-                    "ISO 27001 certificate",
-                    "Backup procedures",
-                    "IT security policy",
-                ],
+                "evidence": ["ISO 27001 certificate", "Backup procedures", "IT security policy"],
             },
             {
                 "number": "2.4",
@@ -186,11 +165,7 @@ UVDB_B2_SECTIONS = [
                     "Does the company have a documented process that demonstrates the controlled hand over of completed works or services?",
                 ],
                 "iso_mapping": {"9001": ["8.5", "8.6"]},
-                "evidence": [
-                    "ITP templates",
-                    "Handover certificates",
-                    "Commissioning reports",
-                ],
+                "evidence": ["ITP templates", "Handover certificates", "Commissioning reports"],
                 "site_applicable": True,
             },
             {
@@ -225,11 +200,7 @@ UVDB_B2_SECTIONS = [
                     "Is there a process for ongoing monitoring of sub-contractor performance?",
                 ],
                 "iso_mapping": {"9001": ["8.4.1", "8.4.2"]},
-                "evidence": [
-                    "Supplier approval procedure",
-                    "Approved contractor list",
-                    "Due diligence forms",
-                ],
+                "evidence": ["Supplier approval procedure", "Approved contractor list", "Due diligence forms"],
             },
             {
                 "number": "12.2",
@@ -244,11 +215,7 @@ UVDB_B2_SECTIONS = [
                     "Does the company have a process to investigate contractor/supplier, Accidents/Incidents and track actions?",
                 ],
                 "iso_mapping": {"9001": ["8.4.3"], "45001": ["8.1.4"]},
-                "evidence": [
-                    "Supplier performance reviews",
-                    "Audit reports",
-                    "Incident tracking",
-                ],
+                "evidence": ["Supplier performance reviews", "Audit reports", "Incident tracking"],
             },
         ],
     },
@@ -270,11 +237,7 @@ UVDB_B2_SECTIONS = [
                     "For companies working in the Nuclear Industry, have CFSI examples been notified to ONR?",
                 ],
                 "iso_mapping": {"9001": ["8.4.2", "8.5.2"]},
-                "evidence": [
-                    "CFSI procedure",
-                    "Material traceability records",
-                    "Supplier audits",
-                ],
+                "evidence": ["CFSI procedure", "Material traceability records", "Supplier audits"],
             },
             {
                 "number": "13.2",
@@ -329,11 +292,7 @@ UVDB_B2_SECTIONS = [
                     "Where applicable, are records of thorough examination/certificates for statutory inspections and tests available?",
                 ],
                 "iso_mapping": {"45001": ["7.1.3", "8.1"]},
-                "evidence": [
-                    "Maintenance schedules",
-                    "LOLER/PUWER records",
-                    "Calibration certificates",
-                ],
+                "evidence": ["Maintenance schedules", "LOLER/PUWER records", "Calibration certificates"],
                 "site_applicable": True,
             },
         ],
@@ -549,7 +508,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "section_number": section_data["number"],
@@ -611,7 +570,7 @@ async def create_audit(
 ) -> dict[str, Any]:
     """Create a new UVDB audit"""
     count = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
-    audit_reference = f"UVDB-{datetime.utcnow().year}-{(count + 1):04d}"
+    audit_reference = UVDBService.generate_audit_reference(count)
 
     audit = UVDBAudit(
         audit_reference=audit_reference,
@@ -622,6 +581,7 @@ async def create_audit(
     await db.flush()
     await db.refresh(audit)
 
+    track_metric("uvdb.audit_created")
     return {
         "id": audit.id,
         "audit_reference": audit_reference,
@@ -688,11 +648,7 @@ async def update_audit(
 # ============ Audit Responses ============
 
 
-@router.post(
-    "/audits/{audit_id}/responses",
-    response_model=dict,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/audits/{audit_id}/responses", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
@@ -755,10 +711,11 @@ async def add_kpi_record(
     """Add KPI record for an audit year"""
     await get_or_404(db, UVDBAudit, audit_id)
 
-    ltifr = None
-    if kpi_data.total_man_hours and kpi_data.total_man_hours > 0:
-        lost_time = kpi_data.lost_time_incidents_1_7_days + kpi_data.riddor_reportable
-        ltifr = (lost_time / kpi_data.total_man_hours) * 1000000
+    ltifr = UVDBService.calculate_ltifr(
+        kpi_data.lost_time_incidents_1_7_days,
+        kpi_data.riddor_reportable,
+        kpi_data.total_man_hours,
+    )
 
     kpi = UVDBKPIRecord(
         audit_id=audit_id,

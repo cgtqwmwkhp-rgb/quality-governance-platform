@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.auth import (
     LoginRequest,
     PasswordChangeRequest,
@@ -17,7 +19,6 @@ from src.api.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
 )
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
@@ -33,6 +34,13 @@ from src.domain.models.user import User
 from src.domain.services.email_service import email_service
 from src.domain.services.token_service import TokenService
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +159,7 @@ async def exchange_azure_token(
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     """Authenticate user and return access and refresh tokens."""
+    _span = tracer.start_span("login") if tracer else None
     # Find user by email
     result = await db.execute(select(User).where(User.email == request.email))
     user = result.scalar_one_or_none()
@@ -177,6 +186,8 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     refresh_token = create_refresh_token(subject=user.id)
 
     track_metric("auth.login")
+    if _span:
+        _span.end()
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -385,7 +396,7 @@ async def request_password_reset(
             # Mask email for logging (show first 3 chars and domain)
             masked_email = user.email[:3] + "***@" + user.email.split("@")[1]
             logger.info(f"Password reset email sent to {masked_email}")
-        except Exception as e:
+        except (SQLAlchemyError, ValueError) as e:
             # Log error but don't reveal to user
             logger.error(f"Failed to send password reset email: {e}")
 
