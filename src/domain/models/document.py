@@ -101,9 +101,13 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # File info
     file_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    file_type: Mapped[FileType] = mapped_column(SQLEnum(FileType, native_enum=False), nullable=False)
+    file_type: Mapped[FileType] = mapped_column(
+        SQLEnum(FileType, native_enum=False), nullable=False
+    )
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)  # bytes
-    file_path: Mapped[str] = mapped_column(String(1000), nullable=False)  # Azure Blob path
+    file_path: Mapped[str] = mapped_column(
+        String(1000), nullable=False
+    )  # Azure Blob path
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Classification
@@ -120,8 +124,12 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     status: Mapped[DocumentStatus] = mapped_column(
         SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.PENDING
     )
-    reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Version control
@@ -134,12 +142,18 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # AI-extracted metadata
     ai_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_tags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ["safety", "procedure"]
+    ai_tags: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # ["safety", "procedure"]
     ai_keywords: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     ai_topics: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    ai_entities: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {contacts: [], assets: []}
+    ai_entities: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # {contacts: [], assets: []}
     ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # 0-1
-    ai_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    ai_processed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Document structure
     page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -150,33 +164,58 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     thumbnail_path: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
     # Indexing for RAG
-    indexed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    indexed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     chunk_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     indexing_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    vector_namespace: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Pinecone namespace
+    vector_namespace: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # Pinecone namespace
 
     # Governance dates
-    effective_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expiry_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Access control
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     restricted_to_roles: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    restricted_to_departments: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    restricted_to_departments: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Usage analytics
     view_count: Mapped[int] = mapped_column(Integer, default=0)
     download_count: Mapped[int] = mapped_column(Integer, default=0)
     citation_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_accessed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_accessed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Module links (governance integration)
-    linked_policy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("policies.id"), nullable=True)
-    linked_standard_id: Mapped[Optional[int]] = mapped_column(ForeignKey("standards.id"), nullable=True)
+    linked_policy_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("policies.id"), nullable=True
+    )
+    linked_standard_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("standards.id"), nullable=True
+    )
+
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Ownership
-    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Relationships
     chunks: Mapped[List["DocumentChunk"]] = relationship(
@@ -204,25 +243,35 @@ class DocumentChunk(Base, TimestampMixin):
     __tablename__ = "document_chunks"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Chunk content
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)  # Order in document
+    chunk_index: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # Order in document
 
     # Metadata
     token_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    heading: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # Section heading
+    heading: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )  # Section heading
 
     # Location info (for deep linking)
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     section_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    sheet_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Excel
+    sheet_name: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # Excel
     char_start: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     char_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Vector info
-    vector_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Pinecone vector ID
+    vector_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # Pinecone vector ID
     embedding_model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Relationships
@@ -243,8 +292,12 @@ class DocumentAnnotation(Base, TimestampMixin):
     __tablename__ = "document_annotations"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Location
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -260,14 +313,24 @@ class DocumentAnnotation(Base, TimestampMixin):
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Workflow (for issue tracking)
-    annotation_type: Mapped[str] = mapped_column(String(50), default="note")  # note, issue, suggestion
-    status: Mapped[str] = mapped_column(String(50), default="open")  # open, resolved, rejected
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    annotation_type: Mapped[str] = mapped_column(
+        String(50), default="note"
+    )  # note, issue, suggestion
+    status: Mapped[str] = mapped_column(
+        String(50), default="open"
+    )  # open, resolved, rejected
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     resolution_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    document: Mapped["Document"] = relationship("Document", back_populates="annotations")
+    document: Mapped["Document"] = relationship(
+        "Document", back_populates="annotations"
+    )
 
     def __repr__(self) -> str:
         return f"<DocumentAnnotation(id={self.id}, doc_id={self.document_id}, type='{self.annotation_type}')>"
@@ -284,7 +347,9 @@ class DocumentVersion(Base, TimestampMixin):
     __tablename__ = "document_versions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Version info
     version_number: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -296,7 +361,9 @@ class DocumentVersion(Base, TimestampMixin):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Ownership
-    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Relationships
     document: Mapped["Document"] = relationship("Document", back_populates="versions")
@@ -318,7 +385,9 @@ class IndexJob(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Job info
-    job_type: Mapped[str] = mapped_column(String(50), nullable=False)  # single, bulk, reindex
+    job_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # single, bulk, reindex
     status: Mapped[IndexJobStatus] = mapped_column(
         SQLEnum(IndexJobStatus, native_enum=False), default=IndexJobStatus.PENDING
     )
@@ -328,8 +397,12 @@ class IndexJob(Base, TimestampMixin):
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Progress
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     chunks_processed: Mapped[int] = mapped_column(Integer, default=0)
     chunks_succeeded: Mapped[int] = mapped_column(Integer, default=0)
     chunks_failed: Mapped[int] = mapped_column(Integer, default=0)
@@ -341,7 +414,9 @@ class IndexJob(Base, TimestampMixin):
     previous_vector_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Ownership
-    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"<IndexJob(id={self.id}, status='{self.status}', docs={len(self.document_ids)})>"
@@ -361,14 +436,18 @@ class DocumentSearchLog(Base, TimestampMixin):
 
     # Query
     query: Mapped[str] = mapped_column(Text, nullable=False)
-    query_type: Mapped[str] = mapped_column(String(50), default="semantic")  # semantic, keyword, hybrid
+    query_type: Mapped[str] = mapped_column(
+        String(50), default="semantic"
+    )  # semantic, keyword, hybrid
 
     # Results
     result_count: Mapped[int] = mapped_column(Integer, default=0)
     result_document_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Context
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Performance

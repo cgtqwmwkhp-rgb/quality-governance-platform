@@ -26,7 +26,9 @@ class TestSetupRequiredResponseSchema:
         """Verify setup_required_response helper returns all required fields."""
         from src.api.schemas.setup_required import setup_required_response
 
-        response = setup_required_response(module="test-module", message="Test message", next_action="Test action")
+        response = setup_required_response(
+            module="test-module", message="Test message", next_action="Test action"
+        )
 
         assert response["error_class"] == "SETUP_REQUIRED"
         assert response["setup_required"] is True

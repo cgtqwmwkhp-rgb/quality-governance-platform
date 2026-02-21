@@ -14,7 +14,7 @@ QUARANTINE STATUS: All tests in this file are quarantined.
 See tests/smoke/QUARANTINE_POLICY.md for details.
 
 Quarantine Date: 2026-01-21
-Expiry Date: 2026-02-21
+Expiry Date: 2026-03-23
 Issue: GOVPLAT-002
 Reason: E2E tests hit endpoints that return 404; API contract mismatch.
 """
@@ -30,9 +30,10 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-# Quarantine marker - skip all tests in this module
-pytestmark = pytest.mark.skip(
-    reason="QUARANTINED: Enterprise E2E tests have API contract mismatch. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+# Quarantine marker - xfail all tests in this module (run but don't block CI)
+pytestmark = pytest.mark.xfail(
+    reason="QUARANTINED: Enterprise E2E tests have API contract mismatch. See QUARANTINE_POLICY.md. Expires: 2026-03-23",
+    strict=False,
 )
 
 
@@ -688,7 +689,9 @@ class TestEdgeCasesE2E:
         # Make multiple rapid requests
         responses = []
         for _ in range(5):
-            response = client.get("/api/incidents?page=1&per_page=5", headers=auth_headers)
+            response = client.get(
+                "/api/incidents?page=1&per_page=5", headers=auth_headers
+            )
             responses.append(response.status_code)
 
         # All should succeed

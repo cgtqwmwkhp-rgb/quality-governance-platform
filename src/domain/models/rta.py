@@ -42,7 +42,9 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Collision identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
@@ -50,28 +52,46 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     severity: Mapped[RTASeverity] = mapped_column(
         SQLEnum(RTASeverity, native_enum=False), default=RTASeverity.DAMAGE_ONLY
     )
-    status: Mapped[RTAStatus] = mapped_column(SQLEnum(RTAStatus, native_enum=False), default=RTAStatus.REPORTED)
+    status: Mapped[RTAStatus] = mapped_column(
+        SQLEnum(RTAStatus, native_enum=False), default=RTAStatus.REPORTED
+    )
 
     # When and where
-    collision_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    collision_time: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # HH:MM format
-    reported_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    collision_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    collision_time: Mapped[Optional[str]] = mapped_column(
+        String(10), nullable=True
+    )  # HH:MM format
+    reported_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     location: Mapped[str] = mapped_column(String(500), nullable=False)
     road_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     postcode: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Weather and road conditions
-    weather_conditions: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    weather_conditions: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
     road_conditions: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    lighting_conditions: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lighting_conditions: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # Company vehicle details
-    company_vehicle_registration: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    company_vehicle_make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    company_vehicle_registration: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
+    company_vehicle_make_model: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
     company_vehicle_damage: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Driver details
-    driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    driver_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     driver_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     driver_email: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True, index=True
@@ -81,7 +101,9 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     driver_injury_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Reporter details (if different from driver)
-    reporter_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    reporter_email: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     reporter_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Third party details (JSON for multiple parties)
@@ -90,7 +112,9 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     #               injured, injury_details, insurer, insurer_policy_number, is_at_fault }]
 
     # Multiple vehicles involved count
-    vehicles_involved_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    vehicles_involved_count: Mapped[int] = mapped_column(
+        Integer, default=2, nullable=False
+    )
 
     # CCTV / Dashcam footage
     cctv_available: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -111,12 +135,18 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
 
     # Insurance
     insurance_notified: Mapped[bool] = mapped_column(Boolean, default=False)
-    insurance_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    insurance_reference: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
     insurance_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    estimated_cost: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # In pence/cents
+    estimated_cost: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # In pence/cents
 
     # Investigation
-    investigator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    investigator_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     investigation_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     fault_determination: Mapped[Optional[str]] = mapped_column(
@@ -124,17 +154,25 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     )  # company_fault, third_party_fault, shared, undetermined
 
     # Reporter
-    reporter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reporter_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Risk linkage
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Portal form source tracking (for audit traceability)
-    source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_rta_v1
+    source_form_id: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # e.g., portal_rta_v1
 
     # Closure
-    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
@@ -160,9 +198,13 @@ class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
-    rta_id: Mapped[int] = mapped_column(ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False)
+    rta_id: Mapped[int] = mapped_column(
+        ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -171,21 +213,35 @@ class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     priority: Mapped[str] = mapped_column(String(20), default="medium")
 
     # Assignment
-    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    verified_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    status: Mapped[ActionStatus] = mapped_column(
+        SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN
+    )
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Evidence
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    rta: Mapped["RoadTrafficCollision"] = relationship("RoadTrafficCollision", back_populates="actions")
+    rta: Mapped["RoadTrafficCollision"] = relationship(
+        "RoadTrafficCollision", back_populates="actions"
+    )
 
     def __repr__(self) -> str:
         return f"<RTAAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"

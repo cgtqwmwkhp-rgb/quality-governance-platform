@@ -75,7 +75,9 @@ async def create_standard(
     current_user: CurrentSuperuser,
 ) -> StandardResponse:
     """Create a new standard (superuser only)."""
-    result = await db.execute(select(Standard).where(Standard.code == standard_data.code))
+    result = await db.execute(
+        select(Standard).where(Standard.code == standard_data.code)
+    )
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -172,11 +174,15 @@ async def get_compliance_score(
             setup_required=True,
         )
 
-    implemented_count = sum(1 for c in controls if c.implementation_status == "implemented")
+    implemented_count = sum(
+        1 for c in controls if c.implementation_status == "implemented"
+    )
     partial_count = sum(1 for c in controls if c.implementation_status == "partial")
     not_implemented_count = total_controls - implemented_count - partial_count
 
-    compliance_percentage = round((implemented_count + 0.5 * partial_count) / total_controls * 100)
+    compliance_percentage = round(
+        (implemented_count + 0.5 * partial_count) / total_controls * 100
+    )
 
     return ComplianceScoreResponse(
         standard_id=standard_id,
@@ -267,7 +273,11 @@ async def list_clauses(
     return [ClauseResponse.model_validate(c) for c in clauses]
 
 
-@router.post("/{standard_id}/clauses", response_model=ClauseResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{standard_id}/clauses",
+    response_model=ClauseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_clause(
     standard_id: int,
     clause_data: ClauseCreate,
@@ -284,7 +294,11 @@ async def create_clause(
     db.add(clause)
     await db.commit()
 
-    result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause.id))
+    result = await db.execute(
+        select(Clause)
+        .options(selectinload(Clause.controls))
+        .where(Clause.id == clause.id)
+    )
     clause = result.scalar_one()  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-002
 
     return ClauseResponse.model_validate(clause)
@@ -297,7 +311,11 @@ async def get_clause(
     current_user: CurrentUser,
 ) -> ClauseResponse:
     """Get a specific clause."""
-    result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause_id))
+    result = await db.execute(
+        select(Clause)
+        .options(selectinload(Clause.controls))
+        .where(Clause.id == clause_id)
+    )
     clause = result.scalar_one_or_none()
 
     if not clause:
@@ -329,7 +347,11 @@ async def update_clause(
 # ============== Control Endpoints ==============
 
 
-@router.post("/clauses/{clause_id}/controls", response_model=ControlResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/clauses/{clause_id}/controls",
+    response_model=ControlResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_control(
     clause_id: int,
     control_data: ControlCreate,

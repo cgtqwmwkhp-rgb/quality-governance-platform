@@ -84,7 +84,9 @@ async def etl_user_token(client: AsyncClient, test_session):
 
 
 @pytest.mark.asyncio
-async def test_etl_user_can_create_complaint(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_user_can_create_complaint(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """Test that ETL user can create complaints (allowed action)."""
     data = {
         "title": "ETL Created Complaint",
@@ -94,16 +96,24 @@ async def test_etl_user_can_create_complaint(client: AsyncClient, etl_user_token
         "complainant_name": "ETL System",
         "external_ref": "ETL-TEST-001",
     }
-    response = await client.post("/api/v1/complaints/", json=data, headers=etl_user_token)
-    assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+    response = await client.post(
+        "/api/v1/complaints/", json=data, headers=etl_user_token
+    )
+    assert (
+        response.status_code == 201
+    ), f"Expected 201, got {response.status_code}: {response.text}"
     assert response.json()["external_ref"] == "ETL-TEST-001"
 
 
 @pytest.mark.asyncio
-async def test_etl_user_can_list_complaints(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_user_can_list_complaints(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """Test that ETL user can list complaints (allowed action)."""
     response = await client.get("/api/v1/complaints/", headers=etl_user_token)
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert (
+        response.status_code == 200
+    ), f"Expected 200, got {response.status_code}: {response.text}"
 
 
 # ============================================================================
@@ -112,7 +122,9 @@ async def test_etl_user_can_list_complaints(client: AsyncClient, etl_user_token:
 
 
 @pytest.mark.asyncio
-async def test_etl_user_cannot_delete_complaint(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_user_cannot_delete_complaint(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """
     Test that ETL user cannot delete complaints (forbidden action).
 
@@ -132,7 +144,9 @@ async def test_etl_user_cannot_delete_complaint(client: AsyncClient, etl_user_to
     await test_session.refresh(complaint)
 
     # Attempt to delete (should fail)
-    response = await client.delete(f"/api/v1/complaints/{complaint.id}", headers=etl_user_token)
+    response = await client.delete(
+        f"/api/v1/complaints/{complaint.id}", headers=etl_user_token
+    )
 
     # Accept either 403 (forbidden) or 405 (method not allowed - if delete not implemented)
     assert response.status_code in [403, 405], (
@@ -142,7 +156,9 @@ async def test_etl_user_cannot_delete_complaint(client: AsyncClient, etl_user_to
 
 
 @pytest.mark.asyncio
-async def test_etl_user_cannot_access_user_management(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_user_cannot_access_user_management(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """
     Test that ETL user cannot access user management endpoints.
 
@@ -155,12 +171,15 @@ async def test_etl_user_cannot_access_user_management(client: AsyncClient, etl_u
     # Accept 403 (forbidden) or 404 (if endpoint requires different access)
     # The key point is ETL user should NOT get a 200 with user list
     assert response.status_code != 200 or len(response.json().get("items", [])) == 0, (
-        f"ETL user should NOT have full access to user list. " f"Got status {response.status_code}: {response.text}"
+        f"ETL user should NOT have full access to user list. "
+        f"Got status {response.status_code}: {response.text}"
     )
 
 
 @pytest.mark.asyncio
-async def test_etl_user_cannot_create_users(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_user_cannot_create_users(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """
     Test that ETL user cannot create new users.
 
@@ -176,12 +195,15 @@ async def test_etl_user_cannot_create_users(client: AsyncClient, etl_user_token:
 
     # Should not succeed
     assert response.status_code != 201, (
-        f"ETL user should NOT be able to create users. " f"Got status {response.status_code}: {response.text}"
+        f"ETL user should NOT be able to create users. "
+        f"Got status {response.status_code}: {response.text}"
     )
 
 
 @pytest.mark.asyncio
-async def test_etl_user_cannot_modify_roles(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_user_cannot_modify_roles(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """
     Test that ETL user cannot modify role assignments.
 
@@ -204,7 +226,9 @@ async def test_etl_user_cannot_modify_roles(client: AsyncClient, etl_user_token:
 
 
 @pytest.mark.asyncio
-async def test_etl_permission_matrix_summary(client: AsyncClient, etl_user_token: dict, test_session):
+async def test_etl_permission_matrix_summary(
+    client: AsyncClient, etl_user_token: dict, test_session
+):
     """
     Summary test documenting the ETL permission matrix.
 
@@ -231,12 +255,18 @@ async def test_etl_permission_matrix_summary(client: AsyncClient, etl_user_token
         "complainant_name": "Matrix Test",
         "external_ref": "MATRIX-TEST-001",
     }
-    create_response = await client.post("/api/v1/complaints/", json=complaint_data, headers=etl_user_token)
-    assert create_response.status_code == 201, "ETL user SHOULD be able to create complaints"
+    create_response = await client.post(
+        "/api/v1/complaints/", json=complaint_data, headers=etl_user_token
+    )
+    assert (
+        create_response.status_code == 201
+    ), "ETL user SHOULD be able to create complaints"
 
     # Verify allowed: complaint read
     read_response = await client.get("/api/v1/complaints/", headers=etl_user_token)
-    assert read_response.status_code == 200, "ETL user SHOULD be able to read complaints"
+    assert (
+        read_response.status_code == 200
+    ), "ETL user SHOULD be able to read complaints"
 
     # Verify denied: user create
     user_data = {
@@ -245,8 +275,12 @@ async def test_etl_permission_matrix_summary(client: AsyncClient, etl_user_token
         "first_name": "Should",
         "last_name": "Fail",
     }
-    user_create_response = await client.post("/api/v1/users/", json=user_data, headers=etl_user_token)
-    assert user_create_response.status_code != 201, "ETL user should NOT be able to create users"
+    user_create_response = await client.post(
+        "/api/v1/users/", json=user_data, headers=etl_user_token
+    )
+    assert (
+        user_create_response.status_code != 201
+    ), "ETL user should NOT be able to create users"
 
     # Test passed - permission matrix is correctly enforced
     assert True, "ETL permission matrix correctly enforced"

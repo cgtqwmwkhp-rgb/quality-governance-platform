@@ -29,7 +29,10 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgment,
     PolicyAcknowledgmentRequirement,
 )
-from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
+from src.domain.services.policy_acknowledgment import (
+    DocumentReadLogService,
+    PolicyAcknowledgmentService,
+)
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
 
@@ -39,7 +42,11 @@ router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgmen
 # =============================================================================
 
 
-@router.post("/requirements", response_model=AcknowledgmentRequirementResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/requirements",
+    response_model=AcknowledgmentRequirementResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_acknowledgment_requirement(
     requirement_data: AcknowledgmentRequirementCreate,
     db: DbSession,
@@ -62,18 +69,28 @@ async def create_acknowledgment_requirement(
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
-@router.get("/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse)
+@router.get(
+    "/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse
+)
 async def get_acknowledgment_requirement(
     requirement_id: int,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """Get an acknowledgment requirement."""
-    requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail="Requirement not found")
+    requirement = await get_or_404(
+        db,
+        PolicyAcknowledgmentRequirement,
+        requirement_id,
+        detail="Requirement not found",
+    )
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
-@router.post("/requirements/{requirement_id}/assign", response_model=PolicyAcknowledgmentListResponse)
+@router.post(
+    "/requirements/{requirement_id}/assign",
+    response_model=PolicyAcknowledgmentListResponse,
+)
 async def assign_acknowledgments(
     requirement_id: int,
     assign_data: AssignAcknowledgmentRequest,
@@ -125,7 +142,9 @@ async def get_acknowledgment(
     current_user: CurrentUser,
 ):
     """Get a specific acknowledgment."""
-    ack = await get_or_404(db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found")
+    ack = await get_or_404(
+        db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found"
+    )
     return PolicyAcknowledgmentResponse.from_orm(ack)
 
 
@@ -140,7 +159,9 @@ async def record_policy_opened(
     ack = await service.record_policy_opened(acknowledgment_id)
 
     if not ack:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found"
+        )
 
     return {"message": "Policy opened recorded", "first_opened_at": ack.first_opened_at}
 
@@ -157,12 +178,16 @@ async def update_reading_time(
     ack = await service.update_reading_time(acknowledgment_id, additional_seconds)
 
     if not ack:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgment not found"
+        )
 
     return {"message": "Reading time updated", "total_seconds": ack.time_spent_seconds}
 
 
-@router.post("/{acknowledgment_id}/acknowledge", response_model=PolicyAcknowledgmentResponse)
+@router.post(
+    "/{acknowledgment_id}/acknowledge", response_model=PolicyAcknowledgmentResponse
+)
 async def record_acknowledgment(
     acknowledgment_id: int,
     ack_data: RecordAcknowledgmentRequest,
@@ -196,7 +221,9 @@ async def record_acknowledgment(
 # =============================================================================
 
 
-@router.get("/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse)
+@router.get(
+    "/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse
+)
 async def get_policy_acknowledgment_status(
     policy_id: int,
     db: DbSession,
@@ -285,7 +312,10 @@ async def log_document_read(
     return DocumentReadLogResponse.from_orm(log)
 
 
-@router.get("/read-logs/document/{document_type}/{document_id}", response_model=DocumentReadLogListResponse)
+@router.get(
+    "/read-logs/document/{document_type}/{document_id}",
+    response_model=DocumentReadLogListResponse,
+)
 async def get_document_read_history(
     document_type: str,
     document_id: int,

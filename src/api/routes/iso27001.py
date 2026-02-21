@@ -20,6 +20,22 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.iso27001 import (
+    AssetCreateResponse,
+    ControlUpdateResponse,
+    IncidentUpdateResponse,
+    InformationAssetListResponse,
+    InformationAssetResponse,
+    InformationSecurityRiskListResponse,
+    ISMSDashboardResponse,
+    ISO27001ControlListResponse,
+    SecurityIncidentCreateResponse,
+    SecurityIncidentListResponse,
+    SecurityRiskCreateResponse,
+    SoAResponse,
+    SupplierAssessmentCreateResponse,
+    SupplierSecurityAssessmentListResponse,
+)
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -38,13 +54,36 @@ from src.domain.models.iso27001 import (
 router = APIRouter()
 
 
+# ============ ISO 27001-Specific Helpers ============
+
+
+async def _generate_asset_id(db) -> str:
+    """Generate next sequential asset ID (ASSET-NNNNN)."""
+    result = await db.execute(select(func.count()).select_from(InformationAsset))
+    count = result.scalar_one()
+    return f"ASSET-{(count + 1):05d}"
+
+
+def _calculate_risk_scores(likelihood: int, impact: int) -> tuple[int, int]:
+    """Calculate inherent and residual risk scores.
+
+    Returns (inherent_score, residual_score) where residual assumes
+    one level of mitigation on both likelihood and impact axes.
+    """
+    inherent = likelihood * impact
+    residual = max((likelihood - 1) * (impact - 1), 1)
+    return inherent, residual
+
+
 # ============ Pydantic Schemas ============
 
 
 class AssetCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     description: Optional[str] = None
-    asset_type: str = Field(..., description="hardware, software, data, service, people, physical")
+    asset_type: str = Field(
+        ..., description="hardware, software, data, service, people, physical"
+    )
     classification: str = Field(default="internal")
     owner_name: Optional[str] = None
     department: Optional[str] = None
@@ -135,9 +174,10 @@ class SupplierAssessmentCreate(BaseModel):
 # ============ Information Assets ============
 
 
-@router.get("/assets", response_model=dict)
+@router.get("/assets", response_model=InformationAssetListResponse)
 async def list_assets(
     db: DbSession,
+    current_user: CurrentUser,
     asset_type: Optional[str] = Query(None),
     classification: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
@@ -145,7 +185,10 @@ async def list_assets(
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List information assets"""
-    stmt = select(InformationAsset).where(InformationAsset.is_active == True)
+    stmt = select(InformationAsset).where(
+        InformationAsset.is_active == True,
+        InformationAsset.tenant_id == current_user.tenant_id,
+    )
 
     if asset_type:
         stmt = stmt.where(InformationAsset.asset_type == asset_type)
@@ -174,26 +217,30 @@ async def list_assets(
                 "criticality": a.criticality,
                 "owner_name": a.owner_name,
                 "department": a.department,
-                "cia_score": a.confidentiality_requirement + a.integrity_requirement + a.availability_requirement,
+                "cia_score": a.confidentiality_requirement
+                + a.integrity_requirement
+                + a.availability_requirement,
             }
             for a in paginated.items
         ],
     }
 
 
-@router.post("/assets", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/assets", response_model=AssetCreateResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_asset(
     asset_data: AssetCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create information asset"""
-    result = await db.execute(select(func.count()).select_from(InformationAsset))
-    count = result.scalar_one()
-    asset_id = f"ASSET-{(count + 1):05d}"
+    asset_id = await _generate_asset_id(db)
 
     asset = InformationAsset(
         asset_id=asset_id,
         next_review_date=datetime.utcnow() + timedelta(days=365),
+        tenant_id=current_user.tenant_id,
         **asset_data.model_dump(),
     )
     db.add(asset)
@@ -203,10 +250,11 @@ async def create_asset(
     return {"id": asset.id, "asset_id": asset_id, "message": "Asset created"}
 
 
-@router.get("/assets/{asset_id}", response_model=dict)
+@router.get("/assets/{asset_id}", response_model=InformationAssetResponse)
 async def get_asset(
     asset_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get asset details"""
     asset = await get_or_404(db, InformationAsset, asset_id)
@@ -230,23 +278,32 @@ async def get_asset(
         "confidentiality_requirement": asset.confidentiality_requirement,
         "integrity_requirement": asset.integrity_requirement,
         "availability_requirement": asset.availability_requirement,
-        "cia_score": asset.confidentiality_requirement + asset.integrity_requirement + asset.availability_requirement,
+        "cia_score": asset.confidentiality_requirement
+        + asset.integrity_requirement
+        + asset.availability_requirement,
         "dependencies": asset.dependencies,
         "dependent_processes": asset.dependent_processes,
         "applied_controls": asset.applied_controls,
         "status": asset.status,
-        "last_review_date": asset.last_review_date.isoformat() if asset.last_review_date else None,
-        "next_review_date": asset.next_review_date.isoformat() if asset.next_review_date else None,
+        "last_review_date": (
+            asset.last_review_date.isoformat() if asset.last_review_date else None
+        ),
+        "next_review_date": (
+            asset.next_review_date.isoformat() if asset.next_review_date else None
+        ),
     }
 
 
 # ============ ISO 27001 Controls (Annex A) ============
 
 
-@router.get("/controls", response_model=dict)
+@router.get("/controls", response_model=ISO27001ControlListResponse)
 async def list_controls(
     db: DbSession,
-    domain: Optional[str] = Query(None, description="organizational, people, physical, technological"),
+    current_user: CurrentUser,
+    domain: Optional[str] = Query(
+        None, description="organizational, people, physical, technological"
+    ),
     implementation_status: Optional[str] = Query(None),
     is_applicable: Optional[bool] = Query(None),
     params: PaginationParams = Depends(),
@@ -257,7 +314,9 @@ async def list_controls(
     if domain:
         stmt = stmt.where(ISO27001Control.domain == domain)
     if implementation_status:
-        stmt = stmt.where(ISO27001Control.implementation_status == implementation_status)
+        stmt = stmt.where(
+            ISO27001Control.implementation_status == implementation_status
+        )
     if is_applicable is not None:
         stmt = stmt.where(ISO27001Control.is_applicable == is_applicable)
 
@@ -266,12 +325,16 @@ async def list_controls(
 
     # Summary
     result = await db.execute(
-        select(func.count()).select_from(ISO27001Control).where(ISO27001Control.implementation_status == "implemented")
+        select(func.count())
+        .select_from(ISO27001Control)
+        .where(ISO27001Control.implementation_status == "implemented")
     )
     implemented = result.scalar_one()
 
     result = await db.execute(
-        select(func.count()).select_from(ISO27001Control).where(ISO27001Control.implementation_status == "partial")
+        select(func.count())
+        .select_from(ISO27001Control)
+        .where(ISO27001Control.implementation_status == "partial")
     )
     partial = result.scalar_one()
 
@@ -283,7 +346,9 @@ async def list_controls(
     not_impl = result.scalar_one()
 
     result = await db.execute(
-        select(func.count()).select_from(ISO27001Control).where(ISO27001Control.is_applicable == False)
+        select(func.count())
+        .select_from(ISO27001Control)
+        .where(ISO27001Control.is_applicable == False)
     )
     excluded = result.scalar_one()
 
@@ -297,7 +362,9 @@ async def list_controls(
             "partially_implemented": partial,
             "not_implemented": not_impl,
             "excluded": excluded,
-            "implementation_percentage": round((implemented / max(paginated.total - excluded, 1)) * 100, 1),
+            "implementation_percentage": round(
+                (implemented / max(paginated.total - excluded, 1)) * 100, 1
+            ),
         },
         "controls": [
             {
@@ -316,11 +383,12 @@ async def list_controls(
     }
 
 
-@router.put("/controls/{control_id}", response_model=dict)
+@router.put("/controls/{control_id}", response_model=ControlUpdateResponse)
 async def update_control(
     control_id: int,
     control_data: ControlUpdate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update control implementation status"""
     control = await get_or_404(db, ISO27001Control, control_id)
@@ -338,12 +406,17 @@ async def update_control(
 # ============ Statement of Applicability ============
 
 
-@router.get("/soa", response_model=dict)
+@router.get("/soa", response_model=SoAResponse)
 async def get_current_soa(
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get current Statement of Applicability"""
-    result = await db.execute(select(StatementOfApplicability).where(StatementOfApplicability.is_current == True))
+    result = await db.execute(
+        select(StatementOfApplicability).where(
+            StatementOfApplicability.is_current == True
+        )
+    )
     soa = result.scalar_one_or_none()
 
     if not soa:
@@ -351,14 +424,19 @@ async def get_current_soa(
         total = result.scalar_one()
 
         result = await db.execute(
-            select(func.count()).select_from(ISO27001Control).where(ISO27001Control.is_applicable == True)
+            select(func.count())
+            .select_from(ISO27001Control)
+            .where(ISO27001Control.is_applicable == True)
         )
         applicable = result.scalar_one()
 
         result = await db.execute(
             select(func.count())
             .select_from(ISO27001Control)
-            .where(ISO27001Control.is_applicable == True, ISO27001Control.implementation_status == "implemented")
+            .where(
+                ISO27001Control.is_applicable == True,
+                ISO27001Control.implementation_status == "implemented",
+            )
         )
         implemented = result.scalar_one()
 
@@ -369,13 +447,17 @@ async def get_current_soa(
             "applicable_controls": applicable,
             "excluded_controls": total - applicable,
             "implemented_controls": implemented,
-            "implementation_percentage": round((implemented / max(applicable, 1)) * 100, 1),
+            "implementation_percentage": round(
+                (implemented / max(applicable, 1)) * 100, 1
+            ),
         }
 
     return {
         "id": soa.id,
         "version": soa.version,
-        "effective_date": soa.effective_date.isoformat() if soa.effective_date else None,
+        "effective_date": (
+            soa.effective_date.isoformat() if soa.effective_date else None
+        ),
         "approved_by": soa.approved_by,
         "approved_date": soa.approved_date.isoformat() if soa.approved_date else None,
         "scope_description": soa.scope_description,
@@ -385,7 +467,9 @@ async def get_current_soa(
         "implemented_controls": soa.implemented_controls,
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
-        "implementation_percentage": round((soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1),
+        "implementation_percentage": round(
+            (soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1
+        ),
         "status": soa.status,
         "document_link": soa.document_link,
     }
@@ -394,16 +478,19 @@ async def get_current_soa(
 # ============ Information Security Risks ============
 
 
-@router.get("/risks", response_model=dict)
+@router.get("/risks", response_model=InformationSecurityRiskListResponse)
 async def list_security_risks(
     db: DbSession,
+    current_user: CurrentUser,
     status: Optional[str] = Query(None),
     treatment_option: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None, ge=1, le=25),
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List information security risks"""
-    stmt = select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+    stmt = select(InformationSecurityRisk).where(
+        InformationSecurityRisk.status != "closed"
+    )
 
     if status:
         stmt = stmt.where(InformationSecurityRisk.status == status)
@@ -438,24 +525,31 @@ async def list_security_risks(
     }
 
 
-@router.post("/risks", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/risks",
+    response_model=SecurityRiskCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_security_risk(
     risk_data: SecurityRiskCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create information security risk"""
     result = await db.execute(select(func.count()).select_from(InformationSecurityRisk))
     count = result.scalar_one()
     risk_id = f"ISR-{(count + 1):04d}"
 
-    inherent_score = risk_data.likelihood * risk_data.impact
-    residual_score = (risk_data.likelihood - 1) * (risk_data.impact - 1)  # Simplified
+    inherent_score, residual_score = _calculate_risk_scores(
+        risk_data.likelihood, risk_data.impact
+    )
 
     risk = InformationSecurityRisk(
         risk_id=risk_id,
         inherent_risk_score=inherent_score,
-        residual_risk_score=max(residual_score, 1),
+        residual_risk_score=residual_score,
         next_review_date=datetime.utcnow() + timedelta(days=90),
+        tenant_id=current_user.tenant_id,
         **risk_data.model_dump(),
     )
     db.add(risk)
@@ -468,9 +562,10 @@ async def create_security_risk(
 # ============ Security Incidents ============
 
 
-@router.get("/incidents", response_model=dict)
+@router.get("/incidents", response_model=SecurityIncidentListResponse)
 async def list_security_incidents(
     db: DbSession,
+    current_user: CurrentUser,
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     incident_type: Optional[str] = Query(None),
@@ -491,12 +586,16 @@ async def list_security_incidents(
 
     # Summary
     result = await db.execute(
-        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.status == "open")
+        select(func.count())
+        .select_from(SecurityIncident)
+        .where(SecurityIncident.status == "open")
     )
     open_count = result.scalar_one()
 
     result = await db.execute(
-        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.severity == "critical")
+        select(func.count())
+        .select_from(SecurityIncident)
+        .where(SecurityIncident.severity == "critical")
     )
     critical_count = result.scalar_one()
 
@@ -515,7 +614,9 @@ async def list_security_incidents(
                 "incident_type": i.incident_type,
                 "severity": i.severity,
                 "status": i.status,
-                "detected_date": i.detected_date.isoformat() if i.detected_date else None,
+                "detected_date": (
+                    i.detected_date.isoformat() if i.detected_date else None
+                ),
                 "assigned_to_name": i.assigned_to_name,
                 "data_compromised": i.data_compromised,
             }
@@ -524,10 +625,15 @@ async def list_security_incidents(
     }
 
 
-@router.post("/incidents", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/incidents",
+    response_model=SecurityIncidentCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_security_incident(
     incident_data: SecurityIncidentCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create security incident"""
     result = await db.execute(select(func.count()).select_from(SecurityIncident))
@@ -537,20 +643,26 @@ async def create_security_incident(
     incident = SecurityIncident(
         incident_id=incident_id,
         status="open",
+        tenant_id=current_user.tenant_id,
         **incident_data.model_dump(),
     )
     db.add(incident)
     await db.commit()
     await db.refresh(incident)
 
-    return {"id": incident.id, "incident_id": incident_id, "message": "Security incident created"}
+    return {
+        "id": incident.id,
+        "incident_id": incident_id,
+        "message": "Security incident created",
+    }
 
 
-@router.put("/incidents/{incident_id}", response_model=dict)
+@router.put("/incidents/{incident_id}", response_model=IncidentUpdateResponse)
 async def update_security_incident(
     incident_id: int,
     incident_data: IncidentUpdate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update security incident"""
     incident = await get_or_404(db, SecurityIncident, incident_id)
@@ -568,15 +680,18 @@ async def update_security_incident(
 # ============ Supplier Assessments ============
 
 
-@router.get("/suppliers", response_model=dict)
+@router.get("/suppliers", response_model=SupplierSecurityAssessmentListResponse)
 async def list_supplier_assessments(
     db: DbSession,
+    current_user: CurrentUser,
     rating: Optional[str] = Query(None),
     risk_level: Optional[str] = Query(None),
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List supplier security assessments"""
-    stmt = select(SupplierSecurityAssessment).where(SupplierSecurityAssessment.status == "active")
+    stmt = select(SupplierSecurityAssessment).where(
+        SupplierSecurityAssessment.status == "active"
+    )
 
     if rating:
         stmt = stmt.where(SupplierSecurityAssessment.overall_rating == rating)
@@ -602,21 +717,31 @@ async def list_supplier_assessments(
                 "iso27001_certified": s.iso27001_certified,
                 "soc2_certified": s.soc2_certified,
                 "risk_level": s.risk_level,
-                "next_assessment_date": s.next_assessment_date.isoformat() if s.next_assessment_date else None,
+                "next_assessment_date": (
+                    s.next_assessment_date.isoformat()
+                    if s.next_assessment_date
+                    else None
+                ),
             }
             for s in paginated.items
         ],
     }
 
 
-@router.post("/suppliers", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/suppliers",
+    response_model=SupplierAssessmentCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_supplier_assessment(
     assessment_data: SupplierAssessmentCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create supplier security assessment"""
     assessment = SupplierSecurityAssessment(
         assessment_date=datetime.utcnow(),
+        tenant_id=current_user.tenant_id,
         next_assessment_date=datetime.utcnow()
         + timedelta(
             days=(
@@ -637,21 +762,27 @@ async def create_supplier_assessment(
 # ============ ISMS Dashboard Summary ============
 
 
-@router.get("/dashboard", response_model=dict)
+@router.get("/dashboard", response_model=ISMSDashboardResponse)
 async def get_isms_dashboard(
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get ISMS dashboard summary"""
     # Assets
     result = await db.execute(
-        select(func.count()).select_from(InformationAsset).where(InformationAsset.is_active == True)
+        select(func.count())
+        .select_from(InformationAsset)
+        .where(InformationAsset.is_active == True)
     )
     total_assets = result.scalar_one()
 
     result = await db.execute(
         select(func.count())
         .select_from(InformationAsset)
-        .where(InformationAsset.is_active == True, InformationAsset.criticality == "critical")
+        .where(
+            InformationAsset.is_active == True,
+            InformationAsset.criticality == "critical",
+        )
     )
     critical_assets = result.scalar_one()
 
@@ -660,31 +791,42 @@ async def get_isms_dashboard(
     total_controls = result.scalar_one()
 
     result = await db.execute(
-        select(func.count()).select_from(ISO27001Control).where(ISO27001Control.implementation_status == "implemented")
+        select(func.count())
+        .select_from(ISO27001Control)
+        .where(ISO27001Control.implementation_status == "implemented")
     )
     implemented_controls = result.scalar_one()
 
     result = await db.execute(
-        select(func.count()).select_from(ISO27001Control).where(ISO27001Control.is_applicable == True)
+        select(func.count())
+        .select_from(ISO27001Control)
+        .where(ISO27001Control.is_applicable == True)
     )
     applicable_controls = result.scalar_one()
 
     # Risks
     result = await db.execute(
-        select(func.count()).select_from(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+        select(func.count())
+        .select_from(InformationSecurityRisk)
+        .where(InformationSecurityRisk.status != "closed")
     )
     open_risks = result.scalar_one()
 
     result = await db.execute(
         select(func.count())
         .select_from(InformationSecurityRisk)
-        .where(InformationSecurityRisk.residual_risk_score > 16, InformationSecurityRisk.status != "closed")
+        .where(
+            InformationSecurityRisk.residual_risk_score > 16,
+            InformationSecurityRisk.status != "closed",
+        )
     )
     high_risks = result.scalar_one()
 
     # Incidents
     result = await db.execute(
-        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.status == "open")
+        select(func.count())
+        .select_from(SecurityIncident)
+        .where(SecurityIncident.status == "open")
     )
     open_incidents = result.scalar_one()
 
@@ -699,7 +841,10 @@ async def get_isms_dashboard(
     result = await db.execute(
         select(func.count())
         .select_from(SupplierSecurityAssessment)
-        .where(SupplierSecurityAssessment.risk_level == "high", SupplierSecurityAssessment.status == "active")
+        .where(
+            SupplierSecurityAssessment.risk_level == "high",
+            SupplierSecurityAssessment.status == "active",
+        )
     )
     high_risk_suppliers = result.scalar_one()
 
@@ -712,7 +857,9 @@ async def get_isms_dashboard(
             "total": total_controls,
             "applicable": applicable_controls,
             "implemented": implemented_controls,
-            "implementation_percentage": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+            "implementation_percentage": round(
+                (implemented_controls / max(applicable_controls, 1)) * 100, 1
+            ),
         },
         "risks": {
             "open": open_risks,
@@ -725,5 +872,7 @@ async def get_isms_dashboard(
         "suppliers": {
             "high_risk": high_risk_suppliers,
         },
-        "compliance_score": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+        "compliance_score": round(
+            (implemented_controls / max(applicable_controls, 1)) * 100, 1
+        ),
     }

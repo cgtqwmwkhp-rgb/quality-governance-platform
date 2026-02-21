@@ -602,7 +602,9 @@ class AuditQuestionGenerator:
 
         return evidence if evidence else ["Interview response", "Visual observation"]
 
-    def _generate_ai_questions(self, standard: str, clause: str, context: str) -> list[dict[str, Any]]:
+    def _generate_ai_questions(
+        self, standard: str, clause: str, context: str
+    ) -> list[dict[str, Any]]:
         """Generate context-specific questions using AI"""
         prompt = f"""Generate 3 specific audit questions for {standard} clause {clause}.
 
@@ -681,7 +683,9 @@ class EvidenceMatcher:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def find_evidence_for_clause(self, standard: str, clause: str) -> list[dict[str, Any]]:
+    async def find_evidence_for_clause(
+        self, standard: str, clause: str
+    ) -> list[dict[str, Any]]:
         """Find existing evidence that may satisfy a clause"""
         from src.domain.models.document_control import ControlledDocument
         from src.domain.models.iso_compliance import ComplianceEvidence
@@ -691,7 +695,9 @@ class EvidenceMatcher:
         # Search compliance evidence
         result = await self.db.execute(
             select(ComplianceEvidence).where(
-                ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}])
+                ComplianceEvidence.iso_clauses.contains(
+                    [{"standard": standard, "clause": clause}]
+                )
             )
         )
         compliance_evidence = result.scalars().all()
@@ -704,7 +710,9 @@ class EvidenceMatcher:
                     "title": ce.title,
                     "description": ce.description,
                     "file_path": ce.file_path,
-                    "last_updated": ce.updated_at.isoformat() if ce.updated_at else None,
+                    "last_updated": (
+                        ce.updated_at.isoformat() if ce.updated_at else None
+                    ),
                     "match_confidence": 95,
                 }
             )
@@ -751,7 +759,9 @@ class EvidenceMatcher:
             select(AuditFinding).where(
                 and_(
                     AuditFinding.audit_id == audit_id,
-                    AuditFinding.conformance.in_(["minor_nc", "major_nc", "observation"]),
+                    AuditFinding.conformance.in_(
+                        ["minor_nc", "major_nc", "observation"]
+                    ),
                 )
             )
         )
@@ -759,7 +769,9 @@ class EvidenceMatcher:
 
         gaps = []
         for finding in findings:
-            existing_evidence = await self.find_evidence_for_clause(finding.standard or "", finding.clause or "")
+            existing_evidence = await self.find_evidence_for_clause(
+                finding.standard or "", finding.clause or ""
+            )
             if len(existing_evidence) < 2:
                 gaps.append(
                     {
@@ -850,7 +862,13 @@ class FindingClassifier:
         return {
             "severity": severity,
             "severity_confidence": (
-                0.8 if any(kw in text_lower for kws in self.SEVERITY_KEYWORDS.values() for kw in kws) else 0.5
+                0.8
+                if any(
+                    kw in text_lower
+                    for kws in self.SEVERITY_KEYWORDS.values()
+                    for kw in kws
+                )
+                else 0.5
             ),
             "root_cause_category": root_cause,
             "root_cause_confidence": min(root_cause_score * 0.3, 0.9),
@@ -879,7 +897,9 @@ class AuditReportGenerator:
         if not audit:
             return "Audit not found"
 
-        result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit_id))
+        result = await self.db.execute(
+            select(AuditFinding).where(AuditFinding.audit_id == audit_id)
+        )
         findings = result.scalars().all()
 
         # Count findings by type
@@ -896,15 +916,15 @@ class AuditReportGenerator:
             recommendation = "Certification cannot be recommended until major non-conformances are closed."
         elif minor_nc > 3:
             conclusion = "The audit identified several minor non-conformances requiring corrective action."
-            recommendation = (
-                "Conditional certification/continuation recommended subject to corrective action implementation."
-            )
+            recommendation = "Conditional certification/continuation recommended subject to corrective action implementation."
         elif minor_nc > 0:
             conclusion = "The audit identified minor non-conformances. The management system is generally effective."
             recommendation = "Certification/continuation is recommended. Corrective actions should be implemented before next surveillance."
         else:
             conclusion = "The audit found the management system to be effectively implemented and maintained."
-            recommendation = "Certification/continuation is recommended without conditions."
+            recommendation = (
+                "Certification/continuation is recommended without conditions."
+            )
 
         summary = f"""EXECUTIVE SUMMARY
 
@@ -945,7 +965,9 @@ RECOMMENDATION:
 
         report = []
         for i, finding in enumerate(findings, 1):
-            classification = FindingClassifier(self.db).classify_finding(finding.description or "")
+            classification = FindingClassifier(self.db).classify_finding(
+                finding.description or ""
+            )
 
             report.append(
                 {
@@ -957,7 +979,9 @@ RECOMMENDATION:
                     "objective_evidence": finding.evidence,
                     "root_cause_category": classification["root_cause_category"],
                     "corrective_action_required": finding.corrective_action,
-                    "due_date": finding.due_date.isoformat() if finding.due_date else None,
+                    "due_date": (
+                        finding.due_date.isoformat() if finding.due_date else None
+                    ),
                     "status": finding.status,
                 }
             )
@@ -977,7 +1001,9 @@ class AuditTrendAnalyzer:
 
         cutoff = datetime.utcnow() - timedelta(days=months * 30)
 
-        result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))
+        result = await self.db.execute(
+            select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date)
+        )
         audits = result.scalars().all()
 
         monthly_data: dict[str, dict] = defaultdict(
@@ -989,7 +1015,9 @@ class AuditTrendAnalyzer:
                 continue
             month_key = audit.audit_date.strftime("%Y-%m")
 
-            result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit.id))
+            result = await self.db.execute(
+                select(AuditFinding).where(AuditFinding.audit_id == audit.id)
+            )
             findings = result.scalars().all()
 
             for finding in findings:
@@ -1018,7 +1046,9 @@ class AuditTrendAnalyzer:
         if len(trends) >= 4:
             mid = len(trends) // 2
             first_half_avg = sum(t["total"] for t in trends[:mid]) / mid
-            second_half_avg = sum(t["total"] for t in trends[mid:]) / (len(trends) - mid)
+            second_half_avg = sum(t["total"] for t in trends[mid:]) / (
+                len(trends) - mid
+            )
             trend_direction = (
                 "improving"
                 if second_half_avg < first_half_avg * 0.9
@@ -1033,12 +1063,16 @@ class AuditTrendAnalyzer:
                 "total_audits": len(audits),
                 "total_major_nc": total_major,
                 "total_minor_nc": total_minor,
-                "avg_findings_per_audit": (sum(t["total"] for t in trends) / len(audits) if audits else 0),
+                "avg_findings_per_audit": (
+                    sum(t["total"] for t in trends) / len(audits) if audits else 0
+                ),
                 "trend_direction": trend_direction,
             },
         }
 
-    async def get_recurring_findings(self, min_occurrences: int = 3) -> list[dict[str, Any]]:
+    async def get_recurring_findings(
+        self, min_occurrences: int = 3
+    ) -> list[dict[str, Any]]:
         """Identify recurring findings across audits"""
         from src.domain.models.audit import AuditFinding
 
@@ -1046,7 +1080,9 @@ class AuditTrendAnalyzer:
         clause_findings: dict[str, list] = defaultdict(list)
 
         result = await self.db.execute(
-            select(AuditFinding).where(AuditFinding.conformance.in_(["major_nc", "minor_nc"]))
+            select(AuditFinding).where(
+                AuditFinding.conformance.in_(["major_nc", "minor_nc"])
+            )
         )
         findings = result.scalars().all()
 
@@ -1064,14 +1100,17 @@ class AuditTrendAnalyzer:
                         "findings": [
                             {
                                 "description": f.description,
-                                "audit_date": (f.created_at.isoformat() if f.created_at else None),
+                                "audit_date": (
+                                    f.created_at.isoformat() if f.created_at else None
+                                ),
                                 "conformance": f.conformance,
                             }
                             for f in clause_list[:5]  # Show first 5
                         ],
                         "priority": (
                             "high"
-                            if len(clause_list) >= 5 or any(f.conformance == "major_nc" for f in clause_list)
+                            if len(clause_list) >= 5
+                            or any(f.conformance == "major_nc" for f in clause_list)
                             else "medium"
                         ),
                         "recommendation": f"Implement systemic improvement for clause {clause}",

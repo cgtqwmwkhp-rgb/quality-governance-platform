@@ -18,8 +18,15 @@ from sqlalchemy import func, select, update
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
+from src.domain.models.notification import (
+    Notification,
+    NotificationPreference,
+    NotificationPriority,
+    NotificationType,
+)
 from src.domain.models.user import User
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -112,6 +119,7 @@ async def list_notifications(
     List notifications for the current user.
 
     Supports filtering by read status and notification type.
+    Tenant scoping is implicit through user ownership (user_id).
     """
     query = select(Notification).where(Notification.user_id == current_user.id)
 
@@ -141,7 +149,10 @@ async def list_notifications(
 
 @router.get("/unread-count")
 async def get_unread_count(db: DbSession, current_user: CurrentUser):
-    """Get the count of unread notifications for the current user."""
+    """Get the count of unread notifications for the current user.
+
+    Tenant scoping is implicit through user ownership (user_id).
+    """
     count = (
         await db.scalar(
             select(func.count(Notification.id)).where(
@@ -155,7 +166,9 @@ async def get_unread_count(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/{notification_id}/read")
-async def mark_notification_read(notification_id: int, db: DbSession, current_user: CurrentUser):
+async def mark_notification_read(
+    notification_id: int, db: DbSession, current_user: CurrentUser
+):
     """Mark a specific notification as read."""
     result = await db.execute(
         select(Notification).where(
@@ -165,16 +178,22 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
+        )
 
     notification.is_read = True
     notification.read_at = datetime.utcnow()
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
 @router.post("/{notification_id}/unread")
-async def mark_notification_unread(notification_id: int, db: DbSession, current_user: CurrentUser):
+async def mark_notification_unread(
+    notification_id: int, db: DbSession, current_user: CurrentUser
+):
     """Mark a specific notification as unread."""
     result = await db.execute(
         select(Notification).where(
@@ -184,11 +203,15 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
+        )
 
     notification.is_read = False
     notification.read_at = None
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
@@ -204,11 +227,15 @@ async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
         .values(is_read=True, read_at=datetime.utcnow())
     )
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "count": result.rowcount}
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(notification_id: int, db: DbSession, current_user: CurrentUser):
+async def delete_notification(
+    notification_id: int, db: DbSession, current_user: CurrentUser
+):
     """Delete a specific notification."""
     result = await db.execute(
         select(Notification).where(
@@ -218,17 +245,25 @@ async def delete_notification(notification_id: int, db: DbSession, current_user:
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
+        )
 
     await db.delete(notification)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
 @router.get("/preferences")
 async def get_notification_preferences(db: DbSession, current_user: CurrentUser):
     """Get notification preferences for the current user."""
-    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
+    result = await db.execute(
+        select(NotificationPreference).where(
+            NotificationPreference.user_id == current_user.id
+        )
+    )
     prefs = result.scalar_one_or_none()
 
     if not prefs:
@@ -266,7 +301,11 @@ async def update_notification_preferences(
     current_user: CurrentUser,
 ):
     """Update notification preferences for the current user."""
-    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
+    result = await db.execute(
+        select(NotificationPreference).where(
+            NotificationPreference.user_id == current_user.id
+        )
+    )
     prefs = result.scalar_one_or_none()
 
     if not prefs:
@@ -276,6 +315,8 @@ async def update_notification_preferences(
     update_data = apply_updates(prefs, preferences, set_updated_at=False)
 
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "preferences": update_data}
 
 

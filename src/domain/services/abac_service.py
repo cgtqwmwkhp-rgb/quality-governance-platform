@@ -132,7 +132,10 @@ class ABACService:
 
         for user_role in user_roles:
             role_permissions = await self._get_role_permissions(user_role.role_id)
-            if permission_code in role_permissions or f"{resource_type}.*" in role_permissions:
+            if (
+                permission_code in role_permissions
+                or f"{resource_type}.*" in role_permissions
+            ):
                 return True
 
         return False
@@ -272,7 +275,9 @@ class ABACService:
             stmt = stmt.where(ABACPolicy.resource_type == resource_type)
 
         if tenant_id is not None:
-            stmt = stmt.where(or_(ABACPolicy.tenant_id == tenant_id, ABACPolicy.tenant_id == None))
+            stmt = stmt.where(
+                or_(ABACPolicy.tenant_id == tenant_id, ABACPolicy.tenant_id == None)
+            )
 
         result = await self.db.execute(stmt)
         return result.scalars().all()
@@ -303,7 +308,9 @@ class ABACService:
 
         # Add permissions
         if permission_codes:
-            result = await self.db.execute(select(Permission).where(Permission.code.in_(permission_codes)))
+            result = await self.db.execute(
+                select(Permission).where(Permission.code.in_(permission_codes))
+            )
             permissions = result.scalars().all()
             for perm in permissions:
                 role_perm = RolePermission(role_id=role.id, permission_id=perm.id)
@@ -395,12 +402,16 @@ class ABACService:
 
         # Check resource conditions
         if policy.resource_conditions:
-            if not self._evaluate_conditions(policy.resource_conditions, resource, subject_context=subject):
+            if not self._evaluate_conditions(
+                policy.resource_conditions, resource, subject_context=subject
+            ):
                 return False
 
         # Check environment conditions
         if policy.environment_conditions:
-            if not self._evaluate_conditions(policy.environment_conditions, environment):
+            if not self._evaluate_conditions(
+                policy.environment_conditions, environment
+            ):
                 return False
 
         return True
@@ -534,7 +545,9 @@ class ABACService:
     ) -> None:
         """Invalidate the policy cache."""
         if resource_type and action:
-            keys_to_remove = [k for k in self._policy_cache if resource_type in k and action in k]
+            keys_to_remove = [
+                k for k in self._policy_cache if resource_type in k and action in k
+            ]
             for key in keys_to_remove:
                 del self._policy_cache[key]
         else:

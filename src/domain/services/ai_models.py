@@ -59,7 +59,11 @@ class AIConfig:
     def from_env(cls) -> "AIConfig":
         """Load configuration from environment variables."""
         provider_str = os.getenv("AI_PROVIDER", "openai")
-        provider = AIProvider(provider_str) if provider_str in [p.value for p in AIProvider] else AIProvider.OPENAI
+        provider = (
+            AIProvider(provider_str)
+            if provider_str in [p.value for p in AIProvider]
+            else AIProvider.OPENAI
+        )
 
         return cls(
             provider=provider,

@@ -27,7 +27,9 @@ router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
 async def get_executive_dashboard(
     db: DbSession,
     current_user: CurrentUser,
-    period_days: int = Query(30, ge=7, le=365, description="Period in days for metrics"),
+    period_days: int = Query(
+        30, ge=7, le=365, description="Period in days for metrics"
+    ),
 ):
     """Get complete executive dashboard with all KPIs.
 

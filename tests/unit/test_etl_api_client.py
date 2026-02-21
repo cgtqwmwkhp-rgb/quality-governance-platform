@@ -19,7 +19,11 @@ from unittest.mock import MagicMock, patch
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.etl.api_client import ETLAPIClient, ImportRecord, ImportResult  # noqa: E402
+from scripts.etl.api_client import (  # noqa: E402
+    ETLAPIClient,
+    ImportRecord,
+    ImportResult,
+)
 
 
 class TestETLAPIClient(unittest.TestCase):
@@ -79,7 +83,8 @@ class TestETLAPIClient(unittest.TestCase):
     def test_create_incident_idempotent_skip(self, mock_urlopen):
         """Test idempotent skip on existing record (409)."""
         mock_urlopen.side_effect = self._mock_http_error(
-            409, {"detail": "Incident with reference number SAMPLE-INC-001 already exists"}
+            409,
+            {"detail": "Incident with reference number SAMPLE-INC-001 already exists"},
         )
 
         result = self.client.create_incident(
@@ -96,7 +101,9 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_create_incident_auth_error(self, mock_urlopen):
         """Test auth error (401) - no retry."""
-        mock_urlopen.side_effect = self._mock_http_error(401, {"detail": "Not authenticated"})
+        mock_urlopen.side_effect = self._mock_http_error(
+            401, {"detail": "Not authenticated"}
+        )
 
         result = self.client.create_incident(
             {
@@ -118,7 +125,9 @@ class TestETLAPIClient(unittest.TestCase):
             self._mock_http_error(500, {"detail": "Internal error"}),
             MagicMock(
                 __enter__=MagicMock(
-                    return_value=self._mock_response(201, {"id": 456, "reference_number": "SAMPLE-INC-002"})
+                    return_value=self._mock_response(
+                        201, {"id": 456, "reference_number": "SAMPLE-INC-002"}
+                    )
                 )
             ),
         ]
@@ -136,13 +145,17 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_retry_on_429_with_retry_after(self, mock_urlopen):
         """Test retry on 429 with Retry-After header."""
-        error_429 = self._mock_http_error(429, {"detail": "Rate limited"}, headers={"Retry-After": "0.01"})
+        error_429 = self._mock_http_error(
+            429, {"detail": "Rate limited"}, headers={"Retry-After": "0.01"}
+        )
 
         mock_urlopen.side_effect = [
             error_429,
             MagicMock(
                 __enter__=MagicMock(
-                    return_value=self._mock_response(201, {"id": 789, "reference_number": "SAMPLE-INC-003"})
+                    return_value=self._mock_response(
+                        201, {"id": 789, "reference_number": "SAMPLE-INC-003"}
+                    )
                 )
             ),
         ]
@@ -160,7 +173,9 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_no_retry_on_400_error(self, mock_urlopen):
         """Test no retry on 400 error (bad request)."""
-        mock_urlopen.side_effect = self._mock_http_error(400, {"detail": "Validation error"})
+        mock_urlopen.side_effect = self._mock_http_error(
+            400, {"detail": "Validation error"}
+        )
 
         result = self.client.create_incident(
             {

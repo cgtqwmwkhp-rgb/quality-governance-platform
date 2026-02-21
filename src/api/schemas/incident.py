@@ -13,12 +13,22 @@ class IncidentBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=300, description="Incident title")
     description: str = Field(..., description="Detailed description of the incident")
-    incident_type: IncidentType = Field(default=IncidentType.OTHER, description="Type of incident")
-    severity: IncidentSeverity = Field(default=IncidentSeverity.MEDIUM, description="Severity level")
-    status: IncidentStatus = Field(default=IncidentStatus.REPORTED, description="Current status")
+    incident_type: IncidentType = Field(
+        default=IncidentType.OTHER, description="Type of incident"
+    )
+    severity: IncidentSeverity = Field(
+        default=IncidentSeverity.MEDIUM, description="Severity level"
+    )
+    status: IncidentStatus = Field(
+        default=IncidentStatus.REPORTED, description="Current status"
+    )
     incident_date: datetime = Field(..., description="When the incident occurred")
-    location: Optional[str] = Field(None, max_length=300, description="Where the incident occurred")
-    department: Optional[str] = Field(None, max_length=100, description="Department involved")
+    location: Optional[str] = Field(
+        None, max_length=300, description="Where the incident occurred"
+    )
+    department: Optional[str] = Field(
+        None, max_length=100, description="Department involved"
+    )
 
 
 class IncidentCreate(IncidentBase):

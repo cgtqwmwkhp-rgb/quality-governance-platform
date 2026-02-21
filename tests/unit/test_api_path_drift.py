@@ -132,7 +132,9 @@ class TestAllowlistHandling(TestCase):
     def test_allowlist_loading(self):
         """Allowlist file MUST be loaded correctly."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({"allowed_paths": ["/api/legacy/endpoint", "/api/special-case"]}, f)
+            json.dump(
+                {"allowed_paths": ["/api/legacy/endpoint", "/api/special-case"]}, f
+            )
             f.flush()
 
             allowlist = load_allowlist(Path(f.name))

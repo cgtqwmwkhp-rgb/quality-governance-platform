@@ -59,7 +59,9 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Idempotency key for ETL/external systems
     # When provided, enforces uniqueness to prevent duplicate imports
-    external_ref: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, unique=True, index=True)
+    external_ref: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, unique=True, index=True
+    )
 
     # Complaint identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
@@ -75,27 +77,43 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     )
 
     # Dates
-    received_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    acknowledged_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    target_resolution_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    received_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    acknowledged_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    target_resolution_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Complainant details
     complainant_name: Mapped[str] = mapped_column(String(200), nullable=False)
     complainant_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     complainant_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    complainant_company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    complainant_company: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
     complainant_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Related reference (e.g., order number, invoice number)
     related_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    related_product_service: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    related_product_service: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
 
     # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Assignment
-    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Investigation
@@ -114,17 +132,27 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Email ingestion source
-    source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api, phone
+    source_type: Mapped[str] = mapped_column(
+        String(50), default="manual"
+    )  # manual, email, api, phone
     source_email_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    original_email_subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    original_email_subject: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     original_email_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Portal form source tracking (for audit traceability)
-    source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_complaint_v1
+    source_form_id: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # e.g., portal_complaint_v1
 
     # Closure
-    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
@@ -144,7 +172,9 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     __tablename__ = "complaint_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    complaint_id: Mapped[int] = mapped_column(ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False)
+    complaint_id: Mapped[int] = mapped_column(
+        ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -153,14 +183,26 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     priority: Mapped[str] = mapped_column(String(20), default="medium")
 
     # Assignment
-    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    verified_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    status: Mapped[ActionStatus] = mapped_column(
+        SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN
+    )
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Evidence
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -220,9 +220,27 @@ class TestStandardsAPI:
     ):
         """Test searching standards by code or name."""
         standards = [
-            Standard(code="ISO-9001", name="ISO 9001", full_name="Quality", version="2015", is_active=True),
-            Standard(code="ISO-14001", name="ISO 14001", full_name="Environmental", version="2015", is_active=True),
-            Standard(code="ISO-27001", name="ISO 27001", full_name="Security", version="2022", is_active=True),
+            Standard(
+                code="ISO-9001",
+                name="ISO 9001",
+                full_name="Quality",
+                version="2015",
+                is_active=True,
+            ),
+            Standard(
+                code="ISO-14001",
+                name="ISO 14001",
+                full_name="Environmental",
+                version="2015",
+                is_active=True,
+            ),
+            Standard(
+                code="ISO-27001",
+                name="ISO 27001",
+                full_name="Security",
+                version="2022",
+                is_active=True,
+            ),
         ]
         for std in standards:
             test_session.add(std)
@@ -239,7 +257,9 @@ class TestStandardsAPI:
         assert data["items"][0]["code"] == "ISO-27001"
 
     @pytest.mark.asyncio
-    async def test_unauthorized_create_standard(self, client: AsyncClient, auth_headers: dict):
+    async def test_unauthorized_create_standard(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test that non-superusers cannot create standards."""
         payload = {
             "code": "ISO-45001",
@@ -488,10 +508,30 @@ class TestComplianceScoreAPI:
 
         # Add controls in non-sorted order
         controls = [
-            Control(clause_id=clause1.id, control_number="4.2.2", title="C4", is_applicable=True),
-            Control(clause_id=clause2.id, control_number="4.1.1", title="C1", is_applicable=True),
-            Control(clause_id=clause1.id, control_number="4.2.1", title="C3", is_applicable=True),
-            Control(clause_id=clause2.id, control_number="4.1.2", title="C2", is_applicable=True),
+            Control(
+                clause_id=clause1.id,
+                control_number="4.2.2",
+                title="C4",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause2.id,
+                control_number="4.1.1",
+                title="C1",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause1.id,
+                control_number="4.2.1",
+                title="C3",
+                is_applicable=True,
+            ),
+            Control(
+                clause_id=clause2.id,
+                control_number="4.1.2",
+                title="C2",
+                is_applicable=True,
+            ),
         ]
         for ctrl in controls:
             test_session.add(ctrl)

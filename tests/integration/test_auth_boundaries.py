@@ -34,13 +34,17 @@ class TestAuthRequiredForListEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
 
     @pytest.mark.asyncio
-    async def test_incidents_list_requires_auth_with_email_filter(self, client: AsyncClient):
+    async def test_incidents_list_requires_auth_with_email_filter(
+        self, client: AsyncClient
+    ):
         """
         CRITICAL SECURITY TEST: Unauthenticated request WITH email filter should return 401.
 
         This was the vulnerability - previously returned 200.
         """
-        response = await client.get("/api/v1/incidents/?reporter_email=test@example.com")
+        response = await client.get(
+            "/api/v1/incidents/?reporter_email=test@example.com"
+        )
         assert response.status_code == 401, (
             f"SECURITY VULNERABILITY: Expected 401, got {response.status_code}. "
             "Unauthenticated access with email filter should be blocked!"
@@ -53,13 +57,17 @@ class TestAuthRequiredForListEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
 
     @pytest.mark.asyncio
-    async def test_complaints_list_requires_auth_with_email_filter(self, client: AsyncClient):
+    async def test_complaints_list_requires_auth_with_email_filter(
+        self, client: AsyncClient
+    ):
         """
         CRITICAL SECURITY TEST: Unauthenticated request WITH email filter should return 401.
 
         This was the vulnerability - previously returned 200.
         """
-        response = await client.get("/api/v1/complaints/?complainant_email=test@example.com")
+        response = await client.get(
+            "/api/v1/complaints/?complainant_email=test@example.com"
+        )
         assert response.status_code == 401, (
             f"SECURITY VULNERABILITY: Expected 401, got {response.status_code}. "
             "Unauthenticated access with email filter should be blocked!"
@@ -170,7 +178,9 @@ class TestSecurityHeaders:
         assert response.status_code == 401
         # Verify response is JSON with error details
         data = response.json()
-        assert "detail" in data or "error" in data or "message" in data, "401 response should include error details"
+        assert (
+            "detail" in data or "error" in data or "message" in data
+        ), "401 response should include error details"
 
 
 class TestEndpointAccessMatrix:

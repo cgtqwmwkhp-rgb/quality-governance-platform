@@ -53,9 +53,13 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
 
     # Link to investigation or entity
     investigation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=True, index=True
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
-    entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # incident, near_miss, complaint
+    entity_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # incident, near_miss, complaint
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
     # Problem statement
@@ -66,7 +70,9 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
     whys: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
     # Root cause(s) identified
-    root_causes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Array of root cause strings
+    root_causes: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # Array of root cause strings
     primary_root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Contributing factors
@@ -77,19 +83,29 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
 
     # Metadata
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Review
     reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     review_comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     def __repr__(self) -> str:
         return f"<FiveWhysAnalysis(id={self.id}, entity={self.entity_type}:{self.entity_id})>"
 
-    def add_why(self, why_question: str, answer: str, evidence: Optional[str] = None) -> None:
+    def add_why(
+        self, why_question: str, answer: str, evidence: Optional[str] = None
+    ) -> None:
         """Add a why iteration."""
         whys = self.whys or []
         whys.append(
@@ -131,7 +147,9 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
 
     # Link to investigation or entity
     investigation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=True, index=True
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
@@ -159,20 +177,30 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
 
     # Root cause determination
     root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    root_cause_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    root_cause_category: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
 
     # Corrective actions
     proposed_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Metadata
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Review
     reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"<FishboneDiagram(id={self.id}, entity={self.entity_type}:{self.entity_id})>"
@@ -234,7 +262,9 @@ class BarrierAnalysis(Base, TimestampMixin, AuditTrailMixin):
 
     # Link to investigation or entity
     investigation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=True, index=True
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
@@ -264,12 +294,18 @@ class BarrierAnalysis(Base, TimestampMixin, AuditTrailMixin):
     missing_barriers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Recommendations
-    recommended_new_barriers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    recommended_improvements: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    recommended_new_barriers: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
+    recommended_improvements: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Metadata
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"<BarrierAnalysis(id={self.id}, entity={self.entity_type}:{self.entity_id})>"
@@ -326,36 +362,58 @@ class CAPAItem(Base, TimestampMixin, AuditTrailMixin):
     )
 
     # CAPA details
-    action_type: Mapped[str] = mapped_column(String(50), nullable=False)  # corrective, preventive
+    action_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # corrective, preventive
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     root_cause_addressed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Assignment
-    assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Status
-    status: Mapped[str] = mapped_column(String(50), default="open")  # open, in_progress, completed, verified, closed
-    priority: Mapped[str] = mapped_column(String(20), default="medium")  # critical, high, medium, low
+    status: Mapped[str] = mapped_column(
+        String(50), default="open"
+    )  # open, in_progress, completed, verified, closed
+    priority: Mapped[str] = mapped_column(
+        String(20), default="medium"
+    )  # critical, high, medium, low
 
     # Dates
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Verification
     verification_required: Mapped[bool] = mapped_column(Boolean, default=True)
-    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    verified_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Effectiveness review
-    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    effectiveness_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     is_effective: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     effectiveness_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Evidence
-    evidence_attachments: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of attachment IDs/URLs
+    evidence_attachments: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # List of attachment IDs/URLs
 
     def __repr__(self) -> str:
-        return f"<CAPAItem(id={self.id}, type={self.action_type}, status={self.status})>"
+        return (
+            f"<CAPAItem(id={self.id}, type={self.action_type}, status={self.status})>"
+        )

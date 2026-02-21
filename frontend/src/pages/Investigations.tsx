@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from '../components/ui/Dialog'
 import { cn } from "../helpers/utils"
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 import {
   STATUS_FILTER_OPTIONS,
@@ -658,9 +659,7 @@ export default function Investigations() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
+      <div className="p-6"><TableSkeleton rows={5} columns={4} /></div>
     )
   }
 

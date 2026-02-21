@@ -30,7 +30,9 @@ class TestTimelineEndpoint:
         response = await client.get("/api/v1/investigations/1/timeline")
         assert response.status_code == 401
 
-    async def test_timeline_not_found_returns_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_timeline_not_found_returns_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test timeline returns 404 for non-existent investigation."""
         response = await client.get(
             "/api/v1/investigations/999999/timeline",
@@ -44,7 +46,10 @@ class TestTimelineEndpoint:
         """Test timeline validates pagination parameters."""
         # page must be >= 1
         response = await client.get("/api/v1/investigations/1/timeline?page=0")
-        assert response.status_code in (401, 422)  # 401 if auth first, 422 if validation first
+        assert response.status_code in (
+            401,
+            422,
+        )  # 401 if auth first, 422 if validation first
 
         # page_size must be <= 100
         response = await client.get("/api/v1/investigations/1/timeline?page_size=200")
@@ -53,7 +58,9 @@ class TestTimelineEndpoint:
     async def test_timeline_event_type_filter_accepted(self, client: AsyncClient):
         """Test timeline accepts event_type filter parameter."""
         # Should accept the parameter without error (401 due to auth, not 422)
-        response = await client.get("/api/v1/investigations/1/timeline?event_type=CREATED")
+        response = await client.get(
+            "/api/v1/investigations/1/timeline?event_type=CREATED"
+        )
         assert response.status_code == 401  # Auth required, not parameter error
 
 
@@ -66,7 +73,9 @@ class TestCommentsEndpoint:
         response = await client.get("/api/v1/investigations/1/comments")
         assert response.status_code == 401
 
-    async def test_comments_not_found_returns_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_comments_not_found_returns_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test comments returns 404 for non-existent investigation."""
         response = await client.get(
             "/api/v1/investigations/999999/comments",
@@ -78,7 +87,9 @@ class TestCommentsEndpoint:
 
     async def test_comments_include_deleted_param_accepted(self, client: AsyncClient):
         """Test comments accepts include_deleted parameter."""
-        response = await client.get("/api/v1/investigations/1/comments?include_deleted=true")
+        response = await client.get(
+            "/api/v1/investigations/1/comments?include_deleted=true"
+        )
         assert response.status_code == 401  # Auth required, not parameter error
 
 
@@ -91,7 +102,9 @@ class TestPacksEndpoint:
         response = await client.get("/api/v1/investigations/1/packs")
         assert response.status_code == 401
 
-    async def test_packs_not_found_returns_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_packs_not_found_returns_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test packs returns 404 for non-existent investigation."""
         response = await client.get(
             "/api/v1/investigations/999999/packs",
@@ -101,7 +114,9 @@ class TestPacksEndpoint:
         data = response.json()
         assert data["detail"]["error_code"] == "INVESTIGATION_NOT_FOUND"
 
-    async def test_packs_does_not_expose_content_in_list(self, client: AsyncClient, auth_headers: dict):
+    async def test_packs_does_not_expose_content_in_list(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test packs list response schema excludes full content."""
         # This test documents the contract: list endpoint should NOT include full content
         # The response model CustomerPackSummaryResponse intentionally omits content field
@@ -114,20 +129,28 @@ class TestPacksEndpoint:
         if response.status_code == 200:
             data = response.json()
             for item in data.get("items", []):
-                assert "content" not in item, "Pack list should not expose content field"
-                assert "redaction_log" not in item, "Pack list should not expose redaction_log"
+                assert (
+                    "content" not in item
+                ), "Pack list should not expose content field"
+                assert (
+                    "redaction_log" not in item
+                ), "Pack list should not expose redaction_log"
 
 
 @pytest.mark.asyncio
 class TestClosureValidationEndpoint:
     """Tests for GET /investigations/{id}/closure-validation endpoint."""
 
-    async def test_closure_validation_unauthenticated_returns_401(self, client: AsyncClient):
+    async def test_closure_validation_unauthenticated_returns_401(
+        self, client: AsyncClient
+    ):
         """Test closure-validation endpoint requires authentication."""
         response = await client.get("/api/v1/investigations/1/closure-validation")
         assert response.status_code == 401
 
-    async def test_closure_validation_not_found_returns_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_closure_validation_not_found_returns_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test closure-validation returns 404 for non-existent investigation."""
         response = await client.get(
             "/api/v1/investigations/999999/closure-validation",
@@ -137,7 +160,9 @@ class TestClosureValidationEndpoint:
         data = response.json()
         assert data["detail"]["error_code"] == "INVESTIGATION_NOT_FOUND"
 
-    async def test_closure_validation_response_schema(self, client: AsyncClient, auth_headers: dict):
+    async def test_closure_validation_response_schema(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test closure-validation returns expected response shape."""
         # With a valid investigation, should return the validation response
         # For non-existent, we just verify the error shape
@@ -226,10 +251,14 @@ class TestCommentsIncludeDeletedAdminGate:
 
     async def test_include_deleted_requires_auth(self, client: AsyncClient):
         """Test include_deleted=true still requires authentication first."""
-        response = await client.get("/api/v1/investigations/1/comments?include_deleted=true")
+        response = await client.get(
+            "/api/v1/investigations/1/comments?include_deleted=true"
+        )
         assert response.status_code == 401
 
-    async def test_include_deleted_without_permission_returns_403(self, client: AsyncClient, auth_headers: dict):
+    async def test_include_deleted_without_permission_returns_403(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test non-admin user with include_deleted=true gets 403 FORBIDDEN.
 
         Security: include_deleted=true requires superuser or
@@ -251,7 +280,9 @@ class TestCommentsIncludeDeletedAdminGate:
             data = response.json()
             assert data["detail"]["error_code"] == "FORBIDDEN"
 
-    async def test_include_deleted_false_does_not_require_admin(self, client: AsyncClient, auth_headers: dict):
+    async def test_include_deleted_false_does_not_require_admin(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test include_deleted=false (default) works for normal users."""
         if not auth_headers:
             pytest.skip("Auth headers not available")
@@ -284,7 +315,9 @@ class TestInvestigationAuthorizationNegativeCase:
     - Other authenticated users get 404 (not 403, to avoid info disclosure)
     """
 
-    async def test_timeline_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_timeline_unauthorized_user_gets_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test user without access to investigation gets 404 for timeline."""
         if not auth_headers:
             pytest.skip("Auth headers not available")
@@ -298,7 +331,9 @@ class TestInvestigationAuthorizationNegativeCase:
         data = response.json()
         assert data["detail"]["error_code"] == "INVESTIGATION_NOT_FOUND"
 
-    async def test_comments_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_comments_unauthorized_user_gets_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test user without access to investigation gets 404 for comments."""
         if not auth_headers:
             pytest.skip("Auth headers not available")
@@ -311,7 +346,9 @@ class TestInvestigationAuthorizationNegativeCase:
         data = response.json()
         assert data["detail"]["error_code"] == "INVESTIGATION_NOT_FOUND"
 
-    async def test_packs_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_packs_unauthorized_user_gets_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test user without access to investigation gets 404 for packs."""
         if not auth_headers:
             pytest.skip("Auth headers not available")
@@ -324,7 +361,9 @@ class TestInvestigationAuthorizationNegativeCase:
         data = response.json()
         assert data["detail"]["error_code"] == "INVESTIGATION_NOT_FOUND"
 
-    async def test_closure_validation_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
+    async def test_closure_validation_unauthorized_user_gets_404(
+        self, client: AsyncClient, auth_headers: dict
+    ):
         """Test user without access to investigation gets 404 for closure-validation."""
         if not auth_headers:
             pytest.skip("Auth headers not available")

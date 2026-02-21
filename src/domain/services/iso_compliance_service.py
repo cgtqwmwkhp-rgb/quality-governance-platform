@@ -492,7 +492,12 @@ ISO_45001_CLAUSES = [
         2,
     ),
     ISOClause(
-        "45001-6", ISOStandard.ISO_45001, "6", "Planning", "Planning for the OHSMS", ["planning", "hazards", "risks"]
+        "45001-6",
+        ISOStandard.ISO_45001,
+        "6",
+        "Planning",
+        "Planning for the OHSMS",
+        ["planning", "hazards", "risks"],
     ),
     ISOClause(
         "45001-6.1.2",
@@ -546,7 +551,14 @@ ISO_45001_CLAUSES = [
         "8.1.2",
         "Eliminating hazards",
         "Apply hierarchy of controls",
-        ["hierarchy of controls", "elimination", "substitution", "engineering", "administrative", "PPE"],
+        [
+            "hierarchy of controls",
+            "elimination",
+            "substitution",
+            "engineering",
+            "administrative",
+            "PPE",
+        ],
         "45001-8",
         2,
     ),
@@ -592,7 +604,13 @@ ISO_45001_CLAUSES = [
         "10.2",
         "Incident, nonconformity and corrective action",
         "Investigate incidents and take corrective action",
-        ["incident investigation", "accident investigation", "nonconformity", "corrective action", "root cause"],
+        [
+            "incident investigation",
+            "accident investigation",
+            "nonconformity",
+            "corrective action",
+            "root cause",
+        ],
         "45001-10",
         2,
     ),
@@ -607,9 +625,13 @@ class ISOComplianceService:
 
     def __init__(self, ai_client: Optional[Any] = None) -> None:
         self.ai_client = ai_client
-        self.clauses: Dict[str, ISOClause] = {clause.id: clause for clause in ALL_CLAUSES}
+        self.clauses: Dict[str, ISOClause] = {
+            clause.id: clause for clause in ALL_CLAUSES
+        }
 
-    def get_all_clauses(self, standard: Optional[ISOStandard] = None) -> List[ISOClause]:
+    def get_all_clauses(
+        self, standard: Optional[ISOStandard] = None
+    ) -> List[ISOClause]:
         """Get all ISO clauses, optionally filtered by standard."""
         if standard:
             return [c for c in ALL_CLAUSES if c.standard == standard]
@@ -651,7 +673,9 @@ class ISOComplianceService:
         results.sort(key=lambda x: x[0], reverse=True)
         return [clause for _, clause in results[:20]]
 
-    def auto_tag_content(self, content: str, min_confidence: float = 0.3) -> List[Dict[str, Any]]:
+    def auto_tag_content(
+        self, content: str, min_confidence: float = 0.3
+    ) -> List[Dict[str, Any]]:
         """
         Automatically detect ISO clauses that relate to the given content.
         Uses keyword matching and pattern recognition.
@@ -696,7 +720,9 @@ class ISOComplianceService:
 
             # Description phrases
             desc_words = clause.description.lower().split()
-            desc_matches = sum(1 for word in desc_words if len(word) > 4 and word in content_lower)
+            desc_matches = sum(
+                1 for word in desc_words if len(word) > 4 and word in content_lower
+            )
             if desc_matches >= 2:
                 score += 0.1
 
@@ -705,7 +731,9 @@ class ISOComplianceService:
 
         # Convert to result list
         results = []
-        for clause_id, confidence in sorted(matched_clauses.items(), key=lambda x: x[1], reverse=True):
+        for clause_id, confidence in sorted(
+            matched_clauses.items(), key=lambda x: x[1], reverse=True
+        ):
             clause = self.clauses[clause_id]
             results.append(
                 {
@@ -731,7 +759,11 @@ class ISOComplianceService:
         try:
             # Create clause context for AI
             clause_context = "\n".join(
-                [f"- {c.id}: {c.clause_number} - {c.title} ({c.standard.value})" for c in ALL_CLAUSES if c.level == 2]
+                [
+                    f"- {c.id}: {c.clause_number} - {c.title} ({c.standard.value})"
+                    for c in ALL_CLAUSES
+                    if c.level == 2
+                ]
             )
 
             prompt = f"""Analyze the following content and identify which ISO clauses (9001, 14001, 45001) it relates to.
@@ -789,7 +821,9 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
         clause_evidence_count: Dict[str, int] = {}
         for link in evidence_links:
             clause_id = link.clause_id
-            clause_evidence_count[clause_id] = clause_evidence_count.get(clause_id, 0) + 1
+            clause_evidence_count[clause_id] = (
+                clause_evidence_count.get(clause_id, 0) + 1
+            )
 
         # Categorize coverage
         full_coverage = []  # 2+ evidence items
@@ -813,20 +847,37 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
             "partial_coverage": len(partial_coverage),
             "gaps": len(no_coverage),
             "coverage_percentage": (
-                round((len(full_coverage) + len(partial_coverage) * 0.5) / total * 100, 1) if total > 0 else 0
+                round(
+                    (len(full_coverage) + len(partial_coverage) * 0.5) / total * 100, 1
+                )
+                if total > 0
+                else 0
             ),
             "gap_clauses": [
-                {"clause_id": c.id, "clause_number": c.clause_number, "title": c.title, "standard": c.standard.value}
+                {
+                    "clause_id": c.id,
+                    "clause_number": c.clause_number,
+                    "title": c.title,
+                    "standard": c.standard.value,
+                }
                 for c in no_coverage
             ],
             "by_standard": {
-                "iso9001": self._standard_coverage(evidence_links, ISOStandard.ISO_9001),
-                "iso14001": self._standard_coverage(evidence_links, ISOStandard.ISO_14001),
-                "iso45001": self._standard_coverage(evidence_links, ISOStandard.ISO_45001),
+                "iso9001": self._standard_coverage(
+                    evidence_links, ISOStandard.ISO_9001
+                ),
+                "iso14001": self._standard_coverage(
+                    evidence_links, ISOStandard.ISO_14001
+                ),
+                "iso45001": self._standard_coverage(
+                    evidence_links, ISOStandard.ISO_45001
+                ),
             },
         }
 
-    def _standard_coverage(self, evidence_links: List[EvidenceLink], standard: ISOStandard) -> Dict[str, Any]:
+    def _standard_coverage(
+        self, evidence_links: List[EvidenceLink], standard: ISOStandard
+    ) -> Dict[str, Any]:
         """Calculate coverage for a specific standard."""
         clauses = [c for c in ALL_CLAUSES if c.standard == standard and c.level == 2]
         clause_ids = {c.id for c in clauses}
@@ -871,7 +922,11 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
                 continue
 
             evidence = clause_evidence.get(clause.id, [])
-            status = "full" if len(evidence) >= 2 else "partial" if len(evidence) == 1 else "gap"
+            status = (
+                "full"
+                if len(evidence) >= 2
+                else "partial" if len(evidence) == 1 else "gap"
+            )
 
             detail: Dict[str, Any] = {
                 "clause_id": clause.id,
@@ -896,7 +951,11 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
 
             clause_details.append(detail)
 
-        return {"generated_at": datetime.utcnow().isoformat(), "summary": coverage, "clauses": clause_details}
+        return {
+            "generated_at": datetime.utcnow().isoformat(),
+            "summary": coverage,
+            "clauses": clause_details,
+        }
 
 
 # Singleton instance

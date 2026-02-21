@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.api.schemas.setup_required import SetupRequiredResponse, setup_required_response
+from src.api.schemas.setup_required import (
+    SetupRequiredResponse,
+    setup_required_response,
+)
 
 
 class TestSetupRequiredRequestId:

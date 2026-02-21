@@ -64,6 +64,7 @@ async def global_search(
 
         inc_stmt = (
             select(Incident)
+            .where(Incident.tenant_id == current_user.tenant_id)
             .where(
                 or_(
                     func.lower(Incident.title).contains(query_lower),
@@ -89,7 +90,9 @@ async def global_search(
                     status=inc.status or "Open",
                     date=str(inc.incident_date or inc.created_at or ""),
                     relevance=relevance,
-                    highlights=[w for w in words if w in title_lower or w in desc_lower],
+                    highlights=[
+                        w for w in words if w in title_lower or w in desc_lower
+                    ],
                 )
             )
     except Exception:
@@ -100,6 +103,7 @@ async def global_search(
 
         rta_stmt = (
             select(RTA)
+            .where(RTA.tenant_id == current_user.tenant_id)
             .where(
                 or_(
                     func.lower(cast(RTA.location, String)).contains(query_lower),
@@ -131,6 +135,7 @@ async def global_search(
 
         cmp_stmt = (
             select(Complaint)
+            .where(Complaint.tenant_id == current_user.tenant_id)
             .where(
                 or_(
                     func.lower(Complaint.title).contains(query_lower),
@@ -162,6 +167,7 @@ async def global_search(
 
         risk_stmt = (
             select(Risk)
+            .where(Risk.tenant_id == current_user.tenant_id)
             .where(
                 or_(
                     func.lower(Risk.title).contains(query_lower),

@@ -82,7 +82,10 @@ class TestAuthenticationSecurity:
         """Test JWT tokens have proper format and claims."""
         response = client.post(
             "/api/auth/login",
-            json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+            json={
+                "username": "testuser@plantexpand.com",
+                "password": "testpassword123",
+            },
         )
         if response.status_code == 200:
             token = response.json().get("access_token")
@@ -199,7 +202,14 @@ class TestDataProtection:
         # Check that API routes don't include sensitive data in GET params
         from src.api import router
 
-        sensitive_patterns = ["password", "token", "secret", "key", "ssn", "credit_card"]
+        sensitive_patterns = [
+            "password",
+            "token",
+            "secret",
+            "key",
+            "ssn",
+            "credit_card",
+        ]
 
         for route in router.routes:
             if hasattr(route, "path"):
@@ -207,7 +217,9 @@ class TestDataProtection:
                 for pattern in sensitive_patterns:
                     # Skip auth routes which legitimately handle tokens
                     if "auth" not in path:
-                        assert pattern not in path, f"Sensitive data '{pattern}' found in route: {path}"
+                        assert (
+                            pattern not in path
+                        ), f"Sensitive data '{pattern}' found in route: {path}"
 
     def test_error_messages_not_verbose(self):
         """Test that error messages don't leak sensitive info."""
@@ -288,8 +300,14 @@ class TestSecurityConfiguration:
                 for pattern in secret_patterns:
                     matches = re.findall(pattern, content, re.IGNORECASE)
                     # Filter out obvious test/example values
-                    real_matches = [m for m in matches if "test" not in m.lower() and "example" not in m.lower()]
-                    assert len(real_matches) == 0, f"Potential secret in {py_file}: {real_matches}"
+                    real_matches = [
+                        m
+                        for m in matches
+                        if "test" not in m.lower() and "example" not in m.lower()
+                    ]
+                    assert (
+                        len(real_matches) == 0
+                    ), f"Potential secret in {py_file}: {real_matches}"
 
     def test_debug_mode_disabled_in_prod(self):
         """Ensure debug mode is disabled in production."""
@@ -327,7 +345,10 @@ class TestAPISecurityBestPractices:
 
         for endpoint in protected_endpoints:
             response = client.get(endpoint)
-            assert response.status_code in [401, 403], f"Endpoint {endpoint} is not protected"
+            assert response.status_code in [
+                401,
+                403,
+            ], f"Endpoint {endpoint} is not protected"
 
     def test_no_server_version_disclosure(self, client):
         """Test that server version is not disclosed."""
@@ -335,7 +356,10 @@ class TestAPISecurityBestPractices:
 
         # Check headers for version disclosure
         headers = dict(response.headers)
-        assert "Server" not in headers or "version" not in headers.get("Server", "").lower()
+        assert (
+            "Server" not in headers
+            or "version" not in headers.get("Server", "").lower()
+        )
         assert "X-Powered-By" not in headers
 
 
@@ -355,7 +379,9 @@ def test_dependencies_have_no_vulnerabilities():
         )
         if result.returncode != 0:
             vulnerabilities = result.stdout
-            pytest.fail(f"Security vulnerabilities found in dependencies:\n{vulnerabilities}")
+            pytest.fail(
+                f"Security vulnerabilities found in dependencies:\n{vulnerabilities}"
+            )
     except FileNotFoundError:
         pytest.skip("safety not installed - run: pip install safety")
 

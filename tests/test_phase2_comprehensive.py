@@ -45,7 +45,9 @@ class TestFiveWhysAnalysis:
             whys=[],
         )
 
-        analysis.add_why("Why did the equipment fail?", "The motor overheated", "Temperature logs")
+        analysis.add_why(
+            "Why did the equipment fail?", "The motor overheated", "Temperature logs"
+        )
 
         assert len(analysis.whys) == 1
         assert analysis.whys[0]["level"] == 1
@@ -74,8 +76,18 @@ class TestFiveWhysAnalysis:
         analysis = FiveWhysAnalysis(
             problem_statement="System crash",
             whys=[
-                {"level": 1, "why": "Why crash?", "answer": "Memory full", "evidence": None},
-                {"level": 2, "why": "Why memory full?", "answer": "Memory leak", "evidence": None},
+                {
+                    "level": 1,
+                    "why": "Why crash?",
+                    "answer": "Memory full",
+                    "evidence": None,
+                },
+                {
+                    "level": 2,
+                    "why": "Why memory full?",
+                    "answer": "Memory leak",
+                    "evidence": None,
+                },
             ],
             primary_root_cause="Memory leak in module X",
         )
@@ -112,7 +124,9 @@ class TestFishboneDiagram:
         )
 
         diagram.add_cause(
-            FishboneCategory.MANPOWER, "Inadequate training", ["No refresher courses", "Outdated materials"]
+            FishboneCategory.MANPOWER,
+            "Inadequate training",
+            ["No refresher courses", "Outdated materials"],
         )
 
         assert len(diagram.causes["manpower"]) == 1
@@ -284,7 +298,10 @@ class TestAuditorCertification:
 
     def test_certification_creation(self):
         """Test creating a certification."""
-        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
+        from src.domain.models.auditor_competence import (
+            AuditorCertification,
+            CertificationStatus,
+        )
 
         cert = AuditorCertification(
             profile_id=1,
@@ -300,7 +317,10 @@ class TestAuditorCertification:
 
     def test_certification_validity_check(self):
         """Test certification validity checking."""
-        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
+        from src.domain.models.auditor_competence import (
+            AuditorCertification,
+            CertificationStatus,
+        )
 
         # Valid certification
         valid_cert = AuditorCertification(
@@ -328,7 +348,10 @@ class TestAuditorCertification:
 
     def test_days_until_expiry(self):
         """Test days until expiry calculation."""
-        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
+        from src.domain.models.auditor_competence import (
+            AuditorCertification,
+            CertificationStatus,
+        )
 
         cert = AuditorCertification(
             profile_id=1,
@@ -420,7 +443,10 @@ class TestAuditAssignmentCriteria:
 
     def test_criteria_creation(self):
         """Test creating assignment criteria."""
-        from src.domain.models.auditor_competence import AuditAssignmentCriteria, CompetenceLevel
+        from src.domain.models.auditor_competence import (
+            AuditAssignmentCriteria,
+            CompetenceLevel,
+        )
 
         criteria = AuditAssignmentCriteria(
             audit_type="ISO 9001 Certification Audit",
@@ -497,7 +523,11 @@ class TestCompetenceIntegration:
 
     def test_auditor_qualification_check(self):
         """Test checking if auditor meets criteria."""
-        from src.domain.models.auditor_competence import AuditAssignmentCriteria, AuditorProfile, CompetenceLevel
+        from src.domain.models.auditor_competence import (
+            AuditAssignmentCriteria,
+            AuditorProfile,
+            CompetenceLevel,
+        )
 
         # Define criteria
         criteria = AuditAssignmentCriteria(
@@ -519,7 +549,9 @@ class TestCompetenceIntegration:
         required_level_idx = level_order.index(criteria.minimum_auditor_level.value)
 
         meets_level = auditor_level_idx >= required_level_idx
-        meets_experience = qualified.total_audits_conducted >= criteria.minimum_audits_conducted
+        meets_experience = (
+            qualified.total_audits_conducted >= criteria.minimum_audits_conducted
+        )
 
         assert meets_level is True
         assert meets_experience is True
@@ -559,7 +591,10 @@ class TestEdgeCases:
 
     def test_certification_no_expiry(self):
         """Test certification without expiry date."""
-        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
+        from src.domain.models.auditor_competence import (
+            AuditorCertification,
+            CertificationStatus,
+        )
 
         cert = AuditorCertification(
             profile_id=1,

@@ -168,7 +168,8 @@ class TestSecurityEndpointLimits:
             config = get_limit_config(endpoint)
             # Should have stricter limits than default (60 rpm)
             assert config.requests_per_minute <= 30, (
-                f"Endpoint {endpoint} should have rate limit <= 30 rpm, " f"got {config.requests_per_minute}"
+                f"Endpoint {endpoint} should have rate limit <= 30 rpm, "
+                f"got {config.requests_per_minute}"
             )
 
     def test_authenticated_users_get_higher_limits(self):
@@ -179,5 +180,7 @@ class TestSecurityEndpointLimits:
         )
 
         # Authenticated users should get 2x the limit
-        authenticated_limit = int(config.requests_per_minute * config.authenticated_multiplier)
+        authenticated_limit = int(
+            config.requests_per_minute * config.authenticated_multiplier
+        )
         assert authenticated_limit == 60

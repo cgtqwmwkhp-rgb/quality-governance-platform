@@ -25,7 +25,9 @@ class TestNoEvalUsage:
 
     def test_no_eval_in_compliance(self):
         """CRITICAL: compliance.py must not use eval()."""
-        compliance_path = Path(__file__).parent.parent.parent / "scripts" / "ai" / "compliance.py"
+        compliance_path = (
+            Path(__file__).parent.parent.parent / "scripts" / "ai" / "compliance.py"
+        )
 
         with open(compliance_path, "r") as f:
             content = f.read()
@@ -52,7 +54,9 @@ class TestNoEvalUsage:
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
                     if isinstance(node.func, ast.Name) and node.func.id == "eval":
-                        pytest.fail(f"eval() found in {file_path.name} on line {node.lineno}")
+                        pytest.fail(
+                            f"eval() found in {file_path.name} on line {node.lineno}"
+                        )
 
     def test_no_exec_in_ai_modules(self):
         """No AI module should use exec()."""
@@ -65,7 +69,9 @@ class TestNoEvalUsage:
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
                     if isinstance(node.func, ast.Name) and node.func.id == "exec":
-                        pytest.fail(f"exec() found in {file_path.name} on line {node.lineno}")
+                        pytest.fail(
+                            f"exec() found in {file_path.name} on line {node.lineno}"
+                        )
 
 
 class TestNoPIIInOutputs:
@@ -196,7 +202,9 @@ class TestComplianceRulesAsFixedFunctions:
         from scripts.ai.compliance import INCIDENT_RULES
 
         for rule in INCIDENT_RULES:
-            assert rule.__name__.startswith("_rule_"), f"Rule {rule.__name__} should start with '_rule_'"
+            assert rule.__name__.startswith(
+                "_rule_"
+            ), f"Rule {rule.__name__} should start with '_rule_'"
 
     def test_compliance_checker_uses_registry(self):
         """ComplianceChecker should use rule registry, not eval."""

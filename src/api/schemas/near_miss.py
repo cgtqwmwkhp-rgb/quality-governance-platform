@@ -35,7 +35,9 @@ class NearMissBase(BaseModel):
     asset_type: Optional[str] = None
 
     risk_category: Optional[str] = None
-    potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    potential_severity: Optional[str] = Field(
+        None, pattern="^(low|medium|high|critical)$"
+    )
 
 
 class NearMissCreate(NearMissBase):
@@ -51,7 +53,9 @@ class NearMissUpdate(BaseModel):
     potential_consequences: Optional[str] = None
     preventive_action_suggested: Optional[str] = None
 
-    status: Optional[str] = Field(None, pattern="^(REPORTED|UNDER_REVIEW|ACTION_REQUIRED|IN_PROGRESS|CLOSED)$")
+    status: Optional[str] = Field(
+        None, pattern="^(REPORTED|UNDER_REVIEW|ACTION_REQUIRED|IN_PROGRESS|CLOSED)$"
+    )
     priority: Optional[str] = Field(None, pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
 
     assigned_to_id: Optional[int] = None

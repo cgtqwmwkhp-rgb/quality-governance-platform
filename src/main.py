@@ -14,7 +14,11 @@ from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
-from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
+from src.api.exceptions import (
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from src.api.middleware import register_exception_handlers
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
@@ -34,9 +38,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://*.azurestaticapps.net; frame-ancestors 'none'"
         )
@@ -80,9 +88,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.is_development:
         await init_db()
 
+    from src.infrastructure.cache.redis_cache import warmup_cache
+
+    await warmup_cache()
+
     # Seed compliance automation default data if tables are empty
     try:
-        from src.domain.services.compliance_automation_service import compliance_automation_service
+        from src.domain.services.compliance_automation_service import (
+            compliance_automation_service,
+        )
         from src.infrastructure.database import async_session_maker
 
         async with async_session_maker() as session:
@@ -157,7 +171,9 @@ def configure_logging():
     uvicorn_access_logger.setLevel(settings.log_level)
 
     # Example log to confirm configuration
-    logger.info("Logging configured successfully", extra={"app_name": settings.app_name})
+    logger.info(
+        "Logging configured successfully", extra={"app_name": settings.app_name}
+    )
 
 
 def create_application() -> FastAPI:
@@ -360,7 +376,9 @@ async def health_check(request: Request) -> dict:
     """Health check endpoint."""
     # Get request_id from request.state (reliable under AsyncClient)
     request_id = getattr(request.state, "request_id", "N/A")
-    logging.getLogger(__name__).info("Health check requested", extra={"request_id": request_id})
+    logging.getLogger(__name__).info(
+        "Health check requested", extra={"request_id": request_id}
+    )
     return {
         "status": "healthy",
         "app_name": settings.app_name,
@@ -475,6 +493,7 @@ async def readiness_check(request: Request, verbose: bool = False):
     response: dict[str, object] = {
         "status": "healthy" if all_healthy else "unhealthy",
         "version": os.getenv("APP_VERSION", "1.0.0"),
+        "flower_url": "http://flower:5555",
     }
 
     if verbose:

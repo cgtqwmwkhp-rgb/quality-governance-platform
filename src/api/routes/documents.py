@@ -12,9 +12,19 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
@@ -29,7 +39,11 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
-from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.domain.services.document_ai_service import (
+    DocumentAIService,
+    EmbeddingService,
+    VectorSearchService,
+)
 from src.infrastructure.storage import StorageError, storage_service
 
 router = APIRouter()
@@ -148,7 +162,11 @@ class AnnotationResponse(BaseModel):
 # =============================================================================
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_document(
     db: DbSession,
     current_user: CurrentUser,
@@ -185,7 +203,9 @@ async def upload_document(
         file_path=file_path,
         mime_type=file.content_type,
         document_type=(
-            DocumentType(document_type) if document_type in [d.value for d in DocumentType] else DocumentType.OTHER
+            DocumentType(document_type)
+            if document_type in [d.value for d in DocumentType]
+            else DocumentType.OTHER
         ),
         category=category,
         department=department,
@@ -239,7 +259,9 @@ async def upload_document(
 
         if text_content and not text_content.startswith("["):
             filename = file.filename or "document"
-            analysis = await ai_service.analyze_document(text_content, filename, file_ext)
+            analysis = await ai_service.analyze_document(
+                text_content, filename, file_ext
+            )
 
             doc.ai_summary = analysis.summary
             doc.ai_tags = analysis.tags
@@ -318,7 +340,17 @@ async def list_documents(
 ):
     """List documents with filtering and pagination."""
 
-    query = select(Document).where(Document.is_active == True)
+    query = (
+        select(Document)
+        .options(
+            selectinload(Document.annotations),
+            selectinload(Document.versions),
+        )
+        .where(
+            Document.is_active == True,
+            Document.tenant_id == current_user.tenant_id,
+        )
+    )
 
     if search:
         search_filter = f"%{search}%"
@@ -409,7 +441,12 @@ async def semantic_search(
         if doc_id and doc_id not in doc_ids:
             doc_ids.add(doc_id)
 
-            doc_result = await db.execute(select(Document).where(Document.id == doc_id))
+            doc_result = await db.execute(
+                select(Document).where(
+                    Document.id == doc_id,
+                    Document.tenant_id == current_user.tenant_id,
+                )
+            )
             doc = doc_result.scalar_one_or_none()
 
             if doc:
@@ -419,7 +456,9 @@ async def semantic_search(
                         reference_number=doc.reference_number,
                         title=doc.title,
                         score=match.get("score", 0.0),
-                        chunk_preview=match.get("metadata", {}).get("content_preview", ""),
+                        chunk_preview=match.get("metadata", {}).get(
+                            "content_preview", ""
+                        ),
                         page_number=match.get("metadata", {}).get("page_number"),
                         heading=match.get("metadata", {}).get("heading"),
                     )
@@ -459,7 +498,9 @@ async def list_annotations(
 ):
     """List annotations for a document."""
 
-    query = select(DocumentAnnotation).where(DocumentAnnotation.document_id == document_id)
+    query = select(DocumentAnnotation).where(
+        DocumentAnnotation.document_id == document_id
+    )
 
     query = query.where(
         or_(
@@ -519,18 +560,38 @@ async def get_document_stats(
 ):
     """Get document library statistics."""
 
-    total_result = await db.execute(select(func.count(Document.id)))
+    tenant_filter = Document.tenant_id == current_user.tenant_id
+
+    total_result = await db.execute(
+        select(func.count(Document.id)).where(tenant_filter)
+    )
     total = total_result.scalar() or 0
 
-    status_result = await db.execute(select(Document.status, func.count(Document.id)).group_by(Document.status))
-    by_status = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in status_result.all()}
+    status_result = await db.execute(
+        select(Document.status, func.count(Document.id))
+        .where(tenant_filter)
+        .group_by(Document.status)
+    )
+    by_status = {
+        row[0].value if hasattr(row[0], "value") else row[0]: row[1]
+        for row in status_result.all()
+    }
 
     type_result = await db.execute(
-        select(Document.document_type, func.count(Document.id)).group_by(Document.document_type)
+        select(Document.document_type, func.count(Document.id))
+        .where(tenant_filter)
+        .group_by(Document.document_type)
     )
-    by_type = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in type_result.all()}
+    by_type = {
+        row[0].value if hasattr(row[0], "value") else row[0]: row[1]
+        for row in type_result.all()
+    }
 
-    indexed_result = await db.execute(select(func.count(Document.id)).where(Document.indexed_at.isnot(None)))
+    indexed_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.indexed_at.isnot(None), tenant_filter
+        )
+    )
     indexed = indexed_result.scalar() or 0
 
     chunk_result = await db.execute(select(func.count(DocumentChunk.id)))

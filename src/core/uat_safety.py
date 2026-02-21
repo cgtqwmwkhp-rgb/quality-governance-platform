@@ -50,7 +50,9 @@ class UATWriteBlockedResponse:
     """Standard response for blocked UAT writes."""
 
     @staticmethod
-    def create(detail: str = "UAT on production is read-only by default") -> JSONResponse:
+    def create(
+        detail: str = "UAT on production is read-only by default",
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
             content={
@@ -203,7 +205,9 @@ class UATSafetyMiddleware(BaseHTTPMiddleware):
                 owner=owner,
                 reason=error_msg,
             )
-            return UATWriteBlockedResponse.create(f"Override validation failed: {error_msg}")
+            return UATWriteBlockedResponse.create(
+                f"Override validation failed: {error_msg}"
+            )
 
         # Check if user is UAT admin
         if not _is_user_uat_admin(user_id):
@@ -215,7 +219,9 @@ class UATSafetyMiddleware(BaseHTTPMiddleware):
                 owner=owner,
                 reason="User not in UAT admin list",
             )
-            return UATWriteBlockedResponse.create("User not authorized for UAT writes. Contact platform admin.")
+            return UATWriteBlockedResponse.create(
+                "User not authorized for UAT writes. Contact platform admin."
+            )
 
         # All checks passed - allow the write
         _log_uat_write_attempt(

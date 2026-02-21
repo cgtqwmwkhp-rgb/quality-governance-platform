@@ -60,7 +60,9 @@ def _get_testing_py_content():
     from pathlib import Path
 
     # Try relative path from test file first
-    testing_path = Path(__file__).parent.parent.parent / "src" / "api" / "routes" / "testing.py"
+    testing_path = (
+        Path(__file__).parent.parent.parent / "src" / "api" / "routes" / "testing.py"
+    )
     if testing_path.exists():
         return testing_path.read_text()
 

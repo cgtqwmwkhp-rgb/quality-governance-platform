@@ -4,10 +4,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
+from src.api.schemas.complaint import (
+    ComplaintCreate,
+    ComplaintListResponse,
+    ComplaintResponse,
+    ComplaintUpdate,
+)
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -91,7 +97,9 @@ async def get_complaint(
 
     Requires authentication.
     """
-    return await get_or_404(db, Complaint, complaint_id, tenant_id=current_user.tenant_id)
+    return await get_or_404(
+        db, Complaint, complaint_id, tenant_id=current_user.tenant_id
+    )
 
 
 @router.get("/", response_model=ComplaintListResponse)
@@ -102,7 +110,9 @@ async def list_complaints(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = None,
-    complainant_email: Optional[str] = Query(None, description="Filter by complainant email"),
+    complainant_email: Optional[str] = Query(
+        None, description="Filter by complainant email"
+    ),
 ) -> ComplaintListResponse:
     """
     List all complaints with deterministic ordering.
@@ -119,7 +129,9 @@ async def list_complaints(
     if complainant_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
-            current_user.has_permission("complaint:view_all") if hasattr(current_user, "has_permission") else False
+            current_user.has_permission("complaint:view_all")
+            if hasattr(current_user, "has_permission")
+            else False
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
@@ -139,7 +151,8 @@ async def list_complaints(
             description="Complaint list accessed with email filter",
             payload={
                 "filter_type": "complainant_email",
-                "is_own_email": user_email and complainant_email.lower() == user_email.lower(),
+                "is_own_email": user_email
+                and complainant_email.lower() == user_email.lower(),
                 "has_view_all_permission": has_view_all,
                 "is_superuser": is_superuser,
             },
@@ -148,7 +161,11 @@ async def list_complaints(
         )
 
     try:
-        query = select(Complaint).where(Complaint.tenant_id == current_user.tenant_id)
+        query = (
+            select(Complaint)
+            .options(selectinload(Complaint.actions))
+            .where(Complaint.tenant_id == current_user.tenant_id)
+        )
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -170,7 +187,14 @@ async def list_complaints(
         error_str = str(e).lower()
         logger.error(f"Error listing complaints: {e}", exc_info=True)
 
-        column_errors = ["email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        column_errors = [
+            "email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
+        ]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
@@ -198,7 +222,9 @@ async def update_complaint(
 
     Requires authentication.
     """
-    complaint = await get_or_404(db, Complaint, complaint_id, tenant_id=current_user.tenant_id)
+    complaint = await get_or_404(
+        db, Complaint, complaint_id, tenant_id=current_user.tenant_id
+    )
     old_status = complaint.status
     update_data = apply_updates(complaint, complaint_in, set_updated_at=False)
 
@@ -256,7 +282,9 @@ async def list_complaint_investigations(
     paginated = await paginate(db, query, params)
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
+        "items": [
+            InvestigationRunResponse.model_validate(inv) for inv in paginated.items
+        ],
         "total": paginated.total,
         "page": paginated.page,
         "page_size": paginated.page_size,

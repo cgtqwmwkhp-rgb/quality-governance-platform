@@ -8,13 +8,20 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
+from src.api.schemas.near_miss import (
+    NearMissCreate,
+    NearMissListResponse,
+    NearMissResponse,
+    NearMissUpdate,
+)
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Near Misses"])
 
@@ -61,6 +68,8 @@ async def create_near_miss(
 
     await db.commit()
     await db.refresh(near_miss)
+    await invalidate_tenant_cache(current_user.tenant_id, "near_miss")
+    track_metric("near_miss.mutation", 1)
     return near_miss
 
 
@@ -111,7 +120,9 @@ async def get_near_miss(
     current_user: CurrentUser,
 ) -> NearMiss:
     """Get a near miss by ID."""
-    return await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
+    return await get_or_404(
+        db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id
+    )
 
 
 @router.patch("/{near_miss_id}", response_model=NearMissResponse)
@@ -123,7 +134,9 @@ async def update_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
-    near_miss = await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
+    near_miss = await get_or_404(
+        db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id
+    )
     old_status = near_miss.status
     update_data = apply_updates(near_miss, data, set_updated_at=False)
 
@@ -144,13 +157,19 @@ async def update_near_miss(
         entity_id=str(near_miss.id),
         action="update",
         description=f"Near Miss {near_miss.reference_number} updated",
-        payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
+        payload={
+            "updates": update_data,
+            "old_status": old_status,
+            "new_status": near_miss.status,
+        },
         user_id=current_user.id,
         request_id=request_id,
     )
 
     await db.commit()
     await db.refresh(near_miss)
+    await invalidate_tenant_cache(current_user.tenant_id, "near_miss")
+    track_metric("near_miss.mutation", 1)
     return near_miss
 
 
@@ -162,7 +181,9 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
-    near_miss = await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
+    near_miss = await get_or_404(
+        db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id
+    )
 
     await record_audit_event(
         db=db,
@@ -178,6 +199,8 @@ async def delete_near_miss(
 
     await db.delete(near_miss)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "near_miss")
+    track_metric("near_miss.mutation", 1)
 
 
 @router.get("/{near_miss_id}/investigations", response_model=dict)
@@ -206,7 +229,9 @@ async def list_near_miss_investigations(
     paginated = await paginate(db, query, params)
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
+        "items": [
+            InvestigationRunResponse.model_validate(inv) for inv in paginated.items
+        ],
         "total": paginated.total,
         "page": paginated.page,
         "page_size": paginated.page_size,

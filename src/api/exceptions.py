@@ -79,7 +79,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return response
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """
     Handle RequestValidationError and return canonical error envelope.
 

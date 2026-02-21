@@ -106,7 +106,12 @@ class TestAssignedEntityTypeEnum:
         """Test that entity types can be instantiated from strings."""
         from src.domain.models.investigation import AssignedEntityType
 
-        for value in ["road_traffic_collision", "reporting_incident", "complaint", "near_miss"]:
+        for value in [
+            "road_traffic_collision",
+            "reporting_incident",
+            "complaint",
+            "near_miss",
+        ]:
             entity_type = AssignedEntityType(value)
             assert entity_type.value == value
 

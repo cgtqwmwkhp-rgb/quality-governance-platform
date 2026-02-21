@@ -73,7 +73,9 @@ class TestTokenService:
         mock_result.rowcount = 3
         db.execute.return_value = mock_result
 
-        count = await TokenService.revoke_all_user_tokens(db, user_id=42, reason="admin_revoke")
+        count = await TokenService.revoke_all_user_tokens(
+            db, user_id=42, reason="admin_revoke"
+        )
 
         assert count == 3
         db.commit.assert_awaited_once()

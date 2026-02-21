@@ -139,7 +139,11 @@ class TestCORSOnSuccessResponses:
                 "name": "exp001_form_opened",
                 "timestamp": "2026-01-28T12:00:00Z",
                 "sessionId": "test_session",
-                "dimensions": {"formType": "incident", "flagEnabled": True, "hasDraft": False},
+                "dimensions": {
+                    "formType": "incident",
+                    "flagEnabled": True,
+                    "hasDraft": False,
+                },
             },
         )
         # May be 200 or 401 depending on auth, but should have CORS
@@ -156,7 +160,11 @@ class TestCORSOnSuccessResponses:
                         "name": "exp001_form_opened",
                         "timestamp": "2026-01-28T12:00:00Z",
                         "sessionId": "test_session",
-                        "dimensions": {"formType": "incident", "flagEnabled": True, "hasDraft": False},
+                        "dimensions": {
+                            "formType": "incident",
+                            "flagEnabled": True,
+                            "hasDraft": False,
+                        },
                     }
                 ]
             },
@@ -215,7 +223,10 @@ class TestCORSExposedHeaders:
             headers={"Origin": PROD_ORIGIN},
         )
         expose_headers = response.headers.get("access-control-expose-headers", "")
-        assert "X-RateLimit-Limit" in expose_headers or "x-ratelimit-limit" in expose_headers.lower()
+        assert (
+            "X-RateLimit-Limit" in expose_headers
+            or "x-ratelimit-limit" in expose_headers.lower()
+        )
 
     def test_expose_request_id_header(self, client):
         """CORS should expose X-Request-Id header."""
@@ -224,4 +235,6 @@ class TestCORSExposedHeaders:
             headers={"Origin": PROD_ORIGIN},
         )
         expose_headers = response.headers.get("access-control-expose-headers", "")
-        assert "X-Request-Id" in expose_headers or "x-request-id" in expose_headers.lower()
+        assert (
+            "X-Request-Id" in expose_headers or "x-request-id" in expose_headers.lower()
+        )

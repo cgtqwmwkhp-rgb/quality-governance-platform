@@ -18,8 +18,15 @@ from sqlalchemy import func, select
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
-from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceLinkMethod,
+)
+from src.domain.services.iso_compliance_service import (
+    EvidenceLink,
+    ISOStandard,
+    iso_compliance_service,
+)
 
 router = APIRouter()
 
@@ -171,7 +178,11 @@ async def _load_evidence_links(
                 entity_type=row.entity_type,
                 entity_id=row.entity_id,
                 clause_id=row.clause_id,
-                linked_by=row.linked_by.value if isinstance(row.linked_by, EvidenceLinkMethod) else row.linked_by,
+                linked_by=(
+                    row.linked_by.value
+                    if isinstance(row.linked_by, EvidenceLinkMethod)
+                    else row.linked_by
+                ),
                 confidence=row.confidence,
                 created_at=row.created_at,
                 created_by=row.created_by_email,
@@ -187,9 +198,15 @@ async def _load_evidence_links(
 
 @router.get("/clauses", response_model=List[ClauseResponse])
 async def list_clauses(
-    standard: Optional[str] = Query(None, description="Filter by ISO standard (iso9001, iso14001, iso45001)"),
-    level: Optional[int] = Query(None, description="Filter by clause level (1=main, 2=sub)"),
-    search: Optional[str] = Query(None, description="Search by keyword or clause number"),
+    standard: Optional[str] = Query(
+        None, description="Filter by ISO standard (iso9001, iso14001, iso45001)"
+    ),
+    level: Optional[int] = Query(
+        None, description="Filter by clause level (1=main, 2=sub)"
+    ),
+    search: Optional[str] = Query(
+        None, description="Search by keyword or clause number"
+    ),
 ):
     """List all ISO clauses with optional filtering."""
     std_enum = None
@@ -197,7 +214,10 @@ async def list_clauses(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     if search:
         clauses = iso_compliance_service.search_clauses(search)
@@ -227,7 +247,10 @@ async def get_clause(clause_id: str):
     """Get a specific ISO clause by ID."""
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Clause not found: {clause_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Clause not found: {clause_id}",
+        )
     return ClauseResponse(
         id=clause.id,
         standard=clause.standard.value,
@@ -260,7 +283,10 @@ async def link_evidence(
     """Link an entity to one or more ISO clauses. Persisted to database."""
     for clause_id in request.clause_ids:
         if not iso_compliance_service.get_clause(clause_id):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid clause ID: {clause_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid clause ID: {clause_id}",
+            )
 
     method = EvidenceLinkMethod.MANUAL
     if request.linked_by == "auto":
@@ -306,7 +332,9 @@ async def link_evidence(
                 "linked_by": method.value,
                 "confidence": link.confidence,
                 "created_at": (
-                    link.created_at.isoformat() if link.created_at else datetime.now(timezone.utc).isoformat()
+                    link.created_at.isoformat()
+                    if link.created_at
+                    else datetime.now(timezone.utc).isoformat()
                 ),
             }
         )
@@ -350,7 +378,11 @@ async def list_evidence_links(
                 entity_type=r.entity_type,
                 entity_id=r.entity_id,
                 clause_id=r.clause_id,
-                linked_by=r.linked_by.value if isinstance(r.linked_by, EvidenceLinkMethod) else r.linked_by,
+                linked_by=(
+                    r.linked_by.value
+                    if isinstance(r.linked_by, EvidenceLinkMethod)
+                    else r.linked_by
+                ),
                 confidence=r.confidence,
                 title=r.title,
                 notes=r.notes,
@@ -373,7 +405,9 @@ async def delete_evidence_link(
     current_user: CurrentSuperuser,
 ):
     """Soft-delete an evidence link."""
-    link = await get_or_404(db, ComplianceEvidenceLink, link_id, tenant_id=current_user.tenant_id)
+    link = await get_or_404(
+        db, ComplianceEvidenceLink, link_id, tenant_id=current_user.tenant_id
+    )
     link.deleted_at = datetime.now(timezone.utc)
     await db.flush()
     return {"status": "success", "message": "Evidence link deleted"}
@@ -391,7 +425,10 @@ async def get_compliance_coverage(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.calculate_compliance_coverage(links, std_enum)
@@ -409,7 +446,10 @@ async def get_compliance_gaps(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     coverage = iso_compliance_service.calculate_compliance_coverage(links, std_enum)
@@ -429,10 +469,15 @@ async def generate_compliance_report(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
-    return iso_compliance_service.generate_audit_report(links, std_enum, include_evidence)
+    return iso_compliance_service.generate_audit_report(
+        links, std_enum, include_evidence
+    )
 
 
 @router.get("/standards", response_model=List[StandardInfo])
@@ -445,7 +490,13 @@ async def list_standards():
             "name": "Quality Management System",
             "description": "Requirements for a quality management system",
             "clause_count": len(
-                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_9001) if c.level == 2]
+                [
+                    c
+                    for c in iso_compliance_service.get_all_clauses(
+                        ISOStandard.ISO_9001
+                    )
+                    if c.level == 2
+                ]
             ),
         },
         {
@@ -454,7 +505,13 @@ async def list_standards():
             "name": "Environmental Management System",
             "description": "Requirements for an environmental management system",
             "clause_count": len(
-                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_14001) if c.level == 2]
+                [
+                    c
+                    for c in iso_compliance_service.get_all_clauses(
+                        ISOStandard.ISO_14001
+                    )
+                    if c.level == 2
+                ]
             ),
         },
         {
@@ -463,7 +520,13 @@ async def list_standards():
             "name": "Occupational Health and Safety Management System",
             "description": "Requirements for an OH&S management system",
             "clause_count": len(
-                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_45001) if c.level == 2]
+                [
+                    c
+                    for c in iso_compliance_service.get_all_clauses(
+                        ISOStandard.ISO_45001
+                    )
+                    if c.level == 2
+                ]
             ),
         },
     ]

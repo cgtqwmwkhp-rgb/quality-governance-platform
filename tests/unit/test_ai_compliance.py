@@ -69,7 +69,9 @@ class TestIncidentRules:
         result = checker.check_incident(entity)
 
         # Should have warning, but still compliant
-        warnings = [v for v in result.violations if v.severity == ComplianceSeverity.WARNING]
+        warnings = [
+            v for v in result.violations if v.severity == ComplianceSeverity.WARNING
+        ]
         assert any(v.rule_id == "INC-003" for v in warnings)
 
 

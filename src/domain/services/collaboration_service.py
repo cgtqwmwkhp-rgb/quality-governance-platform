@@ -83,7 +83,9 @@ class CollaborationService:
         yjs_state_vector: Optional[bytes] = None,
     ) -> CollaborativeDocument:
         """Update the Yjs state of a document."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
+        result = await self.db.execute(
+            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
+        )
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -100,7 +102,9 @@ class CollaborationService:
 
     async def create_snapshot(self, document_id: int) -> CollaborativeDocument:
         """Create a snapshot of the current document state."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
+        result = await self.db.execute(
+            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
+        )
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -120,7 +124,9 @@ class CollaborationService:
         reason: Optional[str] = None,
     ) -> CollaborativeDocument:
         """Lock a document for exclusive editing."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
+        result = await self.db.execute(
+            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
+        )
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -138,9 +144,13 @@ class CollaborationService:
 
         return doc
 
-    async def unlock_document(self, document_id: int, user_id: int) -> CollaborativeDocument:
+    async def unlock_document(
+        self, document_id: int, user_id: int
+    ) -> CollaborativeDocument:
         """Unlock a document."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
+        result = await self.db.execute(
+            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
+        )
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -197,7 +207,9 @@ class CollaborationService:
     async def leave_session(self, session_id: str) -> Optional[CollaborativeSession]:
         """Leave a collaborative editing session."""
         result = await self.db.execute(
-            select(CollaborativeSession).where(CollaborativeSession.session_id == session_id)
+            select(CollaborativeSession).where(
+                CollaborativeSession.session_id == session_id
+            )
         )
         session = result.scalar_one_or_none()
 
@@ -220,7 +232,9 @@ class CollaborationService:
     ) -> CollaborativeSession:
         """Update cursor/selection position for a session."""
         result = await self.db.execute(
-            select(CollaborativeSession).where(CollaborativeSession.session_id == session_id)
+            select(CollaborativeSession).where(
+                CollaborativeSession.session_id == session_id
+            )
         )
         session = result.scalar_one_or_none()
 
@@ -254,7 +268,9 @@ class CollaborationService:
 
     async def cleanup_stale_sessions(self) -> int:
         """Clean up stale sessions. Returns count of cleaned sessions."""
-        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS * 2)
+        timeout = datetime.utcnow() - timedelta(
+            seconds=self.SESSION_TIMEOUT_SECONDS * 2
+        )
 
         result = await self.db.execute(
             select(CollaborativeSession).where(
@@ -314,7 +330,9 @@ class CollaborationService:
         limit: int = 100,
     ) -> list[CollaborativeChange]:
         """Get changes for a document, optionally since a version."""
-        stmt = select(CollaborativeChange).where(CollaborativeChange.document_id == document_id)
+        stmt = select(CollaborativeChange).where(
+            CollaborativeChange.document_id == document_id
+        )
 
         if since_version is not None:
             stmt = stmt.where(CollaborativeChange.version > since_version)
@@ -345,7 +363,9 @@ class CollaborationService:
         """Add a comment to an entity."""
         thread_id = None
         if parent_id:
-            result = await self.db.execute(select(Comment).where(Comment.id == parent_id))
+            result = await self.db.execute(
+                select(Comment).where(Comment.id == parent_id)
+            )
             parent = result.scalar_one_or_none()
             if parent:
                 thread_id = parent.thread_id or parent.id
@@ -459,7 +479,9 @@ class CollaborationService:
         custom_status: Optional[str] = None,
     ) -> Presence:
         """Update user presence."""
-        result = await self.db.execute(select(Presence).where(Presence.user_id == user_id))
+        result = await self.db.execute(
+            select(Presence).where(Presence.user_id == user_id)
+        )
         presence = result.scalar_one_or_none()
 
         if not presence:
@@ -522,7 +544,9 @@ class CollaborationService:
 
     async def set_offline(self, user_id: int) -> Optional[Presence]:
         """Set user as offline."""
-        result = await self.db.execute(select(Presence).where(Presence.user_id == user_id))
+        result = await self.db.execute(
+            select(Presence).where(Presence.user_id == user_id)
+        )
         presence = result.scalar_one_or_none()
 
         if presence:

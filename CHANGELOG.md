@@ -4,6 +4,35 @@ All notable changes to the Quality Governance Platform will be documented in thi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [10.0.0] - 2026-02-21
+
+### Added
+- Tenant isolation: 53 additional endpoints across analytics (24), iso27001 (14), document_control (4), form_config (4), documents (3), employee_portal (4), global_search (1), evidence_assets (1), notifications (2)
+- tenant_id column on InformationAsset, InformationSecurityRisk, SecurityIncident, SupplierSecurityAssessment, Document, EvidenceAsset, FormTemplate, Contract, SystemSetting, LookupOption models
+- selectinload() on 9 list endpoints: incidents, complaints, policies, rtas, kri, investigations, documents, tenants, workflow
+- Cache invalidation wired into 12 additional route files (56 mutation endpoints total)
+- warmup_cache() called in app lifespan startup
+- track_metric() wired into 12 route files + auth failure tracking in dependencies
+- Pydantic response schemas: document_control.py (18 schemas), iso27001.py (20 schemas)
+- response_model on 49 additional endpoints (telemetry, tenants, signatures, investigations, workflow, audits, analytics)
+- 6 new frontend page smoke tests (AuditExecution, InvestigationDetail, ComplianceAutomation, AdvancedAnalytics, AuditTemplateBuilder, MobileAuditExecution)
+- 2 new Playwright E2E specs: complaints (8 tests), policies (9 tests)
+- SkeletonLoader wired into 10 main pages (Dashboard, RiskRegister, Incidents, Audits, Complaints, Policies, Investigations, RTAs, Documents, Standards)
+- Flower URL in /readyz health check response
+- Task queue depth monitoring (Celery Beat task, every 5 minutes)
+- ISO 27001 helper functions: _generate_asset_id(), _calculate_risk_scores()
+- AnalyticsService methods accept tenant_id parameter
+
+### Changed
+- signatures.py: All 16 endpoints migrated from Depends(get_db) to DbSession pattern
+- Frontend coverage thresholds raised (statements: 8%, functions: 8%, lines: 8%)
+- UAT tests now blocking in CI (removed || true)
+- Quarantined backend E2E tests changed from skip to xfail(strict=False)
+- Quarantine policy extended to 2026-03-23 for GOVPLAT-001 and GOVPLAT-002
+
+### Removed
+- Empty src/services/ directory (stub only)
+
 ## [9.5.0] - 2026-02-20
 
 ### Added

@@ -58,7 +58,9 @@ class ComplianceAutomationService:
         reviewed: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """Get regulatory updates with filters."""
-        query = select(RegulatoryUpdate).order_by(RegulatoryUpdate.published_date.desc())
+        query = select(RegulatoryUpdate).order_by(
+            RegulatoryUpdate.published_date.desc()
+        )
 
         if source:
             query = query.where(RegulatoryUpdate.source == source)
@@ -81,7 +83,9 @@ class ComplianceAutomationService:
         action_notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Mark a regulatory update as reviewed."""
-        result = await db.execute(select(RegulatoryUpdate).where(RegulatoryUpdate.id == update_id))
+        result = await db.execute(
+            select(RegulatoryUpdate).where(RegulatoryUpdate.id == update_id)
+        )
         update = result.scalar_one_or_none()
         if not update:
             raise ValueError(f"Regulatory update {update_id} not found")
@@ -109,11 +113,17 @@ class ComplianceAutomationService:
         description = None
 
         if regulatory_update_id:
-            result = await db.execute(select(RegulatoryUpdate).where(RegulatoryUpdate.id == regulatory_update_id))
+            result = await db.execute(
+                select(RegulatoryUpdate).where(
+                    RegulatoryUpdate.id == regulatory_update_id
+                )
+            )
             reg = result.scalar_one_or_none()
             if reg:
                 title = f"Gap Analysis - {reg.title}"
-                description = f"Analysis triggered by regulatory update: {reg.source_reference}"
+                description = (
+                    f"Analysis triggered by regulatory update: {reg.source_reference}"
+                )
 
         gaps_data: List[Dict[str, Any]] = []
 
@@ -130,8 +140,12 @@ class ComplianceAutomationService:
                             f"Regulatory change '{reg.title}' affects clause {clause}. "
                             "Current procedures and documentation must be assessed for alignment."
                         ),
-                        "severity": "high" if reg.impact in ("critical", "high") else "medium",
-                        "effort_hours": 24 if reg.impact in ("critical", "high") else 12,
+                        "severity": (
+                            "high" if reg.impact in ("critical", "high") else "medium"
+                        ),
+                        "effort_hours": (
+                            24 if reg.impact in ("critical", "high") else 12
+                        ),
                         "recommendation": (
                             f"Review clause {clause} documentation and procedures against "
                             f"the updated requirements from {reg.source_reference}. "
@@ -145,7 +159,9 @@ class ComplianceAutomationService:
                         "clause": "General",
                         "requirement": f"Overall compliance with {', '.join(standards) or 'regulatory update'}",
                         "current_state": "Pending assessment",
-                        "gap_description": (f"Regulatory update '{reg.title}' requires a general compliance review."),
+                        "gap_description": (
+                            f"Regulatory update '{reg.title}' requires a general compliance review."
+                        ),
                         "severity": "medium",
                         "effort_hours": 16,
                         "recommendation": "Conduct a thorough review of affected processes and documentation.",
@@ -167,7 +183,8 @@ class ComplianceAutomationService:
                         "requirement": f"Timely completion of '{oa.name}'",
                         "current_state": "Overdue",
                         "gap_description": (
-                            f"Scheduled audit '{oa.name}' is overdue since " f"{oa.next_due_date.strftime('%Y-%m-%d')}."
+                            f"Scheduled audit '{oa.name}' is overdue since "
+                            f"{oa.next_due_date.strftime('%Y-%m-%d')}."
                         ),
                         "severity": "high",
                         "effort_hours": 8,
@@ -259,7 +276,11 @@ class ComplianceAutomationService:
         """Get summary of expiring certificates."""
         now = datetime.utcnow()
 
-        expired_q = select(func.count()).select_from(Certificate).where(Certificate.expiry_date < now)
+        expired_q = (
+            select(func.count())
+            .select_from(Certificate)
+            .where(Certificate.expiry_date < now)
+        )
         exp_7_q = (
             select(func.count())
             .select_from(Certificate)
@@ -350,7 +371,9 @@ class ComplianceAutomationService:
         """Get scheduled audits."""
         now = datetime.utcnow()
         query = (
-            select(ScheduledAudit).where(ScheduledAudit.is_active == True).order_by(ScheduledAudit.next_due_date.asc())
+            select(ScheduledAudit)
+            .where(ScheduledAudit.is_active == True)
+            .order_by(ScheduledAudit.next_due_date.asc())
         )  # noqa: E712
 
         if overdue:
@@ -465,7 +488,11 @@ class ComplianceAutomationService:
 
         return [
             {
-                "period": s.period_start.strftime("%Y-%m") if s.period_start else s.calculated_at.strftime("%Y-%m"),
+                "period": (
+                    s.period_start.strftime("%Y-%m")
+                    if s.period_start
+                    else s.calculated_at.strftime("%Y-%m")
+                ),
                 "overall_score": s.percentage,
                 "breakdown": s.breakdown,
             }
@@ -521,7 +548,9 @@ class ComplianceAutomationService:
             "is_riddor": is_riddor,
             "riddor_types": riddor_types,
             "deadline": deadline.isoformat() if deadline else None,
-            "submission_url": "https://www.hse.gov.uk/riddor/report.htm" if is_riddor else None,
+            "submission_url": (
+                "https://www.hse.gov.uk/riddor/report.htm" if is_riddor else None
+            ),
         }
 
     async def prepare_riddor_submission(
@@ -540,7 +569,9 @@ class ComplianceAutomationService:
         submission = existing.scalar_one_or_none()
 
         if not submission:
-            deadline = datetime.utcnow() + timedelta(days=10 if riddor_type in ("death", "specified_injury") else 15)
+            deadline = datetime.utcnow() + timedelta(
+                days=10 if riddor_type in ("death", "specified_injury") else 15
+            )
             submission = RIDDORSubmission(
                 incident_id=incident_id,
                 riddor_type=riddor_type,
@@ -584,7 +615,9 @@ class ComplianceAutomationService:
 
     async def seed_default_data(self, db: AsyncSession) -> None:
         """Seed default regulatory updates and certificates if tables are empty."""
-        count_result = await db.scalar(select(func.count()).select_from(RegulatoryUpdate))
+        count_result = await db.scalar(
+            select(func.count()).select_from(RegulatoryUpdate)
+        )
         if count_result and count_result > 0:
             logger.info("Compliance automation data already exists, skipping seed")
             return
@@ -728,9 +761,24 @@ class ComplianceAutomationService:
                 max_score=100.0,
                 percentage=87.5,
                 breakdown={
-                    "ISO 9001": {"score": 92.0, "clauses_compliant": 45, "clauses_total": 48, "gaps": 3},
-                    "ISO 14001": {"score": 88.5, "clauses_compliant": 38, "clauses_total": 42, "gaps": 4},
-                    "ISO 45001": {"score": 82.0, "clauses_compliant": 35, "clauses_total": 42, "gaps": 7},
+                    "ISO 9001": {
+                        "score": 92.0,
+                        "clauses_compliant": 45,
+                        "clauses_total": 48,
+                        "gaps": 3,
+                    },
+                    "ISO 14001": {
+                        "score": 88.5,
+                        "clauses_compliant": 38,
+                        "clauses_total": 42,
+                        "gaps": 4,
+                    },
+                    "ISO 45001": {
+                        "score": 82.0,
+                        "clauses_compliant": 35,
+                        "clauses_total": 42,
+                        "gaps": 7,
+                    },
                 },
                 period_start=now - timedelta(days=30),
                 period_end=now,

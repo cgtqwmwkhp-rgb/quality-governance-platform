@@ -62,7 +62,11 @@ def test_severity_level_mapping():
 
 def test_customer_pack_redaction_external():
     """Test EXTERNAL_CUSTOMER packs redact identity fields."""
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.domain.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -97,11 +101,21 @@ def test_customer_pack_redaction_external():
     section = content["sections"]["section_1_details"]
 
     # These should be redacted
-    assert section["reporter_name"] == "[Name Redacted]", f"Expected redacted, got: {section['reporter_name']}"
-    assert section["reporter_email"] == "[Email Redacted]", f"Expected redacted, got: {section['reporter_email']}"
-    assert section["driver_name"] == "[Name Redacted]", f"Expected redacted, got: {section['driver_name']}"
-    assert section["persons_involved"] == "[Redacted]", f"Expected redacted, got: {section['persons_involved']}"
-    assert section["witnesses"] == "[Redacted]", f"Expected redacted, got: {section['witnesses']}"
+    assert (
+        section["reporter_name"] == "[Name Redacted]"
+    ), f"Expected redacted, got: {section['reporter_name']}"
+    assert (
+        section["reporter_email"] == "[Email Redacted]"
+    ), f"Expected redacted, got: {section['reporter_email']}"
+    assert (
+        section["driver_name"] == "[Name Redacted]"
+    ), f"Expected redacted, got: {section['driver_name']}"
+    assert (
+        section["persons_involved"] == "[Redacted]"
+    ), f"Expected redacted, got: {section['persons_involved']}"
+    assert (
+        section["witnesses"] == "[Redacted]"
+    ), f"Expected redacted, got: {section['witnesses']}"
     print("✓ Identity fields redacted correctly")
 
     # These should NOT be redacted
@@ -111,7 +125,9 @@ def test_customer_pack_redaction_external():
     print("✓ Non-identity fields preserved")
 
     # Redaction log should have entries
-    assert len(redaction_log) >= 5, f"Expected >= 5 redactions, got {len(redaction_log)}"
+    assert (
+        len(redaction_log) >= 5
+    ), f"Expected >= 5 redactions, got {len(redaction_log)}"
     print(f"✓ Redaction log has {len(redaction_log)} entries")
 
     print("\n✅ EXTERNAL_CUSTOMER pack redaction working correctly")
@@ -119,7 +135,11 @@ def test_customer_pack_redaction_external():
 
 def test_customer_pack_internal_preserves_identities():
     """Test INTERNAL_CUSTOMER packs preserve identity fields."""
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.domain.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -158,7 +178,11 @@ def test_customer_pack_internal_preserves_identities():
 def test_evidence_visibility_matrix():
     """Test evidence asset visibility rules."""
     from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.domain.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -215,7 +239,9 @@ def test_evidence_visibility_matrix():
         CustomerPackAudience.INTERNAL_CUSTOMER,
         CustomerPackAudience.EXTERNAL_CUSTOMER,
     ]:
-        _, _, assets = InvestigationService.generate_customer_pack(investigation, audience, [asset_external], 1)
+        _, _, assets = InvestigationService.generate_customer_pack(
+            investigation, audience, [asset_external], 1
+        )
         assert assets[0]["included"] is True
         print(f"✓ EXTERNAL_ALLOWED included in {audience.value} pack")
 
@@ -224,7 +250,11 @@ def test_evidence_visibility_matrix():
 
 def test_pack_excludes_comments_and_revisions():
     """Test customer packs never include comments or revision history."""
-    from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
+    from src.domain.models.investigation import (
+        CustomerPackAudience,
+        InvestigationLevel,
+        InvestigationStatus,
+    )
     from src.domain.services.investigation_service import InvestigationService
 
     class MockInvestigation:
@@ -240,10 +270,16 @@ def test_pack_excludes_comments_and_revisions():
         CustomerPackAudience.INTERNAL_CUSTOMER,
         CustomerPackAudience.EXTERNAL_CUSTOMER,
     ]:
-        content, _, _ = InvestigationService.generate_customer_pack(investigation, audience, [], 1)
+        content, _, _ = InvestigationService.generate_customer_pack(
+            investigation, audience, [], 1
+        )
         assert "comments" not in content, f"comments in {audience.value} pack"
-        assert "revision_events" not in content, f"revision_events in {audience.value} pack"
-        assert "revision_history" not in content, f"revision_history in {audience.value} pack"
+        assert (
+            "revision_events" not in content
+        ), f"revision_events in {audience.value} pack"
+        assert (
+            "revision_history" not in content
+        ), f"revision_history in {audience.value} pack"
         print(f"✓ {audience.value} pack excludes internal data")
 
     print("\n✅ Comments and revision history correctly excluded")

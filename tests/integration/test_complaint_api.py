@@ -30,7 +30,10 @@ async def test_create_complaint(client: AsyncClient, auth_headers: dict, test_se
 
     # Verify audit log
     result = await test_session.execute(
-        select(AuditEvent).where(AuditEvent.resource_type == "complaint", AuditEvent.event_type == "complaint.created")
+        select(AuditEvent).where(
+            AuditEvent.resource_type == "complaint",
+            AuditEvent.event_type == "complaint.created",
+        )
     )
     event = result.scalar_one_or_none()
     assert event is not None
@@ -38,7 +41,9 @@ async def test_create_complaint(client: AsyncClient, auth_headers: dict, test_se
 
 
 @pytest.mark.asyncio
-async def test_get_complaint_by_id(client: AsyncClient, auth_headers: dict, test_session):
+async def test_get_complaint_by_id(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test getting a complaint by ID."""
     complaint = Complaint(
         title="Billing Error",
@@ -51,13 +56,17 @@ async def test_get_complaint_by_id(client: AsyncClient, auth_headers: dict, test
     await test_session.commit()
     await test_session.refresh(complaint)
 
-    response = await client.get(f"/api/v1/complaints/{complaint.id}", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/complaints/{complaint.id}", headers=auth_headers
+    )
     assert response.status_code == 200
     assert response.json()["title"] == "Billing Error"
 
 
 @pytest.mark.asyncio
-async def test_list_complaints_deterministic_ordering(client: AsyncClient, auth_headers: dict, test_session):
+async def test_list_complaints_deterministic_ordering(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test listing complaints with deterministic ordering (received_date DESC, id ASC)."""
     now = datetime.now()
     c1 = Complaint(
@@ -67,8 +76,20 @@ async def test_list_complaints_deterministic_ordering(client: AsyncClient, auth_
         complainant_name="N1",
         reference_number="REF1",
     )
-    c2 = Complaint(title="C2", description="D2", received_date=now, complainant_name="N2", reference_number="REF2")
-    c3 = Complaint(title="C3", description="D3", received_date=now, complainant_name="N3", reference_number="REF3")
+    c2 = Complaint(
+        title="C2",
+        description="D2",
+        received_date=now,
+        complainant_name="N2",
+        reference_number="REF2",
+    )
+    c3 = Complaint(
+        title="C3",
+        description="D3",
+        received_date=now,
+        complainant_name="N3",
+        reference_number="REF3",
+    )
 
     test_session.add_all([c1, c2, c3])
     await test_session.commit()
@@ -86,7 +107,9 @@ async def test_list_complaints_deterministic_ordering(client: AsyncClient, auth_
 
 
 @pytest.mark.asyncio
-async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, test_session):
+async def test_update_complaint_status(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test updating complaint status and recording audit log."""
     complaint = Complaint(
         title="Delivery Issue",
@@ -100,14 +123,22 @@ async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, 
     await test_session.commit()
     await test_session.refresh(complaint)
 
-    data = {"status": ComplaintStatus.RESOLVED, "resolution_summary": "Found and delivered."}
-    response = await client.patch(f"/api/v1/complaints/{complaint.id}", json=data, headers=auth_headers)
+    data = {
+        "status": ComplaintStatus.RESOLVED,
+        "resolution_summary": "Found and delivered.",
+    }
+    response = await client.patch(
+        f"/api/v1/complaints/{complaint.id}", json=data, headers=auth_headers
+    )
     assert response.status_code == 200
     assert response.json()["status"] == ComplaintStatus.RESOLVED
 
     # Verify audit log
     result = await test_session.execute(
-        select(AuditEvent).where(AuditEvent.resource_type == "complaint", AuditEvent.event_type == "complaint.updated")
+        select(AuditEvent).where(
+            AuditEvent.resource_type == "complaint",
+            AuditEvent.event_type == "complaint.updated",
+        )
     )
     event = result.scalars().all()[-1]  # Get latest
     assert event.payload["new_status"] == ComplaintStatus.RESOLVED
@@ -120,7 +151,9 @@ async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, 
 
 
 @pytest.mark.asyncio
-async def test_create_complaint_with_external_ref(client: AsyncClient, auth_headers: dict, test_session):
+async def test_create_complaint_with_external_ref(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test creating a complaint with external_ref for idempotency."""
     data = {
         "title": "ETL Imported Complaint",
@@ -138,7 +171,9 @@ async def test_create_complaint_with_external_ref(client: AsyncClient, auth_head
 
 
 @pytest.mark.asyncio
-async def test_duplicate_external_ref_returns_409(client: AsyncClient, auth_headers: dict, test_session):
+async def test_duplicate_external_ref_returns_409(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that duplicate external_ref returns 409 Conflict (idempotency)."""
     external_ref = "EXT-COMP-DUP-001"
     data = {
@@ -151,7 +186,9 @@ async def test_duplicate_external_ref_returns_409(client: AsyncClient, auth_head
     }
 
     # First request: should succeed
-    response1 = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    response1 = await client.post(
+        "/api/v1/complaints/", json=data, headers=auth_headers
+    )
     assert response1.status_code == 201
     first_id = response1.json()["id"]
 
@@ -164,7 +201,9 @@ async def test_duplicate_external_ref_returns_409(client: AsyncClient, auth_head
         "complainant_name": "Second Submitter",
         "external_ref": external_ref,  # Same external_ref
     }
-    response2 = await client.post("/api/v1/complaints/", json=data2, headers=auth_headers)
+    response2 = await client.post(
+        "/api/v1/complaints/", json=data2, headers=auth_headers
+    )
     assert response2.status_code == 409
 
     # Verify error response contains expected fields
@@ -189,12 +228,16 @@ async def test_create_complaint_without_external_ref_no_idempotency(
     }
 
     # First request
-    response1 = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    response1 = await client.post(
+        "/api/v1/complaints/", json=data, headers=auth_headers
+    )
     assert response1.status_code == 201
 
     # Second request with same data but no external_ref: should also succeed
     # (no idempotency check without external_ref)
-    response2 = await client.post("/api/v1/complaints/", json=data, headers=auth_headers)
+    response2 = await client.post(
+        "/api/v1/complaints/", json=data, headers=auth_headers
+    )
     assert response2.status_code == 201
 
     # Verify two different complaints were created
@@ -216,12 +259,16 @@ async def test_different_external_refs_create_separate_complaints(
 
     # Create first complaint
     data1 = {**base_data, "external_ref": "EXT-UNIQUE-001"}
-    response1 = await client.post("/api/v1/complaints/", json=data1, headers=auth_headers)
+    response1 = await client.post(
+        "/api/v1/complaints/", json=data1, headers=auth_headers
+    )
     assert response1.status_code == 201
 
     # Create second complaint with different external_ref
     data2 = {**base_data, "external_ref": "EXT-UNIQUE-002"}
-    response2 = await client.post("/api/v1/complaints/", json=data2, headers=auth_headers)
+    response2 = await client.post(
+        "/api/v1/complaints/", json=data2, headers=auth_headers
+    )
     assert response2.status_code == 201
 
     # Verify they have different IDs

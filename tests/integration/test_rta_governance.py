@@ -7,7 +7,12 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from src.domain.models.audit_log import AuditEvent
-from src.domain.models.rta import RoadTrafficCollision, RTAAction, RTASeverity, RTAStatus
+from src.domain.models.rta import (
+    RoadTrafficCollision,
+    RTAAction,
+    RTASeverity,
+    RTAStatus,
+)
 
 
 @pytest.mark.asyncio
@@ -25,7 +30,9 @@ async def test_create_rta_unauthenticated_returns_401(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_create_rta_with_auth(client: AsyncClient, auth_headers: dict, test_session):
+async def test_create_rta_with_auth(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test creating an RTA with authentication and verify audit log."""
     collision_date = datetime.now(timezone.utc)
     data = {
@@ -60,7 +67,9 @@ async def test_create_rta_with_auth(client: AsyncClient, auth_headers: dict, tes
 
 
 @pytest.mark.asyncio
-async def test_list_rtas_deterministic_ordering(client: AsyncClient, auth_headers: dict, test_session):
+async def test_list_rtas_deterministic_ordering(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that RTAs are returned in deterministic order (created_at DESC, id ASC)."""
     now = datetime.now(timezone.utc)
 
@@ -103,7 +112,9 @@ async def test_list_rtas_deterministic_ordering(client: AsyncClient, auth_header
 
 
 @pytest.mark.asyncio
-async def test_update_rta_with_audit(client: AsyncClient, auth_headers: dict, test_session):
+async def test_update_rta_with_audit(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test updating an RTA and verify audit log."""
     # Create RTA
     rta = RoadTrafficCollision(
@@ -123,7 +134,9 @@ async def test_update_rta_with_audit(client: AsyncClient, auth_headers: dict, te
         "title": "Updated Title",
         "severity": RTASeverity.SERIOUS_INJURY,
     }
-    response = await client.patch(f"/api/v1/rtas/{rta.id}", json=update_data, headers=auth_headers)
+    response = await client.patch(
+        f"/api/v1/rtas/{rta.id}", json=update_data, headers=auth_headers
+    )
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["title"] == "Updated Title"
@@ -132,7 +145,11 @@ async def test_update_rta_with_audit(client: AsyncClient, auth_headers: dict, te
     # Check audit log
     audit_result = await test_session.execute(
         select(AuditEvent)
-        .where(AuditEvent.entity_type == "rta", AuditEvent.action == "update", AuditEvent.entity_id == str(rta.id))
+        .where(
+            AuditEvent.entity_type == "rta",
+            AuditEvent.action == "update",
+            AuditEvent.entity_id == str(rta.id),
+        )
         .order_by(AuditEvent.created_at.desc())
     )
     audit_log = audit_result.scalars().first()
@@ -143,7 +160,9 @@ async def test_update_rta_with_audit(client: AsyncClient, auth_headers: dict, te
 
 
 @pytest.mark.asyncio
-async def test_delete_rta_with_audit(client: AsyncClient, auth_headers: dict, test_session):
+async def test_delete_rta_with_audit(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test deleting an RTA and verify audit log."""
     # Create RTA
     rta = RoadTrafficCollision(
@@ -170,7 +189,11 @@ async def test_delete_rta_with_audit(client: AsyncClient, auth_headers: dict, te
     # Check audit log
     audit_result = await test_session.execute(
         select(AuditEvent)
-        .where(AuditEvent.entity_type == "rta", AuditEvent.action == "delete", AuditEvent.entity_id == str(rta_id))
+        .where(
+            AuditEvent.entity_type == "rta",
+            AuditEvent.action == "delete",
+            AuditEvent.entity_id == str(rta_id),
+        )
         .order_by(AuditEvent.created_at.desc())
     )
     audit_log = audit_result.scalars().first()
@@ -194,7 +217,9 @@ async def test_rta_404_canonical_envelope(client: AsyncClient, auth_headers: dic
 
 
 @pytest.mark.asyncio
-async def test_create_rta_action_with_audit(client: AsyncClient, auth_headers: dict, test_session):
+async def test_create_rta_action_with_audit(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test creating an RTA action and verify audit log."""
     # Create RTA first
     rta = RoadTrafficCollision(
@@ -216,7 +241,9 @@ async def test_create_rta_action_with_audit(client: AsyncClient, auth_headers: d
         "action_type": "corrective",
         "priority": "high",
     }
-    response = await client.post(f"/api/v1/rtas/{rta.id}/actions", json=action_data, headers=auth_headers)
+    response = await client.post(
+        f"/api/v1/rtas/{rta.id}/actions", json=action_data, headers=auth_headers
+    )
     assert response.status_code == 201
     res_data = response.json()
     assert res_data["title"] == "Test Action"
@@ -238,7 +265,9 @@ async def test_create_rta_action_with_audit(client: AsyncClient, auth_headers: d
 
 
 @pytest.mark.asyncio
-async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth_headers: dict, test_session):
+async def test_list_rta_actions_deterministic_ordering(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that RTA actions are returned in deterministic order (created_at DESC, id ASC)."""
     now = datetime.now(timezone.utc)
 
@@ -286,9 +315,15 @@ async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth
 
 
 @pytest.mark.asyncio
-async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dict, test_session):
+async def test_rta_investigations_linkage(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that RTA investigations linkage endpoint works and returns deterministic order."""
-    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
+    from src.domain.models.investigation import (
+        AssignedEntityType,
+        InvestigationRun,
+        InvestigationTemplate,
+    )
 
     now = datetime.now(timezone.utc)
 
@@ -332,7 +367,9 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
     await test_session.commit()
 
     # Get investigations for RTA
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
 
@@ -358,10 +395,16 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
 
 
 @pytest.mark.asyncio
-async def test_complaint_investigations_linkage(client: AsyncClient, auth_headers: dict, test_session):
+async def test_complaint_investigations_linkage(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that complaint investigations linkage endpoint works and returns deterministic order."""
     from src.domain.models.complaint import Complaint
-    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
+    from src.domain.models.investigation import (
+        AssignedEntityType,
+        InvestigationRun,
+        InvestigationTemplate,
+    )
 
     now = datetime.now(timezone.utc)
 
@@ -404,7 +447,9 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     await test_session.commit()
 
     # Get investigations for complaint
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
 
@@ -430,7 +475,9 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
 
 
 @pytest.mark.asyncio
-async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dict, test_session):
+async def test_rta_pagination_consistency(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that RTA pagination is consistent and total_pages is calculated correctly."""
     now = datetime.now(timezone.utc)
 
@@ -449,7 +496,9 @@ async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dic
     await test_session.commit()
 
     # Get page 1 with page_size=5
-    response = await client.get("/api/v1/rtas/?page=1&page_size=5", headers=auth_headers)
+    response = await client.get(
+        "/api/v1/rtas/?page=1&page_size=5", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["page"] == 1
@@ -462,9 +511,15 @@ async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dic
 
 
 @pytest.mark.asyncio
-async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
+async def test_rta_investigations_pagination_fields(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that RTA investigations pagination fields are correct."""
-    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
+    from src.domain.models.investigation import (
+        AssignedEntityType,
+        InvestigationRun,
+        InvestigationTemplate,
+    )
 
     now = datetime.now(timezone.utc)
 
@@ -508,7 +563,9 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
     await test_session.commit()
 
     # Test page 1 (default page_size=25)
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30
@@ -518,7 +575,9 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
     assert len(data["items"]) == 25
 
     # Test page 2
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=2", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page=2", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30
@@ -528,7 +587,9 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
     assert len(data["items"]) == 5
 
     # Test custom page_size
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=10", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page_size=10", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30
@@ -539,7 +600,9 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
 
 
 @pytest.mark.asyncio
-async def test_rta_investigations_invalid_page_param(client: AsyncClient, auth_headers: dict, test_session):
+async def test_rta_investigations_invalid_page_param(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that invalid page parameter returns 422 validation error."""
     now = datetime.now(timezone.utc)
 
@@ -557,16 +620,22 @@ async def test_rta_investigations_invalid_page_param(client: AsyncClient, auth_h
     await test_session.refresh(rta)
 
     # page=0 should fail (must be >= 1)
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=0", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page=0", headers=auth_headers
+    )
     assert response.status_code == 422
 
     # page=-1 should fail
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=-1", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page=-1", headers=auth_headers
+    )
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_rta_investigations_invalid_page_size_param(client: AsyncClient, auth_headers: dict, test_session):
+async def test_rta_investigations_invalid_page_size_param(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that invalid page_size parameter returns 422 validation error."""
     now = datetime.now(timezone.utc)
 
@@ -584,23 +653,35 @@ async def test_rta_investigations_invalid_page_size_param(client: AsyncClient, a
     await test_session.refresh(rta)
 
     # page_size=0 should fail (must be >= 1)
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=0", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page_size=0", headers=auth_headers
+    )
     assert response.status_code == 422
 
     # page_size=101 should fail (must be <= 100)
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=101", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page_size=101", headers=auth_headers
+    )
     assert response.status_code == 422
 
     # page_size=999 should fail
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=999", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/rtas/{rta.id}/investigations?page_size=999", headers=auth_headers
+    )
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_complaint_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
+async def test_complaint_investigations_pagination_fields(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that complaint investigations pagination fields are correct."""
     from src.domain.models.complaint import Complaint
-    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
+    from src.domain.models.investigation import (
+        AssignedEntityType,
+        InvestigationRun,
+        InvestigationTemplate,
+    )
 
     now = datetime.now(timezone.utc)
 
@@ -643,7 +724,9 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     await test_session.commit()
 
     # Test page 1 (default page_size=25)
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30
@@ -653,7 +736,9 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     assert len(data["items"]) == 25
 
     # Test page 2
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations?page=2", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/complaints/{complaint.id}/investigations?page=2", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30
@@ -663,7 +748,10 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     assert len(data["items"]) == 5
 
     # Test custom page_size
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations?page_size=10", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/complaints/{complaint.id}/investigations?page_size=10",
+        headers=auth_headers,
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30

@@ -236,7 +236,9 @@ def assert_stable_ordering(items: list, key: str, expected_order: list) -> None:
         expected_order: Expected order of key values
     """
     actual_order = [item[key] for item in items]
-    assert actual_order == expected_order, f"Ordering not stable. Expected: {expected_order}, Got: {actual_order}"
+    assert (
+        actual_order == expected_order
+    ), f"Ordering not stable. Expected: {expected_order}, Got: {actual_order}"
 
 
 def assert_no_pii(data: Dict[str, Any], forbidden_patterns: list = None) -> None:
@@ -265,4 +267,6 @@ def assert_no_pii(data: Dict[str, Any], forbidden_patterns: list = None) -> None
 
 def assert_uat_reference(reference: str, prefix: str) -> None:
     """Assert reference number has UAT prefix."""
-    assert reference.startswith(f"{prefix}-UAT-"), f"Reference '{reference}' does not have UAT prefix '{prefix}-UAT-'"
+    assert reference.startswith(
+        f"{prefix}-UAT-"
+    ), f"Reference '{reference}' does not have UAT prefix '{prefix}-UAT-'"

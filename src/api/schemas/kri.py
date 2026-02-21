@@ -12,13 +12,19 @@ class KRIBase(BaseModel):
     code: str = Field(..., max_length=50, description="Unique KRI code")
     name: str = Field(..., max_length=200, description="KRI name")
     description: Optional[str] = None
-    category: str = Field(..., description="Category: safety, compliance, operational, etc.")
+    category: str = Field(
+        ..., description="Category: safety, compliance, operational, etc."
+    )
     unit: str = Field(..., max_length=50, description="Measurement unit")
-    measurement_frequency: str = Field("monthly", description="Frequency: daily, weekly, monthly, quarterly")
+    measurement_frequency: str = Field(
+        "monthly", description="Frequency: daily, weekly, monthly, quarterly"
+    )
     data_source: str = Field(..., description="Data source for calculation")
     calculation_method: Optional[str] = None
     auto_calculate: bool = True
-    lower_is_better: bool = Field(True, description="If true, lower values indicate better performance")
+    lower_is_better: bool = Field(
+        True, description="If true, lower values indicate better performance"
+    )
     green_threshold: float = Field(..., description="Acceptable threshold")
     amber_threshold: float = Field(..., description="Warning threshold")
     red_threshold: float = Field(..., description="Critical threshold")
@@ -173,7 +179,9 @@ class SIFAssessmentCreate(BaseModel):
 
     is_sif: bool = Field(False, description="Is this a Serious Injury or Fatality?")
     is_psif: bool = Field(False, description="Is this a Potential SIF?")
-    sif_classification: str = Field(..., description="Classification: SIF, pSIF, Non-SIF")
+    sif_classification: str = Field(
+        ..., description="Classification: SIF, pSIF, Non-SIF"
+    )
     sif_rationale: Optional[str] = None
     life_altering_potential: bool = False
     precursor_events: Optional[List[str]] = None

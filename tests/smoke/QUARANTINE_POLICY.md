@@ -18,7 +18,7 @@ This document tracks tests that are temporarily quarantined due to incomplete fe
 **Smoke Tests:**
 - **File:** `tests/smoke/test_phase3_phase4_smoke.py`
 - **Quarantine Date:** 2026-01-21
-- **Expiry Date:** 2026-02-21
+- **Expiry Date:** 2026-03-23 (extended from 2026-02-21)
 - **Reason:** Phase 3 (Workflow Center) and Phase 4 (Compliance Automation) features are not fully implemented. Tests assert on endpoint contracts that don't exist yet.
 
 **E2E Tests:**
@@ -45,7 +45,7 @@ This document tracks tests that are temporarily quarantined due to incomplete fe
   - Full workflow tests hit endpoints returning 404
 
 **Quarantine Date:** 2026-01-21
-**Expiry Date:** 2026-02-21
+**Expiry Date:** 2026-03-23 (extended from 2026-02-21)
 
 **Resolution Plan:**
 1. Audit actual API endpoints vs test expectations

@@ -14,7 +14,18 @@ import logging
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base
@@ -98,39 +109,61 @@ class AuditLogEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False, index=True
+    )
 
     # Entry sequence for hash chain
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Blockchain-style hash chain
-    entry_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # SHA-256
-    previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # Link to previous entry
+    entry_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )  # SHA-256
+    previous_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False
+    )  # Link to previous entry
 
     # What changed
-    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)  # incident, audit, risk, etc.
-    entity_id: Mapped[str] = mapped_column(String(100), nullable=False)  # ID of the entity
-    entity_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Human-readable name
+    entity_type: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # incident, audit, risk, etc.
+    entity_id: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # ID of the entity
+    entity_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # Human-readable name
 
     # Action performed
     action: Mapped[str] = mapped_column(
         String(50), nullable=False
     )  # create, update, delete, view, export, approve, etc.
-    action_category: Mapped[str] = mapped_column(String(50), default="data")  # data, auth, admin, system
+    action_category: Mapped[str] = mapped_column(
+        String(50), default="data"
+    )  # data, auth, admin, system
 
     # Change details
     old_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     new_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    changed_fields: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of field names that changed
+    changed_fields: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # List of field names that changed
 
     # Who made the change
-    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Denormalized for immutability
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    user_email: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # Denormalized for immutability
     user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     user_role: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Request context
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)  # IPv6 compatible
+    ip_address: Mapped[Optional[str]] = mapped_column(
+        String(45), nullable=True
+    )  # IPv6 compatible
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     request_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -143,11 +176,17 @@ class AuditLogEntry(Base):
     entry_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Timestamp (UTC)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
 
     # Compliance flags
-    is_sensitive: Mapped[bool] = mapped_column(Boolean, default=False)  # PII or sensitive data
-    retention_days: Mapped[int] = mapped_column(Integer, default=2555)  # 7 years default
+    is_sensitive: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # PII or sensitive data
+    retention_days: Mapped[int] = mapped_column(
+        Integer, default=2555
+    )  # 7 years default
 
     def __repr__(self) -> str:
         return f"<AuditLogEntry {self.id} {self.action} {self.entity_type}:{self.entity_id}>"
@@ -197,7 +236,9 @@ class AuditLogVerification(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False
+    )
 
     # Verification range
     start_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -212,7 +253,9 @@ class AuditLogVerification(Base):
     merkle_root: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # Metadata
-    verified_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
     verification_method: Mapped[str] = mapped_column(String(50), default="hash_chain")
 
     # Timestamps
@@ -231,11 +274,17 @@ class AuditLogExport(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False
+    )
 
     # Export details
-    export_format: Mapped[str] = mapped_column(String(20), nullable=False)  # csv, json, pdf
-    export_type: Mapped[str] = mapped_column(String(50), nullable=False)  # full, filtered, date_range
+    export_format: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # csv, json, pdf
+    export_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # full, filtered, date_range
 
     # Filters applied
     filters: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -245,10 +294,14 @@ class AuditLogExport(Base):
     # Result
     entries_exported: Mapped[int] = mapped_column(Integer, nullable=False)
     file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # SHA-256 of export file
+    file_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )  # SHA-256 of export file
 
     # Metadata
-    exported_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    exported_by_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
     reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     exported_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

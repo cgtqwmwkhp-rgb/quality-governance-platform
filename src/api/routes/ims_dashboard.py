@@ -31,7 +31,9 @@ async def _get_standards_compliance(db: Any) -> list[dict]:
     """Query compliance scores for all active standards."""
     from src.domain.models.standard import Clause, Control, Standard
 
-    result = await db.execute(select(Standard).where(Standard.is_active == True).order_by(Standard.code))
+    result = await db.execute(
+        select(Standard).where(Standard.is_active == True).order_by(Standard.code)
+    )
     standards = list(result.scalars().all())
 
     scores = []
@@ -47,7 +49,9 @@ async def _get_standards_compliance(db: Any) -> list[dict]:
         controls = list(control_result.scalars().all())
 
         total = len(controls)
-        implemented = sum(1 for c in controls if c.implementation_status == "implemented")
+        implemented = sum(
+            1 for c in controls if c.implementation_status == "implemented"
+        )
         partial = sum(1 for c in controls if c.implementation_status == "partial")
         not_impl = total - implemented - partial
 
@@ -62,7 +66,9 @@ async def _get_standards_compliance(db: Any) -> list[dict]:
                 "implemented_count": implemented,
                 "partial_count": partial,
                 "not_implemented_count": not_impl,
-                "compliance_percentage": round(((implemented + partial * 0.5) / max(total, 1)) * 100, 1),
+                "compliance_percentage": round(
+                    ((implemented + partial * 0.5) / max(total, 1)) * 100, 1
+                ),
                 "setup_required": total == 0,
             }
         )
@@ -83,7 +89,9 @@ async def _get_isms_data(db: Any) -> dict:
     total_assets = (
         await db.scalar(
             select(func.count()).select_from(
-                select(InformationAsset).where(InformationAsset.is_active == True).subquery()
+                select(InformationAsset)
+                .where(InformationAsset.is_active == True)
+                .subquery()
             )
         )
         or 0
@@ -92,18 +100,25 @@ async def _get_isms_data(db: Any) -> dict:
         await db.scalar(
             select(func.count()).select_from(
                 select(InformationAsset)
-                .where(InformationAsset.is_active == True, InformationAsset.criticality == "critical")
+                .where(
+                    InformationAsset.is_active == True,
+                    InformationAsset.criticality == "critical",
+                )
                 .subquery()
             )
         )
         or 0
     )
 
-    total_controls = await db.scalar(select(func.count()).select_from(ISO27001Control)) or 0
+    total_controls = (
+        await db.scalar(select(func.count()).select_from(ISO27001Control)) or 0
+    )
     applicable_controls = (
         await db.scalar(
             select(func.count()).select_from(
-                select(ISO27001Control).where(ISO27001Control.is_applicable == True).subquery()
+                select(ISO27001Control)
+                .where(ISO27001Control.is_applicable == True)
+                .subquery()
             )
         )
         or 0
@@ -111,7 +126,9 @@ async def _get_isms_data(db: Any) -> dict:
     implemented_controls = (
         await db.scalar(
             select(func.count()).select_from(
-                select(ISO27001Control).where(ISO27001Control.implementation_status == "implemented").subquery()
+                select(ISO27001Control)
+                .where(ISO27001Control.implementation_status == "implemented")
+                .subquery()
             )
         )
         or 0
@@ -120,7 +137,9 @@ async def _get_isms_data(db: Any) -> dict:
     open_risks = (
         await db.scalar(
             select(func.count()).select_from(
-                select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed").subquery()
+                select(InformationSecurityRisk)
+                .where(InformationSecurityRisk.status != "closed")
+                .subquery()
             )
         )
         or 0
@@ -142,7 +161,9 @@ async def _get_isms_data(db: Any) -> dict:
     open_incidents = (
         await db.scalar(
             select(func.count()).select_from(
-                select(SecurityIncident).where(SecurityIncident.status == "open").subquery()
+                select(SecurityIncident)
+                .where(SecurityIncident.status == "open")
+                .subquery()
             )
         )
         or 0
@@ -151,7 +172,10 @@ async def _get_isms_data(db: Any) -> dict:
         await db.scalar(
             select(func.count()).select_from(
                 select(SecurityIncident)
-                .where(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
+                .where(
+                    SecurityIncident.detected_date
+                    >= datetime.utcnow() - timedelta(days=30)
+                )
                 .subquery()
             )
         )
@@ -180,7 +204,9 @@ async def _get_isms_data(db: Any) -> dict:
         d_total = (
             await db.scalar(
                 select(func.count()).select_from(
-                    select(ISO27001Control).where(ISO27001Control.domain == domain_name).subquery()
+                    select(ISO27001Control)
+                    .where(ISO27001Control.domain == domain_name)
+                    .subquery()
                 )
             )
             or 0
@@ -233,12 +259,16 @@ async def _get_isms_data(db: Any) -> dict:
             "total": total_controls,
             "applicable": applicable_controls,
             "implemented": implemented_controls,
-            "implementation_percentage": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+            "implementation_percentage": round(
+                (implemented_controls / max(applicable_controls, 1)) * 100, 1
+            ),
         },
         "risks": {"open": open_risks, "high_critical": high_risks},
         "incidents": {"open": open_incidents, "last_30_days": incidents_30d},
         "suppliers": {"high_risk": high_risk_suppliers},
-        "compliance_score": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+        "compliance_score": round(
+            (implemented_controls / max(applicable_controls, 1)) * 100, 1
+        ),
         "domains": domains,
         "recent_incidents": recent_incidents,
     }
@@ -253,14 +283,18 @@ async def _get_uvdb_data(db: Any) -> dict:
     active_audits = (
         await db.scalar(
             select(func.count()).select_from(
-                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()
+                select(UVDBAudit)
+                .where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
+                .subquery()
             )
         )
         or 0
     )
 
     completed_result = await db.execute(
-        select(UVDBAudit).where(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None))
+        select(UVDBAudit).where(
+            UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)
+        )
     )
     completed = list(completed_result.scalars().all())
 
@@ -268,7 +302,9 @@ async def _get_uvdb_data(db: Any) -> dict:
     latest_score = None
     if completed:
         avg_score = sum(a.percentage_score for a in completed) / len(completed)
-        latest = sorted(completed, key=lambda a: a.created_at or datetime.min, reverse=True)
+        latest = sorted(
+            completed, key=lambda a: a.created_at or datetime.min, reverse=True
+        )
         latest_score = latest[0].percentage_score if latest else None
 
     return {
@@ -277,7 +313,11 @@ async def _get_uvdb_data(db: Any) -> dict:
         "completed_audits": len(completed),
         "average_score": round(avg_score, 1),
         "latest_score": latest_score,
-        "status": "active" if active_audits > 0 else ("completed" if completed else "not_started"),
+        "status": (
+            "active"
+            if active_audits > 0
+            else ("completed" if completed else "not_started")
+        ),
     }
 
 
@@ -287,7 +327,11 @@ async def _get_planet_mark_data(db: Any) -> dict:
 
     from src.domain.models.planet_mark import CarbonReportingYear
 
-    result = await db.execute(select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(2))
+    result = await db.execute(
+        select(CarbonReportingYear)
+        .order_by(desc(CarbonReportingYear.year_number))
+        .limit(2)
+    )
     years = list(result.scalars().all())
 
     if not years:
@@ -300,12 +344,20 @@ async def _get_planet_mark_data(db: Any) -> dict:
         }
 
     current = years[0]
-    total_emissions = (current.scope1_total or 0) + (current.scope2_total or 0) + (current.scope3_total or 0)
+    total_emissions = (
+        (current.scope1_total or 0)
+        + (current.scope2_total or 0)
+        + (current.scope3_total or 0)
+    )
 
     reduction = None
     if len(years) >= 2:
         prev = years[1]
-        prev_total = (prev.scope1_total or 0) + (prev.scope2_total or 0) + (prev.scope3_total or 0)
+        prev_total = (
+            (prev.scope1_total or 0)
+            + (prev.scope2_total or 0)
+            + (prev.scope3_total or 0)
+        )
         if prev_total > 0:
             reduction = round(((prev_total - total_emissions) / prev_total) * 100, 1)
 
@@ -371,7 +423,9 @@ async def _get_audit_schedule(db: Any) -> list[dict]:
                 "reference_number": run.reference_number,
                 "title": run.title,
                 "status": run.status,
-                "scheduled_date": run.scheduled_date.isoformat() if run.scheduled_date else None,
+                "scheduled_date": (
+                    run.scheduled_date.isoformat() if run.scheduled_date else None
+                ),
                 "due_date": run.due_date.isoformat() if run.due_date else None,
             }
         )
@@ -402,10 +456,13 @@ async def get_ims_dashboard(
         response["standards_error"] = "Unable to load standards data"
 
     # Overall compliance (average across standards with data)
-    standards_with_data = [s for s in response.get("standards", []) if not s.get("setup_required")]
+    standards_with_data = [
+        s for s in response.get("standards", []) if not s.get("setup_required")
+    ]
     if standards_with_data:
         response["overall_compliance"] = round(
-            sum(s["compliance_percentage"] for s in standards_with_data) / len(standards_with_data),
+            sum(s["compliance_percentage"] for s in standards_with_data)
+            / len(standards_with_data),
             1,
         )
     else:
@@ -439,7 +496,9 @@ async def get_ims_dashboard(
     try:
         response["planet_mark"] = await _get_planet_mark_data(db)
     except (ProgrammingError, OperationalError) as e:
-        logger.warning("IMS dashboard: Planet Mark tables not available: %s", str(e)[:200])
+        logger.warning(
+            "IMS dashboard: Planet Mark tables not available: %s", str(e)[:200]
+        )
         response["planet_mark"] = None
         response["planet_mark_error"] = "Planet Mark module not configured"
     except Exception as e:

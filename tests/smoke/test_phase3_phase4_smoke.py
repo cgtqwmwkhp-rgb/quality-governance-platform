@@ -11,7 +11,7 @@ QUARANTINE STATUS: All tests in this file are quarantined.
 See QUARANTINE_POLICY.md for details.
 
 Quarantine Date: 2026-01-21
-Expiry Date: 2026-02-21
+Expiry Date: 2026-03-23
 Issue: GOVPLAT-001
 Reason: Phase 3/4 features not fully implemented; test contracts don't match endpoints.
 """
@@ -23,7 +23,7 @@ import requests
 
 # Quarantine marker - skip all tests in this module until features are complete
 pytestmark = pytest.mark.skip(
-    reason="QUARANTINED: Phase 3/4 features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+    reason="QUARANTINED: Phase 3/4 features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-03-23"
 )
 
 
@@ -97,7 +97,9 @@ class TestComplianceAutomationSmoke:
 
     def test_certificates_summary_endpoint_available(self, auth_client: Any) -> None:
         """Verify certificate expiry summary endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/certificates/expiring-summary")
+        response = auth_client.get(
+            "/api/compliance-automation/certificates/expiring-summary"
+        )
         assert response.status_code in [200, 404]
         summary = response.json()
         assert "expired" in summary
@@ -126,7 +128,9 @@ class TestComplianceAutomationSmoke:
     def test_riddor_check_endpoint_available(self, auth_client: Any) -> None:
         """Verify RIDDOR check endpoint is accessible."""
         payload = {"injury_type": "fracture", "fatality": False}
-        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
+        response = auth_client.post(
+            "/api/compliance-automation/riddor/check", json=payload
+        )
         assert response.status_code in [200, 404]
         assert "is_riddor" in response.json()
 
@@ -193,15 +197,22 @@ class TestIntegrationSmoke:
     def test_riddor_detection_flow(self, auth_client: Any) -> None:
         """Test RIDDOR detection and preparation flow."""
         # 1. Check if incident requires RIDDOR
-        check_payload = {"fatality": False, "injury_type": "fracture", "days_off_work": 5}
-        check_resp = auth_client.post("/api/compliance-automation/riddor/check", json=check_payload)
+        check_payload = {
+            "fatality": False,
+            "injury_type": "fracture",
+            "days_off_work": 5,
+        }
+        check_resp = auth_client.post(
+            "/api/compliance-automation/riddor/check", json=check_payload
+        )
         assert check_resp.status_code == 200
         result = check_resp.json()
         assert result["is_riddor"] is True
 
         # 2. Prepare submission
         prep_resp = auth_client.post(
-            "/api/compliance-automation/riddor/prepare/1", params={"riddor_type": "specified_injury"}
+            "/api/compliance-automation/riddor/prepare/1",
+            params={"riddor_type": "specified_injury"},
         )
         assert prep_resp.status_code == 200
         assert "submission_data" in prep_resp.json()

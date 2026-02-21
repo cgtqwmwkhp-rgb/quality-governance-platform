@@ -129,7 +129,10 @@ class TelemetryEvent(BaseModel):
         if "result" in v and v["result"] not in ALLOWED_LOGIN_RESULTS:
             raise ValueError(f"result '{v['result']}' not in allowlist")
 
-        if "durationBucket" in v and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS:
+        if (
+            "durationBucket" in v
+            and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS
+        ):
             raise ValueError(f"durationBucket '{v['durationBucket']}' not in allowlist")
 
         if "errorCode" in v and v["errorCode"] not in ALLOWED_ERROR_CODES:
@@ -250,7 +253,7 @@ def aggregate_event(event: TelemetryEvent) -> None:
 # ============================================================================
 
 
-@router.post("/events")
+@router.post("/events", response_model=dict)
 async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     """
     Receive a single telemetry event.
@@ -284,7 +287,7 @@ async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     return {"status": "ok"}
 
 
-@router.post("/events/batch")
+@router.post("/events/batch", response_model=dict)
 async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser):
     """
     Receive a batch of telemetry events (for offline buffer flush).
@@ -313,7 +316,7 @@ async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser)
     return {"status": "ok", "count": processed}
 
 
-@router.get("/metrics/{experiment_id}")
+@router.get("/metrics/{experiment_id}", response_model=dict)
 async def get_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Get aggregated metrics for an experiment.
@@ -321,22 +324,28 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     Used by the evaluator to check current sample count and metrics.
     """
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found"
+        )
 
     metrics = load_metrics_file()
     return metrics
 
 
-@router.delete("/metrics/{experiment_id}")
+@router.delete("/metrics/{experiment_id}", response_model=dict)
 async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Reset metrics for an experiment (staging only, for testing).
     """
     if not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+        )
 
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found"
+        )
 
     metrics_path = METRICS_DIR / "experiment_metrics_EXP_001.json"
     if metrics_path.exists():

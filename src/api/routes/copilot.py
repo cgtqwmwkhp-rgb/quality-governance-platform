@@ -7,7 +7,14 @@ Interactive conversational AI assistant for QHSE management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -63,7 +70,9 @@ class MessageResponse(BaseModel):
 
 class FeedbackCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5)
-    feedback_type: str = Field(..., pattern="^(helpful|inaccurate|inappropriate|other)$")
+    feedback_type: str = Field(
+        ..., pattern="^(helpful|inaccurate|inappropriate|other)$"
+    )
     feedback_text: Optional[str] = None
 
 
@@ -132,7 +141,9 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+        )
 
     return session
 
@@ -274,7 +285,10 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Action {data.action_name} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Action {data.action_name} not found",
+        )
 
     return {
         "status": "executed",
@@ -452,7 +466,9 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optional[str] = Query(None)):
+async def websocket_endpoint(
+    websocket: WebSocket, session_id: int, token: Optional[str] = Query(None)
+):
     """WebSocket endpoint for real-time chat."""
     from src.domain.services.copilot_service import CopilotService
     from src.infrastructure.database import get_db

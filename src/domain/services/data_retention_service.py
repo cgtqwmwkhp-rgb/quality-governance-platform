@@ -23,7 +23,9 @@ class DataRetentionService:
 
     @staticmethod
     async def cleanup_expired_tokens(db: AsyncSession) -> int:
-        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow()))
+        result = await db.execute(
+            delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow())
+        )
         await db.commit()
         return result.rowcount
 
@@ -32,10 +34,16 @@ class DataRetentionService:
         """Delete AuditLogEntry records older than 365 days."""
         from src.domain.models.audit_log import AuditLogEntry
 
-        cutoff = datetime.utcnow() - timedelta(days=DataRetentionService.RETENTION_POLICIES["audit_trail_entries"])
-        result = await db.execute(delete(AuditLogEntry).where(AuditLogEntry.timestamp < cutoff))
+        cutoff = datetime.utcnow() - timedelta(
+            days=DataRetentionService.RETENTION_POLICIES["audit_trail_entries"]
+        )
+        result = await db.execute(
+            delete(AuditLogEntry).where(AuditLogEntry.timestamp < cutoff)
+        )
         await db.commit()
-        logger.info("Cleaned up %d audit log entries older than 365 days", result.rowcount)
+        logger.info(
+            "Cleaned up %d audit log entries older than 365 days", result.rowcount
+        )
         return result.rowcount
 
     @staticmethod
@@ -60,8 +68,12 @@ class DataRetentionService:
         """Delete Notification records older than 180 days."""
         from src.domain.models.notification import Notification
 
-        cutoff = datetime.utcnow() - timedelta(days=DataRetentionService.RETENTION_POLICIES["notification_history"])
-        result = await db.execute(delete(Notification).where(Notification.created_at < cutoff))
+        cutoff = datetime.utcnow() - timedelta(
+            days=DataRetentionService.RETENTION_POLICIES["notification_history"]
+        )
+        result = await db.execute(
+            delete(Notification).where(Notification.created_at < cutoff)
+        )
         await db.commit()
         logger.info("Cleaned up %d notifications older than 180 days", result.rowcount)
         return result.rowcount
@@ -70,9 +82,17 @@ class DataRetentionService:
     async def run_all_policies(db: AsyncSession) -> dict[str, int]:
         """Run all retention policies and return cleanup counts."""
         results = {}
-        results["token_blacklist"] = await DataRetentionService.cleanup_expired_tokens(db)
-        results["audit_trail_entries"] = await DataRetentionService.cleanup_old_audit_entries(db)
-        results["telemetry_events"] = await DataRetentionService.cleanup_old_telemetry(db)
-        results["notification_history"] = await DataRetentionService.cleanup_old_notifications(db)
+        results["token_blacklist"] = await DataRetentionService.cleanup_expired_tokens(
+            db
+        )
+        results["audit_trail_entries"] = (
+            await DataRetentionService.cleanup_old_audit_entries(db)
+        )
+        results["telemetry_events"] = await DataRetentionService.cleanup_old_telemetry(
+            db
+        )
+        results["notification_history"] = (
+            await DataRetentionService.cleanup_old_notifications(db)
+        )
         logger.info("Data retention cleanup complete: %s", results)
         return results

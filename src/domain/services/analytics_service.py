@@ -37,6 +37,7 @@ class AnalyticsService:
         self,
         time_range: str = "last_30_days",
         filters: Optional[Dict[str, Any]] = None,
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get summary KPIs across all modules.
@@ -93,6 +94,7 @@ class AnalyticsService:
         granularity: str = "daily",
         time_range: str = "last_30_days",
         group_by: Optional[str] = None,
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get time series trend data for charting.
@@ -136,7 +138,8 @@ class AnalyticsService:
                 "min": min(values),
                 "max": max(values),
                 "trend_direction": "up" if values[-1] > values[0] else "down",
-                "trend_percentage": ((values[-1] - values[0]) / max(values[0], 1)) * 100,
+                "trend_percentage": ((values[-1] - values[0]) / max(values[0], 1))
+                * 100,
             },
         }
 
@@ -215,6 +218,7 @@ class AnalyticsService:
         metric: str,
         industry: str = "utilities",
         region: str = "uk",
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Compare organization metrics against industry benchmarks.
@@ -278,7 +282,11 @@ class AnalyticsService:
             },
         )
 
-    def get_benchmark_summary(self, industry: str = "utilities") -> Dict[str, Any]:
+    def get_benchmark_summary(
+        self,
+        industry: str = "utilities",
+        tenant_id: int | None = None,
+    ) -> Dict[str, Any]:
         """Get summary of all benchmark comparisons."""
         metrics = [
             "incident_rate",
@@ -304,7 +312,9 @@ class AnalyticsService:
             "overall_percentile": total_percentile / len(metrics),
             "above_average_count": above_average_count,
             "total_metrics": len(metrics),
-            "performance_rating": self._get_performance_rating(total_percentile / len(metrics)),
+            "performance_rating": self._get_performance_rating(
+                total_percentile / len(metrics)
+            ),
         }
 
     def _get_performance_rating(self, percentile: float) -> str:
@@ -325,6 +335,7 @@ class AnalyticsService:
     def calculate_cost_of_non_compliance(
         self,
         time_range: str = "last_12_months",
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Calculate total cost of non-compliance.
@@ -395,6 +406,7 @@ class AnalyticsService:
     def calculate_roi(
         self,
         investment_id: Optional[int] = None,
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Calculate ROI for safety investments.
@@ -443,7 +455,9 @@ class AnalyticsService:
         ]
 
         if investment_id:
-            investment = next((i for i in investments if i["id"] == investment_id), None)
+            investment = next(
+                (i for i in investments if i["id"] == investment_id), None
+            )
             if investment:
                 return {"investment": investment}
             return {"error": "Investment not found"}
@@ -492,6 +506,7 @@ class AnalyticsService:
     def generate_executive_summary(
         self,
         time_range: str = "last_month",
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Generate executive summary for automated reports.
@@ -525,7 +540,8 @@ class AnalyticsService:
                 "cost_of_non_compliance": costs["total_cost"],
                 "total_investment": roi["summary"]["total_investment"],
                 "total_savings": roi["summary"]["total_annual_savings"],
-                "net_benefit": roi["summary"]["total_annual_savings"] - costs["total_cost"],
+                "net_benefit": roi["summary"]["total_annual_savings"]
+                - costs["total_cost"],
             },
             "benchmarks": {
                 "overall_percentile": benchmarks["overall_percentile"],

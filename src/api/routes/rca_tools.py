@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 
@@ -50,7 +52,10 @@ class CreateFishboneRequest(BaseModel):
 
 
 class AddCauseRequest(BaseModel):
-    category: str = Field(..., description="manpower, method, machine, material, measurement, mother_nature")
+    category: str = Field(
+        ...,
+        description="manpower, method, machine, material, measurement, mother_nature",
+    )
     cause: str
     sub_causes: Optional[List[str]] = None
 
@@ -103,6 +108,8 @@ async def create_five_whys_analysis(
         entity_id=request.entity_id,
         investigation_id=request.investigation_id,
     )
+    await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
+    track_metric("rca.mutation", 1)
     return {
         "id": analysis.id,
         "problem_statement": analysis.problem_statement,
@@ -122,7 +129,9 @@ async def get_five_whys_analysis(
     analysis = await service.get_analysis(analysis_id)
 
     if not analysis:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found"
+        )
 
     return {
         "id": analysis.id,
@@ -262,6 +271,8 @@ async def create_fishbone_diagram(
         entity_id=request.entity_id,
         investigation_id=request.investigation_id,
     )
+    await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
+    track_metric("rca.mutation", 1)
     return {
         "id": diagram.id,
         "effect_statement": diagram.effect_statement,
@@ -281,7 +292,9 @@ async def get_fishbone_diagram(
     diagram = await service.get_diagram(diagram_id)
 
     if not diagram:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Diagram not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Diagram not found"
+        )
 
     return {
         "id": diagram.id,
@@ -401,6 +414,8 @@ async def create_capa(
         due_date=request.due_date,
         priority=request.priority,
     )
+    await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
+    track_metric("rca.mutation", 1)
     return {
         "id": capa.id,
         "action_type": capa.action_type,

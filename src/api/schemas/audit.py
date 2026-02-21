@@ -23,7 +23,10 @@ class ConditionalLogicRule(BaseModel):
     """Schema for conditional logic rules."""
 
     source_question_id: int
-    operator: str = Field(..., pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$")
+    operator: str = Field(
+        ...,
+        pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$",
+    )
     value: Optional[Any] = None
     action: str = Field(..., pattern="^(show|hide|require|skip)$")
 
@@ -34,7 +37,9 @@ class EvidenceRequirement(BaseModel):
     required: bool = False
     min_attachments: int = 0
     max_attachments: int = 10
-    allowed_types: List[str] = Field(default_factory=lambda: ["image", "document", "video"])
+    allowed_types: List[str] = Field(
+        default_factory=lambda: ["image", "document", "video"]
+    )
     require_photo: bool = False
     require_signature: bool = False
 
@@ -197,11 +202,17 @@ class AuditTemplateBase(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
 
     # Template configuration
-    audit_type: str = Field(default="inspection", pattern="^(inspection|audit|assessment|checklist|survey)$")
-    frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$")
+    audit_type: str = Field(
+        default="inspection", pattern="^(inspection|audit|assessment|checklist|survey)$"
+    )
+    frequency: Optional[str] = Field(
+        None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$"
+    )
 
     # Scoring configuration
-    scoring_method: str = Field(default="percentage", pattern="^(percentage|points|weighted|pass_fail)$")
+    scoring_method: str = Field(
+        default="percentage", pattern="^(percentage|points|weighted|pass_fail)$"
+    )
     passing_score: Optional[float] = None
 
     # Standard mapping
@@ -420,8 +431,13 @@ class AuditFindingBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=300)
     description: str = Field(..., min_length=1)
-    severity: str = Field(default="medium", pattern="^(critical|high|medium|low|observation)$")
-    finding_type: str = Field(default="nonconformity", pattern="^(nonconformity|observation|opportunity|positive)$")
+    severity: str = Field(
+        default="medium", pattern="^(critical|high|medium|low|observation)$"
+    )
+    finding_type: str = Field(
+        default="nonconformity",
+        pattern="^(nonconformity|observation|opportunity|positive)$",
+    )
 
     # Standard mapping
     clause_ids: Optional[List[int]] = None
@@ -446,8 +462,12 @@ class AuditFindingUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
-    severity: Optional[str] = Field(None, pattern="^(critical|high|medium|low|observation)$")
-    finding_type: Optional[str] = Field(None, pattern="^(nonconformity|observation|opportunity|positive)$")
+    severity: Optional[str] = Field(
+        None, pattern="^(critical|high|medium|low|observation)$"
+    )
+    finding_type: Optional[str] = Field(
+        None, pattern="^(nonconformity|observation|opportunity|positive)$"
+    )
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
     risk_ids: Optional[List[int]] = None

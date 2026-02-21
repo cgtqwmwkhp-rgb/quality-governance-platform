@@ -21,7 +21,11 @@ from sqlalchemy import desc, func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.utils.pagination import PaginationParams, paginate
-from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
+from src.domain.models.audit_log import (
+    AuditLogEntry,
+    AuditLogExport,
+    AuditLogVerification,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -310,7 +314,11 @@ async def list_audit_logs(
         if date_to:
             conditions.append(AuditLogEntry.timestamp <= date_to)
 
-        query = select(AuditLogEntry).where(*conditions).order_by(desc(AuditLogEntry.timestamp))
+        query = (
+            select(AuditLogEntry)
+            .where(*conditions)
+            .order_by(desc(AuditLogEntry.timestamp))
+        )
         return await paginate(db, query, params)
     except Exception as e:
         logger.error("Failed to list audit logs: %s", e)
@@ -322,7 +330,9 @@ async def list_audit_logs(
         }
 
 
-@router.get("/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse])
+@router.get(
+    "/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse]
+)
 async def get_entity_history(
     entity_type: str,
     entity_id: str,
@@ -391,14 +401,21 @@ async def get_audit_entry(
 ) -> Any:
     """Get a single audit log entry with full details."""
     try:
-        result = await db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
+        result = await db.execute(
+            select(AuditLogEntry).where(AuditLogEntry.id == entry_id)
+        )
         entry = result.scalar_one_or_none()
     except Exception as e:
         logger.error("Failed to get audit entry %s: %s", entry_id, e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve audit entry")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve audit entry",
+        )
 
     if not entry:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Audit entry not found"
+        )
 
     return entry
 
@@ -503,7 +520,10 @@ async def verify_chain(
         return verification
     except Exception as e:
         logger.error("Failed to verify chain: %s", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Chain verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Chain verification failed",
+        )
 
 
 # ============================================================================
@@ -554,12 +574,18 @@ async def export_audit_logs(
             for e in entries
         ]
 
-        export_hash = hashlib.sha256(json.dumps(exported_data, sort_keys=True, default=str).encode()).hexdigest()
+        export_hash = hashlib.sha256(
+            json.dumps(exported_data, sort_keys=True, default=str).encode()
+        ).hexdigest()
 
         export_record = AuditLogExport(
             tenant_id=tenant_id,
             export_format=data.format,
-            export_type="filtered" if (data.date_from or data.date_to or data.entity_type) else "full",
+            export_type=(
+                "filtered"
+                if (data.date_from or data.date_to or data.entity_type)
+                else "full"
+            ),
             filters={
                 "entity_type": data.entity_type,
                 "date_from": data.date_from.isoformat() if data.date_from else None,
@@ -585,4 +611,6 @@ async def export_audit_logs(
         }
     except Exception as e:
         logger.error("Failed to export audit logs: %s", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Export failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Export failed"
+        )

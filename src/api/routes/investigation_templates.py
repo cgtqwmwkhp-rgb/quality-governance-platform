@@ -20,7 +20,11 @@ from src.domain.models.investigation import InvestigationTemplate
 router = APIRouter()
 
 
-@router.post("/", response_model=InvestigationTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=InvestigationTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_template(
     template_data: InvestigationTemplateCreate,
     db: DbSession,
@@ -70,7 +74,9 @@ async def list_templates(
     paginated = await paginate(db, query, params)
 
     return InvestigationTemplateListResponse(
-        items=[InvestigationTemplateResponse.model_validate(t) for t in paginated.items],
+        items=[
+            InvestigationTemplateResponse.model_validate(t) for t in paginated.items
+        ],
         total=paginated.total,
         page=paginated.page,
         page_size=paginated.page_size,
@@ -127,7 +133,9 @@ async def delete_template(
     # Check if template has investigation runs
     from src.domain.models.investigation import InvestigationRun
 
-    count_query = select(func.count()).where(InvestigationRun.template_id == template_id)
+    count_query = select(func.count()).where(
+        InvestigationRun.template_id == template_id
+    )
     run_count = await db.scalar(count_query)
 
     if run_count and run_count > 0:

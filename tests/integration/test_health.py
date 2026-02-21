@@ -148,7 +148,9 @@ async def test_openapi_cached_fast_response(client: AsyncClient):
 
     # Second request should be fast (under 2 seconds in CI environment)
     # Note: We use a generous threshold as CI runners vary in performance
-    assert second_duration < 2.0, f"Cached OpenAPI took {second_duration:.2f}s, expected <2s"
+    assert (
+        second_duration < 2.0
+    ), f"Cached OpenAPI took {second_duration:.2f}s, expected <2s"
 
     # Content should be identical (same cached schema)
     assert response1.json() == response2.json()

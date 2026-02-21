@@ -14,10 +14,14 @@ logger = logging.getLogger(__name__)
     queue="reports",
     soft_time_limit=600,
 )
-def generate_compliance_report(self, tenant_id: int, standard: str, format: str = "pdf") -> dict:
+def generate_compliance_report(
+    self, tenant_id: int, standard: str, format: str = "pdf"
+) -> dict:
     """Generate a compliance report for a tenant."""
     try:
-        logger.info("Generating %s compliance report for tenant %d", standard, tenant_id)
+        logger.info(
+            "Generating %s compliance report for tenant %d", standard, tenant_id
+        )
         return {
             "status": "completed",
             "tenant_id": tenant_id,

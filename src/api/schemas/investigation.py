@@ -17,8 +17,12 @@ class InvestigationTemplateBase(BaseModel):
     description: Optional[str] = Field(None, description="Template description")
     version: str = Field(default="1.0", description="Template version")
     is_active: bool = Field(default=True, description="Whether template is active")
-    structure: Dict[str, Any] = Field(..., description="Template structure (sections and fields)")
-    applicable_entity_types: List[str] = Field(..., description="Entity types this template applies to")
+    structure: Dict[str, Any] = Field(
+        ..., description="Template structure (sections and fields)"
+    )
+    applicable_entity_types: List[str] = Field(
+        ..., description="Entity types this template applies to"
+    )
 
     @field_validator("applicable_entity_types")
     @classmethod
@@ -27,7 +31,9 @@ class InvestigationTemplateBase(BaseModel):
         valid_types = {e.value for e in AssignedEntityType}
         for entity_type in v:
             if entity_type not in valid_types:
-                raise ValueError(f"Invalid entity type: {entity_type}. Must be one of {valid_types}")
+                raise ValueError(
+                    f"Invalid entity type: {entity_type}. Must be one of {valid_types}"
+                )
         return v
 
 
@@ -56,7 +62,9 @@ class InvestigationTemplateUpdate(BaseModel):
         valid_types = {e.value for e in AssignedEntityType}
         for entity_type in v:
             if entity_type not in valid_types:
-                raise ValueError(f"Invalid entity type: {entity_type}. Must be one of {valid_types}")
+                raise ValueError(
+                    f"Invalid entity type: {entity_type}. Must be one of {valid_types}"
+                )
         return v
 
 
@@ -90,12 +98,18 @@ class InvestigationRunBase(BaseModel):
     """Base schema for investigation runs."""
 
     template_id: int = Field(..., description="Investigation template ID")
-    assigned_entity_type: str = Field(..., description="Entity type (RTA, incident, complaint)")
+    assigned_entity_type: str = Field(
+        ..., description="Entity type (RTA, incident, complaint)"
+    )
     assigned_entity_id: int = Field(..., description="Entity ID")
-    title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
+    title: str = Field(
+        ..., min_length=1, max_length=255, description="Investigation title"
+    )
     description: Optional[str] = Field(None, description="Investigation description")
     status: str = Field(default="draft", description="Investigation status")
-    data: Dict[str, Any] = Field(default_factory=dict, description="Investigation data (responses)")
+    data: Dict[str, Any] = Field(
+        default_factory=dict, description="Investigation data (responses)"
+    )
 
     @field_validator("assigned_entity_type")
     @classmethod
@@ -181,10 +195,13 @@ class CreateFromRecordRequest(BaseModel):
     """Request schema for creating investigation from source record."""
 
     source_type: str = Field(
-        ..., description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+        ...,
+        description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)",
     )
     source_id: int = Field(..., gt=0, description="Source record ID")
-    title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
+    title: str = Field(
+        ..., min_length=1, max_length=255, description="Investigation title"
+    )
     template_id: int = Field(default=1, description="Template ID (default: v2.1)")
 
     @field_validator("source_type")
@@ -205,8 +222,12 @@ class SourceRecordItem(BaseModel):
     reference_number: str = Field(..., description="Record reference number")
     status: str = Field(..., description="Record status")
     created_at: datetime = Field(..., description="Record creation date")
-    investigation_id: Optional[int] = Field(None, description="Linked investigation ID if exists")
-    investigation_reference: Optional[str] = Field(None, description="Investigation reference if exists")
+    investigation_id: Optional[int] = Field(
+        None, description="Linked investigation ID if exists"
+    )
+    investigation_reference: Optional[str] = Field(
+        None, description="Investigation reference if exists"
+    )
 
 
 class SourceRecordsResponse(BaseModel):
@@ -228,13 +249,19 @@ class TimelineEventResponse(BaseModel):
 
     id: int
     created_at: datetime
-    event_type: str = Field(..., description="Event type: CREATED, DATA_UPDATED, STATUS_CHANGED, etc.")
-    field_path: Optional[str] = Field(None, description="Field path that changed (for DATA_UPDATED)")
+    event_type: str = Field(
+        ..., description="Event type: CREATED, DATA_UPDATED, STATUS_CHANGED, etc."
+    )
+    field_path: Optional[str] = Field(
+        None, description="Field path that changed (for DATA_UPDATED)"
+    )
     old_value: Optional[Dict[str, Any]] = Field(None, description="Previous value")
     new_value: Optional[Dict[str, Any]] = Field(None, description="New value")
     actor_id: int = Field(..., description="User ID who performed the action")
     version: int = Field(..., description="Investigation version at time of event")
-    event_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional context")
+    event_metadata: Optional[Dict[str, Any]] = Field(
+        None, description="Additional context"
+    )
 
     class Config:
         from_attributes = True
@@ -256,10 +283,14 @@ class CommentCreateRequest(BaseModel):
     Accepts 'body' field to match frontend API contract.
     """
 
-    body: str = Field(..., min_length=1, max_length=10000, description="Comment content")
+    body: str = Field(
+        ..., min_length=1, max_length=10000, description="Comment content"
+    )
     section_id: Optional[str] = Field(None, description="Section to attach comment to")
     field_id: Optional[str] = Field(None, description="Field to attach comment to")
-    parent_comment_id: Optional[int] = Field(None, description="Parent comment ID for threading")
+    parent_comment_id: Optional[int] = Field(
+        None, description="Parent comment ID for threading"
+    )
 
 
 class CommentResponse(BaseModel):
@@ -269,9 +300,15 @@ class CommentResponse(BaseModel):
     created_at: datetime
     content: str = Field(..., description="Comment content")
     author_id: int = Field(..., description="Author user ID")
-    section_id: Optional[str] = Field(None, description="Section this comment is attached to")
-    field_id: Optional[str] = Field(None, description="Field this comment is attached to")
-    parent_comment_id: Optional[int] = Field(None, description="Parent comment ID for threading")
+    section_id: Optional[str] = Field(
+        None, description="Section this comment is attached to"
+    )
+    field_id: Optional[str] = Field(
+        None, description="Field this comment is attached to"
+    )
+    parent_comment_id: Optional[int] = Field(
+        None, description="Parent comment ID for threading"
+    )
 
     class Config:
         from_attributes = True
@@ -293,7 +330,9 @@ class CustomerPackSummaryResponse(BaseModel):
     id: int
     created_at: datetime
     pack_uuid: str = Field(..., description="Unique pack identifier")
-    audience: str = Field(..., description="Pack audience: internal_customer or external_customer")
+    audience: str = Field(
+        ..., description="Pack audience: internal_customer or external_customer"
+    )
     checksum_sha256: str = Field(..., description="Content checksum for integrity")
     generated_by_id: int = Field(..., description="User who generated the pack")
     expires_at: Optional[datetime] = Field(None, description="Pack expiry date if set")
@@ -316,8 +355,14 @@ class ClosureValidationResponse(BaseModel):
     """Result of closure validation check."""
 
     status: str = Field(..., description="OK or BLOCKED")
-    reason_codes: List[str] = Field(default_factory=list, description="List of blocking reason codes")
-    missing_fields: List[str] = Field(default_factory=list, description="List of missing required fields")
+    reason_codes: List[str] = Field(
+        default_factory=list, description="List of blocking reason codes"
+    )
+    missing_fields: List[str] = Field(
+        default_factory=list, description="List of missing required fields"
+    )
     checked_at_utc: datetime = Field(..., description="Timestamp of validation check")
     investigation_id: int
-    investigation_level: Optional[str] = Field(None, description="Investigation level (LOW/MEDIUM/HIGH)")
+    investigation_level: Optional[str] = Field(
+        None, description="Investigation level (LOW/MEDIUM/HIGH)"
+    )

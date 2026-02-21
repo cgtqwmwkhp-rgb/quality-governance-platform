@@ -13,7 +13,13 @@ Uses deterministic seed data for repeatability.
 from typing import Any, Dict
 
 import pytest
-from conftest import UATApiClient, UATConfig, assert_no_pii, assert_stable_ordering, assert_uat_reference
+from conftest import (
+    UATApiClient,
+    UATConfig,
+    assert_no_pii,
+    assert_stable_ordering,
+    assert_uat_reference,
+)
 
 pytestmark = [
     pytest.mark.e2e,
@@ -26,7 +32,9 @@ class TestRiskCreation:
     """Test risk creation operations."""
 
     @pytest.mark.asyncio
-    async def test_create_risk(self, admin_client: UATApiClient, uat_user_ids: Dict[str, str]):
+    async def test_create_risk(
+        self, admin_client: UATApiClient, uat_user_ids: Dict[str, str]
+    ):
         """Admin can create a new risk."""
         risk_data = {
             "title": "UAT New Risk",
@@ -47,7 +55,9 @@ class TestRiskCreation:
         assert response["status"] in ("created", "ok")
 
     @pytest.mark.asyncio
-    async def test_get_risk_by_id(self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]):
+    async def test_get_risk_by_id(
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]
+    ):
         """Can retrieve risk by ID."""
         risk_id = uat_risk_ids["open_security"]
 
@@ -62,7 +72,9 @@ class TestRiskCreation:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_risk_score_calculation(self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]):
+    async def test_risk_score_calculation(
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]
+    ):
         """Risk score is correctly calculated."""
         risk_id = uat_risk_ids["open_security"]
 
@@ -81,7 +93,10 @@ class TestRiskControlLinkage:
 
     @pytest.mark.asyncio
     async def test_link_risk_to_control(
-        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str], uat_control_ids: Dict[str, str]
+        self,
+        admin_client: UATApiClient,
+        uat_risk_ids: Dict[str, str],
+        uat_control_ids: Dict[str, str],
     ):
         """Can link a risk to a control."""
         risk_id = uat_risk_ids["open_security"]
@@ -92,7 +107,9 @@ class TestRiskControlLinkage:
             "relationship": "mitigated_by",
         }
 
-        response = await admin_client.post(f"/api/v1/risks/{risk_id}/controls", link_data)
+        response = await admin_client.post(
+            f"/api/v1/risks/{risk_id}/controls", link_data
+        )
 
         # In real test:
         # assert response.status_code in (200, 201)
@@ -102,7 +119,9 @@ class TestRiskControlLinkage:
         assert response["status"] in ("created", "ok")
 
     @pytest.mark.asyncio
-    async def test_get_risk_with_linked_controls(self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]):
+    async def test_get_risk_with_linked_controls(
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]
+    ):
         """Risk includes linked controls."""
         risk_id = uat_risk_ids["open_security"]
 
@@ -116,11 +135,15 @@ class TestRiskControlLinkage:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_control_shows_linked_risks(self, admin_client: UATApiClient, uat_control_ids: Dict[str, str]):
+    async def test_control_shows_linked_risks(
+        self, admin_client: UATApiClient, uat_control_ids: Dict[str, str]
+    ):
         """Control includes linked risks."""
         control_id = uat_control_ids["iso_access"]
 
-        response = await admin_client.get(f"/api/v1/controls/{control_id}?include=risks")
+        response = await admin_client.get(
+            f"/api/v1/controls/{control_id}?include=risks"
+        )
 
         # In real test:
         # assert response.status_code == 200
@@ -134,7 +157,9 @@ class TestRiskStatusUpdates:
     """Test risk status progression."""
 
     @pytest.mark.asyncio
-    async def test_update_risk_to_mitigated(self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]):
+    async def test_update_risk_to_mitigated(
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]
+    ):
         """Admin can mitigate a risk."""
         risk_id = uat_risk_ids["open_security"]
 
@@ -152,7 +177,9 @@ class TestRiskStatusUpdates:
         assert response["status"] == "updated"
 
     @pytest.mark.asyncio
-    async def test_update_risk_to_accepted(self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]):
+    async def test_update_risk_to_accepted(
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]
+    ):
         """Admin can accept a risk."""
         risk_id = uat_risk_ids["open_compliance"]
 
@@ -190,7 +217,9 @@ class TestRiskDashboard:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_dashboard_updates_after_risk_change(self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]):
+    async def test_dashboard_updates_after_risk_change(
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str]
+    ):
         """Dashboard reflects risk status changes."""
         # Get initial dashboard state
         response1 = await admin_client.get("/api/v1/dashboard/risks")

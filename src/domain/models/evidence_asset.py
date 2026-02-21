@@ -55,7 +55,9 @@ class EvidenceVisibility(str, enum.Enum):
 
     INTERNAL_ONLY = "internal_only"  # Never include in any customer pack
     INTERNAL_CUSTOMER = "internal_customer"  # Include only in internal customer packs
-    EXTERNAL_ALLOWED = "external_allowed"  # Can be included in external packs (may be redacted)
+    EXTERNAL_ALLOWED = (
+        "external_allowed"  # Can be included in external packs (may be redacted)
+    )
     PUBLIC = "public"  # Safe for all audiences
 
 
@@ -87,13 +89,20 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
     original_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)  # MIME type
     file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    checksum_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # For integrity verification
+    checksum_sha256: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )  # For integrity verification
 
     # Asset classification
     asset_type: Mapped[EvidenceAssetType] = mapped_column(
         SQLEnum(EvidenceAssetType, native_enum=False),
         nullable=False,
         default=EvidenceAssetType.OTHER,
+    )
+
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
     )
 
     # Source linkage (polymorphic association)
@@ -122,7 +131,9 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
     # GPS/Location metadata (for photos with EXIF or map pins)
     latitude: Mapped[Optional[float]] = mapped_column(nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(nullable=True)
-    location_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    location_description: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
 
     # Render hints for frontend
     render_hint: Mapped[Optional[str]] = mapped_column(
@@ -142,7 +153,9 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
         nullable=False,
         default=EvidenceVisibility.INTERNAL_CUSTOMER,
     )
-    contains_pii: Mapped[bool] = mapped_column(default=False)  # Flag if asset contains PII (faces, plates, etc.)
+    contains_pii: Mapped[bool] = mapped_column(
+        default=False
+    )  # Flag if asset contains PII (faces, plates, etc.)
     redaction_required: Mapped[bool] = mapped_column(
         default=False
     )  # Flag if asset needs redaction before external sharing
@@ -153,11 +166,17 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
         nullable=False,
         default=EvidenceRetentionPolicy.STANDARD,
     )
-    retention_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    retention_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Soft delete
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
 
     # Indexes for common queries
     __table_args__ = (

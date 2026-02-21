@@ -62,6 +62,9 @@ class InformationAsset(Base):
     __tablename__ = "information_assets"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Identification
     asset_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
@@ -74,9 +77,13 @@ class InformationAsset(Base):
     handling_requirements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Ownership
-    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    custodian_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    custodian_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     custodian_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
@@ -86,7 +93,9 @@ class InformationAsset(Base):
     logical_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Value & Criticality
-    criticality: Mapped[str] = mapped_column(String(50), default="medium")  # low, medium, high, critical
+    criticality: Mapped[str] = mapped_column(
+        String(50), default="medium"
+    )  # low, medium, high, critical
     business_value: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     replacement_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
@@ -96,7 +105,9 @@ class InformationAsset(Base):
     availability_requirement: Mapped[int] = mapped_column(Integer, default=2)  # 1-3
 
     # Lifecycle
-    acquisition_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    acquisition_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     disposal_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     disposal_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
@@ -109,12 +120,18 @@ class InformationAsset(Base):
     applied_controls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Review
-    last_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class ISO27001Control(Base):
@@ -125,49 +142,75 @@ class ISO27001Control(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Control identification
-    control_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)  # e.g., A.5.1
+    control_id: Mapped[str] = mapped_column(
+        String(20), unique=True, nullable=False
+    )  # e.g., A.5.1
     control_name: Mapped[str] = mapped_column(String(255), nullable=False)
     control_description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Classification
-    domain: Mapped[str] = mapped_column(String(50), nullable=False)  # organizational, people, physical, technological
+    domain: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # organizational, people, physical, technological
     category: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Control attributes (ISO 27001:2022)
-    control_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # preventive, detective, corrective
-    information_security_properties: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # C, I, A
+    control_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # preventive, detective, corrective
+    information_security_properties: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # C, I, A
     cybersecurity_concepts: Mapped[Optional[list]] = mapped_column(
         JSON, nullable=True
     )  # Identify, Protect, Detect, Respond, Recover
-    operational_capabilities: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    operational_capabilities: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
     security_domains: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Implementation
-    implementation_status: Mapped[str] = mapped_column(String(50), default="not_implemented")
+    implementation_status: Mapped[str] = mapped_column(
+        String(50), default="not_implemented"
+    )
     implementation_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    implementation_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    implementation_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Applicability
     is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
     exclusion_justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Effectiveness
-    effectiveness_rating: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    last_effectiveness_review: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    effectiveness_rating: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
+    last_effectiveness_review: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Ownership
-    control_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    control_owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    control_owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    control_owner_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
 
     # Evidence
     evidence_required: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     evidence_location: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Mapping to other standards
-    mapped_standards: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ISO 9001, NIST, etc.
+    mapped_standards: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # ISO 9001, NIST, etc.
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class StatementOfApplicability(Base):
@@ -202,7 +245,9 @@ class StatementOfApplicability(Base):
     document_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class SoAControlEntry(Base):
@@ -212,19 +257,27 @@ class SoAControlEntry(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    soa_id: Mapped[int] = mapped_column(ForeignKey("statement_of_applicability.id", ondelete="CASCADE"), nullable=False)
-    control_id: Mapped[int] = mapped_column(ForeignKey("iso27001_controls.id"), nullable=False)
+    soa_id: Mapped[int] = mapped_column(
+        ForeignKey("statement_of_applicability.id", ondelete="CASCADE"), nullable=False
+    )
+    control_id: Mapped[int] = mapped_column(
+        ForeignKey("iso27001_controls.id"), nullable=False
+    )
 
     # Applicability
     is_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
     justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Implementation
-    implementation_status: Mapped[str] = mapped_column(String(50), default="not_implemented")
+    implementation_status: Mapped[str] = mapped_column(
+        String(50), default="not_implemented"
+    )
     implementation_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Risk treatment
-    risk_treatment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    risk_treatment_reference: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -235,6 +288,9 @@ class InformationSecurityRisk(Base):
     __tablename__ = "information_security_risks"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Identification
     risk_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
@@ -248,7 +304,9 @@ class InformationSecurityRisk(Base):
 
     # Affected assets
     affected_assets: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    asset_classification: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    asset_classification: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
 
     # CIA Impact
     confidentiality_impact: Mapped[int] = mapped_column(Integer, default=2)  # 1-3
@@ -264,24 +322,36 @@ class InformationSecurityRisk(Base):
     residual_risk_score: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Treatment
-    treatment_option: Mapped[str] = mapped_column(String(50), default="mitigate")  # accept, avoid, mitigate, transfer
+    treatment_option: Mapped[str] = mapped_column(
+        String(50), default="mitigate"
+    )  # accept, avoid, mitigate, transfer
     treatment_plan: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     treatment_status: Mapped[str] = mapped_column(String(50), default="planned")
 
     # Controls
-    applicable_controls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of ISO 27001 control IDs
+    applicable_controls: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # List of ISO 27001 control IDs
 
     # Ownership
-    risk_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    risk_owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     risk_owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Review
-    last_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     status: Mapped[str] = mapped_column(String(50), default="open")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class SecurityIncident(Base):
@@ -290,6 +360,9 @@ class SecurityIncident(Base):
     __tablename__ = "security_incidents"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Identification
     incident_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
@@ -299,7 +372,9 @@ class SecurityIncident(Base):
     # Classification
     incident_type: Mapped[str] = mapped_column(String(100), nullable=False)
     # Types: malware, phishing, unauthorized_access, data_breach, dos, insider_threat, physical, other
-    severity: Mapped[str] = mapped_column(String(50), default="medium")  # low, medium, high, critical
+    severity: Mapped[str] = mapped_column(
+        String(50), default="medium"
+    )  # low, medium, high, critical
     priority: Mapped[str] = mapped_column(String(50), default="medium")
 
     # Impact
@@ -319,17 +394,23 @@ class SecurityIncident(Base):
     resolved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Reporter
-    reported_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reported_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     reported_by_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Handler
-    assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     assigned_to_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Investigation
     root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     attack_vector: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    indicators_of_compromise: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    indicators_of_compromise: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Response
     containment_actions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -338,8 +419,12 @@ class SecurityIncident(Base):
     lessons_learned: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Regulatory
-    regulatory_notification_required: Mapped[bool] = mapped_column(Boolean, default=False)
-    regulatory_notification_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    regulatory_notification_required: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )
+    regulatory_notification_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     regulatory_body: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Status
@@ -347,7 +432,9 @@ class SecurityIncident(Base):
     # open, investigating, contained, eradicating, recovering, closed
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class AccessControlRecord(Base):
@@ -366,11 +453,17 @@ class AccessControlRecord(Base):
 
     # System/Asset
     system_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("information_assets.id"), nullable=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("information_assets.id"), nullable=True
+    )
 
     # Access details
-    access_level: Mapped[str] = mapped_column(String(50), nullable=False)  # read, write, admin, owner
-    access_type: Mapped[str] = mapped_column(String(50), default="role_based")  # role_based, discretionary, mandatory
+    access_level: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # read, write, admin, owner
+    access_type: Mapped[str] = mapped_column(
+        String(50), default="role_based"
+    )  # role_based, discretionary, mandatory
     access_method: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )  # password, mfa, certificate, biometric
@@ -384,8 +477,12 @@ class AccessControlRecord(Base):
     revocation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Review
-    last_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Status
@@ -393,7 +490,9 @@ class AccessControlRecord(Base):
     status: Mapped[str] = mapped_column(String(50), default="active")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class BusinessContinuityPlan(Base):
@@ -414,9 +513,15 @@ class BusinessContinuityPlan(Base):
     covered_processes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # RTO/RPO
-    rto_hours: Mapped[int] = mapped_column(Integer, nullable=False)  # Recovery Time Objective
-    rpo_hours: Mapped[int] = mapped_column(Integer, nullable=False)  # Recovery Point Objective
-    mtpd_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Maximum Tolerable Period of Disruption
+    rto_hours: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # Recovery Time Objective
+    rpo_hours: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # Recovery Point Objective
+    mtpd_hours: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Maximum Tolerable Period of Disruption
 
     # Procedures
     activation_criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -425,7 +530,9 @@ class BusinessContinuityPlan(Base):
     resumption_procedures: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Team
-    plan_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    plan_owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     plan_owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     team_members: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     escalation_contacts: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -444,11 +551,15 @@ class BusinessContinuityPlan(Base):
     effective_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     approved_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     approved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class SupplierSecurityAssessment(Base):
@@ -457,6 +568,9 @@ class SupplierSecurityAssessment(Base):
     __tablename__ = "supplier_security_assessments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Supplier
     supplier_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -464,18 +578,24 @@ class SupplierSecurityAssessment(Base):
         String(100), nullable=False
     )  # cloud, software, hardware, service, consultant
     services_provided: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    data_access_level: Mapped[str] = mapped_column(String(50), default="none")  # none, limited, full
+    data_access_level: Mapped[str] = mapped_column(
+        String(50), default="none"
+    )  # none, limited, full
 
     # Assessment
     assessment_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    assessment_type: Mapped[str] = mapped_column(String(100), nullable=False)  # initial, periodic, ad-hoc
+    assessment_type: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # initial, periodic, ad-hoc
     assessor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Results
     overall_rating: Mapped[str] = mapped_column(
         String(50), nullable=False
     )  # compliant, partially_compliant, non_compliant
-    security_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-100
+    security_score: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # 0-100
 
     # Certifications
     iso27001_certified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -493,11 +613,15 @@ class SupplierSecurityAssessment(Base):
     risk_accepted_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Next review
-    next_assessment_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_assessment_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     assessment_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
 
     # Status
     status: Mapped[str] = mapped_column(String(50), default="active")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

@@ -27,6 +27,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { riskRegisterApi } from '../api/client'
 import { ToastContainer, useToast } from '../components/ui/Toast'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 
 interface Risk {
   id: number
@@ -426,9 +427,7 @@ export default function RiskRegister() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
+      <div className="p-6"><TableSkeleton rows={5} columns={4} /></div>
     )
   }
 

@@ -60,7 +60,9 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     # Template identification
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    slug: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True, index=True
+    )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     form_type: Mapped[str] = mapped_column(String(50), default="custom")
 
@@ -68,7 +70,9 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
-    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Appearance
     icon: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -83,10 +87,17 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     # Notification settings
     notify_on_submit: Mapped[bool] = mapped_column(Boolean, default=True)
-    notification_emails: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated
+    notification_emails: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Comma-separated
 
     # Workflow settings
     workflow_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Relationships
     steps: Mapped[List["FormStep"]] = relationship(
@@ -97,7 +108,9 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<FormTemplate(id={self.id}, name='{self.name}', type='{self.form_type}')>"
+        return (
+            f"<FormTemplate(id={self.id}, name='{self.name}', type='{self.form_type}')>"
+        )
 
 
 class FormStep(Base, TimestampMixin):
@@ -106,7 +119,9 @@ class FormStep(Base, TimestampMixin):
     __tablename__ = "form_steps"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    template_id: Mapped[int] = mapped_column(ForeignKey("form_templates.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("form_templates.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Step identification
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -117,10 +132,14 @@ class FormStep(Base, TimestampMixin):
     icon: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Conditional logic
-    show_condition: Mapped[Optional[str]] = mapped_column(JSON, nullable=True)  # JSON condition
+    show_condition: Mapped[Optional[str]] = mapped_column(
+        JSON, nullable=True
+    )  # JSON condition
 
     # Relationships
-    template: Mapped["FormTemplate"] = relationship("FormTemplate", back_populates="steps")
+    template: Mapped["FormTemplate"] = relationship(
+        "FormTemplate", back_populates="steps"
+    )
     fields: Mapped[List["FormField"]] = relationship(
         "FormField",
         back_populates="step",
@@ -138,7 +157,9 @@ class FormField(Base, TimestampMixin):
     __tablename__ = "form_fields"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    step_id: Mapped[int] = mapped_column(ForeignKey("form_steps.id", ondelete="CASCADE"), nullable=False)
+    step_id: Mapped[int] = mapped_column(
+        ForeignKey("form_steps.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Field identification
     name: Mapped[str] = mapped_column(String(100), nullable=False)  # Internal key
@@ -156,16 +177,22 @@ class FormField(Base, TimestampMixin):
     max_length: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     min_value: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_value: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    pattern: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # Regex pattern
+    pattern: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )  # Regex pattern
 
     # Default value
     default_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Options (for select, radio, checkbox)
-    options: Mapped[Optional[str]] = mapped_column(JSON, nullable=True)  # JSON array of options
+    options: Mapped[Optional[str]] = mapped_column(
+        JSON, nullable=True
+    )  # JSON array of options
 
     # Conditional logic
-    show_condition: Mapped[Optional[str]] = mapped_column(JSON, nullable=True)  # JSON condition
+    show_condition: Mapped[Optional[str]] = mapped_column(
+        JSON, nullable=True
+    )  # JSON condition
 
     # Appearance
     width: Mapped[str] = mapped_column(String(20), default="full")  # full, half, third
@@ -174,7 +201,9 @@ class FormField(Base, TimestampMixin):
     step: Mapped["FormStep"] = relationship("FormStep", back_populates="fields")
 
     def __repr__(self) -> str:
-        return f"<FormField(id={self.id}, name='{self.name}', type='{self.field_type}')>"
+        return (
+            f"<FormField(id={self.id}, name='{self.name}', type='{self.field_type}')>"
+        )
 
 
 class Contract(Base, TimestampMixin, AuditTrailMixin):
@@ -196,11 +225,20 @@ class Contract(Base, TimestampMixin, AuditTrailMixin):
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    end_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Display order
     display_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     def __repr__(self) -> str:
         return f"<Contract(id={self.id}, name='{self.name}', code='{self.code}')>"
@@ -214,17 +252,30 @@ class SystemSetting(Base, TimestampMixin, AuditTrailMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Setting identification
-    key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    key: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True, index=True
+    )
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Metadata
     category: Mapped[str] = mapped_column(String(50), default="general")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    value_type: Mapped[str] = mapped_column(String(20), default="string")  # string, number, boolean, json
+    value_type: Mapped[str] = mapped_column(
+        String(20), default="string"
+    )  # string, number, boolean, json
 
     # Access control
-    is_public: Mapped[bool] = mapped_column(Boolean, default=False)  # Visible to non-admins
-    is_editable: Mapped[bool] = mapped_column(Boolean, default=True)  # Can be edited via UI
+    is_public: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # Visible to non-admins
+    is_editable: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )  # Can be edited via UI
+
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     def __repr__(self) -> str:
         return f"<SystemSetting(key='{self.key}', category='{self.category}')>"
@@ -238,7 +289,9 @@ class LookupOption(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Option identification
-    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # e.g., 'roles', 'departments'
+    category: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True
+    )  # e.g., 'roles', 'departments'
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -247,8 +300,15 @@ class LookupOption(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
+
     # Parent for hierarchical options
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("lookup_options.id"), nullable=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("lookup_options.id"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"<LookupOption(category='{self.category}', code='{self.code}')>"

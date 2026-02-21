@@ -67,7 +67,9 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     archived_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None, index=True
     )
-    archived_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    archived_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Scoring configuration
     scoring_method: Mapped[str] = mapped_column(String(50), default="percentage")
@@ -86,10 +88,14 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     standard_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Ownership
-    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     @property
     def is_archived(self) -> bool:
@@ -127,7 +133,9 @@ class AuditSection(Base, TimestampMixin):
     __tablename__ = "audit_sections"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Section details
     title: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -141,7 +149,9 @@ class AuditSection(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
-    template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="sections")
+    template: Mapped["AuditTemplate"] = relationship(
+        "AuditTemplate", back_populates="sections"
+    )
     questions: Mapped[List["AuditQuestion"]] = relationship(
         "AuditQuestion",
         back_populates="section",
@@ -158,7 +168,9 @@ class AuditQuestion(Base, TimestampMixin):
     __tablename__ = "audit_questions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False
+    )
     section_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("audit_sections.id", ondelete="SET NULL"), nullable=True
     )
@@ -191,7 +203,9 @@ class AuditQuestion(Base, TimestampMixin):
     max_length: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Evidence requirements (JSON object)
-    evidence_requirements_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    evidence_requirements_json: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Conditional logic (JSON array of rules)
     conditional_logic_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -208,8 +222,12 @@ class AuditQuestion(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     # Relationships
-    template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="questions")
-    section: Mapped[Optional["AuditSection"]] = relationship("AuditSection", back_populates="questions")
+    template: Mapped["AuditTemplate"] = relationship(
+        "AuditTemplate", back_populates="questions"
+    )
+    section: Mapped[Optional["AuditSection"]] = relationship(
+        "AuditSection", back_populates="questions"
+    )
 
     @property
     def options(self) -> list | None:
@@ -241,7 +259,9 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "audit_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id"), nullable=False)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_templates.id"), nullable=False
+    )
     template_version: Mapped[int] = mapped_column(Integer, default=1)
 
     # Audit details
@@ -255,18 +275,34 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Status and dates
-    status: Mapped[AuditStatus] = mapped_column(SQLEnum(AuditStatus, native_enum=False), default=AuditStatus.SCHEDULED)
-    scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[AuditStatus] = mapped_column(
+        SQLEnum(AuditStatus, native_enum=False), default=AuditStatus.SCHEDULED
+    )
+    scheduled_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Assignment
-    assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Scoring
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -275,7 +311,9 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Relationships
-    template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="runs")
+    template: Mapped["AuditTemplate"] = relationship(
+        "AuditTemplate", back_populates="runs"
+    )
     responses: Mapped[List["AuditResponse"]] = relationship(
         "AuditResponse",
         back_populates="run",
@@ -297,15 +335,21 @@ class AuditResponse(Base, TimestampMixin):
     __tablename__ = "audit_responses"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_questions.id"), nullable=False
+    )
 
     # Response values (use appropriate field based on question type)
     response_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     response_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     response_number: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     response_bool: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    response_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    response_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     response_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # N/A handling
@@ -331,15 +375,21 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "audit_findings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_questions.id"), nullable=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    question_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("audit_questions.id"), nullable=True
+    )
 
     # Finding details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), default="medium")
     finding_type: Mapped[str] = mapped_column(String(50), default="nonconformity")
-    status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus, native_enum=False), default=FindingStatus.OPEN)
+    status: Mapped[FindingStatus] = mapped_column(
+        SQLEnum(FindingStatus, native_enum=False), default=FindingStatus.OPEN
+    )
 
     # Standard mapping (JSON arrays)
     clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -350,13 +400,19 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Corrective action
     corrective_action_required: Mapped[bool] = mapped_column(Boolean, default=True)
-    corrective_action_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    corrective_action_due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Ownership
-    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")

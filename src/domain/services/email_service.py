@@ -309,7 +309,9 @@ class EmailService:
             year=datetime.now().year,
         )
 
-        return await self.send_email(to=to, subject=f"[{severity.upper()}] Incident: {title}", html_content=html)
+        return await self.send_email(
+            to=to, subject=f"[{severity.upper()}] Incident: {title}", html_content=html
+        )
 
     async def send_action_reminder(
         self,
@@ -420,7 +422,9 @@ class EmailService:
             year=datetime.now().year,
         )
 
-        return await self.send_email(to=to, subject="📊 Weekly IMS Summary", html_content=html)
+        return await self.send_email(
+            to=to, subject="📊 Weekly IMS Summary", html_content=html
+        )
 
     async def send_password_reset_email(
         self,
