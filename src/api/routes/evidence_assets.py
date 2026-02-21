@@ -8,13 +8,12 @@ Provides endpoints for evidence asset management including:
 """
 
 import hashlib
-import math
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -26,6 +25,7 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUploadResponse,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.core.config import settings
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
@@ -96,21 +96,7 @@ async def validate_source_exists(
     module = __import__(module_path, fromlist=[class_name])
     model_class = getattr(module, class_name)
 
-    # Check if entity exists
-    query = select(model_class).where(model_class.id == source_id)
-    result = await db.execute(query)
-    entity = result.scalar_one_or_none()
-
-    if not entity:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error_code": "SOURCE_NOT_FOUND",
-                "message": f"Source {source_module} with ID {source_id} not found",
-                "details": {"source_module": source_module, "source_id": source_id},
-            },
-        )
-
+    await get_or_404(db, model_class, source_id, detail=f"Source {source_module} with ID {source_id} not found")
     return True
 
 
@@ -293,8 +279,7 @@ async def upload_evidence_asset(
 async def list_evidence_assets(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
     source_module: Optional[str] = Query(None, description="Filter by source module"),
     source_id: Optional[int] = Query(None, description="Filter by source ID"),
     asset_type: Optional[str] = Query(None, description="Filter by asset type"),
@@ -306,14 +291,11 @@ async def list_evidence_assets(
     Returns assets in deterministic order (created_at DESC, id ASC).
     Excludes soft-deleted assets by default.
     """
-    # Build query
     query = select(EvidenceAsset)
 
-    # Exclude deleted by default
     if not include_deleted:
         query = query.where(EvidenceAsset.deleted_at.is_(None))
 
-    # Apply filters
     if source_module:
         try:
             source_module_enum = EvidenceSourceModule(source_module)
@@ -348,30 +330,9 @@ async def list_evidence_assets(
     if linked_investigation_id is not None:
         query = query.where(EvidenceAsset.linked_investigation_id == linked_investigation_id)
 
-    # Deterministic ordering
     query = query.order_by(EvidenceAsset.created_at.desc(), EvidenceAsset.id.asc())
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query)
-
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    # Execute query
-    result = await db.execute(query)
-    assets = result.scalars().all()
-
-    total_pages = math.ceil(total / page_size) if total and total > 0 else 1
-
-    return EvidenceAssetListResponse(
-        items=[EvidenceAssetResponse.model_validate(asset) for asset in assets],
-        total=total or 0,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+    return await paginate(db, query, params)
 
 
 @router.get("/{asset_id}", response_model=EvidenceAssetResponse)
@@ -511,21 +472,9 @@ async def link_asset_to_investigation(
             },
         )
 
-    # Validate investigation exists
     from src.domain.models.investigation import InvestigationRun
 
-    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    inv_result = await db.execute(inv_query)
-    investigation = inv_result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-            },
-        )
+    await get_or_404(db, InvestigationRun, investigation_id)
 
     # Link asset to investigation
     asset.linked_investigation_id = investigation_id

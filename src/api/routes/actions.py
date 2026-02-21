@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.entity import get_or_404
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
@@ -218,36 +219,14 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
 
     # Validate that the source entity exists
     if src_type == "incident":
-        result = await db.execute(select(Incident).where(Incident.id == src_id))
-        if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Incident with id {src_id} not found",
-            )
+        await get_or_404(db, Incident, src_id)
     elif src_type == "rta":
-        result = await db.execute(select(RoadTrafficCollision).where(RoadTrafficCollision.id == src_id))
-        if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"RTA with id {src_id} not found",
-            )
+        await get_or_404(db, RoadTrafficCollision, src_id)
     elif src_type == "complaint":
-        result = await db.execute(select(Complaint).where(Complaint.id == src_id))
-        if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Complaint with id {src_id} not found",
-            )
+        await get_or_404(db, Complaint, src_id)
     elif src_type == "investigation":
         logger.info(f"Validating investigation exists: id={src_id}")
-        result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == src_id))
-        investigation = result.scalar_one_or_none()
-        if not investigation:
-            logger.warning(f"Investigation not found: id={src_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Investigation with id {src_id} not found",
-            )
+        investigation = await get_or_404(db, InvestigationRun, src_id)
         logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
     else:
         raise HTTPException(
@@ -422,25 +401,17 @@ async def get_action(
     src_type = source_type.lower()
 
     if src_type == "incident":
-        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
-        incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
-        if incident_action:
-            return _action_to_response(incident_action, "incident", incident_action.incident_id)
+        action = await get_or_404(db, IncidentAction, action_id)
+        return _action_to_response(action, "incident", action.incident_id)
     elif src_type == "rta":
-        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
-        rta_action = cast(Optional[RTAAction], result.scalar_one_or_none())
-        if rta_action:
-            return _action_to_response(rta_action, "rta", rta_action.rta_id)
+        action = await get_or_404(db, RTAAction, action_id)
+        return _action_to_response(action, "rta", action.rta_id)
     elif src_type == "complaint":
-        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
-        complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
-        if complaint_action:
-            return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id)
+        action = await get_or_404(db, ComplaintAction, action_id)
+        return _action_to_response(action, "complaint", action.complaint_id)
     elif src_type == "investigation":
-        result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
-        investigation_action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
-        if investigation_action:
-            return _action_to_response(investigation_action, "investigation", investigation_action.investigation_id)
+        action = await get_or_404(db, InvestigationAction, action_id)
+        return _action_to_response(action, "investigation", action.investigation_id)
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -489,31 +460,22 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         )
 
     # Find the action by type
-    action: Optional[Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]] = None
-    source_id: int = 0
+    action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]
+    source_id: int
 
     if src_type == "incident":
-        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
-        action = cast(Optional[IncidentAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.incident_id
+        action = await get_or_404(db, IncidentAction, action_id)
+        source_id = action.incident_id
     elif src_type == "rta":
-        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
-        action = cast(Optional[RTAAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.rta_id
+        action = await get_or_404(db, RTAAction, action_id)
+        source_id = action.rta_id
     elif src_type == "complaint":
-        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
-        action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.complaint_id
+        action = await get_or_404(db, ComplaintAction, action_id)
+        source_id = action.complaint_id
     elif src_type == "investigation":
-        result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
-        action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.investigation_id
-
-    if not action:
+        action = await get_or_404(db, InvestigationAction, action_id)
+        source_id = action.investigation_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Action not found",

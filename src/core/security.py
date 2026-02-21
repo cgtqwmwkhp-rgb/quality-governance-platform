@@ -106,6 +106,7 @@ def create_password_reset_token(user_id: int, expires_hours: int = 1) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "password_reset",
+        "jti": str(uuid.uuid4()),
     }
 
     encoded_jwt = jwt.encode(

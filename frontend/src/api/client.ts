@@ -2486,4 +2486,167 @@ export async function checkPackCapability(investigationId: number): Promise<Pack
   }
 }
 
+// ============ Admin Config Types (migrated from services/api.ts) ============
+
+export interface FormFieldOption {
+  value: string
+  label: string
+  sublabel?: string
+}
+
+export interface FormField {
+  id: number
+  name: string
+  label: string
+  field_type: string
+  order: number
+  placeholder?: string
+  help_text?: string
+  is_required: boolean
+  min_length?: number
+  max_length?: number
+  min_value?: number
+  max_value?: number
+  pattern?: string
+  default_value?: string
+  options?: FormFieldOption[]
+  show_condition?: Record<string, unknown>
+  width: string
+}
+
+export interface FormStep {
+  id: number
+  name: string
+  description?: string
+  order: number
+  icon?: string
+  fields: FormField[]
+  show_condition?: Record<string, unknown>
+}
+
+export interface FormTemplate {
+  id: number
+  name: string
+  slug: string
+  description?: string
+  form_type: string
+  version: number
+  is_active: boolean
+  is_published: boolean
+  icon?: string
+  color?: string
+  allow_drafts: boolean
+  allow_attachments: boolean
+  require_signature: boolean
+  auto_assign_reference: boolean
+  reference_prefix?: string
+  notify_on_submit: boolean
+  steps: FormStep[]
+  steps_count?: number
+  fields_count?: number
+  updated_at?: string
+}
+
+export interface Contract {
+  id: number
+  name: string
+  code: string
+  description?: string
+  client_name?: string
+  is_active: boolean
+  display_order: number
+}
+
+export interface LookupOption {
+  id: number
+  category: string
+  code: string
+  label: string
+  description?: string
+  is_active: boolean
+  display_order: number
+}
+
+export interface SystemSetting {
+  key: string
+  value: string
+  category: string
+  description?: string
+  value_type: string
+  is_editable?: boolean
+}
+
+// ============ Admin Config API (migrated from services/api.ts) ============
+// These return data directly (not AxiosResponse) for compatibility with existing consumers.
+
+export const formTemplatesApi = {
+  list: (formType?: string) =>
+    api.get<{ items: FormTemplate[]; total: number }>(
+      `/admin/config/templates${formType ? `?form_type=${formType}` : ''}`
+    ).then(r => r.data),
+
+  getById: (id: number) =>
+    api.get<FormTemplate>(`/admin/config/templates/${id}`).then(r => r.data),
+
+  getBySlug: (slug: string) =>
+    api.get<FormTemplate>(`/admin/config/templates/by-slug/${slug}`).then(r => r.data),
+
+  create: (data: Partial<FormTemplate>) =>
+    api.post<FormTemplate>('/admin/config/templates', data).then(r => r.data),
+
+  update: (id: number, data: Partial<FormTemplate>) =>
+    api.patch<FormTemplate>(`/admin/config/templates/${id}`, data).then(r => r.data),
+
+  publish: (id: number) =>
+    api.post<FormTemplate>(`/admin/config/templates/${id}/publish`).then(r => r.data),
+
+  delete: (id: number) =>
+    api.delete<void>(`/admin/config/templates/${id}`).then(r => r.data),
+}
+
+export const contractsApi = {
+  list: (activeOnly = true) =>
+    api.get<{ items: Contract[]; total: number }>(
+      `/admin/config/contracts${activeOnly ? '?is_active=true' : ''}`
+    ).then(r => r.data),
+
+  create: (data: Partial<Contract>) =>
+    api.post<Contract>('/admin/config/contracts', data).then(r => r.data),
+
+  update: (id: number, data: Partial<Contract>) =>
+    api.patch<Contract>(`/admin/config/contracts/${id}`, data).then(r => r.data),
+
+  delete: (id: number) =>
+    api.delete<void>(`/admin/config/contracts/${id}`).then(r => r.data),
+}
+
+export const lookupsApi = {
+  list: (category: string, activeOnly = true) =>
+    api.get<{ items: LookupOption[]; total: number }>(
+      `/admin/config/lookup/${category}${activeOnly ? '?is_active=true' : ''}`
+    ).then(r => r.data),
+
+  create: (category: string, data: Partial<LookupOption>) =>
+    api.post<LookupOption>(`/admin/config/lookup/${category}`, data).then(r => r.data),
+
+  update: (category: string, id: number, data: Partial<LookupOption>) =>
+    api.patch<LookupOption>(`/admin/config/lookup/${category}/${id}`, data).then(r => r.data),
+
+  delete: (category: string, id: number) =>
+    api.delete<void>(`/admin/config/lookup/${category}/${id}`).then(r => r.data),
+}
+
+export const settingsApi = {
+  list: (category?: string) =>
+    api.get<{ items: SystemSetting[]; total: number }>(
+      `/admin/config/settings${category ? `?category=${category}` : ''}`
+    ).then(r => r.data),
+
+  get: (key: string) =>
+    api.get<SystemSetting>(`/admin/config/settings/${key}`).then(r => r.data),
+
+  update: (key: string, value: string) =>
+    api.patch<SystemSetting>(`/admin/config/settings/${key}`, { value }).then(r => r.data),
+}
+
 export default api

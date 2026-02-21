@@ -8,9 +8,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import CurrentSuperuser, CurrentUser, get_current_user, get_db
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
     EscalationLevelListResponse,
@@ -30,6 +29,7 @@ from src.api.schemas.workflow import (
     WorkflowRuleUpdate,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.workflow_rules import (
     EntityType,
@@ -51,19 +51,16 @@ router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
 
 @router.get("/rules", response_model=WorkflowRuleListResponse)
 async def list_workflow_rules(
+    db: DbSession,
+    current_user: CurrentUser,
+    params: PaginationParams = Depends(),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     rule_type: Optional[str] = Query(None, description="Filter by rule type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """List workflow rules with optional filtering."""
-    query = select(WorkflowRule)
-    count_query = select(func.count(WorkflowRule.id))
+    query = select(WorkflowRule).where(WorkflowRule.tenant_id == current_user.tenant_id)
 
-    # Apply filters
     filters = []
     if entity_type:
         filters.append(WorkflowRule.entity_type == entity_type)
@@ -74,36 +71,22 @@ async def list_workflow_rules(
 
     if filters:
         query = query.where(and_(*filters))
-        count_query = count_query.where(and_(*filters))
 
-    # Get total count
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-
-    # Apply pagination and ordering
     query = query.order_by(WorkflowRule.priority, WorkflowRule.name)
-    query = query.offset((page - 1) * page_size).limit(page_size)
 
-    result = await db.execute(query)
-    rules = result.scalars().all()
-
-    return WorkflowRuleListResponse(
-        items=[WorkflowRuleResponse.from_orm(r) for r in rules],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/rules", response_model=WorkflowRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow_rule(
     rule_data: WorkflowRuleCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create a new workflow rule."""
     rule = WorkflowRule(
         **rule_data.dict(),
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.get("id"),
         created_by=current_user.get("email"),
     )
@@ -116,11 +99,11 @@ async def create_workflow_rule(
 @router.get("/rules/{rule_id}", response_model=WorkflowRuleResponse)
 async def get_workflow_rule(
     rule_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get a specific workflow rule."""
-    rule = await get_or_404(db, WorkflowRule, rule_id)
+    rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     return WorkflowRuleResponse.from_orm(rule)
 
 
@@ -128,11 +111,11 @@ async def get_workflow_rule(
 async def update_workflow_rule(
     rule_id: int,
     rule_data: WorkflowRuleUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Update a workflow rule."""
-    rule = await get_or_404(db, WorkflowRule, rule_id)
+    rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     apply_updates(rule, rule_data)
     rule.updated_by = current_user.get("email")
 
@@ -145,10 +128,10 @@ async def update_workflow_rule(
 async def delete_workflow_rule(
     rule_id: int,
     current_user: CurrentSuperuser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete a workflow rule (superuser only)."""
-    rule = await get_or_404(db, WorkflowRule, rule_id)
+    rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     await db.delete(rule)
     await db.commit()
 
@@ -156,11 +139,13 @@ async def delete_workflow_rule(
 @router.get("/rules/{rule_id}/executions", response_model=RuleExecutionListResponse)
 async def get_rule_executions(
     rule_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """Get execution history for a workflow rule."""
+    await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
+
     result = await db.execute(
         select(RuleExecution)
         .where(RuleExecution.rule_id == rule_id)
@@ -185,13 +170,13 @@ async def get_rule_executions(
 
 @router.get("/sla-configs", response_model=SLAConfigurationListResponse)
 async def list_sla_configurations(
+    db: DbSession,
+    current_user: CurrentUser,
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """List SLA configurations."""
-    query = select(SLAConfiguration)
+    query = select(SLAConfiguration).where(SLAConfiguration.tenant_id == current_user.tenant_id)
 
     filters = []
     if entity_type:
@@ -216,12 +201,13 @@ async def list_sla_configurations(
 @router.post("/sla-configs", response_model=SLAConfigurationResponse, status_code=status.HTTP_201_CREATED)
 async def create_sla_configuration(
     config_data: SLAConfigurationCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create a new SLA configuration."""
     config = SLAConfiguration(
         **config_data.dict(),
+        tenant_id=current_user.tenant_id,
         created_by=current_user.get("email"),
     )
     db.add(config)
@@ -233,11 +219,11 @@ async def create_sla_configuration(
 @router.get("/sla-configs/{config_id}", response_model=SLAConfigurationResponse)
 async def get_sla_configuration(
     config_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get a specific SLA configuration."""
-    config = await get_or_404(db, SLAConfiguration, config_id)
+    config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     return SLAConfigurationResponse.from_orm(config)
 
 
@@ -245,11 +231,11 @@ async def get_sla_configuration(
 async def update_sla_configuration(
     config_id: int,
     config_data: SLAConfigurationUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Update an SLA configuration."""
-    config = await get_or_404(db, SLAConfiguration, config_id)
+    config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     apply_updates(config, config_data)
     config.updated_by = current_user.get("email")
 
@@ -262,10 +248,10 @@ async def update_sla_configuration(
 async def delete_sla_configuration(
     config_id: int,
     current_user: CurrentSuperuser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete an SLA configuration (superuser only)."""
-    config = await get_or_404(db, SLAConfiguration, config_id)
+    config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     await db.delete(config)
     await db.commit()
 
@@ -279,8 +265,8 @@ async def delete_sla_configuration(
 async def get_sla_status(
     entity_type: str,
     entity_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get current SLA status for an entity."""
     from datetime import datetime
@@ -289,6 +275,7 @@ async def get_sla_status(
         select(SLATracking)
         .where(
             and_(
+                SLATracking.tenant_id == current_user.tenant_id,
                 SLATracking.entity_type == entity_type,
                 SLATracking.entity_id == entity_id,
             )
@@ -299,17 +286,17 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found for this entity")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA tracking not found for this entity")
 
     now = datetime.utcnow()
 
-    # Calculate status
+    # Calculate SLA status
     if tracking.resolved_at:
-        status = "resolved"
+        sla_status = "resolved"
         percent_elapsed = 100.0
         time_remaining = None
     elif tracking.is_breached:
-        status = "breached"
+        sla_status = "breached"
         percent_elapsed = 100.0
         time_remaining = None
     else:
@@ -319,14 +306,14 @@ async def get_sla_status(
         time_remaining = max((tracking.resolution_due - now).total_seconds() / 3600, 0)
 
         if tracking.warning_sent or percent_elapsed >= 75:
-            status = "warning"
+            sla_status = "warning"
         else:
-            status = "on_track"
+            sla_status = "on_track"
 
     return SLAStatusSummary(
         entity_type=tracking.entity_type,
         entity_id=tracking.entity_id,
-        status=status,
+        status=sla_status,
         percent_elapsed=round(percent_elapsed, 1),
         time_remaining_hours=round(time_remaining, 2) if time_remaining else None,
         resolution_due=tracking.resolution_due,
@@ -338,15 +325,15 @@ async def get_sla_status(
 async def pause_sla_tracking(
     entity_type: str,
     entity_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Pause SLA tracking for an entity (e.g., waiting for customer response)."""
     sla_service = SLAService(db)
     tracking = await sla_service.pause_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA tracking not found")
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -355,15 +342,15 @@ async def pause_sla_tracking(
 async def resume_sla_tracking(
     entity_type: str,
     entity_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Resume paused SLA tracking."""
     sla_service = SLAService(db)
     tracking = await sla_service.resume_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA tracking not found")
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -375,13 +362,13 @@ async def resume_sla_tracking(
 
 @router.get("/escalation-levels", response_model=EscalationLevelListResponse)
 async def list_escalation_levels(
+    db: DbSession,
+    current_user: CurrentUser,
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """List escalation levels."""
-    query = select(EscalationLevel)
+    query = select(EscalationLevel).where(EscalationLevel.tenant_id == current_user.tenant_id)
 
     filters = []
     if entity_type:
@@ -406,11 +393,11 @@ async def list_escalation_levels(
 @router.post("/escalation-levels", response_model=EscalationLevelResponse, status_code=status.HTTP_201_CREATED)
 async def create_escalation_level(
     level_data: EscalationLevelCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create a new escalation level."""
-    level = EscalationLevel(**level_data.dict())
+    level = EscalationLevel(**level_data.dict(), tenant_id=current_user.tenant_id)
     db.add(level)
     await db.commit()
     await db.refresh(level)
@@ -420,11 +407,11 @@ async def create_escalation_level(
 @router.get("/escalation-levels/{level_id}", response_model=EscalationLevelResponse)
 async def get_escalation_level(
     level_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get a specific escalation level."""
-    level = await get_or_404(db, EscalationLevel, level_id)
+    level = await get_or_404(db, EscalationLevel, level_id, tenant_id=current_user.tenant_id)
     return EscalationLevelResponse.from_orm(level)
 
 
@@ -432,11 +419,11 @@ async def get_escalation_level(
 async def update_escalation_level(
     level_id: int,
     level_data: EscalationLevelUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Update an escalation level."""
-    level = await get_or_404(db, EscalationLevel, level_id)
+    level = await get_or_404(db, EscalationLevel, level_id, tenant_id=current_user.tenant_id)
     apply_updates(level, level_data)
     await db.commit()
     await db.refresh(level)
@@ -447,10 +434,10 @@ async def update_escalation_level(
 async def delete_escalation_level(
     level_id: int,
     current_user: CurrentSuperuser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete an escalation level (superuser only)."""
-    level = await get_or_404(db, EscalationLevel, level_id)
+    level = await get_or_404(db, EscalationLevel, level_id, tenant_id=current_user.tenant_id)
     await db.delete(level)
     await db.commit()
 
@@ -462,8 +449,8 @@ async def delete_escalation_level(
 
 @router.post("/trigger-check")
 async def trigger_sla_check(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Manually trigger SLA checks (normally run by scheduler)."""
     engine = RuleEvaluator(db)

@@ -33,6 +33,11 @@ celery_app.conf.update(
         "reports": {"exchange": "reports", "routing_key": "reports"},
         "cleanup": {"exchange": "cleanup", "routing_key": "cleanup"},
     },
+    task_autoretry_for=(ConnectionError, TimeoutError, IOError),
+    task_retry_backoff=True,
+    task_retry_backoff_max=600,
+    task_max_retries=3,
+    task_retry_jitter=True,
 )
 
 celery_app.conf.beat_schedule = {
@@ -59,3 +64,5 @@ celery_app.autodiscover_tasks(
         "src.infrastructure.tasks",
     ]
 )
+
+import src.infrastructure.tasks.dlq  # noqa: F401, E402

@@ -80,7 +80,7 @@ class InvestigationTemplateListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    total_pages: int
+    pages: int
 
 
 # Investigation Run Schemas
@@ -171,7 +171,7 @@ class InvestigationRunListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    total_pages: int
+    pages: int
 
 
 # === Stage 2.1: From-Record Schemas ===
@@ -216,7 +216,7 @@ class SourceRecordsResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    total_pages: int
+    pages: int
     source_type: str
 
 

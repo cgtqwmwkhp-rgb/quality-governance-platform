@@ -148,7 +148,7 @@ class RTAListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    total_pages: int
+    pages: int
 
 
 class RTAActionBase(BaseModel):
@@ -227,4 +227,4 @@ class RTAActionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    total_pages: int
+    pages: int

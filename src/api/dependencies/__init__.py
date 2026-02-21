@@ -118,7 +118,10 @@ async def get_optional_current_user(
     payload = decode_token(token)
 
     if payload is None:
-        # Invalid token - return None instead of raising error
+        return None
+
+    jti = payload.get("jti")
+    if jti and await is_token_revoked(jti, db):
         return None
 
     user_id_raw = payload.get("sub")

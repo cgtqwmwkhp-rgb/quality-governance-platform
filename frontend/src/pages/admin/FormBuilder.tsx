@@ -21,7 +21,7 @@ import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { cn } from '../../helpers/utils';
 import { useToast, ToastContainer } from '../../components/ui/Toast';
-import { formTemplatesApi } from '../../services/api';
+import { formTemplatesApi } from '../../api/client';
 
 // Field type definitions
 const FIELD_TYPES = [

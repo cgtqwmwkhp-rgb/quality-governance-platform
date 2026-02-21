@@ -256,5 +256,5 @@ async def list_complaint_investigations(
         "total": paginated.total,
         "page": paginated.page,
         "page_size": paginated.page_size,
-        "total_pages": paginated.pages,
+        "pages": paginated.pages,
     }

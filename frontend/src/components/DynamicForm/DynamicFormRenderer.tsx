@@ -33,7 +33,7 @@ import { Textarea } from '../ui/Textarea';
 import { cn } from '../../helpers/utils';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
 import { useGeolocation } from '../../hooks/useGeolocation';
-import type { FormTemplate, FormField } from '../../services/api';
+import type { FormTemplate, FormField } from '../../api/client';
 import FuzzySearchDropdown from '../FuzzySearchDropdown';
 import BodyInjurySelector, { InjurySelection } from '../BodyInjurySelector';
 

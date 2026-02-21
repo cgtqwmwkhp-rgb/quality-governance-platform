@@ -372,7 +372,7 @@ async def unsubscribe_from_push(
     success = await service.unsubscribe(endpoint)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Subscription not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
 
     return {"success": True, "message": "Unsubscribed from push notifications"}
 

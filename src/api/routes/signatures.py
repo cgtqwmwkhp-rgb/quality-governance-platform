@@ -7,7 +7,7 @@ DocuSign-level e-signature capabilities.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -223,7 +223,7 @@ async def get_signature_request(
     request = await service.get_request(request_id)
 
     if not request:
-        raise HTTPException(status_code=404, detail="Request not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
 
     return _format_request(request)
 
@@ -242,7 +242,7 @@ async def send_signature_request(
         request = await service.send_request(request_id)
         return {"status": "sent", "reference": request.reference_number}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/requests/{request_id}/void")
@@ -261,7 +261,7 @@ async def void_signature_request(
         request = await service.void_request(request_id, current_user.id, reason)
         return {"status": "voided", "reference": request.reference_number}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/requests/{request_id}/audit-log", response_model=list[AuditLogResponse])
@@ -296,7 +296,7 @@ async def get_signing_page(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=404, detail="Invalid or expired signing link")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired signing link")
 
     sig_request = signer.request
 
@@ -341,7 +341,7 @@ async def sign_document(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=404, detail="Invalid or expired signing link")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired signing link")
 
     try:
         signature = await service.sign(
@@ -361,7 +361,7 @@ async def sign_document(
             "request_status": signer.request.status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/sign/{token}/decline")
@@ -378,7 +378,7 @@ async def decline_signing(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=404, detail="Invalid or expired signing link")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired signing link")
 
     try:
         signer = await service.decline(
@@ -393,7 +393,7 @@ async def decline_signing(
             "declined_at": signer.declined_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
@@ -476,7 +476,7 @@ async def use_template(
 
         return _format_request(request)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================

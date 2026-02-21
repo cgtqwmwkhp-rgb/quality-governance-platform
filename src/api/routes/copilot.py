@@ -7,7 +7,7 @@ Interactive conversational AI assistant for QHSE management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -132,7 +132,7 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     return session
 
@@ -198,7 +198,7 @@ async def send_message(
         )
         return message
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
@@ -243,7 +243,7 @@ async def submit_feedback(
         )
         return {"status": "submitted", "feedback_id": feedback.id}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ============================================================================
@@ -274,7 +274,7 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Action {data.action_name} not found")
 
     return {
         "status": "executed",
@@ -461,12 +461,20 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
         await websocket.close(code=4001, reason="Authentication required")
         return
     try:
-        from src.core.security import decode_token
+        from src.core.security import decode_token, is_token_revoked
 
         payload = decode_token(token)
         if not payload:
             await websocket.close(code=4001, reason="Invalid token")
             return
+
+        jti = payload.get("jti")
+        if jti:
+            async for db in get_db():
+                if await is_token_revoked(jti, db):
+                    await websocket.close(code=4001, reason="Token has been revoked")
+                    return
+
         ws_user_id = int(payload.get("sub", 0))
     except Exception:
         await websocket.close(code=4001, reason="Token validation failed")

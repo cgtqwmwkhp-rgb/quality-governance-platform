@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import and_, select
 
-from src.api.deps import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.kri import (
     KRIAlertListResponse,
     KRIAlertResponse,
@@ -49,7 +49,7 @@ async def list_kris(
     kri_status: Optional[str] = Query(None, alias="status", description="Filter by current status"),
 ):
     """List all KRIs with optional filtering."""
-    query = select(KeyRiskIndicator)
+    query = select(KeyRiskIndicator).where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
 
     filters = []
     if category:
@@ -80,12 +80,18 @@ async def create_kri(
     current_user: CurrentUser,
 ):
     """Create a new KRI."""
-    existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
+    existing = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+            KeyRiskIndicator.code == kri_data.code,
+        )
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="KRI code already exists")
 
     kri = KeyRiskIndicator(
         **kri_data.dict(),
+        tenant_id=current_user.tenant_id,
         created_by=current_user.email,
     )
     db.add(kri)
@@ -128,7 +134,7 @@ async def get_kri(
     current_user: CurrentUser,
 ):
     """Get a specific KRI."""
-    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found")
+    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
     return KRIResponse.from_orm(kri)
 
 
@@ -140,7 +146,7 @@ async def update_kri(
     current_user: CurrentUser,
 ):
     """Update a KRI."""
-    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found")
+    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
     apply_updates(kri, kri_data, set_updated_at=False)
     kri.updated_by = current_user.email
 
@@ -157,7 +163,7 @@ async def delete_kri(
     current_user: CurrentSuperuser,
 ):
     """Delete a KRI (superuser only)."""
-    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found")
+    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
     await db.delete(kri)
     await db.commit()
 
@@ -169,6 +175,7 @@ async def calculate_kri(
     current_user: CurrentUser,
 ):
     """Trigger calculation for a specific KRI."""
+    await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
     kri_service = KRIService(db)
     result = await kri_service.calculate_kri(kri_id)
 
@@ -191,6 +198,8 @@ async def get_kri_measurements(
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get measurement history for a KRI."""
+    await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
+
     result = await db.execute(
         select(KRIMeasurement)
         .where(KRIMeasurement.kri_id == kri_id)
@@ -220,6 +229,7 @@ async def get_pending_alerts(
         select(KRIAlert)
         .where(
             and_(
+                KRIAlert.tenant_id == current_user.tenant_id,
                 KRIAlert.is_acknowledged == False,
                 KRIAlert.is_resolved == False,
             )
@@ -242,7 +252,7 @@ async def acknowledge_alert(
     notes: Optional[str] = None,
 ):
     """Acknowledge a KRI alert."""
-    alert = await get_or_404(db, KRIAlert, alert_id, detail="Alert not found")
+    alert = await get_or_404(db, KRIAlert, alert_id, detail="Alert not found", tenant_id=current_user.tenant_id)
 
     alert.is_acknowledged = True
     alert.acknowledged_at = datetime.utcnow()
@@ -262,7 +272,7 @@ async def resolve_alert(
     notes: Optional[str] = None,
 ):
     """Resolve a KRI alert."""
-    alert = await get_or_404(db, KRIAlert, alert_id, detail="Alert not found")
+    alert = await get_or_404(db, KRIAlert, alert_id, detail="Alert not found", tenant_id=current_user.tenant_id)
 
     alert.is_resolved = True
     alert.resolved_at = datetime.utcnow()

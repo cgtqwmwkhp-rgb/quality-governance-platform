@@ -1,9 +1,8 @@
 """Investigation Template API routes."""
 
-import math
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -13,12 +12,15 @@ from src.api.schemas.investigation import (
     InvestigationTemplateResponse,
     InvestigationTemplateUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.investigation import InvestigationTemplate
 
 router = APIRouter()
 
 
-@router.post("/", response_model=InvestigationTemplateResponse, status_code=201)
+@router.post("/", response_model=InvestigationTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: InvestigationTemplateCreate,
     db: DbSession,
@@ -51,44 +53,28 @@ async def create_template(
 async def list_templates(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List investigation templates with pagination.
 
     Returns templates in deterministic order (by ID).
     """
-    # Build query
     query = select(InvestigationTemplate)
 
-    # Apply filters
     if is_active is not None:
         query = query.where(InvestigationTemplate.is_active == is_active)
 
-    # Deterministic ordering
     query = query.order_by(InvestigationTemplate.id)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query)
-
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    # Execute query
-    result = await db.execute(query)
-    templates = result.scalars().all()
-
-    total_pages = math.ceil(total / page_size) if total and total > 0 else 1
+    paginated = await paginate(db, query, params)
 
     return InvestigationTemplateListResponse(
-        items=[InvestigationTemplateResponse.model_validate(t) for t in templates],
-        total=total or 0,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
+        items=[InvestigationTemplateResponse.model_validate(t) for t in paginated.items],
+        total=paginated.total,
+        page=paginated.page,
+        page_size=paginated.page_size,
+        pages=paginated.pages,
     )
 
 
@@ -99,24 +85,7 @@ async def get_template(
     current_user: CurrentUser,
 ):
     """Get a specific investigation template by ID."""
-    request_id = "N/A"  # TODO: Get from request context
-
-    query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
-    result = await db.execute(query)
-    template = result.scalar_one_or_none()
-
-    if not template:
-        pass
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "TEMPLATE_NOT_FOUND",
-                "message": f"Investigation template with ID {template_id} not found",
-                "details": {"template_id": template_id},
-                "request_id": request_id,
-            },
-        )
-
+    template = await get_or_404(db, InvestigationTemplate, template_id)
     return template
 
 
@@ -131,29 +100,9 @@ async def update_template(
 
     Only provided fields will be updated (partial update).
     """
-    request_id = "N/A"  # TODO: Get from request context
+    template = await get_or_404(db, InvestigationTemplate, template_id)
 
-    # Get existing template
-    query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
-    result = await db.execute(query)
-    template = result.scalar_one_or_none()
-
-    if not template:
-        pass
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "TEMPLATE_NOT_FOUND",
-                "message": f"Investigation template with ID {template_id} not found",
-                "details": {"template_id": template_id},
-                "request_id": request_id,
-            },
-        )
-
-    # Update fields
-    update_data = template_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(template, field, value)
+    apply_updates(template, template_data)
 
     template.updated_by_id = current_user.id
 
@@ -163,7 +112,7 @@ async def update_template(
     return template
 
 
-@router.delete("/{template_id}", status_code=204)
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: int,
     db: DbSession,
@@ -173,24 +122,7 @@ async def delete_template(
 
     Only safe if no investigation runs reference this template.
     """
-    request_id = "N/A"  # TODO: Get from request context
-
-    # Get existing template
-    query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
-    result = await db.execute(query)
-    template = result.scalar_one_or_none()
-
-    if not template:
-        pass
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "TEMPLATE_NOT_FOUND",
-                "message": f"Investigation template with ID {template_id} not found",
-                "details": {"template_id": template_id},
-                "request_id": request_id,
-            },
-        )
+    template = await get_or_404(db, InvestigationTemplate, template_id)
 
     # Check if template has investigation runs
     from src.domain.models.investigation import InvestigationRun
@@ -199,14 +131,12 @@ async def delete_template(
     run_count = await db.scalar(count_query)
 
     if run_count and run_count > 0:
-        pass
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error_code": "TEMPLATE_IN_USE",
                 "message": f"Cannot delete template with {run_count} investigation run(s)",
                 "details": {"template_id": template_id, "run_count": run_count},
-                "request_id": request_id,
             },
         )
 

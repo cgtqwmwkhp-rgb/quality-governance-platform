@@ -589,7 +589,7 @@ async def update_action_status(
     action = result.scalar_one_or_none()
 
     if not action:
-        raise HTTPException(status_code=404, detail="Action not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action not found")
 
     apply_updates(action, status_data)
     await db.commit()

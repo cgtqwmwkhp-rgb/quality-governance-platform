@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -19,6 +19,7 @@ from src.api.schemas.rta import (
     RTAUpdate,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
@@ -40,6 +41,7 @@ async def create_rta(
     rta = RoadTrafficCollision(
         **rta_in.model_dump(),
         reference_number=ref_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -67,8 +69,7 @@ async def list_rtas(
     db: DbSession,
     current_user: CurrentUser,  # SECURITY FIX: Always require authentication
     request_id: str = Depends(get_request_id),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    params: PaginationParams = Depends(),
     severity: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
@@ -90,20 +91,17 @@ async def list_rtas(
         is_superuser = getattr(current_user, "is_superuser", False)
 
         if not has_view_all and not is_superuser:
-            # Non-admin users can only filter by their own email
             if user_email and reporter_email.lower() != user_email.lower():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You can only view your own RTAs",
                 )
 
-        # AUDIT: Log email filter usage for security monitoring
-        # Note: We log the filter type but NOT the raw email (privacy compliance)
         await record_audit_event(
             db=db,
             event_type="rta.list_filtered",
             entity_type="rta",
-            entity_id="*",  # Wildcard - listing operation
+            entity_id="*",
             action="list",
             description="RTA list accessed with email filter",
             payload={
@@ -117,9 +115,8 @@ async def list_rtas(
         )
 
     try:
-        query = select(RoadTrafficCollision)
+        query = select(RoadTrafficCollision).where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
 
-        # Apply filters
         if severity:
             query = query.where(RoadTrafficCollision.severity == severity)
         if status_filter:
@@ -127,28 +124,15 @@ async def list_rtas(
         if reporter_email:
             query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
 
-        # Deterministic ordering: created_at DESC, id ASC
         query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())
 
-        # Total count
-        count_query = select(func.count()).select_from(query.subquery())
-        count_result = await db.execute(count_query)
-        total = count_result.scalar() or 0
-
-        # Calculate total pages
-        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
-
-        # Pagination
-        query = query.offset((page - 1) * page_size).limit(page_size)
-        result = await db.execute(query)
-        items = result.scalars().all()
-
+        paginated = await paginate(db, query, params)
         return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
+            "items": paginated.items,
+            "total": paginated.total,
+            "page": paginated.page,
+            "page_size": paginated.page_size,
+            "pages": paginated.pages,
         }
     except Exception as e:
         error_str = str(e).lower()
@@ -176,7 +160,7 @@ async def get_rta(
     current_user: CurrentUser,
 ):
     """Get an RTA by ID."""
-    return await get_or_404(db, RoadTrafficCollision, rta_id)
+    return await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{rta_id}", response_model=RTAResponse)
@@ -188,7 +172,7 @@ async def update_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
-    rta = await get_or_404(db, RoadTrafficCollision, rta_id)
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
     update_data = apply_updates(rta, rta_in)
     rta.updated_by_id = current_user.id
 
@@ -217,7 +201,7 @@ async def delete_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    rta = await get_or_404(db, RoadTrafficCollision, rta_id)
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
     await record_audit_event(
         db=db,
@@ -246,7 +230,7 @@ async def create_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new action for an RTA."""
-    rta = await get_or_404(db, RoadTrafficCollision, rta_id)
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
     ref_number = await ReferenceNumberService.generate(db, "rta_action", RTAAction)
 
@@ -254,6 +238,7 @@ async def create_rta_action(
         **action_in.model_dump(),
         rta_id=rta_id,
         reference_number=ref_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -281,36 +266,22 @@ async def list_rta_actions(
     rta_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ):
     """List actions for an RTA with deterministic ordering and pagination."""
-    await get_or_404(db, RoadTrafficCollision, rta_id)
+    await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
-    query = select(RTAAction).where(RTAAction.rta_id == rta_id)
+    query = (
+        select(RTAAction).where(RTAAction.rta_id == rta_id).order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
+    )
 
-    # Deterministic ordering: created_at DESC, id ASC
-    query = query.order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
-
-    # Total count
-    count_query = select(func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
-
-    # Calculate total pages
-    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
-
-    # Pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
-
+    paginated = await paginate(db, query, params)
     return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": total_pages,
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
     }
 
 
@@ -324,8 +295,8 @@ async def update_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Update an RTA action."""
-    await get_or_404(db, RoadTrafficCollision, rta_id)
-    action = await get_or_404(db, RTAAction, action_id)
+    await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
+    action = await get_or_404(db, RTAAction, action_id, tenant_id=current_user.tenant_id)
     if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -361,8 +332,8 @@ async def delete_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA action."""
-    await get_or_404(db, RoadTrafficCollision, rta_id)
-    action = await get_or_404(db, RTAAction, action_id)
+    await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
+    action = await get_or_404(db, RTAAction, action_id, tenant_id=current_user.tenant_id)
     if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -389,8 +360,7 @@ async def list_rta_investigations(
     rta_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
+    params: PaginationParams = Depends(),
 ):
     """
     List investigations for a specific RTA (paginated).
@@ -399,29 +369,11 @@ async def list_rta_investigations(
     Returns investigations assigned to this RTA with pagination.
     Deterministic ordering: created_at DESC, id ASC.
     """
-    from math import ceil
-
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    await get_or_404(db, RoadTrafficCollision, rta_id)
+    await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
-    # Get total count
-    count_query = (
-        select(func.count())
-        .select_from(InvestigationRun)
-        .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
-            InvestigationRun.assigned_entity_id == rta_id,
-        )
-    )
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Calculate total pages
-    total_pages = ceil(total / page_size) if total > 0 else 1
-
-    # Get paginated results
     query = (
         select(InvestigationRun)
         .where(
@@ -429,16 +381,13 @@ async def list_rta_investigations(
             InvestigationRun.assigned_entity_id == rta_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
     )
-    result = await db.execute(query)
-    investigations = result.scalars().all()
 
+    paginated = await paginate(db, query, params)
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": total_pages,
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
     }

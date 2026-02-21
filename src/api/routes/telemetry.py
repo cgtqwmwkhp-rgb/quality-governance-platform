@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentUser
@@ -321,7 +321,7 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     Used by the evaluator to check current sample count and metrics.
     """
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=404, detail="Experiment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
 
     metrics = load_metrics_file()
     return metrics
@@ -333,10 +333,10 @@ async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     Reset metrics for an experiment (staging only, for testing).
     """
     if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=404, detail="Experiment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
 
     metrics_path = METRICS_DIR / "experiment_metrics_EXP_001.json"
     if metrics_path.exists():

@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -17,6 +17,7 @@ from src.api.schemas.user import (
     UserUpdate,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
@@ -58,17 +59,14 @@ async def search_users(
 async def list_users(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     search: Optional[str] = None,
     department: Optional[str] = None,
     is_active: Optional[bool] = None,
 ) -> UserListResponse:
     """List all users with pagination and filtering."""
-    # Build query
     query = select(User).options(selectinload(User.roles))
 
-    # Apply filters
     if search:
         search_filter = f"%{search}%"
         query = query.where(
@@ -81,24 +79,9 @@ async def list_users(
     if is_active is not None:
         query = query.where(User.is_active == is_active)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query)
-
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(User.last_name, User.first_name)
 
-    result = await db.execute(query)
-    users = result.scalars().all()
-
-    return UserListResponse(
-        items=[UserResponse.model_validate(u) for u in users],
-        total=total or 0,
-        page=page,
-        page_size=page_size,
-        pages=(total or 0 + page_size - 1) // page_size,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

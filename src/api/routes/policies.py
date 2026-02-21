@@ -9,6 +9,9 @@ from sqlalchemy import select
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
 
@@ -101,16 +104,7 @@ async def get_policy(
 
     Requires authentication.
     """
-    result = await db.execute(select(Policy).where(Policy.id == policy_id))
-    policy = result.scalar_one_or_none()
-
-    if not policy:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Policy with id {policy_id} not found",
-        )
-
-    return policy
+    return await get_or_404(db, Policy, policy_id)
 
 
 @router.get(
@@ -121,8 +115,7 @@ async def get_policy(
 async def list_policies(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+    params: PaginationParams = Depends(),
 ) -> PolicyListResponse:
     """
     List all policies with deterministic ordering.
@@ -133,29 +126,9 @@ async def list_policies(
 
     Requires authentication.
     """
-    # Count total
-    count_result = await db.execute(select(sa_func.count()).select_from(Policy))
-    total = count_result.scalar_one()
+    query = select(Policy).order_by(Policy.reference_number.desc(), Policy.id.asc())
 
-    # Get paginated results with deterministic ordering
-    offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Policy)
-        .order_by(Policy.reference_number.desc(), Policy.id.asc())  # Deterministic ordering
-        .limit(page_size)
-        .offset(offset)
-    )
-    policies = result.scalars().all()
-
-    import math
-
-    return PolicyListResponse(
-        items=[PolicyResponse.model_validate(p) for p in policies],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=math.ceil(total / page_size) if total > 0 else 1,
-    )
+    return await paginate(db, query, params)
 
 
 @router.put(
@@ -175,20 +148,9 @@ async def update_policy(
 
     Requires authentication.
     """
-    # Get existing policy
-    result = await db.execute(select(Policy).where(Policy.id == policy_id))
-    policy = result.scalar_one_or_none()
+    policy = await get_or_404(db, Policy, policy_id)
 
-    if not policy:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Policy with id {policy_id} not found",
-        )
-
-    # Update fields
-    update_data = policy_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(policy, field, value)
+    update_data = apply_updates(policy, policy_data, set_updated_at=False)
 
     policy.updated_by_id = current_user.id
 
@@ -226,15 +188,7 @@ async def delete_policy(
 
     Requires authentication.
     """
-    # Get existing policy
-    result = await db.execute(select(Policy).where(Policy.id == policy_id))
-    policy = result.scalar_one_or_none()
-
-    if not policy:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Policy with id {policy_id} not found",
-        )
+    policy = await get_or_404(db, Policy, policy_id)
 
     # Record audit event
     await record_audit_event(

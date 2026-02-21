@@ -18,7 +18,7 @@ import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { cn } from '../../helpers/utils';
 import { useToast, ToastContainer } from '../../components/ui/Toast';
-import { contractsApi } from '../../services/api';
+import { contractsApi } from '../../api/client';
 
 interface Contract {
   id: number;

@@ -12,11 +12,11 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
 from src.domain.models.uvdb_achilles import (
@@ -27,7 +27,6 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
-from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -441,7 +440,7 @@ class KPICreate(BaseModel):
 
 
 @router.get("/protocol", response_model=dict)
-async def get_protocol_structure() -> dict[str, Any]:
+async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
     """Get the complete UVDB B2 Audit Protocol structure"""
     return {
         "protocol_name": "UVDB Verify B2 Audit Protocol",
@@ -467,7 +466,8 @@ async def get_protocol_structure() -> dict[str, Any]:
 
 @router.get("/sections", response_model=dict)
 async def list_sections(
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """List all UVDB B2 sections"""
     # Return from static data or database
@@ -492,7 +492,8 @@ async def list_sections(
 @router.get("/sections/{section_number}/questions", response_model=dict)
 async def get_section_questions(
     section_number: str,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Get questions for a specific UVDB section"""
     section_data = None
@@ -518,11 +519,12 @@ async def get_section_questions(
 
 @router.get("/audits", response_model=dict)
 async def list_audits(
+    current_user: CurrentUser,
+    db: DbSession,
     status: Optional[str] = Query(None),
     company_name: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """List UVDB audits"""
     stmt = select(UVDBAudit)
@@ -560,7 +562,8 @@ async def list_audits(
 @router.post("/audits", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_audit(
     audit_data: AuditCreate,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Create a new UVDB audit"""
     count = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
@@ -585,7 +588,8 @@ async def create_audit(
 @router.get("/audits/{audit_id}", response_model=dict)
 async def get_audit(
     audit_id: int,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Get audit details"""
     audit = await get_or_404(db, UVDBAudit, audit_id)
@@ -625,7 +629,8 @@ async def get_audit(
 async def update_audit(
     audit_id: int,
     audit_data: AuditUpdate,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Update audit"""
     audit = await get_or_404(db, UVDBAudit, audit_id)
@@ -643,7 +648,8 @@ async def update_audit(
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Record an audit response"""
     await get_or_404(db, UVDBAudit, audit_id)
@@ -662,7 +668,8 @@ async def create_response(
 @router.get("/audits/{audit_id}/responses", response_model=dict)
 async def get_audit_responses(
     audit_id: int,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Get all responses for an audit"""
     await get_or_404(db, UVDBAudit, audit_id)
@@ -694,7 +701,8 @@ async def get_audit_responses(
 async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
     await get_or_404(db, UVDBAudit, audit_id)
@@ -719,7 +727,8 @@ async def add_kpi_record(
 @router.get("/audits/{audit_id}/kpis", response_model=dict)
 async def get_audit_kpis(
     audit_id: int,
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
     result = await db.execute(
@@ -754,7 +763,7 @@ async def get_audit_kpis(
 
 
 @router.get("/iso-mapping", response_model=dict)
-async def get_iso_cross_mapping() -> dict[str, Any]:
+async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     """Get cross-mapping between UVDB sections and ISO standards"""
     mappings = []
 
@@ -793,7 +802,8 @@ async def get_iso_cross_mapping() -> dict[str, Any]:
 
 @router.get("/dashboard", response_model=dict)
 async def get_uvdb_dashboard(
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
     total_audits = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0

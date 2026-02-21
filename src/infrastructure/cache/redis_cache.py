@@ -12,6 +12,7 @@ Features:
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import pickle
 import time
@@ -20,6 +21,8 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar, Union
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -307,6 +310,37 @@ def get_cache() -> Union[InMemoryCache, RedisCache]:
     return _cache
 
 
+async def invalidate_tenant_cache(tenant_id: int, entity_type: str) -> int:
+    """Invalidate all cached entries for a tenant's entity type.
+
+    Uses pattern-based key deletion for namespace isolation.
+    E.g., invalidate_tenant_cache(1, "risks") clears all risk caches for tenant 1.
+    """
+    cache = get_cache()
+    if not isinstance(cache, RedisCache) or not cache._redis:
+        return 0
+
+    pattern = f"tenant:{tenant_id}:{entity_type}:*"
+    deleted = 0
+    async for key in cache._redis.scan_iter(match=pattern):
+        await cache._redis.delete(key)
+        deleted += 1
+
+    if deleted:
+        logger.info(f"Invalidated {deleted} cache keys matching {pattern}")
+    return deleted
+
+
+async def invalidate_entity_cache(entity_type: str, entity_id: int) -> None:
+    """Invalidate cache for a specific entity."""
+    cache = get_cache()
+    if not isinstance(cache, RedisCache) or not cache._redis:
+        return
+
+    key = f"{entity_type}:{entity_id}"
+    await cache.delete(key)
+
+
 def make_cache_key(*args, **kwargs) -> str:
     """Create a cache key from function arguments."""
     key_parts = [str(arg) for arg in args]
@@ -405,11 +439,37 @@ def invalidate_cache(pattern: str):
 
 async def warmup_cache():
     """Warm up cache with frequently accessed data."""
+    import logging
+
+    logger = logging.getLogger(__name__)
     cache = get_cache()
 
-    # Example: Pre-load standards data
-    # This would be called on application startup
-    pass
+    if isinstance(cache, RedisCache) and not cache._redis:
+        await cache._get_redis()
+        if cache._use_fallback:
+            logger.warning("Cache warmup skipped: Redis unavailable")
+            return
+
+    try:
+        from src.infrastructure.database import async_session_maker
+
+        async with async_session_maker() as db:
+            from sqlalchemy import select
+
+            from src.domain.models.standard import Standard
+
+            result = await db.execute(select(Standard).limit(100))
+            standards = result.scalars().all()
+            for std in standards:
+                await cache.set(
+                    f"standard:{std.id}",
+                    {"id": std.id, "name": std.name, "code": std.code},
+                    ttl=CacheType.DAILY.value,
+                )
+
+            logger.info("Cache warmup complete: %d standards preloaded", len(standards))
+    except Exception as e:
+        logger.warning("Cache warmup failed: %s", e)
 
 
 # ============================================================================

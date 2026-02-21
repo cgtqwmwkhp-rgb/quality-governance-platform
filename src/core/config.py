@@ -31,6 +31,7 @@ class Settings(BaseSettings):
                 "your-secret-key-here",
                 "secret",
                 "dev-secret",
+                "",
             ]
             if self.secret_key in placeholder_keys:
                 raise ValueError(

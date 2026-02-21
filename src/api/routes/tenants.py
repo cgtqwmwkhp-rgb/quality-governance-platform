@@ -105,7 +105,7 @@ async def create_tenant(
         )
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/", response_model=list[TenantResponse])
@@ -133,7 +133,7 @@ async def get_current_tenant(
     tenant = await service.get_tenant(1)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     return tenant
 
@@ -150,7 +150,7 @@ async def get_tenant(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     return tenant
 
@@ -171,7 +171,7 @@ async def update_tenant(
         tenant = await service.update_tenant(tenant_id, **updates)
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
@@ -194,7 +194,7 @@ async def update_branding(
         tenant = await service.update_branding(tenant_id, **data.model_dump(exclude_unset=True))
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
@@ -239,7 +239,7 @@ async def add_user_to_tenant(
     service = TenantService(db)
 
     if not await service.can_add_user(tenant_id):
-        raise HTTPException(status_code=400, detail="User limit reached")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User limit reached")
 
     try:
         tenant_user = await service.add_user_to_tenant(
@@ -249,7 +249,7 @@ async def add_user_to_tenant(
         )
         return {"id": tenant_user.id, "role": tenant_user.role}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{tenant_id}/users/{user_id}")
@@ -267,7 +267,7 @@ async def remove_user_from_tenant(
         await service.remove_user_from_tenant(tenant_id, user_id)
         return {"status": "removed"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
@@ -314,7 +314,7 @@ async def accept_invitation(
         tenant_user = await service.accept_invitation(token, user_id=current_user.id)
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
@@ -334,7 +334,7 @@ async def get_features(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     return tenant.features_enabled
 
@@ -376,7 +376,7 @@ async def get_limits(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     current_users, max_users = await service.check_user_limit(tenant_id)
 

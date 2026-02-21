@@ -17,8 +17,8 @@ import { Button } from '../components/ui/Button';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { cn } from '../helpers/utils';
 import { API_BASE_URL } from '../config/apiBase';
-import { formTemplatesApi, contractsApi, lookupsApi } from '../services/api';
-import type { FormTemplate, Contract, LookupOption } from '../services/api';
+import { formTemplatesApi, contractsApi, lookupsApi } from '../api/client';
+import type { FormTemplate, Contract, LookupOption } from '../api/client';
 import type { DynamicFormData } from '../components/DynamicForm';
 
 // Props for explicit form type (preferred over URL parsing)

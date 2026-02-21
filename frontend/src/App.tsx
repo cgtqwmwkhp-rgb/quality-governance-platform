@@ -1,76 +1,76 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Incidents from './pages/Incidents'
-import IncidentDetail from './pages/IncidentDetail'
-import RTAs from './pages/RTAs'
-import RTADetail from './pages/RTADetail'
-import Complaints from './pages/Complaints'
-import ComplaintDetail from './pages/ComplaintDetail'
-import Policies from './pages/Policies'
-// Risks page retired — consolidated into Enterprise Risk Register
-import Audits from './pages/Audits'
-import Investigations from './pages/Investigations'
-import InvestigationDetail from './pages/InvestigationDetail'
-import Standards from './pages/Standards'
-import Actions from './pages/Actions'
-import Documents from './pages/Documents'
-// Audit Tool Builder
-import AuditTemplateLibrary from './pages/AuditTemplateLibrary'
-import AuditTemplateBuilder from './pages/AuditTemplateBuilder'
-import AuditExecution from './pages/AuditExecution'
-import MobileAuditExecution from './pages/MobileAuditExecution'
-import Portal from './pages/Portal'
-import PortalLogin from './pages/PortalLogin'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import PortalReport from './pages/PortalReport'
-import PortalTrack from './pages/PortalTrack'
-// PortalSOS removed - emergency situations should use phone calls
-import PortalHelp from './pages/PortalHelp'
-import PortalIncidentForm from './pages/PortalIncidentForm'
-import PortalRTAForm from './pages/PortalRTAForm'
-import PortalNearMissForm from './pages/PortalNearMissForm'
-import PortalDynamicForm from './pages/PortalDynamicForm'
-// Enterprise Enhancement Pages
-import Analytics from './pages/Analytics'
-import GlobalSearch from './pages/GlobalSearch'
-import UserManagement from './pages/UserManagement'
-import AuditTrail from './pages/AuditTrail'
-import CalendarView from './pages/CalendarView'
-import Notifications from './pages/Notifications'
-import ExportCenter from './pages/ExportCenter'
-import ComplianceEvidence from './pages/ComplianceEvidence'
-// Phase 2: Advanced Analytics & Reporting
-import AdvancedAnalytics from './pages/AdvancedAnalytics'
-import DashboardBuilder from './pages/DashboardBuilder'
-import ReportGenerator from './pages/ReportGenerator'
-// Phase 3: Workflow Automation
-import WorkflowCenter from './pages/WorkflowCenter'
-// Phase 4: Compliance Automation
-import ComplianceAutomation from './pages/ComplianceAutomation'
-// Tier 1: Enterprise Risk Register & IMS Unification
-import RiskRegister from './pages/RiskRegister'
-import IMSDashboard from './pages/IMSDashboard'
-// Tier 2: AI Intelligence
-import AIIntelligence from './pages/AIIntelligence'
-// UVDB Achilles Verify
-import UVDBAudits from './pages/UVDBAudits'
-// Planet Mark Carbon Management
-import PlanetMark from './pages/PlanetMark'
-// Tier 2: Digital Signatures
-import DigitalSignatures from './pages/DigitalSignatures'
-// Admin Configuration Pages
-import AdminDashboard from './pages/admin/AdminDashboard'
-import FormsList from './pages/admin/FormsList'
-import FormBuilder from './pages/admin/FormBuilder'
-import ContractsManagement from './pages/admin/ContractsManagement'
-import SystemSettings from './pages/admin/SystemSettings'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import PageErrorBoundary from './components/PageErrorBoundary'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary/20 border-t-primary" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  )
+}
+
+// Code-split all page components for faster initial load
+const Login = React.lazy(() => import('./pages/Login'))
+const Dashboard = React.lazy(() => import('./pages/Dashboard'))
+const Incidents = React.lazy(() => import('./pages/Incidents'))
+const IncidentDetail = React.lazy(() => import('./pages/IncidentDetail'))
+const RTAs = React.lazy(() => import('./pages/RTAs'))
+const RTADetail = React.lazy(() => import('./pages/RTADetail'))
+const Complaints = React.lazy(() => import('./pages/Complaints'))
+const ComplaintDetail = React.lazy(() => import('./pages/ComplaintDetail'))
+const Policies = React.lazy(() => import('./pages/Policies'))
+const Audits = React.lazy(() => import('./pages/Audits'))
+const Investigations = React.lazy(() => import('./pages/Investigations'))
+const InvestigationDetail = React.lazy(() => import('./pages/InvestigationDetail'))
+const Standards = React.lazy(() => import('./pages/Standards'))
+const Actions = React.lazy(() => import('./pages/Actions'))
+const Documents = React.lazy(() => import('./pages/Documents'))
+const AuditTemplateLibrary = React.lazy(() => import('./pages/AuditTemplateLibrary'))
+const AuditTemplateBuilder = React.lazy(() => import('./pages/AuditTemplateBuilder'))
+const AuditExecution = React.lazy(() => import('./pages/AuditExecution'))
+const MobileAuditExecution = React.lazy(() => import('./pages/MobileAuditExecution'))
+const Portal = React.lazy(() => import('./pages/Portal'))
+const PortalLogin = React.lazy(() => import('./pages/PortalLogin'))
+const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = React.lazy(() => import('./pages/ResetPassword'))
+const PortalReport = React.lazy(() => import('./pages/PortalReport'))
+const PortalTrack = React.lazy(() => import('./pages/PortalTrack'))
+const PortalHelp = React.lazy(() => import('./pages/PortalHelp'))
+const PortalIncidentForm = React.lazy(() => import('./pages/PortalIncidentForm'))
+const PortalRTAForm = React.lazy(() => import('./pages/PortalRTAForm'))
+const PortalNearMissForm = React.lazy(() => import('./pages/PortalNearMissForm'))
+const PortalDynamicForm = React.lazy(() => import('./pages/PortalDynamicForm'))
+const Analytics = React.lazy(() => import('./pages/Analytics'))
+const GlobalSearch = React.lazy(() => import('./pages/GlobalSearch'))
+const UserManagement = React.lazy(() => import('./pages/UserManagement'))
+const AuditTrail = React.lazy(() => import('./pages/AuditTrail'))
+const CalendarView = React.lazy(() => import('./pages/CalendarView'))
+const Notifications = React.lazy(() => import('./pages/Notifications'))
+const ExportCenter = React.lazy(() => import('./pages/ExportCenter'))
+const ComplianceEvidence = React.lazy(() => import('./pages/ComplianceEvidence'))
+const AdvancedAnalytics = React.lazy(() => import('./pages/AdvancedAnalytics'))
+const DashboardBuilder = React.lazy(() => import('./pages/DashboardBuilder'))
+const ReportGenerator = React.lazy(() => import('./pages/ReportGenerator'))
+const WorkflowCenter = React.lazy(() => import('./pages/WorkflowCenter'))
+const ComplianceAutomation = React.lazy(() => import('./pages/ComplianceAutomation'))
+const RiskRegister = React.lazy(() => import('./pages/RiskRegister'))
+const IMSDashboard = React.lazy(() => import('./pages/IMSDashboard'))
+const AIIntelligence = React.lazy(() => import('./pages/AIIntelligence'))
+const UVDBAudits = React.lazy(() => import('./pages/UVDBAudits'))
+const PlanetMark = React.lazy(() => import('./pages/PlanetMark'))
+const DigitalSignatures = React.lazy(() => import('./pages/DigitalSignatures'))
+const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'))
+const FormsList = React.lazy(() => import('./pages/admin/FormsList'))
+const FormBuilder = React.lazy(() => import('./pages/admin/FormBuilder'))
+const ContractsManagement = React.lazy(() => import('./pages/admin/ContractsManagement'))
+const SystemSettings = React.lazy(() => import('./pages/admin/SystemSettings'))
 
 import { API_BASE_URL } from './config/apiBase'
 
@@ -142,6 +142,7 @@ function App() {
   return (
     <BrowserRouter>
       <PageErrorBoundary>
+      <Suspense fallback={<LoadingFallback />}>
       <Routes>
         {/* Portal Login - Public */}
         <Route 
@@ -270,6 +271,7 @@ function App() {
           <Route path="admin/settings" element={<SystemSettings />} />
         </Route>
       </Routes>
+      </Suspense>
       </PageErrorBoundary>
     </BrowserRouter>
   )

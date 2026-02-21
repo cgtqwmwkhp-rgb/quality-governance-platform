@@ -1,6 +1,7 @@
 /**
- * API Service for Quality Governance Platform
- * Provides typed API calls with error handling and caching
+ * @deprecated This module is deprecated. Use `../api/client` instead.
+ * All types and API objects have been migrated to the primary axios-based client.
+ * This file is kept for backward compatibility but should not be used for new code.
  */
 
 import { API_BASE_URL } from '../config/apiBase';
