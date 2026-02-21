@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -54,7 +55,7 @@ class CAPAStatusTransition(BaseModel):
     comment: str | None = None
 
 
-@router.get("")
+@router.get("", response_model=CAPAListResponse)
 async def list_capa_actions(
     db: DbSession,
     current_user: CurrentUser,
@@ -66,7 +67,7 @@ async def list_capa_actions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
-    query = select(CAPAAction)
+    query = select(CAPAAction).where(CAPAAction.tenant_id == current_user.tenant_id)
 
     if status_filter:
         query = query.where(CAPAAction.status == status_filter)
@@ -87,7 +88,7 @@ async def list_capa_actions(
     return await paginate(db, query, params)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CAPAResponse, status_code=status.HTTP_201_CREATED)
 async def create_capa_action(
     db: DbSession,
     current_user: CurrentUser,
@@ -121,16 +122,22 @@ async def create_capa_action(
     return action
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=CAPAStatsResponse)
 async def get_capa_stats(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    total = await db.execute(select(func.count(CAPAAction.id)))
-    open_count = await db.execute(select(func.count(CAPAAction.id)).where(CAPAAction.status == CAPAStatus.OPEN))
-    in_progress = await db.execute(select(func.count(CAPAAction.id)).where(CAPAAction.status == CAPAStatus.IN_PROGRESS))
+    tenant_filter = CAPAAction.tenant_id == current_user.tenant_id
+    total = await db.execute(select(func.count(CAPAAction.id)).where(tenant_filter))
+    open_count = await db.execute(
+        select(func.count(CAPAAction.id)).where(tenant_filter, CAPAAction.status == CAPAStatus.OPEN)
+    )
+    in_progress = await db.execute(
+        select(func.count(CAPAAction.id)).where(tenant_filter, CAPAAction.status == CAPAStatus.IN_PROGRESS)
+    )
     overdue = await db.execute(
         select(func.count(CAPAAction.id)).where(
+            tenant_filter,
             CAPAAction.due_date < datetime.utcnow(),
             CAPAAction.status.notin_([CAPAStatus.CLOSED]),
         )
@@ -143,37 +150,37 @@ async def get_capa_stats(
     }
 
 
-@router.get("/{capa_id}")
+@router.get("/{capa_id}", response_model=CAPAResponse)
 async def get_capa_action(
     capa_id: int,
     db: DbSession,
     current_user: CurrentUser,
 ):
-    return await get_or_404(db, CAPAAction, capa_id)
+    return await get_or_404(db, CAPAAction, capa_id, tenant_id=current_user.tenant_id)
 
 
-@router.patch("/{capa_id}")
+@router.patch("/{capa_id}", response_model=CAPAResponse)
 async def update_capa_action(
     capa_id: int,
     db: DbSession,
     current_user: CurrentUser,
     data: CAPAUpdate,
 ):
-    action = await get_or_404(db, CAPAAction, capa_id)
+    action = await get_or_404(db, CAPAAction, capa_id, tenant_id=current_user.tenant_id)
     apply_updates(action, data)
     await db.commit()
     await db.refresh(action)
     return action
 
 
-@router.post("/{capa_id}/transition")
+@router.post("/{capa_id}/transition", response_model=CAPAResponse)
 async def transition_capa_status(
     capa_id: int,
     db: DbSession,
     current_user: CurrentUser,
     data: CAPAStatusTransition,
 ):
-    action = await get_or_404(db, CAPAAction, capa_id)
+    action = await get_or_404(db, CAPAAction, capa_id, tenant_id=current_user.tenant_id)
 
     valid_transitions = {
         CAPAStatus.OPEN: [CAPAStatus.IN_PROGRESS],
@@ -221,7 +228,7 @@ async def delete_capa_action(
     db: DbSession,
     current_user: CurrentSuperuser,
 ):
-    action = await get_or_404(db, CAPAAction, capa_id)
+    action = await get_or_404(db, CAPAAction, capa_id, tenant_id=current_user.tenant_id)
 
     from src.domain.services.audit_service import record_audit_event
 

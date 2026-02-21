@@ -15,11 +15,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
 
 router = APIRouter()
@@ -289,8 +290,7 @@ async def list_audit_logs(
     user_id: Optional[int] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> Any:
     """List audit log entries with filters and pagination."""
     tenant_id = current_user.tenant_id
@@ -310,32 +310,15 @@ async def list_audit_logs(
         if date_to:
             conditions.append(AuditLogEntry.timestamp <= date_to)
 
-        count_result = await db.execute(select(func.count(AuditLogEntry.id)).where(*conditions))
-        total = count_result.scalar() or 0
-
-        offset = (page - 1) * page_size
-        result = await db.execute(
-            select(AuditLogEntry)
-            .where(*conditions)
-            .order_by(desc(AuditLogEntry.timestamp))
-            .offset(offset)
-            .limit(page_size)
-        )
-        entries = result.scalars().all()
-
-        return {
-            "items": entries,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
+        query = select(AuditLogEntry).where(*conditions).order_by(desc(AuditLogEntry.timestamp))
+        return await paginate(db, query, params)
     except Exception as e:
         logger.error("Failed to list audit logs: %s", e)
         return {
             "items": [],
             "total": 0,
-            "page": page,
-            "page_size": page_size,
+            "page": params.page,
+            "page_size": params.page_size,
         }
 
 

@@ -21,7 +21,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
 import { useToast, ToastContainer } from '../../components/ui/Toast';
-import { formTemplatesApi } from '../../services/api';
+import { formTemplatesApi } from '../../api/client';
 
 interface FormTemplate {
   id: number;

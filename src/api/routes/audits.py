@@ -10,7 +10,7 @@ Enterprise-grade audit template and execution management with:
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
@@ -41,6 +41,8 @@ from src.api.schemas.audit import (
     AuditTemplateUpdate,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -80,8 +82,7 @@ TEMPLATE_UPDATE_ALLOWED_FIELDS = {
 async def list_templates(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     search: Optional[str] = None,
     category: Optional[str] = None,
     audit_type: Optional[str] = None,
@@ -105,24 +106,9 @@ async def list_templates(
     if is_published is not None:
         query = query.where(AuditTemplate.is_published == is_published)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(AuditTemplate.name)
 
-    result = await db.execute(query)
-    templates = result.scalars().all()
-
-    return AuditTemplateListResponse(
-        items=[AuditTemplateResponse.model_validate(t) for t in templates],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -162,28 +148,13 @@ async def create_template(
 async def list_archived_templates(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> AuditTemplateListResponse:
     """List archived templates that are within the 30-day recovery window."""
     query = select(AuditTemplate).where(AuditTemplate.archived_at.isnot(None))
-
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(AuditTemplate.archived_at.desc())
 
-    result = await db.execute(query)
-    templates = result.scalars().all()
-
-    return AuditTemplateListResponse(
-        items=[AuditTemplateResponse.model_validate(t) for t in templates],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/templates/purge-expired")
@@ -662,8 +633,6 @@ async def update_section(
             detail="Section not found",
         )
 
-    from src.api.utils.update import apply_updates
-
     apply_updates(section, section_data, set_updated_at=False)
 
     await db.commit()
@@ -810,8 +779,7 @@ async def delete_question(
 async def list_runs(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     status_filter: Optional[str] = Query(None, alias="status"),
     template_id: Optional[int] = None,
     assigned_to_id: Optional[int] = None,
@@ -826,24 +794,9 @@ async def list_runs(
     if assigned_to_id:
         query = query.where(AuditRun.assigned_to_id == assigned_to_id)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(AuditRun.created_at.desc())
 
-    result = await db.execute(query)
-    runs = result.scalars().all()
-
-    return AuditRunListResponse(
-        items=[AuditRunResponse.model_validate(r) for r in runs],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED)
@@ -1122,9 +1075,7 @@ async def update_response(
             detail="Cannot update responses on a completed audit",
         )
 
-    update_data = response_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(response, field, value)
+    apply_updates(response, response_data, set_updated_at=False)
 
     await db.commit()
     await db.refresh(response)
@@ -1139,8 +1090,7 @@ async def update_response(
 async def list_findings(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     status_filter: Optional[str] = Query(None, alias="status"),
     severity: Optional[str] = None,
     run_id: Optional[int] = None,
@@ -1155,24 +1105,9 @@ async def list_findings(
     if run_id:
         query = query.where(AuditFinding.run_id == run_id)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(AuditFinding.created_at.desc())
 
-    result = await db.execute(query)
-    findings = result.scalars().all()
-
-    return AuditFindingListResponse(
-        items=[AuditFindingResponse.model_validate(f) for f in findings],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)

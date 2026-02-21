@@ -6,11 +6,10 @@ tracking user acknowledgments, and compliance reporting.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_current_user, get_db
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.policy_acknowledgment import (
     AcknowledgmentRequirementCreate,
     AcknowledgmentRequirementResponse,
@@ -43,8 +42,8 @@ router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgmen
 @router.post("/requirements", response_model=AcknowledgmentRequirementResponse, status_code=status.HTTP_201_CREATED)
 async def create_acknowledgment_requirement(
     requirement_data: AcknowledgmentRequirementCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create an acknowledgment requirement for a policy."""
     service = PolicyAcknowledgmentService(db)
@@ -66,8 +65,8 @@ async def create_acknowledgment_requirement(
 @router.get("/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse)
 async def get_acknowledgment_requirement(
     requirement_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get an acknowledgment requirement."""
     requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail="Requirement not found")
@@ -78,8 +77,8 @@ async def get_acknowledgment_requirement(
 async def assign_acknowledgments(
     requirement_id: int,
     assign_data: AssignAcknowledgmentRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Assign acknowledgment tasks to users."""
     service = PolicyAcknowledgmentService(db)
@@ -106,8 +105,8 @@ async def assign_acknowledgments(
 
 @router.get("/my-pending", response_model=PolicyAcknowledgmentListResponse)
 async def get_my_pending_acknowledgments(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get current user's pending acknowledgments."""
     service = PolicyAcknowledgmentService(db)
@@ -122,8 +121,8 @@ async def get_my_pending_acknowledgments(
 @router.get("/{acknowledgment_id}", response_model=PolicyAcknowledgmentResponse)
 async def get_acknowledgment(
     acknowledgment_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get a specific acknowledgment."""
     ack = await get_or_404(db, PolicyAcknowledgment, acknowledgment_id, detail="Acknowledgment not found")
@@ -133,8 +132,8 @@ async def get_acknowledgment(
 @router.post("/{acknowledgment_id}/open")
 async def record_policy_opened(
     acknowledgment_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Record that a user has opened a policy for reading."""
     service = PolicyAcknowledgmentService(db)
@@ -149,9 +148,9 @@ async def record_policy_opened(
 @router.post("/{acknowledgment_id}/reading-time")
 async def update_reading_time(
     acknowledgment_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     additional_seconds: int = Query(..., ge=1),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """Update reading time for an acknowledgment."""
     service = PolicyAcknowledgmentService(db)
@@ -168,8 +167,8 @@ async def record_acknowledgment(
     acknowledgment_id: int,
     ack_data: RecordAcknowledgmentRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Record a user's acknowledgment of a policy."""
     service = PolicyAcknowledgmentService(db)
@@ -200,8 +199,8 @@ async def record_acknowledgment(
 @router.get("/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse)
 async def get_policy_acknowledgment_status(
     policy_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get acknowledgment status summary for a policy."""
     service = PolicyAcknowledgmentService(db)
@@ -216,8 +215,8 @@ async def get_policy_acknowledgment_status(
 
 @router.get("/dashboard", response_model=ComplianceDashboardResponse)
 async def get_compliance_dashboard(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get overall policy acknowledgment compliance dashboard."""
     service = PolicyAcknowledgmentService(db)
@@ -227,8 +226,8 @@ async def get_compliance_dashboard(
 
 @router.post("/check-overdue")
 async def check_overdue_acknowledgments(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Check for and mark overdue acknowledgments."""
     service = PolicyAcknowledgmentService(db)
@@ -242,8 +241,8 @@ async def check_overdue_acknowledgments(
 
 @router.get("/reminders-needed")
 async def get_reminders_needed(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Get acknowledgments that need reminder emails."""
     service = PolicyAcknowledgmentService(db)
@@ -264,8 +263,8 @@ async def get_reminders_needed(
 async def log_document_read(
     log_data: LogDocumentReadRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Log a document read/access."""
     service = DocumentReadLogService(db)
@@ -290,9 +289,9 @@ async def log_document_read(
 async def get_document_read_history(
     document_type: str,
     document_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(100, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """Get read history for a document."""
     service = DocumentReadLogService(db)
@@ -307,10 +306,10 @@ async def get_document_read_history(
 @router.get("/read-logs/user/{user_id}", response_model=DocumentReadLogListResponse)
 async def get_user_read_history(
     user_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     document_type: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
     """Get read history for a user."""
     service = DocumentReadLogService(db)

@@ -17,7 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { cn } from '../../helpers/utils';
 import { useToast, ToastContainer } from '../../components/ui/Toast';
-import { settingsApi } from '../../services/api';
+import { settingsApi } from '../../api/client';
 
 interface SettingCategory {
   id: string;

@@ -12,12 +12,13 @@ Provides endpoints for:
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
-from src.api.deps import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.risk_register import (
     BowTieElement,
@@ -131,11 +132,10 @@ async def list_risks(
     status: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None, ge=1, le=25),
     outside_appetite: Optional[bool] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List risks with filtering options"""
-    conditions = []
+    conditions = [EnterpriseRisk.tenant_id == current_user.tenant_id]
 
     if category:
         conditions.append(EnterpriseRisk.category == category)
@@ -152,12 +152,14 @@ async def list_risks(
     if conditions:
         stmt = stmt.where(and_(*conditions))
 
-    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
-    result = await db.execute(stmt.order_by(EnterpriseRisk.residual_score.desc()).offset(skip).limit(limit))
-    risks = result.scalars().all()
+    query = stmt.order_by(EnterpriseRisk.residual_score.desc())
+    paginated = await paginate(db, query, params)
 
     return {
-        "total": total,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
         "risks": [
             {
                 "id": r.id,
@@ -175,7 +177,7 @@ async def list_risks(
                 "risk_owner_name": r.risk_owner_name,
                 "next_review_date": r.next_review_date.isoformat() if r.next_review_date else None,
             }
-            for r in risks
+            for r in paginated.items
         ],
     }
 
@@ -188,7 +190,9 @@ async def create_risk(
 ) -> dict[str, Any]:
     """Create a new risk"""
     service = RiskService(db)
-    risk = await service.create_risk(risk_data.model_dump())
+    data = risk_data.model_dump()
+    data["tenant_id"] = current_user.tenant_id
+    risk = await service.create_risk(data)
 
     return {
         "id": risk.id,
@@ -205,7 +209,7 @@ async def update_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
-    risk = await get_or_404(db, EnterpriseRisk, risk_id)
+    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
     apply_updates(risk, risk_data)
     await db.commit()
     await db.refresh(risk)
@@ -221,6 +225,7 @@ async def assess_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update risk assessment scores"""
+    await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
     service = RiskService(db)
     try:
         risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
@@ -232,7 +237,7 @@ async def assess_risk(
             "is_within_appetite": risk.is_within_appetite,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -242,7 +247,7 @@ async def delete_risk(
     current_user: CurrentSuperuser,
 ) -> None:
     """Delete a risk (soft delete by changing status)"""
-    risk = await get_or_404(db, EnterpriseRisk, risk_id)
+    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
     risk.status = "closed"
     risk.updated_at = datetime.utcnow()
@@ -317,11 +322,12 @@ async def get_bow_tie(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get bow-tie diagram data for a risk"""
+    await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
     service = BowTieService(db)
     try:
         return await service.get_bow_tie(risk_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -332,7 +338,7 @@ async def add_bow_tie_element(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add element to bow-tie diagram"""
-    await get_or_404(db, EnterpriseRisk, risk_id)
+    await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
     service = BowTieService(db)
     bow_tie_element = await service.add_bow_tie_element(
@@ -361,12 +367,16 @@ async def delete_bow_tie_element(
 ) -> None:
     """Delete bow-tie element"""
     result = await db.execute(
-        select(BowTieElement).where(BowTieElement.id == element_id, BowTieElement.risk_id == risk_id)
+        select(BowTieElement).where(
+            BowTieElement.id == element_id,
+            BowTieElement.risk_id == risk_id,
+            BowTieElement.tenant_id == current_user.tenant_id,
+        )
     )
     element = result.scalar_one_or_none()
 
     if not element:
-        raise HTTPException(status_code=404, detail="Element not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Element not found")
 
     await db.delete(element)
     await db.commit()
@@ -392,7 +402,7 @@ async def create_kri(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
-    await get_or_404(db, EnterpriseRisk, kri_data.risk_id)
+    await get_or_404(db, EnterpriseRisk, kri_data.risk_id, tenant_id=current_user.tenant_id)
 
     kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
     db.add(kri)
@@ -419,7 +429,7 @@ async def update_kri_value(
             "current_status": kri.current_status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/kris/{kri_id}/history", response_model=list)
@@ -495,7 +505,7 @@ async def link_control_to_risk(
     reduces_impact: bool = False,
 ) -> dict[str, Any]:
     """Link a control to a risk"""
-    await get_or_404(db, EnterpriseRisk, risk_id)
+    await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
     await get_or_404(db, EnterpriseRiskControl, control_id)
 
     existing = (
@@ -508,7 +518,7 @@ async def link_control_to_risk(
     ).scalar_one_or_none()
 
     if existing:
-        raise HTTPException(status_code=400, detail="Control already linked to this risk")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Control already linked to this risk")
 
     mapping = RiskControlMapping(
         risk_id=risk_id,
@@ -561,48 +571,51 @@ async def get_risk_summary(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get overall risk register summary"""
+    tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
     total_risks = await db.scalar(
-        select(func.count()).select_from(EnterpriseRisk).where(EnterpriseRisk.status != "closed")
+        select(func.count()).select_from(EnterpriseRisk).where(tenant_filter, EnterpriseRisk.status != "closed")
     )
     critical_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed")
+        .where(tenant_filter, EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed")
     )
     high_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.residual_score.between(12, 16), EnterpriseRisk.status != "closed")
+        .where(tenant_filter, EnterpriseRisk.residual_score.between(12, 16), EnterpriseRisk.status != "closed")
     )
     medium_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.residual_score.between(5, 11), EnterpriseRisk.status != "closed")
+        .where(tenant_filter, EnterpriseRisk.residual_score.between(5, 11), EnterpriseRisk.status != "closed")
     )
     low_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed")
+        .where(tenant_filter, EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed")
     )
     outside_appetite = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.is_within_appetite == False, EnterpriseRisk.status != "closed")  # noqa: E712
+        .where(
+            tenant_filter, EnterpriseRisk.is_within_appetite == False, EnterpriseRisk.status != "closed"
+        )  # noqa: E712
     )
     overdue_review = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.next_review_date < datetime.utcnow(), EnterpriseRisk.status != "closed")
+        .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.utcnow(), EnterpriseRisk.status != "closed")
     )
     escalated = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed")  # noqa: E712
+        .where(tenant_filter, EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed")  # noqa: E712
     )
 
     result = await db.execute(
         select(EnterpriseRisk.category, func.count(EnterpriseRisk.id))
-        .where(EnterpriseRisk.status != "closed")
+        .where(tenant_filter, EnterpriseRisk.status != "closed")
         .group_by(EnterpriseRisk.category)
     )
     categories = result.all()
@@ -632,7 +645,7 @@ async def get_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed risk information"""
-    risk = await get_or_404(db, EnterpriseRisk, risk_id)
+    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
     result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
     control_mappings = result.scalars().all()

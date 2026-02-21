@@ -15,6 +15,10 @@ class NearMiss(Base):
     __tablename__ = "near_misses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
 
     # Reporter information

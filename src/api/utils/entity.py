@@ -14,9 +14,18 @@ async def get_or_404(
     model: Type[T],
     entity_id: int,
     detail: str | None = None,
+    tenant_id: int | None = None,
 ) -> T:
-    """Fetch an entity by primary key or raise 404."""
-    result = await db.execute(select(model).where(model.id == entity_id))
+    """Fetch an entity by primary key or raise 404.
+
+    When *tenant_id* is provided the query also filters by
+    ``model.tenant_id`` so rows belonging to other tenants are
+    treated as not-found.
+    """
+    stmt = select(model).where(model.id == entity_id)
+    if tenant_id is not None:
+        stmt = stmt.where(model.tenant_id == tenant_id)
+    result = await db.execute(stmt)
     entity = result.scalar_one_or_none()
     if entity is None:
         model_name = model.__name__

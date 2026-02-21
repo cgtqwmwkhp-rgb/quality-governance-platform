@@ -11,11 +11,12 @@ Provides endpoints for:
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 
@@ -103,10 +104,13 @@ class GapClause(BaseModel):
 # ============================================================================
 
 
-async def _load_evidence_links(db, standard: Optional[ISOStandard] = None) -> list[EvidenceLink]:
+async def _load_evidence_links(db, tenant_id: int, standard: Optional[ISOStandard] = None) -> list[EvidenceLink]:
     """Query all active evidence links from the database and convert to
     the EvidenceLink dataclass used by the ISOComplianceService."""
-    query = select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.deleted_at.is_(None))
+    query = select(ComplianceEvidenceLink).where(
+        ComplianceEvidenceLink.deleted_at.is_(None),
+        ComplianceEvidenceLink.tenant_id == tenant_id,
+    )
     result = await db.execute(query)
     rows = result.scalars().all()
 
@@ -223,6 +227,7 @@ async def link_evidence(
     for clause_id in request.clause_ids:
         existing = await db.execute(
             select(ComplianceEvidenceLink).where(
+                ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
                 ComplianceEvidenceLink.entity_type == request.entity_type,
                 ComplianceEvidenceLink.entity_id == request.entity_id,
                 ComplianceEvidenceLink.clause_id == clause_id,
@@ -233,6 +238,7 @@ async def link_evidence(
             continue
 
         link = ComplianceEvidenceLink(
+            tenant_id=current_user.tenant_id,
             entity_type=request.entity_type,
             entity_id=request.entity_id,
             clause_id=clause_id,
@@ -267,18 +273,20 @@ async def link_evidence(
     }
 
 
-@router.get("/evidence/links", response_model=List[EvidenceLinkResponse])
+@router.get("/evidence/links")
 async def list_evidence_links(
     db: DbSession,
     current_user: CurrentUser,
     entity_type: Optional[str] = Query(None),
     entity_id: Optional[str] = Query(None),
     clause_id: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    params: PaginationParams = Depends(),
 ):
     """List evidence links with optional filtering."""
-    query = select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.deleted_at.is_(None))
+    query = select(ComplianceEvidenceLink).where(
+        ComplianceEvidenceLink.deleted_at.is_(None),
+        ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
+    )
     if entity_type:
         query = query.where(ComplianceEvidenceLink.entity_type == entity_type)
     if entity_id:
@@ -287,26 +295,30 @@ async def list_evidence_links(
         query = query.where(ComplianceEvidenceLink.clause_id == clause_id)
 
     query = query.order_by(ComplianceEvidenceLink.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
 
-    result = await db.execute(query)
-    rows = result.scalars().all()
+    paginated = await paginate(db, query, params)
 
-    return [
-        EvidenceLinkResponse(
-            id=r.id,
-            entity_type=r.entity_type,
-            entity_id=r.entity_id,
-            clause_id=r.clause_id,
-            linked_by=r.linked_by.value if isinstance(r.linked_by, EvidenceLinkMethod) else r.linked_by,
-            confidence=r.confidence,
-            title=r.title,
-            notes=r.notes,
-            created_at=r.created_at.isoformat() if r.created_at else "",
-            created_by_email=r.created_by_email,
-        )
-        for r in rows
-    ]
+    return {
+        "items": [
+            EvidenceLinkResponse(
+                id=r.id,
+                entity_type=r.entity_type,
+                entity_id=r.entity_id,
+                clause_id=r.clause_id,
+                linked_by=r.linked_by.value if isinstance(r.linked_by, EvidenceLinkMethod) else r.linked_by,
+                confidence=r.confidence,
+                title=r.title,
+                notes=r.notes,
+                created_at=r.created_at.isoformat() if r.created_at else "",
+                created_by_email=r.created_by_email,
+            )
+            for r in paginated.items
+        ],
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+    }
 
 
 @router.delete("/evidence/link/{link_id}")
@@ -316,7 +328,12 @@ async def delete_evidence_link(
     current_user: CurrentSuperuser,
 ):
     """Soft-delete an evidence link."""
-    result = await db.execute(select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.id == link_id))
+    result = await db.execute(
+        select(ComplianceEvidenceLink).where(
+            ComplianceEvidenceLink.id == link_id,
+            ComplianceEvidenceLink.tenant_id == current_user.tenant_id,
+        )
+    )
     link = result.scalar_one_or_none()
     if not link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
@@ -339,7 +356,7 @@ async def get_compliance_coverage(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
 
-    links = await _load_evidence_links(db, std_enum)
+    links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.calculate_compliance_coverage(links, std_enum)
 
 
@@ -357,7 +374,7 @@ async def get_compliance_gaps(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
 
-    links = await _load_evidence_links(db, std_enum)
+    links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     coverage = iso_compliance_service.calculate_compliance_coverage(links, std_enum)
     return {"total_gaps": coverage["gaps"], "gap_clauses": coverage["gap_clauses"]}
 
@@ -377,7 +394,7 @@ async def generate_compliance_report(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
 
-    links = await _load_evidence_links(db, std_enum)
+    links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.generate_audit_report(links, std_enum, include_evidence)
 
 

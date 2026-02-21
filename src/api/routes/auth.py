@@ -211,6 +211,16 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
             detail="User not found or inactive",
         )
 
+    # Revoke the old refresh token
+    old_jti = payload.get("jti")
+    if old_jti:
+        await TokenService.revoke_token(
+            db=db,
+            jti=old_jti,
+            user_id=int(user_id),
+            reason="token_refresh",
+        )
+
     # Generate new tokens
     access_token = create_access_token(subject=user.id)
     new_refresh_token = create_refresh_token(subject=user.id)

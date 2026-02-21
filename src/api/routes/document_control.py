@@ -507,7 +507,7 @@ async def get_version_diff(
     version = result.scalar_one_or_none()
 
     if not version:
-        raise HTTPException(status_code=404, detail="Version not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
 
     response = {
         "version": {
@@ -684,7 +684,7 @@ async def acknowledge_distribution(
     dist = result.scalar_one_or_none()
 
     if not dist:
-        raise HTTPException(status_code=404, detail="Distribution not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Distribution not found")
 
     dist.acknowledged = True
     dist.acknowledged_date = datetime.utcnow()

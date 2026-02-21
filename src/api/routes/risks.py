@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +23,8 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
@@ -38,8 +40,7 @@ router = APIRouter()
 async def list_risks(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     search: Optional[str] = None,
     category: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -61,24 +62,9 @@ async def list_risks(
     if owner_id:
         query = query.where(Risk.owner_id == owner_id)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(Risk.risk_score.desc(), Risk.created_at.desc())
 
-    result = await db.execute(query)
-    risks = result.scalars().all()
-
-    return RiskListResponse(
-        items=[RiskResponse.model_validate(r) for r in risks],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
@@ -280,14 +266,7 @@ async def update_risk(
     current_user: CurrentUser,
 ) -> RiskResponse:
     """Update a risk."""
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
-    risk = result.scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
-        )
+    risk = await get_or_404(db, Risk, risk_id, "Risk not found")
 
     update_data = risk_data.model_dump(exclude_unset=True)
 
@@ -321,14 +300,7 @@ async def delete_risk(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk (superuser only)."""
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
-    risk = result.scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
-        )
+    risk = await get_or_404(db, Risk, risk_id, "Risk not found")
 
     risk.is_active = False
     risk.status = RiskStatus.CLOSED
@@ -346,15 +318,7 @@ async def create_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Create a new control for a risk."""
-    # Verify risk exists
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
-    risk = result.scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
-        )
+    await get_or_404(db, Risk, risk_id, "Risk not found")
 
     control_dict = control_data.model_dump(exclude={"clause_ids", "control_ids"})
 
@@ -406,14 +370,7 @@ async def update_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Update a risk control."""
-    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
-    control = result.scalar_one_or_none()
-
-    if not control:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Control not found",
-        )
+    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found")
 
     update_data = control_data.model_dump(exclude_unset=True)
 
@@ -439,14 +396,7 @@ async def delete_control(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk control."""
-    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
-    control = result.scalar_one_or_none()
-
-    if not control:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Control not found",
-        )
+    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found")
 
     control.is_active = False
     await db.commit()
@@ -463,15 +413,7 @@ async def create_assessment(
     current_user: CurrentUser,
 ) -> RiskAssessmentResponse:
     """Create a new assessment for a risk."""
-    # Verify risk exists
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
-    risk = result.scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
-        )
+    risk = await get_or_404(db, Risk, risk_id, "Risk not found")
 
     # Calculate scores and levels
     inherent_score, inherent_level, _ = calculate_risk_level(

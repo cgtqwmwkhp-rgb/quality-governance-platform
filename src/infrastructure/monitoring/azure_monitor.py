@@ -35,6 +35,12 @@ _auth_logout: Counter | None = None
 _documents_uploaded: Counter | None = None
 _workflows_completed: Counter | None = None
 _workflow_completion_time: Histogram | None = None
+_error_rate_5xx: Counter | None = None
+_cache_miss_rate: Counter | None = None
+_db_pool_usage: UpDownCounter | None = None
+_celery_task_failures: Counter | None = None
+_celery_queue_depth: UpDownCounter | None = None
+_auth_failures: Counter | None = None
 
 
 def setup_telemetry(app: Any = None, service_name: str = "quality-governance-platform") -> None:
@@ -93,6 +99,8 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     global _capa_created, _capa_closed, _complaints_created, _risks_created
     global _auth_login, _auth_logout, _documents_uploaded, _workflows_completed
     global _workflow_completion_time
+    global _error_rate_5xx, _cache_miss_rate, _db_pool_usage
+    global _celery_task_failures, _celery_queue_depth, _auth_failures
 
     _capa_created = _meter.create_counter("capa.created", description="Number of CAPA actions created")
     _capa_closed = _meter.create_counter("capa.closed", description="Number of CAPA actions closed")
@@ -105,6 +113,17 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     _workflow_completion_time = _meter.create_histogram(
         "workflow.completion_time_hours", description="Workflow completion time in hours", unit="h"
     )
+
+    _error_rate_5xx = _meter.create_counter("api.error_rate_5xx", description="Count of 5xx HTTP errors")
+    _cache_miss_rate = _meter.create_counter("cache.miss_rate", description="Count of cache misses")
+    _db_pool_usage = _meter.create_up_down_counter(
+        "db.pool_usage_percent", description="Database connection pool usage percentage"
+    )
+    _celery_task_failures = _meter.create_counter("celery.task_failures", description="Count of failed Celery tasks")
+    _celery_queue_depth = _meter.create_up_down_counter(
+        "celery.queue_depth", description="Current depth of Celery task queue"
+    )
+    _auth_failures = _meter.create_counter("auth.failures", description="Count of authentication failures")
 
     if app:
         FastAPIInstrumentor.instrument_app(app)
@@ -127,7 +146,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
 def track_metric(name: str, value: float = 1.0, tags: dict[str, str] | None = None) -> None:
     """Track a business metric."""
 
-    metric_map: dict[str, Counter | None] = {
+    metric_map: dict[str, Counter | UpDownCounter | None] = {
         "incidents.created": _incidents_created,
         "incidents.resolved": _incidents_resolved,
         "audits.completed": _audits_completed,
@@ -140,6 +159,12 @@ def track_metric(name: str, value: float = 1.0, tags: dict[str, str] | None = No
         "auth.logout": _auth_logout,
         "documents.uploaded": _documents_uploaded,
         "workflows.completed": _workflows_completed,
+        "api.error_rate_5xx": _error_rate_5xx,
+        "cache.miss_rate": _cache_miss_rate,
+        "db.pool_usage_percent": _db_pool_usage,
+        "celery.task_failures": _celery_task_failures,
+        "celery.queue_depth": _celery_queue_depth,
+        "auth.failures": _auth_failures,
     }
 
     counter = metric_map.get(name)

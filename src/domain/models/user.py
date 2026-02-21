@@ -57,6 +57,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     last_login: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     azure_oid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Relationships
     roles: Mapped[List["Role"]] = relationship(
         "Role",

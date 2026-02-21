@@ -11,7 +11,7 @@ from typing import Optional
 
 from sqlalchemy import DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, Index, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import TimestampMixin
@@ -36,6 +36,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     __tablename__ = "compliance_evidence_links"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     entity_type: Mapped[str] = mapped_column(
         String(50),

@@ -11,11 +11,11 @@ Features:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser
-from src.core.security import decode_token
+from src.core.security import decode_token, is_token_revoked
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
         if not payload:
             await websocket.close(code=4001, reason="Invalid token")
             return
+
+        jti = payload.get("jti")
+        if jti:
+            from src.infrastructure.database import get_db
+
+            async for db in get_db():
+                if await is_token_revoked(jti, db):
+                    await websocket.close(code=4001, reason="Token has been revoked")
+                    return
+
         token_user_id = payload.get("sub")
         if token_user_id is not None and int(token_user_id) != user_id:
             await websocket.close(code=4003, reason="User ID mismatch")
@@ -160,7 +170,7 @@ async def broadcast_message(message: dict, current_user: CurrentUser, channel: O
     Admin only endpoint.
     """
     if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     if channel:
         count = await connection_manager.broadcast_to_channel(

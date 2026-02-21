@@ -15,12 +15,13 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.iso27001 import (
     AccessControlRecord,
@@ -141,8 +142,7 @@ async def list_assets(
     classification: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     criticality: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List information assets"""
     stmt = select(InformationAsset).where(InformationAsset.is_active == True)
@@ -156,14 +156,14 @@ async def list_assets(
     if criticality:
         stmt = stmt.where(InformationAsset.criticality == criticality)
 
-    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = count_result.scalar_one()
-
-    result = await db.execute(stmt.order_by(InformationAsset.criticality.desc()).offset(skip).limit(limit))
-    assets = result.scalars().all()
+    query = stmt.order_by(InformationAsset.criticality.desc())
+    paginated = await paginate(db, query, params)
 
     return {
-        "total": total,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
         "assets": [
             {
                 "id": a.id,
@@ -176,7 +176,7 @@ async def list_assets(
                 "department": a.department,
                 "cia_score": a.confidentiality_requirement + a.integrity_requirement + a.availability_requirement,
             }
-            for a in assets
+            for a in paginated.items
         ],
     }
 
@@ -249,8 +249,7 @@ async def list_controls(
     domain: Optional[str] = Query(None, description="organizational, people, physical, technological"),
     implementation_status: Optional[str] = Query(None),
     is_applicable: Optional[bool] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
+    params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List ISO 27001 Annex A controls"""
     stmt = select(ISO27001Control)
@@ -262,11 +261,8 @@ async def list_controls(
     if is_applicable is not None:
         stmt = stmt.where(ISO27001Control.is_applicable == is_applicable)
 
-    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = count_result.scalar_one()
-
-    result = await db.execute(stmt.order_by(ISO27001Control.control_id).offset(skip).limit(limit))
-    controls = result.scalars().all()
+    query = stmt.order_by(ISO27001Control.control_id)
+    paginated = await paginate(db, query, params)
 
     # Summary
     result = await db.execute(
@@ -292,13 +288,16 @@ async def list_controls(
     excluded = result.scalar_one()
 
     return {
-        "total": total,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
         "summary": {
             "implemented": implemented,
             "partially_implemented": partial,
             "not_implemented": not_impl,
             "excluded": excluded,
-            "implementation_percentage": round((implemented / max(total - excluded, 1)) * 100, 1),
+            "implementation_percentage": round((implemented / max(paginated.total - excluded, 1)) * 100, 1),
         },
         "controls": [
             {
@@ -312,7 +311,7 @@ async def list_controls(
                 "effectiveness_rating": c.effectiveness_rating,
                 "control_owner_name": c.control_owner_name,
             }
-            for c in controls
+            for c in paginated.items
         ],
     }
 
@@ -401,8 +400,7 @@ async def list_security_risks(
     status: Optional[str] = Query(None),
     treatment_option: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None, ge=1, le=25),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List information security risks"""
     stmt = select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
@@ -414,16 +412,14 @@ async def list_security_risks(
     if min_score:
         stmt = stmt.where(InformationSecurityRisk.residual_risk_score >= min_score)
 
-    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = count_result.scalar_one()
-
-    result = await db.execute(
-        stmt.order_by(InformationSecurityRisk.residual_risk_score.desc()).offset(skip).limit(limit)
-    )
-    risks = result.scalars().all()
+    query = stmt.order_by(InformationSecurityRisk.residual_risk_score.desc())
+    paginated = await paginate(db, query, params)
 
     return {
-        "total": total,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
         "risks": [
             {
                 "id": r.id,
@@ -437,7 +433,7 @@ async def list_security_risks(
                 "risk_owner_name": r.risk_owner_name,
                 "status": r.status,
             }
-            for r in risks
+            for r in paginated.items
         ],
     }
 
@@ -478,8 +474,7 @@ async def list_security_incidents(
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     incident_type: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List security incidents"""
     stmt = select(SecurityIncident)
@@ -491,11 +486,8 @@ async def list_security_incidents(
     if incident_type:
         stmt = stmt.where(SecurityIncident.incident_type == incident_type)
 
-    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = count_result.scalar_one()
-
-    result = await db.execute(stmt.order_by(SecurityIncident.detected_date.desc()).offset(skip).limit(limit))
-    incidents = result.scalars().all()
+    query = stmt.order_by(SecurityIncident.detected_date.desc())
+    paginated = await paginate(db, query, params)
 
     # Summary
     result = await db.execute(
@@ -509,7 +501,10 @@ async def list_security_incidents(
     critical_count = result.scalar_one()
 
     return {
-        "total": total,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
         "open_incidents": open_count,
         "critical_incidents": critical_count,
         "incidents": [
@@ -524,7 +519,7 @@ async def list_security_incidents(
                 "assigned_to_name": i.assigned_to_name,
                 "data_compromised": i.data_compromised,
             }
-            for i in incidents
+            for i in paginated.items
         ],
     }
 
@@ -578,8 +573,7 @@ async def list_supplier_assessments(
     db: DbSession,
     rating: Optional[str] = Query(None),
     risk_level: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List supplier security assessments"""
     stmt = select(SupplierSecurityAssessment).where(SupplierSecurityAssessment.status == "active")
@@ -589,14 +583,14 @@ async def list_supplier_assessments(
     if risk_level:
         stmt = stmt.where(SupplierSecurityAssessment.risk_level == risk_level)
 
-    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = count_result.scalar_one()
-
-    result = await db.execute(stmt.order_by(SupplierSecurityAssessment.next_assessment_date).offset(skip).limit(limit))
-    suppliers = result.scalars().all()
+    query = stmt.order_by(SupplierSecurityAssessment.next_assessment_date)
+    paginated = await paginate(db, query, params)
 
     return {
-        "total": total,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
         "suppliers": [
             {
                 "id": s.id,
@@ -610,7 +604,7 @@ async def list_supplier_assessments(
                 "risk_level": s.risk_level,
                 "next_assessment_date": s.next_assessment_date.isoformat() if s.next_assessment_date else None,
             }
-            for s in suppliers
+            for s in paginated.items
         ],
     }
 

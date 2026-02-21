@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Alert threshold definitions for Azure Monitor integration (error rate, latency, queue depth, cache, DB pool, auth failures)
+- Dead letter queue handler for permanently failed Celery tasks
+- Cache invalidation strategy with tenant-scoped pattern-based key deletion
+- Cache warmup on startup for frequently accessed standards data
+- Shared query filter utilities (search, status, date range)
+- SkeletonLoader, TableSkeleton, CardSkeleton UI components
+- Code splitting with React.lazy for all 49 page components
+- Frontend test job in CI pipeline (Vitest + jsdom)
+- Frontend component/hook/store tests (useAppStore, useNotificationStore, useDataFetch)
+- Structured error codes module (ErrorCode class)
+- CAPA response schemas with response_model on all endpoints
 - CAPA (Corrective and Preventive Action) module with full lifecycle management
 - Cross-standard ISO mapping CRUD API
 - JWT token revocation with database blacklist
@@ -24,9 +35,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Disaster recovery and scaling documentation
 
 ### Changed
+- Added tenant_id filtering to all data route files (CAPA, investigations, near_miss, RTAs, risk_register, compliance, workflow, KRI)
+- Enhanced get_or_404 utility with optional tenant_id scoping parameter
+- Added CurrentUser auth to all 14 UVDB endpoints (previously unprotected)
+- Added token blacklist checks to WebSocket endpoints (realtime, copilot) and get_optional_current_user
+- Implemented refresh token revocation on token refresh
+- Added JTI to password reset tokens for revocation support
+- Added Content-Security-Policy, COOP, CORP security headers
+- Unified dependency imports across all route files (deps -> dependencies)
+- Standardized pagination across 20+ files using paginate() utility
+- Standardized entity lookups across 12+ files using get_or_404
+- Standardized field updates across 4+ files using apply_updates
+- Replaced all numeric HTTP status codes with fastapi.status constants across 13 files
+- Standardized pagination response field names (total_pages -> pages)
+- Consolidated duplicate frontend API clients (services/api.ts deprecated, api/client.ts primary)
+- Added Celery retry policies with exponential backoff (3 retries, jitter)
+- Completed data retention service (audit entries, notifications cleanup)
+- Added 6 new observability metrics (error rate, cache, DB pool, Celery failures/queue depth, auth failures)
+- Added Docker Compose resource limits for all services
+- Removed postgresql-client from Dockerfile runtime
+- Raised CI coverage thresholds (unit: 65%, integration: 45%)
 - Refactored all 47 route files to use shared utilities (pagination, entity lookup, updates)
-- Standardized pagination parameter names (page_size) across all APIs
-- Replaced all numeric HTTP status codes with fastapi.status constants
 - Moved business logic from routes to service layer (risk scoring, investigation templates)
 - Consolidated service directory (src/services/ merged into src/domain/services/)
 - Consolidated workflow engine into single module

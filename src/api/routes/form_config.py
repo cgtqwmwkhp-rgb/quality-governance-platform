@@ -4,9 +4,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import delete
-from sqlalchemy import func as sa_func
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -35,6 +33,7 @@ from src.api.schemas.form_config import (
     SystemSettingUpdate,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
@@ -49,10 +48,9 @@ router = APIRouter()
 async def list_form_templates(
     db: DbSession,
     current_user: CurrentUser,
+    params: PaginationParams = Depends(),
     form_type: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
     query = select(FormTemplate)
@@ -62,21 +60,9 @@ async def list_form_templates(
     if is_active is not None:
         query = query.where(FormTemplate.is_active == is_active)
 
-    # Count total
-    count_query = select(sa_func.count()).select_from(query.subquery())
-    total = (await db.execute(count_query)).scalar_one()
+    query = query.order_by(FormTemplate.name)
 
-    # Apply pagination
-    query = query.order_by(FormTemplate.name).offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    templates = result.scalars().all()
-
-    return FormTemplateListResponse(
-        items=[FormTemplateResponse.model_validate(t) for t in templates],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("/templates", response_model=FormTemplateResponse, status_code=status.HTTP_201_CREATED)

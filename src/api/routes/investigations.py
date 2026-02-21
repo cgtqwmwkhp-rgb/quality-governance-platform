@@ -45,6 +45,7 @@ async def validate_assigned_entity(
     entity_id: int,
     db: AsyncSession,
     request_id: str,
+    tenant_id: int | None = None,
 ) -> None:
     """Validate that the assigned entity exists.
 
@@ -78,8 +79,10 @@ async def validate_assigned_entity(
     module = __import__(module_path, fromlist=[class_name])
     model_class = getattr(module, class_name)
 
-    # Check if entity exists
+    # Check if entity exists (tenant-scoped if model supports it)
     query = select(model_class).where(model_class.id == entity_id)
+    if hasattr(model_class, "tenant_id") and tenant_id is not None:
+        query = query.where(model_class.tenant_id == tenant_id)
     result = await db.execute(query)
     entity = result.scalar_one_or_none()
 
@@ -125,6 +128,7 @@ async def create_investigation(
         investigation_data.assigned_entity_id,
         db,
         request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     # Generate reference number
@@ -142,6 +146,7 @@ async def create_investigation(
         status=InvestigationStatus(investigation_data.status),
         data=investigation_data.data,
         reference_number=reference_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -171,7 +176,7 @@ async def list_investigations(
     request_id = "N/A"  # TODO: Get from request context
 
     # Build query
-    query = select(InvestigationRun)
+    query = select(InvestigationRun).where(InvestigationRun.tenant_id == current_user.tenant_id)
 
     # Apply filters
     if entity_type is not None:
@@ -228,14 +233,14 @@ async def list_investigations(
     result = await db.execute(query)
     investigations = result.scalars().all()
 
-    total_pages = math.ceil(total / page_size) if total and total > 0 else 1
+    pages = math.ceil(total / page_size) if total and total > 0 else 1
 
     return InvestigationRunListResponse(
         items=[InvestigationRunResponse.model_validate(inv) for inv in investigations],
         total=total or 0,
         page=page,
         page_size=page_size,
-        total_pages=total_pages,
+        pages=pages,
     )
 
 
@@ -246,7 +251,7 @@ async def get_investigation(
     current_user: CurrentUser,
 ):
     """Get a specific investigation run by ID."""
-    return await get_or_404(db, InvestigationRun, investigation_id)
+    return await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{investigation_id}", response_model=InvestigationRunResponse)
@@ -261,7 +266,7 @@ async def update_investigation(
     Only provided fields will be updated (partial update).
     Can update RCA section fields via the data field.
     """
-    investigation = await get_or_404(db, InvestigationRun, investigation_id)
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Update fields
     update_data = investigation_data.model_dump(exclude_unset=True)
@@ -341,6 +346,7 @@ async def create_investigation_from_record(
 
     # === DUPLICATE CHECK: Return 409 if investigation already exists ===
     existing_query = select(InvestigationRun).where(
+        InvestigationRun.tenant_id == current_user.tenant_id,
         InvestigationRun.assigned_entity_type == source_type_enum,
         InvestigationRun.assigned_entity_id == source_id,
     )
@@ -406,6 +412,7 @@ async def create_investigation_from_record(
         mapping_log=mapping_log,
         version=1,
         reference_number=reference_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -508,8 +515,10 @@ async def list_source_records(
     module = __import__(module_path, fromlist=[class_name])
     model_class = getattr(module, class_name)
 
-    # Build base query for source records
+    # Build base query for source records (tenant-scoped if model supports it)
     base_query = select(model_class)
+    if hasattr(model_class, "tenant_id"):
+        base_query = base_query.where(model_class.tenant_id == current_user.tenant_id)
 
     # Apply search filter if provided
     if q:
@@ -580,14 +589,14 @@ async def list_source_records(
             )
         )
 
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    pages = math.ceil(total / page_size) if total > 0 else 1
 
     return SourceRecordsResponse(
         items=items,
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages,
+        pages=pages,
         source_type=source_type,
     )
 
@@ -609,7 +618,7 @@ async def autosave_investigation(
 
     request_id = "N/A"
 
-    investigation = await get_or_404(db, InvestigationRun, investigation_id)
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Optimistic locking: check version
     if investigation.version != version:
@@ -673,7 +682,7 @@ async def add_comment(
 
     request_id = "N/A"
 
-    investigation = await get_or_404(db, InvestigationRun, investigation_id)
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Validate parent comment if provided
     if request_body.parent_comment_id:
@@ -750,7 +759,7 @@ async def approve_investigation(
 
     request_id = "N/A"
 
-    investigation = await get_or_404(db, InvestigationRun, investigation_id)
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Check status allows approval
     if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
@@ -840,7 +849,7 @@ async def generate_customer_pack(
             },
         )
 
-    investigation = await get_or_404(db, InvestigationRun, investigation_id)
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset
@@ -960,7 +969,7 @@ async def get_investigation_timeline(
     Returns events in deterministic order: created_at DESC, then id DESC.
     Supports filtering by event_type and pagination.
     """
-    await get_or_404(db, InvestigationRun, investigation_id)
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Build query for timeline events
     query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
@@ -1042,7 +1051,7 @@ async def get_investigation_comments(
                 },
             )
 
-    await get_or_404(db, InvestigationRun, investigation_id)
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Build query for comments
     query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
@@ -1101,7 +1110,7 @@ async def get_investigation_packs(
     Returns pack summaries (without full content) in deterministic order:
     created_at DESC, id DESC. Full pack content should be fetched separately.
     """
-    await get_or_404(db, InvestigationRun, investigation_id)
+    await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Build query for packs
     query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
@@ -1176,7 +1185,7 @@ async def validate_investigation_closure(
     """
     checked_at = datetime.now(timezone.utc)
 
-    investigation = await get_or_404(db, InvestigationRun, investigation_id)
+    investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     reason_codes: List[str] = []
     missing_fields: List[str] = []

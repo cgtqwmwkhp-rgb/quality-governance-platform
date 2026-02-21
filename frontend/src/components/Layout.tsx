@@ -137,7 +137,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       </a>
 
       {/* Top Bar */}
-      <header className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
+      <header role="banner" aria-label="Site header" className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
         {/* Search Bar */}
         <button
           onClick={() => navigate('/search')}
@@ -240,7 +240,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 overflow-y-auto">
+          <nav aria-label="Main navigation" className="flex-1 p-4 overflow-y-auto">
             {navSections.map((section) => (
               <div key={section.title} className="mb-6">
                 <h3 className="px-4 text-2xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
@@ -306,6 +306,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          aria-hidden="true"
           onClick={() => setSidebarOpen(false)}
         />
       )}

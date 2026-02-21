@@ -39,6 +39,7 @@ async def create_near_miss(
         reference_number=reference_number,
         status="REPORTED",
         priority="MEDIUM",
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -79,7 +80,7 @@ async def list_near_misses(
 
     Ordered by event_date DESC, id ASC for deterministic results.
     """
-    query = select(NearMiss)
+    query = select(NearMiss).where(NearMiss.tenant_id == current_user.tenant_id)
 
     if reporter_email:
         query = query.where(NearMiss.reporter_email == reporter_email)
@@ -110,7 +111,7 @@ async def get_near_miss(
     current_user: CurrentUser,
 ) -> NearMiss:
     """Get a near miss by ID."""
-    return await get_or_404(db, NearMiss, near_miss_id)
+    return await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{near_miss_id}", response_model=NearMissResponse)
@@ -122,7 +123,7 @@ async def update_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
-    near_miss = await get_or_404(db, NearMiss, near_miss_id)
+    near_miss = await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
     old_status = near_miss.status
     update_data = apply_updates(near_miss, data, set_updated_at=False)
 
@@ -161,7 +162,7 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
-    near_miss = await get_or_404(db, NearMiss, near_miss_id)
+    near_miss = await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
 
     await record_audit_event(
         db=db,
@@ -191,7 +192,7 @@ async def list_near_miss_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    await get_or_404(db, NearMiss, near_miss_id)
+    await get_or_404(db, NearMiss, near_miss_id, tenant_id=current_user.tenant_id)
 
     query = (
         select(InvestigationRun)
@@ -209,5 +210,5 @@ async def list_near_miss_investigations(
         "total": paginated.total,
         "page": paginated.page,
         "page_size": paginated.page_size,
-        "total_pages": paginated.pages,
+        "pages": paginated.pages,
     }
