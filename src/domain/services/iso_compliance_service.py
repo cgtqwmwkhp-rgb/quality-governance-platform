@@ -8,7 +8,7 @@ for ISO 9001, 14001, 45001 and other standards.
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -920,7 +920,7 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
             clause_details.append(detail)
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "summary": coverage,
             "clauses": clause_details,
         }

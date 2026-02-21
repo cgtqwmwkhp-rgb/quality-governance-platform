@@ -23,12 +23,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-# Skip entire module - backend routes need fixes
-# Frontend wiring is tested via TypeScript build + mock gate
-pytestmark = pytest.mark.skip(
-    reason="Planet Mark/UVDB endpoints have backend AsyncSession.query issues. "
-    "Frontend wiring verified via TypeScript build and mock gate."
-)
+pytestmark = pytest.mark.xfail(reason="AsyncSession fixture alignment needed", strict=False)
 
 
 @pytest.fixture(scope="module")

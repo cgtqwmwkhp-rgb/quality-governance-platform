@@ -2,7 +2,7 @@
 
 import logging
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: str = "change-me-in-production"
 
+    # Build / version
+    build_sha: str = "dev"
+    build_time: str = "local"
+    app_version: str = "1.0.0"
+
     # Database
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/quality_governance"
     database_echo: bool = False
@@ -113,11 +118,70 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = ""
     azure_storage_container_name: str = "attachments"
 
+    # Frontend
+    frontend_url: str = "https://app-qgp-prod.azurestaticapps.net"
+
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Celery
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+
+    # Email (SMTP)
+    smtp_host: str = "smtp.office365.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    from_email: str = "noreply@qgp.plantexpand.com"
+    from_name: str = "Quality Governance Platform"
+
     # Email Ingestion
     email_imap_server: str = ""
     email_imap_port: int = 993
     email_username: str = ""
     email_password: str = ""
+
+    # Twilio / SMS
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+
+    # VAPID (Push Notifications)
+    vapid_private_key: str = ""
+    vapid_public_key: str = ""
+    vapid_email: str = "admin@plantexpand.com"
+
+    # AI Providers
+    ai_provider: str = "openai"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4-turbo-preview"
+    azure_openai_endpoint: str = ""
+    azure_openai_key: str = ""
+    azure_openai_deployment: str = ""
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-3-opus-20240229"
+    local_model_path: str = ""
+    embedding_model: str = "text-embedding-3-small"
+
+    # Monitoring / Telemetry
+    applicationinsights_connection_string: str = ""
+    otel_trace_sample_rate: Optional[float] = None
+
+    # Cache
+    cache_recovery_interval: int = 60
+    cache_ttl_short: int = 60
+    cache_ttl_medium: int = 300
+    cache_ttl_long: int = 3600
+    cache_ttl_daily: int = 86400
+    cache_ttl_session: int = 1800
+    cache_ttl_default: int = 300
+
+    # Metrics
+    metrics_dir: str = ""
+
+    # Testing (staging only)
+    ci_test_secret: str = ""
 
     # CORS - explicit allowlist for production safety
     # Production SWA origins must be listed explicitly (no wildcards)

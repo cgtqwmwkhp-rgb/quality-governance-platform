@@ -5,7 +5,7 @@ and automated alerts when thresholds are breached.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import and_, func, select
@@ -178,7 +178,7 @@ class RiskScoringService:
                 # Record history
                 history = RiskScoreHistory(
                     risk_id=risk_id,
-                    recorded_at=datetime.utcnow(),
+                    recorded_at=datetime.now(timezone.utc),
                     likelihood=risk.likelihood,
                     impact=risk.impact,
                     risk_score=risk.risk_score,
@@ -217,7 +217,7 @@ class RiskScoringService:
             return None
 
         # Count near misses linked to this risk in the last month
-        one_month_ago = datetime.utcnow() - timedelta(days=30)
+        one_month_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
         count_result = await self.db.execute(
             select(func.count(NearMiss.id)).where(
@@ -250,7 +250,7 @@ class RiskScoringService:
             # Record history
             history = RiskScoreHistory(
                 risk_id=risk_id,
-                recorded_at=datetime.utcnow(),
+                recorded_at=datetime.now(timezone.utc),
                 likelihood=risk.likelihood,
                 impact=risk.impact,
                 risk_score=risk.risk_score,
@@ -293,7 +293,7 @@ class RiskScoringService:
         days: int = 90,
     ) -> List[Dict[str, Any]]:
         """Get risk score trend over time."""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         result = await self.db.execute(
             select(RiskScoreHistory)
@@ -347,11 +347,11 @@ class KRIService:
         # Store measurement
         measurement = KRIMeasurement(
             kri_id=kri_id,
-            measurement_date=datetime.utcnow(),
+            measurement_date=datetime.now(timezone.utc),
             value=value,
             status=new_status,
-            period_start=datetime.utcnow() - timedelta(days=30),
-            period_end=datetime.utcnow(),
+            period_start=datetime.now(timezone.utc) - timedelta(days=30),
+            period_end=datetime.now(timezone.utc),
         )
         self.db.add(measurement)
 
@@ -362,7 +362,7 @@ class KRIService:
         old_status = kri.current_status
         kri.current_value = value
         kri.current_status = new_status
-        kri.last_updated = datetime.utcnow()
+        kri.last_updated = datetime.now(timezone.utc)
         kri.trend_direction = trend
 
         await self.db.commit()
@@ -426,7 +426,7 @@ class KRIService:
         severity: Optional[IncidentSeverity] = None,
     ) -> float:
         """Count incidents in the specified period."""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         query = select(func.count(Incident.id)).where(Incident.incident_date >= cutoff)
 
@@ -481,7 +481,7 @@ class KRIService:
     async def _calculate_closure_rate(self, entity_type: str) -> float:
         """Calculate percentage of cases closed within target."""
         # Simplified: count closed vs total in last 90 days
-        cutoff = datetime.utcnow() - timedelta(days=90)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
 
         if entity_type == "incident":
             total_result = await self.db.execute(select(func.count(Incident.id)).where(Incident.created_at >= cutoff))
@@ -505,7 +505,7 @@ class KRIService:
 
     async def _count_near_misses(self, days: int) -> float:
         """Count near misses in period."""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         result = await self.db.execute(select(func.count(NearMiss.id)).where(NearMiss.created_at >= cutoff))
         return float(result.scalar() or 0)
@@ -525,7 +525,7 @@ class KRIService:
         """Count complaints in period."""
         from src.domain.models.complaint import Complaint
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         result = await self.db.execute(select(func.count(Complaint.id)).where(Complaint.created_at >= cutoff))
         return float(result.scalar() or 0)
@@ -535,7 +535,7 @@ class KRIService:
         if entity_type == "complaint":
             from src.domain.models.complaint import Complaint, ComplaintStatus
 
-            cutoff = datetime.utcnow() - timedelta(days=90)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=90)
             result = await self.db.execute(
                 select(Complaint.received_date, Complaint.resolved_date).where(
                     and_(
@@ -556,7 +556,7 @@ class KRIService:
             return round(total_days / len(rows), 1) if rows else 0.0
 
         if entity_type == "incident":
-            cutoff = datetime.utcnow() - timedelta(days=90)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=90)
             result = await self.db.execute(
                 select(Incident.created_at, Incident.closed_at).where(
                     and_(
@@ -582,7 +582,7 @@ class KRIService:
         """Count audit findings in period."""
         from src.domain.models.audit import AuditFinding
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         result = await self.db.execute(select(func.count(AuditFinding.id)).where(AuditFinding.created_at >= cutoff))
         return float(result.scalar() or 0)
 
@@ -616,7 +616,7 @@ class KRIService:
         """Count overdue corrective actions."""
         from src.domain.models.incident import ActionStatus, IncidentAction
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         result = await self.db.execute(
             select(func.count(IncidentAction.id)).where(
@@ -680,7 +680,7 @@ class KRIService:
                 kri_id=kri.id,
                 alert_type="threshold_breach",
                 severity=new_status,
-                triggered_at=datetime.utcnow(),
+                triggered_at=datetime.now(timezone.utc),
                 trigger_value=value,
                 previous_value=kri.current_value,
                 threshold_breached=threshold,

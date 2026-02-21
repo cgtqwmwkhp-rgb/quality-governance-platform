@@ -24,7 +24,7 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
   
   // Output directories for artifacts (stable paths)
@@ -60,7 +60,7 @@ export default defineConfig({
   expect: {
     timeout: 10000,
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.05,
+      maxDiffPixelRatio: 0.01,
     },
   },
 

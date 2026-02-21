@@ -10,14 +10,15 @@ Features:
 """
 
 import json
-import os
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.core.config import settings
 
 # AI Integration
 try:
@@ -486,7 +487,7 @@ class AuditQuestionGenerator:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
-        if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
+        if CLAUDE_AVAILABLE and settings.anthropic_api_key:
             self.claude_client = anthropic.Anthropic()
 
     def generate_questions_for_clause(
@@ -821,7 +822,7 @@ class FindingClassifier:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
-        if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
+        if CLAUDE_AVAILABLE and settings.anthropic_api_key:
             self.claude_client = anthropic.Anthropic()
 
     def classify_finding(self, finding_text: str) -> dict[str, Any]:
@@ -867,7 +868,7 @@ class AuditReportGenerator:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
-        if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
+        if CLAUDE_AVAILABLE and settings.anthropic_api_key:
             self.claude_client = anthropic.Anthropic()
 
     async def generate_executive_summary(self, audit_id: int) -> str:
@@ -975,7 +976,7 @@ class AuditTrendAnalyzer:
         """Analyze finding trends over time"""
         from src.domain.models.audit import Audit, AuditFinding
 
-        cutoff = datetime.utcnow() - timedelta(days=months * 30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
 
         result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))
         audits = result.scalars().all()

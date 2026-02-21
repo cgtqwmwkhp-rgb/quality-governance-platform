@@ -369,7 +369,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   // Use prop formType if provided (preferred), otherwise fall back to URL parsing
   const derivedFormType = getFormTypeFromPath(location.pathname);
   const formType = propFormType || derivedFormType;
-  const config = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident;
+  const config = FORM_TYPE_CONFIG[formType] ?? FORM_TYPE_CONFIG['incident']!;
 
   // Debug logging for form type resolution
   console.log('[PortalDynamicForm] Route debug:', {
@@ -406,7 +406,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
 
         const loadedTemplate = templateRes.status === 'fulfilled' && templateRes.value
           ? templateRes.value
-          : FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident;
+          : FALLBACK_TEMPLATES[formType] ?? FALLBACK_TEMPLATES['incident']!;
 
         const loadedContracts = contractsRes.status === 'fulfilled' && contractsRes.value?.items?.length
           ? contractsRes.value.items
@@ -416,12 +416,12 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
           ? rolesRes.value.items
           : FALLBACK_ROLES;
 
-        setTemplate(loadedTemplate);
+        setTemplate(loadedTemplate ?? null);
         setContracts(loadedContracts);
         setRoles(loadedRoles);
       } catch (err) {
         console.error('Failed to load form configuration:', err);
-        setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident);
+        setTemplate(FALLBACK_TEMPLATES[formType] ?? FALLBACK_TEMPLATES['incident']! ?? null);
         setContracts(FALLBACK_CONTRACTS);
         setRoles(FALLBACK_ROLES);
       } finally {
@@ -461,10 +461,10 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     const reportType = reportTypeMap[formType] || 'incident';
     
     // Extract description - try multiple possible field names
-    const descriptionRaw = formData.description || 
-                          formData.complaint_description || 
-                          formData.full_description ||
-                          formData.what_happened ||
+    const descriptionRaw = formData['description'] || 
+                          formData['complaint_description'] || 
+                          formData['full_description'] ||
+                          formData['what_happened'] ||
                           '';
     // Ensure minimum length for API validation (10 chars required)
     const description = String(descriptionRaw).trim().length >= 10 
@@ -472,8 +472,8 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       : `${template?.name || 'Report'} submitted via portal. ${String(descriptionRaw || 'No additional details provided.')}`;
     
     // Build a descriptive title (minimum 5 chars required)
-    const contractName = formData.contract ? String(formData.contract) : '';
-    const locationName = formData.location ? String(formData.location) : '';
+    const contractName = formData['contract'] ? String(formData['contract']) : '';
+    const locationName = formData['location'] ? String(formData['location']) : '';
     const titleSuffix = contractName || locationName || 'Report';
     const title = `${template?.name || 'Incident Report'} - ${titleSuffix}`.substring(0, 200);
     
@@ -481,16 +481,14 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       report_type: reportType,
       title: title.length >= 5 ? title : `${template?.name || 'Report'} - Submitted`,
       description: description,
-      location: formData.location ? String(formData.location) : undefined,
-      severity: formData.severity ? String(formData.severity) : 'medium',
-      reporter_name: formData.person_name ? String(formData.person_name) : 
-                     formData.complainant_name ? String(formData.complainant_name) : 
+      location: formData['location'] ? String(formData['location']) : undefined,
+      severity: formData['severity'] ? String(formData['severity']) : 'medium',
+      reporter_name: formData['person_name'] ? String(formData['person_name']) : 
+                     formData['complainant_name'] ? String(formData['complainant_name']) : 
                      user?.name,
-      // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
-      // Always use the authenticated user's email, not form input (which may be a phone number)
       reporter_email: user?.email || undefined,
-      reporter_phone: formData.complainant_contact ? String(formData.complainant_contact) : undefined,
-      department: formData.contract ? String(formData.contract) : undefined,
+      reporter_phone: formData['complainant_contact'] ? String(formData['complainant_contact']) : undefined,
+      department: formData['contract'] ? String(formData['contract']) : undefined,
       is_anonymous: false,
     };
     

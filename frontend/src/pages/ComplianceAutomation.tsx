@@ -207,13 +207,13 @@ export default function ComplianceAutomation() {
       ]);
 
       if (updatesRes.status === 'fulfilled') {
-        setUpdates((updatesRes.value.data as Record<string, unknown>).updates as typeof updates ?? []);
+        setUpdates((updatesRes.value.data as Record<string, unknown>)['updates'] as typeof updates ?? []);
       }
       if (certsRes.status === 'fulfilled') {
-        setCertificates((certsRes.value.data as Record<string, unknown>).certificates as typeof certificates ?? []);
+        setCertificates((certsRes.value.data as Record<string, unknown>)['certificates'] as typeof certificates ?? []);
       }
       if (auditsRes.status === 'fulfilled') {
-        setAudits((auditsRes.value.data as Record<string, unknown>).audits as typeof audits ?? []);
+        setAudits((auditsRes.value.data as Record<string, unknown>)['audits'] as typeof audits ?? []);
       }
       if (scoreRes.status === 'fulfilled') {
         const s = scoreRes.value.data as unknown as ComplianceScoreData;
@@ -225,10 +225,10 @@ export default function ComplianceAutomation() {
         });
       }
       if (gapRes.status === 'fulfilled') {
-        setGapAnalyses((gapRes.value.data as Record<string, unknown>).analyses as typeof gapAnalyses ?? []);
+        setGapAnalyses((gapRes.value.data as Record<string, unknown>)['analyses'] as typeof gapAnalyses ?? []);
       }
       if (riddorRes.status === 'fulfilled') {
-        setRiddorSubmissions((riddorRes.value.data as Record<string, unknown>).submissions as typeof riddorSubmissions ?? []);
+        setRiddorSubmissions((riddorRes.value.data as Record<string, unknown>)['submissions'] as typeof riddorSubmissions ?? []);
       }
       if (expiringRes.status === 'fulfilled') {
         setExpiringSummary(expiringRes.value.data as ExpiringSummary);
@@ -266,7 +266,7 @@ export default function ComplianceAutomation() {
       );
       showToast('Gap analysis completed successfully', 'success');
       const gapRes = await complianceAutomationApi.listGapAnalyses();
-      setGapAnalyses((gapRes.data as Record<string, unknown>).analyses as typeof gapAnalyses ?? []);
+      setGapAnalyses((gapRes.data as Record<string, unknown>)['analyses'] as typeof gapAnalyses ?? []);
     } catch (err) {
       showToast('Failed to run gap analysis', 'error');
       console.error(err);
@@ -287,7 +287,7 @@ export default function ComplianceAutomation() {
         complianceAutomationApi.listCertificates(),
         complianceAutomationApi.getExpiringCertificates(),
       ]);
-      if (certsRes.status === 'fulfilled') setCertificates((certsRes.value.data as Record<string, unknown>).certificates as typeof certificates ?? []);
+      if (certsRes.status === 'fulfilled') setCertificates((certsRes.value.data as Record<string, unknown>)['certificates'] as typeof certificates ?? []);
       if (expiringRes.status === 'fulfilled') setExpiringSummary(expiringRes.value.data as ExpiringSummary);
     } catch (err) {
       showToast('Failed to add certificate', 'error');
@@ -314,7 +314,7 @@ export default function ComplianceAutomation() {
       setAuditForm(EMPTY_AUDIT_FORM);
       showToast('Audit scheduled successfully', 'success');
       const res = await complianceAutomationApi.listScheduledAudits();
-      setAudits((res.data as Record<string, unknown>).audits as typeof audits ?? []);
+      setAudits((res.data as Record<string, unknown>)['audits'] as typeof audits ?? []);
     } catch (err) {
       showToast('Failed to schedule audit', 'error');
       console.error(err);

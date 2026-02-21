@@ -491,11 +491,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
             return
 
         jti = payload.get("jti")
-        if jti:
-            async for db in get_db():
-                if await is_token_revoked(jti, db):
-                    await websocket.close(code=4001, reason="Token has been revoked")
-                    return
+        if not jti:
+            await websocket.close(code=4001, reason="Invalid token: missing jti")
+            return
+
+        async for db in get_db():
+            if await is_token_revoked(jti, db):
+                await websocket.close(code=4001, reason="Token has been revoked")
+                return
 
         ws_user_id = int(payload.get("sub", 0))
     except (WebSocketDisconnect, ConnectionError):

@@ -40,6 +40,7 @@ from src.api.routes import (
     risks,
     rtas,
     signatures,
+    slo,
     standards,
     telemetry,
     tenants,
@@ -136,5 +137,7 @@ router.include_router(global_search.router, prefix="/search", tags=["Global Sear
 router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)
 router.include_router(telemetry.router, tags=["Telemetry"])
+# SLO/SLI Observability
+router.include_router(slo.router, tags=["SLO Metrics"])
 
 __all__ = ["router"]

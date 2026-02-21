@@ -24,6 +24,8 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
     return (
       <div
         ref={ref}
+        role={!src || imageError ? 'img' : undefined}
+        aria-label={!src || imageError ? alt || initials : undefined}
         className={cn(
           "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface font-medium text-muted-foreground",
           sizeClasses[size],
@@ -39,7 +41,7 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
             onError={() => setImageError(true)}
           />
         ) : (
-          <span>{initials}</span>
+          <span aria-hidden="true">{initials}</span>
         )}
       </div>
     )

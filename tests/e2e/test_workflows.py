@@ -110,7 +110,7 @@ class TestWorkflowSchemaValidation:
 class TestWorkflowTemplates:
     """Test workflow template operations."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_list_workflow_templates(self, auth_client: Any) -> None:
         """Test listing available workflow templates."""
@@ -151,7 +151,7 @@ class TestWorkflowTemplates:
 class TestWorkflowInstances:
     """Test workflow instance operations."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_start_workflow(self, auth_client: Any) -> None:
         """Test starting a new workflow instance."""
@@ -213,7 +213,7 @@ class TestWorkflowInstances:
 class TestApprovals:
     """Test approval management."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_get_pending_approvals(self, auth_client: Any) -> None:
         """Test getting pending approvals for current user."""
@@ -267,7 +267,7 @@ class TestApprovals:
 class TestDelegation:
     """Test out-of-office delegation."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_get_delegations(self, auth_client: Any) -> None:
         """Test getting current delegations."""
@@ -306,7 +306,7 @@ class TestDelegation:
 class TestEscalation:
     """Test escalation features."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_get_pending_escalations(self, auth_client: Any) -> None:
         """Test getting workflows pending escalation."""
@@ -330,7 +330,7 @@ class TestEscalation:
 class TestWorkflowStats:
     """Test workflow statistics."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_get_workflow_stats(self, auth_client: Any) -> None:
         """Test getting workflow statistics."""

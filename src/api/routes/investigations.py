@@ -251,6 +251,140 @@ async def list_investigations(
     return await paginate(db, query, params)
 
 
+@router.get("/source-records", response_model=SourceRecordsResponse)
+async def list_source_records(
+    db: DbSession,
+    current_user: CurrentUser,
+    source_type: str = Query(
+        ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+    ),
+    q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
+    params: PaginationParams = Depends(),
+):
+    """List source records available for investigation creation.
+
+    Returns records of the specified type with investigation status.
+    Records that already have an investigation are marked with investigation_id.
+
+    Query Parameters:
+    - source_type: Required. One of: near_miss, road_traffic_collision, complaint, reporting_incident
+    - q: Optional search query
+    - page: Page number (default: 1)
+    - page_size: Page size (default: 20, max: 100)
+
+    Response includes:
+    - source_id: Record ID
+    - display_label: Human-readable label for dropdown
+    - reference_number: Record reference
+    - status: Current status
+    - created_at: Creation date
+    - investigation_id: If already investigated, the investigation ID (null otherwise)
+    - investigation_reference: If investigated, the investigation reference
+    """
+    request_id = "N/A"
+
+    # Validate source type
+    try:
+        source_type_enum = AssignedEntityType(source_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error_code": "INVALID_SOURCE_TYPE",
+                "message": f"Invalid source type: {source_type}",
+                "details": {"valid_types": [e.value for e in AssignedEntityType]},
+                "request_id": request_id,
+            },
+        )
+
+    entity_models = {
+        AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
+        AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
+        AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
+        AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
+    }
+
+    model_path = entity_models.get(source_type)
+    if not model_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error_code": "UNSUPPORTED_SOURCE_TYPE",
+                "message": f"Source type {source_type} is not supported",
+                "request_id": request_id,
+            },
+        )
+
+    module_path, class_name = model_path.split(":")
+    module = __import__(module_path, fromlist=[class_name])
+    model_class = getattr(module, class_name)
+
+    base_query = select(model_class)
+    if hasattr(model_class, "tenant_id"):
+        base_query = base_query.where(model_class.tenant_id == current_user.tenant_id)
+
+    if q:
+        search_term = f"%{q}%"
+        search_conditions = []
+        if hasattr(model_class, "title"):
+            search_conditions.append(model_class.title.ilike(search_term))
+        if hasattr(model_class, "reference_number"):
+            search_conditions.append(model_class.reference_number.ilike(search_term))
+        if hasattr(model_class, "description"):
+            search_conditions.append(model_class.description.ilike(search_term))
+        if search_conditions:
+            from sqlalchemy import or_
+
+            base_query = base_query.where(or_(*search_conditions))
+
+    base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
+    paginated = await paginate(db, base_query, params)
+    records = list(paginated.items)
+
+    source_ids = [r.id for r in records]
+    inv_query = select(InvestigationRun).where(
+        InvestigationRun.assigned_entity_type == source_type_enum,
+        InvestigationRun.assigned_entity_id.in_(source_ids),
+    )
+    inv_result = await db.execute(inv_query)
+    existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}
+
+    items = []
+    for record in records:
+        ref_num = getattr(record, "reference_number", f"REF-{record.id}")
+
+        record_status = getattr(record, "status", "unknown")
+        if hasattr(record_status, "value"):
+            record_status = record_status.value
+
+        created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
+
+        display_label = f"{ref_num} — {record_status.upper()} — {created_date}"
+
+        existing_inv = existing_investigations.get(record.id)
+
+        items.append(
+            SourceRecordItem(
+                source_id=record.id,
+                display_label=display_label,
+                reference_number=ref_num,
+                status=record_status,
+                created_at=record.created_at,
+                investigation_id=int(existing_inv.id) if existing_inv else None,
+                investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
+            )
+        )
+
+    return SourceRecordsResponse(
+        items=items,
+        total=paginated.total,
+        page=paginated.page,
+        page_size=paginated.page_size,
+        pages=paginated.pages,
+        source_type=source_type,
+    )
+
+
 @router.get("/{investigation_id}", response_model=InvestigationRunResponse)
 async def get_investigation(
     investigation_id: int,
@@ -444,151 +578,6 @@ async def create_investigation_from_record(
     await db.refresh(investigation)
 
     return investigation
-
-
-@router.get("/source-records", response_model=SourceRecordsResponse)
-async def list_source_records(
-    db: DbSession,
-    current_user: CurrentUser,
-    source_type: str = Query(
-        ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
-    ),
-    q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
-    params: PaginationParams = Depends(),
-):
-    """List source records available for investigation creation.
-
-    Returns records of the specified type with investigation status.
-    Records that already have an investigation are marked with investigation_id.
-
-    Query Parameters:
-    - source_type: Required. One of: near_miss, road_traffic_collision, complaint, reporting_incident
-    - q: Optional search query
-    - page: Page number (default: 1)
-    - page_size: Page size (default: 20, max: 100)
-
-    Response includes:
-    - source_id: Record ID
-    - display_label: Human-readable label for dropdown
-    - reference_number: Record reference
-    - status: Current status
-    - created_at: Creation date
-    - investigation_id: If already investigated, the investigation ID (null otherwise)
-    - investigation_reference: If investigated, the investigation reference
-    """
-    request_id = "N/A"
-
-    # Validate source type
-    try:
-        source_type_enum = AssignedEntityType(source_type)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_code": "INVALID_SOURCE_TYPE",
-                "message": f"Invalid source type: {source_type}",
-                "details": {"valid_types": [e.value for e in AssignedEntityType]},
-                "request_id": request_id,
-            },
-        )
-
-    # Import models dynamically based on source type
-    entity_models = {
-        AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
-        AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
-        AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
-        AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
-    }
-
-    model_path = entity_models.get(source_type)
-    if not model_path:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_code": "UNSUPPORTED_SOURCE_TYPE",
-                "message": f"Source type {source_type} is not supported",
-                "request_id": request_id,
-            },
-        )
-
-    module_path, class_name = model_path.split(":")
-    module = __import__(module_path, fromlist=[class_name])
-    model_class = getattr(module, class_name)
-
-    # Build base query for source records (tenant-scoped if model supports it)
-    base_query = select(model_class)
-    if hasattr(model_class, "tenant_id"):
-        base_query = base_query.where(model_class.tenant_id == current_user.tenant_id)
-
-    # Apply search filter if provided
-    if q:
-        search_term = f"%{q}%"
-        # Try to apply search on common fields
-        search_conditions = []
-        if hasattr(model_class, "title"):
-            search_conditions.append(model_class.title.ilike(search_term))
-        if hasattr(model_class, "reference_number"):
-            search_conditions.append(model_class.reference_number.ilike(search_term))
-        if hasattr(model_class, "description"):
-            search_conditions.append(model_class.description.ilike(search_term))
-        if search_conditions:
-            from sqlalchemy import or_
-
-            base_query = base_query.where(or_(*search_conditions))
-
-    # Apply deterministic ordering and paginate
-    base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
-    paginated = await paginate(db, base_query, params)
-    records = list(paginated.items)
-
-    # Get existing investigations for these source records
-    source_ids = [r.id for r in records]
-    inv_query = select(InvestigationRun).where(
-        InvestigationRun.assigned_entity_type == source_type_enum,
-        InvestigationRun.assigned_entity_id.in_(source_ids),
-    )
-    inv_result = await db.execute(inv_query)
-    existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}
-
-    # Build response items
-    items = []
-    for record in records:
-        # Get reference number
-        ref_num = getattr(record, "reference_number", f"REF-{record.id}")
-
-        # Get status (safe enum value)
-        record_status = getattr(record, "status", "unknown")
-        if hasattr(record_status, "value"):
-            record_status = record_status.value
-
-        # Format created_at as date only (no PII)
-        created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
-
-        display_label = f"{ref_num} — {record_status.upper()} — {created_date}"
-
-        # Check if already investigated
-        existing_inv = existing_investigations.get(record.id)
-
-        items.append(
-            SourceRecordItem(
-                source_id=record.id,
-                display_label=display_label,
-                reference_number=ref_num,
-                status=record_status,
-                created_at=record.created_at,
-                investigation_id=int(existing_inv.id) if existing_inv else None,
-                investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
-            )
-        )
-
-    return SourceRecordsResponse(
-        items=items,
-        total=paginated.total,
-        page=paginated.page,
-        page_size=paginated.page_size,
-        pages=paginated.pages,
-        source_type=source_type,
-    )
 
 
 @router.patch("/{investigation_id}/autosave", response_model=InvestigationRunResponse)

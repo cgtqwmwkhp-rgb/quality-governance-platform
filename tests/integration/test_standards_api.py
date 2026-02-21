@@ -27,7 +27,7 @@ class TestStandardsAPI:
         }
 
         response = await client.post(
-            "/api/v1/standards",
+            "/api/v1/standards/",
             json=payload,
             headers=superuser_auth_headers,
         )
@@ -268,7 +268,7 @@ class TestStandardsAPI:
         }
 
         response = await client.post(
-            "/api/v1/standards",
+            "/api/v1/standards/",
             json=payload,
             headers=auth_headers,  # Regular user, not superuser
         )

@@ -17,7 +17,7 @@ Only users in UAT_ADMIN_USERS list can use override headers.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Request, Response
@@ -141,7 +141,7 @@ def _log_uat_write_attempt(
         "method": request.method,
         "path": request.url.path,
         "user_id": user_id or "anonymous",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     if issue_id:
         log_data["issue_id"] = issue_id

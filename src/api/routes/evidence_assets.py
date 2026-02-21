@@ -10,13 +10,13 @@ Provides endpoints for evidence asset management including:
 import hashlib
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.evidence_asset import (
     EvidenceAssetCreate,
     EvidenceAssetListResponse,
@@ -30,6 +30,7 @@ from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.core.config import settings
+from src.domain.models.user import User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -116,7 +117,7 @@ async def validate_source_exists(
 @router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_evidence_asset(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:create"))],
     file: UploadFile = File(..., description="File to upload"),
     source_module: str = Form(..., description="Source module (near_miss, road_traffic_collision, etc.)"),
     source_id: int = Form(..., description="ID of the source record"),
@@ -386,7 +387,7 @@ async def update_evidence_asset(
     asset_id: int,
     asset_data: EvidenceAssetUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
 ):
     """Update evidence asset metadata."""
     query = select(EvidenceAsset).where(
@@ -469,7 +470,7 @@ async def link_asset_to_investigation(
     asset_id: int,
     investigation_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
 ):
     """Link an evidence asset to an investigation.
 

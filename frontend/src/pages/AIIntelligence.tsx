@@ -69,16 +69,16 @@ export default function AIIntelligence() {
       ])
 
       const predData = predRes.data as Record<string, unknown>
-      if (predData?.predictions) setPredictions(predData.predictions as Prediction[])
+      if (predData?.['predictions']) setPredictions(predData['predictions'] as Prediction[])
       else if (Array.isArray(predData)) setPredictions(predData as Prediction[])
 
       const anomData = anomRes.data as Record<string, unknown>
-      if (anomData?.anomalies) setAnomalies(anomData.anomalies as Anomaly[])
+      if (anomData?.['anomalies']) setAnomalies(anomData['anomalies'] as Anomaly[])
       else if (Array.isArray(anomData)) setAnomalies(anomData as Anomaly[])
-      if (anomData?.clusters) setClusters(anomData.clusters as Cluster[])
+      if (anomData?.['clusters']) setClusters(anomData['clusters'] as Cluster[])
 
       const recData = recRes.data as Record<string, unknown>
-      if (recData?.recommendations) setRecommendations(recData.recommendations as typeof recommendations)
+      if (recData?.['recommendations']) setRecommendations(recData['recommendations'] as typeof recommendations)
       else if (Array.isArray(recData)) setRecommendations(recData as typeof recommendations)
     } catch {
       console.error('Failed to load AI data')

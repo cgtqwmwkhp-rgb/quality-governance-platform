@@ -167,6 +167,11 @@ export default function InvestigationDetail() {
     assigned_to: '',
   })
 
+  // Completion notes dialog state
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [completionNotes, setCompletionNotes] = useState('')
+  const [completionActionId, setCompletionActionId] = useState<number | null>(null)
+
   // Load investigation
   const loadInvestigation = useCallback(async () => {
     if (!investigationId || investigationId === 0) {
@@ -312,11 +317,9 @@ export default function InvestigationDetail() {
       rcaFields[`why_${i}`] = String(data[`why_${i}`] || '')
     }
     // Extract root cause
-    rcaFields.root_cause = String(data.root_cause || '')
-    // Extract problem statement
-    rcaFields.problem_statement = String(data.problem_statement || '')
-    // Extract contributing factors
-    rcaFields.contributing_factors = String(data.contributing_factors || '')
+    rcaFields['root_cause'] = String(data['root_cause'] || '')
+    rcaFields['problem_statement'] = String(data['problem_statement'] || '')
+    rcaFields['contributing_factors'] = String(data['contributing_factors'] || '')
     setRcaData(rcaFields)
     setRcaUnsaved(false)
   }, [investigation])
@@ -721,13 +724,13 @@ export default function InvestigationDetail() {
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Findings</h4>
                     <p className="text-foreground">
-                      {String((investigation.data as Record<string, unknown>)?.findings || "") || 'Not yet documented.'}
+                      {String((investigation.data as Record<string, unknown>)?.['findings'] || "") || 'Not yet documented.'}
                     </p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Conclusion</h4>
                     <p className="text-foreground">
-                      {String((investigation.data as Record<string, unknown>)?.conclusion || "") || 'Not yet documented.'}
+                      {String((investigation.data as Record<string, unknown>)?.['conclusion'] || "") || 'Not yet documented.'}
                     </p>
                   </div>
                 </div>
@@ -776,7 +779,7 @@ export default function InvestigationDetail() {
                     <div>
                       <p className="text-xs text-muted-foreground">Lead Investigator</p>
                       <p className="text-sm text-foreground">
-                        {String((investigation.data as Record<string, unknown>)?.lead_investigator || "") || 'Not assigned'}
+                        {String((investigation.data as Record<string, unknown>)?.['lead_investigator'] || "") || 'Not assigned'}
                       </p>
                     </div>
                   </div>
@@ -1146,7 +1149,7 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="Describe the problem or incident being investigated..."
-                value={rcaData.problem_statement || ''}
+                value={rcaData['problem_statement'] || ''}
                 onChange={(e) => handleRcaFieldChange('problem_statement', e.target.value)}
               />
             </Card>
@@ -1185,7 +1188,7 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="Document the root cause based on your 5 Whys analysis..."
-                value={rcaData.root_cause || ''}
+                value={rcaData['root_cause'] || ''}
                 onChange={(e) => handleRcaFieldChange('root_cause', e.target.value)}
               />
             </Card>
@@ -1196,7 +1199,7 @@ export default function InvestigationDetail() {
               <Textarea
                 rows={3}
                 placeholder="List any contributing factors that led to the issue..."
-                value={rcaData.contributing_factors || ''}
+                value={rcaData['contributing_factors'] || ''}
                 onChange={(e) => handleRcaFieldChange('contributing_factors', e.target.value)}
               />
             </Card>
@@ -1311,8 +1314,9 @@ export default function InvestigationDetail() {
                           value={action.status}
                           onValueChange={(newStatus) => {
                             if (newStatus === 'completed') {
-                              const notes = window.prompt('Enter completion notes (optional):')
-                              handleUpdateActionStatus(action.id, newStatus, notes || undefined)
+                              setCompletionActionId(action.id)
+                              setCompletionNotes('')
+                              setShowCompletionDialog(true)
                             } else {
                               handleUpdateActionStatus(action.id, newStatus)
                             }
@@ -1621,6 +1625,35 @@ export default function InvestigationDetail() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Completion Notes Dialog */}
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Action</DialogTitle>
+            <DialogDescription>
+              Enter completion notes (optional) before marking this action as completed.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={completionNotes}
+            onChange={(e) => setCompletionNotes(e.target.value)}
+            placeholder="Enter completion notes..."
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompletionDialog(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (completionActionId !== null) {
+                handleUpdateActionStatus(completionActionId, 'completed', completionNotes || undefined)
+              }
+              setShowCompletionDialog(false)
+            }}>
+              Complete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

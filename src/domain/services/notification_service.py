@@ -12,7 +12,7 @@ Features:
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -388,7 +388,7 @@ class NotificationService:
 
         if notification:
             notification.is_read = True
-            notification.read_at = datetime.utcnow()
+            notification.read_at = datetime.now(timezone.utc)
             await self.db.commit()
             return True
 
@@ -404,7 +404,7 @@ class NotificationService:
         )
         notifications = result.scalars().all()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for notification in notifications:
             notification.is_read = True
             notification.read_at = now
@@ -486,7 +486,7 @@ Location: {location}
 {f'GPS: {gps_coordinates}' if gps_coordinates else ''}
 {f'Details: {description}' if description else ''}
 
-Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 RESPOND IMMEDIATELY
         """.strip()

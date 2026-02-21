@@ -30,7 +30,7 @@ class TestRisksAPI:
         }
 
         response = await client.post(
-            "/api/v1/risks",
+            "/api/v1/risks/",
             json=payload,
             headers=auth_headers,
         )

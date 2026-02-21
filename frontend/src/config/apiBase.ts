@@ -30,7 +30,7 @@ export type Environment = 'staging' | 'production' | 'development';
  */
 export function detectEnvironment(): Environment {
   // Explicit environment override
-  const explicitEnv = import.meta.env.VITE_ENVIRONMENT;
+  const explicitEnv = import.meta.env['VITE_ENVIRONMENT'];
   if (explicitEnv && ['staging', 'production', 'development'].includes(explicitEnv)) {
     return explicitEnv as Environment;
   }

@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.pagination import DataListResponse
 from src.api.schemas.standard import (
     ClauseCreate,
     ClauseResponse,
@@ -193,12 +194,12 @@ async def get_compliance_score(
     )
 
 
-@router.get("/{standard_id}/controls", response_model=list[ControlListItem])
+@router.get("/{standard_id}/controls", response_model=DataListResponse)
 async def list_standard_controls(
     standard_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[ControlListItem]:
+):
     """
     List all controls for a standard (flat view).
 
@@ -222,31 +223,33 @@ async def list_standard_controls(
     result = await db.execute(query)
     rows = result.all()
 
-    return [
-        ControlListItem(
-            id=control.id,
-            clause_id=control.clause_id,
-            clause_number=clause_number,
-            control_number=control.control_number,
-            title=control.title,
-            implementation_status=control.implementation_status,
-            is_applicable=control.is_applicable,
-            is_active=control.is_active,
-        )
-        for control, clause_number, _ in rows
-    ]
+    return {
+        "data": [
+            ControlListItem(
+                id=control.id,
+                clause_id=control.clause_id,
+                clause_number=clause_number,
+                control_number=control.control_number,
+                title=control.title,
+                implementation_status=control.implementation_status,
+                is_applicable=control.is_applicable,
+                is_active=control.is_active,
+            )
+            for control, clause_number, _ in rows
+        ]
+    }
 
 
 # ============== Clause Endpoints ==============
 
 
-@router.get("/{standard_id}/clauses", response_model=list[ClauseResponse])
+@router.get("/{standard_id}/clauses", response_model=DataListResponse)
 async def list_clauses(
     standard_id: int,
     db: DbSession,
     current_user: CurrentUser,
     parent_clause_id: Optional[int] = None,
-) -> list[ClauseResponse]:
+):
     """List clauses for a standard."""
     await get_or_404(db, Standard, standard_id, detail=ErrorCode.ENTITY_NOT_FOUND)
 
@@ -267,7 +270,7 @@ async def list_clauses(
     result = await db.execute(query)
     clauses = result.scalars().all()
 
-    return [ClauseResponse.model_validate(c) for c in clauses]
+    return {"data": [ClauseResponse.model_validate(c) for c in clauses]}
 
 
 @router.post("/{standard_id}/clauses", response_model=ClauseResponse, status_code=status.HTTP_201_CREATED)

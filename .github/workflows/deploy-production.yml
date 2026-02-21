@@ -607,6 +607,25 @@ jobs:
             echo "| Total Time | - | ${TOTAL_ELAPSED}s |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Canary Verification
+        shell: bash
+        run: |
+          echo "Monitoring canary deployment for errors..."
+          ERRORS=0
+          for attempt in $(seq 1 5); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.APP_URL }}/readyz" || echo "000")
+            if [ "$STATUS" != "200" ]; then
+              ERRORS=$((ERRORS + 1))
+            fi
+            echo "Check ${attempt}/5: status=$STATUS"
+            sleep 60
+          done
+          if [ "$ERRORS" -gt 2 ]; then
+            echo "::error::Canary failed - $ERRORS/5 health checks failed"
+            exit 1
+          fi
+          echo "Canary passed - $((5-ERRORS))/5 health checks succeeded"
+
       - name: Deterministic SHA verification with stability gate
         id: stability_gate
         run: |

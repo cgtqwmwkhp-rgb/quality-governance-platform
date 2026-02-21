@@ -132,15 +132,15 @@ export default function DashboardBuilder() {
         name: data.name,
         description: data.description || '',
         widgets: (data.widgets || []).map((w: Record<string, unknown>) => ({
-          id: `w${w.id}`,
-          type: String(w.widget_type),
-          title: String(w.title),
-          dataSource: String(w.data_source),
-          metric: String(w.metric),
-          x: Number(w.grid_x),
-          y: Number(w.grid_y),
-          w: Number(w.grid_w),
-          h: Number(w.grid_h),
+          id: `w${w['id']}`,
+          type: String(w['widget_type']),
+          title: String(w['title']),
+          dataSource: String(w['data_source']),
+          metric: String(w['metric']),
+          x: Number(w['grid_x']),
+          y: Number(w['grid_y']),
+          w: Number(w['grid_w']),
+          h: Number(w['grid_h']),
         })),
       });
     } catch {
@@ -154,7 +154,7 @@ export default function DashboardBuilder() {
     (async () => {
       const list = await loadDashboardList();
       if (list.length > 0) {
-        const defaultDash = list.find((d: DashboardListItem) => d.is_default) || list[0];
+        const defaultDash = list.find((d: DashboardListItem) => d.is_default) ?? list[0]!;
         await loadDashboard(defaultDash.id);
       } else {
         setLoading(false);

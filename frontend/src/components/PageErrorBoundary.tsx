@@ -19,7 +19,7 @@ class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErrorBound
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('Page error:', error, errorInfo);
   }
 
@@ -31,7 +31,7 @@ class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErrorBound
     window.location.href = '/';
   };
 
-  render(): ReactNode {
+  override render(): ReactNode {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50">

@@ -10,7 +10,7 @@ Provides DocuSign-level e-signature capabilities with:
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import and_, func, or_, select
@@ -82,7 +82,7 @@ class SignatureService:
             workflow_type=workflow_type,
             require_all=require_all,
             initiated_by_id=initiated_by_id,
-            expires_at=datetime.utcnow() + timedelta(days=expires_in_days),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days),
             reminder_frequency=reminder_frequency,
             request_metadata=metadata or {},
         )
@@ -189,7 +189,7 @@ class SignatureService:
         result = await self.db.execute(
             select(SignatureRequestSigner).where(
                 SignatureRequestSigner.access_token == token,
-                SignatureRequestSigner.token_expires_at > datetime.utcnow(),
+                SignatureRequestSigner.token_expires_at > datetime.now(timezone.utc),
             )
         )
         return result.scalar_one_or_none()
@@ -206,7 +206,7 @@ class SignatureService:
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if not signer.first_viewed_at:
             signer.first_viewed_at = now
@@ -274,7 +274,7 @@ class SignatureService:
             if pending_before > 0:
                 raise ValueError("Waiting for previous signers")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         signer.status = "signed"
         signer.signed_at = now
@@ -351,7 +351,7 @@ class SignatureService:
         if signer.status in ["signed", "declined"]:
             raise ValueError(f"Already {signer.status}")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         signer.status = "declined"
         signer.declined_at = now
@@ -398,7 +398,7 @@ class SignatureService:
 
         if complete:
             request.status = "completed"
-            request.completed_at = datetime.utcnow()
+            request.completed_at = datetime.now(timezone.utc)
 
             await self._log_action(
                 tenant_id=request.tenant_id,
@@ -540,7 +540,7 @@ class SignatureService:
 
     async def send_reminders(self, tenant_id: int) -> int:
         """Send reminders for pending signatures. Returns count sent."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         reminder_count = 0
 
         result = await self.db.execute(
@@ -583,7 +583,7 @@ class SignatureService:
 
     async def expire_old_requests(self, tenant_id: int) -> int:
         """Expire requests past their deadline. Returns count expired."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         result = await self.db.execute(
             select(SignatureRequest).where(

@@ -319,8 +319,8 @@ const SignaturePad = ({
 
     setIsDrawing(true);
     const rect = canvas.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const clientX = 'touches' in e ? e.touches[0]!.clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0]!.clientY : e.clientY;
     
     ctx.beginPath();
     ctx.moveTo(clientX - rect.left, clientY - rect.top);
@@ -336,8 +336,8 @@ const SignaturePad = ({
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const clientX = 'touches' in e ? e.touches[0]!.clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0]!.clientY : e.clientY;
 
     ctx.lineTo(clientX - rect.left, clientY - rect.top);
     ctx.strokeStyle = '#a855f7';
@@ -438,7 +438,7 @@ export default function AuditExecution() {
           id: String(sec.id),
           title: String(sec.title || ''),
           description: sec.description ? String(sec.description) : undefined,
-          color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
+          color: SECTION_COLORS[sIdx % SECTION_COLORS.length]!,
           isComplete: false,
           questions: (sec.questions || []).filter((q: TemplateApiQuestion) => q.is_active !== false).map(
             (q: TemplateApiQuestion) => ({
@@ -617,15 +617,16 @@ export default function AuditExecution() {
     if (!currentQuestion) return;
     const questionId = currentQuestion.id;
 
-    setResponses(prev => ({
-      ...prev,
-      [questionId]: {
-        ...prev[questionId],
+    setResponses(prev => {
+      const existing = prev[questionId];
+      const updated: QuestionResponse = {
+        ...(existing ?? { questionId, timestamp: new Date().toISOString() } as QuestionResponse),
         ...updates,
         questionId,
         timestamp: new Date().toISOString(),
-      },
-    }));
+      };
+      return { ...prev, [questionId]: updated };
+    });
 
     syncResponseToApi(questionId, updates);
   };
@@ -650,7 +651,7 @@ export default function AuditExecution() {
       setCurrentQuestionIndex(prev => prev - 1);
     } else if (currentSectionIndex > 0) {
       setCurrentSectionIndex(prev => prev - 1);
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1);
+      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1]!.questions.length - 1);
     }
     setShowGuidance(false);
   };
@@ -1342,7 +1343,7 @@ export default function AuditExecution() {
                 className={`w-3 h-3 rounded-full transition-all ${
                   idx === currentQuestionIndex
                     ? 'bg-purple-500 w-6'
-                    : responses[currentSection.questions[idx].id]
+                    : responses[currentSection.questions[idx]!.id]
                     ? 'bg-green-500'
                     : 'bg-surface border border-border hover:bg-card'
                 }`}

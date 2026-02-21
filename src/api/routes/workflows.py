@@ -10,7 +10,7 @@ Features:
 - Live statistics
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -203,7 +203,7 @@ async def list_workflow_instances(
         page_size=page_size,
     )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     items = []
     for inst in instances:
         steps = await engine.get_instance_steps(db, inst.id)
@@ -319,7 +319,7 @@ async def cancel_workflow(
         "status": inst.status,
         "cancelled_by": current_user.id,
         "reason": reason,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -453,7 +453,7 @@ async def cancel_delegation(delegation_id: int, db: DbSession, current_user: Cur
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",
-        "cancelled_at": datetime.utcnow().isoformat(),
+        "cancelled_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

@@ -5,7 +5,7 @@ reminders, and compliance reporting.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, or_, select
@@ -77,7 +77,7 @@ class PolicyAcknowledgmentService:
         if not requirement:
             raise ValueError(f"Requirement {requirement_id} not found")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         due_date = now + timedelta(days=requirement.due_within_days)
 
         acknowledgments = []
@@ -156,7 +156,7 @@ class PolicyAcknowledgmentService:
                 return ack
 
         # Record completion
-        ack.acknowledged_at = datetime.utcnow()
+        ack.acknowledged_at = datetime.now(timezone.utc)
         ack.status = AcknowledgmentStatus.COMPLETED
         ack.acceptance_statement = acceptance_statement
         ack.signature_data = signature_data
@@ -177,7 +177,7 @@ class PolicyAcknowledgmentService:
         ack = result.scalar_one_or_none()
 
         if ack and not ack.first_opened_at:
-            ack.first_opened_at = datetime.utcnow()
+            ack.first_opened_at = datetime.now(timezone.utc)
             await self.db.commit()
             await self.db.refresh(ack)
 
@@ -246,7 +246,7 @@ class PolicyAcknowledgmentService:
 
     async def check_overdue_acknowledgments(self) -> List[PolicyAcknowledgment]:
         """Check for and mark overdue acknowledgments."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         result = await self.db.execute(
             select(PolicyAcknowledgment).where(
@@ -268,7 +268,7 @@ class PolicyAcknowledgmentService:
 
     async def get_reminders_to_send(self) -> List[Dict[str, Any]]:
         """Get acknowledgments that need reminder emails."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         reminders_needed = []
 
         # Get all pending acknowledgments
@@ -313,7 +313,7 @@ class PolicyAcknowledgmentService:
 
         if ack:
             ack.reminders_sent += 1
-            ack.last_reminder_at = datetime.utcnow()
+            ack.last_reminder_at = datetime.now(timezone.utc)
             await self.db.commit()
 
     async def get_compliance_dashboard(self) -> Dict[str, Any]:
@@ -382,7 +382,7 @@ class DocumentReadLogService:
             document_id=document_id,
             user_id=user_id,
             document_version=document_version,
-            accessed_at=datetime.utcnow(),
+            accessed_at=datetime.now(timezone.utc),
             duration_seconds=duration_seconds,
             scroll_percentage=scroll_percentage,
             ip_address=ip_address,

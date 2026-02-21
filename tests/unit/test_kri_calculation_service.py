@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -122,9 +122,9 @@ def test_apply_sif_assessment_sets_assessment_date():
     incident = _mock_incident()
     assessment = _mock_assessment()
 
-    before = datetime.utcnow()
+    before = datetime.now(timezone.utc)
     KRICalculationService.apply_sif_assessment(incident, assessment, assessed_by_id=1)
-    after = datetime.utcnow()
+    after = datetime.now(timezone.utc)
 
     assert before <= incident.sif_assessment_date <= after
 

@@ -159,13 +159,20 @@ async def list_rtas(
         }
     except SQLAlchemyError as e:
         error_str = str(e).lower()
-        logger.exception(f"Error listing RTAs: {e}")
+        logger.exception(
+            "Error listing RTAs [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
 
         column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
-            logger.warning("Database column missing - migration may be pending")
+            logger.warning(
+                "Database column missing - migration may be pending [request_id=%s]",
+                request_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=ErrorCode.INTERNAL_ERROR,

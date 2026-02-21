@@ -68,7 +68,7 @@ export default function ExportCenter() {
       const kpis = res.data as Record<string, Record<string, number>>;
       setModules(prev => prev.map(m => ({
         ...m,
-        count: kpis[m.id]?.total || m.count,
+        count: kpis[m.id]?.['total'] || m.count,
       })));
     } catch {
       // keep defaults
@@ -410,9 +410,9 @@ export default function ExportCenter() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <div className={cn("p-1.5 rounded-lg", formatIcons[job.format].bg)}>
-                          <div className={formatIcons[job.format].color}>
-                            {formatIcons[job.format].icon}
+                        <div className={cn("p-1.5 rounded-lg", formatIcons[job.format]!.bg)}>
+                          <div className={formatIcons[job.format]!.color}>
+                            {formatIcons[job.format]!.icon}
                           </div>
                         </div>
                         <span className="uppercase text-sm text-foreground">{job.format}</span>
@@ -486,9 +486,9 @@ export default function ExportCenter() {
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className={cn("p-3 rounded-xl", formatIcons[template.format].bg)}>
-                    <div className={formatIcons[template.format].color}>
-                      {formatIcons[template.format].icon}
+                  <div className={cn("p-3 rounded-xl", formatIcons[template.format]!.bg)}>
+                    <div className={formatIcons[template.format]!.color}>
+                      {formatIcons[template.format]!.icon}
                     </div>
                   </div>
                   <Button variant="ghost" size="sm">

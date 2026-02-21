@@ -11,7 +11,7 @@ Provides live co-editing with:
 
 import asyncio
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 from sqlalchemy import and_, desc, or_, select
@@ -106,7 +106,7 @@ class CollaborationService:
             raise ValueError(f"Document {document_id} not found")
 
         doc.last_snapshot = doc.yjs_state
-        doc.last_snapshot_at = datetime.utcnow()
+        doc.last_snapshot_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(doc)
@@ -130,7 +130,7 @@ class CollaborationService:
 
         doc.is_locked = True
         doc.locked_by_id = user_id
-        doc.locked_at = datetime.utcnow()
+        doc.locked_at = datetime.now(timezone.utc)
         doc.lock_reason = reason
 
         await self.db.commit()
@@ -203,7 +203,7 @@ class CollaborationService:
 
         if session:
             session.is_active = False
-            session.left_at = datetime.utcnow()
+            session.left_at = datetime.now(timezone.utc)
             await self.db.commit()
             await self.db.refresh(session)
 
@@ -232,7 +232,7 @@ class CollaborationService:
         session.current_field = current_field
         session.is_editing = is_editing
         session.is_typing = is_typing
-        session.last_seen_at = datetime.utcnow()
+        session.last_seen_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(session)
@@ -241,7 +241,7 @@ class CollaborationService:
 
     async def get_active_sessions(self, document_id: int) -> list[CollaborativeSession]:
         """Get all active sessions for a document."""
-        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
+        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
 
         result = await self.db.execute(
             select(CollaborativeSession).where(
@@ -254,7 +254,7 @@ class CollaborationService:
 
     async def cleanup_stale_sessions(self) -> int:
         """Clean up stale sessions. Returns count of cleaned sessions."""
-        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS * 2)
+        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS * 2)
 
         result = await self.db.execute(
             select(CollaborativeSession).where(
@@ -266,7 +266,7 @@ class CollaborationService:
 
         for session in stale:
             session.is_active = False
-            session.left_at = datetime.utcnow()
+            session.left_at = datetime.now(timezone.utc)
 
         await self.db.commit()
 
@@ -412,7 +412,7 @@ class CollaborationService:
 
         comment.status = "resolved"
         comment.resolved_by_id = resolved_by_id
-        comment.resolved_at = datetime.utcnow()
+        comment.resolved_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(comment)
@@ -475,10 +475,10 @@ class CollaborationService:
         presence.current_entity_id = current_entity_id
         presence.device_type = device_type
         presence.custom_status = custom_status
-        presence.last_seen_at = datetime.utcnow()
+        presence.last_seen_at = datetime.now(timezone.utc)
 
         if status == "away":
-            presence.went_away_at = datetime.utcnow()
+            presence.went_away_at = datetime.now(timezone.utc)
         else:
             presence.went_away_at = None
 
@@ -489,7 +489,7 @@ class CollaborationService:
 
     async def get_online_users(self, tenant_id: int) -> list[Presence]:
         """Get all online users in a tenant."""
-        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
+        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
 
         result = await self.db.execute(
             select(Presence).where(
@@ -507,7 +507,7 @@ class CollaborationService:
         entity_id: str,
     ) -> list[Presence]:
         """Get users currently viewing a specific entity."""
-        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
+        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
 
         result = await self.db.execute(
             select(Presence).where(

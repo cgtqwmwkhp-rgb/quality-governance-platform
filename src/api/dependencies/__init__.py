@@ -36,7 +36,10 @@ async def get_current_user(
         raise credentials_exception
 
     jti = payload.get("jti")
-    if jti and await is_token_revoked(jti, db):
+    if not jti:
+        track_metric("auth.failure", 1)
+        raise credentials_exception
+    if await is_token_revoked(jti, db):
         track_metric("auth.failure", 1)
         raise credentials_exception
 
@@ -127,7 +130,9 @@ async def get_optional_current_user(
         return None
 
     jti = payload.get("jti")
-    if jti and await is_token_revoked(jti, db):
+    if not jti:
+        return None
+    if await is_token_revoked(jti, db):
         return None
 
     user_id_raw = payload.get("sub")

@@ -10,7 +10,7 @@ Enterprise document management with:
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
@@ -18,8 +18,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.pagination import DataListResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.document import (
@@ -32,6 +33,7 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
+from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -169,7 +171,7 @@ class AnnotationResponse(BaseModel):
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:create"))],
     file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(None),
@@ -330,8 +332,7 @@ async def upload_document(
 async def list_documents(
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     search: Optional[str] = None,
     document_type: Optional[str] = None,
     category: Optional[str] = None,
@@ -379,7 +380,6 @@ async def list_documents(
             query = query.where(Document.indexed_at.is_(None))
 
     query = query.order_by(Document.created_at.desc())
-    params = PaginationParams(page=page, page_size=page_size)
     paginated = await paginate(db, query, params)
 
     return DocumentListResponse(
@@ -489,7 +489,7 @@ async def semantic_search(
 # =============================================================================
 
 
-@router.get("/{document_id}/annotations", response_model=list[AnnotationResponse])
+@router.get("/{document_id}/annotations", response_model=DataListResponse)
 async def list_annotations(
     document_id: int,
     db: DbSession,
@@ -509,7 +509,7 @@ async def list_annotations(
     result = await db.execute(query.order_by(DocumentAnnotation.created_at.desc()))
     annotations = result.scalars().all()
 
-    return [AnnotationResponse.model_validate(a) for a in annotations]
+    return {"data": [AnnotationResponse.model_validate(a) for a in annotations]}
 
 
 @router.post(
@@ -521,7 +521,7 @@ async def create_annotation(
     document_id: int,
     annotation_data: AnnotationCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:create"))],
 ):
     """Create an annotation on a document."""
     await get_or_404(db, Document, document_id, tenant_id=current_user.tenant_id)

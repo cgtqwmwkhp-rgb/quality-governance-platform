@@ -627,7 +627,7 @@ export default function DynamicFormRenderer({
   const validateStep = useCallback((): boolean => {
     const stepErrors: Record<string, string> = {};
 
-    for (const field of currentStepData.fields) {
+    for (const field of currentStepData!.fields) {
       const value = formData[field.name];
 
       // Required validation
@@ -810,14 +810,14 @@ export default function DynamicFormRenderer({
         >
           <Card className="p-6">
             <div className="mb-6">
-              <h2 className="text-xl font-bold text-foreground">{currentStepData.name}</h2>
-              {currentStepData.description && (
-                <p className="text-muted-foreground mt-1">{currentStepData.description}</p>
+              <h2 className="text-xl font-bold text-foreground">{currentStepData!.name}</h2>
+              {currentStepData!.description && (
+                <p className="text-muted-foreground mt-1">{currentStepData!.description}</p>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {currentStepData.fields
+              {currentStepData!.fields
                 .sort((a, b) => a.order - b.order)
                 .map((field) => (
                   <FieldRenderer
@@ -832,9 +832,9 @@ export default function DynamicFormRenderer({
                 ))}
             </div>
 
-            {errors._form && (
+            {errors['_form'] && (
               <div className="mt-4 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
-                {errors._form}
+                {errors['_form']}
               </div>
             )}
           </Card>

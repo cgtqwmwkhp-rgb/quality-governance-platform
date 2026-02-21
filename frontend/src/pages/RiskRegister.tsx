@@ -25,9 +25,25 @@ import {
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/Dialog'
 import { riskRegisterApi } from '../api/client'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { TableSkeleton, CardSkeleton } from '../components/ui/SkeletonLoader'
+import RiskFormFields, {
+  EMPTY_RISK_FORM,
+  CATEGORIES,
+  TREATMENT_STRATEGIES,
+  scoreToLevel,
+  levelToColor,
+} from '../components/forms/RiskForm'
+import type { RiskFormData } from '../components/forms/RiskForm'
 
 interface Risk {
   id: number
@@ -87,40 +103,7 @@ interface BowTieData {
   controls: { id: number; reference: string; name: string; control_type: string; effectiveness: string }[]
 }
 
-const CATEGORIES = [
-  { id: 'strategic', label: 'Strategic' },
-  { id: 'operational', label: 'Operational' },
-  { id: 'financial', label: 'Financial' },
-  { id: 'compliance', label: 'Compliance' },
-  { id: 'reputational', label: 'Reputational' },
-  { id: 'health_safety', label: 'Health & Safety' },
-  { id: 'environmental', label: 'Environmental' },
-  { id: 'technological', label: 'Technological' },
-  { id: 'legal', label: 'Legal' },
-  { id: 'project', label: 'Project' },
-]
-
-const TREATMENT_STRATEGIES = [
-  { id: 'treat', label: 'Treat' },
-  { id: 'tolerate', label: 'Tolerate' },
-  { id: 'transfer', label: 'Transfer' },
-  { id: 'terminate', label: 'Terminate' },
-]
-
-const EMPTY_FORM = {
-  title: '',
-  description: '',
-  category: 'operational',
-  department: '',
-  inherent_likelihood: 3,
-  inherent_impact: 3,
-  residual_likelihood: 2,
-  residual_impact: 2,
-  treatment_strategy: 'treat',
-  treatment_plan: '',
-  risk_owner_name: '',
-  review_frequency_days: 90,
-}
+const EMPTY_FORM = EMPTY_RISK_FORM
 
 export default function RiskRegister() {
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
@@ -139,10 +122,12 @@ export default function RiskRegister() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [detailRisk, setDetailRisk] = useState<Record<string, unknown> | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [createForm, setCreateForm] = useState({ ...EMPTY_FORM })
-  const [editForm, setEditForm] = useState({ ...EMPTY_FORM })
+  const [createForm, setCreateForm] = useState<RiskFormData>({ ...EMPTY_FORM })
+  const [editForm, setEditForm] = useState<RiskFormData>({ ...EMPTY_FORM })
   const [saving, setSaving] = useState(false)
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false)
+  const [riskToArchive, setRiskToArchive] = useState<Risk | null>(null)
 
   const [summary, setSummary] = useState({
     total_risks: 0,
@@ -152,59 +137,42 @@ export default function RiskRegister() {
     escalated: 0,
   })
 
-  const scoreToLevel = (score: number) => {
-    if (score > 16) return 'critical'
-    if (score > 9) return 'high'
-    if (score > 4) return 'medium'
-    return 'low'
-  }
-
-  const levelToColor = (level: string) => {
-    const map: Record<string, string> = {
-      critical: 'hsl(var(--destructive))',
-      high: 'hsl(var(--warning))',
-      medium: 'hsl(var(--info))',
-      low: 'hsl(var(--success))',
-    }
-    return map[level] || map.low
-  }
-
   const loadRisks = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const params: Record<string, string | number> = { skip: 0, limit: 100 }
-      if (filterCategory) params.category = filterCategory
-      if (filterStatus) params.status = filterStatus
+      if (filterCategory) params['category'] = filterCategory
+      if (filterStatus) params['status'] = filterStatus
 
       const res = await riskRegisterApi.list(params)
       const data = res.data as unknown as Record<string, unknown>
-      const rawItems = (data?.risks ?? data?.items ?? []) as Record<string, unknown>[]
+      const rawItems = (data?.['risks'] ?? data?.['items'] ?? []) as Record<string, unknown>[]
       const mapped: Risk[] = rawItems.map((r) => {
-        const resScore = Number(r.residual_score || 0)
-        const inhScore = Number(r.inherent_score || 0)
-        const level = String(r.risk_level || scoreToLevel(resScore || inhScore))
+        const resScore = Number(r['residual_score'] || 0)
+        const inhScore = Number(r['inherent_score'] || 0)
+        const level = String(r['risk_level'] || scoreToLevel(resScore || inhScore))
         return {
-          id: Number(r.id),
-          reference: String(r.reference || `RISK-${String(r.id).padStart(4, '0')}`),
-          title: String(r.title || ''),
-          description: String(r.description || ''),
-          category: String(r.category || 'operational'),
-          department: String(r.department || ''),
+          id: Number(r['id']),
+          reference: String(r['reference'] || `RISK-${String(r['id']).padStart(4, '0')}`),
+          title: String(r['title'] || ''),
+          description: String(r['description'] || ''),
+          category: String(r['category'] || 'operational'),
+          department: String(r['department'] || ''),
           inherent_score: inhScore,
-          inherent_likelihood: Number(r.inherent_likelihood || 0),
-          inherent_impact: Number(r.inherent_impact || 0),
+          inherent_likelihood: Number(r['inherent_likelihood'] || 0),
+          inherent_impact: Number(r['inherent_impact'] || 0),
           residual_score: resScore,
-          residual_likelihood: Number(r.residual_likelihood || 0),
-          residual_impact: Number(r.residual_impact || 0),
+          residual_likelihood: Number(r['residual_likelihood'] || 0),
+          residual_impact: Number(r['residual_impact'] || 0),
           risk_level: level,
-          risk_color: String(r.risk_color || levelToColor(level)),
-          treatment_strategy: String(r.treatment_strategy || 'treat'),
-          treatment_plan: String(r.treatment_plan || ''),
-          status: String(r.status || 'monitoring'),
-          is_within_appetite: r.is_within_appetite !== false,
-          risk_owner_name: String(r.risk_owner_name || ''),
-          next_review_date: r.next_review_date ? String(r.next_review_date) : null,
+          risk_color: String(r['risk_color'] || levelToColor(level)),
+          treatment_strategy: String(r['treatment_strategy'] || 'treat'),
+          treatment_plan: String(r['treatment_plan'] || ''),
+          status: String(r['status'] || 'monitoring'),
+          is_within_appetite: r['is_within_appetite'] !== false,
+          risk_owner_name: String(r['risk_owner_name'] || ''),
+          next_review_date: r['next_review_date'] ? String(r['next_review_date']) : null,
         }
       })
       setRisks(mapped)
@@ -219,13 +187,13 @@ export default function RiskRegister() {
           medium: mapped.filter(r => r.risk_level === 'medium').length,
           low: mapped.filter(r => r.risk_level === 'low').length,
         }
-        const byLevel = sd?.by_level as { critical: number; high: number; medium: number; low: number } | undefined
+        const byLevel = sd?.['by_level'] as { critical: number; high: number; medium: number; low: number } | undefined
         setSummary({
-          total_risks: Number(sd?.total_risks || mapped.length),
+          total_risks: Number(sd?.['total_risks'] || mapped.length),
           by_level: byLevel || defaultByLevel,
-          outside_appetite: Number(sd?.outside_appetite || 0),
-          overdue_review: Number(sd?.overdue_review || 0),
-          escalated: Number(sd?.escalated || 0),
+          outside_appetite: Number(sd?.['outside_appetite'] || 0),
+          overdue_review: Number(sd?.['overdue_review'] || 0),
+          escalated: Number(sd?.['escalated'] || 0),
         })
       } catch {
         const critical = mapped.filter(r => r.risk_level === 'critical').length
@@ -291,18 +259,18 @@ export default function RiskRegister() {
       const res = await riskRegisterApi.get(risk.id)
       const d = res.data as unknown as Record<string, unknown>
       setEditForm({
-        title: String(d.title || ''),
-        description: String(d.description || ''),
-        category: String(d.category || 'operational'),
-        department: String(d.department || ''),
-        inherent_likelihood: Number(d.inherent_likelihood) || 3,
-        inherent_impact: Number(d.inherent_impact) || 3,
-        residual_likelihood: Number(d.residual_likelihood) || 2,
-        residual_impact: Number(d.residual_impact) || 2,
-        treatment_strategy: String(d.treatment_strategy || 'treat'),
-        treatment_plan: String(d.treatment_plan || ''),
-        risk_owner_name: String(d.risk_owner_name || ''),
-        review_frequency_days: Number(d.review_frequency_days) || 90,
+        title: String(d['title'] || ''),
+        description: String(d['description'] || ''),
+        category: String(d['category'] || 'operational'),
+        department: String(d['department'] || ''),
+        inherent_likelihood: Number(d['inherent_likelihood']) || 3,
+        inherent_impact: Number(d['inherent_impact']) || 3,
+        residual_likelihood: Number(d['residual_likelihood']) || 2,
+        residual_impact: Number(d['residual_impact']) || 2,
+        treatment_strategy: String(d['treatment_strategy'] || 'treat'),
+        treatment_plan: String(d['treatment_plan'] || ''),
+        risk_owner_name: String(d['risk_owner_name'] || ''),
+        review_frequency_days: Number(d['review_frequency_days']) || 90,
       })
       setSelectedRisk(risk)
       setShowEditModal(true)
@@ -360,14 +328,22 @@ export default function RiskRegister() {
     }
   }
 
-  const handleDeleteRisk = async (risk: Risk) => {
-    if (!window.confirm(`Archive risk "${risk.reference}: ${risk.title}"? This will set its status to closed.`)) return
+  const handleDeleteRisk = (risk: Risk) => {
+    setRiskToArchive(risk)
+    setShowArchiveDialog(true)
+  }
+
+  const handleConfirmArchive = async () => {
+    if (!riskToArchive) return
     try {
-      await riskRegisterApi.delete(risk.id)
+      await riskRegisterApi.delete(riskToArchive.id)
       showToast('Risk archived successfully', 'success')
       await loadRisks()
     } catch {
       showToast('Failed to archive risk', 'error')
+    } finally {
+      setShowArchiveDialog(false)
+      setRiskToArchive(null)
     }
   }
 
@@ -440,165 +416,6 @@ export default function RiskRegister() {
       </div>
     )
   }
-
-  const RiskFormFields = ({ form, onChange }: { form: typeof EMPTY_FORM; onChange: (f: typeof EMPTY_FORM) => void }) => (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Title *</label>
-        <input
-          className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground focus:ring-2 focus:ring-primary focus:border-primary"
-          value={form.title}
-          onChange={e => onChange({ ...form, title: e.target.value })}
-          placeholder="Risk title (min 5 chars)"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Description *</label>
-        <textarea
-          rows={3}
-          className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground focus:ring-2 focus:ring-primary focus:border-primary resize-none"
-          value={form.description}
-          onChange={e => onChange({ ...form, description: e.target.value })}
-          placeholder="Detailed risk description (min 10 chars)"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Category</label>
-          <select
-            className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground"
-            value={form.category}
-            onChange={e => onChange({ ...form, category: e.target.value })}
-          >
-            {CATEGORIES.map(c => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Department</label>
-          <input
-            className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground"
-            value={form.department}
-            onChange={e => onChange({ ...form, department: e.target.value })}
-            placeholder="e.g. Operations"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Risk Owner</label>
-        <input
-          className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground"
-          value={form.risk_owner_name}
-          onChange={e => onChange({ ...form, risk_owner_name: e.target.value })}
-          placeholder="Person responsible"
-        />
-      </div>
-      <div className="border-t border-border pt-4">
-        <h4 className="text-sm font-semibold text-foreground mb-3">Inherent Risk (before controls)</h4>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Likelihood (1-5)</label>
-            <input
-              type="range" min={1} max={5} step={1}
-              className="w-full accent-primary"
-              value={form.inherent_likelihood}
-              onChange={e => onChange({ ...form, inherent_likelihood: Number(e.target.value) })}
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Rare</span><span className="font-bold text-foreground">{form.inherent_likelihood}</span><span>Certain</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Impact (1-5)</label>
-            <input
-              type="range" min={1} max={5} step={1}
-              className="w-full accent-primary"
-              value={form.inherent_impact}
-              onChange={e => onChange({ ...form, inherent_impact: Number(e.target.value) })}
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Minor</span><span className="font-bold text-foreground">{form.inherent_impact}</span><span>Critical</span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-2 text-center">
-          <span className="text-sm text-muted-foreground">Inherent Score: </span>
-          <span className="font-bold text-lg" style={{ color: levelToColor(scoreToLevel(form.inherent_likelihood * form.inherent_impact)) }}>
-            {form.inherent_likelihood * form.inherent_impact}
-          </span>
-        </div>
-      </div>
-      <div className="border-t border-border pt-4">
-        <h4 className="text-sm font-semibold text-foreground mb-3">Residual Risk (after controls)</h4>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Likelihood (1-5)</label>
-            <input
-              type="range" min={1} max={5} step={1}
-              className="w-full accent-primary"
-              value={form.residual_likelihood}
-              onChange={e => onChange({ ...form, residual_likelihood: Number(e.target.value) })}
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Rare</span><span className="font-bold text-foreground">{form.residual_likelihood}</span><span>Certain</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Impact (1-5)</label>
-            <input
-              type="range" min={1} max={5} step={1}
-              className="w-full accent-primary"
-              value={form.residual_impact}
-              onChange={e => onChange({ ...form, residual_impact: Number(e.target.value) })}
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Minor</span><span className="font-bold text-foreground">{form.residual_impact}</span><span>Critical</span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-2 text-center">
-          <span className="text-sm text-muted-foreground">Residual Score: </span>
-          <span className="font-bold text-lg" style={{ color: levelToColor(scoreToLevel(form.residual_likelihood * form.residual_impact)) }}>
-            {form.residual_likelihood * form.residual_impact}
-          </span>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Treatment Strategy</label>
-          <select
-            className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground"
-            value={form.treatment_strategy}
-            onChange={e => onChange({ ...form, treatment_strategy: e.target.value })}
-          >
-            {TREATMENT_STRATEGIES.map(s => (
-              <option key={s.id} value={s.id}>{s.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Review Frequency (days)</label>
-          <input
-            type="number" min={7} max={365}
-            className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground"
-            value={form.review_frequency_days}
-            onChange={e => onChange({ ...form, review_frequency_days: Number(e.target.value) })}
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">Treatment Plan</label>
-        <textarea
-          rows={2}
-          className="w-full border border-border rounded-lg px-3 py-2 bg-card text-foreground resize-none"
-          value={form.treatment_plan}
-          onChange={e => onChange({ ...form, treatment_plan: e.target.value })}
-          placeholder="Actions to treat this risk"
-        />
-      </div>
-    </div>
-  )
 
   return (
     <div className="space-y-6">
@@ -1113,7 +930,7 @@ export default function RiskRegister() {
           <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-foreground">
-                {detailRisk ? `${String(detailRisk.reference)} — ${String(detailRisk.title)}` : 'Risk Details'}
+                {detailRisk ? `${String(detailRisk['reference'])} — ${String(detailRisk['title'])}` : 'Risk Details'}
               </h2>
               <button onClick={() => setShowDetailModal(false)} className="p-1 rounded-lg hover:bg-muted transition-colors">
                 <X className="w-5 h-5 text-muted-foreground" />
@@ -1129,80 +946,80 @@ export default function RiskRegister() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Category</span>
-                    <p className="text-sm font-medium text-foreground">{CATEGORIES.find(c => c.id === detailRisk.category)?.label || String(detailRisk.category)}</p>
+                    <p className="text-sm font-medium text-foreground">{CATEGORIES.find(c => c.id === detailRisk['category'])?.label || String(detailRisk['category'])}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Status</span>
-                    <p className="text-sm font-medium text-foreground capitalize">{String(detailRisk.status)}</p>
+                    <p className="text-sm font-medium text-foreground capitalize">{String(detailRisk['status'])}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Department</span>
-                    <p className="text-sm text-foreground">{detailRisk.department ? String(detailRisk.department) : '—'}</p>
+                    <p className="text-sm text-foreground">{detailRisk['department'] ? String(detailRisk['department']) : '—'}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Owner</span>
-                    <p className="text-sm text-foreground">{detailRisk.risk_owner_name ? String(detailRisk.risk_owner_name) : '—'}</p>
+                    <p className="text-sm text-foreground">{detailRisk['risk_owner_name'] ? String(detailRisk['risk_owner_name']) : '—'}</p>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-xs text-muted-foreground uppercase">Description</span>
-                  <p className="text-sm text-foreground mt-1">{String(detailRisk.description ?? '')}</p>
+                  <p className="text-sm text-foreground mt-1">{String(detailRisk['description'] ?? '')}</p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 bg-muted/50 rounded-xl p-4">
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Inherent</span>
-                    <p className="text-2xl font-bold text-muted-foreground">{String(detailRisk.inherent_score)}</p>
-                    <p className="text-xs text-muted-foreground">{String(detailRisk.inherent_likelihood)} x {String(detailRisk.inherent_impact)}</p>
+                    <p className="text-2xl font-bold text-muted-foreground">{String(detailRisk['inherent_score'])}</p>
+                    <p className="text-xs text-muted-foreground">{String(detailRisk['inherent_likelihood'])} x {String(detailRisk['inherent_impact'])}</p>
                   </div>
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Residual</span>
-                    <p className="text-2xl font-bold" style={{ color: levelToColor(scoreToLevel(Number(detailRisk.residual_score))) }}>{String(detailRisk.residual_score)}</p>
-                    <p className="text-xs text-muted-foreground">{String(detailRisk.residual_likelihood)} x {String(detailRisk.residual_impact)}</p>
+                    <p className="text-2xl font-bold" style={{ color: levelToColor(scoreToLevel(Number(detailRisk['residual_score']))) }}>{String(detailRisk['residual_score'])}</p>
+                    <p className="text-xs text-muted-foreground">{String(detailRisk['residual_likelihood'])} x {String(detailRisk['residual_impact'])}</p>
                   </div>
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Target</span>
-                    <p className="text-2xl font-bold text-success">{detailRisk.target_score ? String(detailRisk.target_score) : '—'}</p>
+                    <p className="text-2xl font-bold text-success">{detailRisk['target_score'] ? String(detailRisk['target_score']) : '—'}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Treatment Strategy</span>
-                    <p className="text-sm text-foreground capitalize">{String(detailRisk.treatment_strategy)}</p>
+                    <p className="text-sm text-foreground capitalize">{String(detailRisk['treatment_strategy'])}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Within Appetite</span>
                     <p className="text-sm">
-                      {detailRisk.is_within_appetite
+                      {detailRisk['is_within_appetite']
                         ? <Badge variant="resolved">Yes</Badge>
-                        : <Badge variant="destructive">No — outside threshold ({String(detailRisk.appetite_threshold)})</Badge>
+                        : <Badge variant="destructive">No — outside threshold ({String(detailRisk['appetite_threshold'])})</Badge>
                       }
                     </p>
                   </div>
                 </div>
 
-                {detailRisk.treatment_plan ? (
+                {detailRisk['treatment_plan'] ? (
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Treatment Plan</span>
-                    <p className="text-sm text-foreground mt-1">{String(detailRisk.treatment_plan)}</p>
+                    <p className="text-sm text-foreground mt-1">{String(detailRisk['treatment_plan'])}</p>
                   </div>
                 ) : null}
 
                 {/* Controls */}
-                {Array.isArray(detailRisk.controls) && detailRisk.controls.length > 0 && (
+                {Array.isArray(detailRisk['controls']) && (detailRisk['controls'] as unknown[]).length > 0 && (
                   <div>
-                    <span className="text-xs text-muted-foreground uppercase">Linked Controls ({detailRisk.controls.length})</span>
+                    <span className="text-xs text-muted-foreground uppercase">Linked Controls ({(detailRisk['controls'] as unknown[]).length})</span>
                     <div className="mt-2 space-y-2">
-                      {(detailRisk.controls as Array<Record<string, unknown>>).map((c) => (
-                        <div key={String(c.id)} className="flex items-center gap-3 p-2 bg-muted rounded-lg">
+                      {(detailRisk['controls'] as Array<Record<string, unknown>>).map((c) => (
+                        <div key={String(c['id'])} className="flex items-center gap-3 p-2 bg-muted rounded-lg">
                           <Shield className="w-4 h-4 text-success" />
                           <div className="flex-1">
-                            <span className="text-sm font-medium text-foreground">{String(c.name)}</span>
-                            <span className="text-xs text-muted-foreground ml-2">{String(c.reference)}</span>
+                            <span className="text-sm font-medium text-foreground">{String(c['name'])}</span>
+                            <span className="text-xs text-muted-foreground ml-2">{String(c['reference'])}</span>
                           </div>
-                          <Badge variant="default">{String(c.effectiveness)}</Badge>
+                          <Badge variant="default">{String(c['effectiveness'])}</Badge>
                         </div>
                       ))}
                     </div>
@@ -1210,16 +1027,16 @@ export default function RiskRegister() {
                 )}
 
                 {/* KRIs */}
-                {Array.isArray(detailRisk.kris) && detailRisk.kris.length > 0 && (
+                {Array.isArray(detailRisk['kris']) && (detailRisk['kris'] as unknown[]).length > 0 && (
                   <div>
-                    <span className="text-xs text-muted-foreground uppercase">Key Risk Indicators ({detailRisk.kris.length})</span>
+                    <span className="text-xs text-muted-foreground uppercase">Key Risk Indicators ({(detailRisk['kris'] as unknown[]).length})</span>
                     <div className="mt-2 space-y-2">
-                      {(detailRisk.kris as Array<Record<string, unknown>>).map((k) => (
-                        <div key={String(k.id)} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                          <span className="text-sm text-foreground">{String(k.name)}</span>
+                      {(detailRisk['kris'] as Array<Record<string, unknown>>).map((k) => (
+                        <div key={String(k['id'])} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                          <span className="text-sm text-foreground">{String(k['name'])}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold">{k.current_value != null ? String(k.current_value) : '—'}</span>
-                            <div className={`w-3 h-3 rounded-full ${k.current_status === 'red' ? 'bg-destructive' : k.current_status === 'amber' ? 'bg-warning' : 'bg-success'}`} />
+                            <span className="text-sm font-bold">{k['current_value'] != null ? String(k['current_value']) : '—'}</span>
+                            <div className={`w-3 h-3 rounded-full ${k['current_status'] === 'red' ? 'bg-destructive' : k['current_status'] === 'amber' ? 'bg-warning' : 'bg-success'}`} />
                           </div>
                         </div>
                       ))}
@@ -1228,16 +1045,16 @@ export default function RiskRegister() {
                 )}
 
                 {/* Assessment History */}
-                {Array.isArray(detailRisk.assessment_history) && detailRisk.assessment_history.length > 0 && (
+                {Array.isArray(detailRisk['assessment_history']) && (detailRisk['assessment_history'] as unknown[]).length > 0 && (
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Assessment History</span>
                     <div className="mt-2 space-y-1">
-                      {(detailRisk.assessment_history as Array<Record<string, unknown>>).map((h, i) => (
+                      {(detailRisk['assessment_history'] as Array<Record<string, unknown>>).map((h, i) => (
                         <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                          <span className="text-muted-foreground">{h.date ? new Date(String(h.date)).toLocaleDateString('en-GB') : '—'}</span>
+                          <span className="text-muted-foreground">{h['date'] ? new Date(String(h['date'])).toLocaleDateString('en-GB') : '—'}</span>
                           <div className="flex items-center gap-4">
-                            <span className="text-muted-foreground">Inherent: {String(h.inherent_score)}</span>
-                            <span style={{ color: levelToColor(scoreToLevel(Number(h.residual_score))) }}>Residual: {String(h.residual_score)}</span>
+                            <span className="text-muted-foreground">Inherent: {String(h['inherent_score'])}</span>
+                            <span style={{ color: levelToColor(scoreToLevel(Number(h['residual_score']))) }}>Residual: {String(h['residual_score'])}</span>
                           </div>
                         </div>
                       ))}
@@ -1248,11 +1065,11 @@ export default function RiskRegister() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Last Review</span>
-                    <p className="text-foreground">{detailRisk.last_review_date ? new Date(String(detailRisk.last_review_date)).toLocaleDateString('en-GB') : 'Never'}</p>
+                    <p className="text-foreground">{detailRisk['last_review_date'] ? new Date(String(detailRisk['last_review_date'])).toLocaleDateString('en-GB') : 'Never'}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Next Review</span>
-                    <p className="text-foreground">{detailRisk.next_review_date ? new Date(String(detailRisk.next_review_date)).toLocaleDateString('en-GB') : '—'}</p>
+                    <p className="text-foreground">{detailRisk['next_review_date'] ? new Date(String(detailRisk['next_review_date'])).toLocaleDateString('en-GB') : '—'}</p>
                   </div>
                 </div>
               </div>
@@ -1264,6 +1081,22 @@ export default function RiskRegister() {
           </div>
         </div>
       )}
+
+      {/* Archive Confirmation Dialog */}
+      <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Risk</DialogTitle>
+            <DialogDescription>
+              Archive risk &ldquo;{riskToArchive?.reference}: {riskToArchive?.title}&rdquo;? This will set its status to closed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowArchiveDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmArchive}>Archive</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

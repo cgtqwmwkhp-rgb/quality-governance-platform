@@ -30,8 +30,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-# Quarantine marker - skip all tests in this module (not runnable yet)
-pytestmark = pytest.mark.skip(reason="Requires database migration infrastructure - pending environment setup")
+pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
 
 # ============================================================================

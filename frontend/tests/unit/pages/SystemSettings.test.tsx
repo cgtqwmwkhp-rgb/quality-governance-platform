@@ -67,8 +67,9 @@ describe('SystemSettings', () => {
     );
 
     await screen.findByText('System Settings');
-    const securityTab = screen.getByText('Security');
-    await user.click(securityTab);
-    expect(securityTab).toBeInTheDocument();
+    const securityElements = await screen.findAllByText('Security');
+    expect(securityElements.length).toBeGreaterThanOrEqual(1);
+    await user.click(securityElements[0]!);
+    expect(securityElements[0]).toBeInTheDocument();
   });
 });

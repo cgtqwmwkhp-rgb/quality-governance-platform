@@ -13,6 +13,7 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.audit_log import AuditEvent
+from src.infrastructure.monitoring.azure_monitor import track_business_event
 
 
 async def record_audit_event(
@@ -72,8 +73,6 @@ async def record_audit_event(
         user_id=final_actor_user_id,
     )
 
-    # Note: Not adding to db.session since AuditEvent is not a SQLAlchemy model.
-    # Events are logged for observability. Full persistence requires migration.
-    # See: TODO in AuditEvent class docstring.
+    track_business_event("audit_completed", {"event_type": event_type, "entity_type": entity_type})
 
     return event

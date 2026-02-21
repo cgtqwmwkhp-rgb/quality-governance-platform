@@ -263,7 +263,7 @@ export default function PlanetMark() {
       // Try to load actions for current year if available
       if (transformedYears.length > 0) {
         try {
-          const actionsResponse = await planetMarkApi.listActions(transformedYears[0].id)
+          const actionsResponse = await planetMarkApi.listActions(transformedYears[0]!.id)
           const transformedActions = actionsResponse.data.map(transformAction)
           // Sort by deadline for deterministic ordering
           transformedActions.sort((a, b) => a.deadline.localeCompare(b.deadline))
@@ -274,7 +274,7 @@ export default function PlanetMark() {
         }
 
         try {
-          const scope3Response = await planetMarkApi.getScope3(transformedYears[0].id)
+          const scope3Response = await planetMarkApi.getScope3(transformedYears[0]!.id)
           const transformedScope3 = scope3Response.data.map(transformScope3)
           // Sort by category number for deterministic ordering
           transformedScope3.sort((a, b) => a.number - b.number)
@@ -319,7 +319,7 @@ export default function PlanetMark() {
 
   const completedActions = actions.filter(a => a.status === 'completed').length
   const yoyChange = currentYear && years.length >= 2 
-    ? ((currentYear.emissions_per_fte - years[1].emissions_per_fte) / years[1].emissions_per_fte * 100) 
+    ? ((currentYear.emissions_per_fte - years[1]!.emissions_per_fte) / years[1]!.emissions_per_fte * 100) 
     : null
 
   // Handle SETUP_REQUIRED state with dedicated panel
@@ -541,7 +541,7 @@ export default function PlanetMark() {
               <div className="flex items-center gap-3 mb-2">
                 <select
                   value={currentYear.id}
-                  onChange={(e) => setCurrentYear(years.find(y => y.id === parseInt(e.target.value)) || years[0])}
+                  onChange={(e) => setCurrentYear(years.find(y => y.id === parseInt(e.target.value)) ?? null)}
                   className="bg-primary-foreground/20 border border-primary-foreground/30 rounded-lg px-3 py-1 text-primary-foreground font-bold text-lg"
                 >
                   {years.map(y => (

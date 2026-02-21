@@ -14,7 +14,6 @@ NO PII POLICY:
 
 import json
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -31,6 +30,7 @@ from src.api.schemas.telemetry import (
     ReceiveEventResponse,
     ResetMetricsResponse,
 )
+from src.core.config import settings
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
@@ -97,7 +97,7 @@ ALLOWED_ACTIONS = {"retry", "clear_session"}
 # Local aggregation file (for evaluator)
 # Default to a subdirectory in the project rather than hardcoded /tmp
 _DEFAULT_METRICS_DIR = Path(__file__).parent.parent.parent.parent / "artifacts"
-METRICS_DIR = Path(os.getenv("METRICS_DIR", str(_DEFAULT_METRICS_DIR)))
+METRICS_DIR = Path(settings.metrics_dir) if settings.metrics_dir else _DEFAULT_METRICS_DIR
 
 
 # ============================================================================
@@ -287,9 +287,14 @@ async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     # Aggregate to local file (fault-tolerant)
     try:
         aggregate_event(event)
-    except (SQLAlchemyError, ValueError) as e:
-        # Log but don't fail - telemetry should never block clients
-        logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
+    except (SQLAlchemyError, ValueError, OSError) as e:
+        logger.warning(
+            "Failed to aggregate telemetry event [session=%s]: %s: %s",
+            event.sessionId,
+            type(e).__name__,
+            str(e)[:200],
+            exc_info=True,
+        )
 
     return ReceiveEventResponse(status="ok")
 
@@ -316,11 +321,18 @@ async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser)
         try:
             aggregate_event(event)
             processed += 1
-        except (SQLAlchemyError, ValueError) as e:
-            # Log but don't fail - telemetry should never block clients
-            logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
+        except (SQLAlchemyError, ValueError, OSError) as e:
+            logger.warning(
+                "Failed to aggregate telemetry event in batch [session=%s, event=%s]: %s: %s",
+                event.sessionId,
+                event.name,
+                type(e).__name__,
+                str(e)[:200],
+                exc_info=True,
+            )
 
-    return ReceiveBatchEventResponse(status="ok", count=processed)
+    status_msg = "ok" if processed == len(batch.events) else "partial"
+    return ReceiveBatchEventResponse(status=status_msg, count=processed)
 
 
 @router.get("/metrics/{experiment_id}", response_model=GetExperimentMetricsResponse)

@@ -12,7 +12,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -262,17 +262,15 @@ async def list_reporting_years(
             request_id=get_request_id(request),
         )
     except SQLAlchemyError as e:
+        req_id = get_request_id(request)
         logger.exception(
-            "Planet Mark years query failed unexpectedly: %s: %s",
+            "Planet Mark years query failed [request_id=%s]: %s",
+            req_id,
             type(e).__name__,
-            str(e)[:500],
-            extra={"request_id": get_request_id(request)},
         )
-        return setup_required_response(
-            module="planet-mark",
-            message=f"Planet Mark query failed: {type(e).__name__}. Check server logs.",
-            next_action="Review application logs for request_id and contact support.",
-            request_id=get_request_id(request),
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorCode.INTERNAL_ERROR,
         )
 
     return {
@@ -548,7 +546,7 @@ async def list_improvement_actions(
     # Summary
     completed = len([a for a in actions if a.status == "completed"])
     in_progress = len([a for a in actions if a.status == "in_progress"])
-    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()])
+    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)])
 
     return {
         "year_id": year_id,
@@ -571,7 +569,7 @@ async def list_improvement_actions(
                 "progress_percent": a.progress_percent,
                 "target_scope": a.target_scope,
                 "expected_reduction_pct": a.expected_reduction_pct,
-                "is_overdue": a.status != "completed" and a.time_bound < datetime.utcnow(),
+                "is_overdue": a.status != "completed" and a.time_bound < datetime.now(timezone.utc),
             }
             for a in actions
         ],
@@ -881,17 +879,15 @@ async def get_carbon_dashboard(
             request_id=get_request_id(request),
         )
     except SQLAlchemyError as e:
+        req_id = get_request_id(request)
         logger.exception(
-            "Planet Mark dashboard query failed unexpectedly: %s: %s",
+            "Planet Mark dashboard query failed [request_id=%s]: %s",
+            req_id,
             type(e).__name__,
-            str(e)[:500],
-            extra={"request_id": get_request_id(request)},
         )
-        return setup_required_response(
-            module="planet-mark",
-            message=f"Planet Mark query failed: {type(e).__name__}. Check server logs.",
-            next_action="Review application logs for request_id and contact support.",
-            request_id=get_request_id(request),
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorCode.INTERNAL_ERROR,
         )
 
     if not years:
@@ -920,7 +916,7 @@ async def get_carbon_dashboard(
     )
     actions = list(actions_result.scalars().all())
 
-    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]
+    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)]
 
     return {
         "current_year": {

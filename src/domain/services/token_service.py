@@ -1,6 +1,6 @@
 """Token revocation and management service."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +47,6 @@ class TokenService:
     @staticmethod
     async def cleanup_expired(db: AsyncSession) -> int:
         """Remove expired blacklist entries."""
-        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow()))
+        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.now(timezone.utc)))
         await db.commit()
         return result.rowcount

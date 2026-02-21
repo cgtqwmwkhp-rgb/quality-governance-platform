@@ -181,11 +181,11 @@ export function TypingIndicator({ users }: TypingIndicatorProps) {
 
   const getMessage = () => {
     if (users.length === 1) {
-      return `${users[0].name} is typing`;
+      return `${users[0]!.name} is typing`;
     } else if (users.length === 2) {
-      return `${users[0].name} and ${users[1].name} are typing`;
+      return `${users[0]!.name} and ${users[1]!.name} are typing`;
     } else {
-      return `${users[0].name} and ${users.length - 1} others are typing`;
+      return `${users[0]!.name} and ${users.length - 1} others are typing`;
     }
   };
 

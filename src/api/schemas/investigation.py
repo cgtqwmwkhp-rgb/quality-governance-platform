@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.api.schemas.validators import sanitize_field
 from src.domain.models.investigation import AssignedEntityType, InvestigationStatus
 
 # Investigation Template Schemas
@@ -19,6 +20,11 @@ class InvestigationTemplateBase(BaseModel):
     is_active: bool = Field(default=True, description="Whether template is active")
     structure: Dict[str, Any] = Field(..., description="Template structure (sections and fields)")
     applicable_entity_types: List[str] = Field(..., description="Entity types this template applies to")
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
     @field_validator("applicable_entity_types")
     @classmethod
@@ -46,6 +52,11 @@ class InvestigationTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     structure: Optional[Dict[str, Any]] = None
     applicable_entity_types: Optional[List[str]] = None
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
     @field_validator("applicable_entity_types")
     @classmethod
@@ -97,6 +108,11 @@ class InvestigationRunBase(BaseModel):
     status: str = Field(default="draft", description="Investigation status")
     data: Dict[str, Any] = Field(default_factory=dict, description="Investigation data (responses)")
 
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
     @field_validator("assigned_entity_type")
     @classmethod
     def validate_entity_type(cls, v: str) -> str:
@@ -131,6 +147,11 @@ class InvestigationRunUpdate(BaseModel):
     data: Optional[Dict[str, Any]] = None
     assigned_to_user_id: Optional[int] = None
     reviewer_user_id: Optional[int] = None
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
     @field_validator("status")
     @classmethod
@@ -186,6 +207,11 @@ class CreateFromRecordRequest(BaseModel):
     source_id: int = Field(..., gt=0, description="Source record ID")
     title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
     template_id: int = Field(default=1, description="Template ID (default: v2.1)")
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
     @field_validator("source_type")
     @classmethod
@@ -260,6 +286,11 @@ class CommentCreateRequest(BaseModel):
     section_id: Optional[str] = Field(None, description="Section to attach comment to")
     field_id: Optional[str] = Field(None, description="Field to attach comment to")
     parent_comment_id: Optional[int] = Field(None, description="Parent comment ID for threading")
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class CommentResponse(BaseModel):

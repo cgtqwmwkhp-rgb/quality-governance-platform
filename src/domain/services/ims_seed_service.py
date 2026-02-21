@@ -16,7 +16,7 @@ Each seed function is idempotent: it checks for existing rows before inserting.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select
@@ -1603,7 +1603,7 @@ async def _seed_uvdb_baseline(db: AsyncSession) -> None:
 
     logger.info("Seeding UVDB Achilles baseline B2 audit")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     audit = UVDBAudit(
         audit_reference=f"UVDB-B2-{now.year}-001",
         company_name="Organisation",
@@ -1630,7 +1630,7 @@ async def _seed_planet_mark_year(db: AsyncSession) -> None:
 
     logger.info("Seeding Planet Mark baseline reporting year")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     year_start = datetime(now.year - 1, 4, 1)
     year_end = datetime(now.year, 3, 31)
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.pagination import DataListResponse
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
@@ -59,7 +60,11 @@ async def list_risks(
     owner_id: Optional[int] = None,
 ) -> RiskListResponse:
     """List all risks with pagination and filtering."""
-    query = select(Risk).where(Risk.is_active == True, Risk.tenant_id == current_user.tenant_id)
+    query = (
+        select(Risk)
+        .options(selectinload(Risk.owner))
+        .where(Risk.is_active == True, Risk.tenant_id == current_user.tenant_id)
+    )
 
     if search:
         search_filter = f"%{search}%"
@@ -271,12 +276,12 @@ async def create_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=list[RiskControlResponse])
+@router.get("/{risk_id}/controls", response_model=DataListResponse)
 async def list_controls(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[RiskControlResponse]:
+):
     """List all controls for a risk."""
     await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
 
@@ -292,7 +297,7 @@ async def list_controls(
     )
     controls = result.scalars().all()
 
-    return [RiskControlResponse.model_validate(c) for c in controls]
+    return {"data": [RiskControlResponse.model_validate(c) for c in controls]}
 
 
 @router.patch("/controls/{control_id}", response_model=RiskControlResponse)
@@ -394,12 +399,12 @@ async def create_assessment(
     return RiskAssessmentResponse.model_validate(assessment)
 
 
-@router.get("/{risk_id}/assessments", response_model=list[RiskAssessmentResponse])
+@router.get("/{risk_id}/assessments", response_model=DataListResponse)
 async def list_assessments(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[RiskAssessmentResponse]:
+):
     """List all assessments for a risk (history)."""
     await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
 
@@ -408,4 +413,4 @@ async def list_assessments(
     )
     assessments = result.scalars().all()
 
-    return [RiskAssessmentResponse.model_validate(a) for a in assessments]
+    return {"data": [RiskAssessmentResponse.model_validate(a) for a in assessments]}

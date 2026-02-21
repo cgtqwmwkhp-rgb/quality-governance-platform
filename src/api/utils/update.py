@@ -1,6 +1,6 @@
 """Shared model update utilities for API routes."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
@@ -20,5 +20,5 @@ def apply_updates(
     for key, value in update_data.items():
         setattr(entity, key, value)
     if set_updated_at and hasattr(entity, "updated_at"):
-        entity.updated_at = datetime.utcnow()
+        entity.updated_at = datetime.now(timezone.utc)
     return update_data

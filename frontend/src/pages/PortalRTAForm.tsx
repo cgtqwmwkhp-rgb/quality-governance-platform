@@ -194,7 +194,7 @@ export default function PortalRTAForm() {
     hasPassengers: null,
     passengerDetails: '',
     location: '',
-    accidentDate: new Date().toISOString().split('T')[0],
+    accidentDate: new Date().toISOString().split('T')[0]!,
     accidentTime: new Date().toTimeString().slice(0, 5),
     accidentType: '',
     vehicleCount: 0,
@@ -240,7 +240,7 @@ export default function PortalRTAForm() {
   // Update third party
   const updateThirdParty = (index: number, field: keyof ThirdParty, value: string | boolean | number) => {
     const updated = [...formData.thirdParties];
-    updated[index] = { ...updated[index], [field]: value };
+    updated[index] = { ...updated[index]!, [field]: value };
     setFormData((prev) => ({ ...prev, thirdParties: updated }));
   };
 

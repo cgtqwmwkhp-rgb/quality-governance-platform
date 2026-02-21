@@ -13,7 +13,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -323,7 +323,7 @@ class CopilotService:
         self.db.add(assistant_message)
 
         # Update session
-        session.last_message_at = datetime.utcnow()
+        session.last_message_at = datetime.now(timezone.utc)
         if not session.title and len(content) > 0:
             session.title = content[:50] + ("..." if len(content) > 50 else "")
 

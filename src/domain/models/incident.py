@@ -1,8 +1,10 @@
 """Incident models for incident reporting and investigation."""
 
+from __future__ import annotations
+
 import enum
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
@@ -11,6 +13,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
+
+if TYPE_CHECKING:
+    from src.domain.models.user import User
 
 
 class IncidentType(str, enum.Enum):
@@ -143,6 +148,11 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     control_failures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of failed controls
 
     # Relationships
+    reporter: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[reporter_id],
+        lazy="noload",
+    )
     actions: Mapped[List["IncidentAction"]] = relationship(
         "IncidentAction",
         back_populates="incident",

@@ -4,13 +4,17 @@ import { cn } from "../../helpers/utils"
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: boolean
+  errorMessage?: string
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, error, ...props }, ref) => {
+  ({ className, type, error, errorMessage, id, ...props }, ref) => {
     return (
       <input
         type={type}
+        id={id}
+        aria-invalid={error || undefined}
+        aria-describedby={errorMessage ? `${id}-error` : undefined}
         className={cn(
           "flex h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm",
           "placeholder:text-muted-foreground",

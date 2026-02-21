@@ -34,6 +34,8 @@ export function ThemeToggle({ variant = 'icon', className }: ThemeToggleProps) {
     <div className={cn("flex items-center gap-1 p-1 rounded-lg bg-surface border border-border", className)}>
       <button
         onClick={() => setTheme('light')}
+        aria-pressed={theme === 'light'}
+        aria-label="Light theme"
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
           theme === 'light'
@@ -46,6 +48,8 @@ export function ThemeToggle({ variant = 'icon', className }: ThemeToggleProps) {
       </button>
       <button
         onClick={() => setTheme('dark')}
+        aria-pressed={theme === 'dark'}
+        aria-label="Dark theme"
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
           theme === 'dark'
@@ -58,6 +62,8 @@ export function ThemeToggle({ variant = 'icon', className }: ThemeToggleProps) {
       </button>
       <button
         onClick={() => setTheme('system')}
+        aria-pressed={theme === 'system'}
+        aria-label="System theme"
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
           theme === 'system'

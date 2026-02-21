@@ -324,7 +324,7 @@ async def get_recurring_findings(
 @router.get("/health", response_model=AIHealthResponse)
 async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
     """Check AI service availability"""
-    import os
+    from src.core.config import settings
 
     return {
         "status": "operational",
@@ -334,6 +334,6 @@ async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
             "recommendation_engine": True,
             "root_cause_analysis": True,
             "audit_assistant": True,
-            "claude_ai": bool(os.getenv("ANTHROPIC_API_KEY")),
+            "claude_ai": bool(settings.anthropic_api_key),
         },
     }

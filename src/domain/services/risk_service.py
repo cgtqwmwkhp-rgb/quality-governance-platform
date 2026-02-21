@@ -9,7 +9,7 @@ Provides:
 - Bow-tie analysis support
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import and_, desc, func, select
@@ -24,6 +24,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
+from src.infrastructure.monitoring.azure_monitor import track_business_event
 
 
 class RiskScoringEngine:
@@ -167,13 +168,15 @@ class RiskService:
             created_by=created_by,
         )
 
-        risk.next_review_date = datetime.utcnow() + timedelta(days=risk.review_frequency_days)
+        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
 
         self.db.add(risk)
         await self.db.commit()
         await self.db.refresh(risk)
 
         await self._record_assessment(risk)
+
+        track_business_event("risk_assessed", {"category": risk.category})
 
         return risk
 
@@ -199,8 +202,8 @@ class RiskService:
 
         risk.is_within_appetite = risk.residual_score <= risk.appetite_threshold
 
-        risk.last_review_date = datetime.utcnow()
-        risk.next_review_date = datetime.utcnow() + timedelta(days=risk.review_frequency_days)
+        risk.last_review_date = datetime.now(timezone.utc)
+        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
 
         if "review_notes" in data:
             risk.review_notes = data["review_notes"]
@@ -290,7 +293,7 @@ class RiskService:
 
     async def get_risk_trends(self, risk_id: Optional[int] = None, days: int = 365) -> list[dict[str, Any]]:
         """Get risk score trends over time"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         conditions = [RiskAssessmentHistory.assessment_date >= cutoff]
         if risk_id:
@@ -385,10 +388,10 @@ class KRIService:
         if kri.historical_values is None:
             kri.historical_values = []
 
-        kri.historical_values.append({"value": new_value, "date": datetime.utcnow().isoformat()})
+        kri.historical_values.append({"value": new_value, "date": datetime.now(timezone.utc).isoformat()})
 
         kri.current_value = new_value
-        kri.last_updated = datetime.utcnow()
+        kri.last_updated = datetime.now(timezone.utc)
 
         if kri.threshold_direction == "above":
             if new_value >= kri.red_threshold:

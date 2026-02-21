@@ -11,14 +11,15 @@ Features:
 
 import hashlib
 import json
-import os
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.core.config import settings
 
 # AI Integration
 try:
@@ -172,7 +173,7 @@ class AnomalyDetector:
         """Detect if incident frequency is abnormal for an entity"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
         # Get incidents for this entity
         if entity_type == "department":
@@ -209,7 +210,7 @@ class AnomalyDetector:
         std_dev = variance**0.5 if variance > 0 else 0
 
         # Get current week count
-        current_week = datetime.utcnow().strftime("%Y-W%W")
+        current_week = datetime.now(timezone.utc).strftime("%Y-W%W")
         current_count = weeks.get(current_week, 0)
 
         # Anomaly if > 2 standard deviations above mean
@@ -236,7 +237,7 @@ class AnomalyDetector:
         """Detect unusual patterns across all incidents"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
         recent = result.scalars().all()
 
@@ -299,7 +300,7 @@ class IncidentPredictor:
         """Identify conditions that predict higher incident likelihood"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
         incidents = result.scalars().all()
 
@@ -424,7 +425,7 @@ class RecommendationEngine:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.claude_client = None
-        if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
+        if CLAUDE_AVAILABLE and settings.anthropic_api_key:
             self.claude_client = anthropic.Anthropic()
 
     def get_corrective_action_recommendations(
@@ -593,7 +594,7 @@ class RootCauseAnalyzer:
         """Cluster similar incidents to identify systemic issues"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         result = await self.db.execute(
             select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
         )

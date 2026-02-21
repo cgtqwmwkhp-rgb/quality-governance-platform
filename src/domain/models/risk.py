@@ -1,8 +1,10 @@
 """Risk models for risk register and controls."""
 
+from __future__ import annotations
+
 import enum
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
@@ -11,6 +13,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
+
+if TYPE_CHECKING:
+    from src.domain.models.user import User
 
 
 class RiskStatus(str, enum.Enum):
@@ -80,6 +85,11 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
+    owner: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[owner_id],
+        lazy="noload",
+    )
     controls: Mapped[List["OperationalRiskControl"]] = relationship(
         "OperationalRiskControl",
         back_populates="risk",

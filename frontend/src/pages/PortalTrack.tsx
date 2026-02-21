@@ -283,13 +283,13 @@ export default function PortalTrack() {
       if (response.ok) {
         const data = await response.json();
         const reports: ReportSummary[] = (data.items || []).map((item: Record<string, unknown>) => ({
-          reference_number: item.reference_number,
-          report_type: item.report_type,
-          title: item.title,
-          status: String(item.status || '').toUpperCase() || 'OPEN',
-          status_label: String(item.status_label || '') || getStatusLabel(String(item.status || '')),
-          submitted_at: item.submitted_at,
-          updated_at: item.updated_at,
+          reference_number: item['reference_number'],
+          report_type: item['report_type'],
+          title: item['title'],
+          status: String(item['status'] || '').toUpperCase() || 'OPEN',
+          status_label: String(item['status_label'] || '') || getStatusLabel(String(item['status'] || '')),
+          submitted_at: item['submitted_at'],
+          updated_at: item['updated_at'],
         }));
         
         // Sort by most recent

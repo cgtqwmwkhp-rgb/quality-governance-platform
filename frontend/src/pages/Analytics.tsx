@@ -70,22 +70,22 @@ export default function Analytics() {
       ]);
 
       const kpiData = kpiRes.data as Record<string, unknown>;
-      if (kpiData?.kpis && Array.isArray(kpiData.kpis)) {
-        setKpis((kpiData.kpis as Record<string, unknown>[]).map((k) => ({
-          id: String(k.id || ''),
-          title: String(k.title || ''),
-          value: k.value as string | number,
-          change: Number(k.change || 0),
-          changeType: (k.changeType || k.change_type || 'neutral') as KPICard['changeType'],
-          icon: ICON_MAP[String(k.id)] || <BarChart3 className="w-6 h-6" />,
-          variant: (k.variant || 'primary') as KPICard['variant'],
-          sparkline: k.sparkline as number[] | undefined,
+      if (kpiData?.['kpis'] && Array.isArray(kpiData['kpis'])) {
+        setKpis((kpiData['kpis'] as Record<string, unknown>[]).map((k) => ({
+          id: String(k['id'] || ''),
+          title: String(k['title'] || ''),
+          value: k['value'] as string | number,
+          change: Number(k['change'] || 0),
+          changeType: (k['changeType'] || k['change_type'] || 'neutral') as KPICard['changeType'],
+          icon: ICON_MAP[String(k['id'])] || <BarChart3 className="w-6 h-6" />,
+          variant: (k['variant'] || 'primary') as KPICard['variant'],
+          sparkline: k['sparkline'] as number[] | undefined,
         })));
       }
 
       const trendData = trendRes.data as Record<string, unknown>;
-      if (trendData?.trends && Array.isArray(trendData.trends)) {
-        setMonthlyTrends(trendData.trends as typeof monthlyTrends);
+      if (trendData?.['trends'] && Array.isArray(trendData['trends'])) {
+        setMonthlyTrends(trendData['trends'] as typeof monthlyTrends);
       }
 
       const rawKpis = kpiRes.data as Record<string, Record<string, number>>;
@@ -94,11 +94,11 @@ export default function Analytics() {
         const m = rawKpis[mod] || {};
         return {
           module: mod.charAt(0).toUpperCase() + mod.slice(1),
-          total: Number(m.total || 0),
-          open: Number(m.open || 0),
-          closed: Number(m.closed || m.completed || m.mitigated || 0),
-          avgResolutionDays: Number(m.avg_resolution_days || 0),
-          trend: Number(m.trend || 0),
+          total: Number(m['total'] || 0),
+          open: Number(m['open'] || 0),
+          closed: Number(m['closed'] || m['completed'] || m['mitigated'] || 0),
+          avgResolutionDays: Number(m['avg_resolution_days'] || 0),
+          trend: Number(m['trend'] || 0),
         };
       });
       setModuleStats(stats);

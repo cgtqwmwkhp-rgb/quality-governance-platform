@@ -10,7 +10,6 @@ Features:
 """
 
 import json
-import os
 from datetime import datetime
 from typing import Any, Optional
 
@@ -31,6 +30,7 @@ from src.api.schemas.push_notification import (
     UpdateNotificationPreferencesResponse,
 )
 from src.api.utils.update import apply_updates
+from src.core.config import settings
 from src.infrastructure.database import Base
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -169,9 +169,9 @@ class PushNotificationService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
-        self.vapid_public_key = os.getenv("VAPID_PUBLIC_KEY")
-        self.vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_EMAIL', 'admin@plantexpand.com')}"}
+        self.vapid_private_key = settings.vapid_private_key or None
+        self.vapid_public_key = settings.vapid_public_key or None
+        self.vapid_claims = {"sub": f"mailto:{settings.vapid_email}"}
 
     async def subscribe(
         self,
@@ -278,6 +278,16 @@ class PushNotificationService:
                 self.db.add(log)
 
             except (ConnectionError, TimeoutError, ValueError) as e:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "Push notification delivery failed [user_id=%s, subscription=%s]: %s: %s",
+                    user_id,
+                    sub.id,
+                    type(e).__name__,
+                    str(e)[:200],
+                    exc_info=True,
+                )
                 results.append({"success": False, "error": str(e)})
 
         await self.db.commit()
@@ -314,6 +324,15 @@ class PushNotificationService:
             return {"success": True, "endpoint": subscription.endpoint, "simulated": True}
 
         except (ConnectionError, TimeoutError, ValueError) as e:
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "Web push send failed [endpoint=%s]: %s: %s",
+                subscription.endpoint[:80],
+                type(e).__name__,
+                str(e)[:200],
+                exc_info=True,
+            )
             error_msg = str(e)
             if "410" in error_msg or "404" in error_msg:
                 subscription.is_active = False

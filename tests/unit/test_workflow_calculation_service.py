@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -72,7 +72,7 @@ def test_progress_half():
 
 def test_sla_breached():
     """SLA is breached when now > sla_due_at."""
-    past = datetime.utcnow() - timedelta(hours=1)
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
     instance = MockInstance(sla_due_at=past, sla_warning_at=past - timedelta(hours=2))
     assert WorkflowCalculationService.calculate_sla_status(instance) == "breached"
     print("✓ Past due = breached")
@@ -80,7 +80,7 @@ def test_sla_breached():
 
 def test_sla_warning():
     """SLA is warning when past warning but before due."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     instance = MockInstance(
         sla_due_at=now + timedelta(hours=2),
         sla_warning_at=now - timedelta(hours=1),
@@ -91,7 +91,7 @@ def test_sla_warning():
 
 def test_sla_ok():
     """SLA is ok when before both thresholds."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     instance = MockInstance(
         sla_due_at=now + timedelta(days=5),
         sla_warning_at=now + timedelta(days=3),

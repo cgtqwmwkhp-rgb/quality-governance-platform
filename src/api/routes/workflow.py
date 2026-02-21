@@ -268,7 +268,7 @@ async def get_sla_status(
 ):
     """Get current SLA status for an entity."""
     track_metric("workflow.sla_check", 1, {"entity_type": entity_type})
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     result = await db.execute(
         select(SLATracking)
@@ -287,7 +287,7 @@ async def get_sla_status(
     if not tracking:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Calculate SLA status
     if tracking.resolved_at:

@@ -5,7 +5,6 @@ They are disabled in production for security.
 """
 
 import logging
-import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -57,8 +56,7 @@ class TestingHealthResponse(BaseModel):
 
 def is_staging_env() -> bool:
     """Check if running in staging environment."""
-    app_env = os.environ.get("APP_ENV", settings.app_env).lower()
-    return app_env == "staging"
+    return settings.app_env.lower() == "staging"
 
 
 # ETL Role Permission Matrix (ADR-0001/ADR-0002 compliant)
@@ -151,7 +149,7 @@ async def ensure_test_user(
         )
 
     # Security check 2: Require CI secret
-    ci_secret = os.environ.get("CI_TEST_SECRET", "")
+    ci_secret = settings.ci_test_secret
     if not ci_secret:
         logger.warning("CI_TEST_SECRET not configured in staging")
         raise HTTPException(
@@ -231,5 +229,5 @@ async def testing_health() -> TestingHealthResponse:
     """Check if testing endpoints are available."""
     return TestingHealthResponse(
         available=is_staging_env(),
-        environment=os.environ.get("APP_ENV", settings.app_env),
+        environment=settings.app_env,
     )

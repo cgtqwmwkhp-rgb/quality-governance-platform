@@ -8,13 +8,13 @@ Enterprise-grade audit template and execution management with:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,
@@ -56,6 +56,7 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
+from src.domain.models.user import User
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -128,7 +129,7 @@ async def list_templates(
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditTemplateResponse:
     """Create a new audit template."""
     dump = template_data.model_dump(exclude={"standard_ids"})
@@ -254,7 +255,7 @@ async def update_template(
     template_id: int,
     template_data: AuditTemplateUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditTemplateResponse:
     """Update an audit template."""
     template = await get_or_404(db, AuditTemplate, template_id, tenant_id=current_user.tenant_id)
@@ -304,7 +305,7 @@ async def update_template(
 async def publish_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditTemplateResponse:
     """Publish an audit template, making it available for use."""
     result = await db.execute(
@@ -350,7 +351,7 @@ async def publish_template(
 async def clone_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditTemplateResponse:
     """Clone an existing audit template."""
     result = await db.execute(
@@ -528,7 +529,7 @@ async def archive_template(
 async def restore_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditTemplateResponse:
     """Restore an archived template back to active status."""
     result = await db.execute(
@@ -616,7 +617,7 @@ async def create_section(
     template_id: int,
     section_data: AuditSectionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditSectionResponse:
     """Create a new section in an audit template."""
     await get_or_404(db, AuditTemplate, template_id, tenant_id=current_user.tenant_id)
@@ -642,7 +643,7 @@ async def update_section(
     section_id: int,
     section_data: AuditSectionUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditSectionResponse:
     """Update an audit section."""
     result = await db.execute(
@@ -694,7 +695,7 @@ async def create_question(
     template_id: int,
     question_data: AuditQuestionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditQuestionResponse:
     """Create a new question in an audit template."""
     await get_or_404(db, AuditTemplate, template_id, tenant_id=current_user.tenant_id)
@@ -757,7 +758,7 @@ async def update_question(
     question_id: int,
     question_data: AuditQuestionUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditQuestionResponse:
     """Update an audit question."""
     question = await get_or_404(db, AuditQuestion, question_id)
@@ -812,7 +813,9 @@ async def list_runs(
     assigned_to_id: Optional[int] = None,
 ) -> AuditRunListResponse:
     """List all audit runs with pagination and filtering."""
-    query = select(AuditRun).where(AuditRun.tenant_id == current_user.tenant_id)
+    query = (
+        select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == current_user.tenant_id)
+    )
 
     if status_filter:
         query = query.where(AuditRun.status == status_filter)
@@ -830,7 +833,7 @@ async def list_runs(
 async def create_run(
     run_data: AuditRunCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditRunResponse:
     """Create a new audit run from a template."""
     _span = tracer.start_span("create_audit_run") if tracer else None
@@ -928,7 +931,7 @@ async def update_run(
     run_id: int,
     run_data: AuditRunUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditRunResponse:
     """Update an audit run."""
     run = await get_or_404(db, AuditRun, run_id, tenant_id=current_user.tenant_id)
@@ -966,7 +969,7 @@ async def update_run(
 async def start_run(
     run_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditRunResponse:
     """Start an audit run."""
     run = await get_or_404(db, AuditRun, run_id, tenant_id=current_user.tenant_id)
@@ -990,7 +993,7 @@ async def start_run(
 async def complete_run(
     run_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
     result = await db.execute(
@@ -1042,7 +1045,7 @@ async def create_response(
     run_id: int,
     response_data: AuditResponseCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
     run = await get_or_404(db, AuditRun, run_id, tenant_id=current_user.tenant_id)
@@ -1090,7 +1093,7 @@ async def update_response(
     response_id: int,
     response_data: AuditResponseUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditResponseResponse:
     """Update an audit response."""
     result = await db.execute(
@@ -1153,7 +1156,7 @@ async def create_finding(
     run_id: int,
     finding_data: AuditFindingCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
     await get_or_404(db, AuditRun, run_id, tenant_id=current_user.tenant_id)
@@ -1198,7 +1201,7 @@ async def update_finding(
     finding_id: int,
     finding_data: AuditFindingUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditFindingResponse:
     """Update an audit finding."""
     finding = await get_or_404(db, AuditFinding, finding_id, tenant_id=current_user.tenant_id)

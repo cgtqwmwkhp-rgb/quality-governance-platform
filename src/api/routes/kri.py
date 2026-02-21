@@ -4,7 +4,7 @@ Provides CRUD operations for KRIs, measurements, alerts,
 and risk score tracking.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -284,7 +284,7 @@ async def acknowledge_alert(
     )
 
     alert.is_acknowledged = True
-    alert.acknowledged_at = datetime.utcnow()
+    alert.acknowledged_at = datetime.now(timezone.utc)
     alert.acknowledged_by_id = current_user.id
     alert.acknowledgment_notes = notes
 
@@ -306,7 +306,7 @@ async def resolve_alert(
     )
 
     alert.is_resolved = True
-    alert.resolved_at = datetime.utcnow()
+    alert.resolved_at = datetime.now(timezone.utc)
     alert.resolved_by_id = current_user.id
     alert.resolution_notes = notes
 

@@ -5,13 +5,13 @@ for manual review and retry.
 """
 
 import logging
-import os
 from datetime import datetime, timezone
 
 from celery.signals import task_failure
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session
 
+from src.core.config import settings
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def _get_sync_database_url() -> str | None:
     """Derive a synchronous database URL from the async one."""
-    url = os.getenv("DATABASE_URL", "")
+    url = settings.database_url
     if not url:
         return None
     return url.replace("+asyncpg", "").replace("+aiosqlite", "+pysqlite")

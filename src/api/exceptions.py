@@ -26,6 +26,21 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ORIGIN_REGEX = re.compile(r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$")
 
 
+_STATUS_PHRASE: dict[int, str] = {
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    409: "Conflict",
+    413: "Payload Too Large",
+    422: "Unprocessable Entity",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+}
+
+
 def _get_cors_origin(request: Request) -> Optional[str]:
     """Get allowed CORS origin from request, if valid."""
     origin = request.headers.get("origin")
@@ -61,13 +76,19 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     """
     request_id = getattr(request.state, "request_id", "unknown")
 
+    code = exc.detail if isinstance(exc.detail, str) else str(exc.status_code)
+    message = _STATUS_PHRASE.get(exc.status_code, f"HTTP {exc.status_code}")
+    details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
+
     response = JSONResponse(
         status_code=exc.status_code,
         content={
-            "error_code": str(exc.status_code),
-            "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
-            "details": exc.detail if isinstance(exc.detail, dict) else {},
-            "request_id": request_id,
+            "error": {
+                "code": code,
+                "message": message,
+                "details": details,
+                "request_id": request_id,
+            }
         },
     )
 
@@ -108,10 +129,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     response = JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "error_code": "422",
-            "message": "Validation error",
-            "details": {"errors": errors},
-            "request_id": request_id,
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": {"errors": errors},
+                "request_id": request_id,
+            }
         },
     )
 
@@ -138,28 +161,32 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         JSONResponse with canonical error envelope and CORS headers
     """
     import logging
+    import traceback
 
     logger = logging.getLogger(__name__)
     request_id = getattr(request.state, "request_id", "unknown")
 
-    # Log the actual error for debugging (no PII)
     logger.error(
-        f"Unhandled exception: {type(exc).__name__}",
+        "Unhandled exception [request_id=%s]: %s\n%s",
+        request_id,
+        type(exc).__name__,
+        traceback.format_exc(),
         extra={
             "request_id": request_id,
             "exception_type": type(exc).__name__,
             "path": str(request.url.path),
         },
-        exc_info=True,
     )
 
     response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "error_code": "500",
-            "message": "Internal server error",
-            "details": {},
-            "request_id": request_id,
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "Internal server error",
+                "details": {},
+                "request_id": request_id,
+            }
         },
     )
 

@@ -1,6 +1,6 @@
 """CAPA (Corrective and Preventive Action) API routes."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -88,7 +88,7 @@ async def list_capa_actions(
         query = query.where(CAPAAction.source_type == source_type)
     if overdue_only:
         query = query.where(
-            CAPAAction.due_date < datetime.utcnow(),
+            CAPAAction.due_date < datetime.now(timezone.utc),
             CAPAAction.status.notin_([CAPAStatus.CLOSED]),
         )
 
@@ -153,7 +153,7 @@ async def get_capa_stats(
     overdue = await db.execute(
         select(func.count(CAPAAction.id)).where(
             tenant_filter,
-            CAPAAction.due_date < datetime.utcnow(),
+            CAPAAction.due_date < datetime.now(timezone.utc),
             CAPAAction.status.notin_([CAPAStatus.CLOSED]),
         )
     )
@@ -214,9 +214,9 @@ async def transition_capa_status(
 
     action.status = data.status
     if data.status == CAPAStatus.VERIFICATION:
-        action.completed_at = datetime.utcnow()
+        action.completed_at = datetime.now(timezone.utc)
     elif data.status == CAPAStatus.CLOSED:
-        action.verified_at = datetime.utcnow()
+        action.verified_at = datetime.now(timezone.utc)
         action.verified_by_id = current_user.id
         track_metric("capa.closed")
 

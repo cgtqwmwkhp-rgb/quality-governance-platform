@@ -216,7 +216,7 @@ export default function PortalIncidentForm() {
     personRole: '',
     personContact: '',
     location: '',
-    incidentDate: new Date().toISOString().split('T')[0],
+    incidentDate: new Date().toISOString().split('T')[0]!,
     incidentTime: new Date().toTimeString().slice(0, 5),
     description: '',
     assetNumber: '',

@@ -8,6 +8,7 @@ Enterprise-grade document analysis using Claude AI for:
 - Quality and compliance checking
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -17,8 +18,12 @@ from typing import Optional
 import httpx
 
 from src.core.config import settings
+from src.infrastructure.resilience import CircuitBreaker, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
+
+_ai_circuit = CircuitBreaker("ai_service", failure_threshold=3, recovery_timeout=120.0)
+_ai_semaphore = asyncio.Semaphore(3)
 
 
 @dataclass
@@ -116,49 +121,56 @@ Respond with JSON matching this schema:
 }}"""
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.base_url}/messages",
-                    headers={
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": self.model,
-                        "max_tokens": 2000,
-                        "system": self.SYSTEM_PROMPT,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                    timeout=60.0,
-                )
-                response.raise_for_status()
-
-                data = response.json()
-                ai_response = data["content"][0]["text"]
-
-                # Parse JSON from response
-                json_match = re.search(r"\{[\s\S]*\}", ai_response)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    return DocumentAnalysis(
-                        summary=result.get("summary", ""),
-                        document_type=result.get("document_type", "other"),
-                        category=result.get("category", ""),
-                        tags=result.get("tags", []),
-                        keywords=result.get("keywords", []),
-                        topics=result.get("topics", []),
-                        entities=result.get("entities", {}),
-                        sensitivity=result.get("sensitivity", "internal"),
-                        confidence=result.get("confidence", 0.0),
-                        has_tables=result.get("has_tables", False),
-                        has_images=result.get("has_images", False),
-                        effective_date=result.get("effective_date"),
-                        review_date=result.get("review_date"),
-                    )
-
+            async with _ai_semaphore:
+                return await _ai_circuit.call(self._call_anthropic, prompt, file_name, content)
+        except CircuitBreakerOpenError:
+            logger.warning("AI circuit breaker OPEN – using fallback analysis")
+            return self._fallback_analysis(content, file_name)
         except Exception as e:
             logger.error(f"AI analysis failed: {e}")
+            return self._fallback_analysis(content, file_name)
+
+    async def _call_anthropic(self, prompt: str, file_name: str, content: str) -> DocumentAnalysis:
+        """Execute the Anthropic API call (wrapped by circuit breaker)."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/messages",
+                headers={
+                    "x-api-key": self.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "max_tokens": 2000,
+                    "system": self.SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+                timeout=60.0,
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            ai_response = data["content"][0]["text"]
+
+            json_match = re.search(r"\{[\s\S]*\}", ai_response)
+            if json_match:
+                result = json.loads(json_match.group())
+                return DocumentAnalysis(
+                    summary=result.get("summary", ""),
+                    document_type=result.get("document_type", "other"),
+                    category=result.get("category", ""),
+                    tags=result.get("tags", []),
+                    keywords=result.get("keywords", []),
+                    topics=result.get("topics", []),
+                    entities=result.get("entities", {}),
+                    sensitivity=result.get("sensitivity", "internal"),
+                    confidence=result.get("confidence", 0.0),
+                    has_tables=result.get("has_tables", False),
+                    has_images=result.get("has_images", False),
+                    effective_date=result.get("effective_date"),
+                    review_date=result.get("review_date"),
+                )
 
         return self._fallback_analysis(content, file_name)
 

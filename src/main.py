@@ -1,7 +1,7 @@
 """Main FastAPI application entry point."""
 
 import logging
-import os
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -24,10 +24,29 @@ from src.infrastructure.logging.pii_filter import PIIFilter
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 
 
+class APIVersionMiddleware(BaseHTTPMiddleware):
+    """Track API version usage for future migration."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-API-Version"] = "v1"
+        requested_version = request.headers.get("X-API-Version", "v1")
+        if requested_version != "v1":
+            logging.getLogger(__name__).info(
+                "Client requested API version: %s",
+                requested_version,
+                extra={"requested_api_version": requested_version},
+            )
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
     async def dispatch(self, request: Request, call_next):
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce
+
         response: Response = await call_next(request)
 
         # Security headers
@@ -38,7 +57,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://*.azurestaticapps.net; frame-ancestors 'none'"
+            f"default-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
+            f"img-src 'self' data: https:; "
+            f"font-src 'self'; "
+            f"connect-src 'self' https://*.azurestaticapps.net; "
+            f"frame-ancestors 'none'"
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
@@ -176,6 +201,33 @@ def create_application() -> FastAPI:
         openapi_url="/openapi.json",
         redirect_slashes=True,
         lifespan=lifespan,
+        openapi_tags=[
+            {"name": "Authentication", "description": "Authentication, authorization, and session management"},
+            {"name": "Users", "description": "User account management and profiles"},
+            {"name": "Incidents", "description": "Incident reporting, tracking, and resolution"},
+            {"name": "Risk Register", "description": "Risk assessment, controls, and mitigation"},
+            {"name": "Audits & Inspections", "description": "Audit templates, runs, findings, and scoring"},
+            {
+                "name": "ISO Compliance & Evidence",
+                "description": "ISO clause mapping, evidence links, and gap analysis",
+            },
+            {"name": "Standards Library", "description": "ISO standards, clauses, and controls catalogue"},
+            {"name": "Document Library", "description": "Document upload, AI analysis, and semantic search"},
+            {"name": "Policy Library", "description": "Policy lifecycle management and acknowledgments"},
+            {"name": "Actions", "description": "Corrective and preventive action tracking"},
+            {"name": "CAPA", "description": "Corrective and Preventive Action management"},
+            {"name": "Complaints", "description": "Customer complaint handling and resolution"},
+            {"name": "Investigations", "description": "Root cause investigations and templates"},
+            {"name": "Near Misses", "description": "Near-miss event reporting and tracking"},
+            {"name": "Road Traffic Collisions", "description": "RTA incident management"},
+            {"name": "Notifications", "description": "In-app and push notification management"},
+            {"name": "Analytics & Reporting", "description": "Dashboards, KPIs, and trend analysis"},
+            {"name": "Workflow Automation", "description": "Automated workflows and approval chains"},
+            {"name": "AI Intelligence", "description": "AI-powered insights and recommendations"},
+            {"name": "AI Copilot", "description": "Interactive AI assistant for compliance guidance"},
+            {"name": "Health", "description": "Health, liveness, and readiness probes"},
+            {"name": "Meta", "description": "Build version and deployment metadata"},
+        ],
     )
 
     # Initialize OpenTelemetry instrumentation
@@ -190,6 +242,9 @@ def create_application() -> FastAPI:
 
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Add API Version Middleware (tracks version header for future migration)
+    app.add_middleware(APIVersionMiddleware)
 
     # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
     app.add_middleware(RateLimitMiddleware)
@@ -207,6 +262,7 @@ def create_application() -> FastAPI:
             "Authorization",
             "Content-Type",
             "X-Request-Id",
+            "X-API-Version",
             "X-UAT-Write-Enable",
             "X-UAT-Issue-Id",
             "X-UAT-Owner",
@@ -214,6 +270,7 @@ def create_application() -> FastAPI:
         ],
         expose_headers=[
             "X-Request-Id",
+            "X-API-Version",
             "X-RateLimit-Limit",
             "X-RateLimit-Remaining",
             "X-RateLimit-Reset",
@@ -240,16 +297,17 @@ app = create_application()
 
 
 @app.get("/", tags=["Root"])
-async def root():
+async def root(request: Request):
     """Root endpoint: Provides basic API information and links."""
     from fastapi.responses import HTMLResponse
 
+    nonce = getattr(request.state, "csp_nonce", "")
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>{settings.app_name}</title>
-        <style>
+        <style nonce="{nonce}">
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
                 max-width: 800px;
@@ -309,6 +367,13 @@ async def root():
                 font-size: 12px;
                 font-weight: 600;
             }}
+            .footer {{
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #eee;
+                color: #7f8c8d;
+                font-size: 14px;
+            }}
         </style>
     </head>
     <body>
@@ -348,7 +413,7 @@ async def root():
                 </div>
             </div>
 
-            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 14px;">
+            <div class="footer">
                 <strong>Modules:</strong> Standards Library, Audits & Inspections, Risk Management, Incidents, Root Cause Analysis, Complaints, Policy Library
             </div>
         </div>
@@ -373,8 +438,8 @@ async def health_check(request: Request) -> dict:
     }
 
 
-_BUILD_SHA = os.environ.get("BUILD_SHA", "dev")
-_BUILD_TIME = os.environ.get("BUILD_TIME", "local")
+_BUILD_SHA = settings.build_sha
+_BUILD_TIME = settings.build_time
 
 
 @app.get("/api/v1/meta/version", tags=["Meta"])
@@ -402,6 +467,81 @@ async def liveness_check(request: Request) -> dict:
     }
 
 
+async def _check_database() -> str:
+    from sqlalchemy import text
+
+    from src.infrastructure.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+        return "healthy"
+    except Exception:
+        return "unhealthy"
+
+
+async def _check_redis() -> str:
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url)
+        await r.ping()
+        await r.aclose()
+        return "healthy"
+    except Exception:
+        return "unavailable"
+
+
+def _check_celery() -> str:
+    celery_url = settings.celery_broker_url or settings.redis_url
+    if not celery_url:
+        return "not_configured"
+    try:
+        from src.infrastructure.tasks.celery_app import celery_app
+
+        inspect = celery_app.control.inspect(timeout=2.0)
+        active = inspect.active()
+        return "ok" if active else "no_workers"
+    except Exception as e:
+        return f"error: {str(e)[:100]}"
+
+
+def _check_azure_storage() -> str:
+    storage_conn = settings.azure_storage_connection_string or None
+    if not storage_conn:
+        return "not_configured"
+    try:
+        from azure.storage.blob import BlobServiceClient
+
+        blob_client = BlobServiceClient.from_connection_string(storage_conn)
+        blob_client.get_account_information()
+        return "ok"
+    except ImportError:
+        return "sdk_not_installed"
+    except Exception as e:
+        return f"error: {str(e)[:100]}"
+
+
+def _collect_circuit_breaker_health() -> list[dict]:
+    result: list[dict] = []
+    modules = [
+        ("src.domain.services.email_service", "_email_circuit"),
+        ("src.domain.services.sms_service", "_sms_circuit"),
+        ("src.domain.services.document_ai_service", "_ai_circuit"),
+        ("src.domain.services.ai_models", "_ai_models_circuit"),
+    ]
+    for mod_path, attr_name in modules:
+        try:
+            import importlib
+
+            mod = importlib.import_module(mod_path)
+            circuit = getattr(mod, attr_name)
+            result.append(circuit.get_health())
+        except Exception:
+            pass
+    return result
+
+
 @app.get("/readyz", tags=["Health"])
 async def readiness_check(request: Request, verbose: bool = False):
     """Readiness probe: Check if application is ready to accept traffic.
@@ -411,79 +551,27 @@ async def readiness_check(request: Request, verbose: bool = False):
 
     Per ADR-0003: Readiness Probe Database Check
     """
-    from sqlalchemy import text
+    checks: dict[str, str] = {
+        "database": await _check_database(),
+        "redis": await _check_redis(),
+        "celery": _check_celery(),
+        "azure_storage": _check_azure_storage(),
+    }
 
-    from src.infrastructure.database import async_session_maker
+    ignored = ("unavailable", "not_configured", "sdk_not_installed")
+    all_healthy = all(v in ("healthy", "ok") for v in checks.values() if v not in ignored)
 
-    checks: dict[str, str] = {}
-
-    # Database check
-    try:
-        async with async_session_maker() as session:
-            await session.execute(text("SELECT 1"))
-        checks["database"] = "healthy"
-    except Exception:
-        checks["database"] = "unhealthy"
-
-    # Redis check
-    try:
-        import redis.asyncio as aioredis
-
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        r = aioredis.from_url(redis_url)
-        await r.ping()
-        await r.aclose()
-        checks["redis"] = "healthy"
-    except Exception:
-        checks["redis"] = "unavailable"
-
-    # Check Celery workers (if configured)
-    celery_url = os.getenv("CELERY_BROKER_URL") or os.getenv("REDIS_URL")
-    if celery_url:
-        try:
-            from src.infrastructure.tasks.celery_app import celery_app
-
-            inspect = celery_app.control.inspect(timeout=2.0)
-            active = inspect.active()
-            if active:
-                checks["celery"] = "ok"
-            else:
-                checks["celery"] = "no_workers"
-        except Exception as e:
-            checks["celery"] = f"error: {str(e)[:100]}"
-    else:
-        checks["celery"] = "not_configured"
-
-    # Check Azure Storage (if configured)
-    storage_conn = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    if storage_conn:
-        try:
-            from azure.storage.blob import BlobServiceClient
-
-            blob_client = BlobServiceClient.from_connection_string(storage_conn)
-            blob_client.get_account_information()
-            checks["azure_storage"] = "ok"
-        except ImportError:
-            checks["azure_storage"] = "sdk_not_installed"
-        except Exception as e:
-            checks["azure_storage"] = f"error: {str(e)[:100]}"
-    else:
-        checks["azure_storage"] = "not_configured"
-
-    all_healthy = all(
-        v in ("healthy", "ok")
-        for v in checks.values()
-        if v not in ("unavailable", "not_configured", "sdk_not_installed")
-    )
-
+    request_id = getattr(request.state, "request_id", "N/A")
     response: dict[str, object] = {
         "status": "healthy" if all_healthy else "unhealthy",
-        "version": os.getenv("APP_VERSION", "1.0.0"),
+        "version": settings.app_version,
         "flower_url": "http://flower:5555",
+        "request_id": request_id,
     }
 
     if verbose:
         response["checks"] = checks
+        response["circuit_breakers"] = _collect_circuit_breaker_health()
 
     status_code = 200 if all_healthy else 503
     return JSONResponse(content=response, status_code=status_code)

@@ -68,7 +68,7 @@ export default function CalendarView() {
               id: `audit-${audit.id}`,
               title: audit.title || `Audit ${audit.reference_number || audit.id}`,
               type: 'audit',
-              date: dateStr,
+              date: dateStr!,
               description: `Audit run: ${audit.status}`,
               status: audit.status === 'completed' ? 'completed' : isOverdue ? 'overdue' : isToday ? 'today' : 'upcoming',
               priority: 'high',
@@ -83,7 +83,7 @@ export default function CalendarView() {
         (actionsRes.value.data.items || []).forEach((action) => {
           if (action.due_date && action.status !== 'completed' && action.status !== 'closed') {
             const date = new Date(action.due_date);
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = date.toISOString().split('T')[0]!;
             const isOverdue = date < now;
             const isToday = dateStr === now.toISOString().split('T')[0];
             calendarEvents.push({
@@ -308,7 +308,7 @@ export default function CalendarView() {
                             {dayEvents.slice(0, 3).map((event) => (
                               <Badge
                                 key={event.id}
-                                variant={eventTypeStyles[event.type].variant as BadgeVariant}
+                                variant={eventTypeStyles[event.type]!.variant as BadgeVariant}
                                 className="text-[10px] truncate w-full justify-start"
                               >
                                 {event.title}
@@ -347,7 +347,7 @@ export default function CalendarView() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <Badge variant={eventTypeStyles[event.type].variant as BadgeVariant}>
+                        <Badge variant={eventTypeStyles[event.type]!.variant as BadgeVariant}>
                           {event.type}
                         </Badge>
                         <Badge variant={
@@ -421,7 +421,7 @@ export default function CalendarView() {
                         </>
                       )}
                     </div>
-                    <Badge variant={eventTypeStyles[event.type].variant as BadgeVariant} className="mt-2 text-[10px]">
+                    <Badge variant={eventTypeStyles[event.type]!.variant as BadgeVariant} className="mt-2 text-[10px]">
                       {event.type}
                     </Badge>
                   </div>

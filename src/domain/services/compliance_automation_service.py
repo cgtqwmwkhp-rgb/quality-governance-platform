@@ -11,7 +11,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -88,7 +88,7 @@ class ComplianceAutomationService:
 
         update.is_reviewed = True
         update.reviewed_by = reviewed_by
-        update.reviewed_at = datetime.utcnow()
+        update.reviewed_at = datetime.now(timezone.utc)
         update.requires_action = requires_action
         if action_notes is not None:
             update.action_notes = action_notes
@@ -155,7 +155,7 @@ class ComplianceAutomationService:
             all_audits_q = (
                 select(ScheduledAudit)
                 .where(ScheduledAudit.is_active == True)  # noqa: E712
-                .where(ScheduledAudit.next_due_date < datetime.utcnow())
+                .where(ScheduledAudit.next_due_date < datetime.now(timezone.utc))
             )
             overdue_result = await db.execute(all_audits_q)
             overdue_audits = overdue_result.scalars().all()
@@ -246,7 +246,7 @@ class ComplianceAutomationService:
         if status:
             query = query.where(Certificate.status == status)
         if expiring_within_days:
-            cutoff = datetime.utcnow() + timedelta(days=expiring_within_days)
+            cutoff = datetime.now(timezone.utc) + timedelta(days=expiring_within_days)
             query = query.where(Certificate.expiry_date <= cutoff)
 
         result = await db.execute(query)
@@ -257,7 +257,7 @@ class ComplianceAutomationService:
         db: AsyncSession,
     ) -> Dict[str, Any]:
         """Get summary of expiring certificates."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         expired_q = select(func.count()).select_from(Certificate).where(Certificate.expiry_date < now)
         exp_7_q = (
@@ -348,7 +348,7 @@ class ComplianceAutomationService:
         overdue: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """Get scheduled audits."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = (
             select(ScheduledAudit).where(ScheduledAudit.is_active == True).order_by(ScheduledAudit.next_due_date.asc())
         )  # noqa: E712
@@ -440,7 +440,7 @@ class ComplianceAutomationService:
             "change": 0,
             "trend": "stable",
             "breakdown": {},
-            "calculated_at": datetime.utcnow().isoformat(),
+            "calculated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     async def get_compliance_trend(
@@ -450,7 +450,7 @@ class ComplianceAutomationService:
         months: int = 12,
     ) -> List[Dict[str, Any]]:
         """Get compliance score trend over time."""
-        since = datetime.utcnow() - timedelta(days=months * 30)
+        since = datetime.now(timezone.utc) - timedelta(days=months * 30)
         query = (
             select(ComplianceScore)
             .where(
@@ -513,9 +513,9 @@ class ComplianceAutomationService:
         deadline = None
         if is_riddor:
             if "death" in riddor_types or "specified_injury" in riddor_types:
-                deadline = datetime.utcnow() + timedelta(days=10)
+                deadline = datetime.now(timezone.utc) + timedelta(days=10)
             else:
-                deadline = datetime.utcnow() + timedelta(days=15)
+                deadline = datetime.now(timezone.utc) + timedelta(days=15)
 
         return {
             "is_riddor": is_riddor,
@@ -540,7 +540,9 @@ class ComplianceAutomationService:
         submission = existing.scalar_one_or_none()
 
         if not submission:
-            deadline = datetime.utcnow() + timedelta(days=10 if riddor_type in ("death", "specified_injury") else 15)
+            deadline = datetime.now(timezone.utc) + timedelta(
+                days=10 if riddor_type in ("death", "specified_injury") else 15
+            )
             submission = RIDDORSubmission(
                 incident_id=incident_id,
                 riddor_type=riddor_type,
@@ -571,7 +573,7 @@ class ComplianceAutomationService:
         if not submission:
             raise ValueError(f"No pending RIDDOR submission for incident {incident_id}")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         submission.submission_status = "submitted"
         submission.submitted_at = now
         submission.submitted_by = submitted_by
@@ -590,7 +592,7 @@ class ComplianceAutomationService:
             return
 
         logger.info("Seeding compliance automation default data")
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         updates = [
             RegulatoryUpdate(

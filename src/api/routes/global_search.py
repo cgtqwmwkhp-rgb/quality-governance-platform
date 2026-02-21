@@ -5,14 +5,18 @@ Provides unified cross-module search across incidents, RTAs, complaints,
 risks, audits, actions, and documents.
 """
 
+import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.request_context import get_request_id
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -47,6 +51,7 @@ async def global_search(
     date_to: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    request_id: str = Depends(get_request_id),
 ) -> SearchResponse:
     """
     Unified search across all modules.
@@ -98,7 +103,12 @@ async def global_search(
                 )
             )
     except (SQLAlchemyError, ValueError) as e:
-        pass
+        logger.warning(
+            "Search: incident query failed [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+            exc_info=True,
+        )
 
     try:
         from src.domain.models.rta import RTA
@@ -130,7 +140,12 @@ async def global_search(
                 )
             )
     except (SQLAlchemyError, ValueError) as e:
-        pass
+        logger.warning(
+            "Search: RTA query failed [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+            exc_info=True,
+        )
 
     try:
         from src.domain.models.complaint import Complaint
@@ -162,7 +177,12 @@ async def global_search(
                 )
             )
     except (SQLAlchemyError, ValueError) as e:
-        pass
+        logger.warning(
+            "Search: complaint query failed [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+            exc_info=True,
+        )
 
     try:
         from src.domain.models.risk import Risk
@@ -194,7 +214,12 @@ async def global_search(
                 )
             )
     except (SQLAlchemyError, ValueError) as e:
-        pass
+        logger.warning(
+            "Search: risk query failed [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+            exc_info=True,
+        )
 
     if module:
         all_results = [r for r in all_results if r.module.lower() == module.lower()]
