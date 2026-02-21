@@ -1,12 +1,12 @@
 """Celery application configuration."""
 
-import os
-
 from celery import Celery
 from celery.schedules import crontab
 
-broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
-result_backend = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+from src.core.config import settings
+
+broker_url = settings.celery_broker_url
+result_backend = settings.celery_result_backend
 
 celery_app = Celery(
     "quality_governance",

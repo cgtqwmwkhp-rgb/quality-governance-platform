@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,7 +53,7 @@ class RiskRegisterService:
         overdue_review = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
-            .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.utcnow(), not_closed)
+            .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.now(timezone.utc), not_closed)
         )
         escalated = await db.scalar(
             select(func.count())

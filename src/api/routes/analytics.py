@@ -11,7 +11,7 @@ Features:
 - ROI tracking
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
@@ -154,7 +154,7 @@ async def list_dashboards(current_user: CurrentUser):
                 "color": "#10B981",
                 "is_default": True,
                 "widget_count": 8,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "id": 2,
@@ -164,7 +164,7 @@ async def list_dashboards(current_user: CurrentUser):
                 "color": "#3B82F6",
                 "is_default": False,
                 "widget_count": 6,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "id": 3,
@@ -174,7 +174,7 @@ async def list_dashboards(current_user: CurrentUser):
                 "color": "#8B5CF6",
                 "is_default": False,
                 "widget_count": 5,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         ]
     }
@@ -190,7 +190,7 @@ async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser
         "description": dashboard.description,
         "icon": dashboard.icon or "LayoutDashboard",
         "color": dashboard.color or "#10B981",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     track_metric("analytics.dashboards_created", 1)
     if _span:
@@ -250,7 +250,7 @@ async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, curren
     return {
         "id": dashboard_id,
         "name": dashboard.name,
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -285,7 +285,7 @@ async def get_widget_data(
                 "values": [15, 12, 10, 10],
             },
         },
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -465,7 +465,7 @@ async def record_cost(cost: CostRecord, current_user: CurrentUser):
         "entity_type": cost.entity_type,
         "entity_id": cost.entity_id,
         "amount": cost.amount,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -505,7 +505,7 @@ async def create_investment(investment: ROIInvestmentCreate, current_user: Curre
         "name": investment.name,
         "category": investment.category,
         "investment_amount": investment.investment_amount,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -521,7 +521,7 @@ async def update_investment_actuals(
         "id": investment_id,
         "actual_savings": actual_savings,
         "incidents_prevented": incidents_prevented,
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -552,7 +552,7 @@ async def generate_report(
         "report_type": report_type,
         "format": format,
         "status": "generating",
-        "estimated_completion": datetime.utcnow().isoformat(),
+        "estimated_completion": datetime.now(timezone.utc).isoformat(),
         "download_url": None,  # Will be available when complete
     }
 
@@ -564,5 +564,5 @@ async def get_report_status(report_id: str, current_user: CurrentUser):
         "report_id": report_id,
         "status": "complete",
         "download_url": f"/api/v1/analytics/reports/{report_id}/download",
-        "expires_at": datetime.utcnow().isoformat(),
+        "expires_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -16,7 +16,7 @@ export function Skeleton({ className = '', lines = 3, variant = 'text' }: Skelet
   }
 
   return (
-    <div className={cn('space-y-3', className)}>
+    <div className={cn('space-y-3', className)} role="status" aria-busy="true" aria-label="Loading">
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
@@ -38,7 +38,7 @@ interface TableSkeletonProps {
 
 export function TableSkeleton({ rows = 5, columns = 4, className = '' }: TableSkeletonProps) {
   return (
-    <div className={cn('w-full', className)}>
+    <div className={cn('w-full', className)} role="status" aria-busy="true" aria-label="Loading table">
       <div className="flex gap-4 mb-4 pb-3 border-b border-border">
         {Array.from({ length: columns }).map((_, i) => (
           <div
@@ -74,7 +74,7 @@ interface CardSkeletonProps {
 
 export function CardSkeleton({ count = 3, className = '' }: CardSkeletonProps) {
   return (
-    <div className={cn('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4', className)}>
+    <div className={cn('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4', className)} role="status" aria-busy="true" aria-label="Loading cards">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}

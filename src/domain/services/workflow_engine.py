@@ -18,7 +18,7 @@ Features:
 import enum
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -307,7 +307,7 @@ async def start_workflow(
     if template is None:
         raise ValueError(f"Template not found: {template_code}")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     sla_due = now + timedelta(hours=template.sla_hours or 72)
     warning_at = now + timedelta(hours=template.warning_hours or 48)
 
@@ -410,7 +410,7 @@ async def advance_workflow(
     if instance is None:
         raise ValueError(f"Workflow instance {instance_id} not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Find current step
     steps = await get_instance_steps(db, instance_id)
@@ -472,7 +472,7 @@ async def cancel_workflow(
     if instance is None:
         raise ValueError(f"Workflow instance {instance_id} not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     instance.status = "cancelled"
     instance.completed_at = now
     instance.updated_at = now
@@ -512,7 +512,7 @@ async def get_pending_approvals(db: AsyncSession, user_id: int) -> List[Dict[str
 
     approvals = []
     for step, inst, tpl in result.all():
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         sla_status = "ok"
         if step.due_at:
             if now > step.due_at:
@@ -574,7 +574,7 @@ async def reject_step(
     if step is None:
         raise ValueError(f"Step {step_id} not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     step.status = "completed"
     step.outcome = "rejected"
     step.outcome_by = user_id
@@ -627,7 +627,7 @@ async def bulk_approve(
 
 async def check_escalations(db: AsyncSession) -> List[Dict[str, Any]]:
     """Find workflows with breached SLAs."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(WorkflowInstance, WorkflowTemplate)
         .join(WorkflowTemplate, WorkflowInstance.template_id == WorkflowTemplate.id)
@@ -674,7 +674,7 @@ async def escalate_workflow(
     if instance is None:
         raise ValueError(f"Workflow instance {instance_id} not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     old_priority = instance.priority
     instance.status = "escalated"
     if new_priority:
@@ -706,7 +706,7 @@ async def escalate_workflow(
 
 
 async def get_active_delegations(db: AsyncSession, user_id: int) -> List[UserDelegation]:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(UserDelegation).where(
             and_(
@@ -758,7 +758,7 @@ async def cancel_delegation(db: AsyncSession, delegation_id: int) -> bool:
 
 async def get_workflow_stats(db: AsyncSession) -> Dict[str, Any]:
     """Compute live statistics from the database."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=today_start.weekday())
 
@@ -1215,7 +1215,7 @@ class RuleEvaluator:
                 entity_type=entity_type,
                 entity_id=entity_id,
                 trigger_event=trigger_event,
-                executed_at=datetime.utcnow(),
+                executed_at=datetime.now(timezone.utc),
                 success=action_result.get("success", False),
                 error_message=action_result.get("error"),
                 action_taken=f"{rule.action_type.value}: {rule.name}",
@@ -1293,7 +1293,7 @@ class RuleEvaluator:
             if not model:
                 continue
 
-            threshold = datetime.utcnow() - timedelta(hours=rule.delay_hours)
+            threshold = datetime.now(timezone.utc) - timedelta(hours=rule.delay_hours)
             delay_field = rule.delay_from_field or "created_at"
 
             logger.info(f"Checking escalation rule: {rule.name}")
@@ -1302,7 +1302,7 @@ class RuleEvaluator:
 
     async def check_sla_breaches(self) -> List[Dict[str, Any]]:
         """Check for SLA warnings and breaches (called periodically by scheduler)."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         results = []
 
         warning_query = select(SLATracking).where(
@@ -1392,7 +1392,7 @@ class SLAService:
             logger.info(f"No SLA config found for {entity_type.value}")
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         acknowledgment_due = None
         response_due = None
@@ -1422,7 +1422,7 @@ class SLAService:
     async def mark_acknowledged(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.acknowledged_at:
-            tracking.acknowledged_at = datetime.utcnow()
+            tracking.acknowledged_at = datetime.now(timezone.utc)
             tracking.acknowledgment_met = (
                 tracking.acknowledged_at <= tracking.acknowledgment_due if tracking.acknowledgment_due else True
             )
@@ -1432,7 +1432,7 @@ class SLAService:
     async def mark_responded(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.responded_at:
-            tracking.responded_at = datetime.utcnow()
+            tracking.responded_at = datetime.now(timezone.utc)
             tracking.response_met = tracking.responded_at <= tracking.response_due if tracking.response_due else True
             await self.db.commit()
         return tracking
@@ -1440,7 +1440,7 @@ class SLAService:
     async def mark_resolved(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.resolved_at:
-            tracking.resolved_at = datetime.utcnow()
+            tracking.resolved_at = datetime.now(timezone.utc)
             tracking.resolution_met = tracking.resolved_at <= tracking.resolution_due
             await self.db.commit()
         return tracking
@@ -1449,14 +1449,14 @@ class SLAService:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.is_paused:
             tracking.is_paused = True
-            tracking.paused_at = datetime.utcnow()
+            tracking.paused_at = datetime.now(timezone.utc)
             await self.db.commit()
         return tracking
 
     async def resume_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and tracking.is_paused:
-            paused_duration = (datetime.utcnow() - tracking.paused_at).total_seconds() / 3600
+            paused_duration = (datetime.now(timezone.utc) - tracking.paused_at).total_seconds() / 3600
             tracking.total_paused_hours += paused_duration
             tracking.is_paused = False
             tracking.paused_at = None

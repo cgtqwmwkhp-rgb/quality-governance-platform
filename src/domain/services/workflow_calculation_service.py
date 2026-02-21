@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 
@@ -35,7 +35,7 @@ class WorkflowCalculationService:
         attributes.
         """
         if now is None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
         if instance.sla_due_at:
             if now > instance.sla_due_at:

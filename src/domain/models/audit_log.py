@@ -11,7 +11,7 @@ Provides blockchain-style immutable audit logging with:
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
@@ -62,7 +62,7 @@ class AuditEvent:
         self.resource_type = resource_type
         self.resource_id = resource_id
         self.user_id = user_id
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
         self.id = None  # Will be set if/when persisted
 
         # Log the event for observability (no secrets in payload)

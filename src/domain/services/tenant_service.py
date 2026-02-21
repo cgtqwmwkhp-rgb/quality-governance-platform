@@ -10,7 +10,7 @@ Provides complete tenant management with:
 """
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import and_, func, or_, select
@@ -261,7 +261,7 @@ class TenantService:
     ) -> TenantInvitation:
         """Create an invitation to join a tenant."""
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
         invitation = TenantInvitation(
             tenant_id=tenant_id,
@@ -287,7 +287,7 @@ class TenantService:
         if not invitation:
             raise ValueError("Invalid or expired invitation")
 
-        if invitation.expires_at < datetime.utcnow():
+        if invitation.expires_at < datetime.now(timezone.utc):
             invitation.status = "expired"
             await self.db.commit()
             raise ValueError("Invitation has expired")
@@ -295,7 +295,7 @@ class TenantService:
         tenant_user = await self.add_user_to_tenant(invitation.tenant_id, user_id, invitation.role)
 
         invitation.status = "accepted"
-        invitation.accepted_at = datetime.utcnow()
+        invitation.accepted_at = datetime.now(timezone.utc)
         await self.db.commit()
 
         return tenant_user

@@ -13,7 +13,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
 import pickle
 import time
 from collections import OrderedDict
@@ -22,23 +21,24 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar, Union
 
+from src.core.config import settings
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-_RECOVERY_INTERVAL = int(os.getenv("CACHE_RECOVERY_INTERVAL", "60"))
+_RECOVERY_INTERVAL = settings.cache_recovery_interval
 
 
 class CacheType(Enum):
-    """Cache categories with default TTLs (configurable via environment)."""
+    """Cache categories with default TTLs (configurable via settings)."""
 
-    SHORT = int(os.getenv("CACHE_TTL_SHORT", "60"))
-    MEDIUM = int(os.getenv("CACHE_TTL_MEDIUM", "300"))
-    LONG = int(os.getenv("CACHE_TTL_LONG", "3600"))
-    DAILY = int(os.getenv("CACHE_TTL_DAILY", "86400"))
-    SESSION = int(os.getenv("CACHE_TTL_SESSION", "1800"))
+    SHORT = settings.cache_ttl_short
+    MEDIUM = settings.cache_ttl_medium
+    LONG = settings.cache_ttl_long
+    DAILY = settings.cache_ttl_daily
+    SESSION = settings.cache_ttl_session
 
 
 @dataclass
@@ -46,7 +46,7 @@ class CacheConfig:
     """Cache configuration."""
 
     redis_url: Optional[str] = None
-    default_ttl: int = int(os.getenv("CACHE_TTL_DEFAULT", "300"))
+    default_ttl: int = settings.cache_ttl_default
     max_memory_items: int = 1000
     enable_stats: bool = True
     key_prefix: str = "qgp:"
@@ -383,9 +383,8 @@ def get_cache() -> Union[InMemoryCache, RedisCache]:
     """Get or create the global cache instance."""
     global _cache
     if _cache is None:
-        redis_url = os.getenv("REDIS_URL")
-        if redis_url:
-            _cache = RedisCache(redis_url)
+        if settings.redis_url:
+            _cache = RedisCache(settings.redis_url)
         else:
             _cache = InMemoryCache()
     return _cache

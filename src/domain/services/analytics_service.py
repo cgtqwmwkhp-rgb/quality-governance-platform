@@ -11,7 +11,7 @@ Features:
 
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ class AnalyticsService:
 
         base_value = 10
         for i in range(days):
-            date = datetime.utcnow() - timedelta(days=days - i - 1)
+            date = datetime.now(timezone.utc) - timedelta(days=days - i - 1)
             labels.append(date.strftime("%Y-%m-%d"))
             # Add some variance
             variance = math.sin(i / 5) * 3 + (i / days) * 2
@@ -514,7 +514,7 @@ class AnalyticsService:
         benchmarks = self.get_benchmark_summary()
 
         return {
-            "report_date": datetime.utcnow().isoformat(),
+            "report_date": datetime.now(timezone.utc).isoformat(),
             "time_range": time_range,
             "executive_summary": {
                 "headline": "Safety Performance Improved by 8.5%",

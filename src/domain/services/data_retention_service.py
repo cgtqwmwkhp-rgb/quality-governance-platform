@@ -1,7 +1,7 @@
 """Automated data retention and cleanup service."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +23,7 @@ class DataRetentionService:
 
     @staticmethod
     async def cleanup_expired_tokens(db: AsyncSession) -> int:
-        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.utcnow()))
+        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.now(timezone.utc)))
         await db.commit()
         return result.rowcount
 
@@ -32,7 +32,7 @@ class DataRetentionService:
         """Delete AuditLogEntry records older than 365 days."""
         from src.domain.models.audit_log import AuditLogEntry
 
-        cutoff = datetime.utcnow() - timedelta(days=DataRetentionService.RETENTION_POLICIES["audit_trail_entries"])
+        cutoff = datetime.now(timezone.utc) - timedelta(days=DataRetentionService.RETENTION_POLICIES["audit_trail_entries"])
         result = await db.execute(delete(AuditLogEntry).where(AuditLogEntry.timestamp < cutoff))
         await db.commit()
         logger.info("Cleaned up %d audit log entries older than 365 days", result.rowcount)
@@ -60,7 +60,7 @@ class DataRetentionService:
         """Delete Notification records older than 180 days."""
         from src.domain.models.notification import Notification
 
-        cutoff = datetime.utcnow() - timedelta(days=DataRetentionService.RETENTION_POLICIES["notification_history"])
+        cutoff = datetime.now(timezone.utc) - timedelta(days=DataRetentionService.RETENTION_POLICIES["notification_history"])
         result = await db.execute(delete(Notification).where(Notification.created_at < cutoff))
         await db.commit()
         logger.info("Cleaned up %d notifications older than 180 days", result.rowcount)

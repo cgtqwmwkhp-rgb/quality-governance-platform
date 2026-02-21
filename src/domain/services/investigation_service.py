@@ -31,11 +31,11 @@ class InvestigationStatusManager:
     @staticmethod
     def apply_status_timestamps(investigation, new_status: str) -> None:
         if new_status == "in_progress" and not investigation.started_at:
-            investigation.started_at = datetime.utcnow()
+            investigation.started_at = datetime.now(timezone.utc)
         elif new_status == "completed" and not investigation.completed_at:
-            investigation.completed_at = datetime.utcnow()
+            investigation.completed_at = datetime.now(timezone.utc)
         elif new_status == "closed" and not investigation.closed_at:
-            investigation.closed_at = datetime.utcnow()
+            investigation.closed_at = datetime.now(timezone.utc)
 
 
 class MappingReasonCode:

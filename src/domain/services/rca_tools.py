@@ -4,7 +4,7 @@ Provides services for 5-Whys, Fishbone diagrams, and CAPA management.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, select
@@ -102,7 +102,7 @@ class FiveWhysService:
             raise ValueError(f"Analysis {analysis_id} not found")
 
         analysis.completed = True
-        analysis.completed_at = datetime.utcnow()
+        analysis.completed_at = datetime.now(timezone.utc)
         analysis.completed_by_id = user_id
         analysis.proposed_actions = proposed_actions
 
@@ -220,7 +220,7 @@ class FishboneService:
             raise ValueError(f"Diagram {diagram_id} not found")
 
         diagram.completed = True
-        diagram.completed_at = datetime.utcnow()
+        diagram.completed_at = datetime.now(timezone.utc)
         diagram.completed_by_id = user_id
         diagram.proposed_actions = proposed_actions
 
@@ -305,7 +305,7 @@ class CAPAService:
 
         capa.status = status
         if status == "completed":
-            capa.completed_at = datetime.utcnow()
+            capa.completed_at = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(capa)
@@ -325,7 +325,7 @@ class CAPAService:
         if not capa:
             raise ValueError(f"CAPA {capa_id} not found")
 
-        capa.verified_at = datetime.utcnow()
+        capa.verified_at = datetime.now(timezone.utc)
         capa.verified_by_id = user_id
         capa.verification_notes = verification_notes
         capa.is_effective = is_effective
@@ -349,7 +349,7 @@ class CAPAService:
 
     async def get_overdue_capas(self) -> List[CAPAItem]:
         """Get all overdue CAPA items."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = await self.db.execute(
             select(CAPAItem)
             .where(

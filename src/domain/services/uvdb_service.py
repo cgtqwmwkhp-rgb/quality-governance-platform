@@ -5,7 +5,7 @@ Encapsulates LTIFR calculation and audit reference number generation.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class UVDBService:
@@ -35,5 +35,5 @@ class UVDBService:
         Format: ``UVDB-{year}-{nnnn}``
         """
         if year is None:
-            year = datetime.utcnow().year
+            year = datetime.now(timezone.utc).year
         return f"UVDB-{year}-{(existing_count + 1):04d}"

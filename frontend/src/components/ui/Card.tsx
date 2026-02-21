@@ -1,11 +1,16 @@
 import * as React from "react"
 import { cn } from "../../helpers/utils"
 
+interface CardProps extends React.HTMLAttributes<HTMLElement> {
+  hoverable?: boolean
+  as?: React.ElementType
+}
+
 const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { hoverable?: boolean }
->(({ className, hoverable = false, ...props }, ref) => (
-  <div
+  HTMLElement,
+  CardProps
+>(({ className, hoverable = false, as: Component = 'div', ...props }, ref) => (
+  <Component
     ref={ref}
     className={cn(
       "rounded-xl border border-border bg-card text-card-foreground shadow-sm",

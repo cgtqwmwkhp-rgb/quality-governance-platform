@@ -4,7 +4,7 @@ Digital Signature API Routes
 DocuSign-level e-signature capabilities.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -527,7 +527,7 @@ async def get_signature_stats(
 
     total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
-    this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+    this_month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0)
     this_month_count = (
         await db.scalar(
             select(func.count(SignatureRequest.id)).where(

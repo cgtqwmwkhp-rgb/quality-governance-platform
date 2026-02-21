@@ -1,7 +1,6 @@
 """OpenTelemetry instrumentation and Azure Monitor integration."""
 
 import logging
-import os
 from typing import Any
 
 from opentelemetry import metrics, trace
@@ -51,23 +50,24 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     global _audits_completed, _audit_findings
     global _api_response_time, _db_query_time, _cache_hit_rate
 
+    from src.core.config import settings
+
     resource = Resource.create(
         {
             "service.name": service_name,
-            "service.version": os.getenv("APP_VERSION", "1.0.0"),
-            "deployment.environment": os.getenv("ENVIRONMENT", "development"),
+            "service.version": settings.app_version,
+            "deployment.environment": settings.app_env,
         }
     )
 
-    environment = os.getenv("ENVIRONMENT", "development")
-    default_sample_rate = 0.1 if environment == "production" else 1.0
-    sample_rate = float(os.getenv("OTEL_TRACE_SAMPLE_RATE", str(default_sample_rate)))
+    default_sample_rate = 0.1 if settings.is_production else 1.0
+    sample_rate = settings.otel_trace_sample_rate if settings.otel_trace_sample_rate is not None else default_sample_rate
     sampler = ParentBased(root=TraceIdRatioBased(sample_rate))
 
     tracer_provider = TracerProvider(resource=resource, sampler=sampler)
-    logger.info("Trace sampling configured at %.0f%% (environment=%s)", sample_rate * 100, environment)
+    logger.info("Trace sampling configured at %.0f%% (environment=%s)", sample_rate * 100, settings.app_env)
 
-    connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    connection_string = settings.applicationinsights_connection_string or None
     if connection_string:
         try:
             from azure.monitor.opentelemetry.exporter import AzureMonitorMetricExporter, AzureMonitorTraceExporter
@@ -198,6 +198,13 @@ def track_cache_operation(hit: bool) -> None:
     """Record a cache hit or miss."""
     if _cache_hit_rate:
         _cache_hit_rate.add(1 if hit else -1, attributes={"result": "hit" if hit else "miss"})
+
+
+def track_business_event(event_name: str, properties: dict[str, str] | None = None) -> None:
+    """Track a business domain event as a custom metric."""
+    track_metric(f"business.{event_name}", 1)
+    if properties:
+        logger.info("Business event: %s", event_name, extra={"event": event_name, **properties})
 
 
 def get_tracer() -> trace.Tracer:

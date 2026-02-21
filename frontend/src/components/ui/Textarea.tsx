@@ -4,12 +4,16 @@ import { cn } from "../../helpers/utils"
 export interface TextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: boolean
+  errorMessage?: string
 }
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, error, ...props }, ref) => {
+  ({ className, error, errorMessage, id, ...props }, ref) => {
     return (
       <textarea
+        id={id}
+        aria-invalid={error || undefined}
+        aria-describedby={errorMessage ? `${id}-error` : undefined}
         className={cn(
           "flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm",
           "placeholder:text-muted-foreground",

@@ -146,11 +146,10 @@ def get_rate_limiter() -> InMemoryRateLimiter | RedisRateLimiter:
     """Get or create the global rate limiter."""
     global _rate_limiter
     if _rate_limiter is None:
-        import os
+        from src.core.config import settings
 
-        redis_url = os.getenv("REDIS_URL")
-        if redis_url:
-            _rate_limiter = RedisRateLimiter(redis_url)
+        if settings.redis_url:
+            _rate_limiter = RedisRateLimiter(settings.redis_url)
         else:
             _rate_limiter = InMemoryRateLimiter()
     return _rate_limiter
