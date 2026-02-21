@@ -9,7 +9,7 @@ interface UseDataFetchResult<T> {
 
 export function useDataFetch<T>(
   fetchFn: () => Promise<T>,
-  deps: unknown[] = []
+  deps: unknown[] = [],
 ): UseDataFetchResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);

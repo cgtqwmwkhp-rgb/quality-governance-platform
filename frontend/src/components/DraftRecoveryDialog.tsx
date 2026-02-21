@@ -1,12 +1,12 @@
 /**
  * DraftRecoveryDialog - Prompt to recover a saved form draft
- * 
+ *
  * Part of EXP-001: Autosave + Draft Recovery for Portal Forms
  */
 
-import { Clock, FileText, RotateCcw, Trash2 } from 'lucide-react';
-import { Button } from './ui/Button';
-import { cn } from '../helpers/utils';
+import { Clock, FileText, RotateCcw, Trash2 } from "lucide-react";
+import { Button } from "./ui/Button";
+import { cn } from "../helpers/utils";
 
 interface DraftRecoveryDialogProps {
   isOpen: boolean;
@@ -28,15 +28,15 @@ function formatRelativeTime(dateString: string): string {
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
-    
-    if (diffMins < 1) return 'just now';
-    if (diffMins === 1) return '1 minute ago';
+
+    if (diffMins < 1) return "just now";
+    if (diffMins === 1) return "1 minute ago";
     if (diffMins < 60) return `${diffMins} minutes ago`;
-    if (diffHours === 1) return '1 hour ago';
+    if (diffHours === 1) return "1 hour ago";
     if (diffHours < 24) return `${diffHours} hours ago`;
-    return 'yesterday';
+    return "yesterday";
   } catch {
-    return 'recently';
+    return "recently";
   }
 }
 
@@ -45,12 +45,12 @@ function formatRelativeTime(dateString: string): string {
  */
 function formatFormType(formType: string): string {
   const typeMap: Record<string, string> = {
-    'incident': 'Incident Report',
-    'near-miss': 'Near Miss Report',
-    'complaint': 'Customer Complaint',
-    'rta': 'RTA Report',
+    incident: "Incident Report",
+    "near-miss": "Near Miss Report",
+    complaint: "Customer Complaint",
+    rta: "RTA Report",
   };
-  return typeMap[formType] || 'Form';
+  return typeMap[formType] || "Form";
 }
 
 export function DraftRecoveryDialog({
@@ -63,23 +63,25 @@ export function DraftRecoveryDialog({
   onDiscard,
 }: DraftRecoveryDialogProps) {
   if (!isOpen) return null;
-  
+
   const relativeTime = formatRelativeTime(savedAt);
   const formName = formatFormType(formType);
-  
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onDiscard}
       />
-      
+
       {/* Dialog */}
-      <div className={cn(
-        'relative w-full max-w-md bg-card rounded-2xl shadow-2xl',
-        'animate-in slide-in-from-bottom-4 duration-300'
-      )}>
+      <div
+        className={cn(
+          "relative w-full max-w-md bg-card rounded-2xl shadow-2xl",
+          "animate-in slide-in-from-bottom-4 duration-300",
+        )}
+      >
         {/* Header */}
         <div className="p-6 pb-4">
           <div className="flex items-start gap-4">
@@ -96,7 +98,7 @@ export function DraftRecoveryDialog({
             </div>
           </div>
         </div>
-        
+
         {/* Progress info */}
         <div className="px-6 pb-4">
           <div className="flex items-center gap-3 p-3 bg-surface rounded-xl">
@@ -116,7 +118,7 @@ export function DraftRecoveryDialog({
             </div>
           </div>
         </div>
-        
+
         {/* Actions */}
         <div className="p-6 pt-2 space-y-3">
           <Button
@@ -127,7 +129,7 @@ export function DraftRecoveryDialog({
             <RotateCcw className="w-4 h-4 mr-2" />
             Resume Draft
           </Button>
-          
+
           <Button
             variant="outline"
             onClick={onDiscard}
@@ -138,7 +140,7 @@ export function DraftRecoveryDialog({
             Start Fresh
           </Button>
         </div>
-        
+
         {/* Footer note */}
         <div className="px-6 pb-6">
           <p className="text-xs text-center text-muted-foreground">

@@ -28,7 +28,7 @@ class TestAuditTemplates:
     @pytest.mark.asyncio
     async def test_list_audit_templates(self, admin_client: UATApiClient):
         """Can list available audit templates."""
-        response = await admin_client.get("/api/v1/audit-templates")
+        response = await admin_client.get("/api/v1/audits/templates")
 
         # In real test:
         # assert response.status_code == 200
@@ -46,8 +46,8 @@ class TestAuditTemplates:
     async def test_audit_templates_stable_ordering(self, admin_client: UATApiClient):
         """Audit templates have stable ordering."""
         # Get templates twice and verify same order
-        response1 = await admin_client.get("/api/v1/audit-templates?sort=name")
-        response2 = await admin_client.get("/api/v1/audit-templates?sort=name")
+        response1 = await admin_client.get("/api/v1/audits/templates?sort=name")
+        response2 = await admin_client.get("/api/v1/audits/templates?sort=name")
 
         # In real test:
         # templates1 = response1.json()['items']

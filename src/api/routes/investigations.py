@@ -1,14 +1,14 @@
 """Investigation Run API routes."""
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.investigation import (
     AutosaveRequest,
     ClosureValidationResponse,
@@ -31,6 +31,7 @@ from src.api.schemas.investigation import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.models.user import User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -118,7 +119,7 @@ async def validate_assigned_entity(
 async def create_investigation(
     investigation_data: InvestigationRunCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:create"))],
 ):
     """Create a new investigation run.
 
@@ -400,7 +401,7 @@ async def update_investigation(
     investigation_id: int,
     investigation_data: InvestigationRunUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
 ):
     """Update an investigation run.
 
@@ -435,7 +436,7 @@ async def update_investigation(
 async def create_investigation_from_record(
     request_body: CreateFromRecordRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:create"))],
 ):
     """Create an investigation from a source record (Near Miss, Complaint, RTA).
 
@@ -585,7 +586,7 @@ async def autosave_investigation(
     investigation_id: int,
     payload: AutosaveRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
 ):
     """Autosave investigation data with optimistic locking.
 
@@ -642,7 +643,7 @@ async def add_comment(
     investigation_id: int,
     request_body: CommentCreateRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:create"))],
 ):
     """Add an internal comment to an investigation.
 
@@ -725,7 +726,7 @@ async def add_comment(
 async def approve_investigation(
     investigation_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
     approved: bool = True,
     rejection_reason: Optional[str] = None,
 ):
@@ -798,7 +799,7 @@ async def generate_customer_pack(
     investigation_id: int,
     audience: str,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("investigation:create"))],
 ):
     """Generate a customer pack with audience-specific redaction.
 

@@ -4,13 +4,13 @@ Provides CRUD operations for workflow rules, SLA configurations,
 escalation levels, and status checking.
 """
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
@@ -34,6 +34,7 @@ from src.api.schemas.workflow import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.models.user import User
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
@@ -90,14 +91,14 @@ async def list_workflow_rules(
 async def create_workflow_rule(
     rule_data: WorkflowRuleCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Create a new workflow rule."""
     rule = WorkflowRule(
-        **rule_data.dict(),
+        **rule_data.model_dump(),
         tenant_id=current_user.tenant_id,
-        created_by_id=current_user.get("id"),
-        created_by=current_user.get("email"),
+        created_by_id=current_user.id,
+        created_by=current_user.email,
     )
     db.add(rule)
     await db.commit()
@@ -122,12 +123,12 @@ async def update_workflow_rule(
     rule_id: int,
     rule_data: WorkflowRuleUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Update a workflow rule."""
     rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     apply_updates(rule, rule_data)
-    rule.updated_by = current_user.get("email")
+    rule.updated_by = current_user.email  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     await db.commit()
     await db.refresh(rule)
@@ -197,13 +198,13 @@ async def list_sla_configurations(
 async def create_sla_configuration(
     config_data: SLAConfigurationCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Create a new SLA configuration."""
     config = SLAConfiguration(
-        **config_data.dict(),
+        **config_data.model_dump(),
         tenant_id=current_user.tenant_id,
-        created_by=current_user.get("email"),
+        created_by=current_user.email,
     )
     db.add(config)
     await db.commit()
@@ -228,12 +229,12 @@ async def update_sla_configuration(
     config_id: int,
     config_data: SLAConfigurationUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Update an SLA configuration."""
     config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     apply_updates(config, config_data)
-    config.updated_by = current_user.get("email")
+    config.updated_by = current_user.email  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     await db.commit()
     await db.refresh(config)
@@ -325,7 +326,7 @@ async def pause_sla_tracking(
     entity_type: str,
     entity_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Pause SLA tracking for an entity (e.g., waiting for customer response)."""
     sla_service = SLAService(db)
@@ -342,7 +343,7 @@ async def resume_sla_tracking(
     entity_type: str,
     entity_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Resume paused SLA tracking."""
     sla_service = SLAService(db)
@@ -388,10 +389,10 @@ async def list_escalation_levels(
 async def create_escalation_level(
     level_data: EscalationLevelCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Create a new escalation level."""
-    level = EscalationLevel(**level_data.dict(), tenant_id=current_user.tenant_id)
+    level = EscalationLevel(**level_data.model_dump(), tenant_id=current_user.tenant_id)
     db.add(level)
     await db.commit()
     await db.refresh(level)
@@ -415,7 +416,7 @@ async def update_escalation_level(
     level_id: int,
     level_data: EscalationLevelUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Update an escalation level."""
     level = await get_or_404(db, EscalationLevel, level_id, tenant_id=current_user.tenant_id)
@@ -447,7 +448,7 @@ async def delete_escalation_level(
 @router.post("/trigger-check", response_model=SLACheckResponse)
 async def trigger_sla_check(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Manually trigger SLA checks (normally run by scheduler)."""
     engine = RuleEvaluator(db)

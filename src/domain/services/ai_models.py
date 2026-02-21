@@ -63,20 +63,20 @@ class AIConfig:
     @classmethod
     def from_env(cls) -> "AIConfig":
         """Load configuration from validated settings."""
-        provider_str = settings.ai_provider
+        provider_str: str = getattr(settings, "ai_provider", "openai")
         provider = AIProvider(provider_str) if provider_str in [p.value for p in AIProvider] else AIProvider.OPENAI
 
         return cls(
             provider=provider,
-            openai_api_key=settings.openai_api_key,
-            openai_model=settings.openai_model,
-            azure_openai_endpoint=settings.azure_openai_endpoint,
-            azure_openai_key=settings.azure_openai_key,
-            azure_openai_deployment=settings.azure_openai_deployment,
-            anthropic_api_key=settings.anthropic_api_key,
-            anthropic_model=settings.anthropic_model,
-            local_model_path=settings.local_model_path,
-            embedding_model=settings.embedding_model,
+            openai_api_key=getattr(settings, "openai_api_key", ""),
+            openai_model=getattr(settings, "openai_model", "gpt-4-turbo-preview"),
+            azure_openai_endpoint=getattr(settings, "azure_openai_endpoint", ""),
+            azure_openai_key=getattr(settings, "azure_openai_key", ""),
+            azure_openai_deployment=getattr(settings, "azure_openai_deployment", ""),
+            anthropic_api_key=getattr(settings, "anthropic_api_key", ""),
+            anthropic_model=getattr(settings, "anthropic_model", "claude-3-opus-20240229"),
+            local_model_path=getattr(settings, "local_model_path", ""),
+            embedding_model=getattr(settings, "embedding_model", "text-embedding-3-small"),
         )
 
 
@@ -137,7 +137,8 @@ class OpenAIClient(AIClient):
         messages.append({"role": "user", "content": prompt})
 
         async with _ai_models_semaphore:
-            return await _ai_models_circuit.call(self._openai_complete, messages, temperature, max_tokens)
+            result: str = await _ai_models_circuit.call(self._openai_complete, messages, temperature, max_tokens)
+            return result
 
     async def _openai_complete(
         self,
@@ -167,7 +168,8 @@ class OpenAIClient(AIClient):
     async def embed(self, text: str) -> list[float]:
         """Generate embedding using OpenAI."""
         async with _ai_models_semaphore:
-            return await _ai_models_circuit.call(self._openai_embed, text)
+            result: list[float] = await _ai_models_circuit.call(self._openai_embed, text)
+            return result
 
     async def _openai_embed(self, text: str) -> list[float]:
         async with httpx.AsyncClient() as client:
@@ -238,7 +240,8 @@ class AnthropicClient(AIClient):
     ) -> str:
         """Generate completion using Claude."""
         async with _ai_models_semaphore:
-            return await _ai_models_circuit.call(self._anthropic_complete, prompt, system_prompt, max_tokens)
+            result: str = await _ai_models_circuit.call(self._anthropic_complete, prompt, system_prompt, max_tokens)
+            return result
 
     async def _anthropic_complete(
         self,

@@ -1,7 +1,7 @@
 """Shared pagination schemas and utilities.
 
 Defines the canonical response envelope for list endpoints:
-- Paginated collections: {"data": [...], "meta": {"total", "page", "per_page", "total_pages"}}
+- Paginated collections: {"data": [...], "meta": {"total", "page", "page_size", "total_pages"}}
 - Non-paginated collections: {"data": [...]}
 """
 
@@ -19,11 +19,11 @@ class PaginationParams:
     def __init__(
         self,
         page: int = Query(1, ge=1, description="Page number"),
-        per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+        page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     ):
         self.page = page
-        self.per_page = per_page
-        self.offset = (page - 1) * per_page
+        self.page_size = page_size
+        self.offset = (page - 1) * page_size
 
 
 class PaginationMeta(BaseModel):
@@ -31,7 +31,7 @@ class PaginationMeta(BaseModel):
 
     total: int
     page: int
-    per_page: int
+    page_size: int
     total_pages: int
 
 

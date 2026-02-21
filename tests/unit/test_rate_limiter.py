@@ -25,7 +25,7 @@ class TestRateLimitConfig:
 
     def test_auth_endpoints_have_stricter_limits(self):
         """Verify auth endpoints have stricter rate limits."""
-        login_config = ENDPOINT_LIMITS.get("/api/auth/login")
+        login_config = ENDPOINT_LIMITS.get("/api/v1/auth/login")
         assert login_config is not None
         assert login_config.requests_per_minute == 10
         assert login_config.burst_limit == 5

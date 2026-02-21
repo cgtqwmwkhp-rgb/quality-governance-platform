@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface PreferencesState {
   sidebarCollapsed: boolean;
@@ -22,11 +22,9 @@ export const usePreferencesStore = create<PreferencesState>()(
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
-      setSidebarCollapsed: (collapsed) =>
-        set({ sidebarCollapsed: collapsed }),
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
-      setTablePageSize: (size) =>
-        set({ tablePageSize: size }),
+      setTablePageSize: (size) => set({ tablePageSize: size }),
 
       saveFilter: (page, filters) =>
         set((state) => ({
@@ -40,7 +38,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         }),
     }),
     {
-      name: 'qgp-preferences',
-    }
-  )
+      name: "qgp-preferences",
+    },
+  ),
 );

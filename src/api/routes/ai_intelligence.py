@@ -58,7 +58,7 @@ class RecommendationRequest(BaseModel):
 
 class FiveWhysRequest(BaseModel):
     incident_id: int
-    answers: list[str] = Field(..., min_items=1, max_items=7)
+    answers: list[str] = Field(..., min_length=1, max_length=7)
 
 
 class QuestionGenerationRequest(BaseModel):
@@ -77,7 +77,7 @@ class FindingClassificationRequest(BaseModel):
 
 
 class BatchFindingRequest(BaseModel):
-    findings: list[str] = Field(..., min_items=1, max_items=50)
+    findings: list[str] = Field(..., min_length=1, max_length=50)
 
 
 # ============ Predictive Analytics Endpoints ============

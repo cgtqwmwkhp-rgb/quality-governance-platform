@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -11,14 +11,14 @@ import {
   Mail,
   Phone,
   Loader2,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Textarea } from '../../components/ui/Textarea';
-import { cn } from '../../helpers/utils';
-import { useToast, ToastContainer } from '../../components/ui/Toast';
-import { contractsApi } from '../../api/client';
+} from "lucide-react";
+import { Card } from "../../components/ui/Card";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { cn } from "../../helpers/utils";
+import { useToast, ToastContainer } from "../../components/ui/Toast";
+import { contractsApi } from "../../api/client";
 
 interface Contract {
   id: number;
@@ -37,7 +37,7 @@ interface Contract {
 export default function ContractsManagement() {
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -50,22 +50,24 @@ export default function ContractsManagement() {
       const data = await contractsApi.list(false);
       setContracts(data.items || []);
     } catch {
-      console.error('Failed to load contracts');
-      showToast('Failed to load contracts', 'error');
+      console.error("Failed to load contracts");
+      showToast("Failed to load contracts", "error");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadContracts(); }, [loadContracts]);
+  useEffect(() => {
+    loadContracts();
+  }, [loadContracts]);
 
   const [formData, setFormData] = useState<Partial<Contract>>({
-    name: '',
-    code: '',
-    description: '',
-    client_name: '',
-    client_contact: '',
-    client_email: '',
+    name: "",
+    code: "",
+    description: "",
+    client_name: "",
+    client_contact: "",
+    client_email: "",
     is_active: true,
   });
 
@@ -90,12 +92,12 @@ export default function ContractsManagement() {
     setIsAdding(true);
     setEditingContract(null);
     setFormData({
-      name: '',
-      code: '',
-      description: '',
-      client_name: '',
-      client_contact: '',
-      client_email: '',
+      name: "",
+      code: "",
+      description: "",
+      client_name: "",
+      client_contact: "",
+      client_email: "",
       is_active: true,
     });
   };
@@ -111,8 +113,8 @@ export default function ContractsManagement() {
     try {
       if (isAdding) {
         const created = await contractsApi.create({
-          name: formData.name || '',
-          code: formData.code || '',
+          name: formData.name || "",
+          code: formData.code || "",
           description: formData.description,
           client_name: formData.client_name,
           is_active: formData.is_active ?? true,
@@ -121,26 +123,26 @@ export default function ContractsManagement() {
       } else if (editingContract) {
         const updated = await contractsApi.update(editingContract.id, formData);
         setContracts((prev) =>
-          prev.map((c) => (c.id === editingContract.id ? updated : c))
+          prev.map((c) => (c.id === editingContract.id ? updated : c)),
         );
       }
       handleCancel();
     } catch {
-      console.error('Failed to save');
-      showToast('Failed to save contract', 'error');
+      console.error("Failed to save");
+      showToast("Failed to save contract", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this contract?')) {
+    if (confirm("Are you sure you want to delete this contract?")) {
       try {
         await contractsApi.delete(id);
         setContracts((prev) => prev.filter((c) => c.id !== id));
       } catch {
-        console.error('Failed to delete');
-        showToast('Failed to delete contract', 'error');
+        console.error("Failed to delete");
+        showToast("Failed to delete contract", "error");
       }
     }
   };
@@ -151,11 +153,11 @@ export default function ContractsManagement() {
     try {
       await contractsApi.update(id, { is_active: !contract.is_active });
       setContracts((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c))
+        prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c)),
       );
     } catch {
-      console.error('Failed to toggle');
-      showToast('Failed to update contract status', 'error');
+      console.error("Failed to toggle");
+      showToast("Failed to update contract status", "error");
     }
   };
 
@@ -224,16 +226,19 @@ export default function ContractsManagement() {
                 <Card
                   key={contract.id}
                   className={cn(
-                    'p-4 flex items-center gap-4 group',
-                    !contract.is_active && 'opacity-60',
-                    editingContract?.id === contract.id && 'ring-2 ring-primary'
+                    "p-4 flex items-center gap-4 group",
+                    !contract.is_active && "opacity-60",
+                    editingContract?.id === contract.id &&
+                      "ring-2 ring-primary",
                   )}
                 >
                   <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-foreground">{contract.name}</h3>
+                      <h3 className="font-semibold text-foreground">
+                        {contract.name}
+                      </h3>
                       <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                         {contract.code}
                       </span>
@@ -244,7 +249,9 @@ export default function ContractsManagement() {
                       )}
                     </div>
                     {contract.client_name && (
-                      <p className="text-sm text-muted-foreground">{contract.client_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {contract.client_name}
+                      </p>
                     )}
                   </div>
 
@@ -259,7 +266,7 @@ export default function ContractsManagement() {
                     <button
                       onClick={() => toggleActive(contract.id)}
                       className="p-2 hover:bg-muted rounded-lg transition-colors"
-                      title={contract.is_active ? 'Deactivate' : 'Activate'}
+                      title={contract.is_active ? "Deactivate" : "Activate"}
                     >
                       {contract.is_active ? (
                         <X className="w-4 h-4 text-muted-foreground" />
@@ -284,19 +291,26 @@ export default function ContractsManagement() {
           <div>
             <Card className="p-6 sticky top-6">
               <h3 className="font-semibold text-foreground mb-4">
-                {isAdding ? 'Add Contract' : editingContract ? 'Edit Contract' : 'Contract Details'}
+                {isAdding
+                  ? "Add Contract"
+                  : editingContract
+                    ? "Edit Contract"
+                    : "Contract Details"}
               </h3>
 
-              {(isAdding || editingContract) ? (
+              {isAdding || editingContract ? (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Name *
                     </label>
                     <Input
-                      value={formData.name || ''}
+                      value={formData.name || ""}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, name: e.target.value }))
+                        setFormData((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
                       }
                       placeholder="e.g. UKPN"
                     />
@@ -307,11 +321,13 @@ export default function ContractsManagement() {
                       Code *
                     </label>
                     <Input
-                      value={formData.code || ''}
+                      value={formData.code || ""}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          code: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                          code: e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, ""),
                         }))
                       }
                       placeholder="e.g. ukpn"
@@ -326,9 +342,12 @@ export default function ContractsManagement() {
                       Client Name
                     </label>
                     <Input
-                      value={formData.client_name || ''}
+                      value={formData.client_name || ""}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, client_name: e.target.value }))
+                        setFormData((prev) => ({
+                          ...prev,
+                          client_name: e.target.value,
+                        }))
                       }
                       placeholder="e.g. UK Power Networks"
                     />
@@ -339,9 +358,12 @@ export default function ContractsManagement() {
                       Description
                     </label>
                     <Textarea
-                      value={formData.description || ''}
+                      value={formData.description || ""}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                        setFormData((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
                       }
                       placeholder="Optional description..."
                       rows={2}
@@ -356,9 +378,12 @@ export default function ContractsManagement() {
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         type="email"
-                        value={formData.client_email || ''}
+                        value={formData.client_email || ""}
                         onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, client_email: e.target.value }))
+                          setFormData((prev) => ({
+                            ...prev,
+                            client_email: e.target.value,
+                          }))
                         }
                         placeholder="contact@example.com"
                         className="pl-10"
@@ -374,9 +399,12 @@ export default function ContractsManagement() {
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         type="tel"
-                        value={formData.client_contact || ''}
+                        value={formData.client_contact || ""}
                         onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, client_contact: e.target.value }))
+                          setFormData((prev) => ({
+                            ...prev,
+                            client_contact: e.target.value,
+                          }))
                         }
                         placeholder="+44 1234 567890"
                         className="pl-10"
@@ -390,17 +418,28 @@ export default function ContractsManagement() {
                       type="checkbox"
                       checked={formData.is_active ?? true}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, is_active: e.target.checked }))
+                        setFormData((prev) => ({
+                          ...prev,
+                          is_active: e.target.checked,
+                        }))
                       }
                       className="rounded border-border"
                     />
                   </label>
 
                   <div className="flex gap-3 pt-4">
-                    <Button variant="outline" onClick={handleCancel} className="flex-1">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancel}
+                      className="flex-1"
+                    >
                       Cancel
                     </Button>
-                    <Button onClick={handleSave} disabled={isSaving} className="flex-1">
+                    <Button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="flex-1"
+                    >
                       {isSaving ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : (

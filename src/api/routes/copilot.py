@@ -5,13 +5,13 @@ Interactive conversational AI assistant for QHSE management.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.copilot import (
     ActionDetailResponse,
     AddKnowledgeResponse,
@@ -21,6 +21,7 @@ from src.api.schemas.copilot import (
     SubmitFeedbackResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
@@ -105,7 +106,7 @@ class SuggestedAction(BaseModel):
 async def create_session(
     data: SessionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
 ):
     """Create a new copilot conversation session."""
     _span = tracer.start_span("create_copilot_session") if tracer else None
@@ -203,7 +204,7 @@ async def send_message(
     session_id: int,
     data: MessageCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
@@ -244,7 +245,7 @@ async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("copilot:update"))],
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
@@ -290,7 +291,7 @@ async def list_actions(current_user: CurrentUser, category: Optional[str] = None
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
@@ -426,7 +427,7 @@ async def add_knowledge(
     content: str,
     category: str,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
     tags: Optional[list[str]] = None,
 ):
     """Add to the knowledge base."""

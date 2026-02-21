@@ -1,6 +1,6 @@
 /**
  * useCollaboration - React hook for real-time collaborative editing
- * 
+ *
  * Features:
  * - Yjs-based conflict-free collaborative editing
  * - Awareness (cursor positions, user presence)
@@ -8,8 +8,8 @@
  * - WebSocket sync provider
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { API_BASE_URL } from '../config/apiBase';
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { API_BASE_URL } from "../config/apiBase";
 
 // Types for collaborative editing
 interface CollaboratorInfo {
@@ -53,28 +53,30 @@ interface UseCollaborationReturn {
 // Generate a random color for user
 const generateUserColor = (): string => {
   const colors = [
-    '#10B981', // emerald
-    '#3B82F6', // blue
-    '#8B5CF6', // violet
-    '#EC4899', // pink
-    '#F59E0B', // amber
-    '#EF4444', // red
-    '#06B6D4', // cyan
-    '#84CC16', // lime
+    "#10B981", // emerald
+    "#3B82F6", // blue
+    "#8B5CF6", // violet
+    "#EC4899", // pink
+    "#F59E0B", // amber
+    "#EF4444", // red
+    "#06B6D4", // cyan
+    "#84CC16", // lime
   ];
   return colors[Math.floor(Math.random() * colors.length)]!;
 };
 
 /**
  * Hook for real-time collaborative editing using Yjs
- * 
+ *
  * NOTE: This is a simplified implementation for demonstration.
  * For production, install and integrate:
  * - yjs: Core CRDT library
  * - y-websocket: WebSocket sync provider
  * - y-indexeddb: Offline persistence
  */
-const useCollaboration = (options: UseCollaborationOptions): UseCollaborationReturn => {
+const useCollaboration = (
+  options: UseCollaborationOptions,
+): UseCollaborationReturn => {
   const {
     documentId,
     userId,
@@ -102,12 +104,15 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
   const redoStackRef = useRef<Uint8Array[]>([]);
 
   // Local user info
-  const localUser = useMemo<CollaboratorInfo>(() => ({
-    id: userId,
-    name: userName,
-    color: userColor,
-    lastActive: new Date(),
-  }), [userId, userName, userColor]);
+  const localUser = useMemo<CollaboratorInfo>(
+    () => ({
+      id: userId,
+      name: userName,
+      color: userColor,
+      lastActive: new Date(),
+    }),
+    [userId, userName, userColor],
+  );
 
   // Connect to collaboration server
   const connect = useCallback(() => {
@@ -115,8 +120,8 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = API_BASE_URL.replace(/^https?:\/\//, '');
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = API_BASE_URL.replace(/^https?:\/\//, "");
     const wsUrl = `${protocol}//${host}/api/v1/realtime/collab/${documentId}?userId=${userId}`;
 
     console.log(`[Collaboration] Connecting to ${wsUrl}`);
@@ -125,18 +130,20 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('[Collaboration] Connected');
-        setState(prev => ({
+        console.log("[Collaboration] Connected");
+        setState((prev) => ({
           ...prev,
           isConnected: true,
           localUser,
         }));
 
         // Send awareness info
-        ws.send(JSON.stringify({
-          type: 'awareness',
-          user: localUser,
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "awareness",
+            user: localUser,
+          }),
+        );
       };
 
       ws.onmessage = (event) => {
@@ -144,13 +151,13 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
           const message = JSON.parse(event.data);
           handleMessage(message);
         } catch (error) {
-          console.error('[Collaboration] Failed to parse message:', error);
+          console.error("[Collaboration] Failed to parse message:", error);
         }
       };
 
       ws.onclose = () => {
-        console.log('[Collaboration] Disconnected');
-        setState(prev => ({
+        console.log("[Collaboration] Disconnected");
+        setState((prev) => ({
           ...prev,
           isConnected: false,
           isSynced: false,
@@ -158,12 +165,12 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       };
 
       ws.onerror = (error) => {
-        console.error('[Collaboration] Error:', error);
+        console.error("[Collaboration] Error:", error);
       };
 
       wsRef.current = ws;
     } catch (error) {
-      console.error('[Collaboration] Failed to connect:', error);
+      console.error("[Collaboration] Failed to connect:", error);
     }
   }, [documentId, userId, localUser]);
 
@@ -173,7 +180,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       wsRef.current.close();
       wsRef.current = null;
     }
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       isConnected: false,
       isSynced: false,
@@ -181,49 +188,54 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
   }, []);
 
   // Handle incoming messages
-  const handleMessage = useCallback((message: Record<string, unknown>) => {
-    switch (message['type']) {
-      case 'sync':
-        setState(prev => ({ ...prev, isSynced: true }));
-        onSync?.();
-        break;
+  const handleMessage = useCallback(
+    (message: Record<string, unknown>) => {
+      switch (message["type"]) {
+        case "sync":
+          setState((prev) => ({ ...prev, isSynced: true }));
+          onSync?.();
+          break;
 
-      case 'update':
-        if (message['update']) {
-          const update = new Uint8Array(message['update'] as ArrayBuffer | ArrayLike<number>);
-          onUpdate?.(update);
+        case "update":
+          if (message["update"]) {
+            const update = new Uint8Array(
+              message["update"] as ArrayBuffer | ArrayLike<number>,
+            );
+            onUpdate?.(update);
+          }
+          break;
+
+        case "awareness":
+          if (message["users"]) {
+            const users = message["users"] as CollaboratorInfo[];
+            const collaborators = users
+              .filter((u) => u.id !== userId)
+              .map((u) => ({
+                ...u,
+                lastActive: new Date(u.lastActive),
+              }));
+            setState((prev) => ({ ...prev, collaborators }));
+          }
+          break;
+
+        case "cursor": {
+          const cursorUserId = message["userId"] as string;
+          const cursor = message["cursor"] as CollaboratorInfo["cursor"];
+          setState((prev) => ({
+            ...prev,
+            collaborators: prev.collaborators.map((c) =>
+              c.id === cursorUserId ? { ...c, cursor } : c,
+            ),
+          }));
+          break;
         }
-        break;
 
-      case 'awareness':
-        if (message['users']) {
-          const users = message['users'] as CollaboratorInfo[];
-          const collaborators = users
-            .filter((u) => u.id !== userId)
-            .map((u) => ({
-              ...u,
-              lastActive: new Date(u.lastActive),
-            }));
-          setState(prev => ({ ...prev, collaborators }));
-        }
-        break;
-
-      case 'cursor': {
-        const cursorUserId = message['userId'] as string;
-        const cursor = message['cursor'] as CollaboratorInfo['cursor'];
-        setState(prev => ({
-          ...prev,
-          collaborators: prev.collaborators.map(c =>
-            c.id === cursorUserId ? { ...c, cursor } : c
-          ),
-        }));
-        break;
+        default:
+          console.log("[Collaboration] Unknown message type:", message["type"]);
       }
-
-      default:
-        console.log('[Collaboration] Unknown message type:', message['type']);
-    }
-  }, [userId, onSync, onUpdate]);
+    },
+    [userId, onSync, onUpdate],
+  );
 
   // Apply a local update
   const applyUpdate = useCallback((update: Uint8Array) => {
@@ -235,10 +247,12 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
 
     // Broadcast to other collaborators
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'update',
-        update: Array.from(update),
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "update",
+          update: Array.from(update),
+        }),
+      );
     }
   }, []);
 
@@ -258,7 +272,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       setCanRedo(true);
 
       // TODO: Apply inverse of update
-      console.log('[Collaboration] Undo');
+      console.log("[Collaboration] Undo");
     }
   }, []);
 
@@ -273,17 +287,19 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       setCanRedo(redoStackRef.current.length > 0);
 
       // TODO: Re-apply update
-      console.log('[Collaboration] Redo');
+      console.log("[Collaboration] Redo");
     }
   }, []);
 
   // Update cursor position
   const updateCursor = useCallback((index: number, length: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'cursor',
-        cursor: { index, length },
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "cursor",
+          cursor: { index, length },
+        }),
+      );
     }
   }, []);
 

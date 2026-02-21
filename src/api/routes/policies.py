@@ -1,7 +1,7 @@
 """Policy Library API routes."""
 
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
@@ -33,7 +34,7 @@ router = APIRouter()
 async def create_policy(
     policy_data: PolicyCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("policy:create"))],
     request_id: str = Depends(get_request_id),
 ) -> Policy:
     """
@@ -107,13 +108,16 @@ async def get_policy(
     policy_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> Policy:
+):
     """
     Get a specific policy by ID.
 
     Requires authentication.
     """
-    return await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
+    policy = await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
+    response = PolicyResponse.model_validate(policy)
+    response.links = build_resource_links("", "policies", policy_id)
+    return response
 
 
 @router.get(
@@ -125,7 +129,7 @@ async def list_policies(
     db: DbSession,
     current_user: CurrentUser,
     params: PaginationParams = Depends(),
-) -> PolicyListResponse:
+) -> Any:
     """
     List all policies with deterministic ordering.
 
@@ -142,7 +146,15 @@ async def list_policies(
         .order_by(Policy.reference_number.desc(), Policy.id.asc())
     )
 
-    return await paginate(db, query, params)
+    paginated = await paginate(db, query, params)
+    return {
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+        "links": build_collection_links("policies", paginated.page, paginated.page_size, paginated.pages),
+    }
 
 
 @router.put(

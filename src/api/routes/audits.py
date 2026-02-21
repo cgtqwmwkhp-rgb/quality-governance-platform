@@ -8,7 +8,7 @@ Enterprise-grade audit template and execution management with:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
@@ -43,6 +43,7 @@ from src.api.schemas.audit import (
     PurgeExpiredTemplatesResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -100,7 +101,7 @@ async def list_templates(
     category: Optional[str] = None,
     audit_type: Optional[str] = None,
     is_published: Optional[bool] = None,
-) -> AuditTemplateListResponse:
+) -> Any:
     """List all audit templates with pagination and filtering."""
     query = select(AuditTemplate).where(
         AuditTemplate.is_active == True,  # noqa: E712
@@ -122,7 +123,15 @@ async def list_templates(
 
     query = query.order_by(AuditTemplate.name)
 
-    return await paginate(db, query, params)
+    paginated = await paginate(db, query, params)
+    return {
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+        "links": build_collection_links("audits/templates", paginated.page, paginated.page_size, paginated.pages),
+    }
 
 
 @router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -165,7 +174,7 @@ async def list_archived_templates(
     db: DbSession,
     current_user: CurrentUser,
     params: PaginationParams = Depends(),
-) -> AuditTemplateListResponse:
+) -> Any:
     """List archived templates that are within the 30-day recovery window."""
     query = select(AuditTemplate).where(
         AuditTemplate.archived_at.isnot(None),
@@ -173,7 +182,20 @@ async def list_archived_templates(
     )
     query = query.order_by(AuditTemplate.archived_at.desc())
 
-    return await paginate(db, query, params)
+    paginated = await paginate(db, query, params)
+    return {
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+        "links": build_collection_links(
+            "audits/templates/archived",
+            paginated.page,
+            paginated.page_size,
+            paginated.pages,
+        ),
+    }
 
 
 @router.post("/templates/purge-expired", response_model=PurgeExpiredTemplatesResponse)
@@ -246,6 +268,7 @@ async def get_template(
     response = AuditTemplateDetailResponse.model_validate(template)
     response.section_count = len(template.sections)
     response.question_count = len(template.questions)
+    response.links = build_resource_links("", "audits/templates", template_id)
 
     return response
 
@@ -811,7 +834,7 @@ async def list_runs(
     status_filter: Optional[str] = Query(None, alias="status"),
     template_id: Optional[int] = None,
     assigned_to_id: Optional[int] = None,
-) -> AuditRunListResponse:
+) -> Any:
     """List all audit runs with pagination and filtering."""
     query = (
         select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == current_user.tenant_id)
@@ -826,7 +849,15 @@ async def list_runs(
 
     query = query.order_by(AuditRun.created_at.desc())
 
-    return await paginate(db, query, params)
+    paginated = await paginate(db, query, params)
+    return {
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+        "links": build_collection_links("audits/runs", paginated.page, paginated.page_size, paginated.pages),
+    }
 
 
 @router.post("/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED)
@@ -904,8 +935,8 @@ async def get_run(
 
     response = AuditRunDetailResponse.model_validate(run)
     response.template_name = run.template.name if run.template else None
+    response.links = build_resource_links("", "audits/runs", run_id)
 
-    # Calculate completion percentage
     if run.template:
         total_questions = await db.scalar(
             select(func.count())
@@ -1135,7 +1166,7 @@ async def list_findings(
     status_filter: Optional[str] = Query(None, alias="status"),
     severity: Optional[str] = None,
     run_id: Optional[int] = None,
-) -> AuditFindingListResponse:
+) -> Any:
     """List all audit findings with pagination and filtering."""
     query = select(AuditFinding).where(AuditFinding.tenant_id == current_user.tenant_id)
 
@@ -1148,7 +1179,15 @@ async def list_findings(
 
     query = query.order_by(AuditFinding.created_at.desc())
 
-    return await paginate(db, query, params)
+    paginated = await paginate(db, query, params)
+    return {
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+        "links": build_collection_links("audits/findings", paginated.page, paginated.page_size, paginated.pages),
+    }
 
 
 @router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)

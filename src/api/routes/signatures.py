@@ -5,13 +5,13 @@ DocuSign-level e-signature capabilities.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.signatures import (
     DeclineSigningResponse,
@@ -25,6 +25,7 @@ from src.api.schemas.signatures import (
     TemplateUseResponse,
     VoidRequestResponse,
 )
+from src.domain.models.user import User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -145,7 +146,7 @@ class AuditLogResponse(BaseModel):
 @router.post("/requests", response_model=SignatureRequestResponse)
 async def create_signature_request(
     data: SignatureRequestCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:create"))],
     db: DbSession,
 ):
     """Create a new signature request."""
@@ -156,7 +157,7 @@ async def create_signature_request(
     tenant_id = current_user.tenant_id
 
     request = await service.create_request(
-        tenant_id=tenant_id,
+        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         title=data.title,
         initiated_by_id=current_user.id,
         document_type=data.document_type,
@@ -218,7 +219,7 @@ async def get_pending_requests(
     tenant_id = current_user.tenant_id
 
     requests = await service.get_pending_requests(
-        tenant_id=tenant_id,
+        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         user_id=current_user.id,
         email=current_user.email,
     )
@@ -247,7 +248,7 @@ async def get_signature_request(
 @router.post("/requests/{request_id}/send", response_model=SendRequestResponse)
 async def send_signature_request(
     request_id: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:update"))],
     db: DbSession,
 ):
     """Send a signature request to signers."""
@@ -267,7 +268,7 @@ async def send_signature_request(
 @router.post("/requests/{request_id}/void", response_model=VoidRequestResponse)
 async def void_signature_request(
     request_id: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:update"))],
     db: DbSession,
     reason: Optional[str] = None,
 ):
@@ -379,7 +380,7 @@ async def sign_document(
         return {
             "status": "signed",
             "signature_id": signature.id,
-            "signed_at": signature.signed_at.isoformat(),
+            "signed_at": signature.signed_at.isoformat() if signature.signed_at else None,
             "request_status": signer.request.status,
         }
     except ValueError as e:
@@ -412,7 +413,7 @@ async def decline_signing(
 
         return {
             "status": "declined",
-            "declined_at": signer.declined_at.isoformat(),
+            "declined_at": signer.declined_at.isoformat() if signer.declined_at else None,
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
@@ -426,7 +427,7 @@ async def decline_signing(
 @router.post("/templates", response_model=TemplateResponse)
 async def create_template(
     data: TemplateCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:create"))],
     db: DbSession,
 ):
     """Create a signature template."""
@@ -437,7 +438,7 @@ async def create_template(
     tenant_id = current_user.tenant_id
 
     template = await service.create_template(
-        tenant_id=tenant_id,
+        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         name=data.name,
         created_by_id=current_user.id,
         description=data.description,
@@ -481,7 +482,7 @@ async def list_templates(
 async def use_template(
     template_id: int,
     signers: list[SignerInput],
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:create"))],
     db: DbSession,
     title: Optional[str] = None,
 ):
@@ -523,7 +524,7 @@ async def get_signature_stats(
         .where(SignatureRequest.tenant_id == tenant_id)
         .group_by(SignatureRequest.status)
     )
-    status_counts: dict[str, int] = dict(status_result.all())
+    status_counts: dict[str, int] = dict(status_result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
@@ -552,7 +553,7 @@ async def get_signature_stats(
 
 @router.post("/admin/send-reminders", response_model=SendRemindersResponse)
 async def send_reminders(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:update"))],
     db: DbSession,
 ):
     """Send reminders for pending signatures (admin/cron job)."""
@@ -562,14 +563,14 @@ async def send_reminders(
 
     tenant_id = current_user.tenant_id
 
-    count = await service.send_reminders(tenant_id)
+    count = await service.send_reminders(tenant_id)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     return {"reminders_sent": count}
 
 
 @router.post("/admin/expire-old", response_model=ExpireOldResponse)
 async def expire_old_requests(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:update"))],
     db: DbSession,
 ):
     """Expire old signature requests (admin/cron job)."""
@@ -579,7 +580,7 @@ async def expire_old_requests(
 
     tenant_id = current_user.tenant_id
 
-    count = await service.expire_old_requests(tenant_id)
+    count = await service.expire_old_requests(tenant_id)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     return {"expired_count": count}
 

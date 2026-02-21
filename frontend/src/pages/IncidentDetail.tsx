@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -17,13 +17,28 @@ import {
   Save,
   X,
   ExternalLink,
-} from 'lucide-react'
-import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
-import { Button } from '../components/ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
-import { Badge, type BadgeVariant } from '../components/ui/Badge'
-import { Textarea } from '../components/ui/Textarea'
-import { Input } from '../components/ui/Input'
+} from "lucide-react";
+import {
+  incidentsApi,
+  Incident,
+  IncidentUpdate,
+  investigationsApi,
+  actionsApi,
+  Action,
+  UserSearchResult,
+  getApiErrorMessage,
+  CreateFromRecordError,
+} from "../api/client";
+import { Button } from "../components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/Card";
+import { Badge, type BadgeVariant } from "../components/ui/Badge";
+import { Textarea } from "../components/ui/Textarea";
+import { Input } from "../components/ui/Input";
 import {
   Dialog,
   DialogContent,
@@ -31,79 +46,99 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-} from '../components/ui/Dialog'
+} from "../components/ui/Dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../components/ui/Select'
-import { cn } from '../helpers/utils'
-import { CardSkeleton } from '../components/ui/SkeletonLoader'
-import { UserEmailSearch } from '../components/UserEmailSearch'
-import { useToast, ToastContainer } from '../components/ui/Toast'
+} from "../components/ui/Select";
+import { cn } from "../helpers/utils";
+import { CardSkeleton } from "../components/ui/SkeletonLoader";
+import { UserEmailSearch } from "../components/UserEmailSearch";
+import { useToast, ToastContainer } from "../components/ui/Toast";
 
 // Status options for action updates
 const ACTION_STATUS_OPTIONS = [
-  { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
-  { value: 'in_progress', label: 'In Progress', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
-  { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800 hover:bg-purple-200' },
-  { value: 'completed', label: 'Completed', className: 'bg-green-100 text-green-800 hover:bg-green-200' },
-  { value: 'cancelled', label: 'Cancelled', className: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
-]
+  {
+    value: "open",
+    label: "Open",
+    className: "bg-blue-100 text-blue-800 hover:bg-blue-200",
+  },
+  {
+    value: "in_progress",
+    label: "In Progress",
+    className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+  },
+  {
+    value: "pending_verification",
+    label: "Pending Verification",
+    className: "bg-purple-100 text-purple-800 hover:bg-purple-200",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+    className: "bg-green-100 text-green-800 hover:bg-green-200",
+  },
+  {
+    value: "cancelled",
+    label: "Cancelled",
+    className: "bg-gray-100 text-gray-800 hover:bg-gray-200",
+  },
+];
 
 export default function IncidentDetail() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
-  const [incident, setIncident] = useState<Incident | null>(null)
-  const [actions, setActions] = useState<Action[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showInvestigationModal, setShowInvestigationModal] = useState(false)
-  const [showActionModal, setShowActionModal] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [editForm, setEditForm] = useState<IncidentUpdate>({})
-  
+  const [incident, setIncident] = useState<Incident | null>(null);
+  const [actions, setActions] = useState<Action[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showInvestigationModal, setShowInvestigationModal] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState<IncidentUpdate>({});
+
   // Action detail modal state
-  const [selectedAction, setSelectedAction] = useState<Action | null>(null)
-  const [showActionDetailModal, setShowActionDetailModal] = useState(false)
-  const [updatingAction, setUpdatingAction] = useState(false)
-  const [actionUpdateError, setActionUpdateError] = useState('')
+  const [selectedAction, setSelectedAction] = useState<Action | null>(null);
+  const [showActionDetailModal, setShowActionDetailModal] = useState(false);
+  const [updatingAction, setUpdatingAction] = useState(false);
+  const [actionUpdateError, setActionUpdateError] = useState("");
 
   // Completion notes dialog state
-  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
-  const [completionNotes, setCompletionNotes] = useState('')
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+  const [completionNotes, setCompletionNotes] = useState("");
 
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({
-    title: '',
-    description: '',
-    investigation_type: 'root_cause_analysis',
-    lead_investigator: '',
-  })
+    title: "",
+    description: "",
+    investigation_type: "root_cause_analysis",
+    lead_investigator: "",
+  });
 
   // Action form
   const [actionForm, setActionForm] = useState({
-    title: '',
-    description: '',
-    priority: 'medium',
-    due_date: '',
-    assigned_to: '',
-  })
+    title: "",
+    description: "",
+    priority: "medium",
+    due_date: "",
+    assigned_to: "",
+  });
 
   useEffect(() => {
     if (id) {
-      loadIncident(parseInt(id))
+      loadIncident(parseInt(id));
     }
-  }, [id])
+  }, [id]);
 
   const loadIncident = async (incidentId: number) => {
     try {
-      const response = await incidentsApi.get(incidentId)
-      setIncident(response.data)
+      const response = await incidentsApi.get(incidentId);
+      setIncident(response.data);
       setEditForm({
         title: response.data.title,
         description: response.data.description,
@@ -112,45 +147,45 @@ export default function IncidentDetail() {
         status: response.data.status,
         location: response.data.location,
         department: response.data.department,
-      })
-      loadActions()
+      });
+      loadActions();
     } catch (err) {
-      console.error('Failed to load incident:', err)
-      showToast('Failed to load incident', 'error');
+      console.error("Failed to load incident:", err);
+      showToast("Failed to load incident", "error");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadActions = async () => {
-    if (!id) return
+    if (!id) return;
     try {
       // Load actions filtered by this specific incident
-      const response = await actionsApi.list(1, 50)
+      const response = await actionsApi.list(1, 50);
       // Filter client-side for this incident's actions
       const incidentActions = (response.data.items || []).filter(
-        (a) => a.source_type === 'incident' && a.source_id === parseInt(id)
-      )
-      setActions(incidentActions)
+        (a) => a.source_type === "incident" && a.source_id === parseInt(id),
+      );
+      setActions(incidentActions);
     } catch (err) {
-      console.error('Failed to load actions:', err)
+      console.error("Failed to load actions:", err);
     }
-  }
+  };
 
   const handleSaveEdit = async () => {
-    if (!incident) return
-    setSaving(true)
+    if (!incident) return;
+    setSaving(true);
     try {
-      const response = await incidentsApi.update(incident.id, editForm)
-      setIncident(response.data)
-      setIsEditing(false)
+      const response = await incidentsApi.update(incident.id, editForm);
+      setIncident(response.data);
+      setIsEditing(false);
     } catch (err) {
-      console.error('Failed to update incident:', err)
-      showToast('Failed to update incident', 'error');
+      console.error("Failed to update incident:", err);
+      showToast("Failed to update incident", "error");
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleCancelEdit = () => {
     if (incident) {
@@ -162,158 +197,199 @@ export default function IncidentDetail() {
         status: incident.status,
         location: incident.location,
         department: incident.department,
-      })
+      });
     }
-    setIsEditing(false)
-  }
+    setIsEditing(false);
+  };
 
-  const [investigationError, setInvestigationError] = useState('')
-  const [existingInvestigation, setExistingInvestigation] = useState<{ id: number; reference: string } | null>(null)
+  const [investigationError, setInvestigationError] = useState("");
+  const [existingInvestigation, setExistingInvestigation] = useState<{
+    id: number;
+    reference: string;
+  } | null>(null);
 
   const handleCreateInvestigation = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!incident) return
-    setCreating(true)
-    setInvestigationError('')
-    setExistingInvestigation(null)
-    
+    e.preventDefault();
+    if (!incident) return;
+    setCreating(true);
+    setInvestigationError("");
+    setExistingInvestigation(null);
+
     try {
       // Use from-record endpoint with proper JSON body
       await investigationsApi.createFromRecord({
-        source_type: 'reporting_incident',
+        source_type: "reporting_incident",
         source_id: incident.id,
-        title: investigationForm.title || `Investigation - ${incident.reference_number}`,
-      })
-      setShowInvestigationModal(false)
+        title:
+          investigationForm.title ||
+          `Investigation - ${incident.reference_number}`,
+      });
+      setShowInvestigationModal(false);
       setInvestigationForm({
-        title: '',
-        description: '',
-        investigation_type: 'root_cause_analysis',
-        lead_investigator: '',
-      })
-      navigate('/investigations')
+        title: "",
+        description: "",
+        investigation_type: "root_cause_analysis",
+        lead_investigator: "",
+      });
+      navigate("/investigations");
     } catch (err: unknown) {
-      console.error('Failed to create investigation:', err)
-      showToast('Failed to create investigation', 'error');
-      
+      console.error("Failed to create investigation:", err);
+      showToast("Failed to create investigation", "error");
+
       // Check for 409 Conflict (already exists)
-      const axiosErr = err as { response?: { status?: number; data?: { detail?: unknown } } };
+      const axiosErr = err as {
+        response?: { status?: number; data?: { detail?: unknown } };
+      };
       if (axiosErr.response?.status === 409) {
-        const errorData = axiosErr.response?.data?.detail as CreateFromRecordError | undefined
-        if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
+        const errorData = axiosErr.response?.data?.detail as
+          | CreateFromRecordError
+          | undefined;
+        if (
+          errorData?.error_code === "INV_ALREADY_EXISTS" &&
+          errorData.details?.existing_investigation_id
+        ) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
-            reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
-          })
-          setInvestigationError('An investigation already exists for this incident.')
-          return
+            reference:
+              errorData.details.existing_reference_number ||
+              `INV-${errorData.details.existing_investigation_id}`,
+          });
+          setInvestigationError(
+            "An investigation already exists for this incident.",
+          );
+          return;
         }
       }
-      setInvestigationError(getApiErrorMessage(err))
+      setInvestigationError(getApiErrorMessage(err));
     } finally {
-      setCreating(false)
+      setCreating(false);
     }
-  }
+  };
 
   const handleCreateAction = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!incident) return
-    setCreating(true)
+    e.preventDefault();
+    if (!incident) return;
+    setCreating(true);
     try {
       await actionsApi.create({
         title: actionForm.title,
-        description: actionForm.description || `Action for ${incident.reference_number}`,
+        description:
+          actionForm.description || `Action for ${incident.reference_number}`,
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
-        action_type: 'corrective',
-        source_type: 'incident',
+        action_type: "corrective",
+        source_type: "incident",
         source_id: incident.id,
         assigned_to_email: actionForm.assigned_to || undefined,
-      })
-      setShowActionModal(false)
+      });
+      setShowActionModal(false);
       setActionForm({
-        title: '',
-        description: '',
-        priority: 'medium',
-        due_date: '',
-        assigned_to: '',
-      })
-      loadActions()
+        title: "",
+        description: "",
+        priority: "medium",
+        due_date: "",
+        assigned_to: "",
+      });
+      loadActions();
     } catch (err: unknown) {
-      console.error('Failed to create action:', err)
-      alert(`Failed to create action: ${getApiErrorMessage(err)}`)
+      console.error("Failed to create action:", err);
+      alert(`Failed to create action: ${getApiErrorMessage(err)}`);
     } finally {
-      setCreating(false)
+      setCreating(false);
     }
-  }
+  };
 
   const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
-    setActionForm({ ...actionForm, assigned_to: email })
-  }
+    setActionForm({ ...actionForm, assigned_to: email });
+  };
 
-  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
-    setInvestigationForm({ ...investigationForm, lead_investigator: email })
-  }
+  const handleInvestigatorChange = (
+    email: string,
+    _user?: UserSearchResult,
+  ) => {
+    setInvestigationForm({ ...investigationForm, lead_investigator: email });
+  };
 
   // Action detail handlers
   const handleOpenAction = (action: Action) => {
-    setSelectedAction(action)
-    setActionUpdateError('')
-    setShowActionDetailModal(true)
-  }
+    setSelectedAction(action);
+    setActionUpdateError("");
+    setShowActionDetailModal(true);
+  };
 
-  const handleUpdateActionStatus = async (newStatus: string, completionNotes?: string) => {
-    if (!selectedAction) return
-    setUpdatingAction(true)
-    setActionUpdateError('')
-    
+  const handleUpdateActionStatus = async (
+    newStatus: string,
+    completionNotes?: string,
+  ) => {
+    if (!selectedAction) return;
+    setUpdatingAction(true);
+    setActionUpdateError("");
+
     try {
-      const updatePayload: { status: string; completion_notes?: string } = { status: newStatus }
+      const updatePayload: { status: string; completion_notes?: string } = {
+        status: newStatus,
+      };
       if (completionNotes) {
-        updatePayload.completion_notes = completionNotes
+        updatePayload.completion_notes = completionNotes;
       }
-      
-      const response = await actionsApi.update(selectedAction.id, 'incident', updatePayload)
-      
+
+      const response = await actionsApi.update(
+        selectedAction.id,
+        "incident",
+        updatePayload,
+      );
+
       // Update local state
-      setSelectedAction(response.data)
-      setActions(prev => prev.map(a => a.id === selectedAction.id ? response.data : a))
+      setSelectedAction(response.data);
+      setActions((prev) =>
+        prev.map((a) => (a.id === selectedAction.id ? response.data : a)),
+      );
     } catch (err) {
-      console.error('Failed to update action status:', err)
-      showToast('Failed to update action status', 'error');
-      setActionUpdateError(getApiErrorMessage(err))
+      console.error("Failed to update action status:", err);
+      showToast("Failed to update action status", "error");
+      setActionUpdateError(getApiErrorMessage(err));
     } finally {
-      setUpdatingAction(false)
+      setUpdatingAction(false);
     }
-  }
+  };
 
   const handleCompleteAction = () => {
-    setCompletionNotes('')
-    setShowCompletionDialog(true)
-  }
+    setCompletionNotes("");
+    setShowCompletionDialog(true);
+  };
 
   const getSeverityVariant = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'critical'
-      case 'high': return 'high'
-      case 'medium': return 'medium'
-      case 'low': return 'low'
-      default: return 'secondary'
+      case "critical":
+        return "critical";
+      case "high":
+        return "high";
+      case "medium":
+        return "medium";
+      case "low":
+        return "low";
+      default:
+        return "secondary";
     }
-  }
+  };
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'open': return 'destructive'
-      case 'under_investigation': return 'in-progress'
-      case 'pending_actions': return 'acknowledged'
-      case 'closed': return 'resolved'
-      default: return 'secondary'
+      case "open":
+        return "destructive";
+      case "under_investigation":
+        return "in-progress";
+      case "pending_actions":
+        return "acknowledged";
+      case "closed":
+        return "resolved";
+      default:
+        return "secondary";
     }
-  }
+  };
 
   if (loading) {
-    return <CardSkeleton count={1} />
+    return <CardSkeleton count={1} />;
   }
 
   if (!incident) {
@@ -321,12 +397,12 @@ export default function IncidentDetail() {
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertTriangle className="w-12 h-12 text-muted-foreground" />
         <p className="text-muted-foreground">Incident not found</p>
-        <Button variant="outline" onClick={() => navigate('/incidents')}>
+        <Button variant="outline" onClick={() => navigate("/incidents")}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Incidents
         </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -334,39 +410,56 @@ export default function IncidentDetail() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="icon"
-            onClick={() => navigate('/incidents')}
+            onClick={() => navigate("/incidents")}
             aria-label="Back to incidents"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="font-mono text-sm text-primary">{incident.reference_number}</span>
-              <Badge variant={getSeverityVariant(incident.severity) as BadgeVariant}>
+              <span className="font-mono text-sm text-primary">
+                {incident.reference_number}
+              </span>
+              <Badge
+                variant={getSeverityVariant(incident.severity) as BadgeVariant}
+              >
                 {incident.severity}
               </Badge>
-              <Badge variant={getStatusVariant(incident.status) as BadgeVariant}>
-                {incident.status.replace('_', ' ')}
+              <Badge
+                variant={getStatusVariant(incident.status) as BadgeVariant}
+              >
+                {incident.status.replace("_", " ")}
               </Badge>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">{incident.title}</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {incident.title}
+            </h1>
             <p className="text-muted-foreground mt-1">
-              Reported on {new Date(incident.reported_date).toLocaleDateString()}
+              Reported on{" "}
+              {new Date(incident.reported_date).toLocaleDateString()}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {isEditing ? (
             <>
-              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={saving}
+              >
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
                 Save Changes
               </Button>
             </>
@@ -376,7 +469,10 @@ export default function IncidentDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 Edit
               </Button>
-              <Button variant="outline" onClick={() => setShowActionModal(true)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowActionModal(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Action
               </Button>
@@ -405,35 +501,52 @@ export default function IncidentDetail() {
               {isEditing ? (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Title</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Title
+                    </label>
                     <Input
-                      value={editForm.title || ''}
-                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                      value={editForm.title || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, title: e.target.value })
+                      }
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Description
+                    </label>
                     <Textarea
-                      value={editForm.description || ''}
-                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      value={editForm.description || ""}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          description: e.target.value,
+                        })
+                      }
                       rows={4}
                       className="mt-1"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Incident Type
+                      </label>
                       <Select
                         value={editForm.incident_type}
-                        onValueChange={(value) => setEditForm({ ...editForm, incident_type: value })}
+                        onValueChange={(value) =>
+                          setEditForm({ ...editForm, incident_type: value })
+                        }
                       >
                         <SelectTrigger className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="safety">Safety</SelectItem>
-                          <SelectItem value="environmental">Environmental</SelectItem>
+                          <SelectItem value="environmental">
+                            Environmental
+                          </SelectItem>
                           <SelectItem value="quality">Quality</SelectItem>
                           <SelectItem value="security">Security</SelectItem>
                           <SelectItem value="near_miss">Near Miss</SelectItem>
@@ -442,10 +555,14 @@ export default function IncidentDetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Severity
+                      </label>
                       <Select
                         value={editForm.severity}
-                        onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
+                        onValueChange={(value) =>
+                          setEditForm({ ...editForm, severity: value })
+                        }
                       >
                         <SelectTrigger className="mt-1">
                           <SelectValue />
@@ -459,27 +576,39 @@ export default function IncidentDetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Status
+                      </label>
                       <Select
                         value={editForm.status}
-                        onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                        onValueChange={(value) =>
+                          setEditForm({ ...editForm, status: value })
+                        }
                       >
                         <SelectTrigger className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="open">Open</SelectItem>
-                          <SelectItem value="under_investigation">Under Investigation</SelectItem>
-                          <SelectItem value="pending_actions">Pending Actions</SelectItem>
+                          <SelectItem value="under_investigation">
+                            Under Investigation
+                          </SelectItem>
+                          <SelectItem value="pending_actions">
+                            Pending Actions
+                          </SelectItem>
                           <SelectItem value="closed">Closed</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Location
+                      </label>
                       <Input
-                        value={editForm.location || ''}
-                        onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                        value={editForm.location || ""}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, location: e.target.value })
+                        }
                         className="mt-1"
                       />
                     </div>
@@ -488,29 +617,45 @@ export default function IncidentDetail() {
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Description
+                    </label>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {incident.description || 'No description provided'}
+                      {incident.description || "No description provided"}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
-                      <p className="mt-1 text-foreground capitalize">{incident.incident_type.replace('_', ' ')}</p>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Incident Type
+                      </label>
+                      <p className="mt-1 text-foreground capitalize">
+                        {incident.incident_type.replace("_", " ")}
+                      </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
-                      <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Severity
+                      </label>
+                      <p className="mt-1 text-foreground capitalize">
+                        {incident.severity}
+                      </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Incident Date</label>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Incident Date
+                      </label>
                       <p className="mt-1 text-foreground">
                         {new Date(incident.incident_date).toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
-                      <p className="mt-1 text-foreground">{incident.location || 'Not specified'}</p>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Location
+                      </label>
+                      <p className="mt-1 text-foreground">
+                        {incident.location || "Not specified"}
+                      </p>
                     </div>
                   </div>
                 </>
@@ -525,7 +670,11 @@ export default function IncidentDetail() {
                 <ClipboardList className="w-5 h-5 text-primary" />
                 Actions ({actions.length})
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowActionModal(true)}
+              >
                 <Plus className="w-4 h-4 mr-1" />
                 Add
               </Button>
@@ -535,7 +684,9 @@ export default function IncidentDetail() {
                 <div className="text-center py-8 text-muted-foreground">
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No actions yet</p>
-                  <p className="text-sm">Create actions to track follow-up tasks</p>
+                  <p className="text-sm">
+                    Create actions to track follow-up tasks
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -546,29 +697,43 @@ export default function IncidentDetail() {
                       onClick={() => handleOpenAction(action)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center",
-                          action.status === 'completed' ? 'bg-success/10 text-success' :
-                          action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
-                          'bg-warning/10 text-warning'
-                        )}>
+                        <div
+                          className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center",
+                            action.status === "completed"
+                              ? "bg-success/10 text-success"
+                              : action.status === "cancelled"
+                                ? "bg-destructive/10 text-destructive"
+                                : "bg-warning/10 text-warning",
+                          )}
+                        >
                           <CheckCircle className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{action.title}</p>
+                          <p className="font-medium text-foreground">
+                            {action.title}
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'No due date'}
+                            Due:{" "}
+                            {action.due_date
+                              ? new Date(action.due_date).toLocaleDateString()
+                              : "No due date"}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={
-                          action.status === 'completed' ? 'resolved' :
-                          action.status === 'cancelled' ? 'destructive' :
-                          action.status === 'in_progress' ? 'in-progress' :
-                          'secondary' as BadgeVariant
-                        }>
-                          {action.status.replace(/_/g, ' ')}
+                        <Badge
+                          variant={
+                            action.status === "completed"
+                              ? "resolved"
+                              : action.status === "cancelled"
+                                ? "destructive"
+                                : action.status === "in_progress"
+                                  ? "in-progress"
+                                  : ("secondary" as BadgeVariant)
+                          }
+                        >
+                          {action.status.replace(/_/g, " ")}
                         </Badge>
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
                       </div>
@@ -605,7 +770,9 @@ export default function IncidentDetail() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Location</p>
-                  <p className="font-medium text-foreground">{incident.location || 'Not specified'}</p>
+                  <p className="font-medium text-foreground">
+                    {incident.location || "Not specified"}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -614,7 +781,9 @@ export default function IncidentDetail() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Department</p>
-                  <p className="font-medium text-foreground">{incident.department || 'Not specified'}</p>
+                  <p className="font-medium text-foreground">
+                    {incident.department || "Not specified"}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -633,7 +802,9 @@ export default function IncidentDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Incident Reported</p>
+                    <p className="text-sm font-medium text-foreground">
+                      Incident Reported
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(incident.reported_date).toLocaleString()}
                     </p>
@@ -642,7 +813,9 @@ export default function IncidentDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-muted mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Record Created</p>
+                    <p className="text-sm font-medium text-foreground">
+                      Record Created
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(incident.created_at).toLocaleString()}
                     </p>
@@ -655,13 +828,16 @@ export default function IncidentDetail() {
       </div>
 
       {/* Create Investigation Modal */}
-      <Dialog open={showInvestigationModal} onOpenChange={(open) => {
-        setShowInvestigationModal(open)
-        if (!open) {
-          setInvestigationError('')
-          setExistingInvestigation(null)
-        }
-      }}>
+      <Dialog
+        open={showInvestigationModal}
+        onOpenChange={(open) => {
+          setShowInvestigationModal(open);
+          if (!open) {
+            setInvestigationError("");
+            setExistingInvestigation(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -669,8 +845,9 @@ export default function IncidentDetail() {
               Start Investigation
             </DialogTitle>
             <DialogDescription>
-              Create a root cause investigation for incident {incident.reference_number}.
-              Data will be prefilled from the incident record.
+              Create a root cause investigation for incident{" "}
+              {incident.reference_number}. Data will be prefilled from the
+              incident record.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
@@ -680,7 +857,12 @@ export default function IncidentDetail() {
               </label>
               <Input
                 value={investigationForm.title}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
+                onChange={(e) =>
+                  setInvestigationForm({
+                    ...investigationForm,
+                    title: e.target.value,
+                  })
+                }
                 placeholder={`Investigation - ${incident.reference_number}`}
               />
             </div>
@@ -690,16 +872,25 @@ export default function IncidentDetail() {
               </label>
               <Select
                 value={investigationForm.investigation_type}
-                onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
+                onValueChange={(value) =>
+                  setInvestigationForm({
+                    ...investigationForm,
+                    investigation_type: value,
+                  })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="root_cause_analysis">Root Cause Analysis</SelectItem>
+                  <SelectItem value="root_cause_analysis">
+                    Root Cause Analysis
+                  </SelectItem>
                   <SelectItem value="5_whys">5 Whys</SelectItem>
                   <SelectItem value="fishbone">Fishbone Analysis</SelectItem>
-                  <SelectItem value="incident_review">Incident Review</SelectItem>
+                  <SelectItem value="incident_review">
+                    Incident Review
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -715,7 +906,12 @@ export default function IncidentDetail() {
               </label>
               <Textarea
                 value={investigationForm.description}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
+                onChange={(e) =>
+                  setInvestigationForm({
+                    ...investigationForm,
+                    description: e.target.value,
+                  })
+                }
                 placeholder="Describe the scope and initial findings..."
                 rows={4}
               />
@@ -731,24 +927,33 @@ export default function IncidentDetail() {
                     variant="link"
                     size="sm"
                     onClick={() => {
-                      setShowInvestigationModal(false)
-                      navigate(`/investigations/${existingInvestigation.id}`)
+                      setShowInvestigationModal(false);
+                      navigate(`/investigations/${existingInvestigation.id}`);
                     }}
                     className="mt-2 p-0 h-auto text-primary"
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    Open existing investigation ({existingInvestigation.reference})
+                    Open existing investigation (
+                    {existingInvestigation.reference})
                   </Button>
                 )}
               </div>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInvestigationModal(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Investigation'}
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Create Investigation"
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -774,7 +979,9 @@ export default function IncidentDetail() {
               </label>
               <Input
                 value={actionForm.title}
-                onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
+                onChange={(e) =>
+                  setActionForm({ ...actionForm, title: e.target.value })
+                }
                 placeholder="e.g., Review safety procedures"
                 required
               />
@@ -791,7 +998,9 @@ export default function IncidentDetail() {
               </label>
               <Select
                 value={actionForm.priority}
-                onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
+                onValueChange={(value) =>
+                  setActionForm({ ...actionForm, priority: value })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -811,7 +1020,9 @@ export default function IncidentDetail() {
               <Input
                 type="date"
                 value={actionForm.due_date}
-                onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
+                onChange={(e) =>
+                  setActionForm({ ...actionForm, due_date: e.target.value })
+                }
               />
             </div>
             <div>
@@ -820,17 +1031,27 @@ export default function IncidentDetail() {
               </label>
               <Textarea
                 value={actionForm.description}
-                onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+                onChange={(e) =>
+                  setActionForm({ ...actionForm, description: e.target.value })
+                }
                 placeholder="Describe the action to be taken..."
                 rows={3}
               />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowActionModal(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={creating || !actionForm.title}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Create Action"
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -838,89 +1059,117 @@ export default function IncidentDetail() {
       </Dialog>
 
       {/* Action Detail Modal */}
-      <Dialog open={showActionDetailModal} onOpenChange={setShowActionDetailModal}>
+      <Dialog
+        open={showActionDetailModal}
+        onOpenChange={setShowActionDetailModal}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
               Action Details
             </DialogTitle>
-            <DialogDescription>
-              View and update action status
-            </DialogDescription>
+            <DialogDescription>View and update action status</DialogDescription>
           </DialogHeader>
-          
+
           {selectedAction && (
             <div className="space-y-4">
               {/* Action Info */}
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Title</label>
-                  <p className="font-medium text-foreground">{selectedAction.title}</p>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Title
+                  </label>
+                  <p className="font-medium text-foreground">
+                    {selectedAction.title}
+                  </p>
                 </div>
-                
+
                 {selectedAction.description && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <p className="text-foreground">{selectedAction.description}</p>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Description
+                    </label>
+                    <p className="text-foreground">
+                      {selectedAction.description}
+                    </p>
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Status</label>
-                    <Badge 
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Status
+                    </label>
+                    <Badge
                       variant={
-                        selectedAction.status === 'completed' ? 'resolved' :
-                        selectedAction.status === 'cancelled' ? 'destructive' :
-                        selectedAction.status === 'in_progress' ? 'in-progress' :
-                        'secondary' as BadgeVariant
+                        selectedAction.status === "completed"
+                          ? "resolved"
+                          : selectedAction.status === "cancelled"
+                            ? "destructive"
+                            : selectedAction.status === "in_progress"
+                              ? "in-progress"
+                              : ("secondary" as BadgeVariant)
                       }
                       className="mt-1"
                     >
-                      {selectedAction.status.replace(/_/g, ' ')}
+                      {selectedAction.status.replace(/_/g, " ")}
                     </Badge>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Priority</label>
-                    <p className="text-foreground capitalize">{selectedAction.priority}</p>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Priority
+                    </label>
+                    <p className="text-foreground capitalize">
+                      {selectedAction.priority}
+                    </p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Due Date</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Due Date
+                    </label>
                     <p className="text-foreground">
-                      {selectedAction.due_date 
-                        ? new Date(selectedAction.due_date).toLocaleDateString() 
-                        : 'Not set'}
+                      {selectedAction.due_date
+                        ? new Date(selectedAction.due_date).toLocaleDateString()
+                        : "Not set"}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Assigned To</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Assigned To
+                    </label>
                     <p className="text-foreground">
-                      {selectedAction.assigned_to_email || 'Unassigned'}
+                      {selectedAction.assigned_to_email || "Unassigned"}
                     </p>
                   </div>
                 </div>
-                
+
                 {selectedAction.completed_at && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Completed At</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Completed At
+                    </label>
                     <p className="text-foreground">
                       {new Date(selectedAction.completed_at).toLocaleString()}
                     </p>
                   </div>
                 )}
-                
+
                 {selectedAction.completion_notes && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Completion Notes</label>
-                    <p className="text-foreground">{selectedAction.completion_notes}</p>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Completion Notes
+                    </label>
+                    <p className="text-foreground">
+                      {selectedAction.completion_notes}
+                    </p>
                   </div>
                 )}
               </div>
-              
+
               {/* Status Update Section */}
               <div className="border-t pt-4">
                 <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -934,14 +1183,17 @@ export default function IncidentDetail() {
                       variant="outline"
                       className={cn(
                         option.className,
-                        selectedAction.status === option.value && 'ring-2 ring-primary'
+                        selectedAction.status === option.value &&
+                          "ring-2 ring-primary",
                       )}
-                      disabled={updatingAction || selectedAction.status === option.value}
+                      disabled={
+                        updatingAction || selectedAction.status === option.value
+                      }
                       onClick={() => {
-                        if (option.value === 'completed') {
-                          handleCompleteAction()
+                        if (option.value === "completed") {
+                          handleCompleteAction();
                         } else {
-                          handleUpdateActionStatus(option.value)
+                          handleUpdateActionStatus(option.value);
                         }
                       }}
                     >
@@ -949,11 +1201,13 @@ export default function IncidentDetail() {
                     </Button>
                   ))}
                 </div>
-                
+
                 {actionUpdateError && (
-                  <p className="text-sm text-destructive mt-2">{actionUpdateError}</p>
+                  <p className="text-sm text-destructive mt-2">
+                    {actionUpdateError}
+                  </p>
                 )}
-                
+
                 {updatingAction && (
                   <div className="flex items-center gap-2 mt-2 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -961,9 +1215,12 @@ export default function IncidentDetail() {
                   </div>
                 )}
               </div>
-              
+
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowActionDetailModal(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowActionDetailModal(false)}
+                >
                   Close
                 </Button>
               </DialogFooter>
@@ -973,12 +1230,16 @@ export default function IncidentDetail() {
       </Dialog>
 
       {/* Completion Notes Dialog */}
-      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+      <Dialog
+        open={showCompletionDialog}
+        onOpenChange={setShowCompletionDialog}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Complete Action</DialogTitle>
             <DialogDescription>
-              Enter completion notes (optional) before marking this action as completed.
+              Enter completion notes (optional) before marking this action as
+              completed.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -988,11 +1249,21 @@ export default function IncidentDetail() {
             rows={3}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCompletionDialog(false)}>Cancel</Button>
-            <Button onClick={() => {
-              handleUpdateActionStatus('completed', completionNotes || undefined)
-              setShowCompletionDialog(false)
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => setShowCompletionDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                handleUpdateActionStatus(
+                  "completed",
+                  completionNotes || undefined,
+                );
+                setShowCompletionDialog(false);
+              }}
+            >
               Complete
             </Button>
           </DialogFooter>
@@ -1001,5 +1272,5 @@ export default function IncidentDetail() {
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
-  )
+  );
 }

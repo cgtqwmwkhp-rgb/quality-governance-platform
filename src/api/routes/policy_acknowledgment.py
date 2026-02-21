@@ -62,7 +62,7 @@ async def create_acknowledgment_requirement(
     service = PolicyAcknowledgmentService(db)
     requirement = await service.create_requirement(
         policy_id=requirement_data.policy_id,
-        acknowledgment_type=requirement_data.acknowledgment_type,
+        acknowledgment_type=requirement_data.acknowledgment_type,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
         required_for_all=requirement_data.required_for_all,
         required_departments=requirement_data.required_departments,
         required_roles=requirement_data.required_roles,
@@ -125,7 +125,7 @@ async def get_my_pending_acknowledgments(
 ):
     """Get current user's pending acknowledgments."""
     service = PolicyAcknowledgmentService(db)
-    pending = await service.get_user_pending_acknowledgments(current_user.get("id"))
+    pending = await service.get_user_pending_acknowledgments(current_user.id)
 
     return PolicyAcknowledgmentListResponse(
         items=[PolicyAcknowledgmentResponse.from_orm(a) for a in pending],
@@ -294,7 +294,7 @@ async def log_document_read(
     log = await service.log_document_access(
         document_type=log_data.document_type,
         document_id=log_data.document_id,
-        user_id=current_user.get("id"),
+        user_id=current_user.id,
         document_version=log_data.document_version,
         duration_seconds=log_data.duration_seconds,
         scroll_percentage=log_data.scroll_percentage,

@@ -181,7 +181,7 @@ class PolicyAcknowledgmentService:
             await self.db.commit()
             await self.db.refresh(ack)
 
-        return ack
+        return ack  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     async def update_reading_time(
         self,
@@ -198,7 +198,7 @@ class PolicyAcknowledgmentService:
             await self.db.commit()
             await self.db.refresh(ack)
 
-        return ack
+        return ack  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     async def get_user_pending_acknowledgments(
         self,

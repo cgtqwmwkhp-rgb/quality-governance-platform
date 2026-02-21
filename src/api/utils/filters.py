@@ -35,7 +35,7 @@ def apply_date_range_filter(
     query: Select,
     start_date=None,
     end_date=None,
-    field: InstrumentedAttribute = None,
+    field: InstrumentedAttribute | None = None,
 ) -> Select:
     """Apply a date range filter on a field."""
     if field is None:

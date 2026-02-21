@@ -280,6 +280,7 @@ class RiskDetailResponse(RiskResponse):
     assessments: List[RiskAssessmentResponse] = []
     control_count: int = 0
     open_action_count: int = 0
+    links: Optional[dict] = None
 
 
 class RiskListResponse(BaseModel):
@@ -290,6 +291,7 @@ class RiskListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    links: Optional[dict] = None
 
 
 # ============== Risk Matrix Schemas ==============

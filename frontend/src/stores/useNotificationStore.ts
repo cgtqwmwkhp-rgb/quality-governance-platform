@@ -1,10 +1,10 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  type: "info" | "success" | "warning" | "error";
   read: boolean;
   createdAt: string;
 }
@@ -12,7 +12,9 @@ interface Notification {
 interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
-  addNotification: (notification: Omit<Notification, 'id' | 'read' | 'createdAt'>) => void;
+  addNotification: (
+    notification: Omit<Notification, "id" | "read" | "createdAt">,
+  ) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
@@ -41,7 +43,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   markAsRead: (id) =>
     set((state) => {
       const notifications = state.notifications.map((n) =>
-        n.id === id ? { ...n, read: true } : n
+        n.id === id ? { ...n, read: true } : n,
       );
       return {
         notifications,

@@ -376,8 +376,56 @@ class NotificationService:
 
     # ==================== Notification Management ====================
 
+    async def list_notifications(
+        self,
+        user_id: int,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        unread_only: bool = False,
+        notification_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List notifications for a user with pagination and unread count.
+
+        Returns dict with items, total, unread_count, page, page_size.
+        """
+        from sqlalchemy import func
+
+        from src.api.utils.pagination import PaginationParams, paginate
+
+        if not self.db:
+            return {"items": [], "total": 0, "unread_count": 0, "page": 1, "page_size": page_size}
+
+        query = select(Notification).where(Notification.user_id == user_id)
+        if unread_only:
+            query = query.where(Notification.is_read == False)  # noqa: E712
+        if notification_type:
+            query = query.where(Notification.type == notification_type)
+
+        unread_query = select(func.count(Notification.id)).where(
+            Notification.user_id == user_id,
+            Notification.is_read == False,  # noqa: E712
+        )
+        unread_count = await self.db.scalar(unread_query) or 0
+
+        query = query.order_by(Notification.created_at.desc())
+        params = PaginationParams(page=page, page_size=page_size)
+        paginated = await paginate(self.db, query, params)
+
+        return {
+            "items": list(paginated.items),
+            "total": paginated.total,
+            "unread_count": unread_count,
+            "page": paginated.page,
+            "page_size": paginated.page_size,
+        }
+
     async def mark_as_read(self, notification_id: int, user_id: int) -> bool:
-        """Mark a notification as read"""
+        """Mark a notification as read.
+
+        Raises:
+            LookupError: If the notification is not found.
+        """
         if not self.db:
             return False
 
@@ -385,32 +433,74 @@ class NotificationService:
             select(Notification).where(Notification.id == notification_id, Notification.user_id == user_id)
         )
         notification = result.scalar_one_or_none()
+        if not notification:
+            raise LookupError(f"Notification {notification_id} not found")
 
-        if notification:
-            notification.is_read = True
-            notification.read_at = datetime.now(timezone.utc)
-            await self.db.commit()
-            return True
+        notification.is_read = True
+        notification.read_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        return True
 
-        return False
+    async def mark_as_unread(self, notification_id: int, user_id: int) -> bool:
+        """Mark a notification as unread.
+
+        Raises:
+            LookupError: If the notification is not found.
+        """
+        if not self.db:
+            return False
+
+        result = await self.db.execute(
+            select(Notification).where(Notification.id == notification_id, Notification.user_id == user_id)
+        )
+        notification = result.scalar_one_or_none()
+        if not notification:
+            raise LookupError(f"Notification {notification_id} not found")
+
+        notification.is_read = False
+        notification.read_at = None
+        await self.db.commit()
+        return True
 
     async def mark_all_as_read(self, user_id: int) -> int:
-        """Mark all notifications as read for a user"""
+        """Mark all notifications as read for a user."""
         if not self.db:
             return 0
 
+        from sqlalchemy import update
+
         result = await self.db.execute(
-            select(Notification).where(Notification.user_id == user_id, Notification.is_read == False)  # noqa: E712
+            update(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.is_read == False,  # noqa: E712
+            )
+            .values(is_read=True, read_at=datetime.now(timezone.utc))
         )
-        notifications = result.scalars().all()
-
-        now = datetime.now(timezone.utc)
-        for notification in notifications:
-            notification.is_read = True
-            notification.read_at = now
-
         await self.db.commit()
-        return len(notifications)
+        return result.rowcount
+
+    async def delete_notification(self, notification_id: int, user_id: int) -> None:
+        """Delete a notification.
+
+        Raises:
+            LookupError: If the notification is not found.
+        """
+        if not self.db:
+            return
+
+        result = await self.db.execute(
+            select(Notification).where(
+                Notification.id == notification_id,
+                Notification.user_id == user_id,
+            )
+        )
+        notification = result.scalar_one_or_none()
+        if not notification:
+            raise LookupError(f"Notification {notification_id} not found")
+
+        await self.db.delete(notification)
+        await self.db.commit()
 
     async def get_unread_count(self, user_id: int) -> int:
         """Get count of unread notifications for a user"""
@@ -426,6 +516,94 @@ class NotificationService:
             )
         )
         return result.scalar() or 0
+
+    async def get_preferences(self, user_id: int) -> Dict[str, Any]:
+        """Get notification preferences for a user, returning defaults if none exist."""
+        if not self.db:
+            return self._default_preferences()
+
+        result = await self.db.execute(select(NotificationPreference).where(NotificationPreference.user_id == user_id))
+        prefs = result.scalar_one_or_none()
+
+        if not prefs:
+            return self._default_preferences()
+
+        return {
+            "email_enabled": prefs.email_enabled,
+            "sms_enabled": prefs.sms_enabled,
+            "push_enabled": prefs.push_enabled,
+            "phone_number": prefs.phone_number,
+            "quiet_hours_enabled": prefs.quiet_hours_enabled,
+            "quiet_hours_start": prefs.quiet_hours_start,
+            "quiet_hours_end": prefs.quiet_hours_end,
+            "email_digest_enabled": prefs.email_digest_enabled,
+            "email_digest_frequency": prefs.email_digest_frequency,
+            "category_preferences": prefs.category_preferences or {},
+        }
+
+    async def update_preferences(self, user_id: int, preferences_data: Any) -> Dict[str, Any]:
+        """Update notification preferences, creating record if needed."""
+        if not self.db:
+            return {}
+
+        from src.api.utils.update import apply_updates
+
+        result = await self.db.execute(select(NotificationPreference).where(NotificationPreference.user_id == user_id))
+        prefs = result.scalar_one_or_none()
+
+        if not prefs:
+            prefs = NotificationPreference(user_id=user_id)
+            self.db.add(prefs)
+
+        update_data = apply_updates(prefs, preferences_data, set_updated_at=False)
+        await self.db.commit()
+        return update_data
+
+    async def search_mentionable_users(self, query_str: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search for users that can be @mentioned."""
+        if not self.db:
+            return []
+
+        from src.domain.models.user import User
+
+        search_pattern = f"%{query_str}%"
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.is_active == True,  # noqa: E712
+                (User.first_name.ilike(search_pattern))
+                | (User.last_name.ilike(search_pattern))
+                | (User.email.ilike(search_pattern)),
+            )
+            .order_by(User.first_name, User.last_name)
+            .limit(limit)
+        )
+        users = result.scalars().all()
+
+        return [
+            {
+                "id": u.id,
+                "display_name": f"{u.first_name} {u.last_name}",
+                "email": u.email,
+                "avatar_url": None,
+            }
+            for u in users
+        ]
+
+    @staticmethod
+    def _default_preferences() -> Dict[str, Any]:
+        return {
+            "email_enabled": True,
+            "sms_enabled": False,
+            "push_enabled": True,
+            "phone_number": None,
+            "quiet_hours_enabled": False,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "07:00",
+            "email_digest_enabled": True,
+            "email_digest_frequency": "daily",
+            "category_preferences": {},
+        }
 
     async def get_notifications(
         self,

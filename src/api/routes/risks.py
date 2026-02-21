@@ -1,14 +1,15 @@
 """Risk Register API routes."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.pagination import DataListResponse
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
@@ -29,6 +30,7 @@ from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
+from src.domain.models.user import User
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
 from src.domain.services.risk_statistics_service import RiskStatisticsService
@@ -58,7 +60,7 @@ async def list_risks(
     status_filter: Optional[str] = Query(None, alias="status"),
     risk_level: Optional[str] = None,
     owner_id: Optional[int] = None,
-) -> RiskListResponse:
+) -> Any:
     """List all risks with pagination and filtering."""
     query = (
         select(Risk)
@@ -80,14 +82,22 @@ async def list_risks(
 
     query = query.order_by(Risk.risk_score.desc(), Risk.created_at.desc())
 
-    return await paginate(db, query, params)
+    paginated = await paginate(db, query, params)
+    return {
+        "items": paginated.items,
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "pages": paginated.pages,
+        "links": build_collection_links("risks", paginated.page, paginated.page_size, paginated.pages),
+    }
 
 
 @router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> RiskResponse:
     """Create a new risk."""
     _span = tracer.start_span("create_risk") if tracer else None
@@ -180,9 +190,8 @@ async def get_risk(
 
     response = RiskDetailResponse.model_validate(risk)
     response.control_count = len(risk.controls)
-
-    # Count open actions (simplified - would need action linkage)
     response.open_action_count = 0
+    response.links = build_resource_links("", "risks", risk_id)
 
     return response
 
@@ -192,7 +201,7 @@ async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> RiskResponse:
     """Update a risk."""
     risk = await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
@@ -251,7 +260,7 @@ async def create_control(
     risk_id: int,
     control_data: RiskControlCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> RiskControlResponse:
     """Create a new control for a risk."""
     await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
@@ -305,7 +314,7 @@ async def update_control(
     control_id: int,
     control_data: RiskControlUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> RiskControlResponse:
     """Update a risk control."""
     control = await get_or_404(
@@ -353,7 +362,7 @@ async def create_assessment(
     risk_id: int,
     assessment_data: RiskAssessmentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> RiskAssessmentResponse:
     """Create a new assessment for a risk."""
     risk = await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)

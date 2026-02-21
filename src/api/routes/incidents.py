@@ -14,6 +14,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.investigation import InvestigationRunListResponse
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.incident import Incident
@@ -42,7 +43,7 @@ router = APIRouter()
 async def create_incident(
     incident_data: IncidentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:create"))],
     request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
@@ -85,13 +86,16 @@ async def get_incident(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> Incident:
+):
     """
     Get an incident by ID.
 
     Requires authentication.
     """
-    return await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
+    incident = await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
+    response = IncidentResponse.model_validate(incident)
+    response.links = build_resource_links("", "incidents", incident_id)
+    return response
 
 
 @router.get("/", response_model=IncidentListResponse)
@@ -145,11 +149,19 @@ async def list_incidents(
         )
 
     try:
-        return await service.list_incidents(
+        paginated = await service.list_incidents(
             tenant_id=current_user.tenant_id,
             params=params,
             reporter_email=reporter_email,
         )
+        return {  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
+            "items": paginated.items,
+            "total": paginated.total,
+            "page": paginated.page,
+            "page_size": paginated.page_size,
+            "pages": paginated.pages,
+            "links": build_collection_links("incidents", paginated.page, paginated.page_size, paginated.pages),
+        }
     except SQLAlchemyError as e:
         error_str = str(e).lower()
         logger.exception(

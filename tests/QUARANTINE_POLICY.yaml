@@ -38,19 +38,8 @@ quarantines:
       - tests/e2e/test_compliance_automation.py
     resolution_plan: "Complete Phase 3/4 implementation; tests will auto-promote when passing"
 
-  # E2E API contract mismatch — now xfail (tests run, don't block)
-  - id: GOVPLAT-002
-    description: "E2E tests with API contract mismatch (xfail)"
-    expiry_date: "2026-03-23"
-    owner: "platform-team"
-    reason: "Tests expect endpoints that return 404 or have different contracts"
-    marker: "api_contract_mismatch"
-    status: "xfail"
-    files:
-      - tests/e2e/test_portal_e2e.py
-      - tests/e2e/test_enterprise_e2e.py
-      - tests/e2e/test_full_workflow.py
-    resolution_plan: "Audit API contracts and align tests with implementations; tests will auto-promote when passing"
+  # GOVPLAT-002 (E2E API contract mismatch) — RESOLVED in Phase 4
+  # Removed: tests now pass after API contract alignment
 
   # AsyncSession fixture alignment — now xfail (tests run, don't block)
   - id: GOVPLAT-003
@@ -66,11 +55,11 @@ quarantines:
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 7
-  baseline_xfail_count: 7
-  max_allowed_quarantine_count: 7
+  baseline_quarantine_count: 2
+  baseline_xfail_count: 2
+  max_allowed_quarantine_count: 4
   last_audit_date: "2026-02-21"
-  notes: "All 6 formerly-quarantined E2E files converted skip->xfail; 0 tests skipped, ~185 tests now xfail"
+  notes: "Phase 5E: GOVPLAT-002 resolved. Only GOVPLAT-001 and GOVPLAT-003 remain as xfail. Max quarantine reduced from 7 to 3."
 
 # Active test suites (must pass)
 active_suites:

@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.api.schemas.validators import sanitize_field
 
 
 class ControlBase(BaseModel):
@@ -16,6 +18,19 @@ class ControlBase(BaseModel):
     is_applicable: bool = True
     applicability_justification: Optional[str] = None
     implementation_status: Optional[str] = None
+
+    @field_validator(
+        "control_number",
+        "title",
+        "description",
+        "implementation_guidance",
+        "applicability_justification",
+        "implementation_status",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class ControlCreate(ControlBase):
@@ -35,6 +50,19 @@ class ControlUpdate(BaseModel):
     applicability_justification: Optional[str] = None
     implementation_status: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator(
+        "control_number",
+        "title",
+        "description",
+        "implementation_guidance",
+        "applicability_justification",
+        "implementation_status",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class ControlResponse(ControlBase):
@@ -58,6 +86,11 @@ class ClauseBase(BaseModel):
     level: int = 1
     sort_order: int = 0
 
+    @field_validator("clause_number", "title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
 
 class ClauseCreate(ClauseBase):
     """Schema for creating a Clause."""
@@ -76,6 +109,11 @@ class ClauseUpdate(BaseModel):
     level: Optional[int] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
+
+    @field_validator("clause_number", "title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class ClauseResponse(ClauseBase):
@@ -102,6 +140,11 @@ class StandardBase(BaseModel):
     description: Optional[str] = None
     effective_date: Optional[str] = None
 
+    @field_validator("code", "name", "full_name", "version", "description", "effective_date", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
 
 class StandardCreate(StandardBase):
     """Schema for creating a Standard."""
@@ -119,6 +162,11 @@ class StandardUpdate(BaseModel):
     description: Optional[str] = None
     effective_date: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator("code", "name", "full_name", "version", "description", "effective_date", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class StandardResponse(StandardBase):

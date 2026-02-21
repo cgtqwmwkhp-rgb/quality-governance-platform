@@ -41,7 +41,7 @@ def auth_headers(client) -> dict:
     """Get authenticated headers for API requests."""
     try:
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={
                 "username": "testuser@plantexpand.com",
                 "password": "testpassword123",
@@ -82,12 +82,10 @@ class TestPlanetMarkE2E:
             pytest.skip("Auth not available in test environment")
 
         response = client.get("/api/v1/planet-mark/dashboard", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
-        if response.status_code == 200:
-            data = response.json()
-            # Verify response structure
-            assert isinstance(data, dict)
+        data = response.json()
+        assert isinstance(data, dict)
 
     def test_planet_mark_years_with_auth(self, client, auth_headers):
         """Authenticated request to years should return list."""
@@ -95,12 +93,10 @@ class TestPlanetMarkE2E:
             pytest.skip("Auth not available in test environment")
 
         response = client.get("/api/v1/planet-mark/years", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
-        if response.status_code == 200:
-            data = response.json()
-            # Should be a list (possibly empty)
-            assert isinstance(data, list)
+        data = response.json()
+        assert isinstance(data, list)
 
     def test_planet_mark_deterministic_ordering(self, client, auth_headers):
         """Verify years are returned in deterministic order."""
@@ -153,11 +149,10 @@ class TestUVDBE2E:
             pytest.skip("Auth not available in test environment")
 
         response = client.get("/api/v1/uvdb/sections", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, list)
+        data = response.json()
+        assert isinstance(data, list)
 
     def test_uvdb_audits_with_auth(self, client, auth_headers):
         """Authenticated request to audits should return paginated list."""
@@ -165,14 +160,12 @@ class TestUVDBE2E:
             pytest.skip("Auth not available in test environment")
 
         response = client.get("/api/v1/uvdb/audits?page=1&size=10", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
-        if response.status_code == 200:
-            data = response.json()
-            # Should have pagination structure
-            assert isinstance(data, dict)
-            if "items" in data:
-                assert isinstance(data["items"], list)
+        data = response.json()
+        assert isinstance(data, dict)
+        if "items" in data:
+            assert isinstance(data["items"], list)
 
     def test_uvdb_deterministic_ordering(self, client, auth_headers):
         """Verify sections are returned in deterministic order."""

@@ -9,28 +9,16 @@ Run with:
 
 For parallel execution:
     pytest tests/e2e/ -v -n auto
-
-QUARANTINE STATUS: All tests in this file are quarantined.
-See tests/smoke/QUARANTINE_POLICY.md for details.
-
-Quarantine Date: 2026-01-21
-Expiry Date: 2026-03-23
-Issue: GOVPLAT-002
-Reason: E2E tests hit endpoints that return 404; API contract mismatch.
 """
 
-import json
 import os
 import sys
-import time
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
-pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
 
 # ============================================================================
@@ -52,7 +40,7 @@ def client():
 def auth_headers(client) -> dict:
     """Get authenticated headers."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
@@ -65,7 +53,7 @@ def auth_headers(client) -> dict:
 def admin_headers(client) -> dict:
     """Get admin headers."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={"username": "admin@plantexpand.com", "password": "adminpassword123"},
     )
     if response.status_code == 200:
@@ -92,7 +80,7 @@ class TestIncidentLifecycleE2E:
 
         # === Step 1: Submit incident via Portal ===
         submit_response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "E2E Lifecycle Test - Slip Hazard",
@@ -114,24 +102,31 @@ class TestIncidentLifecycleE2E:
         # === Step 2: Track the incident ===
         if tracking_code:
             track_response = client.get(
-                f"/api/portal/track/{reference}",
+                f"/api/v1/portal/reports/{reference}/",
                 params={"tracking_code": tracking_code},
             )
             assert track_response.status_code in [200, 404]
+            if track_response.status_code == 200:
+                track_data = track_response.json()
+                assert "reference_number" in track_data
 
         # === Step 3: Admin views incident list ===
         list_response = client.get(
-            "/api/incidents",
+            "/api/v1/incidents",
             headers=auth_headers,
         )
         assert list_response.status_code == 200
+        list_data = list_response.json()
+        assert isinstance(list_data, (list, dict))
 
         # === Step 4: Search for the incident ===
         search_response = client.get(
-            "/api/incidents?search=Slip Hazard",
+            "/api/v1/incidents?search=Slip Hazard",
             headers=auth_headers,
         )
         assert search_response.status_code == 200
+        search_data = search_response.json()
+        assert isinstance(search_data, (list, dict))
 
     def test_incident_with_investigation(self, client, auth_headers):
         """E2E: Incident with investigation workflow."""
@@ -140,7 +135,7 @@ class TestIncidentLifecycleE2E:
 
         # Create incident
         create_response = client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json={
                 "title": "E2E Investigation Test",
                 "description": "Incident requiring investigation.",
@@ -154,10 +149,13 @@ class TestIncidentLifecycleE2E:
         if create_response.status_code in [200, 201]:
             incident = create_response.json()
             incident_id = incident.get("id")
+            assert "id" in incident or "reference" in incident
 
             # List investigations
-            inv_response = client.get("/api/investigations", headers=auth_headers)
+            inv_response = client.get("/api/v1/investigations", headers=auth_headers)
             assert inv_response.status_code == 200
+            inv_data = inv_response.json()
+            assert isinstance(inv_data, (list, dict))
 
     def test_incident_filtering_and_export(self, client, auth_headers):
         """E2E: Filter incidents and export data."""
@@ -166,24 +164,30 @@ class TestIncidentLifecycleE2E:
 
         # Filter by severity
         high_response = client.get(
-            "/api/incidents?severity=high",
+            "/api/v1/incidents?severity=high",
             headers=auth_headers,
         )
         assert high_response.status_code == 200
+        high_data = high_response.json()
+        assert isinstance(high_data, (list, dict))
 
         # Filter by status
         open_response = client.get(
-            "/api/incidents?status=open",
+            "/api/v1/incidents?status=open",
             headers=auth_headers,
         )
         assert open_response.status_code == 200
+        open_data = open_response.json()
+        assert isinstance(open_data, (list, dict))
 
         # Filter by date range
         date_response = client.get(
-            f"/api/incidents?date_from={datetime.now().date().isoformat()}",
+            f"/api/v1/incidents?date_from={datetime.now().date().isoformat()}",
             headers=auth_headers,
         )
         assert date_response.status_code == 200
+        date_data = date_response.json()
+        assert isinstance(date_data, (list, dict))
 
 
 # ============================================================================
@@ -204,10 +208,12 @@ class TestAuditLifecycleE2E:
 
         # === Step 1: List templates ===
         templates_response = client.get(
-            "/api/audit-templates",
+            "/api/v1/audits/templates",
             headers=auth_headers,
         )
         assert templates_response.status_code == 200
+        templates_data = templates_response.json()
+        assert isinstance(templates_data, (list, dict))
 
         # === Step 2: Create new template ===
         template_data = {
@@ -226,26 +232,33 @@ class TestAuditLifecycleE2E:
         }
 
         create_template = client.post(
-            "/api/audit-templates",
+            "/api/v1/audits/templates",
             json=template_data,
             headers=auth_headers,
         )
-        # May or may not create based on implementation
+        # TODO: Remove 404 when endpoint is implemented
         assert create_template.status_code in [200, 201, 422, 404]
+        if create_template.status_code in [200, 201]:
+            ct_data = create_template.json()
+            assert "id" in ct_data or "reference" in ct_data
 
         # === Step 3: List scheduled audits ===
         runs_response = client.get(
-            "/api/audits/runs",
+            "/api/v1/audits/runs",
             headers=auth_headers,
         )
         assert runs_response.status_code == 200
+        runs_data = runs_response.json()
+        assert isinstance(runs_data, (list, dict))
 
         # === Step 4: List findings ===
         findings_response = client.get(
-            "/api/audits/findings",
+            "/api/v1/audits/findings",
             headers=auth_headers,
         )
         assert findings_response.status_code == 200
+        findings_data = findings_response.json()
+        assert isinstance(findings_data, (list, dict))
 
     def test_audit_findings_management(self, client, auth_headers):
         """E2E: Manage audit findings."""
@@ -253,15 +266,19 @@ class TestAuditLifecycleE2E:
             pytest.skip("Auth required")
 
         # List findings
-        response = client.get("/api/audits/findings", headers=auth_headers)
+        response = client.get("/api/v1/audits/findings", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
 
         # Filter by severity
         high_findings = client.get(
-            "/api/audits/findings?severity=major",
+            "/api/v1/audits/findings?severity=major",
             headers=auth_headers,
         )
         assert high_findings.status_code == 200
+        high_data = high_findings.json()
+        assert isinstance(high_data, (list, dict))
 
 
 # ============================================================================
@@ -281,8 +298,12 @@ class TestRiskManagementE2E:
             pytest.skip("Auth required")
 
         # === Step 1: List risks ===
-        list_response = client.get("/api/risks", headers=auth_headers)
+        list_response = client.get("/api/v1/risks", headers=auth_headers)
         assert list_response.status_code == 200
+        list_data = list_response.json()
+        assert isinstance(list_data, (list, dict))
+        if isinstance(list_data, dict):
+            assert "items" in list_data or "results" in list_data or "data" in list_data
 
         # === Step 2: Create risk ===
         risk_data = {
@@ -295,18 +316,28 @@ class TestRiskManagementE2E:
         }
 
         create_response = client.post(
-            "/api/risks",
+            "/api/v1/risks",
             json=risk_data,
             headers=auth_headers,
         )
         assert create_response.status_code in [200, 201, 422]
+        if create_response.status_code in [200, 201]:
+            created = create_response.json()
+            assert "id" in created or "reference" in created
+        elif create_response.status_code == 422:
+            err_data = create_response.json()
+            assert "detail" in err_data or "message" in err_data
 
         # === Step 3: View risk register heat map ===
         heatmap_response = client.get(
-            "/api/risk-register/heat-map",
+            "/api/v1/risk-register/heat-map",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert heatmap_response.status_code in [200, 404]
+        if heatmap_response.status_code == 200:
+            hm_data = heatmap_response.json()
+            assert isinstance(hm_data, dict)
 
     def test_risk_filtering_and_analysis(self, client, auth_headers):
         """E2E: Filter and analyze risks."""
@@ -315,17 +346,21 @@ class TestRiskManagementE2E:
 
         # Filter by category
         response = client.get(
-            "/api/risks?category=operational",
+            "/api/v1/risks?category=operational",
             headers=auth_headers,
         )
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
 
         # Get high risks
         high_response = client.get(
-            "/api/risks?min_score=15",
+            "/api/v1/risks?min_score=15",
             headers=auth_headers,
         )
         assert high_response.status_code == 200
+        high_data = high_response.json()
+        assert isinstance(high_data, (list, dict))
 
 
 # ============================================================================
@@ -345,22 +380,32 @@ class TestComplianceE2E:
             pytest.skip("Auth required")
 
         # === Step 1: List standards ===
-        standards_response = client.get("/api/standards", headers=auth_headers)
+        standards_response = client.get("/api/v1/standards", headers=auth_headers)
         assert standards_response.status_code == 200
+        standards_data = standards_response.json()
+        assert isinstance(standards_data, (list, dict))
 
         # === Step 2: Get compliance evidence ===
         evidence_response = client.get(
-            "/api/compliance/evidence",
+            "/api/v1/compliance/evidence",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert evidence_response.status_code in [200, 404]
+        if evidence_response.status_code == 200:
+            ev_data = evidence_response.json()
+            assert isinstance(ev_data, (list, dict))
 
         # === Step 3: Gap analysis ===
         gap_response = client.get(
-            "/api/compliance/gaps",
+            "/api/v1/compliance-automation/gap-analyses",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert gap_response.status_code in [200, 404]
+        if gap_response.status_code == 200:
+            gap_data = gap_response.json()
+            assert isinstance(gap_data, (list, dict))
 
     def test_multi_standard_compliance(self, client, auth_headers):
         """E2E: View compliance across multiple standards."""
@@ -371,10 +416,13 @@ class TestComplianceE2E:
 
         for standard in standards:
             response = client.get(
-                f"/api/standards/{standard}",
+                f"/api/v1/standards/{standard}",
                 headers=auth_headers,
             )
             assert response.status_code in [200, 404]
+            if response.status_code == 200:
+                data = response.json()
+                assert "id" in data or "code" in data or "name" in data
 
 
 # ============================================================================
@@ -394,12 +442,20 @@ class TestDocumentControlE2E:
             pytest.skip("Auth required")
 
         # List documents
-        response = client.get("/api/documents", headers=auth_headers)
+        response = client.get("/api/v1/documents", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
         # List policies
-        policies_response = client.get("/api/policies", headers=auth_headers)
+        policies_response = client.get("/api/v1/policies", headers=auth_headers)
         assert policies_response.status_code == 200
+        policies_data = policies_response.json()
+        assert isinstance(policies_data, (list, dict))
+        if isinstance(policies_data, dict):
+            assert "items" in policies_data or "results" in policies_data or "data" in policies_data
 
     def test_policy_workflow(self, client, auth_headers):
         """E2E: Policy creation and approval."""
@@ -415,11 +471,15 @@ class TestDocumentControlE2E:
         }
 
         create_response = client.post(
-            "/api/policies",
+            "/api/v1/policies",
             json=policy_data,
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert create_response.status_code in [200, 201, 422, 404]
+        if create_response.status_code in [200, 201]:
+            created = create_response.json()
+            assert "id" in created or "reference" in created
 
 
 # ============================================================================
@@ -440,17 +500,25 @@ class TestWorkflowAutomationE2E:
 
         # List templates
         templates_response = client.get(
-            "/api/workflows/templates",
+            "/api/v1/workflows/templates",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert templates_response.status_code in [200, 404]
+        if templates_response.status_code == 200:
+            templates_data = templates_response.json()
+            assert isinstance(templates_data, (list, dict))
 
         # List instances
         instances_response = client.get(
-            "/api/workflows/instances",
+            "/api/v1/workflows/instances",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert instances_response.status_code in [200, 404]
+        if instances_response.status_code == 200:
+            instances_data = instances_response.json()
+            assert isinstance(instances_data, (list, dict))
 
     def test_approval_workflow(self, client, auth_headers):
         """E2E: Approval workflow."""
@@ -459,10 +527,14 @@ class TestWorkflowAutomationE2E:
 
         # Get pending approvals
         response = client.get(
-            "/api/workflows/approvals/pending",
+            "/api/v1/workflows/approvals/pending",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, (list, dict))
 
 
 # ============================================================================
@@ -482,8 +554,12 @@ class TestIMSDashboardE2E:
             pytest.skip("Auth required")
 
         # Get standards
-        response = client.get("/api/standards", headers=auth_headers)
+        response = client.get("/api/v1/standards", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_cross_standard_mapping(self, client, auth_headers):
         """E2E: Cross-standard mapping."""
@@ -491,8 +567,12 @@ class TestIMSDashboardE2E:
             pytest.skip("Auth required")
 
         # This would test clause mappings across standards
-        response = client.get("/api/standards/cross-mapping", headers=auth_headers)
+        response = client.get("/api/v1/standards/cross-mapping", headers=auth_headers)
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, (list, dict))
 
 
 # ============================================================================
@@ -513,17 +593,25 @@ class TestAnalyticsE2E:
 
         # Summary
         summary_response = client.get(
-            "/api/analytics/summary",
+            "/api/v1/analytics/summary",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert summary_response.status_code in [200, 404]
+        if summary_response.status_code == 200:
+            summary_data = summary_response.json()
+            assert isinstance(summary_data, dict)
 
         # Trends
         trends_response = client.get(
-            "/api/analytics/trends",
+            "/api/v1/analytics/trends",
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert trends_response.status_code in [200, 404]
+        if trends_response.status_code == 200:
+            trends_data = trends_response.json()
+            assert isinstance(trends_data, dict)
 
     def test_report_generation(self, client, auth_headers):
         """E2E: Report generation."""
@@ -539,11 +627,16 @@ class TestAnalyticsE2E:
         }
 
         response = client.post(
-            "/api/analytics/reports/generate",
+            "/api/v1/analytics/reports/generate",
             json=report_request,
             headers=auth_headers,
         )
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 201, 404, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert isinstance(data, dict)
+            assert "id" in data or "report_id" in data or "status" in data
 
 
 # ============================================================================
@@ -561,12 +654,14 @@ class TestNewEmployeeJourneyE2E:
         """E2E: New employee uses portal for first time."""
 
         # === Step 1: View portal stats ===
-        stats_response = client.get("/api/portal/stats")
+        stats_response = client.get("/api/v1/portal/stats")
         assert stats_response.status_code == 200
+        stats_data = stats_response.json()
+        assert isinstance(stats_data, dict)
 
         # === Step 2: Submit first incident ===
         incident_response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "New Employee Test - First Report",
@@ -581,20 +676,28 @@ class TestNewEmployeeJourneyE2E:
         assert incident_response.status_code in [200, 201]
 
         data = incident_response.json()
+        assert "reference_number" in data
         reference = data.get("reference_number")
         tracking = data.get("tracking_code")
 
         # === Step 3: Track the report ===
         if reference and tracking:
             track_response = client.get(
-                f"/api/portal/track/{reference}",
+                f"/api/v1/portal/reports/{reference}/",
                 params={"tracking_code": tracking},
             )
             assert track_response.status_code in [200, 404]
+            if track_response.status_code == 200:
+                track_data = track_response.json()
+                assert "reference_number" in track_data
 
         # === Step 4: Access help ===
-        help_response = client.get("/api/portal/help")
+        help_response = client.get("/api/v1/portal/help")
+        # TODO: Remove 404 when endpoint is implemented
         assert help_response.status_code in [200, 404]
+        if help_response.status_code == 200:
+            help_data = help_response.json()
+            assert isinstance(help_data, (list, dict))
 
 
 # ============================================================================
@@ -615,28 +718,36 @@ class TestSafetyManagerJourneyE2E:
 
         # === Step 1: Check dashboard ===
         incidents_response = client.get(
-            "/api/incidents?page=1&per_page=10",
+            "/api/v1/incidents?page=1&per_page=10",
             headers=auth_headers,
         )
         assert incidents_response.status_code == 200
+        incidents_data = incidents_response.json()
+        assert isinstance(incidents_data, (list, dict))
 
         # === Step 2: Review open incidents ===
         open_response = client.get(
-            "/api/incidents?status=open",
+            "/api/v1/incidents?status=open",
             headers=auth_headers,
         )
         assert open_response.status_code == 200
+        open_data = open_response.json()
+        assert isinstance(open_data, (list, dict))
 
         # === Step 3: Check upcoming audits ===
         audits_response = client.get(
-            "/api/audits/runs?status=scheduled",
+            "/api/v1/audits/runs?status=scheduled",
             headers=auth_headers,
         )
         assert audits_response.status_code == 200
+        audits_data = audits_response.json()
+        assert isinstance(audits_data, (list, dict))
 
         # === Step 4: Review risks ===
-        risks_response = client.get("/api/risks", headers=auth_headers)
+        risks_response = client.get("/api/v1/risks", headers=auth_headers)
         assert risks_response.status_code == 200
+        risks_data = risks_response.json()
+        assert isinstance(risks_data, (list, dict))
 
 
 # ============================================================================
@@ -652,22 +763,28 @@ class TestEdgeCasesE2E:
         large_description = "This is a detailed description. " * 500
 
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Large Description Test",
-                "description": large_description[:10000],  # Limit to 10k chars
+                "description": large_description[:10000],
                 "severity": "low",
             },
         )
         assert response.status_code in [200, 201, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert "reference_number" in data
+        elif response.status_code == 422:
+            data = response.json()
+            assert "detail" in data or "message" in data
 
     def test_special_characters_handling(self, client):
         """E2E: Handle special characters."""
         special_title = "Test with émojis 🚨 and spëcial çharacters"
 
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": special_title,
@@ -676,6 +793,8 @@ class TestEdgeCasesE2E:
             },
         )
         assert response.status_code in [200, 201]
+        data = response.json()
+        assert "reference_number" in data
 
     def test_concurrent_requests(self, client, auth_headers):
         """E2E: Handle concurrent requests."""
@@ -685,7 +804,7 @@ class TestEdgeCasesE2E:
         # Make multiple rapid requests
         responses = []
         for _ in range(5):
-            response = client.get("/api/incidents?page=1&per_page=5", headers=auth_headers)
+            response = client.get("/api/v1/incidents?page=1&per_page=5", headers=auth_headers)
             responses.append(response.status_code)
 
         # All should succeed
@@ -706,16 +825,18 @@ class TestE2ESummary:
             pytest.skip("Auth required")
 
         critical_endpoints = [
-            "/api/incidents",
-            "/api/audits/runs",
-            "/api/audits/findings",
-            "/api/risks",
-            "/api/standards",
-            "/api/documents",
-            "/api/policies",
-            "/api/users/me",
+            "/api/v1/incidents",
+            "/api/v1/audits/runs",
+            "/api/v1/audits/findings",
+            "/api/v1/risks",
+            "/api/v1/standards",
+            "/api/v1/documents",
+            "/api/v1/policies",
+            "/api/v1/users/me",
         ]
 
         for endpoint in critical_endpoints:
             response = client.get(endpoint, headers=auth_headers)
             assert response.status_code == 200, f"Failed: {endpoint}"
+            data = response.json()
+            assert isinstance(data, (list, dict)), f"Invalid response type for {endpoint}"

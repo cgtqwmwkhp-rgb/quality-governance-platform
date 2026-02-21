@@ -275,7 +275,7 @@ class AuditLogService:
 
         stmt = stmt.order_by(desc(AuditLogEntry.timestamp)).offset(offset).limit(limit)
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_entity_history(
         self,
@@ -293,7 +293,7 @@ class AuditLogService:
             )
             .order_by(AuditLogEntry.timestamp)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_user_activity(
         self,
@@ -416,7 +416,7 @@ class AuditLogService:
             .order_by(desc(AuditLogVerification.verified_at))
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Export
@@ -510,7 +510,7 @@ class AuditLogService:
                 AuditLogEntry.timestamp >= date_from,
             )
         )
-        total = result.scalar()
+        total: int = result.scalar() or 0
 
         # By action
         result = await self.db.execute(
@@ -521,7 +521,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.action)
         )
-        by_action = dict(result.all())
+        by_action: dict[str, int] = dict(result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         # By entity type
         result = await self.db.execute(
@@ -532,7 +532,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.entity_type)
         )
-        by_entity = dict(result.all())
+        by_entity: dict[str, int] = dict(result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         # Most active users
         result = await self.db.execute(
@@ -546,7 +546,7 @@ class AuditLogService:
             .order_by(desc(func.count(AuditLogEntry.id)))
             .limit(10)
         )
-        top_users = result.all()
+        top_users: list[Any] = list(result.all())
 
         return {
             "total_entries": total,

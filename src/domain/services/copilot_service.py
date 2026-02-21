@@ -260,9 +260,9 @@ class CopilotService:
             .order_by(CopilotMessage.created_at)
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def close_session(self, session_id: int) -> CopilotSession:
+    async def close_session(self, session_id: int) -> Optional[CopilotSession]:
         """Close a session."""
         session = await self.get_session(session_id)
         if session:
@@ -645,7 +645,7 @@ class CopilotService:
         stmt = stmt.limit(limit)
 
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def add_knowledge(
         self,

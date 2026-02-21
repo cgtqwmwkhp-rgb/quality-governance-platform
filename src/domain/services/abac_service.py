@@ -168,7 +168,7 @@ class ABACService:
                 ),
             )
         )
-        field_perms = result.scalars().all()
+        field_perms = list(result.scalars().all())
 
         user_roles = set(subject.get("roles", []))
 
@@ -275,7 +275,7 @@ class ABACService:
             stmt = stmt.where(or_(ABACPolicy.tenant_id == tenant_id, ABACPolicy.tenant_id == None))
 
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Role Management
@@ -375,7 +375,7 @@ class ABACService:
                 ),
             )
         )
-        policies = result.scalars().all()
+        policies = list(result.scalars().all())
 
         self._policy_cache[cache_key] = policies
         return policies
@@ -429,7 +429,9 @@ class ABACService:
                     # Handle variable substitution
                     if isinstance(value, str) and value.startswith("$subject."):
                         if subject_context:
-                            value = subject_context.get(value[9:])  # Skip "$subject."
+                            value = subject_context.get(
+                                value[9:]
+                            )  # Skip "$subject."  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
 
                     if not self._compare(actual, op, value):
                         return False

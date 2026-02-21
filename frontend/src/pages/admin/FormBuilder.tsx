@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Plus,
@@ -14,39 +14,39 @@ import {
   Check,
   Loader2,
   HelpCircle,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Textarea } from '../../components/ui/Textarea';
-import { cn } from '../../helpers/utils';
-import { useToast, ToastContainer } from '../../components/ui/Toast';
-import { formTemplatesApi } from '../../api/client';
+} from "lucide-react";
+import { Card } from "../../components/ui/Card";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { cn } from "../../helpers/utils";
+import { useToast, ToastContainer } from "../../components/ui/Toast";
+import { formTemplatesApi } from "../../api/client";
 
 // Field type definitions
 const FIELD_TYPES = [
-  { value: 'text', label: 'Text Input', icon: '📝' },
-  { value: 'textarea', label: 'Long Text', icon: '📄' },
-  { value: 'number', label: 'Number', icon: '🔢' },
-  { value: 'email', label: 'Email', icon: '📧' },
-  { value: 'phone', label: 'Phone', icon: '📞' },
-  { value: 'date', label: 'Date', icon: '📅' },
-  { value: 'time', label: 'Time', icon: '⏰' },
-  { value: 'datetime', label: 'Date & Time', icon: '📆' },
-  { value: 'select', label: 'Dropdown', icon: '🔽' },
-  { value: 'multi_select', label: 'Multi-Select', icon: '☑️' },
-  { value: 'radio', label: 'Radio Buttons', icon: '🔘' },
-  { value: 'checkbox', label: 'Checkboxes', icon: '✅' },
-  { value: 'toggle', label: 'Yes/No Toggle', icon: '🔀' },
-  { value: 'file', label: 'File Upload', icon: '📎' },
-  { value: 'image', label: 'Image Upload', icon: '🖼️' },
-  { value: 'signature', label: 'Signature', icon: '✍️' },
-  { value: 'location', label: 'Location/GPS', icon: '📍' },
-  { value: 'body_map', label: 'Body Injury Map', icon: '🧍' },
-  { value: 'rating', label: 'Star Rating', icon: '⭐' },
-  { value: 'heading', label: 'Section Heading', icon: '📌' },
-  { value: 'paragraph', label: 'Info Text', icon: 'ℹ️' },
-  { value: 'divider', label: 'Divider Line', icon: '➖' },
+  { value: "text", label: "Text Input", icon: "📝" },
+  { value: "textarea", label: "Long Text", icon: "📄" },
+  { value: "number", label: "Number", icon: "🔢" },
+  { value: "email", label: "Email", icon: "📧" },
+  { value: "phone", label: "Phone", icon: "📞" },
+  { value: "date", label: "Date", icon: "📅" },
+  { value: "time", label: "Time", icon: "⏰" },
+  { value: "datetime", label: "Date & Time", icon: "📆" },
+  { value: "select", label: "Dropdown", icon: "🔽" },
+  { value: "multi_select", label: "Multi-Select", icon: "☑️" },
+  { value: "radio", label: "Radio Buttons", icon: "🔘" },
+  { value: "checkbox", label: "Checkboxes", icon: "✅" },
+  { value: "toggle", label: "Yes/No Toggle", icon: "🔀" },
+  { value: "file", label: "File Upload", icon: "📎" },
+  { value: "image", label: "Image Upload", icon: "🖼️" },
+  { value: "signature", label: "Signature", icon: "✍️" },
+  { value: "location", label: "Location/GPS", icon: "📍" },
+  { value: "body_map", label: "Body Injury Map", icon: "🧍" },
+  { value: "rating", label: "Star Rating", icon: "⭐" },
+  { value: "heading", label: "Section Heading", icon: "📌" },
+  { value: "paragraph", label: "Info Text", icon: "ℹ️" },
+  { value: "divider", label: "Divider Line", icon: "➖" },
 ];
 
 interface FormField {
@@ -97,22 +97,22 @@ export default function FormBuilder() {
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
   const [template, setTemplate] = useState<FormTemplate>({
-    name: '',
-    slug: '',
-    description: '',
-    form_type: 'incident',
+    name: "",
+    slug: "",
+    description: "",
+    form_type: "incident",
     allow_drafts: true,
     allow_attachments: true,
     require_signature: false,
     auto_assign_reference: true,
-    reference_prefix: 'INC',
+    reference_prefix: "INC",
     notify_on_submit: true,
-    notification_emails: '',
+    notification_emails: "",
     steps: [
       {
-        id: 'step-1',
-        name: 'Step 1',
-        description: '',
+        id: "step-1",
+        name: "Step 1",
+        description: "",
         order: 0,
         fields: [],
         isExpanded: true,
@@ -122,7 +122,7 @@ export default function FormBuilder() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showFieldPalette, setShowFieldPalette] = useState(false);
-  const [selectedStepId, setSelectedStepId] = useState<string | null>('step-1');
+  const [selectedStepId, setSelectedStepId] = useState<string | null>("step-1");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -135,10 +135,10 @@ export default function FormBuilder() {
           if (data) {
             setTemplate({
               id: data.id,
-              name: data.name || '',
-              slug: data.slug || '',
-              description: data.description || '',
-              form_type: data.form_type || 'incident',
+              name: data.name || "",
+              slug: data.slug || "",
+              description: data.description || "",
+              form_type: data.form_type || "incident",
               icon: data.icon,
               color: data.color,
               allow_drafts: data.allow_drafts ?? true,
@@ -147,32 +147,38 @@ export default function FormBuilder() {
               auto_assign_reference: data.auto_assign_reference ?? true,
               reference_prefix: data.reference_prefix,
               notify_on_submit: data.notify_on_submit ?? true,
-              notification_emails: String((data as unknown as Record<string, unknown>)['notification_emails'] || ''),
+              notification_emails: String(
+                (data as unknown as Record<string, unknown>)[
+                  "notification_emails"
+                ] || "",
+              ),
               steps: (data.steps || []).map((s, i: number) => ({
                 id: s.id ? String(s.id) : `step-${i}`,
                 name: s.name || `Step ${i + 1}`,
-                description: s.description || '',
+                description: s.description || "",
                 order: s.order ?? i,
                 icon: s.icon,
                 fields: (s.fields || []).map((f) => ({
-                  id: f.id ? String(f.id) : `field-${Date.now()}-${Math.random()}`,
-                  name: f.name || '',
-                  label: f.label || '',
-                  field_type: f.field_type || 'text',
+                  id: f.id
+                    ? String(f.id)
+                    : `field-${Date.now()}-${Math.random()}`,
+                  name: f.name || "",
+                  label: f.label || "",
+                  field_type: f.field_type || "text",
                   order: f.order ?? 0,
                   placeholder: f.placeholder,
                   help_text: f.help_text,
                   is_required: f.is_required ?? false,
                   options: f.options,
-                  width: f.width || 'full',
+                  width: f.width || "full",
                 })),
                 isExpanded: i === 0,
               })),
             });
           }
         } catch (err) {
-          console.error('Failed to load template', err);
-          showToast('Failed to load template', 'error');
+          console.error("Failed to load template", err);
+          showToast("Failed to load template", "error");
         }
       })();
     }
@@ -181,8 +187,8 @@ export default function FormBuilder() {
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
   };
 
   const handleNameChange = (name: string) => {
@@ -197,7 +203,7 @@ export default function FormBuilder() {
     const newStep: FormStep = {
       id: `step-${Date.now()}`,
       name: `Step ${template.steps.length + 1}`,
-      description: '',
+      description: "",
       order: template.steps.length,
       fields: [],
       isExpanded: true,
@@ -221,7 +227,7 @@ export default function FormBuilder() {
     setTemplate((prev) => ({
       ...prev,
       steps: prev.steps.map((s) =>
-        s.id === stepId ? { ...s, isExpanded: !s.isExpanded } : s
+        s.id === stepId ? { ...s, isExpanded: !s.isExpanded } : s,
       ),
     }));
   };
@@ -229,7 +235,9 @@ export default function FormBuilder() {
   const updateStep = (stepId: string, updates: Partial<FormStep>) => {
     setTemplate((prev) => ({
       ...prev,
-      steps: prev.steps.map((s) => (s.id === stepId ? { ...s, ...updates } : s)),
+      steps: prev.steps.map((s) =>
+        s.id === stepId ? { ...s, ...updates } : s,
+      ),
     }));
   };
 
@@ -241,11 +249,11 @@ export default function FormBuilder() {
     const newField: FormField = {
       id: `field-${Date.now()}`,
       name: `field_${step.fields.length + 1}`,
-      label: fieldDef?.label || 'New Field',
+      label: fieldDef?.label || "New Field",
       field_type: fieldType,
       order: step.fields.length,
       is_required: false,
-      width: 'full',
+      width: "full",
     };
 
     updateStep(stepId, {
@@ -254,12 +262,18 @@ export default function FormBuilder() {
     setShowFieldPalette(false);
   };
 
-  const updateField = (stepId: string, fieldId: string, updates: Partial<FormField>) => {
+  const updateField = (
+    stepId: string,
+    fieldId: string,
+    updates: Partial<FormField>,
+  ) => {
     const step = template.steps.find((s) => s.id === stepId);
     if (!step) return;
 
     updateStep(stepId, {
-      fields: step.fields.map((f) => (f.id === fieldId ? { ...f, ...updates } : f)),
+      fields: step.fields.map((f) =>
+        f.id === fieldId ? { ...f, ...updates } : f,
+      ),
     });
   };
 
@@ -308,14 +322,14 @@ export default function FormBuilder() {
         await formTemplatesApi.update(template.id, payload);
       } else {
         const created = await formTemplatesApi.create(payload);
-        setTemplate(prev => ({ ...prev, id: created.id }));
+        setTemplate((prev) => ({ ...prev, id: created.id }));
       }
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err) {
-      console.error('Failed to save template', err);
-      showToast('Failed to save template', 'error');
+      console.error("Failed to save template", err);
+      showToast("Failed to save template", "error");
     } finally {
       setIsSaving(false);
     }
@@ -328,14 +342,14 @@ export default function FormBuilder() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate('/admin/forms')}
+              onClick={() => navigate("/admin/forms")}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
             >
               <ArrowLeft className="w-5 h-5 text-foreground" />
             </button>
             <div>
               <h1 className="text-lg font-bold text-foreground">
-                {isEditing ? 'Edit Form' : 'Create New Form'}
+                {isEditing ? "Edit Form" : "Create New Form"}
               </h1>
               <p className="text-sm text-muted-foreground">
                 Design your form with drag-and-drop fields
@@ -344,7 +358,10 @@ export default function FormBuilder() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => setShowSettings(!showSettings)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowSettings(!showSettings)}
+            >
               <Settings className="w-4 h-4 mr-2" />
               Settings
             </Button>
@@ -360,7 +377,7 @@ export default function FormBuilder() {
               ) : (
                 <Save className="w-4 h-4 mr-2" />
               )}
-              {saveSuccess ? 'Saved!' : 'Save Form'}
+              {saveSuccess ? "Saved!" : "Save Form"}
             </Button>
           </div>
         </div>
@@ -372,7 +389,9 @@ export default function FormBuilder() {
           <div className="lg:col-span-2 space-y-6">
             {/* Form Details */}
             <Card className="p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Form Details</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">
+                Form Details
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
@@ -391,7 +410,10 @@ export default function FormBuilder() {
                   <select
                     value={template.form_type}
                     onChange={(e) =>
-                      setTemplate((prev) => ({ ...prev, form_type: e.target.value }))
+                      setTemplate((prev) => ({
+                        ...prev,
+                        form_type: e.target.value,
+                      }))
                     }
                     className="w-full px-3 py-2 bg-card border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   >
@@ -408,9 +430,12 @@ export default function FormBuilder() {
                     Description
                   </label>
                   <Textarea
-                    value={template.description || ''}
+                    value={template.description || ""}
                     onChange={(e) =>
-                      setTemplate((prev) => ({ ...prev, description: e.target.value }))
+                      setTemplate((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
                     }
                     placeholder="Describe what this form is used for..."
                     rows={2}
@@ -422,7 +447,9 @@ export default function FormBuilder() {
             {/* Steps */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-foreground">Form Steps</h2>
+                <h2 className="text-lg font-semibold text-foreground">
+                  Form Steps
+                </h2>
                 <Button variant="outline" size="sm" onClick={addStep}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Step
@@ -434,8 +461,10 @@ export default function FormBuilder() {
                   {/* Step Header */}
                   <div
                     className={cn(
-                      'flex items-center justify-between p-4 cursor-pointer',
-                      selectedStepId === step.id ? 'bg-primary/5' : 'bg-surface'
+                      "flex items-center justify-between p-4 cursor-pointer",
+                      selectedStepId === step.id
+                        ? "bg-primary/5"
+                        : "bg-surface",
                     )}
                     onClick={() => {
                       setSelectedStepId(step.id);
@@ -490,7 +519,9 @@ export default function FormBuilder() {
                         <div className="text-center py-8 text-muted-foreground">
                           <HelpCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
                           <p>No fields yet</p>
-                          <p className="text-sm">Click "Add Field" to start building</p>
+                          <p className="text-sm">
+                            Click "Add Field" to start building
+                          </p>
                         </div>
                       ) : (
                         step.fields.map((field) => (
@@ -503,7 +534,9 @@ export default function FormBuilder() {
                               <Input
                                 value={field.label}
                                 onChange={(e) =>
-                                  updateField(step.id, field.id, { label: e.target.value })
+                                  updateField(step.id, field.id, {
+                                    label: e.target.value,
+                                  })
                                 }
                                 placeholder="Field Label"
                                 className="text-sm"
@@ -511,7 +544,9 @@ export default function FormBuilder() {
                               <select
                                 value={field.field_type}
                                 onChange={(e) =>
-                                  updateField(step.id, field.id, { field_type: e.target.value })
+                                  updateField(step.id, field.id, {
+                                    field_type: e.target.value,
+                                  })
                                 }
                                 className="px-3 py-2 bg-card border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                               >
@@ -576,7 +611,9 @@ export default function FormBuilder() {
                                   className="flex items-center gap-2 p-2 text-sm text-left hover:bg-surface rounded-lg transition-colors"
                                 >
                                   <span>{ft.icon}</span>
-                                  <span className="text-foreground">{ft.label}</span>
+                                  <span className="text-foreground">
+                                    {ft.label}
+                                  </span>
                                 </button>
                               ))}
                             </div>
@@ -593,14 +630,16 @@ export default function FormBuilder() {
           {/* Settings Panel */}
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">Form Settings</h3>
+              <h3 className="font-semibold text-foreground mb-4">
+                Form Settings
+              </h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Reference Prefix
                   </label>
                   <Input
-                    value={template.reference_prefix || ''}
+                    value={template.reference_prefix || ""}
                     onChange={(e) =>
                       setTemplate((prev) => ({
                         ...prev,
@@ -611,25 +650,33 @@ export default function FormBuilder() {
                     maxLength={10}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    References will be: {template.reference_prefix || 'REF'}-2026-0001
+                    References will be: {template.reference_prefix || "REF"}
+                    -2026-0001
                   </p>
                 </div>
 
                 <div className="space-y-3">
                   <label className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Allow Draft Saving</span>
+                    <span className="text-sm text-foreground">
+                      Allow Draft Saving
+                    </span>
                     <input
                       type="checkbox"
                       checked={template.allow_drafts}
                       onChange={(e) =>
-                        setTemplate((prev) => ({ ...prev, allow_drafts: e.target.checked }))
+                        setTemplate((prev) => ({
+                          ...prev,
+                          allow_drafts: e.target.checked,
+                        }))
                       }
                       className="rounded border-border"
                     />
                   </label>
 
                   <label className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Allow Attachments</span>
+                    <span className="text-sm text-foreground">
+                      Allow Attachments
+                    </span>
                     <input
                       type="checkbox"
                       checked={template.allow_attachments}
@@ -644,7 +691,9 @@ export default function FormBuilder() {
                   </label>
 
                   <label className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Require Signature</span>
+                    <span className="text-sm text-foreground">
+                      Require Signature
+                    </span>
                     <input
                       type="checkbox"
                       checked={template.require_signature}
@@ -659,7 +708,9 @@ export default function FormBuilder() {
                   </label>
 
                   <label className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Notify on Submit</span>
+                    <span className="text-sm text-foreground">
+                      Notify on Submit
+                    </span>
                     <input
                       type="checkbox"
                       checked={template.notify_on_submit}
@@ -680,7 +731,7 @@ export default function FormBuilder() {
                       Notification Emails
                     </label>
                     <Input
-                      value={template.notification_emails || ''}
+                      value={template.notification_emails || ""}
                       onChange={(e) =>
                         setTemplate((prev) => ({
                           ...prev,
@@ -698,13 +749,18 @@ export default function FormBuilder() {
             </Card>
 
             <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">Quick Actions</h3>
+              <h3 className="font-semibold text-foreground mb-4">
+                Quick Actions
+              </h3>
               <div className="space-y-2">
                 <Button variant="outline" className="w-full justify-start">
                   <Copy className="w-4 h-4 mr-2" />
                   Duplicate Form
                 </Button>
-                <Button variant="outline" className="w-full justify-start text-destructive hover:bg-destructive/10">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-destructive hover:bg-destructive/10"
+                >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete Form
                 </Button>

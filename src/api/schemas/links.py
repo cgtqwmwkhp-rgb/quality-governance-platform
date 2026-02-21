@@ -29,18 +29,33 @@ def build_resource_links(request_url: str, resource_type: str, resource_id: int 
 def build_collection_links(
     resource_type: str,
     page: int,
-    per_page: int,
+    page_size: int,
     total_pages: int,
 ) -> dict:
     """Build HATEOAS links for a paginated collection."""
     base = f"/api/v1/{resource_type}"
     links = {
-        "self": {"href": f"{base}?page={page}&per_page={per_page}", "method": "GET"},
+        "self": {
+            "href": f"{base}?page={page}&page_size={page_size}",
+            "method": "GET",
+        },
     }
     if page > 1:
-        links["prev"] = {"href": f"{base}?page={page - 1}&per_page={per_page}", "method": "GET"}
+        links["prev"] = {
+            "href": f"{base}?page={page - 1}&page_size={page_size}",
+            "method": "GET",
+        }
     if page < total_pages:
-        links["next"] = {"href": f"{base}?page={page + 1}&per_page={per_page}", "method": "GET"}
-    links["first"] = {"href": f"{base}?page=1&per_page={per_page}", "method": "GET"}
-    links["last"] = {"href": f"{base}?page={total_pages}&per_page={per_page}", "method": "GET"}
+        links["next"] = {
+            "href": f"{base}?page={page + 1}&page_size={page_size}",
+            "method": "GET",
+        }
+    links["first"] = {
+        "href": f"{base}?page=1&page_size={page_size}",
+        "method": "GET",
+    }
+    links["last"] = {
+        "href": f"{base}?page={total_pages}&page_size={page_size}",
+        "method": "GET",
+    }
     return links

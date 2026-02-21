@@ -301,6 +301,7 @@ class AuditTemplateDetailResponse(AuditTemplateResponse):
     sections: List[AuditSectionResponse] = []
     question_count: int = 0
     section_count: int = 0
+    links: Optional[dict] = None
 
 
 class AuditTemplateListResponse(BaseModel):
@@ -311,6 +312,7 @@ class AuditTemplateListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    links: Optional[dict] = None
 
 
 # ============== Audit Run Schemas ==============
@@ -393,6 +395,7 @@ class AuditRunDetailResponse(AuditRunResponse):
     responses: List["AuditResponseResponse"] = []
     findings: List["AuditFindingResponse"] = []
     completion_percentage: float = 0.0
+    links: Optional[dict] = None
 
 
 class AuditRunListResponse(BaseModel):
@@ -403,6 +406,7 @@ class AuditRunListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    links: Optional[dict] = None
 
 
 # ============== Audit Response Schemas ==============
@@ -550,6 +554,7 @@ class AuditFindingListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    links: Optional[dict] = None
 
 
 class PurgeExpiredTemplatesResponse(BaseModel):

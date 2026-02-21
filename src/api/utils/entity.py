@@ -1,6 +1,6 @@
 """Shared entity lookup utilities for API routes."""
 
-from typing import Type, TypeVar
+from typing import Any, Type, TypeVar
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -22,9 +22,10 @@ async def get_or_404(
     ``model.tenant_id`` so rows belonging to other tenants are
     treated as not-found.
     """
-    stmt = select(model).where(model.id == entity_id)
+    model_any: Any = model
+    stmt = select(model).where(model_any.id == entity_id)
     if tenant_id is not None:
-        stmt = stmt.where(model.tenant_id == tenant_id)
+        stmt = stmt.where(model_any.tenant_id == tenant_id)
     result = await db.execute(stmt)
     entity = result.scalar_one_or_none()
     if entity is None:

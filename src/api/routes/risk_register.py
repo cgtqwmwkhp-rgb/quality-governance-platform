@@ -10,13 +10,13 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
@@ -50,6 +50,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
+from src.domain.models.user import User
 from src.domain.services.risk_register_service import RiskRegisterService
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -217,7 +218,7 @@ async def list_risks(
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> dict[str, Any]:
     """Create a new risk"""
     _span = tracer.start_span("create_risk") if tracer else None
@@ -243,7 +244,7 @@ async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
     risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
@@ -261,7 +262,7 @@ async def assess_risk(
     risk_id: int,
     assessment: RiskAssessmentUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> dict[str, Any]:
     """Update risk assessment scores"""
     await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
@@ -378,7 +379,7 @@ async def add_bow_tie_element(
     risk_id: int,
     element: BowTieElementCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> dict[str, Any]:
     """Add element to bow-tie diagram"""
     await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
@@ -442,7 +443,7 @@ async def get_kri_dashboard(
 async def create_kri(
     kri_data: KRICreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
     await get_or_404(db, EnterpriseRisk, kri_data.risk_id, tenant_id=current_user.tenant_id)
@@ -462,7 +463,7 @@ async def update_kri_value(
     kri_id: int,
     value_update: KRIValueUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> dict[str, Any]:
     """Update KRI value"""
     service = KRIService(db)
@@ -523,7 +524,7 @@ async def list_controls(
 async def create_control(
     control_data: ControlCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> dict[str, Any]:
     """Create a risk control"""
     count = await db.scalar(select(func.count()).select_from(EnterpriseRiskControl)) or 0
@@ -549,7 +550,7 @@ async def link_control_to_risk(
     risk_id: int,
     control_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
     reduces_likelihood: bool = True,
     reduces_impact: bool = False,
 ) -> dict[str, Any]:
@@ -635,25 +636,27 @@ async def get_risk(
     """Get detailed risk information"""
     risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
-    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
-    control_mappings = result.scalars().all()
+    mapping_result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
+    control_mappings = mapping_result.scalars().all()
     control_ids = [m.control_id for m in control_mappings]
     if control_ids:
-        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
-        controls = result.scalars().all()
+        ctrl_result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
+        controls = ctrl_result.scalars().all()
     else:
         controls = []
 
-    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
-    kris = result.scalars().all()
+    kri_result = await db.execute(
+        select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id)
+    )
+    kris = kri_result.scalars().all()
 
-    result = await db.execute(
+    hist_result = await db.execute(
         select(RiskAssessmentHistory)
         .where(RiskAssessmentHistory.risk_id == risk_id)
         .order_by(RiskAssessmentHistory.assessment_date.desc())
         .limit(10)
     )
-    history = result.scalars().all()
+    history = hist_result.scalars().all()
 
     return {
         "id": risk.id,

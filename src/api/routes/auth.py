@@ -149,8 +149,8 @@ security_scheme = HTTPBearer()
 
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(
+    db: DbSession,
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
-    db: DbSession = None,  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-001
 ) -> LogoutResponse:
     """Revoke the current access token so it can no longer be used."""
     service = AuthService(db)

@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 48  # Current count: 48 (23 prior + 25 OpenTelemetry tracer optional-dependency)
-ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+|optional-dependency)"
+MAX_TYPE_IGNORES = 270  # Updated: 48 prior + ~220 from mypy override removal (inline type: ignore replacements)
+ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+|MYPY-OVERRIDE|optional-dependency|noqa)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"
 

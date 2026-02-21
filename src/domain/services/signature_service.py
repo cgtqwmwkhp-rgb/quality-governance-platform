@@ -271,7 +271,7 @@ class SignatureService:
                 )
             )
             pending_before = result.scalar_one()
-            if pending_before > 0:
+            if pending_before > 0:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
                 raise ValueError("Waiting for previous signers")
 
         now = datetime.now(timezone.utc)
@@ -286,7 +286,7 @@ class SignatureService:
         signer.auth_method = auth_method
 
         signature_hash = hashlib.sha256(
-            f"{signature_data}{request.document_hash}{now.isoformat()}".encode()
+            f"{signature_data}{request.document_hash or ''}{now.isoformat()}".encode()
         ).hexdigest()
 
         signature = Signature(
@@ -387,7 +387,7 @@ class SignatureService:
                 SignatureRequestSigner.signer_role.in_(["signer", "approver"]),
             )
         )
-        required_signers = result.scalars().all()
+        required_signers = list(result.scalars().all())
 
         signed_count = sum(1 for s in required_signers if s.status == "signed")
 
@@ -506,7 +506,7 @@ class SignatureService:
 
         stmt = stmt.order_by(SignatureRequest.created_at.desc())
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_completed_requests(
         self,
@@ -523,7 +523,7 @@ class SignatureService:
             .order_by(SignatureRequest.completed_at.desc())
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_audit_log(self, request_id: int) -> list[SignatureAuditLog]:
         """Get audit log for a signature request."""
@@ -532,7 +532,7 @@ class SignatureService:
             .where(SignatureAuditLog.request_id == request_id)
             .order_by(SignatureAuditLog.created_at)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Reminders
@@ -551,12 +551,12 @@ class SignatureService:
                 SignatureRequest.reminder_frequency > 0,
             )
         )
-        requests = result.scalars().all()
+        requests = list(result.scalars().all())
 
         for request in requests:
             if request.last_reminder_at:
                 days_since = (now - request.last_reminder_at).days
-                if days_since < request.reminder_frequency:
+                if days_since < request.reminder_frequency:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
                     continue
             else:
                 days_since_created = (now - request.created_at).days
@@ -592,7 +592,7 @@ class SignatureService:
                 SignatureRequest.expires_at < now,
             )
         )
-        expired = result.scalars().all()
+        expired = list(result.scalars().all())
 
         for request in expired:
             request.status = "expired"
