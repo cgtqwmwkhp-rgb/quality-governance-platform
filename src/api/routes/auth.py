@@ -42,6 +42,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency

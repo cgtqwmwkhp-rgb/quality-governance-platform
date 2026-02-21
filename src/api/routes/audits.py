@@ -64,6 +64,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -273,10 +274,7 @@ async def update_template(
         safe_data["standard_ids_json"] = raw["standard_ids"]
 
     # Track which fields actually changed (for the audit event)
-    changed_fields = [
-        field for field, value in safe_data.items()
-        if getattr(template, field, None) != value
-    ]
+    changed_fields = [field for field, value in safe_data.items() if getattr(template, field, None) != value]
 
     # Apply allowed-field updates
     apply_updates(template, template_data, exclude=_exclude | {"standard_ids_json"})

@@ -60,6 +60,7 @@ class BroadcastResponse(BaseModel):
 
 class BroadcastMessageRequest(BaseModel):
     """Broadcast message payload"""
+
     message_type: str = "info"
     title: Optional[str] = None
     content: str

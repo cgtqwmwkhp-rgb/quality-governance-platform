@@ -57,6 +57,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -370,7 +371,9 @@ async def get_bow_tie(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
 
 
-@router.post("/{risk_id}/bowtie/elements", response_model=BowTieElementCreatedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{risk_id}/bowtie/elements", response_model=BowTieElementCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_bow_tie_element(
     risk_id: int,
     element: BowTieElementCreate,
@@ -539,7 +542,9 @@ async def create_control(
     return {"id": control.id, "reference": reference, "message": "Control created"}
 
 
-@router.post("/{risk_id}/controls/{control_id}", response_model=ControlLinkedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{risk_id}/controls/{control_id}", response_model=ControlLinkedResponse, status_code=status.HTTP_201_CREATED
+)
 async def link_control_to_risk(
     risk_id: int,
     control_id: int,

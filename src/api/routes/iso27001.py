@@ -43,6 +43,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -348,7 +349,9 @@ async def list_controls(
             "partially_implemented": partial,
             "not_implemented": not_impl,
             "excluded": excluded,
-            "implementation_percentage": ISO27001Service.calculate_implementation_percentage(implemented, paginated.total, excluded),
+            "implementation_percentage": ISO27001Service.calculate_implementation_percentage(
+                implemented, paginated.total, excluded
+            ),
         },
         "controls": [
             {
@@ -422,7 +425,9 @@ async def get_current_soa(
             "applicable_controls": applicable,
             "excluded_controls": total - applicable,
             "implemented_controls": implemented,
-            "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(int(implemented), int(applicable)),
+            "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
+                int(implemented), int(applicable)
+            ),
         }
 
     return {
@@ -438,7 +443,9 @@ async def get_current_soa(
         "implemented_controls": soa.implemented_controls,
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
-        "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(int(soa.implemented_controls), int(soa.applicable_controls)),
+        "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
+            int(soa.implemented_controls), int(soa.applicable_controls)
+        ),
         "status": soa.status,
         "document_link": soa.document_link,
     }
@@ -814,7 +821,9 @@ async def get_isms_dashboard(
             "total": total_controls,
             "applicable": applicable_controls,
             "implemented": implemented_controls,
-            "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(implemented_controls, applicable_controls),
+            "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
+                implemented_controls, applicable_controls
+            ),
         },
         "risks": {
             "open": open_risks,
@@ -827,5 +836,7 @@ async def get_isms_dashboard(
         "suppliers": {
             "high_risk": high_risk_suppliers,
         },
-        "compliance_score": ISO27001Service.calculate_soa_compliance_percentage(implemented_controls, applicable_controls),
+        "compliance_score": ISO27001Service.calculate_soa_compliance_percentage(
+            implemented_controls, applicable_controls
+        ),
     }

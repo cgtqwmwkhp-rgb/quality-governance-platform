@@ -44,6 +44,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -348,8 +349,11 @@ async def get_document_summary(
     overdue_review = overdue_result.scalar_one()
 
     obsolete_result = await db.execute(
-        select(func.count()).select_from(ControlledDocument).where(
-            ControlledDocument.status == "obsolete", tenant_filter,
+        select(func.count())
+        .select_from(ControlledDocument)
+        .where(
+            ControlledDocument.status == "obsolete",
+            tenant_filter,
         )
     )
     obsolete = obsolete_result.scalar_one()

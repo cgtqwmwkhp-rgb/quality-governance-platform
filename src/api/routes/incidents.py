@@ -24,6 +24,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -184,7 +185,9 @@ async def list_incidents(
     logger = logging.getLogger(__name__)
 
     try:
-        query = select(Incident).options(selectinload(Incident.actions)).where(Incident.tenant_id == current_user.tenant_id)
+        query = (
+            select(Incident).options(selectinload(Incident.actions)).where(Incident.tenant_id == current_user.tenant_id)
+        )
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)

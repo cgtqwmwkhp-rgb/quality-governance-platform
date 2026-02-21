@@ -44,6 +44,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -63,7 +64,11 @@ async def list_form_templates(
     is_active: Optional[bool] = Query(None),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
-    query = select(FormTemplate).where(FormTemplate.tenant_id == current_user.tenant_id).options(selectinload(FormTemplate.steps))
+    query = (
+        select(FormTemplate)
+        .where(FormTemplate.tenant_id == current_user.tenant_id)
+        .options(selectinload(FormTemplate.steps))
+    )
 
     if form_type:
         query = query.where(FormTemplate.form_type == form_type)

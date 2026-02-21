@@ -11,7 +11,7 @@ class FiveWhysAnalysisResponse(BaseModel):
     status: str = "in_progress"
     iterations: list[dict[str, Any]] = []
     root_cause: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -23,7 +23,7 @@ class FishboneDiagramResponse(BaseModel):
     status: str = "in_progress"
     causes: list[dict[str, Any]] = []
     root_cause: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -34,7 +34,7 @@ class RCACAPAResponse(BaseModel):
     status: str
     investigation_id: Optional[int] = None
     due_date: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 

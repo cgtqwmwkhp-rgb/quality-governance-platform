@@ -27,6 +27,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -396,7 +397,9 @@ async def get_reporting_year(
 # ============ Emission Sources ============
 
 
-@router.post("/years/{year_id}/sources", response_model=EmissionSourceCreatedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/years/{year_id}/sources", response_model=EmissionSourceCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
@@ -407,7 +410,8 @@ async def add_emission_source(
     year = await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
     co2e_kg, co2e_tonnes, emission_factor = PlanetMarkService.calculate_co2e(
-        source_data.activity_value, source_data.activity_type,
+        source_data.activity_value,
+        source_data.activity_type,
     )
     dq_score = PlanetMarkService.get_data_quality_score(source_data.data_quality_level)
 
@@ -754,7 +758,9 @@ async def get_fleet_summary(
 # ============ Utility Integration ============
 
 
-@router.post("/years/{year_id}/utilities", response_model=UtilityReadingCreatedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/years/{year_id}/utilities", response_model=UtilityReadingCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,

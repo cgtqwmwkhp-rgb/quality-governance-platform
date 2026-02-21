@@ -86,11 +86,15 @@ async def list_near_misses(
 
     Ordered by event_date DESC, id ASC for deterministic results.
     """
-    query = select(NearMiss).where(NearMiss.tenant_id == current_user.tenant_id).options(
-        selectinload(NearMiss.assigned_to),
-        selectinload(NearMiss.created_by),
-        selectinload(NearMiss.updated_by),
-        selectinload(NearMiss.closed_by),
+    query = (
+        select(NearMiss)
+        .where(NearMiss.tenant_id == current_user.tenant_id)
+        .options(
+            selectinload(NearMiss.assigned_to),
+            selectinload(NearMiss.created_by),
+            selectinload(NearMiss.updated_by),
+            selectinload(NearMiss.closed_by),
+        )
     )
 
     if reporter_email:

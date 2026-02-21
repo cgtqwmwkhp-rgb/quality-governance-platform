@@ -22,7 +22,6 @@ from typing import Any
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Mock-based tests that run without database infrastructure
 # ---------------------------------------------------------------------------
@@ -34,12 +33,12 @@ class TestComplianceSchemaValidation:
     def test_compliance_schemas_importable(self) -> None:
         """Verify all compliance automation schemas can be imported."""
         from src.api.schemas.compliance_automation import (
+            CertificateListResponse,
+            ComplianceScoreResponse,
+            GapAnalysisListResponse,
+            RegulatoryUpdateResponse,
             RIDDORCheckRequest,
             RIDDORCheckResponse,
-            ComplianceScoreResponse,
-            CertificateListResponse,
-            RegulatoryUpdateResponse,
-            GapAnalysisListResponse,
         )
 
         assert RIDDORCheckRequest is not None

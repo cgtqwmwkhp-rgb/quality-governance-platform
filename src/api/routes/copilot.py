@@ -25,6 +25,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -483,6 +484,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
         return
     try:
         from src.core.security import decode_token, is_token_revoked
+
         payload = decode_token(token)
         if not payload:
             await websocket.close(code=4001, reason="Invalid token")

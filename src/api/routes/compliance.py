@@ -25,6 +25,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -167,7 +168,9 @@ class StandardInfo(BaseModel):
 # ============================================================================
 
 
-async def _load_evidence_links(db, tenant_id: int | None = None, standard: Optional[ISOStandard] = None) -> list[EvidenceLink]:
+async def _load_evidence_links(
+    db, tenant_id: int | None = None, standard: Optional[ISOStandard] = None
+) -> list[EvidenceLink]:
     """Query all active evidence links from the database and convert to
     the EvidenceLink dataclass used by the ISOComplianceService."""
     query = select(ComplianceEvidenceLink).where(

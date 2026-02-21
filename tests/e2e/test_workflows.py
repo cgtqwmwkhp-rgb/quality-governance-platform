@@ -23,7 +23,6 @@ from typing import Any
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Mock-based tests that run without database infrastructure
 # ---------------------------------------------------------------------------
@@ -35,11 +34,11 @@ class TestWorkflowSchemaValidation:
     def test_workflow_schemas_importable(self) -> None:
         """Verify all workflow response schemas are importable."""
         from src.api.schemas.workflows import (
-            ListTemplatesResponse,
-            StartWorkflowResponse,
+            BulkApproveResponse,
             GetInstanceResponse,
             ListInstancesResponse,
-            BulkApproveResponse,
+            ListTemplatesResponse,
+            StartWorkflowResponse,
         )
 
         assert ListTemplatesResponse is not None

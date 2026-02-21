@@ -36,6 +36,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -302,7 +303,9 @@ async def update_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Update a risk control."""
-    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id)
+    control = await get_or_404(
+        db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id
+    )
     await get_or_404(db, Risk, control.risk_id, "Risk not found", tenant_id=current_user.tenant_id)
 
     update_data = control_data.model_dump(exclude_unset=True)
@@ -328,7 +331,9 @@ async def delete_control(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk control."""
-    control = await get_or_404(db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id)
+    control = await get_or_404(
+        db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id
+    )
     await get_or_404(db, Risk, control.risk_id, "Risk not found", tenant_id=current_user.tenant_id)
 
     control.is_active = False

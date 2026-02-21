@@ -137,7 +137,12 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "incident"
     if not source_type or source_type == "incident":
-        incident_query = select(IncidentAction).join(Incident).where(Incident.tenant_id == current_user.tenant_id).options(selectinload(IncidentAction.incident))
+        incident_query = (
+            select(IncidentAction)
+            .join(Incident)
+            .where(Incident.tenant_id == current_user.tenant_id)
+            .options(selectinload(IncidentAction.incident))
+        )
         if status_filter:
             incident_query = incident_query.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
@@ -149,7 +154,9 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "rta"
     if not source_type or source_type == "rta":
-        rta_query = select(RTAAction).where(RTAAction.tenant_id == current_user.tenant_id).options(selectinload(RTAAction.rta))
+        rta_query = (
+            select(RTAAction).where(RTAAction.tenant_id == current_user.tenant_id).options(selectinload(RTAAction.rta))
+        )
         if status_filter:
             rta_query = rta_query.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
@@ -161,7 +168,12 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "complaint"
     if not source_type or source_type == "complaint":
-        complaint_query = select(ComplaintAction).join(Complaint).where(Complaint.tenant_id == current_user.tenant_id).options(selectinload(ComplaintAction.complaint))
+        complaint_query = (
+            select(ComplaintAction)
+            .join(Complaint)
+            .where(Complaint.tenant_id == current_user.tenant_id)
+            .options(selectinload(ComplaintAction.complaint))
+        )
         if status_filter:
             complaint_query = complaint_query.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
@@ -174,7 +186,12 @@ async def list_actions(
     # Only query if source_type not specified or matches "investigation"
     # This fixes the "Cannot add action" defect by including investigation actions
     if not source_type or source_type == "investigation":
-        investigation_query = select(InvestigationAction).join(InvestigationRun).where(InvestigationRun.tenant_id == current_user.tenant_id).options(selectinload(InvestigationAction.investigation))
+        investigation_query = (
+            select(InvestigationAction)
+            .join(InvestigationRun)
+            .where(InvestigationRun.tenant_id == current_user.tenant_id)
+            .options(selectinload(InvestigationAction.investigation))
+        )
         if status_filter:
             investigation_query = investigation_query.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:

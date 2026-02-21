@@ -24,9 +24,7 @@ class RiskRegisterService:
         tenant_filter = EnterpriseRisk.tenant_id == tenant_id
         not_closed = EnterpriseRisk.status != "closed"
 
-        total_risks = await db.scalar(
-            select(func.count()).select_from(EnterpriseRisk).where(tenant_filter, not_closed)
-        )
+        total_risks = await db.scalar(select(func.count()).select_from(EnterpriseRisk).where(tenant_filter, not_closed))
         critical_risks = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)

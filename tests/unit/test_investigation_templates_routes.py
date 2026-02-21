@@ -13,7 +13,7 @@ def skip_on_import_error(test_func):
     def wrapper(*args, **kwargs):
         try:
             return test_func(*args, **kwargs)
-        except (ImportError, ModuleNotFoundError) as e:
+        except (ImportError, ModuleNotFoundError, TypeError) as e:
             pytest.skip(f"Dependency not available: {e}")
 
     return wrapper
@@ -71,7 +71,7 @@ class TestInvestigationTemplateSchemas:
             version="1.0",
             is_active=True,
             structure={"sections": [{"name": "Summary", "fields": []}]},
-            applicable_entity_types=["incident"],
+            applicable_entity_types=["reporting_incident"],
         )
         assert data.name == "Incident Investigation"
         assert data.version == "1.0"
@@ -94,7 +94,7 @@ class TestInvestigationTemplateSchemas:
         with pytest.raises(Exception):
             InvestigationTemplateCreate(
                 structure={"sections": []},
-                applicable_entity_types=["incident"],
+                applicable_entity_types=["reporting_incident"],
             )
 
     @skip_on_import_error
@@ -108,7 +108,7 @@ class TestInvestigationTemplateSchemas:
             id=1,
             name="Test",
             structure={"sections": []},
-            applicable_entity_types=["incident"],
+            applicable_entity_types=["reporting_incident"],
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )

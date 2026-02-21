@@ -16,6 +16,7 @@ class ReviewUpdateResponse(BaseModel):
     update_id: int
     reviewed: bool
     requires_action: bool
+
     class Config:
         from_attributes = True
 
@@ -24,6 +25,7 @@ class GapAnalysisResponse(BaseModel):
     id: int
     status: Optional[str] = None
     gaps: list[dict] = []
+
     class Config:
         from_attributes = True
 
@@ -68,6 +70,7 @@ class ComplianceScoreResponse(BaseModel):
     scope_type: str
     scope_id: Optional[str] = None
     breakdown: dict = {}
+
     class Config:
         from_attributes = True
 
@@ -108,6 +111,7 @@ class RIDDORSubmitResponse(BaseModel):
     submission_id: Optional[int] = None
     status: str
     submitted_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 

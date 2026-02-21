@@ -36,6 +36,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -194,11 +195,15 @@ async def list_investigations(
     request_id = "N/A"  # TODO: Get from request context
 
     # Build query
-    query = select(InvestigationRun).options(
-        selectinload(InvestigationRun.template),
-        selectinload(InvestigationRun.comments),
-        selectinload(InvestigationRun.actions),
-    ).where(InvestigationRun.tenant_id == current_user.tenant_id)
+    query = (
+        select(InvestigationRun)
+        .options(
+            selectinload(InvestigationRun.template),
+            selectinload(InvestigationRun.comments),
+            selectinload(InvestigationRun.actions),
+        )
+        .where(InvestigationRun.tenant_id == current_user.tenant_id)
+    )
 
     # Apply filters
     if entity_type is not None:

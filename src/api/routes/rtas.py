@@ -33,6 +33,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -133,10 +134,10 @@ async def list_rtas(
         )
 
     try:
-        query = select(RoadTrafficCollision).options(
-            selectinload(RoadTrafficCollision.actions)
-        ).where(
-            RoadTrafficCollision.tenant_id == current_user.tenant_id
+        query = (
+            select(RoadTrafficCollision)
+            .options(selectinload(RoadTrafficCollision.actions))
+            .where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
         )
 
         if severity:
@@ -298,9 +299,7 @@ async def list_rta_actions(
     await get_or_404(db, RoadTrafficCollision, rta_id, tenant_id=current_user.tenant_id)
 
     query = (
-        select(RTAAction)
-        .where(RTAAction.rta_id == rta_id)
-        .order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
+        select(RTAAction).where(RTAAction.rta_id == rta_id).order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
     )
 
     paginated = await paginate(db, query, params)

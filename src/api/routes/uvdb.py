@@ -546,8 +546,10 @@ async def list_audits(
     company_name: Optional[str] = Query(None),
 ) -> dict[str, Any]:
     """List UVDB audits"""
-    stmt = select(UVDBAudit).options(selectinload(UVDBAudit.responses)).where(
-        UVDBAudit.tenant_id == current_user.tenant_id
+    stmt = (
+        select(UVDBAudit)
+        .options(selectinload(UVDBAudit.responses))
+        .where(UVDBAudit.tenant_id == current_user.tenant_id)
     )
 
     if status:
@@ -665,7 +667,9 @@ async def update_audit(
 # ============ Audit Responses ============
 
 
-@router.post("/audits/{audit_id}/responses", response_model=CreateAuditResponseResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/audits/{audit_id}/responses", response_model=CreateAuditResponseResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,

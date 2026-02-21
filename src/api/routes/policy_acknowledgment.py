@@ -39,6 +39,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
+
     tracer = trace.get_tracer(__name__)
 except ImportError:
     tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
@@ -81,7 +82,9 @@ async def get_acknowledgment_requirement(
     current_user: CurrentUser,
 ):
     """Get an acknowledgment requirement."""
-    requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail=ErrorCode.ENTITY_NOT_FOUND)
+    requirement = await get_or_404(
+        db, PolicyAcknowledgmentRequirement, requirement_id, detail=ErrorCode.ENTITY_NOT_FOUND
+    )
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 

@@ -188,7 +188,11 @@ async def calculate_competence_score(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/certifications", status_code=status.HTTP_201_CREATED, response_model=CertificationCreateResponse)
+@router.post(
+    "/profiles/{user_id}/certifications",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CertificationCreateResponse,
+)
 async def add_certification(
     user_id: int,
     request: AddCertificationRequest,

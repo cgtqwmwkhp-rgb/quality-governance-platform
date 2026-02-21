@@ -64,7 +64,11 @@ async def list_workflow_rules(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflow rules with optional filtering."""
-    query = select(WorkflowRule).options(selectinload(WorkflowRule.executions)).where(WorkflowRule.tenant_id == current_user.tenant_id)
+    query = (
+        select(WorkflowRule)
+        .options(selectinload(WorkflowRule.executions))
+        .where(WorkflowRule.tenant_id == current_user.tenant_id)
+    )
 
     filters = []
     if entity_type:
@@ -154,11 +158,7 @@ async def get_rule_executions(
     """Get execution history for a workflow rule."""
     await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
 
-    query = (
-        select(RuleExecution)
-        .where(RuleExecution.rule_id == rule_id)
-        .order_by(RuleExecution.executed_at.desc())
-    )
+    query = select(RuleExecution).where(RuleExecution.rule_id == rule_id).order_by(RuleExecution.executed_at.desc())
 
     return await paginate(db, query, params)
 
