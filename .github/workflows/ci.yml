@@ -338,7 +338,7 @@ jobs:
       - name: Security linting with Bandit (BLOCKING on High severity)
         run: |
           echo "=== Bandit: Security Linting (BLOCKING on High) ==="
-          bandit -r src/ -ll --severity-level high -f screen
+          bandit -r src/ -ll -f screen
           echo ""
           echo "[OK] Bandit passed: No High severity issues found"
 
