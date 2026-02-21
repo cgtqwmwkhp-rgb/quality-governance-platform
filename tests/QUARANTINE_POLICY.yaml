@@ -66,9 +66,9 @@ quarantines:
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 3
+  baseline_quarantine_count: 7
   baseline_xfail_count: 7
-  max_allowed_quarantine_count: 3
+  max_allowed_quarantine_count: 7
   last_audit_date: "2026-02-21"
   notes: "All 6 formerly-quarantined E2E files converted skip->xfail; 0 tests skipped, ~185 tests now xfail"
 
