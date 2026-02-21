@@ -16,12 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
-from src.api.schemas.error_codes import ErrorCode
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
-
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
     BowTieResponse,
@@ -32,14 +28,19 @@ from src.api.schemas.risk_register import (
     HeatMapResponse,
     KRICreatedResponse,
     KRIValueUpdatedResponse,
-    RiskAssessmentResponse as RiskAssessmentResultResponse,
-    RiskCreatedResponse,
-    RiskDetailResponse as RiskDetailResponseSchema,
+)
+from src.api.schemas.risk_register import RiskAssessmentResponse as RiskAssessmentResultResponse
+from src.api.schemas.risk_register import RiskCreatedResponse
+from src.api.schemas.risk_register import RiskDetailResponse as RiskDetailResponseSchema
+from src.api.schemas.risk_register import (
     RiskListResponse,
     RiskMatrixConfigResponse,
     RiskSummaryResponse,
     RiskUpdatedResponse,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
