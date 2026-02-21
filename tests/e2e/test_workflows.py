@@ -114,7 +114,7 @@ class TestWorkflowTemplates:
 
     def test_list_workflow_templates(self, auth_client: Any) -> None:
         """Test listing available workflow templates."""
-        response = auth_client.get("/api/workflows/templates")
+        response = auth_client.get("/api/v1/workflows/templates")
         assert response.status_code == 200
 
         data = response.json()
@@ -132,7 +132,7 @@ class TestWorkflowTemplates:
 
     def test_get_workflow_template_details(self, auth_client: Any) -> None:
         """Test getting detailed template information."""
-        response = auth_client.get("/api/workflows/templates/RIDDOR")
+        response = auth_client.get("/api/v1/workflows/templates/RIDDOR")
         assert response.status_code == 200
 
         template = response.json()
@@ -144,7 +144,7 @@ class TestWorkflowTemplates:
 
     def test_get_nonexistent_template(self, auth_client: Any) -> None:
         """Test getting a template that doesn't exist."""
-        response = auth_client.get("/api/workflows/templates/NONEXISTENT")
+        response = auth_client.get("/api/v1/workflows/templates/NONEXISTENT")
         assert response.status_code == 404
 
 
@@ -163,7 +163,7 @@ class TestWorkflowInstances:
             "priority": "high",
         }
 
-        response = auth_client.post("/api/workflows/start", json=payload)
+        response = auth_client.post("/api/v1/workflows/start", json=payload)
         assert response.status_code == 200
 
         instance = response.json()
@@ -178,12 +178,12 @@ class TestWorkflowInstances:
         """Test starting workflow with invalid template."""
         payload = {"template_code": "INVALID", "entity_type": "action", "entity_id": "ACT-TEST-002"}
 
-        response = auth_client.post("/api/workflows/start", json=payload)
+        response = auth_client.post("/api/v1/workflows/start", json=payload)
         assert response.status_code == 400
 
     def test_list_workflow_instances(self, auth_client: Any) -> None:
         """Test listing workflow instances."""
-        response = auth_client.get("/api/workflows/instances")
+        response = auth_client.get("/api/v1/workflows/instances")
         assert response.status_code == 200
 
         data = response.json()
@@ -192,7 +192,7 @@ class TestWorkflowInstances:
 
     def test_filter_workflow_instances_by_status(self, auth_client: Any) -> None:
         """Test filtering workflows by status."""
-        response = auth_client.get("/api/workflows/instances?status=in_progress")
+        response = auth_client.get("/api/v1/workflows/instances?status=in_progress")
         assert response.status_code == 200
 
         data = response.json()
@@ -201,7 +201,7 @@ class TestWorkflowInstances:
 
     def test_get_workflow_instance_details(self, auth_client: Any) -> None:
         """Test getting workflow instance details."""
-        response = auth_client.get("/api/workflows/instances/WF-20260119001")
+        response = auth_client.get("/api/v1/workflows/instances/WF-20260119001")
         assert response.status_code == 200
 
         instance = response.json()
@@ -217,7 +217,7 @@ class TestApprovals:
 
     def test_get_pending_approvals(self, auth_client: Any) -> None:
         """Test getting pending approvals for current user."""
-        response = auth_client.get("/api/workflows/approvals/pending")
+        response = auth_client.get("/api/v1/workflows/approvals/pending")
         assert response.status_code == 200
 
         data = response.json()
@@ -228,7 +228,7 @@ class TestApprovals:
         """Test approving a request."""
         payload = {"notes": "Approved after review"}
 
-        response = auth_client.post("/api/workflows/approvals/APR-001/approve", json=payload)
+        response = auth_client.post("/api/v1/workflows/approvals/APR-001/approve", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -239,14 +239,14 @@ class TestApprovals:
         """Test that rejection requires a reason."""
         payload = {"notes": "Some notes but no reason"}
 
-        response = auth_client.post("/api/workflows/approvals/APR-002/reject", json=payload)
+        response = auth_client.post("/api/v1/workflows/approvals/APR-002/reject", json=payload)
         assert response.status_code == 400
 
     def test_reject_request_with_reason(self, auth_client: Any) -> None:
         """Test rejecting a request with valid reason."""
         payload = {"reason": "Insufficient documentation provided"}
 
-        response = auth_client.post("/api/workflows/approvals/APR-002/reject", json=payload)
+        response = auth_client.post("/api/v1/workflows/approvals/APR-002/reject", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -256,7 +256,7 @@ class TestApprovals:
         """Test bulk approval of multiple requests."""
         payload = {"approval_ids": ["APR-001", "APR-002", "APR-003"], "notes": "Bulk approved after batch review"}
 
-        response = auth_client.post("/api/workflows/approvals/bulk-approve", json=payload)
+        response = auth_client.post("/api/v1/workflows/approvals/bulk-approve", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -271,7 +271,7 @@ class TestDelegation:
 
     def test_get_delegations(self, auth_client: Any) -> None:
         """Test getting current delegations."""
-        response = auth_client.get("/api/workflows/delegations")
+        response = auth_client.get("/api/v1/workflows/delegations")
         assert response.status_code == 200
 
         data = response.json()
@@ -286,7 +286,7 @@ class TestDelegation:
             "reason": "Annual leave",
         }
 
-        response = auth_client.post("/api/workflows/delegations", json=payload)
+        response = auth_client.post("/api/v1/workflows/delegations", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -296,7 +296,7 @@ class TestDelegation:
 
     def test_cancel_delegation(self, auth_client: Any) -> None:
         """Test cancelling a delegation."""
-        response = auth_client.delete("/api/workflows/delegations/DEL-001")
+        response = auth_client.delete("/api/v1/workflows/delegations/DEL-001")
         assert response.status_code == 200
 
         result = response.json()
@@ -310,7 +310,7 @@ class TestEscalation:
 
     def test_get_pending_escalations(self, auth_client: Any) -> None:
         """Test getting workflows pending escalation."""
-        response = auth_client.get("/api/workflows/escalations/pending")
+        response = auth_client.get("/api/v1/workflows/escalations/pending")
         assert response.status_code == 200
 
         data = response.json()
@@ -320,7 +320,7 @@ class TestEscalation:
         """Test escalating a workflow."""
         payload = {"escalate_to": 10, "reason": "SLA breach - requires immediate attention", "new_priority": "critical"}
 
-        response = auth_client.post("/api/workflows/instances/WF-001/escalate", json=payload)
+        response = auth_client.post("/api/v1/workflows/instances/WF-001/escalate", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -334,7 +334,7 @@ class TestWorkflowStats:
 
     def test_get_workflow_stats(self, auth_client: Any) -> None:
         """Test getting workflow statistics."""
-        response = auth_client.get("/api/workflows/stats")
+        response = auth_client.get("/api/v1/workflows/stats")
         assert response.status_code == 200
 
         stats = response.json()

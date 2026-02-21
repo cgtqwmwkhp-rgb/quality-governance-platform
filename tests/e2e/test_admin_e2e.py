@@ -20,7 +20,7 @@ def client():
 def auth_headers(client):
     """Get authenticated headers."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={"username": "admin@plantexpand.com", "password": "adminpassword123"},
     )
     if response.status_code == 200:
@@ -37,17 +37,24 @@ class TestDashboard:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        # Load incidents
-        response = client.get("/api/incidents?page=1&per_page=5", headers=auth_headers)
+        response = client.get("/api/v1/incidents?page=1&per_page=5", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_dashboard_stats(self, client, auth_headers):
         """Dashboard statistics should load."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/analytics/summary", headers=auth_headers)
+        response = client.get("/api/v1/analytics/summary", headers=auth_headers)
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, dict)
 
 
 class TestIncidentManagement:
@@ -58,7 +65,7 @@ class TestIncidentManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/incidents", headers=auth_headers)
+        response = client.get("/api/v1/incidents", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data or isinstance(data, list)
@@ -69,7 +76,7 @@ class TestIncidentManagement:
             pytest.skip("Authentication required")
 
         response = client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json={
                 "title": "Admin Created Incident",
                 "description": "Incident created by admin for E2E testing.",
@@ -80,6 +87,12 @@ class TestIncidentManagement:
             headers=auth_headers,
         )
         assert response.status_code in [200, 201, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert "id" in data or "reference" in data
+        elif response.status_code == 422:
+            data = response.json()
+            assert "detail" in data or "message" in data
 
     def test_filter_incidents(self, client, auth_headers):
         """Filter incidents by various criteria."""
@@ -87,19 +100,23 @@ class TestIncidentManagement:
             pytest.skip("Authentication required")
 
         # By status
-        response = client.get("/api/incidents?status=open", headers=auth_headers)
+        response = client.get("/api/v1/incidents?status=open", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
 
         # By severity
-        response = client.get("/api/incidents?severity=high", headers=auth_headers)
+        response = client.get("/api/v1/incidents?severity=high", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
 
     def test_incident_pagination(self, client, auth_headers):
         """Test incident list pagination."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/incidents?page=1&per_page=10", headers=auth_headers)
+        response = client.get("/api/v1/incidents?page=1&per_page=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data or isinstance(data, list)
@@ -113,24 +130,36 @@ class TestAuditManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/audit-templates", headers=auth_headers)
+        response = client.get("/api/v1/audits/templates", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_list_audit_runs(self, client, auth_headers):
         """List audit runs."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/audits/runs", headers=auth_headers)
+        response = client.get("/api/v1/audits/runs", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_list_audit_findings(self, client, auth_headers):
         """List audit findings."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/audits/findings", headers=auth_headers)
+        response = client.get("/api/v1/audits/findings", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
 
 class TestRiskManagement:
@@ -141,8 +170,12 @@ class TestRiskManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/risks", headers=auth_headers)
+        response = client.get("/api/v1/risks", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_create_risk(self, client, auth_headers):
         """Create new risk."""
@@ -150,7 +183,7 @@ class TestRiskManagement:
             pytest.skip("Authentication required")
 
         response = client.post(
-            "/api/risks",
+            "/api/v1/risks",
             json={
                 "title": "E2E Test Risk",
                 "description": "Risk created for E2E testing.",
@@ -161,6 +194,12 @@ class TestRiskManagement:
             headers=auth_headers,
         )
         assert response.status_code in [200, 201, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert "id" in data or "reference" in data
+        elif response.status_code == 422:
+            data = response.json()
+            assert "detail" in data or "message" in data
 
 
 class TestCompliance:
@@ -171,16 +210,26 @@ class TestCompliance:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/standards", headers=auth_headers)
+        response = client.get("/api/v1/standards", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_compliance_evidence(self, client, auth_headers):
         """Get compliance evidence."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/compliance/evidence", headers=auth_headers)
+        response = client.get("/api/v1/compliance/evidence", headers=auth_headers)
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, (list, dict))
+            if isinstance(data, dict):
+                assert "items" in data or "results" in data or "data" in data
 
 
 class TestUserManagement:
@@ -191,16 +240,23 @@ class TestUserManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/users/me", headers=auth_headers)
+        response = client.get("/api/v1/users/me", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert "id" in data
 
     def test_list_users(self, client, auth_headers):
         """List all users (admin only)."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/users", headers=auth_headers)
+        response = client.get("/api/v1/users", headers=auth_headers)
         assert response.status_code in [200, 403]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, (list, dict))
+            if isinstance(data, dict):
+                assert "items" in data or "results" in data or "data" in data
 
 
 class TestDocumentManagement:
@@ -211,16 +267,24 @@ class TestDocumentManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/documents", headers=auth_headers)
+        response = client.get("/api/v1/documents", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
     def test_list_policies(self, client, auth_headers):
         """List policies."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/policies", headers=auth_headers)
+        response = client.get("/api/v1/policies", headers=auth_headers)
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, (list, dict))
+        if isinstance(data, dict):
+            assert "items" in data or "results" in data or "data" in data
 
 
 class TestNotifications:
@@ -231,8 +295,14 @@ class TestNotifications:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/notifications", headers=auth_headers)
+        response = client.get("/api/v1/notifications", headers=auth_headers)
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, (list, dict))
+            if isinstance(data, dict):
+                assert "items" in data or "results" in data or "data" in data
 
 
 class TestAnalytics:
@@ -243,13 +313,21 @@ class TestAnalytics:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/analytics/summary", headers=auth_headers)
+        response = client.get("/api/v1/analytics/summary", headers=auth_headers)
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, dict)
 
     def test_analytics_trends(self, client, auth_headers):
         """Get trend data."""
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/analytics/trends", headers=auth_headers)
+        response = client.get("/api/v1/analytics/trends", headers=auth_headers)
+        # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, dict)

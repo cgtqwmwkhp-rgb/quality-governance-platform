@@ -2,21 +2,10 @@
 End-to-End Tests for Employee Portal
 
 Comprehensive E2E coverage for all portal user journeys.
-
-QUARANTINE STATUS: All tests in this file are quarantined.
-See tests/smoke/QUARANTINE_POLICY.md for details.
-
-Quarantine Date: 2026-01-21
-Expiry Date: 2026-03-23
-Issue: GOVPLAT-002
-Reason: Test expects /api/portal/report but actual endpoint is /api/portal/reports/.
-        API contract mismatch between tests and implementation.
 """
 
 import pytest
 from fastapi.testclient import TestClient
-
-pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
 
 @pytest.fixture
@@ -33,13 +22,15 @@ class TestPortalAuthentication:
     def test_portal_login_page_accessible(self, client):
         """Portal login page should be accessible."""
         # Frontend route - API should not 404
-        response = client.get("/api/portal/stats")
+        response = client.get("/api/v1/portal/stats")
         assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
 
     def test_portal_sso_redirect(self, client):
         """SSO should redirect to Azure AD."""
-        response = client.get("/api/auth/sso/portal", follow_redirects=False)
-        # May be 307 redirect or 404 if not configured
+        response = client.get("/api/v1/auth/sso/portal", follow_redirects=False)
+        # TODO: Remove 404 when SSO endpoint is implemented
         assert response.status_code in [307, 302, 404, 422]
 
 
@@ -49,7 +40,7 @@ class TestIncidentReporting:
     def test_submit_incident_minimal_fields(self, client):
         """Submit incident with minimal required fields."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Test Incident - Minimal",
@@ -64,7 +55,7 @@ class TestIncidentReporting:
     def test_submit_incident_all_fields(self, client):
         """Submit incident with all fields populated."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Test Incident - Full Details",
@@ -86,7 +77,7 @@ class TestIncidentReporting:
     def test_submit_anonymous_incident(self, client):
         """Submit anonymous incident."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Anonymous Safety Report",
@@ -96,18 +87,22 @@ class TestIncidentReporting:
             },
         )
         assert response.status_code in [200, 201]
+        data = response.json()
+        assert "reference_number" in data
 
     def test_incident_validation_errors(self, client):
         """Submit incident with validation errors."""
         # Missing required fields
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "X",  # Too short
             },
         )
         assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data or "message" in data
 
 
 class TestNearMissReporting:
@@ -116,7 +111,7 @@ class TestNearMissReporting:
     def test_submit_near_miss(self, client):
         """Submit near miss report."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "near_miss",
                 "title": "Near Miss - Forklift",
@@ -127,6 +122,9 @@ class TestNearMissReporting:
         )
         # May be accepted as incident if near_miss type not distinct
         assert response.status_code in [200, 201, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert "reference_number" in data
 
 
 class TestComplaintReporting:
@@ -135,7 +133,7 @@ class TestComplaintReporting:
     def test_submit_complaint(self, client):
         """Submit customer complaint."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "complaint",
                 "title": "Delivery Delay Complaint",
@@ -144,6 +142,8 @@ class TestComplaintReporting:
             },
         )
         assert response.status_code in [200, 201]
+        data = response.json()
+        assert "reference_number" in data
 
 
 class TestRTAReporting:
@@ -152,7 +152,7 @@ class TestRTAReporting:
     def test_submit_rta_report(self, client):
         """Submit RTA report."""
         response = client.post(
-            "/api/portal/rta",
+            "/api/v1/portal/rta",
             json={
                 "vehicle_registration": "PLT-001",
                 "driver_name": "John Doe",
@@ -163,8 +163,11 @@ class TestRTAReporting:
                 "injuries": False,
             },
         )
-        # May not be implemented yet
+        # TODO: Remove 404 when RTA endpoint is implemented
         assert response.status_code in [200, 201, 404, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert "id" in data or "reference" in data or "reference_number" in data
 
 
 class TestReportTracking:
@@ -174,7 +177,7 @@ class TestReportTracking:
         """Track a submitted report."""
         # First submit a report
         submit_response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Tracking Test Incident",
@@ -191,24 +194,29 @@ class TestReportTracking:
             if reference and tracking_code:
                 # Track the report
                 track_response = client.get(
-                    f"/api/portal/track/{reference}",
+                    f"/api/v1/portal/reports/{reference}/",
                     params={"tracking_code": tracking_code},
                 )
                 assert track_response.status_code in [200, 404]
+                if track_response.status_code == 200:
+                    track_data = track_response.json()
+                    assert "reference_number" in track_data
 
     def test_track_invalid_reference(self, client):
         """Track with invalid reference number."""
         response = client.get(
-            "/api/portal/track/INVALID-REF-001",
+            "/api/v1/portal/reports/INVALID-REF-001/",
             params={"tracking_code": "invalidcode"},
         )
         assert response.status_code == 404
+        data = response.json()
+        assert "detail" in data or "message" in data
 
     def test_track_wrong_tracking_code(self, client):
         """Track with wrong tracking code."""
         # Submit a report first
         submit_response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Wrong Code Test",
@@ -224,7 +232,7 @@ class TestReportTracking:
             if reference:
                 # Try with wrong tracking code
                 track_response = client.get(
-                    f"/api/portal/track/{reference}",
+                    f"/api/v1/portal/reports/{reference}/",
                     params={"tracking_code": "wrongcode"},
                 )
                 assert track_response.status_code in [403, 404]
@@ -235,7 +243,7 @@ class TestPortalStats:
 
     def test_get_portal_stats(self, client):
         """Get portal statistics."""
-        response = client.get("/api/portal/stats")
+        response = client.get("/api/v1/portal/stats")
         assert response.status_code == 200
         data = response.json()
         # Check expected fields
@@ -248,15 +256,18 @@ class TestSOSFunctionality:
     def test_sos_endpoint(self, client):
         """Test SOS emergency endpoint."""
         response = client.post(
-            "/api/portal/sos",
+            "/api/v1/portal/sos",
             json={
                 "location": "Test Location",
                 "message": "Test emergency",
                 "contact_number": "+44 7700 900000",
             },
         )
-        # May not be fully implemented
+        # TODO: Remove 404 when SOS endpoint is implemented
         assert response.status_code in [200, 201, 404, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert isinstance(data, dict)
 
 
 class TestPortalHelp:
@@ -264,18 +275,25 @@ class TestPortalHelp:
 
     def test_get_help_content(self, client):
         """Get help/FAQ content."""
-        response = client.get("/api/portal/help")
-        # May not be implemented
+        response = client.get("/api/v1/portal/help")
+        # TODO: Remove 404 when help endpoint is implemented
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert isinstance(data, (list, dict))
 
     def test_contact_support(self, client):
         """Submit support request."""
         response = client.post(
-            "/api/portal/support",
+            "/api/v1/portal/support",
             json={
                 "subject": "Help needed",
                 "message": "I need help with the portal.",
                 "email": "user@example.com",
             },
         )
+        # TODO: Remove 404 when support endpoint is implemented
         assert response.status_code in [200, 201, 404, 422]
+        if response.status_code in [200, 201]:
+            data = response.json()
+            assert isinstance(data, dict)
