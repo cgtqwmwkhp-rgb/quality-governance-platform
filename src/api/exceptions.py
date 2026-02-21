@@ -78,7 +78,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
     code = exc.detail if isinstance(exc.detail, str) else str(exc.status_code)
     message = _STATUS_PHRASE.get(exc.status_code, f"HTTP {exc.status_code}")
-    details = exc.detail if isinstance(exc.detail, dict) else {}
+    details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
 
     response = JSONResponse(
         status_code=exc.status_code,
