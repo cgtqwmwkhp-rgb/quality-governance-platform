@@ -40,7 +40,10 @@ COPILOT_ACTIONS = {
         "parameters": {
             "title": {"type": "string", "required": True},
             "description": {"type": "string", "required": True},
-            "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+            "severity": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"],
+            },
             "location": {"type": "string"},
             "incident_type": {"type": "string"},
         },
@@ -73,7 +76,10 @@ COPILOT_ACTIONS = {
         "description": "Get compliance status for a standard",
         "category": "compliance",
         "parameters": {
-            "standard": {"type": "string", "enum": ["iso9001", "iso14001", "iso45001", "iso27001"]},
+            "standard": {
+                "type": "string",
+                "enum": ["iso9001", "iso14001", "iso45001", "iso27001"],
+            },
         },
         "examples": [
             "What's our ISO 9001 status?",
@@ -372,7 +378,13 @@ class CopilotService:
 
         # Create incident
         if any(
-            word in message_lower for word in ["create incident", "log incident", "report incident", "new incident"]
+            word in message_lower
+            for word in [
+                "create incident",
+                "log incident",
+                "report incident",
+                "new incident",
+            ]
         ):
             # Extract title from message
             title = user_message
@@ -514,7 +526,10 @@ class CopilotService:
             result = None
 
             if action_name == "navigate":
-                result = {"navigated": True, "destination": parameters.get("destination")}
+                result = {
+                    "navigated": True,
+                    "destination": parameters.get("destination"),
+                }
 
             elif action_name == "create_incident":
                 result = {

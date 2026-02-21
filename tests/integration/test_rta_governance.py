@@ -132,7 +132,11 @@ async def test_update_rta_with_audit(client: AsyncClient, auth_headers: dict, te
     # Check audit log
     audit_result = await test_session.execute(
         select(AuditEvent)
-        .where(AuditEvent.entity_type == "rta", AuditEvent.action == "update", AuditEvent.entity_id == str(rta.id))
+        .where(
+            AuditEvent.entity_type == "rta",
+            AuditEvent.action == "update",
+            AuditEvent.entity_id == str(rta.id),
+        )
         .order_by(AuditEvent.created_at.desc())
     )
     audit_log = audit_result.scalars().first()
@@ -170,7 +174,11 @@ async def test_delete_rta_with_audit(client: AsyncClient, auth_headers: dict, te
     # Check audit log
     audit_result = await test_session.execute(
         select(AuditEvent)
-        .where(AuditEvent.entity_type == "rta", AuditEvent.action == "delete", AuditEvent.entity_id == str(rta_id))
+        .where(
+            AuditEvent.entity_type == "rta",
+            AuditEvent.action == "delete",
+            AuditEvent.entity_id == str(rta_id),
+        )
         .order_by(AuditEvent.created_at.desc())
     )
     audit_log = audit_result.scalars().first()
@@ -663,7 +671,10 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     assert len(data["items"]) == 5
 
     # Test custom page_size
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations?page_size=10", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/complaints/{complaint.id}/investigations?page_size=10",
+        headers=auth_headers,
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 30

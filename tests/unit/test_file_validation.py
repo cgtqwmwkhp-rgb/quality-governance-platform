@@ -63,7 +63,17 @@ class TestFileValidation:
 
     def test_allowed_extensions_list(self):
         """Test that all expected extensions are in the allowlist."""
-        expected = {".pdf", ".doc", ".docx", ".xlsx", ".png", ".jpg", ".csv", ".json", ".xml"}
+        expected = {
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xlsx",
+            ".png",
+            ".jpg",
+            ".csv",
+            ".json",
+            ".xml",
+        }
         assert expected.issubset(ALLOWED_EXTENSIONS)
 
     def test_max_file_size(self):

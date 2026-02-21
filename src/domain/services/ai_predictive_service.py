@@ -69,8 +69,25 @@ class TextAnalyzer:
     }
 
     SEVERITY_INDICATORS = {
-        "high": ["fatality", "fatal", "death", "amputation", "hospital", "critical", "severe", "major"],
-        "medium": ["injury", "medical", "treatment", "doctor", "broken", "fracture", "laceration"],
+        "high": [
+            "fatality",
+            "fatal",
+            "death",
+            "amputation",
+            "hospital",
+            "critical",
+            "severe",
+            "major",
+        ],
+        "medium": [
+            "injury",
+            "medical",
+            "treatment",
+            "doctor",
+            "broken",
+            "fracture",
+            "laceration",
+        ],
         "low": ["first aid", "minor", "near miss", "close call", "slight", "bruise"],
     }
 
@@ -165,7 +182,12 @@ class AnomalyDetector:
             recent_incidents = result.scalars().all()
         elif entity_type == "location":
             result = await self.db.execute(
-                select(Incident).where(and_(Incident.location.ilike(f"%{entity}%"), Incident.reported_date >= cutoff))
+                select(Incident).where(
+                    and_(
+                        Incident.location.ilike(f"%{entity}%"),
+                        Incident.reported_date >= cutoff,
+                    )
+                )
             )
             recent_incidents = result.scalars().all()
         else:
@@ -202,7 +224,7 @@ class AnomalyDetector:
             "average": round(mean, 2),
             "threshold": round(threshold, 2),
             "std_dev": round(std_dev, 2),
-            "severity": "high" if current_count > mean * 2 else "medium" if is_anomaly else "low",
+            "severity": ("high" if current_count > mean * 2 else "medium" if is_anomaly else "low"),
             "message": (
                 f"Incident frequency for {entity} is {current_count}, which is significantly above the average of {mean:.1f}"
                 if is_anomaly
@@ -586,7 +608,7 @@ class RootCauseAnalyzer:
                     {
                         "id": inc.id,
                         "title": inc.title,
-                        "date": inc.incident_date.isoformat() if inc.incident_date else None,
+                        "date": (inc.incident_date.isoformat() if inc.incident_date else None),
                         "department": inc.department,
                     }
                 )

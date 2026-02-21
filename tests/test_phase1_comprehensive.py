@@ -65,7 +65,11 @@ class TestWorkflowEngine:
         """Test IN operator for list membership."""
         from src.domain.services.workflow_engine import ConditionEvaluator
 
-        condition = {"field": "priority", "operator": "in", "value": ["critical", "high", "medium"]}
+        condition = {
+            "field": "priority",
+            "operator": "in",
+            "value": ["critical", "high", "medium"],
+        }
 
         assert ConditionEvaluator.evaluate(condition, {"priority": "critical"}) is True
         assert ConditionEvaluator.evaluate(condition, {"priority": "low"}) is False
@@ -74,7 +78,11 @@ class TestWorkflowEngine:
         """Test dot notation for nested field access."""
         from src.domain.services.workflow_engine import ConditionEvaluator
 
-        condition = {"field": "user.department", "operator": "equals", "value": "Safety"}
+        condition = {
+            "field": "user.department",
+            "operator": "equals",
+            "value": "Safety",
+        }
 
         data = {"user": {"department": "Safety", "name": "John"}}
         assert ConditionEvaluator.evaluate(condition, data) is True

@@ -20,6 +20,8 @@ from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
 from src.domain.models.user import User
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -112,6 +114,7 @@ async def list_notifications(
     List notifications for the current user.
 
     Supports filtering by read status and notification type.
+    Tenant scoping is implicit through user ownership (user_id).
     """
     query = select(Notification).where(Notification.user_id == current_user.id)
 
@@ -141,7 +144,10 @@ async def list_notifications(
 
 @router.get("/unread-count")
 async def get_unread_count(db: DbSession, current_user: CurrentUser):
-    """Get the count of unread notifications for the current user."""
+    """Get the count of unread notifications for the current user.
+
+    Tenant scoping is implicit through user ownership (user_id).
+    """
     count = (
         await db.scalar(
             select(func.count(Notification.id)).where(
@@ -170,6 +176,8 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
     notification.is_read = True
     notification.read_at = datetime.utcnow()
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
@@ -189,6 +197,8 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
     notification.is_read = False
     notification.read_at = None
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
@@ -204,6 +214,8 @@ async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
         .values(is_read=True, read_at=datetime.utcnow())
     )
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "count": result.rowcount}
 
 
@@ -222,6 +234,8 @@ async def delete_notification(notification_id: int, db: DbSession, current_user:
 
     await db.delete(notification)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
@@ -276,6 +290,8 @@ async def update_notification_preferences(
     update_data = apply_updates(prefs, preferences, set_updated_at=False)
 
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
+    track_metric("notification.mutation", 1)
     return {"success": True, "preferences": update_data}
 
 

@@ -138,7 +138,9 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     # Investigation details
     status: Mapped[InvestigationStatus] = mapped_column(
-        Enum(InvestigationStatus, native_enum=False), nullable=False, default=InvestigationStatus.DRAFT
+        Enum(InvestigationStatus, native_enum=False),
+        nullable=False,
+        default=InvestigationStatus.DRAFT,
     )
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -182,17 +184,25 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     reviewer = relationship("User", foreign_keys=[reviewer_user_id])
     approved_by = relationship("User", foreign_keys=[approved_by_id])
     comments: Mapped[List["InvestigationComment"]] = relationship(
-        "InvestigationComment", back_populates="investigation", cascade="all, delete-orphan"
+        "InvestigationComment",
+        back_populates="investigation",
+        cascade="all, delete-orphan",
     )
     revision_events: Mapped[List["InvestigationRevisionEvent"]] = relationship(
-        "InvestigationRevisionEvent", back_populates="investigation", cascade="all, delete-orphan"
+        "InvestigationRevisionEvent",
+        back_populates="investigation",
+        cascade="all, delete-orphan",
     )
     customer_packs: Mapped[List["InvestigationCustomerPack"]] = relationship(
-        "InvestigationCustomerPack", back_populates="investigation", cascade="all, delete-orphan"
+        "InvestigationCustomerPack",
+        back_populates="investigation",
+        cascade="all, delete-orphan",
     )
     # Actions relationship (fixes "Cannot add action" defect)
     actions: Mapped[List["InvestigationAction"]] = relationship(
-        "InvestigationAction", back_populates="investigation", cascade="all, delete-orphan"
+        "InvestigationAction",
+        back_populates="investigation",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -213,7 +223,10 @@ class InvestigationComment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Comment content
@@ -225,7 +238,9 @@ class InvestigationComment(Base, TimestampMixin):
 
     # Threading support
     parent_comment_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("investigation_comments.id", ondelete="CASCADE"), nullable=True
+        Integer,
+        ForeignKey("investigation_comments.id", ondelete="CASCADE"),
+        nullable=True,
     )
 
     # Author
@@ -258,7 +273,10 @@ class InvestigationRevisionEvent(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Event details
@@ -297,7 +315,10 @@ class InvestigationCustomerPack(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Pack identification
@@ -359,7 +380,10 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Action details

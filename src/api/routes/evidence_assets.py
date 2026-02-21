@@ -34,6 +34,8 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -96,11 +98,20 @@ async def validate_source_exists(
     module = __import__(module_path, fromlist=[class_name])
     model_class = getattr(module, class_name)
 
-    await get_or_404(db, model_class, source_id, detail=f"Source {source_module} with ID {source_id} not found")
+    await get_or_404(
+        db,
+        model_class,
+        source_id,
+        detail=f"Source {source_module} with ID {source_id} not found",
+    )
     return True
 
 
-@router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload",
+    response_model=EvidenceAssetUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_evidence_asset(
     db: DbSession,
     current_user: CurrentUser,
@@ -264,6 +275,8 @@ async def upload_evidence_asset(
     db.add(evidence_asset)
     await db.commit()
     await db.refresh(evidence_asset)
+    await invalidate_tenant_cache(current_user.tenant_id, "evidence_assets")
+    track_metric("evidence.mutation", 1)
 
     return EvidenceAssetUploadResponse(
         id=evidence_asset.id,
@@ -291,7 +304,7 @@ async def list_evidence_assets(
     Returns assets in deterministic order (created_at DESC, id ASC).
     Excludes soft-deleted assets by default.
     """
-    query = select(EvidenceAsset)
+    query = select(EvidenceAsset).where(EvidenceAsset.tenant_id == current_user.tenant_id)
 
     if not include_deleted:
         query = query.where(EvidenceAsset.deleted_at.is_(None))
@@ -401,6 +414,8 @@ async def update_evidence_asset(
 
     await db.commit()
     await db.refresh(asset)
+    await invalidate_tenant_cache(current_user.tenant_id, "evidence_assets")
+    track_metric("evidence.mutation", 1)
 
     return asset
 
@@ -439,6 +454,8 @@ async def delete_evidence_asset(
     asset.updated_by_id = current_user.id
 
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "evidence_assets")
+    track_metric("evidence.mutation", 1)
 
     return None
 
@@ -555,7 +572,10 @@ async def download_file_direct(
     if not isinstance(svc, LocalFileStorageService):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error_code": "NOT_AVAILABLE", "message": "Direct download not available in production"},
+            detail={
+                "error_code": "NOT_AVAILABLE",
+                "message": "Direct download not available in production",
+            },
         )
 
     # Validate expiry
@@ -577,7 +597,10 @@ async def download_file_direct(
     if not hmac_lib.compare_digest(sig, expected_sig):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error_code": "INVALID_SIGNATURE", "message": "Invalid download signature"},
+            detail={
+                "error_code": "INVALID_SIGNATURE",
+                "message": "Invalid download signature",
+            },
         )
 
     # Download and serve

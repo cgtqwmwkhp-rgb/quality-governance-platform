@@ -179,7 +179,10 @@ class TestCustomerPackRedactionRules:
 
         investigation = MockInvestigation()
 
-        for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
+        for audience in [
+            CustomerPackAudience.INTERNAL_CUSTOMER,
+            CustomerPackAudience.EXTERNAL_CUSTOMER,
+        ]:
             content, _, _ = InvestigationService.generate_customer_pack(
                 investigation=investigation,
                 audience=audience,
@@ -221,7 +224,10 @@ class TestEvidenceAssetVisibilityMatrix:
         assets = [MockAsset()]
 
         # Test both audiences
-        for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
+        for audience in [
+            CustomerPackAudience.INTERNAL_CUSTOMER,
+            CustomerPackAudience.EXTERNAL_CUSTOMER,
+        ]:
             _, _, included_assets = InvestigationService.generate_customer_pack(
                 investigation=investigation,
                 audience=audience,
@@ -300,7 +306,10 @@ class TestEvidenceAssetVisibilityMatrix:
         investigation = MockInvestigation()
         assets = [MockAsset()]
 
-        for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
+        for audience in [
+            CustomerPackAudience.INTERNAL_CUSTOMER,
+            CustomerPackAudience.EXTERNAL_CUSTOMER,
+        ]:
             _, _, included_assets = InvestigationService.generate_customer_pack(
                 investigation=investigation,
                 audience=audience,

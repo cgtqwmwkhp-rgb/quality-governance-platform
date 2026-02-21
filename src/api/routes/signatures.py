@@ -7,13 +7,13 @@ DocuSign-level e-signature capabilities.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser
-from src.infrastructure.database import get_db
+from src.api.dependencies import CurrentUser, DbSession
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -133,7 +133,7 @@ class AuditLogResponse(BaseModel):
 async def create_signature_request(
     data: SignatureRequestCreate,
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Create a new signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -157,15 +157,17 @@ async def create_signature_request(
         metadata=data.metadata,
     )
 
+    await invalidate_tenant_cache(current_user.tenant_id, "signatures")
+    track_metric("signature.mutation", 1)
     return _format_request(request)
 
 
 @router.get("/requests", response_model=list[SignatureRequestResponse])
 async def list_signature_requests(
     current_user: CurrentUser,
+    db: DbSession,
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
 ):
     """List signature requests."""
     from sqlalchemy.orm import selectinload
@@ -190,10 +192,10 @@ async def list_signature_requests(
     return [_format_request(r) for r in requests]
 
 
-@router.get("/requests/pending")
+@router.get("/requests/pending", response_model=dict)
 async def get_pending_requests(
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Get signature requests pending user's signature."""
     from src.domain.services.signature_service import SignatureService
@@ -214,7 +216,7 @@ async def get_pending_requests(
 @router.get("/requests/{request_id}", response_model=SignatureRequestResponse)
 async def get_signature_request(
     request_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Get a signature request by ID."""
     from src.domain.services.signature_service import SignatureService
@@ -228,10 +230,10 @@ async def get_signature_request(
     return _format_request(request)
 
 
-@router.post("/requests/{request_id}/send")
+@router.post("/requests/{request_id}/send", response_model=dict)
 async def send_signature_request(
     request_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Send a signature request to signers."""
     from src.domain.services.signature_service import SignatureService
@@ -240,17 +242,19 @@ async def send_signature_request(
 
     try:
         request = await service.send_request(request_id)
+        await invalidate_tenant_cache(request.tenant_id, "signatures")
+        track_metric("signature.mutation", 1)
         return {"status": "sent", "reference": request.reference_number}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/requests/{request_id}/void")
+@router.post("/requests/{request_id}/void", response_model=dict)
 async def void_signature_request(
     request_id: int,
     current_user: CurrentUser,
+    db: DbSession,
     reason: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
 ):
     """Void a signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -259,6 +263,8 @@ async def void_signature_request(
 
     try:
         request = await service.void_request(request_id, current_user.id, reason)
+        await invalidate_tenant_cache(current_user.tenant_id, "signatures")
+        track_metric("signature.mutation", 1)
         return {"status": "voided", "reference": request.reference_number}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -267,7 +273,7 @@ async def void_signature_request(
 @router.get("/requests/{request_id}/audit-log", response_model=list[AuditLogResponse])
 async def get_audit_log(
     request_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Get audit log for a signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -283,11 +289,11 @@ async def get_audit_log(
 # ============================================================================
 
 
-@router.get("/sign/{token}")
+@router.get("/sign/{token}", response_model=dict)
 async def get_signing_page(
     token: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Get signing page data for external signer."""
     from src.domain.services.signature_service import SignatureService
@@ -296,7 +302,10 @@ async def get_signing_page(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired signing link")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired signing link",
+        )
 
     sig_request = signer.request
 
@@ -327,12 +336,12 @@ async def get_signing_page(
     }
 
 
-@router.post("/sign/{token}")
+@router.post("/sign/{token}", response_model=dict)
 async def sign_document(
     token: str,
     data: SignInput,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Apply signature to document."""
     from src.domain.services.signature_service import SignatureService
@@ -341,7 +350,10 @@ async def sign_document(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired signing link")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired signing link",
+        )
 
     try:
         signature = await service.sign(
@@ -364,12 +376,12 @@ async def sign_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/sign/{token}/decline")
+@router.post("/sign/{token}/decline", response_model=dict)
 async def decline_signing(
     token: str,
     data: DeclineInput,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Decline to sign."""
     from src.domain.services.signature_service import SignatureService
@@ -378,7 +390,10 @@ async def decline_signing(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired signing link")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired signing link",
+        )
 
     try:
         signer = await service.decline(
@@ -405,7 +420,7 @@ async def decline_signing(
 async def create_template(
     data: TemplateCreate,
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Create a signature template."""
     from src.domain.services.signature_service import SignatureService
@@ -426,13 +441,15 @@ async def create_template(
         reminder_days=data.reminder_days,
     )
 
+    await invalidate_tenant_cache(current_user.tenant_id, "signatures")
+    track_metric("signature.mutation", 1)
     return template
 
 
 @router.get("/templates", response_model=list[TemplateResponse])
 async def list_templates(
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """List signature templates."""
     from src.domain.models.digital_signature import SignatureTemplate
@@ -453,13 +470,13 @@ async def list_templates(
     return templates
 
 
-@router.post("/templates/{template_id}/use")
+@router.post("/templates/{template_id}/use", response_model=dict)
 async def use_template(
     template_id: int,
     signers: list[SignerInput],
     current_user: CurrentUser,
+    db: DbSession,
     title: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
 ):
     """Create a signature request from a template."""
     from src.domain.services.signature_service import SignatureService
@@ -484,10 +501,10 @@ async def use_template(
 # ============================================================================
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=dict)
 async def get_signature_stats(
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Get signature statistics."""
     from src.domain.models.digital_signature import Signature, SignatureRequest
@@ -526,10 +543,10 @@ async def get_signature_stats(
 # ============================================================================
 
 
-@router.post("/admin/send-reminders")
+@router.post("/admin/send-reminders", response_model=dict)
 async def send_reminders(
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Send reminders for pending signatures (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService
@@ -543,10 +560,10 @@ async def send_reminders(
     return {"reminders_sent": count}
 
 
-@router.post("/admin/expire-old")
+@router.post("/admin/expire-old", response_model=dict)
 async def expire_old_requests(
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Expire old signature requests (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService

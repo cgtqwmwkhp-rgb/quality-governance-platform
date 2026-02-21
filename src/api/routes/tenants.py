@@ -15,11 +15,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.tenant import verify_tenant_access
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.services.tenant_service import TenantService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -104,6 +107,8 @@ async def create_tenant(
             subscription_tier=data.subscription_tier,
             domain=data.domain,
         )
+        await invalidate_tenant_cache(current_user.tenant_id, "tenants")
+        track_metric("tenant.mutation", 1)
         return tenant
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -118,7 +123,7 @@ async def list_tenants(
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
 
-    return await paginate(db, select(Tenant), params)
+    return await paginate(db, select(Tenant).options(selectinload(Tenant.users)), params)
 
 
 @router.get("/current", response_model=TenantResponse)
@@ -167,6 +172,8 @@ async def update_tenant(
     try:
         updates = data.model_dump(exclude_unset=True)
         tenant = await service.update_tenant(tenant_id, **updates)
+        await invalidate_tenant_cache(current_user.tenant_id, "tenants")
+        track_metric("tenant.mutation", 1)
         return tenant
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -190,6 +197,8 @@ async def update_branding(
 
     try:
         tenant = await service.update_branding(tenant_id, **data.model_dump(exclude_unset=True))
+        await invalidate_tenant_cache(current_user.tenant_id, "tenants")
+        track_metric("tenant.mutation", 1)
         return tenant
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -200,7 +209,7 @@ async def update_branding(
 # ============================================================================
 
 
-@router.get("/{tenant_id}/users")
+@router.get("/{tenant_id}/users", response_model=dict)
 async def list_tenant_users(
     tenant_id: int,
     db: DbSession,
@@ -225,7 +234,7 @@ async def list_tenant_users(
     }
 
 
-@router.post("/{tenant_id}/users")
+@router.post("/{tenant_id}/users", response_model=dict)
 async def add_user_to_tenant(
     tenant_id: int,
     data: TenantUserAdd,
@@ -245,12 +254,14 @@ async def add_user_to_tenant(
             user_id=data.user_id,
             role=data.role,
         )
+        await invalidate_tenant_cache(current_user.tenant_id, "tenants")
+        track_metric("tenant.mutation", 1)
         return {"id": tenant_user.id, "role": tenant_user.role}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{tenant_id}/users/{user_id}")
+@router.delete("/{tenant_id}/users/{user_id}", response_model=dict)
 async def remove_user_from_tenant(
     tenant_id: int,
     user_id: int,
@@ -263,6 +274,8 @@ async def remove_user_from_tenant(
 
     try:
         await service.remove_user_from_tenant(tenant_id, user_id)
+        await invalidate_tenant_cache(current_user.tenant_id, "tenants")
+        track_metric("tenant.mutation", 1)
         return {"status": "removed"}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -273,7 +286,7 @@ async def remove_user_from_tenant(
 # ============================================================================
 
 
-@router.post("/{tenant_id}/invitations")
+@router.post("/{tenant_id}/invitations", response_model=dict)
 async def create_invitation(
     tenant_id: int,
     data: TenantInvite,
@@ -299,7 +312,7 @@ async def create_invitation(
     }
 
 
-@router.post("/invitations/{token}/accept")
+@router.post("/invitations/{token}/accept", response_model=dict)
 async def accept_invitation(
     token: str,
     db: DbSession,
@@ -320,7 +333,7 @@ async def accept_invitation(
 # ============================================================================
 
 
-@router.get("/{tenant_id}/features")
+@router.get("/{tenant_id}/features", response_model=dict)
 async def get_features(
     tenant_id: int,
     db: DbSession,
@@ -337,7 +350,7 @@ async def get_features(
     return tenant.features_enabled
 
 
-@router.put("/{tenant_id}/features/{feature}")
+@router.put("/{tenant_id}/features/{feature}", response_model=dict)
 async def toggle_feature(
     tenant_id: int,
     feature: str,
@@ -362,7 +375,7 @@ async def toggle_feature(
 # ============================================================================
 
 
-@router.get("/{tenant_id}/limits")
+@router.get("/{tenant_id}/limits", response_model=dict)
 async def get_limits(
     tenant_id: int,
     db: DbSession,

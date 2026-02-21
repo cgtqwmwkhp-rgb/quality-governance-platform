@@ -81,7 +81,11 @@ class TestMultiStepEntityWorkflows:
         submit_response = await client.post("/api/v1/portal/reports/", json=incident)
 
         if submit_response.status_code != 201:
-            TestResult.record("SUAT-001", "NOT_WORKING", f"Submission failed: {submit_response.status_code}")
+            TestResult.record(
+                "SUAT-001",
+                "NOT_WORKING",
+                f"Submission failed: {submit_response.status_code}",
+            )
             pytest.fail(f"Submission failed: {submit_response.text}")
 
         submit_data = submit_response.json()

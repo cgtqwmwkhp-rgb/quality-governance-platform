@@ -47,7 +47,10 @@ def auth_headers(client) -> dict:
     try:
         response = client.post(
             "/api/auth/login",
-            json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+            json={
+                "username": "testuser@plantexpand.com",
+                "password": "testpassword123",
+            },
         )
         if response.status_code == 200:
             token = response.json().get("access_token")

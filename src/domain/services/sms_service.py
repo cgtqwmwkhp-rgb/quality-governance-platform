@@ -93,12 +93,20 @@ class SMSService:
         """
         if not self.enabled:
             logger.warning(f"SMS disabled. Would send to {to}: {message[:50]}...")
-            return SMSResult(success=False, status=SMSStatus.FAILED, error_message="SMS service not configured")
+            return SMSResult(
+                success=False,
+                status=SMSStatus.FAILED,
+                error_message="SMS service not configured",
+            )
 
         # Validate phone number format
         normalized = self._normalize_phone_number(to)
         if not normalized:
-            return SMSResult(success=False, status=SMSStatus.FAILED, error_message="Invalid phone number format")
+            return SMSResult(
+                success=False,
+                status=SMSStatus.FAILED,
+                error_message="Invalid phone number format",
+            )
 
         # Truncate message if too long
         if len(message) > 1600:
@@ -112,7 +120,7 @@ class SMSService:
             return SMSResult(
                 success=True,
                 message_sid=sms.sid,
-                status=SMSStatus(sms.status) if sms.status in SMSStatus.__members__ else SMSStatus.QUEUED,
+                status=(SMSStatus(sms.status) if sms.status in SMSStatus.__members__ else SMSStatus.QUEUED),
             )
 
         except Exception as e:
@@ -146,7 +154,11 @@ class SMSService:
         return results
 
     async def send_sos_alert(
-        self, recipients: List[str], reporter_name: str, location: str, gps_link: Optional[str] = None
+        self,
+        recipients: List[str],
+        reporter_name: str,
+        location: str,
+        gps_link: Optional[str] = None,
     ) -> Dict[str, SMSResult]:
         """
         Send SOS emergency alert SMS.
@@ -174,7 +186,11 @@ RESPOND IMMEDIATELY"""
         return await self.send_bulk_sms(recipients, message)
 
     async def send_riddor_alert(
-        self, recipients: List[str], incident_ref: str, incident_type: str, location: str
+        self,
+        recipients: List[str],
+        incident_ref: str,
+        incident_type: str,
+        location: str,
     ) -> Dict[str, SMSResult]:
         """
         Send RIDDOR reportable incident alert SMS.

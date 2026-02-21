@@ -57,6 +57,10 @@ celery_app.conf.beat_schedule = {
         "task": "src.infrastructure.tasks.report_tasks.recalculate_compliance_scores",
         "schedule": crontab(hour=3, minute=0),  # Daily at 3 AM
     },
+    "log-task-queue-depth": {
+        "task": "src.infrastructure.tasks.monitor_tasks.log_task_queue_depth",
+        "schedule": crontab(minute="*/5"),  # Every 5 minutes
+    },
 }
 
 celery_app.autodiscover_tasks(

@@ -171,7 +171,7 @@ async def _load_evidence_links(
                 entity_type=row.entity_type,
                 entity_id=row.entity_id,
                 clause_id=row.clause_id,
-                linked_by=row.linked_by.value if isinstance(row.linked_by, EvidenceLinkMethod) else row.linked_by,
+                linked_by=(row.linked_by.value if isinstance(row.linked_by, EvidenceLinkMethod) else row.linked_by),
                 confidence=row.confidence,
                 created_at=row.created_at,
                 created_by=row.created_by_email,
@@ -197,7 +197,10 @@ async def list_clauses(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     if search:
         clauses = iso_compliance_service.search_clauses(search)
@@ -227,7 +230,10 @@ async def get_clause(clause_id: str):
     """Get a specific ISO clause by ID."""
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Clause not found: {clause_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Clause not found: {clause_id}",
+        )
     return ClauseResponse(
         id=clause.id,
         standard=clause.standard.value,
@@ -260,7 +266,10 @@ async def link_evidence(
     """Link an entity to one or more ISO clauses. Persisted to database."""
     for clause_id in request.clause_ids:
         if not iso_compliance_service.get_clause(clause_id):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid clause ID: {clause_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid clause ID: {clause_id}",
+            )
 
     method = EvidenceLinkMethod.MANUAL
     if request.linked_by == "auto":
@@ -350,7 +359,7 @@ async def list_evidence_links(
                 entity_type=r.entity_type,
                 entity_id=r.entity_id,
                 clause_id=r.clause_id,
-                linked_by=r.linked_by.value if isinstance(r.linked_by, EvidenceLinkMethod) else r.linked_by,
+                linked_by=(r.linked_by.value if isinstance(r.linked_by, EvidenceLinkMethod) else r.linked_by),
                 confidence=r.confidence,
                 title=r.title,
                 notes=r.notes,
@@ -391,7 +400,10 @@ async def get_compliance_coverage(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.calculate_compliance_coverage(links, std_enum)
@@ -409,7 +421,10 @@ async def get_compliance_gaps(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     coverage = iso_compliance_service.calculate_compliance_coverage(links, std_enum)
@@ -429,7 +444,10 @@ async def generate_compliance_report(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid standard: {standard}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid standard: {standard}",
+            )
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.generate_audit_report(links, std_enum, include_evidence)

@@ -57,7 +57,14 @@ def _persist_failed_task(
 
 @task_failure.connect
 def handle_task_failure(
-    sender=None, task_id=None, exception=None, args=None, kwargs=None, traceback=None, einfo=None, **kw
+    sender=None,
+    task_id=None,
+    exception=None,
+    args=None,
+    kwargs=None,
+    traceback=None,
+    einfo=None,
+    **kw,
 ):
     """Handle permanently failed tasks by logging to database."""
     task_name = sender.name if sender else "unknown"

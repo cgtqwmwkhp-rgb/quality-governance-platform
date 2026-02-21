@@ -288,7 +288,11 @@ class TestMinAcceptableComputation(TestCase):
         )
 
         override = Override(
-            issue_id="GH-123", owner="test-owner", expiry="2026-12-31", reason="Test", temporary_min_pass=80
+            issue_id="GH-123",
+            owner="test-owner",
+            expiry="2026-12-31",
+            reason="Test",
+            temporary_min_pass=80,
         )
 
         result = compute_min_acceptable(baseline, override)

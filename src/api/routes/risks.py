@@ -80,7 +80,13 @@ async def create_risk(
     score, level, _ = calculate_risk_level(risk_data.likelihood, risk_data.impact)
 
     risk_dict = risk_data.model_dump(
-        exclude={"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
+        exclude={
+            "clause_ids",
+            "control_ids",
+            "linked_audit_ids",
+            "linked_incident_ids",
+            "linked_policy_ids",
+        }
     )
 
     risk = Risk(
@@ -281,7 +287,13 @@ async def update_risk(
     update_data = risk_data.model_dump(exclude_unset=True)
 
     # Handle JSON array fields (schema → model field remapping)
-    _json_fields = {"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
+    _json_fields = {
+        "clause_ids",
+        "control_ids",
+        "linked_audit_ids",
+        "linked_incident_ids",
+        "linked_policy_ids",
+    }
     for field in _json_fields:
         if field in update_data:
             setattr(risk, f"{field}_json", update_data[field])
@@ -321,7 +333,11 @@ async def delete_risk(
 # ============== Risk Control Endpoints ==============
 
 
-@router.post("/{risk_id}/controls", response_model=RiskControlResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{risk_id}/controls",
+    response_model=RiskControlResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_control(
     risk_id: int,
     control_data: RiskControlCreate,
@@ -419,7 +435,11 @@ async def delete_control(
 # ============== Risk Assessment Endpoints ==============
 
 
-@router.post("/{risk_id}/assessments", response_model=RiskAssessmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{risk_id}/assessments",
+    response_model=RiskAssessmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_assessment(
     risk_id: int,
     assessment_data: RiskAssessmentCreate,

@@ -19,7 +19,6 @@ import {
   Lock,
   Bell,
   RefreshCw,
-  Loader2,
 } from 'lucide-react'
 import {
   incidentsApi,
@@ -33,6 +32,7 @@ import {
   ExecutiveDashboardData,
 } from '../api/client'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { cn } from "../helpers/utils"
@@ -531,9 +531,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
+      <div className="p-6"><CardSkeleton count={4} /></div>
     )
   }
 

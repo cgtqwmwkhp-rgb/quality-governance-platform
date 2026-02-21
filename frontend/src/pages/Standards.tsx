@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { cn } from "../helpers/utils"
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 
 interface ExpandedState {
   [key: number]: boolean
@@ -154,9 +155,7 @@ export default function Standards() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
+      <div className="p-6"><TableSkeleton rows={5} columns={4} /></div>
     )
   }
 

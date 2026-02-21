@@ -96,6 +96,9 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
         default=EvidenceAssetType.OTHER,
     )
 
+    # Tenant isolation
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Source linkage (polymorphic association)
     source_module: Mapped[EvidenceSourceModule] = mapped_column(
         SQLEnum(EvidenceSourceModule, native_enum=False),

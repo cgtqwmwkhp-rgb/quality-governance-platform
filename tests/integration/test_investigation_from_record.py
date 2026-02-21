@@ -106,7 +106,10 @@ class TestFromRecordErrorResponses:
         assert "request_id" in data["detail"]
 
     async def test_duplicate_returns_409_with_existing_id(
-        self, client: AsyncClient, auth_headers: dict, near_miss_with_investigation: tuple
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        near_miss_with_investigation: tuple,
     ):
         """Test 409 INV_ALREADY_EXISTS includes existing_investigation_id."""
         near_miss, investigation = near_miss_with_investigation
@@ -167,7 +170,10 @@ class TestSourceRecordsEndpoint:
         assert data["source_type"] == "near_miss"
 
     async def test_source_records_marks_investigated(
-        self, client: AsyncClient, auth_headers: dict, near_miss_with_investigation: tuple
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        near_miss_with_investigation: tuple,
     ):
         """Test source-records marks records with investigation_id."""
         near_miss, investigation = near_miss_with_investigation

@@ -267,7 +267,11 @@ async def list_clauses(
     return [ClauseResponse.model_validate(c) for c in clauses]
 
 
-@router.post("/{standard_id}/clauses", response_model=ClauseResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{standard_id}/clauses",
+    response_model=ClauseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_clause(
     standard_id: int,
     clause_data: ClauseCreate,
@@ -329,7 +333,11 @@ async def update_clause(
 # ============== Control Endpoints ==============
 
 
-@router.post("/clauses/{clause_id}/controls", response_model=ControlResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/clauses/{clause_id}/controls",
+    response_model=ControlResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_control(
     clause_id: int,
     control_data: ControlCreate,

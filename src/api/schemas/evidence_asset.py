@@ -33,7 +33,9 @@ class EvidenceAssetBase(BaseModel):
     description: Optional[str] = Field(None, description="Asset description")
     captured_at: Optional[datetime] = Field(None, description="When the evidence was captured")
     captured_by_role: Optional[str] = Field(
-        None, max_length=100, description="Role of person who captured (driver, technician, etc.)"
+        None,
+        max_length=100,
+        description="Role of person who captured (driver, technician, etc.)",
     )
     latitude: Optional[float] = Field(None, ge=-90, le=90, description="GPS latitude")
     longitude: Optional[float] = Field(None, ge=-180, le=180, description="GPS longitude")
@@ -44,7 +46,10 @@ class EvidenceAssetBase(BaseModel):
         description="Visibility for customer packs (internal_only, internal_customer, external_allowed, public)",
     )
     contains_pii: bool = Field(default=False, description="Whether asset contains PII (faces, plates, etc.)")
-    redaction_required: bool = Field(default=False, description="Whether asset needs redaction before external sharing")
+    redaction_required: bool = Field(
+        default=False,
+        description="Whether asset needs redaction before external sharing",
+    )
     retention_policy: str = Field(default="standard", description="Retention policy")
     metadata_json: Optional[Dict[str, Any]] = Field(None, description="Extended metadata")
 

@@ -274,7 +274,10 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Action {data.action_name} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Action {data.action_name} not found",
+        )
 
     return {
         "status": "executed",

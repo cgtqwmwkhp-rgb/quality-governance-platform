@@ -21,6 +21,8 @@ from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -32,7 +34,11 @@ router = APIRouter()
 async def search_users(
     db: DbSession,
     current_user: CurrentUser,
-    q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
+    q: str = Query(
+        ...,
+        min_length=1,
+        description="Search query for email, first name, or last name",
+    ),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
     search_filter = f"%{q}%"
@@ -119,6 +125,8 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    await invalidate_tenant_cache(current_user.tenant_id, "users")
+    track_metric("user.mutation", 1)
 
     return UserResponse.model_validate(user)
 
@@ -172,6 +180,8 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
+    await invalidate_tenant_cache(current_user.tenant_id, "users")
+    track_metric("user.mutation", 1)
 
     return UserResponse.model_validate(user)
 
@@ -193,6 +203,8 @@ async def delete_user(
 
     user.is_active = False
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "users")
+    track_metric("user.mutation", 1)
 
 
 # ============== Role Endpoints ==============

@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { useToast, ToastContainer } from '../components/ui/Toast'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 
 export default function Policies() {
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
@@ -112,9 +113,7 @@ export default function Policies() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
+      <div className="p-6"><TableSkeleton rows={5} columns={4} /></div>
     )
   }
 

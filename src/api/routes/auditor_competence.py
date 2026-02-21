@@ -90,7 +90,11 @@ class AssessCompetencyRequest(BaseModel):
 # =============================================================================
 
 
-@router.post("/profiles", status_code=status.HTTP_201_CREATED, response_model=AuditorProfileCreateResponse)
+@router.post(
+    "/profiles",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AuditorProfileCreateResponse,
+)
 async def create_auditor_profile(
     request: CreateProfileRequest,
     db: DbSession,
@@ -287,7 +291,11 @@ async def update_expired_certifications(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/training", status_code=status.HTTP_201_CREATED, response_model=TrainingCreateResponse)
+@router.post(
+    "/profiles/{user_id}/training",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TrainingCreateResponse,
+)
 async def add_training(
     user_id: int,
     request: AddTrainingRequest,

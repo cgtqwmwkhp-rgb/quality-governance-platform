@@ -181,7 +181,8 @@ class CreateFromRecordRequest(BaseModel):
     """Request schema for creating investigation from source record."""
 
     source_type: str = Field(
-        ..., description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+        ...,
+        description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)",
     )
     source_id: int = Field(..., gt=0, description="Source record ID")
     title: str = Field(..., min_length=1, max_length=255, description="Investigation title")

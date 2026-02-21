@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -148,7 +149,11 @@ async def list_complaints(
         )
 
     try:
-        query = select(Complaint).where(Complaint.tenant_id == current_user.tenant_id)
+        query = (
+            select(Complaint)
+            .options(selectinload(Complaint.actions))
+            .where(Complaint.tenant_id == current_user.tenant_id)
+        )
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -170,7 +175,14 @@ async def list_complaints(
         error_str = str(e).lower()
         logger.error(f"Error listing complaints: {e}", exc_info=True)
 
-        column_errors = ["email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        column_errors = [
+            "email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
+        ]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:

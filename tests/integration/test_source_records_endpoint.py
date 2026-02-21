@@ -169,7 +169,10 @@ class TestSourceRecordsInvestigationStatus:
     """Test investigated records are properly flagged."""
 
     async def test_investigated_record_has_investigation_id(
-        self, client: AsyncClient, auth_headers: dict, near_miss_with_investigation: tuple
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        near_miss_with_investigation: tuple,
     ):
         """Test records with investigations have investigation_id set."""
         near_miss, investigation = near_miss_with_investigation

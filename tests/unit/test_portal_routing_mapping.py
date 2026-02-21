@@ -200,7 +200,12 @@ class TestReferencePrefixAssignment:
 
         pattern = r"^[A-Z]{2,4}-\d{4}-\d{4}$"
 
-        example_refs = ["INC-2026-0001", "RTA-2026-0123", "NM-2026-9999", "COMP-2026-0042"]
+        example_refs = [
+            "INC-2026-0001",
+            "RTA-2026-0123",
+            "NM-2026-9999",
+            "COMP-2026-0042",
+        ]
 
         for ref in example_refs:
             assert re.match(pattern, ref), f"Reference format invalid: {ref}"

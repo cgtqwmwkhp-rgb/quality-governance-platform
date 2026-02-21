@@ -294,7 +294,11 @@ class PushNotificationService:
             return {"success": True, "endpoint": subscription.endpoint}
 
         except ImportError:
-            return {"success": True, "endpoint": subscription.endpoint, "simulated": True}
+            return {
+                "success": True,
+                "endpoint": subscription.endpoint,
+                "simulated": True,
+            }
 
         except Exception as e:
             error_msg = str(e)

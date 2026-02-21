@@ -66,8 +66,16 @@ class TestValidateRecords:
     def test_batch_validation_counts(self):
         """Batch validation should count valid/invalid correctly."""
         records = [
-            {"external_ref": "TEST-001", "title": "Valid", "incident_date": "2026-01-15"},
-            {"external_ref": "TEST-002", "title": "Also Valid", "incident_date": "2026-01-16"},
+            {
+                "external_ref": "TEST-001",
+                "title": "Valid",
+                "incident_date": "2026-01-15",
+            },
+            {
+                "external_ref": "TEST-002",
+                "title": "Also Valid",
+                "incident_date": "2026-01-16",
+            },
             {"external_ref": "", "title": "", "incident_date": ""},  # Invalid
         ]
 
@@ -80,7 +88,11 @@ class TestValidateRecords:
     def test_validation_report_serializable(self):
         """Validation report should be JSON serializable."""
         records = [
-            {"external_ref": "TEST-001", "title": "Test", "incident_date": "2026-01-15"},
+            {
+                "external_ref": "TEST-001",
+                "title": "Test",
+                "incident_date": "2026-01-15",
+            },
         ]
 
         report = validate_records(records, INCIDENT_MAPPINGS, EntityType.INCIDENT, "test.csv")

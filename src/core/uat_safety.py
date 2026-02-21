@@ -50,7 +50,9 @@ class UATWriteBlockedResponse:
     """Standard response for blocked UAT writes."""
 
     @staticmethod
-    def create(detail: str = "UAT on production is read-only by default") -> JSONResponse:
+    def create(
+        detail: str = "UAT on production is read-only by default",
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
             content={

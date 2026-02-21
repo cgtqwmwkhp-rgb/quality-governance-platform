@@ -735,7 +735,7 @@ jobs:
           JWT_SECRET_KEY: test-jwt-secret
         run: |
           echo "=== UAT STAGE 1 - Basic Workflow Tests (50 tests) ==="
-          pytest tests/uat/test_stage1_basic_workflows.py -v --tb=short --junit-xml=junit-uat-stage1.xml || true
+          pytest tests/uat/test_stage1_basic_workflows.py -v --tb=short --junit-xml=junit-uat-stage1.xml
           echo ""
           echo "UAT Stage 1 completed"
 
@@ -746,7 +746,7 @@ jobs:
           JWT_SECRET_KEY: test-jwt-secret
         run: |
           echo "=== UAT STAGE 2 - Sophisticated Workflow Tests (20 tests) ==="
-          pytest tests/uat/test_stage2_sophisticated_workflows.py -v --tb=short --junit-xml=junit-uat-stage2.xml || true
+          pytest tests/uat/test_stage2_sophisticated_workflows.py -v --tb=short --junit-xml=junit-uat-stage2.xml
           echo ""
           echo "UAT Stage 2 completed"
 

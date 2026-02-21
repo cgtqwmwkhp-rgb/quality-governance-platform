@@ -395,7 +395,10 @@ async def get_audit_entry(
         entry = result.scalar_one_or_none()
     except Exception as e:
         logger.error("Failed to get audit entry %s: %s", entry_id, e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve audit entry")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve audit entry",
+        )
 
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit entry not found")
@@ -503,7 +506,10 @@ async def verify_chain(
         return verification
     except Exception as e:
         logger.error("Failed to verify chain: %s", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Chain verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Chain verification failed",
+        )
 
 
 # ============================================================================
@@ -559,7 +565,7 @@ async def export_audit_logs(
         export_record = AuditLogExport(
             tenant_id=tenant_id,
             export_format=data.format,
-            export_type="filtered" if (data.date_from or data.date_to or data.entity_type) else "full",
+            export_type=("filtered" if (data.date_from or data.date_to or data.entity_type) else "full"),
             filters={
                 "entity_type": data.entity_type,
                 "date_from": data.date_from.isoformat() if data.date_from else None,

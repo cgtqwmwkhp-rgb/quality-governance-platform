@@ -107,7 +107,7 @@ class ROIInvestmentCreate(BaseModel):
 # ============================================================================
 
 
-@router.get("/dashboards")
+@router.get("/dashboards", response_model=dict)
 async def list_dashboards(current_user: CurrentUser):
     """List all dashboards for the current user."""
     # Mock dashboards
@@ -147,7 +147,7 @@ async def list_dashboards(current_user: CurrentUser):
     }
 
 
-@router.post("/dashboards")
+@router.post("/dashboards", response_model=dict)
 async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser):
     """Create a new custom dashboard."""
     return {
@@ -160,7 +160,7 @@ async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser
     }
 
 
-@router.get("/dashboards/{dashboard_id}")
+@router.get("/dashboards/{dashboard_id}", response_model=dict)
 async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     """Get dashboard with widgets."""
     return {
@@ -206,7 +206,7 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     }
 
 
-@router.put("/dashboards/{dashboard_id}")
+@router.put("/dashboards/{dashboard_id}", response_model=dict)
 async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser):
     """Update dashboard configuration."""
     return {
@@ -216,7 +216,7 @@ async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, curren
     }
 
 
-@router.delete("/dashboards/{dashboard_id}")
+@router.delete("/dashboards/{dashboard_id}", response_model=dict)
 async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
     """Delete a dashboard."""
     return {"success": True, "id": dashboard_id}
@@ -227,7 +227,7 @@ async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
 # ============================================================================
 
 
-@router.get("/widgets/{widget_id}/data")
+@router.get("/widgets/{widget_id}/data", response_model=dict)
 async def get_widget_data(
     widget_id: int,
     current_user: CurrentUser,
@@ -251,7 +251,7 @@ async def get_widget_data(
     }
 
 
-@router.post("/widgets/preview")
+@router.post("/widgets/preview", response_model=dict)
 async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
     """Preview widget data without saving."""
     trend_data = analytics_service.get_trend_data(
@@ -259,6 +259,7 @@ async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
         metric=widget.metric,
         time_range="last_30_days",
         group_by=widget.group_by,
+        tenant_id=current_user.tenant_id,
     )
     return {
         "widget_type": widget.widget_type,
@@ -272,16 +273,16 @@ async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
 # ============================================================================
 
 
-@router.get("/kpis")
+@router.get("/kpis", response_model=dict)
 async def get_kpi_summary(
     current_user: CurrentUser,
     time_range: str = Query("last_30_days"),
 ):
     """Get summary KPIs across all modules."""
-    return analytics_service.get_kpi_summary(time_range)
+    return analytics_service.get_kpi_summary(time_range, tenant_id=current_user.tenant_id)
 
 
-@router.get("/trends/{data_source}")
+@router.get("/trends/{data_source}", response_model=dict)
 async def get_trend_data(
     data_source: str,
     current_user: CurrentUser,
@@ -297,10 +298,11 @@ async def get_trend_data(
         granularity=granularity,
         time_range=time_range,
         group_by=group_by,
+        tenant_id=current_user.tenant_id,
     )
 
 
-@router.get("/drill-down/{data_source}")
+@router.get("/drill-down/{data_source}", response_model=dict)
 async def get_drill_down_data(
     data_source: str,
     current_user: CurrentUser,
@@ -346,7 +348,7 @@ async def get_drill_down_data(
 # ============================================================================
 
 
-@router.post("/forecast")
+@router.post("/forecast", response_model=dict)
 async def generate_forecast(request: ForecastRequest, current_user: CurrentUser):
     """Generate trend forecast with confidence intervals."""
     # Get historical data
@@ -354,6 +356,7 @@ async def generate_forecast(request: ForecastRequest, current_user: CurrentUser)
         data_source=request.data_source,
         metric=request.metric,
         time_range="last_90_days",
+        tenant_id=current_user.tenant_id,
     )
 
     historical = trend_data["datasets"][0]["data"] if trend_data["datasets"] else []
@@ -381,16 +384,16 @@ async def generate_forecast(request: ForecastRequest, current_user: CurrentUser)
 # ============================================================================
 
 
-@router.get("/benchmarks")
+@router.get("/benchmarks", response_model=dict)
 async def get_benchmark_summary(
     current_user: CurrentUser,
     industry: str = Query("utilities"),
 ):
     """Get benchmark comparison summary."""
-    return analytics_service.get_benchmark_summary(industry)
+    return analytics_service.get_benchmark_summary(industry, tenant_id=current_user.tenant_id)
 
 
-@router.get("/benchmarks/{metric}")
+@router.get("/benchmarks/{metric}", response_model=dict)
 async def get_benchmark_comparison(
     metric: str,
     current_user: CurrentUser,
@@ -398,7 +401,7 @@ async def get_benchmark_comparison(
     region: str = Query("uk"),
 ):
     """Get benchmark comparison for a specific metric."""
-    return analytics_service.get_benchmark_comparison(metric, industry, region)
+    return analytics_service.get_benchmark_comparison(metric, industry, region, tenant_id=current_user.tenant_id)
 
 
 # ============================================================================
@@ -406,16 +409,16 @@ async def get_benchmark_comparison(
 # ============================================================================
 
 
-@router.get("/costs/non-compliance")
+@router.get("/costs/non-compliance", response_model=dict)
 async def get_cost_of_non_compliance(
     current_user: CurrentUser,
     time_range: str = Query("last_12_months"),
 ):
     """Calculate cost of non-compliance."""
-    return analytics_service.calculate_cost_of_non_compliance(time_range)
+    return analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
 
 
-@router.post("/costs/record")
+@router.post("/costs/record", response_model=dict)
 async def record_cost(cost: CostRecord, current_user: CurrentUser):
     """Record a cost entry."""
     return {
@@ -427,14 +430,14 @@ async def record_cost(cost: CostRecord, current_user: CurrentUser):
     }
 
 
-@router.get("/costs/breakdown")
+@router.get("/costs/breakdown", response_model=dict)
 async def get_cost_breakdown(
     current_user: CurrentUser,
     time_range: str = Query("last_12_months"),
     group_by: str = Query("category"),
 ):
     """Get cost breakdown by category."""
-    costs = analytics_service.calculate_cost_of_non_compliance(time_range)
+    costs = analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
     return costs.get("breakdown", {})
 
 
@@ -443,19 +446,19 @@ async def get_cost_breakdown(
 # ============================================================================
 
 
-@router.get("/roi")
+@router.get("/roi", response_model=dict)
 async def get_roi_summary(current_user: CurrentUser):
     """Get ROI summary for all investments."""
-    return analytics_service.calculate_roi()
+    return analytics_service.calculate_roi(tenant_id=current_user.tenant_id)
 
 
-@router.get("/roi/{investment_id}")
+@router.get("/roi/{investment_id}", response_model=dict)
 async def get_investment_roi(investment_id: int, current_user: CurrentUser):
     """Get ROI for a specific investment."""
-    return analytics_service.calculate_roi(investment_id)
+    return analytics_service.calculate_roi(investment_id, tenant_id=current_user.tenant_id)
 
 
-@router.post("/roi/investment")
+@router.post("/roi/investment", response_model=dict)
 async def create_investment(investment: ROIInvestmentCreate, current_user: CurrentUser):
     """Create a new investment record."""
     return {
@@ -467,7 +470,7 @@ async def create_investment(investment: ROIInvestmentCreate, current_user: Curre
     }
 
 
-@router.put("/roi/{investment_id}/actual")
+@router.put("/roi/{investment_id}/actual", response_model=dict)
 async def update_investment_actuals(
     investment_id: int,
     actual_savings: float,
@@ -488,16 +491,16 @@ async def update_investment_actuals(
 # ============================================================================
 
 
-@router.get("/reports/executive-summary")
+@router.get("/reports/executive-summary", response_model=dict)
 async def get_executive_summary(
     current_user: CurrentUser,
     time_range: str = Query("last_month"),
 ):
     """Generate executive summary data."""
-    return analytics_service.generate_executive_summary(time_range)
+    return analytics_service.generate_executive_summary(time_range, tenant_id=current_user.tenant_id)
 
 
-@router.post("/reports/generate")
+@router.post("/reports/generate", response_model=dict)
 async def generate_report(
     report_type: str,
     current_user: CurrentUser,
@@ -515,7 +518,7 @@ async def generate_report(
     }
 
 
-@router.get("/reports/{report_id}/status")
+@router.get("/reports/{report_id}/status", response_model=dict)
 async def get_report_status(report_id: str, current_user: CurrentUser):
     """Check report generation status."""
     return {

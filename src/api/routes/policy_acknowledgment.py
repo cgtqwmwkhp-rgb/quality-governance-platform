@@ -39,7 +39,11 @@ router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgmen
 # =============================================================================
 
 
-@router.post("/requirements", response_model=AcknowledgmentRequirementResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/requirements",
+    response_model=AcknowledgmentRequirementResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_acknowledgment_requirement(
     requirement_data: AcknowledgmentRequirementCreate,
     db: DbSession,
@@ -69,11 +73,19 @@ async def get_acknowledgment_requirement(
     current_user: CurrentUser,
 ):
     """Get an acknowledgment requirement."""
-    requirement = await get_or_404(db, PolicyAcknowledgmentRequirement, requirement_id, detail="Requirement not found")
+    requirement = await get_or_404(
+        db,
+        PolicyAcknowledgmentRequirement,
+        requirement_id,
+        detail="Requirement not found",
+    )
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
-@router.post("/requirements/{requirement_id}/assign", response_model=PolicyAcknowledgmentListResponse)
+@router.post(
+    "/requirements/{requirement_id}/assign",
+    response_model=PolicyAcknowledgmentListResponse,
+)
 async def assign_acknowledgments(
     requirement_id: int,
     assign_data: AssignAcknowledgmentRequest,
@@ -285,7 +297,10 @@ async def log_document_read(
     return DocumentReadLogResponse.from_orm(log)
 
 
-@router.get("/read-logs/document/{document_type}/{document_id}", response_model=DocumentReadLogListResponse)
+@router.get(
+    "/read-logs/document/{document_type}/{document_id}",
+    response_model=DocumentReadLogListResponse,
+)
 async def get_document_read_history(
     document_type: str,
     document_id: int,

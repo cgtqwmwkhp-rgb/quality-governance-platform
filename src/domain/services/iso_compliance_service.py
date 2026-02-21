@@ -492,7 +492,12 @@ ISO_45001_CLAUSES = [
         2,
     ),
     ISOClause(
-        "45001-6", ISOStandard.ISO_45001, "6", "Planning", "Planning for the OHSMS", ["planning", "hazards", "risks"]
+        "45001-6",
+        ISOStandard.ISO_45001,
+        "6",
+        "Planning",
+        "Planning for the OHSMS",
+        ["planning", "hazards", "risks"],
     ),
     ISOClause(
         "45001-6.1.2",
@@ -546,7 +551,14 @@ ISO_45001_CLAUSES = [
         "8.1.2",
         "Eliminating hazards",
         "Apply hierarchy of controls",
-        ["hierarchy of controls", "elimination", "substitution", "engineering", "administrative", "PPE"],
+        [
+            "hierarchy of controls",
+            "elimination",
+            "substitution",
+            "engineering",
+            "administrative",
+            "PPE",
+        ],
         "45001-8",
         2,
     ),
@@ -592,7 +604,13 @@ ISO_45001_CLAUSES = [
         "10.2",
         "Incident, nonconformity and corrective action",
         "Investigate incidents and take corrective action",
-        ["incident investigation", "accident investigation", "nonconformity", "corrective action", "root cause"],
+        [
+            "incident investigation",
+            "accident investigation",
+            "nonconformity",
+            "corrective action",
+            "root cause",
+        ],
         "45001-10",
         2,
     ),
@@ -816,7 +834,12 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
                 round((len(full_coverage) + len(partial_coverage) * 0.5) / total * 100, 1) if total > 0 else 0
             ),
             "gap_clauses": [
-                {"clause_id": c.id, "clause_number": c.clause_number, "title": c.title, "standard": c.standard.value}
+                {
+                    "clause_id": c.id,
+                    "clause_number": c.clause_number,
+                    "title": c.title,
+                    "standard": c.standard.value,
+                }
                 for c in no_coverage
             ],
             "by_standard": {
@@ -896,7 +919,11 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
 
             clause_details.append(detail)
 
-        return {"generated_at": datetime.utcnow().isoformat(), "summary": coverage, "clauses": clause_details}
+        return {
+            "generated_at": datetime.utcnow().isoformat(),
+            "summary": coverage,
+            "clauses": clause_details,
+        }
 
 
 # Singleton instance

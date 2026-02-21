@@ -152,7 +152,13 @@ class TestAuthSmoke:
         )
         # Should return 401 for bad credentials, not 500
         # 404 may occur if auth routes aren't included in test configuration
-        assert response.status_code in [200, 401, 404, 422, 429], f"Login endpoint error: {response.status_code}"
+        assert response.status_code in [
+            200,
+            401,
+            404,
+            422,
+            429,
+        ], f"Login endpoint error: {response.status_code}"
 
     def test_valid_credentials_work(self, auth_token):
         """✓ Valid credentials must return token."""
@@ -167,7 +173,10 @@ class TestAuthSmoke:
         """✓ Protected endpoints must require authentication."""
         response = client.get("/api/users/")
         # 401 = requires auth, 404 = route not in test config (both acceptable)
-        assert response.status_code in [401, 404], f"Protected endpoint accessible without auth: {response.status_code}"
+        assert response.status_code in [
+            401,
+            404,
+        ], f"Protected endpoint accessible without auth: {response.status_code}"
 
     def test_authenticated_access_works(self, client, auth_headers):
         """✓ Authenticated requests must succeed."""
@@ -175,7 +184,10 @@ class TestAuthSmoke:
             pytest.skip("Auth not available")
         response = client.get("/api/users/", headers=auth_headers)
         # 200 = success, 404 = route not in test config
-        assert response.status_code in [200, 404], f"Authenticated request failed: {response.status_code}"
+        assert response.status_code in [
+            200,
+            404,
+        ], f"Authenticated request failed: {response.status_code}"
 
 
 # ============================================================================
@@ -283,7 +295,10 @@ class TestPortalSmoke:
         """✓ Portal stats are publicly accessible."""
         response = client.get("/api/portal/stats")
         # 200 = success, 404 = route not configured in test environment
-        assert response.status_code in [200, 404], f"Portal stats error: {response.status_code}"
+        assert response.status_code in [
+            200,
+            404,
+        ], f"Portal stats error: {response.status_code}"
 
     def test_portal_report_submission(self, client):
         """✓ Portal can submit reports."""
@@ -298,7 +313,12 @@ class TestPortalSmoke:
             },
         )
         # 404 = route not configured in test environment
-        assert response.status_code in [200, 201, 404, 422], f"Portal report submission failed: {response.status_code}"
+        assert response.status_code in [
+            200,
+            201,
+            404,
+            422,
+        ], f"Portal report submission failed: {response.status_code}"
 
         # Only check response content if endpoint exists
         if response.status_code in [200, 201]:

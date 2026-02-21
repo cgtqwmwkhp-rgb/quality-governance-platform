@@ -211,7 +211,13 @@ class TestActionsAPIPatchValidation:
     @pytest.mark.asyncio
     async def test_actions_patch_accepts_valid_status_values(self, client: AsyncClient):
         """PATCH /api/v1/actions/{id} accepts valid status enum values."""
-        valid_statuses = ["open", "in_progress", "pending_verification", "completed", "cancelled"]
+        valid_statuses = [
+            "open",
+            "in_progress",
+            "pending_verification",
+            "completed",
+            "cancelled",
+        ]
         for status in valid_statuses:
             response = await client.patch(
                 "/api/v1/actions/1?source_type=incident",
@@ -432,7 +438,13 @@ class TestInvestigationActionsAPI:
     @pytest.mark.asyncio
     async def test_investigation_action_accepts_valid_statuses(self, client: AsyncClient):
         """PATCH with investigation source_type accepts all valid status values."""
-        valid_statuses = ["open", "in_progress", "pending_verification", "completed", "cancelled"]
+        valid_statuses = [
+            "open",
+            "in_progress",
+            "pending_verification",
+            "completed",
+            "cancelled",
+        ]
         for status in valid_statuses:
             response = await client.patch(
                 "/api/v1/actions/1?source_type=investigation",

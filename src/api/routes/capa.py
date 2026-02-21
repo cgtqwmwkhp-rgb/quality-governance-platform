@@ -216,7 +216,11 @@ async def transition_capa_status(
         entity_id=str(action.id),
         action="update",
         description=f"CAPA {action.reference_number} transitioned from {current} to {data.status}",
-        payload={"from_status": str(current), "to_status": str(data.status), "comment": data.comment},
+        payload={
+            "from_status": str(current),
+            "to_status": str(data.status),
+            "comment": data.comment,
+        },
         user_id=current_user.id,
     )
 

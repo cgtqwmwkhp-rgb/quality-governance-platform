@@ -80,6 +80,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.is_development:
         await init_db()
 
+    from src.infrastructure.cache.redis_cache import warmup_cache
+
+    await warmup_cache()
+
     # Seed compliance automation default data if tables are empty
     try:
         from src.domain.services.compliance_automation_service import compliance_automation_service
@@ -475,6 +479,7 @@ async def readiness_check(request: Request, verbose: bool = False):
     response: dict[str, object] = {
         "status": "healthy" if all_healthy else "unhealthy",
         "version": os.getenv("APP_VERSION", "1.0.0"),
+        "flower_url": "http://flower:5555",
     }
 
     if verbose:

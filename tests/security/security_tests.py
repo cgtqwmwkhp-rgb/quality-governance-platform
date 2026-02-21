@@ -82,7 +82,10 @@ class TestAuthenticationSecurity:
         """Test JWT tokens have proper format and claims."""
         response = client.post(
             "/api/auth/login",
-            json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+            json={
+                "username": "testuser@plantexpand.com",
+                "password": "testpassword123",
+            },
         )
         if response.status_code == 200:
             token = response.json().get("access_token")
@@ -199,7 +202,14 @@ class TestDataProtection:
         # Check that API routes don't include sensitive data in GET params
         from src.api import router
 
-        sensitive_patterns = ["password", "token", "secret", "key", "ssn", "credit_card"]
+        sensitive_patterns = [
+            "password",
+            "token",
+            "secret",
+            "key",
+            "ssn",
+            "credit_card",
+        ]
 
         for route in router.routes:
             if hasattr(route, "path"):
@@ -327,7 +337,10 @@ class TestAPISecurityBestPractices:
 
         for endpoint in protected_endpoints:
             response = client.get(endpoint)
-            assert response.status_code in [401, 403], f"Endpoint {endpoint} is not protected"
+            assert response.status_code in [
+                401,
+                403,
+            ], f"Endpoint {endpoint} is not protected"
 
     def test_no_server_version_disclosure(self, client):
         """Test that server version is not disclosed."""

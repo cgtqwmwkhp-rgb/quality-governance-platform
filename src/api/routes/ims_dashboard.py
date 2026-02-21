@@ -92,7 +92,10 @@ async def _get_isms_data(db: Any) -> dict:
         await db.scalar(
             select(func.count()).select_from(
                 select(InformationAsset)
-                .where(InformationAsset.is_active == True, InformationAsset.criticality == "critical")
+                .where(
+                    InformationAsset.is_active == True,
+                    InformationAsset.criticality == "critical",
+                )
                 .subquery()
             )
         )
@@ -277,7 +280,7 @@ async def _get_uvdb_data(db: Any) -> dict:
         "completed_audits": len(completed),
         "average_score": round(avg_score, 1),
         "latest_score": latest_score,
-        "status": "active" if active_audits > 0 else ("completed" if completed else "not_started"),
+        "status": ("active" if active_audits > 0 else ("completed" if completed else "not_started")),
     }
 
 
@@ -371,7 +374,7 @@ async def _get_audit_schedule(db: Any) -> list[dict]:
                 "reference_number": run.reference_number,
                 "title": run.title,
                 "status": run.status,
-                "scheduled_date": run.scheduled_date.isoformat() if run.scheduled_date else None,
+                "scheduled_date": (run.scheduled_date.isoformat() if run.scheduled_date else None),
                 "due_date": run.due_date.isoformat() if run.due_date else None,
             }
         )

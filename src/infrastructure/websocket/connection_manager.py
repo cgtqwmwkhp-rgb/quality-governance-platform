@@ -84,7 +84,10 @@ class ConnectionManager:
         return f"conn_{self._connection_counter}_{datetime.utcnow().timestamp()}"
 
     async def connect(
-        self, websocket: WebSocket, user_id: int, metadata: Optional[Dict[str, Any]] = None
+        self,
+        websocket: WebSocket,
+        user_id: int,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> UserConnection:
         """
         Accept a new WebSocket connection for a user.
@@ -101,7 +104,10 @@ class ConnectionManager:
 
         connection_id = self._generate_connection_id()
         connection = UserConnection(
-            websocket=websocket, user_id=user_id, connection_id=connection_id, metadata=metadata or {}
+            websocket=websocket,
+            user_id=user_id,
+            connection_id=connection_id,
+            metadata=metadata or {},
         )
 
         # Add to user's connections
@@ -149,7 +155,10 @@ class ConnectionManager:
         logger.info(f"User {user_id} disconnected (connection_id={connection.connection_id})")
 
         # Trigger disconnect event
-        await self._trigger_event("disconnect", {"user_id": user_id, "connection_id": connection.connection_id})
+        await self._trigger_event(
+            "disconnect",
+            {"user_id": user_id, "connection_id": connection.connection_id},
+        )
 
     async def subscribe_to_channel(self, connection: UserConnection, channel: str):
         """Subscribe a connection to a channel"""
@@ -189,7 +198,13 @@ class ConnectionManager:
         if user_id not in self.user_connections:
             return 0
 
-        payload = json.dumps({"type": event_type, "data": message, "timestamp": datetime.utcnow().isoformat()})
+        payload = json.dumps(
+            {
+                "type": event_type,
+                "data": message,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         sent_count = 0
         failed_connections = []
@@ -360,7 +375,10 @@ class ConnectionManager:
 
             else:
                 # Trigger custom message handler
-                await self._trigger_event("message", {"connection": connection, "type": msg_type, "data": data})
+                await self._trigger_event(
+                    "message",
+                    {"connection": connection, "type": msg_type, "data": data},
+                )
                 return None
 
         except json.JSONDecodeError:

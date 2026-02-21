@@ -37,6 +37,8 @@ from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -53,7 +55,7 @@ async def list_form_templates(
     is_active: Optional[bool] = Query(None),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
-    query = select(FormTemplate)
+    query = select(FormTemplate).where(FormTemplate.tenant_id == current_user.tenant_id)
 
     if form_type:
         query = query.where(FormTemplate.form_type == form_type)
@@ -65,7 +67,11 @@ async def list_form_templates(
     return await paginate(db, query, params)
 
 
-@router.post("/templates", response_model=FormTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates",
+    response_model=FormTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_form_template(
     data: FormTemplateCreate,
     db: DbSession,
@@ -143,6 +149,8 @@ async def create_form_template(
 
     await db.commit()
     await db.refresh(template)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     await record_audit_event(
         db=db,
@@ -207,6 +215,8 @@ async def update_form_template(
 
     await db.commit()
     await db.refresh(template)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     await record_audit_event(
         db=db,
@@ -273,12 +283,18 @@ async def delete_form_template(
 
     await db.delete(template)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
 
 # ==================== Form Step Routes ====================
 
 
-@router.post("/templates/{template_id}/steps", response_model=FormStepResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates/{template_id}/steps",
+    response_model=FormStepResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_form_step(
     template_id: int,
     data: FormStepCreate,
@@ -357,7 +373,11 @@ async def delete_form_step(
 # ==================== Form Field Routes ====================
 
 
-@router.post("/steps/{step_id}/fields", response_model=FormFieldResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/steps/{step_id}/fields",
+    response_model=FormFieldResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_form_field(
     step_id: int,
     data: FormFieldCreate,
@@ -431,10 +451,11 @@ async def delete_form_field(
 @router.get("/contracts", response_model=ContractListResponse)
 async def list_contracts(
     db: DbSession,
+    current_user: CurrentUser,
     is_active: Optional[bool] = Query(None),
 ) -> ContractListResponse:
     """List all contracts."""
-    query = select(Contract)
+    query = select(Contract).where(Contract.tenant_id == current_user.tenant_id)
 
     if is_active is not None:
         query = query.where(Contract.is_active == is_active)
@@ -483,6 +504,8 @@ async def create_contract(
     db.add(contract)
     await db.commit()
     await db.refresh(contract)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     await record_audit_event(
         db=db,
@@ -523,6 +546,8 @@ async def update_contract(
 
     await db.commit()
     await db.refresh(contract)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     await record_audit_event(
         db=db,
@@ -559,6 +584,8 @@ async def delete_contract(
 
     await db.delete(contract)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
 
 # ==================== System Setting Routes ====================
@@ -571,7 +598,7 @@ async def list_system_settings(
     category: Optional[str] = Query(None),
 ) -> SystemSettingListResponse:
     """List all system settings."""
-    query = select(SystemSetting)
+    query = select(SystemSetting).where(SystemSetting.tenant_id == current_user.tenant_id)
 
     if category:
         query = query.where(SystemSetting.category == category)
@@ -586,7 +613,11 @@ async def list_system_settings(
     )
 
 
-@router.post("/settings", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/settings",
+    response_model=SystemSettingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_system_setting(
     data: SystemSettingCreate,
     db: DbSession,
@@ -616,6 +647,8 @@ async def create_system_setting(
     db.add(setting)
     await db.commit()
     await db.refresh(setting)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     return setting
 
@@ -648,6 +681,8 @@ async def update_system_setting(
 
     await db.commit()
     await db.refresh(setting)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     return setting
 
@@ -659,10 +694,14 @@ async def update_system_setting(
 async def list_lookup_options(
     category: str,
     db: DbSession,
+    current_user: CurrentUser,
     is_active: Optional[bool] = Query(True),
 ) -> LookupOptionListResponse:
     """List lookup options by category."""
-    query = select(LookupOption).where(LookupOption.category == category)
+    query = select(LookupOption).where(
+        LookupOption.category == category,
+        LookupOption.tenant_id == current_user.tenant_id,
+    )
 
     if is_active is not None:
         query = query.where(LookupOption.is_active == is_active)
@@ -677,7 +716,11 @@ async def list_lookup_options(
     )
 
 
-@router.post("/lookup/{category}", response_model=LookupOptionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/lookup/{category}",
+    response_model=LookupOptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_lookup_option(
     category: str,
     data: LookupOptionCreate,
@@ -702,6 +745,8 @@ async def create_lookup_option(
     db.add(option)
     await db.commit()
     await db.refresh(option)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     return option
 
@@ -730,6 +775,8 @@ async def update_lookup_option(
 
     await db.commit()
     await db.refresh(option)
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)
 
     return option
 
@@ -755,3 +802,5 @@ async def delete_lookup_option(
 
     await db.delete(option)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
+    track_metric("form_config.mutation", 1)

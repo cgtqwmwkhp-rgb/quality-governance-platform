@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -24,6 +25,8 @@ from src.api.utils.update import apply_updates
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Road Traffic Collisions"])
 
@@ -61,6 +64,8 @@ async def create_rta(
 
     await db.commit()
     await db.refresh(rta)
+    await invalidate_tenant_cache(current_user.tenant_id, "rtas")
+    track_metric("rta.mutation", 1)
     return rta
 
 
@@ -115,7 +120,11 @@ async def list_rtas(
         )
 
     try:
-        query = select(RoadTrafficCollision).where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
+        query = (
+            select(RoadTrafficCollision)
+            .options(selectinload(RoadTrafficCollision.actions))
+            .where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
+        )
 
         if severity:
             query = query.where(RoadTrafficCollision.severity == severity)
@@ -138,7 +147,14 @@ async def list_rtas(
         error_str = str(e).lower()
         logger.error(f"Error listing RTAs: {e}", exc_info=True)
 
-        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        column_errors = [
+            "reporter_email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
+        ]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
@@ -190,6 +206,8 @@ async def update_rta(
 
     await db.commit()
     await db.refresh(rta)
+    await invalidate_tenant_cache(current_user.tenant_id, "rtas")
+    track_metric("rta.mutation", 1)
     return rta
 
 
@@ -216,12 +234,18 @@ async def delete_rta(
 
     await db.delete(rta)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "rtas")
+    track_metric("rta.mutation", 1)
 
 
 # RTA Actions endpoints
 
 
-@router.post("/{rta_id}/actions", response_model=RTAActionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{rta_id}/actions",
+    response_model=RTAActionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,

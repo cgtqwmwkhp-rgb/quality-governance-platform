@@ -23,7 +23,10 @@ class ConditionalLogicRule(BaseModel):
     """Schema for conditional logic rules."""
 
     source_question_id: int
-    operator: str = Field(..., pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$")
+    operator: str = Field(
+        ...,
+        pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$",
+    )
     value: Optional[Any] = None
     action: str = Field(..., pattern="^(show|hide|require|skip)$")
 
@@ -421,7 +424,10 @@ class AuditFindingBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: str = Field(..., min_length=1)
     severity: str = Field(default="medium", pattern="^(critical|high|medium|low|observation)$")
-    finding_type: str = Field(default="nonconformity", pattern="^(nonconformity|observation|opportunity|positive)$")
+    finding_type: str = Field(
+        default="nonconformity",
+        pattern="^(nonconformity|observation|opportunity|positive)$",
+    )
 
     # Standard mapping
     clause_ids: Optional[List[int]] = None

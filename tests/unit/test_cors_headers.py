@@ -139,7 +139,11 @@ class TestCORSOnSuccessResponses:
                 "name": "exp001_form_opened",
                 "timestamp": "2026-01-28T12:00:00Z",
                 "sessionId": "test_session",
-                "dimensions": {"formType": "incident", "flagEnabled": True, "hasDraft": False},
+                "dimensions": {
+                    "formType": "incident",
+                    "flagEnabled": True,
+                    "hasDraft": False,
+                },
             },
         )
         # May be 200 or 401 depending on auth, but should have CORS
@@ -156,7 +160,11 @@ class TestCORSOnSuccessResponses:
                         "name": "exp001_form_opened",
                         "timestamp": "2026-01-28T12:00:00Z",
                         "sessionId": "test_session",
-                        "dimensions": {"formType": "incident", "flagEnabled": True, "hasDraft": False},
+                        "dimensions": {
+                            "formType": "incident",
+                            "flagEnabled": True,
+                            "hasDraft": False,
+                        },
                     }
                 ]
             },

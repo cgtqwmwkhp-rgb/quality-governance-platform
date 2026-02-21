@@ -250,7 +250,7 @@ def aggregate_event(event: TelemetryEvent) -> None:
 # ============================================================================
 
 
-@router.post("/events")
+@router.post("/events", response_model=dict)
 async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     """
     Receive a single telemetry event.
@@ -284,7 +284,7 @@ async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     return {"status": "ok"}
 
 
-@router.post("/events/batch")
+@router.post("/events/batch", response_model=dict)
 async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser):
     """
     Receive a batch of telemetry events (for offline buffer flush).
@@ -313,7 +313,7 @@ async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser)
     return {"status": "ok", "count": processed}
 
 
-@router.get("/metrics/{experiment_id}")
+@router.get("/metrics/{experiment_id}", response_model=dict)
 async def get_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Get aggregated metrics for an experiment.
@@ -327,7 +327,7 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     return metrics
 
 
-@router.delete("/metrics/{experiment_id}")
+@router.delete("/metrics/{experiment_id}", response_model=dict)
 async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Reset metrics for an experiment (staging only, for testing).

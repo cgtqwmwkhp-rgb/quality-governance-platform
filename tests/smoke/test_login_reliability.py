@@ -50,7 +50,8 @@ class TestLoginReliability:
         start = time.time()
 
         response = client.post(
-            "/api/v1/auth/login", json={"email": "invalid@test.example", "password": "wrongpassword123"}
+            "/api/v1/auth/login",
+            json={"email": "invalid@test.example", "password": "wrongpassword123"},
         )
 
         elapsed = time.time() - start
@@ -71,15 +72,23 @@ class TestLoginReliability:
         response = client.post("/api/v1/auth/login", json={"email": "", "password": ""})
 
         # 422 for validation error
-        assert response.status_code in [400, 422], f"Expected 400/422, got {response.status_code}"
+        assert response.status_code in [
+            400,
+            422,
+        ], f"Expected 400/422, got {response.status_code}"
 
     def test_login_malformed_json_returns_422(self, client):
         """Malformed JSON should return 422, not crash."""
         response = client.post(
-            "/api/v1/auth/login", content="not valid json", headers={"Content-Type": "application/json"}
+            "/api/v1/auth/login",
+            content="not valid json",
+            headers={"Content-Type": "application/json"},
         )
 
-        assert response.status_code in [400, 422], f"Expected 400/422, got {response.status_code}"
+        assert response.status_code in [
+            400,
+            422,
+        ], f"Expected 400/422, got {response.status_code}"
 
     def test_login_endpoint_responds_under_threshold(self, client):
         """Login endpoint must respond within P95 threshold."""
@@ -87,7 +96,8 @@ class TestLoginReliability:
 
         try:
             response = client.post(
-                "/api/v1/auth/login", json={"email": "timing-test@example.com", "password": "test123"}
+                "/api/v1/auth/login",
+                json={"email": "timing-test@example.com", "password": "test123"},
             )
             elapsed = time.time() - start
         except httpx.TimeoutException:
@@ -125,7 +135,10 @@ class TestLoginErrorCodes:
 
     def test_401_response_has_proper_structure(self, client):
         """401 response should have bounded error structure."""
-        response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": "wrong"})
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "wrong"},
+        )
 
         assert response.status_code == 401
 
@@ -189,7 +202,10 @@ class TestLoginNoPII:
         """Error responses should not echo the password."""
         test_password = "SuperSecretTestPassword123!"
 
-        response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": test_password})
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": test_password},
+        )
 
         # Password should never appear in response
         response_text = response.text

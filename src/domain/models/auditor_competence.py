@@ -48,7 +48,10 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
 
     # Professional details
@@ -114,7 +117,9 @@ class AuditorCertification(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Certification details
@@ -136,7 +141,8 @@ class AuditorCertification(Base, TimestampMixin):
 
     # Status
     status: Mapped[CertificationStatus] = mapped_column(
-        SQLEnum(CertificationStatus, native_enum=False), default=CertificationStatus.ACTIVE
+        SQLEnum(CertificationStatus, native_enum=False),
+        default=CertificationStatus.ACTIVE,
     )
 
     # CPD/CPE requirements
@@ -182,7 +188,9 @@ class AuditorTraining(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Training details
@@ -272,10 +280,14 @@ class AuditorCompetency(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     competency_area_id: Mapped[int] = mapped_column(
-        ForeignKey("competency_areas.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("competency_areas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Current proficiency level (typically 1-5)

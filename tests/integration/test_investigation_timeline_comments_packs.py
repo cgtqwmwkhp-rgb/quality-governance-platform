@@ -44,7 +44,10 @@ class TestTimelineEndpoint:
         """Test timeline validates pagination parameters."""
         # page must be >= 1
         response = await client.get("/api/v1/investigations/1/timeline?page=0")
-        assert response.status_code in (401, 422)  # 401 if auth first, 422 if validation first
+        assert response.status_code in (
+            401,
+            422,
+        )  # 401 if auth first, 422 if validation first
 
         # page_size must be <= 100
         response = await client.get("/api/v1/investigations/1/timeline?page_size=200")

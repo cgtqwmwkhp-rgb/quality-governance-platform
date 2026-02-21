@@ -37,7 +37,8 @@ class SetupRequiredResponse(BaseModel):
         description="Error classification for client handling. Always 'SETUP_REQUIRED' for this response type.",
     )
     setup_required: bool = Field(
-        default=True, description="Flag indicating setup is required. Always true for this response type."
+        default=True,
+        description="Flag indicating setup is required. Always true for this response type.",
     )
     module: str = Field(..., description="The module that requires setup (e.g., 'planet-mark', 'uvdb')")
     message: str = Field(..., description="Human-readable description of what setup is needed")

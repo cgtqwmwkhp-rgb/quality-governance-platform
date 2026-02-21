@@ -20,7 +20,11 @@ from src.domain.models.investigation import InvestigationTemplate
 router = APIRouter()
 
 
-@router.post("/", response_model=InvestigationTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=InvestigationTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_template(
     template_data: InvestigationTemplateCreate,
     db: DbSession,

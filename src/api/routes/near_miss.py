@@ -15,6 +15,8 @@ from src.api.utils.update import apply_updates
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Near Misses"])
 
@@ -61,6 +63,8 @@ async def create_near_miss(
 
     await db.commit()
     await db.refresh(near_miss)
+    await invalidate_tenant_cache(current_user.tenant_id, "near_miss")
+    track_metric("near_miss.mutation", 1)
     return near_miss
 
 
@@ -144,13 +148,19 @@ async def update_near_miss(
         entity_id=str(near_miss.id),
         action="update",
         description=f"Near Miss {near_miss.reference_number} updated",
-        payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
+        payload={
+            "updates": update_data,
+            "old_status": old_status,
+            "new_status": near_miss.status,
+        },
         user_id=current_user.id,
         request_id=request_id,
     )
 
     await db.commit()
     await db.refresh(near_miss)
+    await invalidate_tenant_cache(current_user.tenant_id, "near_miss")
+    track_metric("near_miss.mutation", 1)
     return near_miss
 
 
@@ -178,6 +188,8 @@ async def delete_near_miss(
 
     await db.delete(near_miss)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "near_miss")
+    track_metric("near_miss.mutation", 1)
 
 
 @router.get("/{near_miss_id}/investigations", response_model=dict)

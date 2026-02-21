@@ -59,7 +59,10 @@ class TestIncidentLifecycle:
 
     @pytest.mark.asyncio
     async def test_update_incident_status_open_to_in_progress(
-        self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str], uat_user_ids: Dict[str, str]
+        self,
+        admin_client: UATApiClient,
+        uat_incident_ids: Dict[str, str],
+        uat_user_ids: Dict[str, str],
     ):
         """Admin can update incident status from open to in_progress."""
         incident_id = uat_incident_ids["open"]

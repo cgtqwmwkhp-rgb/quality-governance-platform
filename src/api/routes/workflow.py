@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.workflow import (
@@ -60,7 +61,11 @@ async def list_workflow_rules(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflow rules with optional filtering."""
-    query = select(WorkflowRule).where(WorkflowRule.tenant_id == current_user.tenant_id)
+    query = (
+        select(WorkflowRule)
+        .options(selectinload(WorkflowRule.executions))
+        .where(WorkflowRule.tenant_id == current_user.tenant_id)
+    )
 
     filters = []
     if entity_type:
@@ -202,7 +207,11 @@ async def list_sla_configurations(
     )
 
 
-@router.post("/sla-configs", response_model=SLAConfigurationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sla-configs",
+    response_model=SLAConfigurationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_sla_configuration(
     config_data: SLAConfigurationCreate,
     db: DbSession,
@@ -293,7 +302,10 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA tracking not found for this entity")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="SLA tracking not found for this entity",
+        )
 
     now = datetime.utcnow()
 
@@ -397,7 +409,11 @@ async def list_escalation_levels(
     )
 
 
-@router.post("/escalation-levels", response_model=EscalationLevelResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/escalation-levels",
+    response_model=EscalationLevelResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_escalation_level(
     level_data: EscalationLevelCreate,
     db: DbSession,
@@ -457,7 +473,7 @@ async def delete_escalation_level(
 # =============================================================================
 
 
-@router.post("/trigger-check")
+@router.post("/trigger-check", response_model=dict)
 async def trigger_sla_check(
     db: DbSession,
     current_user: CurrentUser,

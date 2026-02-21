@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -169,7 +170,9 @@ async def list_incidents(
     logger = logging.getLogger(__name__)
 
     try:
-        query = select(Incident).where(Incident.tenant_id == current_user.tenant_id)
+        query = (
+            select(Incident).options(selectinload(Incident.actions)).where(Incident.tenant_id == current_user.tenant_id)
+        )
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)
@@ -297,7 +300,10 @@ async def delete_incident(
         entity_id=str(incident.id),
         action="delete",
         description=f"Incident {incident.reference_number} deleted",
-        payload={"incident_id": incident_id, "reference_number": incident.reference_number},
+        payload={
+            "incident_id": incident_id,
+            "reference_number": incident.reference_number,
+        },
         user_id=current_user.id,
         request_id=request_id,
     )

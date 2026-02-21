@@ -61,7 +61,11 @@ router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])
 router.include_router(rtas.router, prefix="/rtas", tags=["Road Traffic Collisions"])
-router.include_router(investigation_templates.router, prefix="/investigation-templates", tags=["Investigations"])
+router.include_router(
+    investigation_templates.router,
+    prefix="/investigation-templates",
+    tags=["Investigations"],
+)
 router.include_router(investigations.router, prefix="/investigations", tags=["Investigations"])
 router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
@@ -73,11 +77,19 @@ router.include_router(notifications.router, prefix="/notifications", tags=["Noti
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
 router.include_router(workflows.router, prefix="/workflows", tags=["Workflow Automation"])
-router.include_router(compliance_automation.router, prefix="/compliance-automation", tags=["Compliance Automation"])
+router.include_router(
+    compliance_automation.router,
+    prefix="/compliance-automation",
+    tags=["Compliance Automation"],
+)
 # Enterprise Risk Register & AI Intelligence (Tier 1 & 2)
 router.include_router(risk_register.router, prefix="/risk-register", tags=["Enterprise Risk Register"])
 router.include_router(ai_intelligence.router, prefix="/ai", tags=["AI Intelligence"])
-router.include_router(document_control.router, prefix="/document-control", tags=["Document Control System"])
+router.include_router(
+    document_control.router,
+    prefix="/document-control",
+    tags=["Document Control System"],
+)
 # ISO 27001 Information Security Management System
 router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS"])
 # UVDB Achilles Verify B2 Audit Protocol
@@ -88,7 +100,9 @@ router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet M
 router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
 # Cross-Standard ISO Mappings
 router.include_router(
-    cross_standard_mappings.router, prefix="/cross-standard-mappings", tags=["Cross-Standard Mappings"]
+    cross_standard_mappings.router,
+    prefix="/cross-standard-mappings",
+    tags=["Cross-Standard Mappings"],
 )
 # AI Copilot (Tier 2)
 router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])

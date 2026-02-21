@@ -57,11 +57,22 @@ class ExecutiveDashboardService:
             "at_risk": 0,
             "pending_alerts": 0,
         }
-        empty_compliance = {"total_assigned": 0, "completed": 0, "overdue": 0, "completion_rate": 100}
-        empty_sla = {"total_tracked": 0, "met": 0, "breached": 0, "compliance_rate": 100}
+        empty_compliance = {
+            "total_assigned": 0,
+            "completed": 0,
+            "overdue": 0,
+            "completion_rate": 100,
+        }
+        empty_sla = {
+            "total_tracked": 0,
+            "met": 0,
+            "breached": 0,
+            "compliance_rate": 100,
+        }
 
         incident_summary = await self._safe_call(
-            self._get_incident_summary(cutoff), {**empty_summary, "by_severity": {}, "high_severity": 0}
+            self._get_incident_summary(cutoff),
+            {**empty_summary, "by_severity": {}, "high_severity": 0},
         )
         near_miss_summary = await self._safe_call(self._get_near_miss_summary(cutoff), empty_summary)
         complaint_summary = await self._safe_call(self._get_complaint_summary(cutoff), empty_summary)
@@ -229,7 +240,7 @@ class ExecutiveDashboardService:
             "total_in_period": total,
             "open": open_count,
             "closed_in_period": closed_count,
-            "resolution_rate": round((closed_count / total * 100), 1) if total > 0 else 100,
+            "resolution_rate": (round((closed_count / total * 100), 1) if total > 0 else 100),
         }
 
     async def _get_rta_summary(self, cutoff: datetime) -> Dict[str, Any]:
@@ -324,7 +335,7 @@ class ExecutiveDashboardService:
             "total_assigned": total,
             "completed": completed,
             "overdue": overdue,
-            "completion_rate": round((completed / total * 100), 1) if total > 0 else 100,
+            "completion_rate": (round((completed / total * 100), 1) if total > 0 else 100),
         }
 
     async def _get_sla_summary(self) -> Dict[str, Any]:

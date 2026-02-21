@@ -15,7 +15,8 @@ class RiskControlBase(BaseModel):
     description: Optional[str] = None
     control_type: str = Field(default="preventive", pattern="^(preventive|detective|corrective|directive)$")
     implementation_status: str = Field(
-        default="planned", pattern="^(planned|in_progress|implemented|not_implemented|not_applicable)$"
+        default="planned",
+        pattern="^(planned|in_progress|implemented|not_implemented|not_applicable)$",
     )
     effectiveness: Optional[str] = Field(None, pattern="^(effective|partially_effective|ineffective|not_tested)$")
     owner_id: Optional[int] = None

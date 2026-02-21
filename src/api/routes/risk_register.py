@@ -30,6 +30,8 @@ from src.domain.models.risk_register import (
     RiskControlMapping,
 )
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -175,7 +177,7 @@ async def list_risks(
                 "status": r.status,
                 "is_within_appetite": r.is_within_appetite,
                 "risk_owner_name": r.risk_owner_name,
-                "next_review_date": r.next_review_date.isoformat() if r.next_review_date else None,
+                "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
             }
             for r in paginated.items
         ],
@@ -193,6 +195,8 @@ async def create_risk(
     data = risk_data.model_dump()
     data["tenant_id"] = current_user.tenant_id
     risk = await service.create_risk(data)
+    await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
+    track_metric("risk_register.mutation", 1)
 
     return {
         "id": risk.id,
@@ -213,6 +217,8 @@ async def update_risk(
     apply_updates(risk, risk_data)
     await db.commit()
     await db.refresh(risk)
+    await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
+    track_metric("risk_register.mutation", 1)
 
     return {"message": "EnterpriseRisk updated successfully", "id": risk.id}
 
@@ -252,6 +258,8 @@ async def delete_risk(
     risk.status = "closed"
     risk.updated_at = datetime.utcnow()
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
+    track_metric("risk_register.mutation", 1)
 
 
 # ============ Heat Map & Matrix Endpoints ============
@@ -330,7 +338,11 @@ async def get_bow_tie(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{risk_id}/bowtie/elements",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_bow_tie_element(
     risk_id: int,
     element: BowTieElementCreate,
@@ -408,6 +420,8 @@ async def create_kri(
     db.add(kri)
     await db.commit()
     await db.refresh(kri)
+    await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
+    track_metric("risk_register.mutation", 1)
 
     return {"id": kri.id, "message": "KRI created successfully"}
 
@@ -491,11 +505,17 @@ async def create_control(
     db.add(control)
     await db.commit()
     await db.refresh(control)
+    await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
+    track_metric("risk_register.mutation", 1)
 
     return {"id": control.id, "reference": reference, "message": "Control created"}
 
 
-@router.post("/{risk_id}/controls/{control_id}", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{risk_id}/controls/{control_id}",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+)
 async def link_control_to_risk(
     risk_id: int,
     control_id: int,
@@ -518,7 +538,10 @@ async def link_control_to_risk(
     ).scalar_one_or_none()
 
     if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Control already linked to this risk")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Control already linked to this risk",
+        )
 
     mapping = RiskControlMapping(
         risk_id=risk_id,
@@ -578,39 +601,65 @@ async def get_risk_summary(
     critical_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed")
+        .where(
+            tenant_filter,
+            EnterpriseRisk.residual_score > 16,
+            EnterpriseRisk.status != "closed",
+        )
     )
     high_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score.between(12, 16), EnterpriseRisk.status != "closed")
+        .where(
+            tenant_filter,
+            EnterpriseRisk.residual_score.between(12, 16),
+            EnterpriseRisk.status != "closed",
+        )
     )
     medium_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score.between(5, 11), EnterpriseRisk.status != "closed")
+        .where(
+            tenant_filter,
+            EnterpriseRisk.residual_score.between(5, 11),
+            EnterpriseRisk.status != "closed",
+        )
     )
     low_risks = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed")
+        .where(
+            tenant_filter,
+            EnterpriseRisk.residual_score <= 4,
+            EnterpriseRisk.status != "closed",
+        )
     )
     outside_appetite = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
         .where(
-            tenant_filter, EnterpriseRisk.is_within_appetite == False, EnterpriseRisk.status != "closed"
+            tenant_filter,
+            EnterpriseRisk.is_within_appetite == False,
+            EnterpriseRisk.status != "closed",
         )  # noqa: E712
     )
     overdue_review = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.utcnow(), EnterpriseRisk.status != "closed")
+        .where(
+            tenant_filter,
+            EnterpriseRisk.next_review_date < datetime.utcnow(),
+            EnterpriseRisk.status != "closed",
+        )
     )
     escalated = await db.scalar(
         select(func.count())
         .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed")  # noqa: E712
+        .where(
+            tenant_filter,
+            EnterpriseRisk.is_escalated == True,
+            EnterpriseRisk.status != "closed",
+        )  # noqa: E712
     )
 
     result = await db.execute(
@@ -696,12 +745,12 @@ async def get_risk(
         "risk_owner_id": risk.risk_owner_id,
         "risk_owner_name": risk.risk_owner_name,
         "review_frequency_days": risk.review_frequency_days,
-        "last_review_date": risk.last_review_date.isoformat() if risk.last_review_date else None,
-        "next_review_date": risk.next_review_date.isoformat() if risk.next_review_date else None,
+        "last_review_date": (risk.last_review_date.isoformat() if risk.last_review_date else None),
+        "next_review_date": (risk.next_review_date.isoformat() if risk.next_review_date else None),
         "review_notes": risk.review_notes,
         "is_escalated": risk.is_escalated,
         "escalation_reason": risk.escalation_reason,
-        "identified_date": risk.identified_date.isoformat() if risk.identified_date else None,
+        "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
         "controls": [
             {
                 "id": c.id,

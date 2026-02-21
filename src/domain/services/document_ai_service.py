@@ -356,7 +356,11 @@ class EmbeddingService:
                         "Authorization": f"Bearer {self.voyage_api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={"model": self.model, "input": texts, "input_type": "document"},
+                    json={
+                        "model": self.model,
+                        "input": texts,
+                        "input_type": "document",
+                    },
                     timeout=60.0,
                 )
                 response.raise_for_status()
@@ -407,7 +411,12 @@ class VectorSearchService:
         self.environment = getattr(settings, "pinecone_environment", "gcp-starter")
         self.embedding_service = EmbeddingService()
 
-    async def upsert_chunks(self, document_id: int, chunks: list[DocumentChunk], embeddings: list[list[float]]) -> bool:
+    async def upsert_chunks(
+        self,
+        document_id: int,
+        chunks: list[DocumentChunk],
+        embeddings: list[list[float]],
+    ) -> bool:
         """Upsert document chunks to Pinecone."""
 
         if not self.api_key or not embeddings:

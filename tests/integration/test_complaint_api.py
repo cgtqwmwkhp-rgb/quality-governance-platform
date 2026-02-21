@@ -30,7 +30,10 @@ async def test_create_complaint(client: AsyncClient, auth_headers: dict, test_se
 
     # Verify audit log
     result = await test_session.execute(
-        select(AuditEvent).where(AuditEvent.resource_type == "complaint", AuditEvent.event_type == "complaint.created")
+        select(AuditEvent).where(
+            AuditEvent.resource_type == "complaint",
+            AuditEvent.event_type == "complaint.created",
+        )
     )
     event = result.scalar_one_or_none()
     assert event is not None
@@ -67,8 +70,20 @@ async def test_list_complaints_deterministic_ordering(client: AsyncClient, auth_
         complainant_name="N1",
         reference_number="REF1",
     )
-    c2 = Complaint(title="C2", description="D2", received_date=now, complainant_name="N2", reference_number="REF2")
-    c3 = Complaint(title="C3", description="D3", received_date=now, complainant_name="N3", reference_number="REF3")
+    c2 = Complaint(
+        title="C2",
+        description="D2",
+        received_date=now,
+        complainant_name="N2",
+        reference_number="REF2",
+    )
+    c3 = Complaint(
+        title="C3",
+        description="D3",
+        received_date=now,
+        complainant_name="N3",
+        reference_number="REF3",
+    )
 
     test_session.add_all([c1, c2, c3])
     await test_session.commit()
@@ -100,14 +115,20 @@ async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, 
     await test_session.commit()
     await test_session.refresh(complaint)
 
-    data = {"status": ComplaintStatus.RESOLVED, "resolution_summary": "Found and delivered."}
+    data = {
+        "status": ComplaintStatus.RESOLVED,
+        "resolution_summary": "Found and delivered.",
+    }
     response = await client.patch(f"/api/v1/complaints/{complaint.id}", json=data, headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["status"] == ComplaintStatus.RESOLVED
 
     # Verify audit log
     result = await test_session.execute(
-        select(AuditEvent).where(AuditEvent.resource_type == "complaint", AuditEvent.event_type == "complaint.updated")
+        select(AuditEvent).where(
+            AuditEvent.resource_type == "complaint",
+            AuditEvent.event_type == "complaint.updated",
+        )
     )
     event = result.scalars().all()[-1]  # Get latest
     assert event.payload["new_status"] == ComplaintStatus.RESOLVED

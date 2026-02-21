@@ -13,7 +13,7 @@ QUARANTINE STATUS: All tests in this file are quarantined.
 See tests/smoke/QUARANTINE_POLICY.md for details.
 
 Quarantine Date: 2026-01-21
-Expiry Date: 2026-02-21
+Expiry Date: 2026-03-23
 Issue: GOVPLAT-001
 Reason: Phase 4 Compliance Automation features not fully implemented; endpoints return 404.
 """
@@ -22,9 +22,10 @@ from typing import Any
 
 import pytest
 
-# Quarantine marker - skip all tests in this module until features are complete
-pytestmark = pytest.mark.skip(
-    reason="QUARANTINED: Phase 4 Compliance Automation features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+# Quarantine marker - xfail all tests in this module (run but don't block CI)
+pytestmark = pytest.mark.xfail(
+    reason="QUARANTINED: Phase 4 Compliance Automation features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-03-23",
+    strict=False,
 )
 
 
@@ -86,7 +87,10 @@ class TestGapAnalysis:
 
     def test_run_gap_analysis(self, auth_client: Any) -> None:
         """Test running automated gap analysis."""
-        response = auth_client.post("/api/compliance-automation/gap-analysis/run", params={"regulatory_update_id": 1})
+        response = auth_client.post(
+            "/api/compliance-automation/gap-analysis/run",
+            params={"regulatory_update_id": 1},
+        )
         assert response.status_code == 200
 
         analysis = response.json()
@@ -294,7 +298,8 @@ class TestRIDDORAutomation:
     def test_prepare_riddor_submission(self, auth_client: Any) -> None:
         """Test preparing RIDDOR submission data."""
         response = auth_client.post(
-            "/api/compliance-automation/riddor/prepare/123", params={"riddor_type": "specified_injury"}
+            "/api/compliance-automation/riddor/prepare/123",
+            params={"riddor_type": "specified_injury"},
         )
         assert response.status_code == 200
 

@@ -88,7 +88,9 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     _audits_completed = _meter.create_counter("audits.completed", description="Number of audits completed")
     _audit_findings = _meter.create_counter("audits.findings", description="Number of audit findings")
     _api_response_time = _meter.create_histogram(
-        "api.response_time_ms", description="API response time in milliseconds", unit="ms"
+        "api.response_time_ms",
+        description="API response time in milliseconds",
+        unit="ms",
     )
     _db_query_time = _meter.create_histogram(
         "db.query_time_ms", description="Database query time in milliseconds", unit="ms"
@@ -111,7 +113,9 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     _documents_uploaded = _meter.create_counter("documents.uploaded", description="Number of documents uploaded")
     _workflows_completed = _meter.create_counter("workflows.completed", description="Number of workflows completed")
     _workflow_completion_time = _meter.create_histogram(
-        "workflow.completion_time_hours", description="Workflow completion time in hours", unit="h"
+        "workflow.completion_time_hours",
+        description="Workflow completion time in hours",
+        unit="h",
     )
 
     _error_rate_5xx = _meter.create_counter("api.error_rate_5xx", description="Count of 5xx HTTP errors")

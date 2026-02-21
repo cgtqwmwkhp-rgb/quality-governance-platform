@@ -268,7 +268,13 @@ class TestAuditService:
         severities = ["critical", "major", "minor", "observation", "opportunity"]
 
         for severity in severities:
-            assert severity in ["critical", "major", "minor", "observation", "opportunity"]
+            assert severity in [
+                "critical",
+                "major",
+                "minor",
+                "observation",
+                "opportunity",
+            ]
 
     def test_audit_score_calculation(self):
         """Audit score calculation is correct."""

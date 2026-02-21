@@ -128,26 +128,44 @@ class NotificationService:
         return notification
 
     async def create_bulk_notifications(
-        self, user_ids: List[int], notification_type: NotificationType, title: str, message: str, **kwargs
+        self,
+        user_ids: List[int],
+        notification_type: NotificationType,
+        title: str,
+        message: str,
+        **kwargs,
     ) -> List[Notification]:
         """Create notifications for multiple users"""
         notifications = []
         for user_id in user_ids:
             notification = await self.create_notification(
-                user_id=user_id, notification_type=notification_type, title=title, message=message, **kwargs
+                user_id=user_id,
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                **kwargs,
             )
             notifications.append(notification)
         return notifications
 
     async def _get_delivery_channels(
-        self, user_id: int, notification_type: NotificationType, priority: NotificationPriority
+        self,
+        user_id: int,
+        notification_type: NotificationType,
+        priority: NotificationPriority,
     ) -> List[NotificationChannel]:
         """Determine which channels to use based on preferences"""
         channels = [NotificationChannel.IN_APP]  # Always in-app
 
         # Critical notifications always go to all enabled channels
         if priority == NotificationPriority.CRITICAL:
-            channels.extend([NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.PUSH])
+            channels.extend(
+                [
+                    NotificationChannel.EMAIL,
+                    NotificationChannel.SMS,
+                    NotificationChannel.PUSH,
+                ]
+            )
             return channels
 
         # Get user preferences
@@ -160,7 +178,10 @@ class NotificationService:
             if prefs:
                 if prefs.email_enabled:
                     channels.append(NotificationChannel.EMAIL)
-                if prefs.sms_enabled and priority in [NotificationPriority.CRITICAL, NotificationPriority.HIGH]:
+                if prefs.sms_enabled and priority in [
+                    NotificationPriority.CRITICAL,
+                    NotificationPriority.HIGH,
+                ]:
                     channels.append(NotificationChannel.SMS)
                 if prefs.push_enabled:
                     channels.append(NotificationChannel.PUSH)
@@ -170,7 +191,9 @@ class NotificationService:
     async def _deliver_in_app(self, notification: Notification):
         """Deliver notification via WebSocket"""
         await connection_manager.send_to_user(
-            user_id=notification.user_id, message=notification.to_dict(), event_type="notification"
+            user_id=notification.user_id,
+            message=notification.to_dict(),
+            event_type="notification",
         )
         logger.debug(f"In-app notification sent to user {notification.user_id}")
 
@@ -202,7 +225,8 @@ class NotificationService:
 
             if prefs and prefs.phone_number:
                 await self.sms_service.send_sms(
-                    to=prefs.phone_number, message=f"{notification.title}\n\n{notification.message}"
+                    to=prefs.phone_number,
+                    message=f"{notification.title}\n\n{notification.message}",
                 )
                 logger.info(f"SMS sent to user {notification.user_id}")
 
@@ -345,7 +369,7 @@ class NotificationService:
             entity_id=entity_id,
             action_url=f"/{entity_type}s/{entity_id}",
             sender_id=assigned_by_user_id,
-            priority=NotificationPriority.MEDIUM if priority == "medium" else NotificationPriority.HIGH,
+            priority=(NotificationPriority.MEDIUM if priority == "medium" else NotificationPriority.HIGH),
         )
 
         return assignment
@@ -397,7 +421,8 @@ class NotificationService:
 
         result = await self.db.execute(
             select(func.count(Notification.id)).where(
-                Notification.user_id == user_id, Notification.is_read == False  # noqa: E712
+                Notification.user_id == user_id,
+                Notification.is_read == False,  # noqa: E712
             )
         )
         return result.scalar() or 0
@@ -477,7 +502,11 @@ RESPOND IMMEDIATELY
                 priority=NotificationPriority.CRITICAL,
                 entity_type="sos",
                 sender_id=reporter_id,
-                metadata={"reporter_name": reporter_name, "location": location, "gps_coordinates": gps_coordinates},
+                metadata={
+                    "reporter_name": reporter_name,
+                    "location": location,
+                    "gps_coordinates": gps_coordinates,
+                },
                 channels=[
                     NotificationChannel.IN_APP,
                     NotificationChannel.SMS,
@@ -490,7 +519,11 @@ RESPOND IMMEDIATELY
         return notifications
 
     async def send_riddor_alert(
-        self, incident_id: str, incident_type: str, location: str, compliance_team_ids: List[int]
+        self,
+        incident_id: str,
+        incident_type: str,
+        location: str,
+        compliance_team_ids: List[int],
     ) -> List[Notification]:
         """Send RIDDOR-reportable incident alert to compliance team"""
         message = f"""
@@ -517,7 +550,11 @@ Please review and submit RIDDOR report immediately.
                 entity_type="incident",
                 entity_id=incident_id,
                 action_url=f"/incidents/{incident_id}",
-                channels=[NotificationChannel.IN_APP, NotificationChannel.SMS, NotificationChannel.EMAIL],
+                channels=[
+                    NotificationChannel.IN_APP,
+                    NotificationChannel.SMS,
+                    NotificationChannel.EMAIL,
+                ],
             )
             notifications.append(notification)
 

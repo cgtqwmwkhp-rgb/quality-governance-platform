@@ -79,7 +79,8 @@ class TestETLAPIClient(unittest.TestCase):
     def test_create_incident_idempotent_skip(self, mock_urlopen):
         """Test idempotent skip on existing record (409)."""
         mock_urlopen.side_effect = self._mock_http_error(
-            409, {"detail": "Incident with reference number SAMPLE-INC-001 already exists"}
+            409,
+            {"detail": "Incident with reference number SAMPLE-INC-001 already exists"},
         )
 
         result = self.client.create_incident(

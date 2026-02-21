@@ -331,7 +331,10 @@ async def approve_request(step_id: int, response: ApprovalResponse, db: DbSessio
 async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: CurrentUser):
     """Reject a workflow step."""
     if not response.reason:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reason required for rejection")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reason required for rejection",
+        )
     try:
         result = await engine.reject_step(db, step_id, current_user.id, response.reason)
     except ValueError as exc:

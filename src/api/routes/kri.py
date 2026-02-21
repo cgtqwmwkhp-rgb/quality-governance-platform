@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import and_, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.kri import (
@@ -31,6 +32,8 @@ from src.api.utils.update import apply_updates
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 
@@ -49,7 +52,14 @@ async def list_kris(
     kri_status: Optional[str] = Query(None, alias="status", description="Filter by current status"),
 ):
     """List all KRIs with optional filtering."""
-    query = select(KeyRiskIndicator).where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
+    query = (
+        select(KeyRiskIndicator)
+        .options(
+            selectinload(KeyRiskIndicator.measurements),
+            selectinload(KeyRiskIndicator.alerts),
+        )
+        .where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
+    )
 
     filters = []
     if category:
@@ -97,6 +107,8 @@ async def create_kri(
     db.add(kri)
     await db.commit()
     await db.refresh(kri)
+    await invalidate_tenant_cache(current_user.tenant_id, "kri")
+    track_metric("kri.mutation", 1)
 
     return KRIResponse.from_orm(kri)
 
@@ -134,7 +146,13 @@ async def get_kri(
     current_user: CurrentUser,
 ):
     """Get a specific KRI."""
-    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
+    kri = await get_or_404(
+        db,
+        KeyRiskIndicator,
+        kri_id,
+        detail="KRI not found",
+        tenant_id=current_user.tenant_id,
+    )
     return KRIResponse.from_orm(kri)
 
 
@@ -146,12 +164,20 @@ async def update_kri(
     current_user: CurrentUser,
 ):
     """Update a KRI."""
-    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
+    kri = await get_or_404(
+        db,
+        KeyRiskIndicator,
+        kri_id,
+        detail="KRI not found",
+        tenant_id=current_user.tenant_id,
+    )
     apply_updates(kri, kri_data, set_updated_at=False)
     kri.updated_by = current_user.email
 
     await db.commit()
     await db.refresh(kri)
+    await invalidate_tenant_cache(current_user.tenant_id, "kri")
+    track_metric("kri.mutation", 1)
 
     return KRIResponse.from_orm(kri)
 
@@ -163,9 +189,17 @@ async def delete_kri(
     current_user: CurrentSuperuser,
 ):
     """Delete a KRI (superuser only)."""
-    kri = await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
+    kri = await get_or_404(
+        db,
+        KeyRiskIndicator,
+        kri_id,
+        detail="KRI not found",
+        tenant_id=current_user.tenant_id,
+    )
     await db.delete(kri)
     await db.commit()
+    await invalidate_tenant_cache(current_user.tenant_id, "kri")
+    track_metric("kri.mutation", 1)
 
 
 @router.post("/{kri_id}/calculate")
@@ -175,7 +209,13 @@ async def calculate_kri(
     current_user: CurrentUser,
 ):
     """Trigger calculation for a specific KRI."""
-    await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
+    await get_or_404(
+        db,
+        KeyRiskIndicator,
+        kri_id,
+        detail="KRI not found",
+        tenant_id=current_user.tenant_id,
+    )
     kri_service = KRIService(db)
     result = await kri_service.calculate_kri(kri_id)
 
@@ -198,7 +238,13 @@ async def get_kri_measurements(
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get measurement history for a KRI."""
-    await get_or_404(db, KeyRiskIndicator, kri_id, detail="KRI not found", tenant_id=current_user.tenant_id)
+    await get_or_404(
+        db,
+        KeyRiskIndicator,
+        kri_id,
+        detail="KRI not found",
+        tenant_id=current_user.tenant_id,
+    )
 
     result = await db.execute(
         select(KRIMeasurement)
@@ -252,7 +298,13 @@ async def acknowledge_alert(
     notes: Optional[str] = None,
 ):
     """Acknowledge a KRI alert."""
-    alert = await get_or_404(db, KRIAlert, alert_id, detail="Alert not found", tenant_id=current_user.tenant_id)
+    alert = await get_or_404(
+        db,
+        KRIAlert,
+        alert_id,
+        detail="Alert not found",
+        tenant_id=current_user.tenant_id,
+    )
 
     alert.is_acknowledged = True
     alert.acknowledged_at = datetime.utcnow()
@@ -272,7 +324,13 @@ async def resolve_alert(
     notes: Optional[str] = None,
 ):
     """Resolve a KRI alert."""
-    alert = await get_or_404(db, KRIAlert, alert_id, detail="Alert not found", tenant_id=current_user.tenant_id)
+    alert = await get_or_404(
+        db,
+        KRIAlert,
+        alert_id,
+        detail="Alert not found",
+        tenant_id=current_user.tenant_id,
+    )
 
     alert.is_resolved = True
     alert.resolved_at = datetime.utcnow()
@@ -362,7 +420,10 @@ async def get_incident_sif_assessment(
     incident = await get_or_404(db, Incident, incident_id, detail="Incident not found")
 
     if not incident.sif_classification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No SIF assessment found for this incident")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No SIF assessment found for this incident",
+        )
 
     return SIFAssessmentResponse(
         incident_id=incident.id,

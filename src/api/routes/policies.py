@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -131,6 +132,7 @@ async def list_policies(
     """
     query = (
         select(Policy)
+        .options(selectinload(Policy.versions))
         .where(Policy.tenant_id == current_user.tenant_id)
         .order_by(Policy.reference_number.desc(), Policy.id.asc())
     )

@@ -704,7 +704,7 @@ class EvidenceMatcher:
                     "title": ce.title,
                     "description": ce.description,
                     "file_path": ce.file_path,
-                    "last_updated": ce.updated_at.isoformat() if ce.updated_at else None,
+                    "last_updated": (ce.updated_at.isoformat() if ce.updated_at else None),
                     "match_confidence": 95,
                 }
             )
@@ -957,7 +957,7 @@ RECOMMENDATION:
                     "objective_evidence": finding.evidence,
                     "root_cause_category": classification["root_cause_category"],
                     "corrective_action_required": finding.corrective_action,
-                    "due_date": finding.due_date.isoformat() if finding.due_date else None,
+                    "due_date": (finding.due_date.isoformat() if finding.due_date else None),
                     "status": finding.status,
                 }
             )

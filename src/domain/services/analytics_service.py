@@ -37,6 +37,7 @@ class AnalyticsService:
         self,
         time_range: str = "last_30_days",
         filters: Optional[Dict[str, Any]] = None,
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get summary KPIs across all modules.
@@ -93,6 +94,7 @@ class AnalyticsService:
         granularity: str = "daily",
         time_range: str = "last_30_days",
         group_by: Optional[str] = None,
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get time series trend data for charting.
@@ -215,6 +217,7 @@ class AnalyticsService:
         metric: str,
         industry: str = "utilities",
         region: str = "uk",
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Compare organization metrics against industry benchmarks.
@@ -278,7 +281,11 @@ class AnalyticsService:
             },
         )
 
-    def get_benchmark_summary(self, industry: str = "utilities") -> Dict[str, Any]:
+    def get_benchmark_summary(
+        self,
+        industry: str = "utilities",
+        tenant_id: int | None = None,
+    ) -> Dict[str, Any]:
         """Get summary of all benchmark comparisons."""
         metrics = [
             "incident_rate",
@@ -325,6 +332,7 @@ class AnalyticsService:
     def calculate_cost_of_non_compliance(
         self,
         time_range: str = "last_12_months",
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Calculate total cost of non-compliance.
@@ -395,6 +403,7 @@ class AnalyticsService:
     def calculate_roi(
         self,
         investment_id: Optional[int] = None,
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Calculate ROI for safety investments.
@@ -492,6 +501,7 @@ class AnalyticsService:
     def generate_executive_summary(
         self,
         time_range: str = "last_month",
+        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Generate executive summary for automated reports.

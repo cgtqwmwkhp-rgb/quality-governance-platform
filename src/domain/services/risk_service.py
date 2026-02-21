@@ -213,7 +213,10 @@ class RiskService:
         return risk
 
     async def _record_assessment(
-        self, risk: EnterpriseRisk, assessed_by: Optional[int] = None, notes: Optional[str] = None
+        self,
+        risk: EnterpriseRisk,
+        assessed_by: Optional[int] = None,
+        notes: Optional[str] = None,
     ) -> None:
         """Record assessment in history"""
         history = RiskAssessmentHistory(
@@ -429,8 +432,8 @@ class KRIService:
                     "green_threshold": k.green_threshold,
                     "amber_threshold": k.amber_threshold,
                     "red_threshold": k.red_threshold,
-                    "last_updated": k.last_updated.isoformat() if k.last_updated else None,
-                    "trend": self._calculate_trend(k.historical_values) if k.historical_values else "stable",
+                    "last_updated": (k.last_updated.isoformat() if k.last_updated else None),
+                    "trend": (self._calculate_trend(k.historical_values) if k.historical_values else "stable"),
                 }
                 for k in kris
             ],
@@ -547,7 +550,10 @@ class BowTieService:
 
         max_order = await self.db.scalar(
             select(func.max(BowTieElement.order_index)).where(
-                and_(BowTieElement.risk_id == risk_id, BowTieElement.element_type == element_type)
+                and_(
+                    BowTieElement.risk_id == risk_id,
+                    BowTieElement.element_type == element_type,
+                )
             )
         )
         max_order = max_order or 0

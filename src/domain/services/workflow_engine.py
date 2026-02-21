@@ -64,7 +64,12 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
                 "approvers": ["safety_manager"],
                 "sla_hours": 4,
             },
-            {"name": "HSE Notification", "type": "task", "assignee_role": "safety_manager", "sla_hours": 8},
+            {
+                "name": "HSE Notification",
+                "type": "task",
+                "assignee_role": "safety_manager",
+                "sla_hours": 8,
+            },
             {
                 "name": "Management Sign-off",
                 "type": "approval",
@@ -72,9 +77,20 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
                 "approvers": ["operations_director"],
                 "sla_hours": 4,
             },
-            {"name": "Final Submission", "type": "task", "assignee_role": "compliance_officer", "sla_hours": 4},
+            {
+                "name": "Final Submission",
+                "type": "task",
+                "assignee_role": "compliance_officer",
+                "sla_hours": 4,
+            },
         ],
-        "escalation_rules": [{"trigger": "sla_breach", "escalate_to": "operations_director", "priority": "critical"}],
+        "escalation_rules": [
+            {
+                "trigger": "sla_breach",
+                "escalate_to": "operations_director",
+                "priority": "critical",
+            }
+        ],
     },
     {
         "code": "CAPA",
@@ -86,7 +102,12 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "sla_hours": 168,
         "warning_hours": 120,
         "steps": [
-            {"name": "Root Cause Analysis", "type": "task", "assignee": "action_owner", "sla_hours": 48},
+            {
+                "name": "Root Cause Analysis",
+                "type": "task",
+                "assignee": "action_owner",
+                "sla_hours": 48,
+            },
             {
                 "name": "Action Plan Review",
                 "type": "approval",
@@ -94,7 +115,12 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
                 "approvers": ["quality_manager"],
                 "sla_hours": 24,
             },
-            {"name": "Implementation", "type": "task", "assignee": "action_owner", "sla_hours": 72},
+            {
+                "name": "Implementation",
+                "type": "task",
+                "assignee": "action_owner",
+                "sla_hours": 72,
+            },
             {
                 "name": "Effectiveness Verification",
                 "type": "approval",
@@ -114,8 +140,18 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "sla_hours": 72,
         "warning_hours": 48,
         "steps": [
-            {"name": "NCR Registration", "type": "task", "assignee_role": "quality_team", "sla_hours": 8},
-            {"name": "Root Cause Investigation", "type": "task", "assignee": "finding_owner", "sla_hours": 24},
+            {
+                "name": "NCR Registration",
+                "type": "task",
+                "assignee_role": "quality_team",
+                "sla_hours": 8,
+            },
+            {
+                "name": "Root Cause Investigation",
+                "type": "task",
+                "assignee": "finding_owner",
+                "sla_hours": 24,
+            },
             {
                 "name": "Corrective Action Plan",
                 "type": "approval",
@@ -123,7 +159,12 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
                 "approvers": ["quality_manager", "department_head"],
                 "sla_hours": 16,
             },
-            {"name": "Implementation & Closure", "type": "task", "assignee": "finding_owner", "sla_hours": 24},
+            {
+                "name": "Implementation & Closure",
+                "type": "task",
+                "assignee": "finding_owner",
+                "sla_hours": 24,
+            },
         ],
     },
     {
@@ -136,9 +177,24 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
         "sla_hours": 120,
         "warning_hours": 96,
         "steps": [
-            {"name": "Initial Assessment", "type": "task", "assignee_role": "safety_manager", "sla_hours": 4},
-            {"name": "Evidence Collection", "type": "task", "assignee_role": "investigator", "sla_hours": 24},
-            {"name": "Root Cause Analysis", "type": "task", "assignee_role": "investigator", "sla_hours": 48},
+            {
+                "name": "Initial Assessment",
+                "type": "task",
+                "assignee_role": "safety_manager",
+                "sla_hours": 4,
+            },
+            {
+                "name": "Evidence Collection",
+                "type": "task",
+                "assignee_role": "investigator",
+                "sla_hours": 24,
+            },
+            {
+                "name": "Root Cause Analysis",
+                "type": "task",
+                "assignee_role": "investigator",
+                "sla_hours": 48,
+            },
             {
                 "name": "Findings Review",
                 "type": "approval",
@@ -146,7 +202,12 @@ DEFAULT_TEMPLATES: List[Dict[str, Any]] = [
                 "approvers": ["safety_manager", "operations_manager"],
                 "sla_hours": 24,
             },
-            {"name": "Action Assignment", "type": "task", "assignee_role": "safety_manager", "sla_hours": 8},
+            {
+                "name": "Action Assignment",
+                "type": "task",
+                "assignee_role": "safety_manager",
+                "sla_hours": 8,
+            },
             {
                 "name": "Management Sign-off",
                 "type": "approval",
@@ -382,7 +443,12 @@ async def advance_workflow(
     instance.updated_at = now
     await db.flush()
 
-    logger.info("Advanced workflow %s — step %s → %s", instance_id, current_step.step_name, outcome)
+    logger.info(
+        "Advanced workflow %s — step %s → %s",
+        instance_id,
+        current_step.step_name,
+        outcome,
+    )
 
     return {
         "workflow_id": instance_id,
@@ -971,7 +1037,12 @@ class ActionExecutor:
         role = config.get("role")
         department = config.get("department", entity_data.get("department"))
         logger.info(f"Would assign to role: {role} in department: {department}")
-        return {"action": "assign_to_role", "role": role, "department": department, "pending_user_lookup": True}
+        return {
+            "action": "assign_to_role",
+            "role": role,
+            "department": department,
+            "pending_user_lookup": True,
+        }
 
     async def _execute_change_status(
         self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
@@ -995,7 +1066,11 @@ class ActionExecutor:
 
             await self.db.execute(sa_update(model).where(model.id == entity_id).values(priority=new_priority))
             await self.db.commit()
-        return {"action": "change_priority", "new_priority": new_priority, "completed": True}
+        return {
+            "action": "change_priority",
+            "new_priority": new_priority,
+            "completed": True,
+        }
 
     async def _execute_escalate(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         current_level = entity_data.get("escalation_level", 0)
@@ -1024,7 +1099,10 @@ class ActionExecutor:
 
             if escalation.escalate_to_user_id:
                 await self._execute_assign_to_user(
-                    {"user_id": escalation.escalate_to_user_id}, entity_type, entity_id, entity_data
+                    {"user_id": escalation.escalate_to_user_id},
+                    entity_type,
+                    entity_id,
+                    entity_data,
                 )
 
             return {
@@ -1047,7 +1125,11 @@ class ActionExecutor:
         risk_id = config.get("risk_id") or entity_data.get("risk_id")
         score_adjustment = config.get("score_adjustment", 0)
         logger.info(f"Would update risk score: risk_id={risk_id}, adjustment={score_adjustment}")
-        return {"action": "update_risk_score", "risk_id": risk_id, "adjustment": score_adjustment}
+        return {
+            "action": "update_risk_score",
+            "risk_id": risk_id,
+            "adjustment": score_adjustment,
+        }
 
     async def _execute_log_audit_event(
         self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict
@@ -1062,7 +1144,12 @@ class ActionExecutor:
         title = config.get("title", f"Follow-up for {entity_type.value} #{entity_id}")
         due_days = config.get("due_days", 7)
         logger.info(f"Would create task: {title}, due in {due_days} days")
-        return {"action": "create_task", "title": title, "due_days": due_days, "created": True}
+        return {
+            "action": "create_task",
+            "title": title,
+            "due_days": due_days,
+            "created": True,
+        }
 
     async def _execute_webhook(self, config: Dict, entity_type: EntityType, entity_id: int, entity_data: Dict) -> Dict:
         url = config.get("url")
@@ -1116,7 +1203,11 @@ class RuleEvaluator:
                 continue
 
             action_result = await self.action_executor.execute(
-                rule.action_type, rule.action_config, entity_type, entity_id, entity_data
+                rule.action_type,
+                rule.action_config,
+                entity_type,
+                entity_id,
+                entity_data,
             )
 
             execution = RuleExecution(
@@ -1244,7 +1335,10 @@ class RuleEvaluator:
                     tracking.entity_type,
                     tracking.entity_id,
                     TriggerEvent.SLA_WARNING,
-                    {"sla_tracking_id": tracking.id, "percent_elapsed": percent_elapsed},
+                    {
+                        "sla_tracking_id": tracking.id,
+                        "percent_elapsed": percent_elapsed,
+                    },
                 )
                 tracking.warning_sent = True
                 results.append(

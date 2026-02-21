@@ -231,7 +231,9 @@ class RiskControlMapping(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
     control_id: Mapped[int] = mapped_column(
-        ForeignKey("enterprise_risk_controls.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("enterprise_risk_controls.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Mapping details

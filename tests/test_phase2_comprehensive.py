@@ -74,8 +74,18 @@ class TestFiveWhysAnalysis:
         analysis = FiveWhysAnalysis(
             problem_statement="System crash",
             whys=[
-                {"level": 1, "why": "Why crash?", "answer": "Memory full", "evidence": None},
-                {"level": 2, "why": "Why memory full?", "answer": "Memory leak", "evidence": None},
+                {
+                    "level": 1,
+                    "why": "Why crash?",
+                    "answer": "Memory full",
+                    "evidence": None,
+                },
+                {
+                    "level": 2,
+                    "why": "Why memory full?",
+                    "answer": "Memory leak",
+                    "evidence": None,
+                },
             ],
             primary_root_cause="Memory leak in module X",
         )
@@ -112,7 +122,9 @@ class TestFishboneDiagram:
         )
 
         diagram.add_cause(
-            FishboneCategory.MANPOWER, "Inadequate training", ["No refresher courses", "Outdated materials"]
+            FishboneCategory.MANPOWER,
+            "Inadequate training",
+            ["No refresher courses", "Outdated materials"],
         )
 
         assert len(diagram.causes["manpower"]) == 1

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.security import decode_token, is_token_revoked
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 # Security scheme - auto_error=False allows optional auth
 security = HTTPBearer()
@@ -31,14 +32,17 @@ async def get_current_user(
     payload = decode_token(token)
 
     if payload is None:
+        track_metric("auth.failure", 1)
         raise credentials_exception
 
     jti = payload.get("jti")
     if jti and await is_token_revoked(jti, db):
+        track_metric("auth.failure", 1)
         raise credentials_exception
 
     user_id_raw = payload.get("sub")
     if user_id_raw is None:
+        track_metric("auth.failure", 1)
         raise credentials_exception
     user_id: str = str(user_id_raw)
 
@@ -49,9 +53,11 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if user is None:
+        track_metric("auth.failure", 1)
         raise credentials_exception
 
     if not user.is_active:
+        track_metric("auth.failure", 1)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",

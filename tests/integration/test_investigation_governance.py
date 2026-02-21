@@ -368,7 +368,10 @@ class TestIncidentsInvestigationLinkage:
         assert len(data["items"]) == 25
 
         # Test page 2
-        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations?page=2", headers=auth_headers)
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page=2",
+            headers=auth_headers,
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 30
@@ -379,7 +382,8 @@ class TestIncidentsInvestigationLinkage:
 
         # Test custom page_size
         response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=10", headers=auth_headers
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=10",
+            headers=auth_headers,
         )
         assert response.status_code == 200
         data = response.json()
@@ -394,12 +398,16 @@ class TestIncidentsInvestigationLinkage:
     ):
         """Test that invalid page parameter returns 422 validation error."""
         # page=0 should fail (must be >= 1)
-        response = await client.get(f"/api/v1/incidents/{test_incident.id}/investigations?page=0", headers=auth_headers)
+        response = await client.get(
+            f"/api/v1/incidents/{test_incident.id}/investigations?page=0",
+            headers=auth_headers,
+        )
         assert response.status_code == 422
 
         # page=-1 should fail
         response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations?page=-1", headers=auth_headers
+            f"/api/v1/incidents/{test_incident.id}/investigations?page=-1",
+            headers=auth_headers,
         )
         assert response.status_code == 422
 
@@ -409,19 +417,22 @@ class TestIncidentsInvestigationLinkage:
         """Test that invalid page_size parameter returns 422 validation error."""
         # page_size=0 should fail (must be >= 1)
         response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=0", headers=auth_headers
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=0",
+            headers=auth_headers,
         )
         assert response.status_code == 422
 
         # page_size=101 should fail (must be <= 100)
         response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=101", headers=auth_headers
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=101",
+            headers=auth_headers,
         )
         assert response.status_code == 422
 
         # page_size=999 should fail
         response = await client.get(
-            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=999", headers=auth_headers
+            f"/api/v1/incidents/{test_incident.id}/investigations?page_size=999",
+            headers=auth_headers,
         )
         assert response.status_code == 422
 
