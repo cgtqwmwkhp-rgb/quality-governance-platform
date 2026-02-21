@@ -436,6 +436,7 @@ export interface Complaint {
   related_reference?: string
   department?: string
   resolution_summary?: string
+  due_date?: string
   created_at: string
 }
 
@@ -1582,6 +1583,8 @@ export interface UserSearchResult {
   id: number
   email: string
   full_name: string
+  display_name?: string
+  avatar_url?: string
   department?: string
 }
 
@@ -1734,6 +1737,7 @@ export interface RiskEntry {
   title: string
   description?: string
   category?: string
+  department?: string
   risk_owner?: string
   status: string
   likelihood?: number
@@ -1743,9 +1747,15 @@ export interface RiskEntry {
   residual_impact?: number
   residual_score?: number
   treatment_strategy?: string
+  treatment_plan?: string
   review_date?: string
   created_at: string
   updated_at?: string
+  risk_owner_name?: string
+  review_frequency_days?: number
+  inherent_likelihood?: number
+  inherent_impact?: number
+  inherent_score?: number
 }
 
 export interface RiskHeatmapData {
@@ -1925,6 +1935,7 @@ export interface NotificationEntry {
   entity_id?: string
   action_url?: string
   sender_id?: number
+  sender_name?: string
   is_read: boolean
   created_at: string
 }

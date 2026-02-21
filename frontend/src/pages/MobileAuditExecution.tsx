@@ -115,6 +115,7 @@ interface MobileRunApiResponse {
   id: number | string;
   is_na?: boolean;
   response_value?: string;
+  text_response?: string;
   score?: number;
   notes?: string;
   flagged?: boolean;

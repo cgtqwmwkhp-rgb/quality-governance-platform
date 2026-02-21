@@ -285,8 +285,8 @@ export default function PortalTrack() {
           reference_number: item.reference_number,
           report_type: item.report_type,
           title: item.title,
-          status: item.status?.toUpperCase() || 'OPEN',
-          status_label: item.status_label || getStatusLabel(item.status),
+          status: String(item.status || '').toUpperCase() || 'OPEN',
+          status_label: String(item.status_label || '') || getStatusLabel(String(item.status || '')),
           submitted_at: item.submitted_at,
           updated_at: item.updated_at,
         }));

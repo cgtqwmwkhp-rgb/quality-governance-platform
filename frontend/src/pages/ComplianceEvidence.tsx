@@ -138,12 +138,12 @@ export default function ComplianceEvidence() {
           if (data?.covered_clauses && Array.isArray(data.covered_clauses)) {
             data.covered_clauses.forEach((link: Record<string, string | number | boolean | null>, idx: number) => {
               items.push({
-                id: `ev-${idx}`, type: (link.entity_type || 'document') as EvidenceType,
-                title: link.entity_name || link.entity_type || 'Linked Evidence',
-                description: `Evidence linked to clause ${link.clause_id}`,
-                date: link.created_at || new Date().toISOString().split('T')[0],
-                status: 'active', linkedClauses: [link.clause_id],
-                autoTagged: link.linked_by === 'auto', confidence: link.confidence ? link.confidence * 100 : undefined,
+                id: `ev-${idx}`, type: (String(link.entity_type || 'document')) as EvidenceType,
+                title: String(link.entity_name || link.entity_type || 'Linked Evidence'),
+                description: `Evidence linked to clause ${String(link.clause_id)}`,
+                date: String(link.created_at || new Date().toISOString().split('T')[0]),
+                status: 'active', linkedClauses: [String(link.clause_id)],
+                autoTagged: link.linked_by === 'auto', confidence: link.confidence ? Number(link.confidence) * 100 : undefined,
                 link: '#',
               });
             });
