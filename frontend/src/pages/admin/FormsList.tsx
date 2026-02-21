@@ -138,8 +138,19 @@ export default function FormsList() {
         form_type: form.form_type,
         description: form.description,
       });
-      const c = created as unknown as Record<string, unknown>;
-      setForms((prev) => [...prev, { ...c, steps_count: c.steps_count ?? 0, fields_count: c.fields_count ?? 0, updated_at: c.updated_at ?? '' }]);
+      setForms((prev) => [...prev, {
+        id: created.id,
+        name: created.name,
+        slug: created.slug,
+        form_type: created.form_type,
+        description: created.description,
+        is_active: created.is_active,
+        is_published: created.is_published,
+        version: created.version,
+        steps_count: created.steps_count ?? 0,
+        fields_count: created.fields_count ?? 0,
+        updated_at: created.updated_at ?? '',
+      }]);
     } catch {
       console.error('Failed to duplicate form');
       showToast('Failed to duplicate form', 'error');

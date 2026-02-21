@@ -929,7 +929,7 @@ export interface Action {
   description: string
   action_type: string
   priority: string
-  status: 'open' | 'in_progress' | 'pending_verification' | 'completed' | 'cancelled'
+  status: 'open' | 'in_progress' | 'pending_verification' | 'completed' | 'cancelled' | 'closed'
   due_date?: string
   completed_at?: string
   completion_notes?: string
