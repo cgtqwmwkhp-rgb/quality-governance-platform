@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.tenant import verify_tenant_access
 from src.domain.services.tenant_service import TenantService
 
 router = APIRouter()
@@ -144,6 +145,7 @@ async def get_tenant(
     current_user: CurrentUser,
 ) -> Any:
     """Get tenant by ID."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
     tenant = await service.get_tenant(tenant_id)
 
@@ -161,6 +163,7 @@ async def update_tenant(
     current_user: CurrentUser,
 ) -> Any:
     """Update tenant settings."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
 
     try:
@@ -184,6 +187,7 @@ async def update_branding(
     current_user: CurrentUser,
 ) -> Any:
     """Update tenant branding."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
 
     try:
@@ -205,6 +209,7 @@ async def list_tenant_users(
     current_user: CurrentUser,
 ) -> Any:
     """List all users in a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
     users = await service.get_tenant_users(tenant_id)
 
@@ -230,6 +235,7 @@ async def add_user_to_tenant(
     current_user: CurrentUser,
 ) -> Any:
     """Add a user to a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
 
     if not await service.can_add_user(tenant_id):
@@ -254,6 +260,7 @@ async def remove_user_from_tenant(
     current_user: CurrentUser,
 ) -> Any:
     """Remove a user from a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
 
     try:
@@ -276,6 +283,7 @@ async def create_invitation(
     current_user: CurrentUser,
 ) -> Any:
     """Create an invitation to join a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
 
     invitation = await service.create_invitation(
@@ -321,6 +329,7 @@ async def get_features(
     current_user: CurrentUser,
 ) -> Any:
     """Get enabled features for a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
     tenant = await service.get_tenant(tenant_id)
 
@@ -339,6 +348,7 @@ async def toggle_feature(
     enabled: bool = True,
 ) -> Any:
     """Enable or disable a feature for a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
 
     if enabled:
@@ -361,6 +371,7 @@ async def get_limits(
     current_user: CurrentUser,
 ) -> Any:
     """Get usage limits for a tenant."""
+    await verify_tenant_access(tenant_id, current_user)
     service = TenantService(db)
     tenant = await service.get_tenant(tenant_id)
 

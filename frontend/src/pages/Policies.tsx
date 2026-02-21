@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -176,7 +176,7 @@ export default function Policies() {
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between">
-                <Badge variant={getStatusVariant(policy.status) as any}>
+                <Badge variant={getStatusVariant(policy.status) as BadgeVariant}>
                   {policy.status.replace('_', ' ')}
                 </Badge>
                 <span className="text-xs text-muted-foreground">

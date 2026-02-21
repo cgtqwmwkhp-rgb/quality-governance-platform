@@ -51,7 +51,7 @@ from src.domain.models.audit import (
     FindingStatus,
 )
 from src.domain.services.audit_service import record_audit_event
-from src.services.reference_number import ReferenceNumberService
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 

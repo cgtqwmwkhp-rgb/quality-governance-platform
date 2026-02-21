@@ -136,7 +136,7 @@ export default function RiskRegister() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [detailRisk, setDetailRisk] = useState<Record<string, any> | null>(null)
+  const [detailRisk, setDetailRisk] = useState<Record<string, unknown> | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [createForm, setCreateForm] = useState({ ...EMPTY_FORM })
   const [editForm, setEditForm] = useState({ ...EMPTY_FORM })
@@ -172,38 +172,38 @@ export default function RiskRegister() {
     try {
       setLoading(true)
       setError(null)
-      const params: Record<string, any> = { skip: 0, limit: 100 }
+      const params: Record<string, string | number> = { skip: 0, limit: 100 }
       if (filterCategory) params.category = filterCategory
       if (filterStatus) params.status = filterStatus
 
       const res = await riskRegisterApi.list(params)
-      const data = res.data as any
-      const items = data?.risks || data?.items || []
-      const mapped: Risk[] = items.map((r: any) => {
+      const data = res.data as Record<string, unknown>
+      const rawItems = (data?.risks ?? data?.items ?? []) as Record<string, unknown>[]
+      const mapped: Risk[] = rawItems.map((r) => {
         const resScore = Number(r.residual_score || 0)
         const inhScore = Number(r.inherent_score || 0)
-        const level = r.risk_level || scoreToLevel(resScore || inhScore)
+        const level = String(r.risk_level || scoreToLevel(resScore || inhScore))
         return {
           id: Number(r.id),
           reference: String(r.reference || `RISK-${String(r.id).padStart(4, '0')}`),
           title: String(r.title || ''),
-          description: r.description || '',
+          description: String(r.description || ''),
           category: String(r.category || 'operational'),
           department: String(r.department || ''),
           inherent_score: inhScore,
-          inherent_likelihood: r.inherent_likelihood,
-          inherent_impact: r.inherent_impact,
+          inherent_likelihood: Number(r.inherent_likelihood || 0),
+          inherent_impact: Number(r.inherent_impact || 0),
           residual_score: resScore,
-          residual_likelihood: r.residual_likelihood,
-          residual_impact: r.residual_impact,
+          residual_likelihood: Number(r.residual_likelihood || 0),
+          residual_impact: Number(r.residual_impact || 0),
           risk_level: level,
-          risk_color: r.risk_color || levelToColor(level),
+          risk_color: String(r.risk_color || levelToColor(level)),
           treatment_strategy: String(r.treatment_strategy || 'treat'),
-          treatment_plan: r.treatment_plan,
+          treatment_plan: String(r.treatment_plan || ''),
           status: String(r.status || 'monitoring'),
           is_within_appetite: r.is_within_appetite !== false,
           risk_owner_name: String(r.risk_owner_name || ''),
-          next_review_date: r.next_review_date || null,
+          next_review_date: r.next_review_date ? String(r.next_review_date) : null,
         }
       })
       setRisks(mapped)
@@ -211,9 +211,9 @@ export default function RiskRegister() {
       // Load summary from API
       try {
         const summaryRes = await riskRegisterApi.getSummary()
-        const sd = summaryRes.data as any
+        const sd = summaryRes.data as Record<string, unknown>
         setSummary({
-          total_risks: sd?.total_risks || mapped.length,
+          total_risks: Number(sd?.total_risks || mapped.length),
           by_level: sd?.by_level || {
             critical: mapped.filter(r => r.risk_level === 'critical').length,
             high: mapped.filter(r => r.risk_level === 'high').length,
@@ -241,7 +241,7 @@ export default function RiskRegister() {
       // Load heatmap from API
       try {
         const hmRes = await riskRegisterApi.getHeatmap()
-        setHeatMapData(hmRes.data as any)
+        setHeatMapData(hmRes.data as unknown as HeatMapData)
       } catch {
         setHeatMapData(null)
       }
@@ -260,7 +260,7 @@ export default function RiskRegister() {
     try {
       setBowTieLoading(true)
       const res = await riskRegisterApi.getBowtie(riskId)
-      setBowTieData(res.data as any)
+      setBowTieData(res.data as unknown as BowTieData)
     } catch {
       setBowTieData(null)
       showToast('Bow-tie data not available for this risk', 'info')
@@ -274,7 +274,7 @@ export default function RiskRegister() {
       setDetailLoading(true)
       setShowDetailModal(true)
       const res = await riskRegisterApi.get(risk.id)
-      setDetailRisk(res.data as any)
+      setDetailRisk(res.data as unknown as Record<string, unknown>)
     } catch {
       showToast('Failed to load risk details', 'error')
       setShowDetailModal(false)
@@ -286,20 +286,20 @@ export default function RiskRegister() {
   const handleEditRisk = async (risk: Risk) => {
     try {
       const res = await riskRegisterApi.get(risk.id)
-      const d = res.data as any
+      const d = res.data as Record<string, unknown>
       setEditForm({
-        title: d.title || '',
-        description: d.description || '',
-        category: d.category || 'operational',
-        department: d.department || '',
-        inherent_likelihood: d.inherent_likelihood || 3,
-        inherent_impact: d.inherent_impact || 3,
-        residual_likelihood: d.residual_likelihood || 2,
-        residual_impact: d.residual_impact || 2,
-        treatment_strategy: d.treatment_strategy || 'treat',
-        treatment_plan: d.treatment_plan || '',
-        risk_owner_name: d.risk_owner_name || '',
-        review_frequency_days: d.review_frequency_days || 90,
+        title: String(d.title || ''),
+        description: String(d.description || ''),
+        category: String(d.category || 'operational'),
+        department: String(d.department || ''),
+        inherent_likelihood: Number(d.inherent_likelihood) || 3,
+        inherent_impact: Number(d.inherent_impact) || 3,
+        residual_likelihood: Number(d.residual_likelihood) || 2,
+        residual_impact: Number(d.residual_impact) || 2,
+        treatment_strategy: String(d.treatment_strategy || 'treat'),
+        treatment_plan: String(d.treatment_plan || ''),
+        risk_owner_name: String(d.risk_owner_name || ''),
+        review_frequency_days: Number(d.review_frequency_days) || 90,
       })
       setSelectedRisk(risk)
       setShowEditModal(true)
@@ -319,7 +319,7 @@ export default function RiskRegister() {
     }
     try {
       setSaving(true)
-      await riskRegisterApi.create(createForm as any)
+      await riskRegisterApi.create(createForm)
       showToast('Risk created successfully', 'success')
       setShowCreateModal(false)
       setCreateForm({ ...EMPTY_FORM })
@@ -342,15 +342,11 @@ export default function RiskRegister() {
         department: editForm.department,
         treatment_strategy: editForm.treatment_strategy,
         treatment_plan: editForm.treatment_plan,
-        risk_owner_name: editForm.risk_owner_name,
-      } as any)
-      // Also update assessment if scores changed
+      })
       await riskRegisterApi.assess(selectedRisk.id, {
-        residual_likelihood: editForm.residual_likelihood,
-        residual_impact: editForm.residual_impact,
-        inherent_likelihood: editForm.inherent_likelihood,
-        inherent_impact: editForm.inherent_impact,
-      } as any)
+        likelihood: editForm.residual_likelihood,
+        impact: editForm.residual_impact,
+      })
       showToast('Risk updated successfully', 'success')
       setShowEditModal(false)
       await loadRisks()
@@ -1116,7 +1112,7 @@ export default function RiskRegister() {
           <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-foreground">
-                {detailRisk ? `${detailRisk.reference} — ${detailRisk.title}` : 'Risk Details'}
+                {detailRisk ? `${String(detailRisk.reference)} — ${String(detailRisk.title)}` : 'Risk Details'}
               </h2>
               <button onClick={() => setShowDetailModal(false)} className="p-1 rounded-lg hover:bg-muted transition-colors">
                 <X className="w-5 h-5 text-muted-foreground" />
@@ -1132,25 +1128,25 @@ export default function RiskRegister() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Category</span>
-                    <p className="text-sm font-medium text-foreground">{CATEGORIES.find(c => c.id === detailRisk.category)?.label || detailRisk.category}</p>
+                    <p className="text-sm font-medium text-foreground">{CATEGORIES.find(c => c.id === detailRisk.category)?.label || String(detailRisk.category)}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Status</span>
-                    <p className="text-sm font-medium text-foreground capitalize">{detailRisk.status}</p>
+                    <p className="text-sm font-medium text-foreground capitalize">{String(detailRisk.status)}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Department</span>
-                    <p className="text-sm text-foreground">{detailRisk.department || '—'}</p>
+                    <p className="text-sm text-foreground">{detailRisk.department ? String(detailRisk.department) : '—'}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Owner</span>
-                    <p className="text-sm text-foreground">{detailRisk.risk_owner_name || '—'}</p>
+                    <p className="text-sm text-foreground">{detailRisk.risk_owner_name ? String(detailRisk.risk_owner_name) : '—'}</p>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-xs text-muted-foreground uppercase">Description</span>
-                  <p className="text-sm text-foreground mt-1">{detailRisk.description}</p>
+                  <p className="text-sm text-foreground mt-1">{String(detailRisk.description ?? '')}</p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 bg-muted/50 rounded-xl p-4">
@@ -1194,18 +1190,18 @@ export default function RiskRegister() {
                 )}
 
                 {/* Controls */}
-                {detailRisk.controls && detailRisk.controls.length > 0 && (
+                {Array.isArray(detailRisk.controls) && detailRisk.controls.length > 0 && (
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Linked Controls ({detailRisk.controls.length})</span>
                     <div className="mt-2 space-y-2">
-                      {detailRisk.controls.map((c: any) => (
-                        <div key={c.id} className="flex items-center gap-3 p-2 bg-muted rounded-lg">
+                      {(detailRisk.controls as Array<Record<string, unknown>>).map((c) => (
+                        <div key={String(c.id)} className="flex items-center gap-3 p-2 bg-muted rounded-lg">
                           <Shield className="w-4 h-4 text-success" />
                           <div className="flex-1">
-                            <span className="text-sm font-medium text-foreground">{c.name}</span>
-                            <span className="text-xs text-muted-foreground ml-2">{c.reference}</span>
+                            <span className="text-sm font-medium text-foreground">{String(c.name)}</span>
+                            <span className="text-xs text-muted-foreground ml-2">{String(c.reference)}</span>
                           </div>
-                          <Badge variant="default">{c.effectiveness}</Badge>
+                          <Badge variant="default">{String(c.effectiveness)}</Badge>
                         </div>
                       ))}
                     </div>
@@ -1213,15 +1209,15 @@ export default function RiskRegister() {
                 )}
 
                 {/* KRIs */}
-                {detailRisk.kris && detailRisk.kris.length > 0 && (
+                {Array.isArray(detailRisk.kris) && detailRisk.kris.length > 0 && (
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Key Risk Indicators ({detailRisk.kris.length})</span>
                     <div className="mt-2 space-y-2">
-                      {detailRisk.kris.map((k: any) => (
-                        <div key={k.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                          <span className="text-sm text-foreground">{k.name}</span>
+                      {(detailRisk.kris as Array<Record<string, unknown>>).map((k) => (
+                        <div key={String(k.id)} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                          <span className="text-sm text-foreground">{String(k.name)}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold">{k.current_value ?? '—'}</span>
+                            <span className="text-sm font-bold">{k.current_value != null ? String(k.current_value) : '—'}</span>
                             <div className={`w-3 h-3 rounded-full ${k.current_status === 'red' ? 'bg-destructive' : k.current_status === 'amber' ? 'bg-warning' : 'bg-success'}`} />
                           </div>
                         </div>
@@ -1231,16 +1227,16 @@ export default function RiskRegister() {
                 )}
 
                 {/* Assessment History */}
-                {detailRisk.assessment_history && detailRisk.assessment_history.length > 0 && (
+                {Array.isArray(detailRisk.assessment_history) && detailRisk.assessment_history.length > 0 && (
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Assessment History</span>
                     <div className="mt-2 space-y-1">
-                      {detailRisk.assessment_history.map((h: any, i: number) => (
+                      {(detailRisk.assessment_history as Array<Record<string, unknown>>).map((h, i) => (
                         <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                          <span className="text-muted-foreground">{h.date ? new Date(h.date).toLocaleDateString('en-GB') : '—'}</span>
+                          <span className="text-muted-foreground">{h.date ? new Date(String(h.date)).toLocaleDateString('en-GB') : '—'}</span>
                           <div className="flex items-center gap-4">
-                            <span className="text-muted-foreground">Inherent: {h.inherent_score}</span>
-                            <span style={{ color: levelToColor(scoreToLevel(h.residual_score)) }}>Residual: {h.residual_score}</span>
+                            <span className="text-muted-foreground">Inherent: {String(h.inherent_score)}</span>
+                            <span style={{ color: levelToColor(scoreToLevel(Number(h.residual_score))) }}>Residual: {String(h.residual_score)}</span>
                           </div>
                         </div>
                       ))}

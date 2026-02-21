@@ -1,7 +1,1 @@
-"""Application services package."""
-
-from src.services.reference_number import ReferenceNumberService
-
-__all__ = [
-    "ReferenceNumberService",
-]
+"""Application services package (consolidated into src.domain.services)."""

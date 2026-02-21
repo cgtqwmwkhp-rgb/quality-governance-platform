@@ -273,13 +273,13 @@ const AICopilot: React.FC<AICopilotProps> = ({
       setIsListening(true);
       // Start speech recognition
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
+        const SpeechRecognitionCtor = ((window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition) as { new(): { continuous: boolean; interimResults: boolean; lang: string; onresult: ((event: { results: { [index: number]: { [index: number]: { transcript: string } } } }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void } };
+        const recognition = new SpeechRecognitionCtor();
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = 'en-GB';
         
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: { results: { [index: number]: { [index: number]: { transcript: string } } } }) => {
           const transcript = event.results[0][0].transcript;
           setInput(prev => prev + transcript);
           setIsListening(false);
@@ -344,6 +344,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
             onClick={() => setIsMinimized(true)}
             className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
             title="Minimize"
+            aria-label="Minimize copilot"
           >
             <Minimize2 className="w-4 h-4" />
           </button>
@@ -351,6 +352,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
             onClick={onClose}
             className="p-2 hover:bg-primary-foreground/10 rounded-lg transition-colors text-primary-foreground/80 hover:text-primary-foreground"
             title="Close"
+            aria-label="Close copilot"
           >
             <X className="w-4 h-4" />
           </button>
@@ -491,6 +493,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
             />
             <button
               onClick={toggleVoiceInput}
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
               className={cn(
                 "absolute right-2 bottom-2.5 p-1.5 rounded-lg transition-colors",
                 isListening 
@@ -505,6 +508,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
             size="icon"
+            aria-label="Send message"
           >
             <Send className="w-5 h-5" />
           </Button>

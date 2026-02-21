@@ -147,6 +147,8 @@ export function ToastContainer({
     <div
       className="fixed top-[72px] right-5 z-[200] flex flex-col gap-2.5 pointer-events-none"
       aria-label="Notifications"
+      aria-live="polite"
+      aria-atomic="false"
     >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />

@@ -198,7 +198,7 @@ function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
     }
   };
 
-  const getStatusVariant = (status: string) => {
+  const getStatusVariant = (status: string): "destructive" | "warning" | "success" | "secondary" => {
     switch (status) {
       case 'open': return 'destructive';
       case 'in_progress': case 'under_investigation': return 'warning';
@@ -230,7 +230,7 @@ function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
               <p className="text-sm text-foreground truncate">{activity.title}</p>
               <p className="text-xs text-muted-foreground">{activity.time}</p>
             </div>
-            <Badge variant={getStatusVariant(activity.status) as any}>
+            <Badge variant={getStatusVariant(activity.status)}>
               {activity.status.replace(/_/g, ' ')}
             </Badge>
           </div>
@@ -373,21 +373,21 @@ export default function Dashboard() {
       setUpcomingAudits(auditItems)
 
       // Compute stats from real data
-      const openIncidents = incidentItems.filter((i: any) => i.status !== 'closed')
-      const criticalIncidents = incidentItems.filter((i: any) => i.severity === 'critical' || i.severity === 'high')
-      const openRtas = rtaItems.filter((r: any) => r.status !== 'closed')
-      const openComplaints = complaintItems.filter((c: any) => c.status !== 'closed' && c.status !== 'resolved')
-      const overdueComplaints = complaintItems.filter((c: any) => {
+      const openIncidents = incidentItems.filter(i => i.status !== 'closed')
+      const criticalIncidents = incidentItems.filter(i => i.severity === 'critical' || i.severity === 'high')
+      const openRtas = rtaItems.filter(r => r.status !== 'closed')
+      const openComplaints = complaintItems.filter(c => c.status !== 'closed' && c.status !== 'resolved')
+      const overdueComplaints = complaintItems.filter(c => {
         if (c.status === 'closed' || c.status === 'resolved') return false
         if (!c.due_date) return false
         return new Date(c.due_date) < new Date()
       })
-      const overdueActions = actionItems.filter((a: any) => {
+      const overdueActions = actionItems.filter(a => {
         if (a.status === 'completed' || a.status === 'closed') return false
         if (!a.due_date) return false
         return new Date(a.due_date) < new Date()
       })
-      const dueSoonActions = actionItems.filter((a: any) => {
+      const dueSoonActions = actionItems.filter(a => {
         if (a.status === 'completed' || a.status === 'closed') return false
         if (!a.due_date) return false
         const due = new Date(a.due_date)
@@ -395,11 +395,11 @@ export default function Dashboard() {
         const diffDays = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
         return diffDays > 0 && diffDays <= 7
       })
-      const completedAudits = auditItems.filter((a: any) => a.status === 'completed')
-      const scheduledAudits = auditItems.filter((a: any) => a.status === 'scheduled')
-      const scoredAudits = auditItems.filter((a: any) => a.score_percentage != null)
+      const completedAudits = auditItems.filter(a => a.status === 'completed')
+      const scheduledAudits = auditItems.filter(a => a.status === 'scheduled')
+      const scoredAudits = auditItems.filter(a => a.score_percentage != null)
       const avgScore = scoredAudits.length > 0
-        ? Math.round(scoredAudits.reduce((sum: number, a: any) => sum + a.score_percentage, 0) / scoredAudits.length)
+        ? Math.round(scoredAudits.reduce((sum, a) => sum + (a.score_percentage ?? 0), 0) / scoredAudits.length)
         : 0
 
       // Use exec dashboard for risks, compliance if available
@@ -458,7 +458,7 @@ export default function Dashboard() {
       // Build recent activities from real records
       const recentActivities: RecentActivity[] = []
 
-      incidentItems.slice(0, 3).forEach((i: any) => {
+      incidentItems.slice(0, 3).forEach(i => {
         recentActivities.push({
           id: `inc-${i.id}`,
           type: 'incident',
@@ -469,7 +469,7 @@ export default function Dashboard() {
         })
       })
 
-      auditItems.slice(0, 2).forEach((a: any) => {
+      auditItems.slice(0, 2).forEach(a => {
         recentActivities.push({
           id: `aud-${a.id}`,
           type: 'audit',
@@ -479,7 +479,7 @@ export default function Dashboard() {
         })
       })
 
-      complaintItems.slice(0, 2).forEach((c: any) => {
+      complaintItems.slice(0, 2).forEach(c => {
         recentActivities.push({
           id: `cmp-${c.id}`,
           type: 'complaint',
@@ -489,7 +489,7 @@ export default function Dashboard() {
         })
       })
 
-      actionItems.slice(0, 2).forEach((a: any) => {
+      actionItems.slice(0, 2).forEach(a => {
         recentActivities.push({
           id: `act-${a.id}`,
           type: 'action',
@@ -499,7 +499,7 @@ export default function Dashboard() {
         })
       })
 
-      rtaItems.slice(0, 1).forEach((r: any) => {
+      rtaItems.slice(0, 1).forEach(r => {
         recentActivities.push({
           id: `rta-${r.id}`,
           type: 'rta',

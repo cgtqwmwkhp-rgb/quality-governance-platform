@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -381,10 +381,10 @@ export default function Actions() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <span className="font-mono text-sm text-primary">{action.reference_number || `ACT-${action.id}`}</span>
-                          <Badge variant={getPriorityVariant(action.priority) as any}>
+                          <Badge variant={getPriorityVariant(action.priority) as BadgeVariant}>
                             {action.priority}
                           </Badge>
-                          <Badge variant={getStatusVariant(action.status) as any}>
+                          <Badge variant={getStatusVariant(action.status) as BadgeVariant}>
                             {action.status.replace('_', ' ')}
                           </Badge>
                           {overdue && (

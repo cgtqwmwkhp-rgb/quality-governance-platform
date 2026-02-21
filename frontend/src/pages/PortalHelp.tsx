@@ -66,7 +66,7 @@ const CategoryCard = ({
   colorClass,
   onClick,
 }: {
-  icon: any;
+  icon: React.ElementType;
   title: string;
   description: string;
   count: number;
@@ -93,7 +93,7 @@ const QuickLink = ({
   title,
   href,
 }: {
-  icon: any;
+  icon: React.ElementType;
   title: string;
   href: string;
 }) => (

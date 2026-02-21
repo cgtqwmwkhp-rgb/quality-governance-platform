@@ -1,11 +1,16 @@
 """Database connection and session management."""
 
+import logging
+import time
 from typing import Any, AsyncGenerator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from src.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -26,12 +31,29 @@ if "postgresql" in settings.database_url:
     engine_kwargs.update(
         {
             "pool_pre_ping": True,
-            "pool_size": 10,
-            "max_overflow": 20,
+            "pool_size": 20,
+            "max_overflow": 10,
+            "pool_recycle": 3600,
         }
     )
 
 engine = create_async_engine(settings.database_url, **engine_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Slow-query logging via sync_engine events
+# ---------------------------------------------------------------------------
+
+@event.listens_for(engine.sync_engine, "before_cursor_execute")
+def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    conn.info.setdefault("query_start_time", []).append(time.time())
+
+
+@event.listens_for(engine.sync_engine, "after_cursor_execute")
+def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    total = time.time() - conn.info["query_start_time"].pop()
+    if total > 0.5:
+        logger.warning("Slow query (%.3fs): %s", total, statement[:200])
 
 # Create async session factory
 async_session_maker = async_sessionmaker(

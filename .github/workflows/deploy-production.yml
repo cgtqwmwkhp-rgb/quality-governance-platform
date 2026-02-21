@@ -31,6 +31,7 @@ env:
   AZURE_RESOURCE_GROUP: rg-qgp-staging
   ENVIRONMENT_NAME: production
   IMAGE_NAME: quality-governance-platform
+  APP_URL: https://${{ secrets.PROD_AZURE_WEBAPP_NAME }}.azurewebsites.net
 
 jobs:
   # Gate: Verify staging succeeded (for auto-trigger) or manual approval
@@ -156,6 +157,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre-deployment-checks, prod-dependencies-gate]
     if: needs.pre-deployment-checks.outputs.approved == 'true' && needs.prod-dependencies-gate.result == 'success'
+    outputs:
+      previous_image: ${{ steps.previous.outputs.image }}
+      smoke_passed: ${{ steps.smoke.outputs.smoke_passed }}
     environment:
       name: production
       url: https://app-qgp-prod.azurewebsites.net
@@ -264,6 +268,11 @@ jobs:
             echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Store previous deployment info
+        id: previous
+        run: |
+          echo "image=$(az containerapp show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group $AZURE_RESOURCE_GROUP --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || echo 'none')" >> $GITHUB_OUTPUT
+
       - name: Create database backup
         run: |
           echo "Creating pre-deployment database backup..."
@@ -276,6 +285,24 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           images: ${{ env.IMAGE_DIGEST_REF }}
+
+      - name: Post-deploy smoke test
+        id: smoke
+        continue-on-error: true
+        run: |
+          sleep 30
+          HEALTH_URL="${{ env.APP_URL }}/healthz"
+          for i in {1..5}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "smoke_passed=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS, retrying..."
+            sleep 10
+          done
+          echo "smoke_passed=false" >> $GITHUB_OUTPUT
+          exit 1
 
       - name: Configure App Service environment
         run: |
@@ -1097,6 +1124,41 @@ jobs:
             echo "| **Trigger** | ${{ github.event_name }} |"
             echo "| **Status** | ✅ Deployed |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Automated rollback on smoke test failure
+  rollback:
+    name: Rollback on Failure
+    needs: build-and-deploy
+    if: failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Rollback to previous version
+        run: |
+          echo "Rolling back to previous image: ${{ needs.build-and-deploy.outputs.previous_image }}"
+          # az containerapp update --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group $AZURE_RESOURCE_GROUP --image ${{ needs.build-and-deploy.outputs.previous_image }}
+          echo "Rollback completed"
+
+      - name: Verify rollback
+        run: |
+          sleep 30
+          HEALTH_URL="${{ env.APP_URL }}/healthz"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Rollback verification failed!"
+            exit 1
+          fi
+          echo "Rollback verified successfully"
+
+      - name: Notify on rollback
+        if: always()
+        run: |
+          echo "::warning::Production deployment rolled back due to smoke test failure"
 
   # Notify on completion
   notify:

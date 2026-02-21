@@ -17,6 +17,9 @@ from src.domain.models.analytics import (
     SavedReport,
 )
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
+
+# CAPA (Corrective and Preventive Action)
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
 
@@ -143,6 +146,7 @@ from src.domain.models.risk_register import (
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -324,4 +328,12 @@ __all__ = [
     "EscalationRule",
     "EscalationLog",
     "UserDelegation",
+    # Token Blacklist (JWT Revocation)
+    "TokenBlacklist",
+    # CAPA (Corrective and Preventive Action)
+    "CAPAAction",
+    "CAPAStatus",
+    "CAPAType",
+    "CAPAPriority",
+    "CAPASource",
 ]

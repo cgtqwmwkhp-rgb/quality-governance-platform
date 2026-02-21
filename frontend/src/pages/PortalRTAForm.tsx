@@ -238,7 +238,7 @@ export default function PortalRTAForm() {
   };
 
   // Update third party
-  const updateThirdParty = (index: number, field: keyof ThirdParty, value: any) => {
+  const updateThirdParty = (index: number, field: keyof ThirdParty, value: string | boolean | number) => {
     const updated = [...formData.thirdParties];
     updated[index] = { ...updated[index], [field]: value };
     setFormData((prev) => ({ ...prev, thirdParties: updated }));

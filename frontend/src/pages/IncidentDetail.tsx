@@ -21,7 +21,7 @@ import {
 import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
 import { Input } from '../components/ui/Input'
 import {
@@ -187,13 +187,14 @@ export default function IncidentDetail() {
         lead_investigator: '',
       })
       navigate('/investigations')
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create investigation:', err)
       showToast('Failed to create investigation', 'error');
       
       // Check for 409 Conflict (already exists)
-      if (err.response?.status === 409) {
-        const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: unknown } } };
+      if (axiosErr.response?.status === 409) {
+        const errorData = axiosErr.response?.data?.detail as CreateFromRecordError | undefined
         if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
@@ -336,16 +337,17 @@ export default function IncidentDetail() {
             variant="outline" 
             size="icon"
             onClick={() => navigate('/incidents')}
+            aria-label="Back to incidents"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm text-primary">{incident.reference_number}</span>
-              <Badge variant={getSeverityVariant(incident.severity) as any}>
+              <Badge variant={getSeverityVariant(incident.severity) as BadgeVariant}>
                 {incident.severity}
               </Badge>
-              <Badge variant={getStatusVariant(incident.status) as any}>
+              <Badge variant={getStatusVariant(incident.status) as BadgeVariant}>
                 {incident.status.replace('_', ' ')}
               </Badge>
             </div>
@@ -563,7 +565,7 @@ export default function IncidentDetail() {
                           action.status === 'completed' ? 'resolved' :
                           action.status === 'cancelled' ? 'destructive' :
                           action.status === 'in_progress' ? 'in-progress' :
-                          'secondary' as any
+                          'secondary' as BadgeVariant
                         }>
                           {action.status.replace(/_/g, ' ')}
                         </Badge>
@@ -871,7 +873,7 @@ export default function IncidentDetail() {
                         selectedAction.status === 'completed' ? 'resolved' :
                         selectedAction.status === 'cancelled' ? 'destructive' :
                         selectedAction.status === 'in_progress' ? 'in-progress' :
-                        'secondary' as any
+                        'secondary' as BadgeVariant
                       }
                       className="mt-1"
                     >

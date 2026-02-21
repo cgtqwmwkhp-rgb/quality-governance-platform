@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Switch } from '../components/ui/Switch'
 import {
   Dialog,
@@ -65,14 +65,15 @@ export default function RTAs() {
       const response = await rtasApi.list(1, 50)
       setRtas(response.data.items)
       setError(null)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load RTAs:', err)
       showToast('Failed to load RTAs. Please try again.', 'error')
       
       // Extract error details for display
-      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.name === 'AbortError'
-      const status = err.response?.status
-      const requestId = err.response?.data?.request_id || err.response?.headers?.['x-request-id']
+      const axiosErr = err as { code?: string; message?: string; name?: string; response?: { status?: number; data?: { request_id?: string; message?: string; detail?: { message?: string } }; headers?: Record<string, string> } };
+      const isTimeout = axiosErr.code === 'ECONNABORTED' || axiosErr.message?.includes('timeout') || axiosErr.name === 'AbortError'
+      const status = axiosErr.response?.status
+      const requestId = axiosErr.response?.data?.request_id || axiosErr.response?.headers?.['x-request-id']
       
       if (isTimeout) {
         setError({
@@ -80,7 +81,7 @@ export default function RTAs() {
           code: 'TIMEOUT',
           requestId,
         })
-      } else if (!err.response) {
+      } else if (!axiosErr.response) {
         setError({
           message: 'Network error. Please check your connection.',
           code: 'NETWORK_ERROR',
@@ -88,7 +89,7 @@ export default function RTAs() {
         })
       } else {
         setError({
-          message: err.response?.data?.message || err.response?.data?.detail?.message || 'Failed to load RTAs. Please try again.',
+          message: axiosErr.response?.data?.message || axiosErr.response?.data?.detail?.message || 'Failed to load RTAs. Please try again.',
           code: status ? `HTTP_${status}` : 'UNKNOWN',
           requestId,
         })
@@ -261,12 +262,12 @@ export default function RTAs() {
                         <p className="text-sm text-foreground truncate max-w-xs">{rta.location}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getSeverityVariant(rta.severity) as any}>
+                        <Badge variant={getSeverityVariant(rta.severity) as BadgeVariant}>
                           {rta.severity.replace('_', ' ')}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(rta.status) as any}>
+                        <Badge variant={getStatusVariant(rta.status) as BadgeVariant}>
                           {rta.status.replace('_', ' ')}
                         </Badge>
                       </td>

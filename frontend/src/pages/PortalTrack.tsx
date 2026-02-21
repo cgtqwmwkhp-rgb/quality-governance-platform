@@ -281,7 +281,7 @@ export default function PortalTrack() {
       
       if (response.ok) {
         const data = await response.json();
-        const reports: ReportSummary[] = (data.items || []).map((item: any) => ({
+        const reports: ReportSummary[] = (data.items || []).map((item: Record<string, unknown>) => ({
           reference_number: item.reference_number,
           report_type: item.report_type,
           title: item.title,

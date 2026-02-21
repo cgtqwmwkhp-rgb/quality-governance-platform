@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -214,12 +214,12 @@ export default function Complaints() {
                         <p className="text-sm text-foreground">{complaint.complainant_name}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getPriorityVariant(complaint.priority) as any}>
+                        <Badge variant={getPriorityVariant(complaint.priority) as BadgeVariant}>
                           {complaint.priority}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(complaint.status) as any}>
+                        <Badge variant={getStatusVariant(complaint.status) as BadgeVariant}>
                           {complaint.status.replace('_', ' ')}
                         </Badge>
                       </td>

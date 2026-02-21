@@ -122,7 +122,7 @@ const DigitalSignatures: React.FC = () => {
         signaturesApi.listTemplates(),
       ]);
       setSignatureRequests((reqRes.data || []).map(mapApiRequest));
-      setTemplates((tplRes.data || []).map((t: any) => ({
+      setTemplates((tplRes.data || []).map((t: Record<string, unknown>) => ({
         id: Number(t.id),
         name: String(t.name || ''),
         description: t.description ? String(t.description) : undefined,

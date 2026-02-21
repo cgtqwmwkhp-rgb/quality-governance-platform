@@ -37,6 +37,46 @@ services:
       retries: 5
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  celery-worker:
+    build: .
+    command: celery -A src.infrastructure.tasks.celery_app worker --loglevel=info --queues=default,email,notifications,reports,cleanup
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+
+  celery-beat:
+    build: .
+    command: celery -A src.infrastructure.tasks.celery_app beat --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  flower:
+    build: .
+    command: celery -A src.infrastructure.tasks.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - redis
+    restart: unless-stopped
+
   # Optional: pgAdmin for database management
   pgadmin:
     image: dpage/pgadmin4:latest

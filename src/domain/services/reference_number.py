@@ -18,11 +18,13 @@ class ReferenceNumberService:
         "risk": "RSK",
         "incident": "INC",
         "rta": "RTA",
-        "complaint": "CMP",
+        "complaint": "COMP",
+        "near_miss": "NM",
         "policy": "POL",
         "incident_action": "INA",
-        "rta_action": "RTA",
+        "rta_action": "RTAACT",
         "complaint_action": "CMA",
+        "capa": "CAPA",
     }
 
     @classmethod

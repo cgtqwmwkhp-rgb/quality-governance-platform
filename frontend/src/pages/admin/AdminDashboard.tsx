@@ -116,7 +116,7 @@ export default function AdminDashboard() {
 
       const userCount = usersRes.status === 'fulfilled' ? (usersRes.value.data?.total || 0) : 0;
       const actionItems = actionsRes.status === 'fulfilled' ? (actionsRes.value.data?.items || []) : [];
-      const pendingActions = actionItems.filter((a: any) => a.status !== 'completed' && a.status !== 'closed').length;
+      const pendingActions = actionItems.filter((a) => a.status !== 'completed' && a.status !== 'closed').length;
 
       setStats([
         { label: 'Total Users', value: String(userCount), change: '', trend: 'neutral' as const, icon: <Users className="w-5 h-5" /> },
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
 
       if (trailRes.status === 'fulfilled') {
         const entries = Array.isArray(trailRes.value.data) ? trailRes.value.data : [];
-        setRecentActivity(entries.slice(0, 5).map((e: any) => {
+        setRecentActivity(entries.slice(0, 5).map((e) => {
           const actionType = e.action === 'create' ? 'add' : e.action === 'update' ? 'edit' : e.action === 'delete' ? 'settings' : 'publish';
           const timeAgo = formatTimeAgo(e.timestamp || e.created_at || '');
           return {

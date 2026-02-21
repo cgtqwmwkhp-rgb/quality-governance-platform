@@ -22,6 +22,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, validator
 
+from src.api.dependencies import CurrentUser
+
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 logger = logging.getLogger(__name__)
@@ -249,7 +251,7 @@ def aggregate_event(event: TelemetryEvent) -> None:
 
 
 @router.post("/events")
-async def receive_event(event: TelemetryEvent):
+async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     """
     Receive a single telemetry event.
 
@@ -283,7 +285,7 @@ async def receive_event(event: TelemetryEvent):
 
 
 @router.post("/events/batch")
-async def receive_events_batch(batch: TelemetryBatch):
+async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser):
     """
     Receive a batch of telemetry events (for offline buffer flush).
 
@@ -312,7 +314,7 @@ async def receive_events_batch(batch: TelemetryBatch):
 
 
 @router.get("/metrics/{experiment_id}")
-async def get_metrics(experiment_id: str):
+async def get_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Get aggregated metrics for an experiment.
 
@@ -326,10 +328,13 @@ async def get_metrics(experiment_id: str):
 
 
 @router.delete("/metrics/{experiment_id}")
-async def reset_metrics(experiment_id: str):
+async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Reset metrics for an experiment (staging only, for testing).
     """
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     if experiment_id != "EXP_001":
         raise HTTPException(status_code=404, detail="Experiment not found")
 

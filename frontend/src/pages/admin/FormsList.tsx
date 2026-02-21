@@ -86,7 +86,7 @@ export default function FormsList() {
     try {
       setLoading(true);
       const data = await formTemplatesApi.list(filterType || undefined);
-      setForms((data.items || []).map((f: any) => ({
+      setForms((data.items || []).map((f) => ({
         id: f.id,
         name: f.name,
         slug: f.slug,
@@ -138,7 +138,7 @@ export default function FormsList() {
         form_type: form.form_type,
         description: form.description,
       });
-      const c = created as any;
+      const c = created as unknown as Record<string, unknown>;
       setForms((prev) => [...prev, { ...c, steps_count: c.steps_count ?? 0, fields_count: c.fields_count ?? 0, updated_at: c.updated_at ?? '' }]);
     } catch {
       console.error('Failed to duplicate form');

@@ -10,10 +10,12 @@ from src.api.routes import (
     auditor_competence,
     audits,
     auth,
+    capa,
     complaints,
     compliance,
     compliance_automation,
     copilot,
+    cross_standard_mappings,
     document_control,
     documents,
     employee_portal,
@@ -61,6 +63,7 @@ router.include_router(actions.router, prefix="/actions", tags=["Actions"])
 router.include_router(rtas.router, prefix="/rtas", tags=["Road Traffic Collisions"])
 router.include_router(investigation_templates.router, prefix="/investigation-templates", tags=["Investigations"])
 router.include_router(investigations.router, prefix="/investigations", tags=["Investigations"])
+router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
@@ -83,6 +86,8 @@ router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"]
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
 # IMS (Integrated Management System) Dashboard
 router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
+# Cross-Standard ISO Mappings
+router.include_router(cross_standard_mappings.router, prefix="/cross-standard-mappings", tags=["Cross-Standard Mappings"])
 # AI Copilot (Tier 2)
 router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
 # Digital Signatures (Tier 2)

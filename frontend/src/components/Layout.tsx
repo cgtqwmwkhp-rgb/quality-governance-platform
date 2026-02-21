@@ -129,11 +129,19 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-md focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
       {/* Top Bar */}
       <header className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
         {/* Search Bar */}
         <button
           onClick={() => navigate('/search')}
+          aria-label="Open global search"
           className={cn(
             "flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground",
             "bg-surface border border-border",
@@ -156,6 +164,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           
           <NavLink
             to="/notifications"
+            aria-label={`Notifications${unreadNotifications > 0 ? ` (${unreadNotifications} unread)` : ''}`}
             className={cn(
               "relative p-2 rounded-lg transition-colors",
               "text-muted-foreground hover:text-foreground hover:bg-surface"
@@ -171,6 +180,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           
           <NavLink
             to="/users"
+            aria-label="Settings"
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors"
           >
             <Settings className="w-5 h-5" />
@@ -195,13 +205,15 @@ export default function Layout({ onLogout }: LayoutProps) {
       {/* Mobile menu button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
+        aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={sidebarOpen}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border text-foreground shadow-sm"
       >
         {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
       {/* Sidebar */}
-      <aside className={cn(
+      <aside aria-label="Main navigation" className={cn(
         "fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border",
         "transform transition-transform duration-300 ease-in-out",
         "lg:translate-x-0",
@@ -284,7 +296,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="lg:pl-72 pt-16">
+      <main id="main-content" className="lg:pl-72 pt-16">
         <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
           <Outlet />
         </div>

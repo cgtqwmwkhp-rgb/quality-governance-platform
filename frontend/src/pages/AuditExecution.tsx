@@ -87,6 +87,68 @@ interface AuditData {
   sections: AuditSection[];
 }
 
+interface TemplateApiSection {
+  id: number | string;
+  title?: string;
+  description?: string;
+  questions?: TemplateApiQuestion[];
+}
+
+interface TemplateApiQuestion {
+  id: number | string;
+  question_text?: string;
+  text?: string;
+  description?: string;
+  question_type?: string;
+  type?: string;
+  is_required?: boolean;
+  is_active?: boolean;
+  allow_na?: boolean;
+  weight?: number;
+  options?: { value: string; label: string; score?: number; triggers_finding?: boolean }[];
+  options_json?: unknown;
+  min_value?: number;
+  max_value?: number;
+  max_score?: number;
+  evidence_required?: boolean;
+  help_text?: string;
+  risk_category?: string;
+  iso_clause?: string;
+}
+
+interface TemplateApiData {
+  sections?: TemplateApiSection[];
+  name?: string;
+}
+
+interface RunApiResponse {
+  question_id: number | string;
+  id: number | string;
+  is_na?: boolean;
+  response_value?: string;
+  score?: number;
+  notes?: string;
+  flagged?: boolean;
+  created_at?: string;
+}
+
+interface RunApiData {
+  id: number | string;
+  location?: string;
+  title?: string;
+  status?: string;
+  responses?: RunApiResponse[];
+}
+
+interface ResponsePayload {
+  question_id: number;
+  response_value: string | undefined;
+  score?: number;
+  max_score?: number;
+  notes?: string;
+  is_na: boolean;
+}
+
 const SECTION_COLORS = [
   'from-blue-500 to-cyan-500',
   'from-purple-500 to-pink-500',
@@ -369,15 +431,16 @@ export default function AuditExecution() {
       const runData = await auditsApi.getRun(numericId);
       const templateData = await auditsApi.getTemplate(runData.data.template_id);
 
-      const sections: AuditSection[] = ((templateData.data as any).sections || []).map(
-        (sec: any, sIdx: number) => ({
+      const tplData = templateData.data as TemplateApiData;
+      const sections: AuditSection[] = (tplData.sections || []).map(
+        (sec: TemplateApiSection, sIdx: number) => ({
           id: String(sec.id),
           title: String(sec.title || ''),
           description: sec.description ? String(sec.description) : undefined,
           color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
           isComplete: false,
-          questions: (sec.questions || []).filter((q: any) => q.is_active !== false).map(
-            (q: any) => ({
+          questions: (sec.questions || []).filter((q: TemplateApiQuestion) => q.is_active !== false).map(
+            (q: TemplateApiQuestion) => ({
               id: String(q.id),
               text: String(q.question_text || q.text || ''),
               description: q.description ? String(q.description) : undefined,
@@ -385,7 +448,7 @@ export default function AuditExecution() {
               required: q.is_required !== false,
               allowNa: q.allow_na === true,
               weight: Number(q.weight || 1),
-              options: q.options || q.options_json || undefined,
+              options: q.options || (q.options_json as typeof q.options) || undefined,
               minValue: q.min_value != null ? Number(q.min_value) : undefined,
               maxValue: q.max_value != null ? Number(q.max_value) : undefined,
               maxScore: q.max_score != null ? Number(q.max_score) : undefined,
@@ -398,10 +461,10 @@ export default function AuditExecution() {
         })
       );
 
-      const rd = runData.data as any;
+      const rd = runData.data as RunApiData;
       setAudit({
         id: String(rd.id),
-        templateName: String((templateData.data as any).name || ''),
+        templateName: String(tplData.name || ''),
         location: String(rd.location || ''),
         asset: String(rd.title || ''),
         status: String(rd.status || 'scheduled'),
@@ -411,7 +474,7 @@ export default function AuditExecution() {
       // Restore previously saved responses
       const existingResponses: Record<string, QuestionResponse> = {};
       if (rd.responses) {
-        for (const r of rd.responses as any[]) {
+        for (const r of rd.responses as RunApiResponse[]) {
           const qId = String(r.question_id);
           responseIdMapRef.current[qId] = Number(r.id);
           existingResponses[qId] = {
@@ -522,7 +585,7 @@ export default function AuditExecution() {
       maxScore = 5;
     }
 
-    const payload: any = {
+    const payload: ResponsePayload = {
       question_id: numericQuestionId,
       response_value: responseValue,
       score,

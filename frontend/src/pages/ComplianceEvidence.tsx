@@ -102,7 +102,7 @@ export default function ComplianceEvidence() {
       ]);
 
       if (linksRes.status === 'fulfilled') {
-        const links = Array.isArray(linksRes.value) ? linksRes.value : (linksRes.value as any)?.data || [];
+        const links = Array.isArray(linksRes.value.data) ? linksRes.value.data : [];
         setEvidenceLinks(links);
 
         const grouped = new Map<string, EvidenceLinkRecord[]>();
@@ -134,9 +134,9 @@ export default function ComplianceEvidence() {
       } else {
         const items: EvidenceItem[] = [];
         if (coverageRes.status === 'fulfilled' && coverageRes.value) {
-          const data = (coverageRes.value as any)?.data || coverageRes.value;
+          const data = coverageRes.value.data as Record<string, unknown>;
           if (data?.covered_clauses && Array.isArray(data.covered_clauses)) {
-            data.covered_clauses.forEach((link: any, idx: number) => {
+            data.covered_clauses.forEach((link: Record<string, string | number | boolean | null>, idx: number) => {
               items.push({
                 id: `ev-${idx}`, type: (link.entity_type || 'document') as EvidenceType,
                 title: link.entity_name || link.entity_type || 'Linked Evidence',
@@ -174,8 +174,8 @@ export default function ComplianceEvidence() {
       setShowLinkModal(false);
       setLinkForm({ entity_type: 'document', entity_id: '', title: '', notes: '' });
       await loadEvidenceData();
-    } catch (err: any) {
-      showToast(`Failed to link evidence: ${err?.response?.data?.detail || err.message || 'Unknown error'}`, 'error');
+    } catch (err: unknown) {
+      showToast(`Failed to link evidence: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     } finally {
       setLinkSubmitting(false);
     }
@@ -195,7 +195,7 @@ export default function ComplianceEvidence() {
     try {
       setExportingReport(true);
       const report = await complianceApi.getReport(selectedStandard === 'all' ? undefined : selectedStandard);
-      const data = (report as any)?.data || report;
+      const data = report.data;
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

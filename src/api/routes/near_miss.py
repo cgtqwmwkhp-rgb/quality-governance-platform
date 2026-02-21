@@ -12,6 +12,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Near Misses"])
 
@@ -29,11 +30,7 @@ async def create_near_miss(
     Near misses are events that could have resulted in injury, damage, or loss
     but didn't. Tracking these helps prevent future incidents.
     """
-    # Generate reference number (format: NM-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
-    count_result = await db.execute(select(sa_func.count()).select_from(NearMiss))
-    count = count_result.scalar_one()
-    reference_number = f"NM-{year}-{count + 1:04d}"
+    reference_number = await ReferenceNumberService.generate(db, "near_miss", NearMiss)
 
     near_miss = NearMiss(
         **data.model_dump(),

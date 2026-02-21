@@ -217,7 +217,11 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle error responses with proper classification
+interface ClassifiedAxiosError extends AxiosError {
+  classifiedMessage?: string
+  isTimeout?: boolean
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
@@ -237,23 +241,20 @@ api.interceptors.response.use(
       }
       // For data endpoints, enhance the error with a clear message
       if (!error.response?.data) {
-        (error as any).classifiedMessage = 'Session expired. Please sign in again.'
+        (error as ClassifiedAxiosError).classifiedMessage = 'Session expired. Please sign in again.'
       }
     } else if (status === 403) {
-      (error as any).classifiedMessage = "You don't have permission to perform this action."
+      (error as ClassifiedAxiosError).classifiedMessage = "You don't have permission to perform this action."
     } else if (status === 422) {
-      // Validation error - message should come from server
-      const data = error.response?.data as any
-      (error as any).classifiedMessage = data?.detail || data?.message || 'Validation error. Please check your input.'
+      const data = error.response?.data as Record<string, unknown> | undefined
+      (error as ClassifiedAxiosError).classifiedMessage = (data?.detail as string) || (data?.message as string) || 'Validation error. Please check your input.'
     } else if (status && status >= 500) {
-      (error as any).classifiedMessage = 'Server error. Please try again later.'
+      (error as ClassifiedAxiosError).classifiedMessage = 'Server error. Please try again later.'
     } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      // Request timed out
-      (error as any).classifiedMessage = 'Request timed out. Please try again.'
-      ;(error as any).isTimeout = true
+      (error as ClassifiedAxiosError).classifiedMessage = 'Request timed out. Please try again.'
+      ;(error as ClassifiedAxiosError).isTimeout = true
     } else if (!error.response) {
-      // No response - true network error or CORS issue
-      (error as any).classifiedMessage = 'Network error. Please check your connection and try again.'
+      (error as ClassifiedAxiosError).classifiedMessage = 'Network error. Please check your connection and try again.'
     }
     
     return Promise.reject(error)
@@ -266,14 +267,13 @@ api.interceptors.response.use(
  */
 export function getApiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    // Use classified message if available
-    if ((error as any).classifiedMessage) {
-      return (error as any).classifiedMessage
+    const classified = error as ClassifiedAxiosError
+    if (classified.classifiedMessage) {
+      return classified.classifiedMessage
     }
-    // Fall back to server-provided message
-    const data = error.response?.data as any
+    const data = error.response?.data as Record<string, unknown> | undefined
     if (data?.message) {
-      return data.message
+      return data.message as string
     }
     if (data?.detail) {
       return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
@@ -2320,7 +2320,7 @@ export const evidenceAssetsApi = {
 
 export const workflowsApi = {
   getPendingApprovals: () =>
-    api.get<any[]>('/api/v1/workflows/approvals/pending'),
+    api.get<Record<string, unknown>[]>('/api/v1/workflows/approvals/pending'),
   approveRequest: (approvalId: number, data?: { comments?: string }) =>
     api.post(`/api/v1/workflows/approvals/${approvalId}/approve`, data),
   rejectRequest: (approvalId: number, data?: { comments?: string; reason?: string }) =>
@@ -2331,14 +2331,14 @@ export const workflowsApi = {
     const sp = new URLSearchParams();
     if (params?.page) sp.set('page', String(params.page));
     if (params?.size) sp.set('size', String(params.size));
-    return api.get<{ items: any[]; total: number }>(`/api/v1/workflows/instances?${sp}`);
+    return api.get<{ items: Record<string, unknown>[]; total: number }>(`/api/v1/workflows/instances?${sp}`);
   },
   listTemplates: () =>
-    api.get<any[]>('/api/v1/workflows/templates'),
+    api.get<Record<string, unknown>[]>('/api/v1/workflows/templates'),
   getStats: () =>
-    api.get<any>('/api/v1/workflows/stats'),
+    api.get<Record<string, unknown>>('/api/v1/workflows/stats'),
   getDelegations: () =>
-    api.get<any[]>('/api/v1/workflows/delegations'),
+    api.get<Record<string, unknown>[]>('/api/v1/workflows/delegations'),
   setDelegation: (data: { delegate_to: number; entity_type?: string; start_date?: string; end_date?: string }) =>
     api.post('/api/v1/workflows/delegations', data),
   cancelDelegation: (delegationId: number) =>

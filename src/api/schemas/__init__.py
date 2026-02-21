@@ -1,5 +1,13 @@
 """Pydantic schemas for API request/response validation."""
 
+from src.api.schemas.responses import (
+    ErrorDetail,
+    ErrorResponse,
+    HealthResponse,
+    PaginatedMeta,
+    PaginatedResponse,
+    SuccessResponse,
+)
 from src.api.schemas.audit import (
     AuditFindingBase,
     AuditFindingCreate,
@@ -171,4 +179,11 @@ __all__ = [
     "RiskMatrixCell",
     "RiskMatrixResponse",
     "RiskStatistics",
+    # Response schemas
+    "ErrorDetail",
+    "ErrorResponse",
+    "HealthResponse",
+    "PaginatedMeta",
+    "PaginatedResponse",
+    "SuccessResponse",
 ]

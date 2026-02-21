@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user, get_db
-from src.services.rca_tools import CAPAService, FishboneService, FiveWhysService
+from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 
 router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 

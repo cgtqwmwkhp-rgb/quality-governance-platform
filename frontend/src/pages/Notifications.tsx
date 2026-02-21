@@ -250,7 +250,7 @@ export default function Notifications() {
                   key={f}
                   variant={filter === f ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setFilter(f as any)}
+                  onClick={() => setFilter(f as typeof filter)}
                 >
                   {f === 'unread' ? `Unread (${unreadCount})` : f.charAt(0).toUpperCase() + f.slice(1)}
                 </Button>

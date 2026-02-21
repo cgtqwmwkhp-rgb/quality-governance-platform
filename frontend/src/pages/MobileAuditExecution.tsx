@@ -83,6 +83,52 @@ interface AuditSection {
   questions: AuditQuestion[];
 }
 
+interface MobileTemplateApiSection {
+  id: number | string;
+  title?: string;
+  description?: string;
+  questions?: MobileTemplateApiQuestion[];
+}
+
+interface MobileTemplateApiQuestion {
+  id: number | string;
+  text?: string;
+  description?: string;
+  type?: string;
+  is_required?: boolean;
+  weight?: number;
+  evidence_required?: boolean;
+  help_text?: string;
+  question_type?: string;
+  guidance?: string;
+  risk_category?: string;
+  iso_clause?: string;
+}
+
+interface MobileTemplateApiData {
+  sections?: MobileTemplateApiSection[];
+  name?: string;
+}
+
+interface MobileRunApiResponse {
+  question_id: number | string;
+  id: number | string;
+  is_na?: boolean;
+  response_value?: string;
+  score?: number;
+  notes?: string;
+  flagged?: boolean;
+  created_at?: string;
+}
+
+interface MobileRunApiData {
+  id: number | string;
+  location?: string;
+  asset_id?: string;
+  status?: string;
+  responses?: MobileRunApiResponse[];
+}
+
 const SECTION_COLORS = [
   'from-blue-500 to-cyan-500',
   'from-purple-500 to-pink-500',
@@ -529,14 +575,14 @@ export default function MobileAuditExecution() {
       const runData = await auditsApi.getRun(numericId);
       const templateData = await auditsApi.getTemplate(runData.data.template_id);
 
-      const sections: AuditSection[] = ((templateData.data as any).sections || []).map(
-        (sec: any, sIdx: number) => ({
+      const sections: AuditSection[] = ((templateData.data as MobileTemplateApiData).sections || []).map(
+        (sec: MobileTemplateApiSection, sIdx: number) => ({
           id: String(sec.id),
           title: String(sec.title || ''),
           description: sec.description ? String(sec.description) : undefined,
           color: SECTION_COLORS[sIdx % SECTION_COLORS.length],
           questions: (sec.questions || []).map(
-            (q: any) => ({
+            (q: MobileTemplateApiQuestion) => ({
               id: String(q.id),
               text: String(q.text || ''),
               description: q.description ? String(q.description) : undefined,
@@ -552,10 +598,10 @@ export default function MobileAuditExecution() {
         })
       );
 
-      const rd = runData.data as any;
+      const rd = runData.data as MobileRunApiData;
       setAudit({
         id: String(rd.id),
-        templateName: String((templateData.data as any).name || ''),
+        templateName: String((templateData.data as MobileTemplateApiData).name || ''),
         location: String(rd.location || ''),
         asset: String(rd.asset_id || ''),
         sections,
@@ -563,7 +609,7 @@ export default function MobileAuditExecution() {
 
       const existingResponses: Record<string, QuestionResponse> = {};
       if (rd.responses) {
-        for (const r of rd.responses as any[]) {
+        for (const r of rd.responses as MobileRunApiResponse[]) {
           const qId = String(r.question_id);
           responseIdMapRef.current[qId] = Number(r.id);
           existingResponses[qId] = {

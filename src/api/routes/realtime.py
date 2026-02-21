@@ -11,9 +11,10 @@ Features:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from src.api.dependencies import CurrentUser
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
 
 
 @router.get("/stats", response_model=ConnectionStats)
-async def get_connection_stats():
+async def get_connection_stats(current_user: CurrentUser):
     """
     Get WebSocket connection statistics.
 
@@ -102,7 +103,7 @@ async def get_connection_stats():
 
 
 @router.get("/online-users")
-async def get_online_users():
+async def get_online_users(current_user: CurrentUser):
     """
     Get list of currently online user IDs.
 
@@ -112,7 +113,7 @@ async def get_online_users():
 
 
 @router.get("/presence/{user_id}", response_model=Optional[PresenceResponse])
-async def get_user_presence(user_id: int):
+async def get_user_presence(user_id: int, current_user: CurrentUser):
     """
     Get presence information for a specific user.
 
@@ -135,7 +136,7 @@ async def get_user_presence(user_id: int):
 
 
 @router.post("/broadcast")
-async def broadcast_message(message: dict, channel: Optional[str] = None):
+async def broadcast_message(message: dict, current_user: CurrentUser, channel: Optional[str] = None):
     """
     Broadcast a message to connected users.
 
@@ -144,6 +145,9 @@ async def broadcast_message(message: dict, channel: Optional[str] = None):
 
     Admin only endpoint.
     """
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     if channel:
         count = await connection_manager.broadcast_to_channel(
             channel=channel, message=message, event_type="admin_broadcast"
