@@ -428,7 +428,44 @@ async def readiness_check(request: Request, verbose: bool = False):
     except Exception:
         checks["redis"] = "unavailable"
 
-    all_healthy = all(v == "healthy" for v in checks.values() if v != "unavailable")
+    # Check Celery workers (if configured)
+    celery_url = os.getenv("CELERY_BROKER_URL") or os.getenv("REDIS_URL")
+    if celery_url:
+        try:
+            from src.infrastructure.tasks.celery_app import celery_app
+
+            inspect = celery_app.control.inspect(timeout=2.0)
+            active = inspect.active()
+            if active:
+                checks["celery"] = "ok"
+            else:
+                checks["celery"] = "no_workers"
+        except Exception as e:
+            checks["celery"] = f"error: {str(e)[:100]}"
+    else:
+        checks["celery"] = "not_configured"
+
+    # Check Azure Storage (if configured)
+    storage_conn = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    if storage_conn:
+        try:
+            from azure.storage.blob import BlobServiceClient
+
+            blob_client = BlobServiceClient.from_connection_string(storage_conn)
+            blob_client.get_account_information()
+            checks["azure_storage"] = "ok"
+        except ImportError:
+            checks["azure_storage"] = "sdk_not_installed"
+        except Exception as e:
+            checks["azure_storage"] = f"error: {str(e)[:100]}"
+    else:
+        checks["azure_storage"] = "not_configured"
+
+    all_healthy = all(
+        v in ("healthy", "ok")
+        for v in checks.values()
+        if v not in ("unavailable", "not_configured", "sdk_not_installed")
+    )
 
     response: dict[str, object] = {
         "status": "healthy" if all_healthy else "unhealthy",

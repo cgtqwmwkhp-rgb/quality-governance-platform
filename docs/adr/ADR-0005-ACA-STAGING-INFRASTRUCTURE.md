@@ -1,4 +1,4 @@
-# ADR-0004: Azure Container Apps Staging Infrastructure
+# ADR-0005: Azure Container Apps Staging Infrastructure
 
 ## Status
 

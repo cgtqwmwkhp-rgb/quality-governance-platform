@@ -16,6 +16,8 @@ from src.api.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
 
@@ -201,14 +203,7 @@ async def delete_user(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a user (superuser only)."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    user = await get_or_404(db, User, user_id)
 
     if user.id == current_user.id:
         raise HTTPException(
@@ -265,14 +260,7 @@ async def update_role(
     current_user: CurrentSuperuser,
 ) -> RoleResponse:
     """Update a role (superuser only)."""
-    result = await db.execute(select(Role).where(Role.id == role_id))
-    role = result.scalar_one_or_none()
-
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found",
-        )
+    role = await get_or_404(db, Role, role_id)
 
     if role.is_system_role:
         raise HTTPException(
@@ -280,9 +268,7 @@ async def update_role(
             detail="Cannot modify system roles",
         )
 
-    update_data = role_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(role, field, value)
+    apply_updates(role, role_data)
 
     await db.commit()
     await db.refresh(role)

@@ -4,12 +4,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -77,11 +79,8 @@ async def list_near_misses(
 
     Ordered by event_date DESC, id ASC for deterministic results.
     """
-    import math
-
     query = select(NearMiss)
 
-    # Apply filters
     if reporter_email:
         query = query.where(NearMiss.reporter_email == reporter_email)
     if status_filter:
@@ -91,25 +90,16 @@ async def list_near_misses(
     if contract:
         query = query.where(NearMiss.contract == contract)
 
-    # Count total
-    count_query = select(sa_func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total = count_result.scalar_one()
-
-    # Deterministic ordering
     query = query.order_by(NearMiss.event_date.desc(), NearMiss.id.asc())
-
-    # Pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
+    params = PaginationParams(page=page, page_size=page_size)
+    paginated = await paginate(db, query, params)
 
     return NearMissListResponse(
-        items=[NearMissResponse.model_validate(nm) for nm in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=math.ceil(total / page_size) if total > 0 else 1,
+        items=[NearMissResponse.model_validate(nm) for nm in paginated.items],
+        total=paginated.total,
+        page=paginated.page,
+        page_size=paginated.page_size,
+        pages=paginated.pages,
     )
 
 
@@ -120,16 +110,7 @@ async def get_near_miss(
     current_user: CurrentUser,
 ) -> NearMiss:
     """Get a near miss by ID."""
-    result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
-
-    return near_miss
+    return await get_or_404(db, NearMiss, near_miss_id)
 
 
 @router.patch("/{near_miss_id}", response_model=NearMissResponse)
@@ -141,28 +122,15 @@ async def update_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
-    result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
-
-    update_data = data.model_dump(exclude_unset=True)
+    near_miss = await get_or_404(db, NearMiss, near_miss_id)
     old_status = near_miss.status
+    update_data = apply_updates(near_miss, data, set_updated_at=False)
 
-    for field, value in update_data.items():
-        setattr(near_miss, field, value)
-
-    # Handle status changes
     if "status" in update_data:
         if update_data["status"] == "CLOSED" and near_miss.closed_at is None:
             near_miss.closed_at = datetime.now(timezone.utc)
             near_miss.closed_by_id = current_user.id
 
-    # Handle assignment
     if "assigned_to_id" in update_data and near_miss.assigned_at is None:
         near_miss.assigned_at = datetime.now(timezone.utc)
 
@@ -193,14 +161,7 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
-    result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
+    near_miss = await get_or_404(db, NearMiss, near_miss_id)
 
     await record_audit_event(
         db=db,
@@ -227,31 +188,10 @@ async def list_near_miss_investigations(
     page_size: int = Query(25, ge=1, le=100),
 ):
     """List investigations for a near miss."""
-    from math import ceil
-
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    # Verify near miss exists
-    result = await db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
-
-    # Get investigations
-    count_query = (
-        select(sa_func.count())
-        .select_from(InvestigationRun)
-        .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.NEAR_MISS,
-            InvestigationRun.assigned_entity_id == near_miss_id,
-        )
-    )
-    total = (await db.execute(count_query)).scalar() or 0
+    await get_or_404(db, NearMiss, near_miss_id)
 
     query = (
         select(InvestigationRun)
@@ -260,15 +200,14 @@ async def list_near_miss_investigations(
             InvestigationRun.assigned_entity_id == near_miss_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
     )
-    investigations = (await db.execute(query)).scalars().all()
+    params = PaginationParams(page=page, page_size=page_size)
+    paginated = await paginate(db, query, params)
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": ceil(total / page_size) if total > 0 else 1,
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
+        "total": paginated.total,
+        "page": paginated.page,
+        "page_size": paginated.page_size,
+        "total_pages": paginated.pages,
     }

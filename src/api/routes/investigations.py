@@ -4,7 +4,7 @@ import math
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from src.api.schemas.investigation import (
     TimelineEventResponse,
     TimelineListResponse,
 )
+from src.api.utils.entity import get_or_404
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -59,7 +60,7 @@ async def validate_assigned_entity(
 
     if entity_type not in entity_models:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error_code": "INVALID_ENTITY_TYPE",
                 "message": f"Invalid entity type: {entity_type}",
@@ -84,7 +85,7 @@ async def validate_assigned_entity(
 
     if not entity:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 "error_code": "ENTITY_NOT_FOUND",
                 "message": f"{entity_type.replace('_', ' ').title()} with ID {entity_id} not found",
@@ -97,7 +98,7 @@ async def validate_assigned_entity(
         )
 
 
-@router.post("/", response_model=InvestigationRunResponse, status_code=201)
+@router.post("/", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation(
     investigation_data: InvestigationRunCreate,
     db: DbSession,
@@ -112,59 +113,11 @@ async def create_investigation(
 
     Returns 400 for invalid entity type, 404 for missing template or entity.
     """
+    from src.domain.services.investigation_service import get_or_create_default_template
+
     request_id = "N/A"  # TODO: Get from request context
 
-    # Validate template exists, create default if missing
-    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation_data.template_id)
-    template_result = await db.execute(template_query)
-    template = template_result.scalar_one_or_none()
-
-    if not template:
-        # Auto-create a default template if template_id is 1 and doesn't exist
-        if investigation_data.template_id == 1:
-            default_template = InvestigationTemplate(
-                id=1,
-                name="Default Investigation Template",
-                description="Standard investigation template for incidents, RTAs, and complaints",
-                version="1.0",
-                is_active=True,
-                structure={
-                    "sections": [
-                        {
-                            "id": "rca",
-                            "title": "Root Cause Analysis",
-                            "fields": [
-                                {"id": "problem_statement", "type": "text", "required": True},
-                                {"id": "root_cause", "type": "text", "required": True},
-                                {"id": "contributing_factors", "type": "array", "required": False},
-                                {"id": "corrective_actions", "type": "array", "required": True},
-                            ],
-                        }
-                    ]
-                },
-                applicable_entity_types=[
-                    "road_traffic_collision",
-                    "reporting_incident",
-                    "complaint",
-                    "near_miss",
-                ],
-                created_by_id=current_user.id,
-                updated_by_id=current_user.id,
-            )
-            db.add(default_template)
-            await db.commit()
-            await db.refresh(default_template)
-            template = default_template
-        else:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error_code": "TEMPLATE_NOT_FOUND",
-                    "message": f"Investigation template with ID {investigation_data.template_id} not found",
-                    "details": {"template_id": investigation_data.template_id},
-                    "request_id": request_id,
-                },
-            )
+    template = await get_or_create_default_template(db, investigation_data.template_id, current_user.id)
 
     # Validate assigned entity exists
     await validate_assigned_entity(
@@ -208,7 +161,7 @@ async def list_investigations(
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     entity_id: Optional[int] = Query(None, description="Filter by entity ID"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
 ):
     """List investigation runs with pagination.
 
@@ -227,7 +180,7 @@ async def list_investigations(
             query = query.where(InvestigationRun.assigned_entity_type == entity_type_enum)
         except ValueError:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error_code": "INVALID_ENTITY_TYPE",
                     "message": f"Invalid entity type: {entity_type}",
@@ -242,18 +195,18 @@ async def list_investigations(
     if entity_id is not None:
         query = query.where(InvestigationRun.assigned_entity_id == entity_id)
 
-    if status is not None:
+    if status_filter is not None:
         try:
-            status_enum = InvestigationStatus(status)
+            status_enum = InvestigationStatus(status_filter)
             query = query.where(InvestigationRun.status == status_enum)
         except ValueError:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error_code": "INVALID_STATUS",
-                    "message": f"Invalid status: {status}",
+                    "message": f"Invalid status: {status_filter}",
                     "details": {
-                        "status": status,
+                        "status": status_filter,
                         "valid_statuses": [s.value for s in InvestigationStatus],
                     },
                     "request_id": request_id,
@@ -293,24 +246,7 @@ async def get_investigation(
     current_user: CurrentUser,
 ):
     """Get a specific investigation run by ID."""
-    request_id = "N/A"  # TODO: Get from request context
-
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-                "details": {"investigation_id": investigation_id},
-                "request_id": request_id,
-            },
-        )
-
-    return investigation
+    return await get_or_404(db, InvestigationRun, investigation_id)
 
 
 @router.patch("/{investigation_id}", response_model=InvestigationRunResponse)
@@ -325,23 +261,7 @@ async def update_investigation(
     Only provided fields will be updated (partial update).
     Can update RCA section fields via the data field.
     """
-    request_id = "N/A"  # TODO: Get from request context
-
-    # Get existing investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-                "details": {"investigation_id": investigation_id},
-                "request_id": request_id,
-            },
-        )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id)
 
     # Update fields
     update_data = investigation_data.model_dump(exclude_unset=True)
@@ -371,7 +291,7 @@ async def update_investigation(
 # === Stage 2 Endpoints ===
 
 
-@router.post("/from-record", response_model=InvestigationRunResponse, status_code=201)
+@router.post("/from-record", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation_from_record(
     request_body: CreateFromRecordRequest,
     db: DbSession,
@@ -405,7 +325,7 @@ async def create_investigation_from_record(
         "request_id": "..."
     }
     """
-    from src.domain.services.investigation_service import InvestigationService
+    from src.domain.services.investigation_service import InvestigationService, get_or_create_default_template
     from src.domain.services.reference_number import ReferenceNumberService
 
     request_id = "N/A"  # TODO: Get from request context
@@ -429,7 +349,7 @@ async def create_investigation_from_record(
 
     if existing_investigation:
         raise HTTPException(
-            status_code=409,
+            status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "INV_ALREADY_EXISTS",
                 "message": f"An investigation already exists for this {source_type.replace('_', ' ')}",
@@ -447,7 +367,7 @@ async def create_investigation_from_record(
     record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
     if error:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 "error_code": "SOURCE_NOT_FOUND",
                 "message": error,
@@ -465,37 +385,7 @@ async def create_investigation_from_record(
     # Map source to investigation data
     data, mapping_log, level = InvestigationService.map_source_to_investigation(record, source_type_enum)
 
-    # Validate template exists or create default
-    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
-    template_result = await db.execute(template_query)
-    template = template_result.scalar_one_or_none()
-
-    if not template and template_id == 1:
-        # Auto-create default template
-        template = InvestigationTemplate(
-            id=1,
-            name="Investigation Report Template v2.1",
-            description="Standard investigation template based on Plantexpand Template v2.0",
-            version="2.1",
-            is_active=True,
-            structure={"sections": []},
-            applicable_entity_types=[e.value for e in AssignedEntityType],
-            created_by_id=current_user.id,
-            updated_by_id=current_user.id,
-        )
-        db.add(template)
-        await db.commit()
-        await db.refresh(template)
-
-    if not template:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "TEMPLATE_NOT_FOUND",
-                "message": f"Template {template_id} not found",
-                "request_id": request_id,
-            },
-        )
+    template = await get_or_create_default_template(db, template_id, current_user.id)
 
     # Generate reference number
     reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
@@ -557,7 +447,7 @@ async def list_source_records(
     ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Page size"),
+    page_size: int = Query(20, ge=1, le=100, description="Page size"),
 ):
     """List source records available for investigation creation.
 
@@ -568,7 +458,7 @@ async def list_source_records(
     - source_type: Required. One of: near_miss, road_traffic_collision, complaint, reporting_incident
     - q: Optional search query
     - page: Page number (default: 1)
-    - size: Page size (default: 20, max: 100)
+    - page_size: Page size (default: 20, max: 100)
 
     Response includes:
     - source_id: Record ID
@@ -586,7 +476,7 @@ async def list_source_records(
         source_type_enum = AssignedEntityType(source_type)
     except ValueError:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error_code": "INVALID_SOURCE_TYPE",
                 "message": f"Invalid source type: {source_type}",
@@ -606,7 +496,7 @@ async def list_source_records(
     model_path = entity_models.get(source_type)
     if not model_path:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error_code": "UNSUPPORTED_SOURCE_TYPE",
                 "message": f"Source type {source_type} is not supported",
@@ -643,8 +533,8 @@ async def list_source_records(
 
     # Apply deterministic ordering and pagination
     base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
-    offset = (page - 1) * size
-    base_query = base_query.offset(offset).limit(size)
+    offset = (page - 1) * page_size
+    base_query = base_query.offset(offset).limit(page_size)
 
     # Execute query
     result = await db.execute(base_query)
@@ -666,17 +556,14 @@ async def list_source_records(
         ref_num = getattr(record, "reference_number", f"REF-{record.id}")
 
         # Get status (safe enum value)
-        status = getattr(record, "status", "unknown")
-        if hasattr(status, "value"):
-            status = status.value
+        record_status = getattr(record, "status", "unknown")
+        if hasattr(record_status, "value"):
+            record_status = record_status.value
 
         # Format created_at as date only (no PII)
         created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
 
-        # === SAFE DISPLAY LABEL (NO PII) ===
-        # Format: "{reference_number} — {status} — {date}"
-        # This avoids exposing free-text fields that may contain PII
-        display_label = f"{ref_num} — {status.upper()} — {created_date}"
+        display_label = f"{ref_num} — {record_status.upper()} — {created_date}"
 
         # Check if already investigated
         existing_inv = existing_investigations.get(record.id)
@@ -686,20 +573,20 @@ async def list_source_records(
                 source_id=record.id,
                 display_label=display_label,
                 reference_number=ref_num,
-                status=status,
+                status=record_status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
                 investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
             )
         )
 
-    total_pages = math.ceil(total / size) if total > 0 else 1
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
 
     return SourceRecordsResponse(
         items=items,
         total=total,
         page=page,
-        page_size=size,
+        page_size=page_size,
         total_pages=total_pages,
         source_type=source_type,
     )
@@ -722,25 +609,12 @@ async def autosave_investigation(
 
     request_id = "N/A"
 
-    # Get investigation with version check
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id)
 
     # Optimistic locking: check version
     if investigation.version != version:
         raise HTTPException(
-            status_code=409,
+            status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "VERSION_CONFLICT",
                 "message": "Investigation was modified by another user",
@@ -776,7 +650,7 @@ async def autosave_investigation(
     return investigation
 
 
-@router.post("/{investigation_id}/comments", status_code=201, response_model=CommentResponse)
+@router.post("/{investigation_id}/comments", status_code=status.HTTP_201_CREATED, response_model=CommentResponse)
 async def add_comment(
     investigation_id: int,
     request_body: CommentCreateRequest,
@@ -799,20 +673,7 @@ async def add_comment(
 
     request_id = "N/A"
 
-    # Validate investigation exists
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id)
 
     # Validate parent comment if provided
     if request_body.parent_comment_id:
@@ -825,7 +686,7 @@ async def add_comment(
         parent_comment = parent_result.scalar_one_or_none()
         if not parent_comment:
             raise HTTPException(
-                status_code=404,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail={
                     "error_code": "PARENT_COMMENT_NOT_FOUND",
                     "message": f"Parent comment {request_body.parent_comment_id} not found",
@@ -889,25 +750,12 @@ async def approve_investigation(
 
     request_id = "N/A"
 
-    # Get investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id)
 
     # Check status allows approval
     if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error_code": "INVALID_STATUS_TRANSITION",
                 "message": f"Cannot approve investigation in status {investigation.status.value}",
@@ -927,7 +775,7 @@ async def approve_investigation(
     else:
         if not rejection_reason:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error_code": "REJECTION_REASON_REQUIRED",
                     "message": "Rejection reason is required",
@@ -983,7 +831,7 @@ async def generate_customer_pack(
         audience_enum = CustomerPackAudience(audience)
     except ValueError:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error_code": "INVALID_AUDIENCE",
                 "message": f"Invalid audience: {audience}",
@@ -992,20 +840,7 @@ async def generate_customer_pack(
             },
         )
 
-    # Get investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    investigation = await get_or_404(db, InvestigationRun, investigation_id)
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset
@@ -1125,25 +960,7 @@ async def get_investigation_timeline(
     Returns events in deterministic order: created_at DESC, then id DESC.
     Supports filtering by event_type and pagination.
     """
-    request_id = "N/A"
-
-    # Validate investigation exists
-    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    inv_result = await db.execute(inv_query)
-    investigation = inv_result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
-
-    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
-    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
+    await get_or_404(db, InvestigationRun, investigation_id)
 
     # Build query for timeline events
     query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
@@ -1217,7 +1034,7 @@ async def get_investigation_comments(
         )
         if not has_deleted_access:
             raise HTTPException(
-                status_code=403,
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "error_code": "FORBIDDEN",
                     "message": "Permission 'investigations:comments:read_deleted' required to view deleted comments",
@@ -1225,22 +1042,7 @@ async def get_investigation_comments(
                 },
             )
 
-    # Validate investigation exists
-    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
-    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
-    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    inv_result = await db.execute(inv_query)
-    investigation = inv_result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+    await get_or_404(db, InvestigationRun, investigation_id)
 
     # Build query for comments
     query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
@@ -1299,25 +1101,7 @@ async def get_investigation_packs(
     Returns pack summaries (without full content) in deterministic order:
     created_at DESC, id DESC. Full pack content should be fetched separately.
     """
-    request_id = "N/A"
-
-    # Validate investigation exists
-    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    inv_result = await db.execute(inv_query)
-    investigation = inv_result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
-
-    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
-    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
+    await get_or_404(db, InvestigationRun, investigation_id)
 
     # Build query for packs
     query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
@@ -1390,26 +1174,9 @@ async def validate_investigation_closure(
         reason_codes: List of blocking reasons (stable strings)
         missing_fields: List of field paths that are missing
     """
-    request_id = "N/A"
     checked_at = datetime.now(timezone.utc)
 
-    # Get investigation with template
-    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    inv_result = await db.execute(inv_query)
-    investigation = inv_result.scalar_one_or_none()
-
-    if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
-
-    # NOTE: For UAT, authz is temporarily relaxed to match the main GET endpoint.
-    # TODO: Implement consistent authz across all investigation endpoints (see ADR-TBD).
+    investigation = await get_or_404(db, InvestigationRun, investigation_id)
 
     reason_codes: List[str] = []
     missing_fields: List[str] = []
@@ -1505,10 +1272,10 @@ async def validate_investigation_closure(
     # Deduplicate reason codes (keep unique)
     unique_reason_codes = list(dict.fromkeys(reason_codes))
 
-    status = "OK" if not unique_reason_codes else "BLOCKED"
+    closure_status = "OK" if not unique_reason_codes else "BLOCKED"
 
     return ClosureValidationResponse(
-        status=status,
+        status=closure_status,
         reason_codes=unique_reason_codes,
         missing_fields=missing_fields,
         checked_at_utc=checked_at,

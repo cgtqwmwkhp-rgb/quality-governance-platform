@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.update import apply_updates
 from src.infrastructure.database import Base
 
 router = APIRouter(tags=["Push Notifications"])
@@ -339,7 +340,7 @@ class PushNotificationService:
 # ============================================================================
 
 
-@router.post("/subscribe", response_model=dict, status_code=201)
+@router.post("/subscribe", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def subscribe_to_push(
     subscription: PushSubscriptionCreate,
     db: DbSession,
@@ -427,8 +428,7 @@ async def update_notification_preferences(
         prefs = NotificationPreference(user_id=current_user.id)
         db.add(prefs)
 
-    for key, value in updates.model_dump(exclude_unset=True).items():
-        setattr(prefs, key, value)
+    apply_updates(prefs, updates)
 
     await db.commit()
 

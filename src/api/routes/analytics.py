@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentSuperuser, CurrentUser
 from src.domain.services.analytics_service import analytics_service
 
 router = APIRouter()
@@ -217,7 +217,7 @@ async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, curren
 
 
 @router.delete("/dashboards/{dashboard_id}")
-async def delete_dashboard(dashboard_id: int, current_user: CurrentUser):
+async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
     """Delete a dashboard."""
     return {"success": True, "id": dashboard_id}
 

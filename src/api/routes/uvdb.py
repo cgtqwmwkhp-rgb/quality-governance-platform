@@ -12,11 +12,13 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -500,7 +502,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise HTTPException(status_code=404, detail="Section not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
 
     return {
         "section_number": section_data["number"],
@@ -555,7 +557,7 @@ async def list_audits(
     }
 
 
-@router.post("/audits", response_model=dict, status_code=201)
+@router.post("/audits", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_audit(
     audit_data: AuditCreate,
     db: AsyncSession = Depends(get_db),
@@ -586,10 +588,7 @@ async def get_audit(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get audit details"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
-    if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+    audit = await get_or_404(db, UVDBAudit, audit_id)
 
     return {
         "id": audit.id,
@@ -629,16 +628,9 @@ async def update_audit(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update audit"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
-    if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+    audit = await get_or_404(db, UVDBAudit, audit_id)
 
-    update_data = audit_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(audit, key, value)
-
-    audit.updated_at = datetime.utcnow()
+    apply_updates(audit, audit_data)
     await db.flush()
 
     return {"message": "Audit updated", "id": audit.id}
@@ -647,17 +639,14 @@ async def update_audit(
 # ============ Audit Responses ============
 
 
-@router.post("/audits/{audit_id}/responses", response_model=dict, status_code=201)
+@router.post("/audits/{audit_id}/responses", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Record an audit response"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
-    if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+    await get_or_404(db, UVDBAudit, audit_id)
 
     response = UVDBAuditResponse(
         audit_id=audit_id,
@@ -676,10 +665,7 @@ async def get_audit_responses(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get all responses for an audit"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
-    if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+    await get_or_404(db, UVDBAudit, audit_id)
 
     result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
     responses = result.scalars().all()
@@ -704,17 +690,14 @@ async def get_audit_responses(
 # ============ KPI Management ============
 
 
-@router.post("/audits/{audit_id}/kpis", response_model=dict, status_code=201)
+@router.post("/audits/{audit_id}/kpis", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
-    if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+    await get_or_404(db, UVDBAudit, audit_id)
 
     ltifr = None
     if kpi_data.total_man_hours and kpi_data.total_man_hours > 0:

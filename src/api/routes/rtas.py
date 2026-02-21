@@ -18,6 +18,8 @@ from src.api.schemas.rta import (
     RTAResponse,
     RTAUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.update import apply_updates
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -174,13 +176,7 @@ async def get_rta(
     current_user: CurrentUser,
 ):
     """Get an RTA by ID."""
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
-    return rta
+    return await get_or_404(db, RoadTrafficCollision, rta_id)
 
 
 @router.patch("/{rta_id}", response_model=RTAResponse)
@@ -192,17 +188,8 @@ async def update_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
-
-    update_data = rta_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(rta, field, value)
-
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id)
+    update_data = apply_updates(rta, rta_in)
     rta.updated_by_id = current_user.id
 
     await record_audit_event(
@@ -230,12 +217,7 @@ async def delete_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id)
 
     await record_audit_event(
         db=db,
@@ -264,13 +246,7 @@ async def create_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new action for an RTA."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    rta = await get_or_404(db, RoadTrafficCollision, rta_id)
 
     ref_number = await ReferenceNumberService.generate(db, "rta_action", RTAAction)
 
@@ -309,13 +285,7 @@ async def list_rta_actions(
     page_size: int = Query(10, ge=1, le=100),
 ):
     """List actions for an RTA with deterministic ordering and pagination."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    await get_or_404(db, RoadTrafficCollision, rta_id)
 
     query = select(RTAAction).where(RTAAction.rta_id == rta_id)
 
@@ -354,26 +324,15 @@ async def update_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Update an RTA action."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
-
-    # Get action
-    action = await db.get(RTAAction, action_id)
-    if not action or action.rta_id != rta_id:
+    await get_or_404(db, RoadTrafficCollision, rta_id)
+    action = await get_or_404(db, RTAAction, action_id)
+    if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Action with id {action_id} not found for RTA {rta_id}",
         )
 
-    update_data = action_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(action, field, value)
-
+    update_data = apply_updates(action, action_in)
     action.updated_by_id = current_user.id
 
     await record_audit_event(
@@ -402,17 +361,9 @@ async def delete_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA action."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
-
-    # Get action
-    action = await db.get(RTAAction, action_id)
-    if not action or action.rta_id != rta_id:
+    await get_or_404(db, RoadTrafficCollision, rta_id)
+    action = await get_or_404(db, RTAAction, action_id)
+    if action.rta_id != rta_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Action with id {action_id} not found for RTA {rta_id}",
@@ -453,13 +404,7 @@ async def list_rta_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with ID {rta_id} not found",
-        )
+    await get_or_404(db, RoadTrafficCollision, rta_id)
 
     # Get total count
     count_query = (

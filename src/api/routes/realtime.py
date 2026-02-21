@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser
+from src.core.security import decode_token
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -62,8 +63,21 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
     - { "type": "presence_update", "data": {...} } - Presence change
     """
 
-    # TODO: Validate JWT token in production
-    # For now, accept connection if user_id is provided
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+    try:
+        payload = decode_token(token)
+        if not payload:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        token_user_id = payload.get("sub")
+        if token_user_id is not None and int(token_user_id) != user_id:
+            await websocket.close(code=4003, reason="User ID mismatch")
+            return
+    except Exception:
+        await websocket.close(code=4001, reason="Token validation failed")
+        return
 
     connection = await connection_manager.connect(websocket=websocket, user_id=user_id, metadata={"token": token})
 

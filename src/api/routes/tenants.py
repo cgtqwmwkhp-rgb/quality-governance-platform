@@ -16,7 +16,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.tenant import verify_tenant_access
 from src.domain.services.tenant_service import TenantService
 
@@ -89,7 +89,7 @@ class TenantResponse(BaseModel):
 async def create_tenant(
     data: TenantCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Create a new tenant."""
     service = TenantService(db)
@@ -111,7 +111,7 @@ async def create_tenant(
 @router.get("/", response_model=list[TenantResponse])
 async def list_tenants(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
@@ -160,7 +160,7 @@ async def update_tenant(
     tenant_id: int,
     data: TenantUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Update tenant settings."""
     await verify_tenant_access(tenant_id, current_user)
@@ -184,7 +184,7 @@ async def update_branding(
     tenant_id: int,
     data: TenantBranding,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Update tenant branding."""
     await verify_tenant_access(tenant_id, current_user)
@@ -344,7 +344,7 @@ async def toggle_feature(
     tenant_id: int,
     feature: str,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     enabled: bool = True,
 ) -> Any:
     """Enable or disable a feature for a tenant."""

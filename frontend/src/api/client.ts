@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios'
 import { getPlatformToken, isTokenExpired, clearTokens } from '../utils/auth'
 import { API_BASE_URL } from '../config/apiBase'
+import { useAppStore } from '../stores/useAppStore'
 
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL;
@@ -168,8 +169,12 @@ const api = axios.create({
   },
 })
 
+let activeRequests = 0;
+
 // CRITICAL: Enforce HTTPS on all requests at interceptor level
 api.interceptors.request.use((config) => {
+  activeRequests++;
+  useAppStore.getState().setLoading(true);
   // Force HTTPS on baseURL
   if (config.baseURL && !config.baseURL.startsWith('https://')) {
     config.baseURL = config.baseURL.replace(/^http:/, 'https:');
@@ -223,8 +228,22 @@ interface ClassifiedAxiosError extends AxiosError {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    activeRequests--;
+    if (activeRequests === 0) {
+      useAppStore.getState().setLoading(false);
+    }
+    useAppStore.getState().setConnectionStatus('connected');
+    return response;
+  },
   (error: AxiosError) => {
+    activeRequests--;
+    if (activeRequests === 0) {
+      useAppStore.getState().setLoading(false);
+    }
+    if (!error.response) {
+      useAppStore.getState().setConnectionStatus('disconnected');
+    }
     // Classify the error for better user messaging
     const status = error.response?.status
     const currentPath = window.location.pathname

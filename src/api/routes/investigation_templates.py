@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.investigation import (
     InvestigationTemplateCreate,
     InvestigationTemplateListResponse,
@@ -167,7 +167,7 @@ async def update_template(
 async def delete_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ):
     """Delete an investigation template.
 

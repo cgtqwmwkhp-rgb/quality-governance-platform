@@ -763,3 +763,54 @@ class KRIService:
         summary["alerts_pending"] = alert_result.scalar() or 0
 
         return summary
+
+
+# ============== Risk Matrix Configuration ==============
+
+RISK_MATRIX = {
+    1: {
+        1: ("very_low", "#22c55e"),
+        2: ("low", "#84cc16"),
+        3: ("low", "#84cc16"),
+        4: ("medium", "#eab308"),
+        5: ("medium", "#eab308"),
+    },
+    2: {
+        1: ("low", "#84cc16"),
+        2: ("low", "#84cc16"),
+        3: ("medium", "#eab308"),
+        4: ("medium", "#eab308"),
+        5: ("high", "#f97316"),
+    },
+    3: {
+        1: ("low", "#84cc16"),
+        2: ("medium", "#eab308"),
+        3: ("medium", "#eab308"),
+        4: ("high", "#f97316"),
+        5: ("high", "#f97316"),
+    },
+    4: {
+        1: ("medium", "#eab308"),
+        2: ("medium", "#eab308"),
+        3: ("high", "#f97316"),
+        4: ("high", "#f97316"),
+        5: ("critical", "#ef4444"),
+    },
+    5: {
+        1: ("medium", "#eab308"),
+        2: ("high", "#f97316"),
+        3: ("high", "#f97316"),
+        4: ("critical", "#ef4444"),
+        5: ("critical", "#ef4444"),
+    },
+}
+
+
+def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
+    """Calculate risk score and level from likelihood and impact.
+
+    Returns (score, level_name, color_hex).
+    """
+    score = likelihood * impact
+    level, color = RISK_MATRIX.get(likelihood, {}).get(impact, ("medium", "#eab308"))
+    return score, level, color

@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -22,6 +22,9 @@ from src.api.schemas.standard import (
     StandardResponse,
     StandardUpdate,
 )
+from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.standard import Clause, Control, Standard
 
 router = APIRouter()
@@ -52,23 +55,16 @@ async def list_standards(
     if is_active is not None:
         query = query.where(Standard.is_active == is_active)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query)
-
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(Standard.code)
-
-    result = await db.execute(query)
-    standards = result.scalars().all()
+    params = PaginationParams(page=page, page_size=page_size)
+    paginated = await paginate(db, query, params)
 
     return StandardListResponse(
-        items=[StandardResponse.model_validate(s) for s in standards],
-        total=total or 0,
-        page=page,
-        page_size=page_size,
-        pages=(total or 0 + page_size - 1) // page_size,
+        items=[StandardResponse.model_validate(s) for s in paginated.items],
+        total=paginated.total,
+        page=paginated.page,
+        page_size=paginated.page_size,
+        pages=paginated.pages,
     )
 
 
@@ -79,7 +75,6 @@ async def create_standard(
     current_user: CurrentSuperuser,
 ) -> StandardResponse:
     """Create a new standard (superuser only)."""
-    # Check if code already exists
     result = await db.execute(select(Standard).where(Standard.code == standard_data.code))
     if result.scalar_one_or_none():
         raise HTTPException(
@@ -126,18 +121,8 @@ async def update_standard(
     current_user: CurrentSuperuser,
 ) -> StandardResponse:
     """Update a standard (superuser only)."""
-    result = await db.execute(select(Standard).where(Standard.id == standard_id))
-    standard = result.scalar_one_or_none()
-
-    if not standard:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Standard not found",
-        )
-
-    update_data = standard_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(standard, field, value)
+    standard = await get_or_404(db, Standard, standard_id, detail="Standard not found")
+    apply_updates(standard, standard_data, set_updated_at=False)
 
     await db.commit()
     await db.refresh(standard)
@@ -161,17 +146,8 @@ async def get_compliance_score(
 
     Returns setup_required=true if no applicable controls exist.
     """
-    # Verify standard exists
-    result = await db.execute(select(Standard).where(Standard.id == standard_id))
-    standard = result.scalar_one_or_none()
+    standard = await get_or_404(db, Standard, standard_id, detail="Standard not found")
 
-    if not standard:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Standard not found",
-        )
-
-    # Get all applicable, active controls for this standard
     control_query = (
         select(Control)
         .join(Clause, Control.clause_id == Clause.id)
@@ -196,12 +172,10 @@ async def get_compliance_score(
             setup_required=True,
         )
 
-    # Count by status
     implemented_count = sum(1 for c in controls if c.implementation_status == "implemented")
     partial_count = sum(1 for c in controls if c.implementation_status == "partial")
     not_implemented_count = total_controls - implemented_count - partial_count
 
-    # Calculate percentage: implemented=100%, partial=50%, others=0%
     compliance_percentage = round((implemented_count + 0.5 * partial_count) / total_controls * 100)
 
     return ComplianceScoreResponse(
@@ -228,15 +202,8 @@ async def list_standard_controls(
     Returns controls with clause reference, ordered deterministically by:
     clause.sort_order, clause.clause_number, control.control_number, control.id
     """
-    # Verify standard exists
-    result = await db.execute(select(Standard).where(Standard.id == standard_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Standard not found",
-        )
+    await get_or_404(db, Standard, standard_id, detail="Standard not found")
 
-    # Get all controls with clause info, deterministically ordered
     query = (
         select(Control, Clause.clause_number, Clause.sort_order)
         .join(Clause, Control.clause_id == Clause.id)
@@ -246,7 +213,7 @@ async def list_standard_controls(
             Clause.sort_order,
             Clause.clause_number,
             Control.control_number,
-            Control.id,  # Tie-breaker for determinism
+            Control.id,
         )
     )
     result = await db.execute(query)
@@ -278,13 +245,7 @@ async def list_clauses(
     parent_clause_id: Optional[int] = None,
 ) -> list[ClauseResponse]:
     """List clauses for a standard."""
-    # Verify standard exists
-    result = await db.execute(select(Standard).where(Standard.id == standard_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Standard not found",
-        )
+    await get_or_404(db, Standard, standard_id, detail="Standard not found")
 
     query = (
         select(Clause)
@@ -314,13 +275,7 @@ async def create_clause(
     current_user: CurrentSuperuser,
 ) -> ClauseResponse:
     """Create a new clause for a standard (superuser only)."""
-    # Verify standard exists
-    result = await db.execute(select(Standard).where(Standard.id == standard_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Standard not found",
-        )
+    await get_or_404(db, Standard, standard_id, detail="Standard not found")
 
     clause = Clause(
         standard_id=standard_id,
@@ -329,7 +284,6 @@ async def create_clause(
     db.add(clause)
     await db.commit()
 
-    # Reload with relationships
     result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause.id))
     clause = result.scalar_one()  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-002
 
@@ -363,18 +317,8 @@ async def update_clause(
     current_user: CurrentSuperuser,
 ) -> ClauseResponse:
     """Update a clause (superuser only)."""
-    result = await db.execute(select(Clause).where(Clause.id == clause_id))
-    clause = result.scalar_one_or_none()
-
-    if not clause:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clause not found",
-        )
-
-    update_data = clause_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(clause, field, value)
+    clause = await get_or_404(db, Clause, clause_id, detail="Clause not found")
+    apply_updates(clause, clause_data, set_updated_at=False)
 
     await db.commit()
     await db.refresh(clause)
@@ -393,13 +337,7 @@ async def create_control(
     current_user: CurrentSuperuser,
 ) -> ControlResponse:
     """Create a new control for a clause (superuser only)."""
-    # Verify clause exists
-    result = await db.execute(select(Clause).where(Clause.id == clause_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clause not found",
-        )
+    await get_or_404(db, Clause, clause_id, detail="Clause not found")
 
     control = Control(
         clause_id=clause_id,
@@ -419,15 +357,7 @@ async def get_control(
     current_user: CurrentUser,
 ) -> ControlResponse:
     """Get a specific control."""
-    result = await db.execute(select(Control).where(Control.id == control_id))
-    control = result.scalar_one_or_none()
-
-    if not control:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Control not found",
-        )
-
+    control = await get_or_404(db, Control, control_id, detail="Control not found")
     return ControlResponse.model_validate(control)
 
 
@@ -439,18 +369,8 @@ async def update_control(
     current_user: CurrentSuperuser,
 ) -> ControlResponse:
     """Update a control (superuser only)."""
-    result = await db.execute(select(Control).where(Control.id == control_id))
-    control = result.scalar_one_or_none()
-
-    if not control:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Control not found",
-        )
-
-    update_data = control_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(control, field, value)
+    control = await get_or_404(db, Control, control_id, detail="Control not found")
+    apply_updates(control, control_data, set_updated_at=False)
 
     await db.commit()
     await db.refresh(control)

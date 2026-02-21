@@ -7,12 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.domain.models.incident import Incident
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -89,6 +90,7 @@ async def create_incident(
 
     await db.commit()
     await db.refresh(incident)
+    track_metric("incidents.created")
     return incident
 
 
@@ -354,7 +356,7 @@ async def update_incident(
 async def delete_incident(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     request_id: str = Depends(get_request_id),
 ) -> None:
     """

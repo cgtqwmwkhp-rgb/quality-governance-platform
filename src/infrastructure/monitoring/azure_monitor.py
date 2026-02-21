@@ -26,6 +26,15 @@ _audit_findings: Counter | None = None
 _api_response_time: Histogram | None = None
 _db_query_time: Histogram | None = None
 _cache_hit_rate: UpDownCounter | None = None
+_capa_created: Counter | None = None
+_capa_closed: Counter | None = None
+_complaints_created: Counter | None = None
+_risks_created: Counter | None = None
+_auth_login: Counter | None = None
+_auth_logout: Counter | None = None
+_documents_uploaded: Counter | None = None
+_workflows_completed: Counter | None = None
+_workflow_completion_time: Histogram | None = None
 
 
 def setup_telemetry(app: Any = None, service_name: str = "quality-governance-platform") -> None:
@@ -80,6 +89,23 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     )
     _cache_hit_rate = _meter.create_up_down_counter("cache.operations", description="Cache hit/miss counter")
 
+    # Additional business metrics
+    global _capa_created, _capa_closed, _complaints_created, _risks_created
+    global _auth_login, _auth_logout, _documents_uploaded, _workflows_completed
+    global _workflow_completion_time
+
+    _capa_created = _meter.create_counter("capa.created", description="Number of CAPA actions created")
+    _capa_closed = _meter.create_counter("capa.closed", description="Number of CAPA actions closed")
+    _complaints_created = _meter.create_counter("complaints.created", description="Number of complaints created")
+    _risks_created = _meter.create_counter("risks.created", description="Number of risks created")
+    _auth_login = _meter.create_counter("auth.login", description="Number of user logins")
+    _auth_logout = _meter.create_counter("auth.logout", description="Number of user logouts")
+    _documents_uploaded = _meter.create_counter("documents.uploaded", description="Number of documents uploaded")
+    _workflows_completed = _meter.create_counter("workflows.completed", description="Number of workflows completed")
+    _workflow_completion_time = _meter.create_histogram(
+        "workflow.completion_time_hours", description="Workflow completion time in hours", unit="h"
+    )
+
     if app:
         FastAPIInstrumentor.instrument_app(app)
         try:
@@ -106,6 +132,14 @@ def track_metric(name: str, value: float = 1.0, tags: dict[str, str] | None = No
         "incidents.resolved": _incidents_resolved,
         "audits.completed": _audits_completed,
         "audits.findings": _audit_findings,
+        "capa.created": _capa_created,
+        "capa.closed": _capa_closed,
+        "complaints.created": _complaints_created,
+        "risks.created": _risks_created,
+        "auth.login": _auth_login,
+        "auth.logout": _auth_logout,
+        "documents.uploaded": _documents_uploaded,
+        "workflows.completed": _workflows_completed,
     }
 
     counter = metric_map.get(name)

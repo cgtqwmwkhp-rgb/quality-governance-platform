@@ -88,7 +88,7 @@ class ActionListResponse(BaseModel):
     items: list[ActionResponse]
     total: int
     page: int
-    size: int
+    page_size: int
     pages: int
 
 
@@ -124,7 +124,7 @@ async def list_actions(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
     source_type: Optional[str] = Query(None),
     source_id: Optional[int] = Query(None),
@@ -186,16 +186,16 @@ async def list_actions(
 
     # Apply pagination
     total = len(actions_list)
-    start = (page - 1) * size
-    end = start + size
+    start = (page - 1) * page_size
+    end = start + page_size
     paginated = actions_list[start:end]
 
     return ActionListResponse(
         items=paginated,
         total=total,
         page=page,
-        size=size,
-        pages=(total + size - 1) // size if total > 0 else 0,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
     )
 
 

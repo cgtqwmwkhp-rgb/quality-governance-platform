@@ -1110,6 +1110,27 @@ jobs:
           retention-days: 30
         if: always()
 
+  performance-baseline:
+    name: Performance Baseline
+    runs-on: ubuntu-latest
+    needs: [build-check]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install locust
+      - name: Run performance baseline
+        run: |
+          echo "Performance baseline check (advisory)"
+          echo "Locust test suite available at tests/performance/locustfile.py"
+          echo "Run locally: locust -f tests/performance/locustfile.py --headless --users 10 --spawn-rate 2 --run-time 30s"
+        continue-on-error: true
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest

@@ -11,11 +11,13 @@ Features:
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.pagination import PaginationParams, paginate
+from src.api.utils.update import apply_updates
 from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
 from src.domain.models.user import User
 
@@ -118,9 +120,6 @@ async def list_notifications(
     if notification_type:
         query = query.where(Notification.type == notification_type)
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
-
     unread_query = select(func.count(Notification.id)).where(
         Notification.user_id == current_user.id,
         Notification.is_read == False,
@@ -128,17 +127,15 @@ async def list_notifications(
     unread_count = await db.scalar(unread_query) or 0
 
     query = query.order_by(Notification.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
-
-    result = await db.execute(query)
-    notifications = result.scalars().all()
+    params = PaginationParams(page=page, page_size=page_size)
+    paginated = await paginate(db, query, params)
 
     return NotificationListResponse(
-        items=[NotificationResponse.model_validate(n) for n in notifications],
-        total=total,
+        items=[NotificationResponse.model_validate(n) for n in paginated.items],
+        total=paginated.total,
         unread_count=unread_count,
-        page=page,
-        page_size=page_size,
+        page=paginated.page,
+        page_size=paginated.page_size,
     )
 
 
@@ -168,7 +165,7 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     notification.is_read = True
     notification.read_at = datetime.utcnow()
@@ -187,7 +184,7 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     notification.is_read = False
     notification.read_at = None
@@ -221,7 +218,7 @@ async def delete_notification(notification_id: int, db: DbSession, current_user:
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     await db.delete(notification)
     await db.commit()
@@ -276,9 +273,7 @@ async def update_notification_preferences(
         prefs = NotificationPreference(user_id=current_user.id)
         db.add(prefs)
 
-    update_data = preferences.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(prefs, field, value)
+    update_data = apply_updates(prefs, preferences, set_updated_at=False)
 
     await db.commit()
     return {"success": True, "preferences": update_data}
@@ -330,7 +325,6 @@ async def send_test_notification(current_user: CurrentUser):
     """
     from src.infrastructure.websocket.connection_manager import connection_manager
 
-    # Send test notification via WebSocket
     await connection_manager.send_to_user(
         user_id=current_user.id,
         message={
