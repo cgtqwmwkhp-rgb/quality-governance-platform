@@ -1,23 +1,20 @@
-"""
-Real-Time WebSocket API Routes
+"""Real-Time WebSocket API routes.
 
-Features:
-- WebSocket connection handling
-- Real-time notifications
-- Presence tracking
-- Channel subscriptions
+Thin controller layer — broadcast / stats / presence logic lives in RealtimeService.
+WebSocket lifecycle stays here as it is a transport concern.
 """
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentUser, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.core.security import decode_token, is_token_revoked
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.domain.models.user import User
+from src.domain.services.realtime_service import RealtimeService
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
@@ -26,8 +23,6 @@ router = APIRouter()
 
 
 class ConnectionStats(BaseModel):
-    """WebSocket connection statistics"""
-
     total_users: int
     total_connections: int
     total_channels: int
@@ -35,8 +30,6 @@ class ConnectionStats(BaseModel):
 
 
 class PresenceResponse(BaseModel):
-    """User presence response"""
-
     user_id: int
     status: str
     last_seen: str
@@ -44,23 +37,17 @@ class PresenceResponse(BaseModel):
 
 
 class OnlineUsersResponse(BaseModel):
-    """Response for online users list"""
-
     online_users: list[int]
     count: int
 
 
 class BroadcastResponse(BaseModel):
-    """Response for broadcast message"""
-
     success: bool
     recipients: int
     channel: Optional[str] = None
 
 
 class BroadcastMessageRequest(BaseModel):
-    """Broadcast message payload"""
-
     message_type: str = "info"
     title: Optional[str] = None
     content: str
@@ -69,26 +56,7 @@ class BroadcastMessageRequest(BaseModel):
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional[str] = Query(None)):
-    """
-    WebSocket endpoint for real-time communication.
-
-    Connect with: ws://host/api/v1/realtime/ws/{user_id}?token=JWT_TOKEN
-
-    Message Protocol:
-
-    Client -> Server:
-    - { "type": "ping" } - Heartbeat
-    - { "type": "subscribe", "channel": "channel_name" } - Subscribe to channel
-    - { "type": "unsubscribe", "channel": "channel_name" } - Unsubscribe
-    - { "type": "presence", "status": "online|away|busy", "page": "/current/page" }
-
-    Server -> Client:
-    - { "type": "pong", "timestamp": "..." } - Heartbeat response
-    - { "type": "notification", "data": {...} } - Notification
-    - { "type": "channel_message", "data": {...} } - Channel broadcast
-    - { "type": "presence_update", "data": {...} } - Presence change
-    """
-
+    """WebSocket endpoint for real-time communication."""
     if not token:
         await websocket.close(code=4001, reason="Authentication required")
         return
@@ -122,16 +90,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
 
     try:
         while True:
-            # Receive message from client
             message = await websocket.receive_text()
-
-            # Handle message
             response = await connection_manager.handle_message(connection, message)
-
-            # Send response if any
             if response:
                 await websocket.send_json(response)
-
     except WebSocketDisconnect:
         await connection_manager.disconnect(connection)
     except (WebSocketDisconnect, ConnectionError) as e:
@@ -141,72 +103,34 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
 
 @router.get("/stats", response_model=ConnectionStats)
 async def get_connection_stats(current_user: CurrentUser):
-    """
-    Get WebSocket connection statistics.
-
-    Returns current connection counts and channel information.
-    """
-    track_metric("realtime.connections", 1)
-    stats = connection_manager.get_stats()
-    return ConnectionStats(
-        total_users=stats["total_users"],
-        total_connections=stats["total_connections"],
-        total_channels=stats["total_channels"],
-        online_users=stats["online_users"],
-    )
+    """Get WebSocket connection statistics."""
+    service = RealtimeService()
+    return service.get_stats()
 
 
 @router.get("/online-users", response_model=OnlineUsersResponse)
 async def get_online_users(current_user: CurrentUser):
-    """
-    Get list of currently online user IDs.
-
-    Returns list of user IDs with active WebSocket connections.
-    """
-    return {"online_users": connection_manager.get_online_users(), "count": len(connection_manager.get_online_users())}
+    """Get list of currently online user IDs."""
+    service = RealtimeService()
+    return service.get_online_users()
 
 
 @router.get("/presence/{user_id}", response_model=Optional[PresenceResponse])
 async def get_user_presence(user_id: int, current_user: CurrentUser):
-    """
-    Get presence information for a specific user.
-
-    Returns:
-    - status: 'online', 'away', 'busy', or 'offline'
-    - last_seen: Last activity timestamp
-    - active_connections: Number of active connections
-    """
-    presence = connection_manager.get_presence(user_id)
-
-    if presence:
-        return PresenceResponse(
-            user_id=presence.user_id,
-            status=presence.status,
-            last_seen=presence.last_seen.isoformat(),
-            active_connections=presence.active_connections,
-        )
-
-    return None
+    """Get presence information for a specific user."""
+    service = RealtimeService()
+    return service.get_presence(user_id)
 
 
 @router.post("/broadcast", response_model=BroadcastResponse)
-async def broadcast_message(message: BroadcastMessageRequest, current_user: CurrentUser, channel: Optional[str] = None):
-    """
-    Broadcast a message to connected users.
-
-    If channel is provided, broadcasts only to that channel.
-    Otherwise, broadcasts to all connected users.
-
-    Admin only endpoint.
-    """
+async def broadcast_message(
+    message: BroadcastMessageRequest,
+    current_user: Annotated[User, Depends(require_permission("realtime:create"))],
+    channel: Optional[str] = None,
+):
+    """Broadcast a message to connected users. Admin only."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ErrorCode.PERMISSION_DENIED)
 
-    if channel:
-        count = await connection_manager.broadcast_to_channel(
-            channel=channel, message=message.model_dump(), event_type="admin_broadcast"
-        )
-    else:
-        count = await connection_manager.broadcast_to_all(message=message.model_dump(), event_type="admin_broadcast")
-
-    return {"success": True, "recipients": count, "channel": channel}
+    service = RealtimeService()
+    return await service.broadcast(message.model_dump(), channel=channel)

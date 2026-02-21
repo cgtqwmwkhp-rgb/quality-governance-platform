@@ -13,13 +13,13 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.iso27001 import (
     AssetCreateResponse,
     ControlUpdateResponse,
@@ -39,6 +39,7 @@ from src.api.schemas.iso27001 import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
@@ -219,7 +220,9 @@ async def list_assets(
                 "criticality": a.criticality,
                 "owner_name": a.owner_name,
                 "department": a.department,
-                "cia_score": a.confidentiality_requirement + a.integrity_requirement + a.availability_requirement,
+                "cia_score": int(a.confidentiality_requirement or 0)
+                + int(a.integrity_requirement or 0)
+                + int(a.availability_requirement or 0),
             }
             for a in paginated.items
         ],
@@ -230,7 +233,7 @@ async def list_assets(
 async def create_asset(
     asset_data: AssetCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create information asset"""
     _span = tracer.start_span("create_information_asset") if tracer else None
@@ -280,7 +283,9 @@ async def get_asset(
         "confidentiality_requirement": asset.confidentiality_requirement,
         "integrity_requirement": asset.integrity_requirement,
         "availability_requirement": asset.availability_requirement,
-        "cia_score": asset.confidentiality_requirement + asset.integrity_requirement + asset.availability_requirement,
+        "cia_score": int(asset.confidentiality_requirement or 0)
+        + int(asset.integrity_requirement or 0)
+        + int(asset.availability_requirement or 0),
         "dependencies": asset.dependencies,
         "dependent_processes": asset.dependent_processes,
         "applied_controls": asset.applied_controls,
@@ -350,7 +355,7 @@ async def list_controls(
             "not_implemented": not_impl,
             "excluded": excluded,
             "implementation_percentage": ISO27001Service.calculate_implementation_percentage(
-                implemented, paginated.total, excluded
+                int(implemented), int(paginated.total), int(excluded)
             ),
         },
         "controls": [
@@ -375,7 +380,7 @@ async def update_control(
     control_id: int,
     control_data: ControlUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("iso27001:update"))],
 ) -> dict[str, Any]:
     """Update control implementation status"""
     control = await get_or_404(db, ISO27001Control, control_id)
@@ -423,7 +428,7 @@ async def get_current_soa(
             "status": "not_created",
             "total_controls": total,
             "applicable_controls": applicable,
-            "excluded_controls": total - applicable,
+            "excluded_controls": int(total) - int(applicable),
             "implemented_controls": implemented,
             "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
                 int(implemented), int(applicable)
@@ -444,7 +449,7 @@ async def get_current_soa(
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
         "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
-            int(soa.implemented_controls), int(soa.applicable_controls)
+            int(soa.implemented_controls or 0), int(soa.applicable_controls or 0)
         ),
         "status": soa.status,
         "document_link": soa.document_link,
@@ -506,7 +511,7 @@ async def list_security_risks(
 async def create_security_risk(
     risk_data: SecurityRiskCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create information security risk"""
     result = await db.execute(select(func.count()).select_from(InformationSecurityRisk))
@@ -600,7 +605,7 @@ async def list_security_incidents(
 async def create_security_incident(
     incident_data: SecurityIncidentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create security incident"""
     result = await db.execute(select(func.count()).select_from(SecurityIncident))
@@ -625,7 +630,7 @@ async def update_security_incident(
     incident_id: int,
     incident_data: IncidentUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("iso27001:update"))],
 ) -> dict[str, Any]:
     """Update security incident"""
     incident = await get_or_404(db, SecurityIncident, incident_id, tenant_id=current_user.tenant_id)
@@ -692,20 +697,14 @@ async def list_supplier_assessments(
 async def create_supplier_assessment(
     assessment_data: SupplierAssessmentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create supplier security assessment"""
     assessment = SupplierSecurityAssessment(
         assessment_date=datetime.now(timezone.utc),
         tenant_id=current_user.tenant_id,
         next_assessment_date=datetime.now(timezone.utc)
-        + timedelta(
-            days=(
-                assessment_data.assessment_frequency_months
-                if hasattr(assessment_data, "assessment_frequency_months")
-                else 365
-            )
-        ),
+        + timedelta(days=int(getattr(assessment_data, "assessment_frequency_months", 365) or 365)),
         **assessment_data.model_dump(),
     )
     db.add(assessment)
@@ -822,7 +821,7 @@ async def get_isms_dashboard(
             "applicable": applicable_controls,
             "implemented": implemented_controls,
             "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
-                implemented_controls, applicable_controls
+                int(implemented_controls), int(applicable_controls)
             ),
         },
         "risks": {
@@ -837,6 +836,6 @@ async def get_isms_dashboard(
             "high_risk": high_risk_suppliers,
         },
         "compliance_score": ISO27001Service.calculate_soa_compliance_percentage(
-            implemented_controls, applicable_controls
+            int(implemented_controls), int(applicable_controls)
         ),
     }

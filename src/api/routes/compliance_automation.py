@@ -10,11 +10,11 @@ Features:
 - RIDDOR automation
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.compliance_automation import (
     AddCertificateResponse,
     AuditScheduleCreate,
@@ -36,6 +36,7 @@ from src.api.schemas.compliance_automation import (
     SubmitRIDDORResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.models.user import User
 from src.domain.services.compliance_automation_service import compliance_automation_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -80,7 +81,7 @@ async def list_regulatory_updates(
 async def review_regulatory_update(
     update_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:update"))],
     requires_action: bool = False,
     action_notes: Optional[str] = None,
 ):
@@ -106,7 +107,7 @@ async def review_regulatory_update(
 @router.post("/gap-analysis/run", response_model=RunGapAnalysisResponse)
 async def run_gap_analysis(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
     regulatory_update_id: Optional[int] = None,
     standard_id: Optional[int] = None,
 ):
@@ -175,7 +176,7 @@ async def get_expiring_certificates_summary(
 async def add_certificate(
     data: CertificateCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
 ):
     """Add a new certificate."""
     return await compliance_automation_service.add_certificate(db=db, data=data.model_dump())
@@ -206,7 +207,7 @@ async def list_scheduled_audits(
 async def schedule_audit(
     data: AuditScheduleCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
 ):
     """Schedule a new audit."""
     return await compliance_automation_service.schedule_audit(
@@ -274,7 +275,7 @@ async def list_riddor_submissions(
 @router.post("/riddor/check", response_model=RIDDORCheckResponse)
 async def check_riddor_required(
     incident_data: RIDDORCheckRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
 ):
     """Check if incident requires RIDDOR reporting."""
     return await compliance_automation_service.check_riddor_required(incident_data.model_dump())
@@ -285,7 +286,7 @@ async def prepare_riddor_submission(
     incident_id: int,
     riddor_type: str,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
 ):
     """Prepare RIDDOR submission data."""
     return await compliance_automation_service.prepare_riddor_submission(
@@ -299,7 +300,7 @@ async def prepare_riddor_submission(
 async def submit_riddor(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("compliance:create"))],
 ):
     """Submit RIDDOR report to HSE."""
     try:

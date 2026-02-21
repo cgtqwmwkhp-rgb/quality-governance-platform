@@ -12,17 +12,18 @@ Features:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import datetime, timedelta
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
@@ -402,7 +403,7 @@ async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
     year = await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
@@ -413,7 +414,7 @@ async def add_emission_source(
     )
     dq_score = PlanetMarkService.get_data_quality_score(source_data.data_quality_level)
 
-    source = EmissionSource(
+    source = EmissionSource(  # type: ignore[misc]  # SA model kwargs
         reporting_year_id=year_id,
         emission_factor=emission_factor["factor"],
         emission_factor_unit=emission_factor["unit"],
@@ -453,7 +454,7 @@ async def list_emission_sources(
     result = await db.execute(stmt.order_by(desc(EmissionSource.co2e_tonnes)))
     sources = result.scalars().all()
 
-    total = sum(s.co2e_tonnes for s in sources)
+    total = sum(float(s.co2e_tonnes) for s in sources)
 
     return {
         "year_id": year_id,
@@ -467,7 +468,7 @@ async def list_emission_sources(
                 "activity_value": s.activity_value,
                 "activity_unit": s.activity_unit,
                 "co2e_tonnes": s.co2e_tonnes,
-                "percentage": round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0,
+                "percentage": round((float(s.co2e_tonnes) / total * 100), 1) if total > 0 else 0,
                 "data_quality": s.data_quality_level,
             }
             for s in sources
@@ -499,7 +500,7 @@ async def get_scope3_breakdown(
             "total_co2e": 0,
         }
 
-    total = sum(c.total_co2e for c in categories)
+    total = sum(float(c.total_co2e) for c in categories)
     measured = len([c for c in categories if c.is_measured])
 
     return {
@@ -515,7 +516,7 @@ async def get_scope3_breakdown(
                 "is_relevant": c.is_relevant,
                 "is_measured": c.is_measured,
                 "total_co2e": c.total_co2e,
-                "percentage": round((c.total_co2e / total * 100), 1) if total > 0 else 0,
+                "percentage": round((float(c.total_co2e) / total * 100), 1) if total > 0 else 0,
                 "data_quality_score": c.data_quality_score,
                 "calculation_method": c.calculation_method,
                 "exclusion_reason": c.exclusion_reason,
@@ -532,21 +533,21 @@ async def get_scope3_breakdown(
 async def list_improvement_actions(
     year_id: int,
     db: DbSession,
-    status: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
 ) -> dict[str, Any]:
     """List SMART improvement actions"""
-    stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
+    stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)  # type: ignore[attr-defined]  # SA column
 
-    if status:
-        stmt = stmt.where(ImprovementAction.status == status)
+    if status_filter:
+        stmt = stmt.where(ImprovementAction.status == status_filter)  # type: ignore[attr-defined]  # SA column
 
-    result = await db.execute(stmt.order_by(ImprovementAction.time_bound))
+    result = await db.execute(stmt.order_by(ImprovementAction.time_bound))  # type: ignore[attr-defined]  # SA column
     actions = result.scalars().all()
 
-    # Summary
+    now = datetime.utcnow()
     completed = len([a for a in actions if a.status == "completed"])
     in_progress = len([a for a in actions if a.status == "in_progress"])
-    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)])
+    overdue = len([a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < now])
 
     return {
         "year_id": year_id,
@@ -569,7 +570,7 @@ async def list_improvement_actions(
                 "progress_percent": a.progress_percent,
                 "target_scope": a.target_scope,
                 "expected_reduction_pct": a.expected_reduction_pct,
-                "is_overdue": a.status != "completed" and a.time_bound < datetime.now(timezone.utc),
+                "is_overdue": a.status != "completed" and bool(a.time_bound and a.time_bound < now),
             }
             for a in actions
         ],
@@ -581,7 +582,7 @@ async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
     await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
@@ -592,7 +593,7 @@ async def create_improvement_action(
     count = count_result.scalar_one()
     action_id = f"ACT-{(count + 1):03d}"
 
-    action = ImprovementAction(
+    action = ImprovementAction(  # type: ignore[misc]  # SA model kwargs
         reporting_year_id=year_id,
         action_id=action_id,
         status="planned",
@@ -679,7 +680,7 @@ async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
     await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
@@ -687,7 +688,7 @@ async def add_fleet_record(
     co2e_kg, _ = PlanetMarkService.calculate_fleet_co2e(fleet_data.fuel_litres, fleet_data.fuel_type)
     l_per_100km = PlanetMarkService.calculate_fuel_efficiency(fleet_data.fuel_litres, fleet_data.mileage)
 
-    record = FleetEmissionRecord(
+    record = FleetEmissionRecord(  # type: ignore[misc]  # SA model kwargs
         reporting_year_id=year_id,
         co2e_kg=co2e_kg,
         litres_per_100km=l_per_100km,
@@ -763,12 +764,12 @@ async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Add utility meter reading"""
     await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
-    reading = UtilityMeterReading(
+    reading = UtilityMeterReading(  # type: ignore[misc]  # SA model kwargs
         reporting_year_id=year_id,
         **reading_data.model_dump(),
     )
@@ -840,7 +841,7 @@ async def get_certification_status(
         "evidence_checklist": required_evidence,
         "actions_completed": len([a for a in actions if a.status == "completed"]),
         "actions_total": len(actions),
-        "data_quality_met": year.overall_data_quality >= 12,
+        "data_quality_met": int(year.overall_data_quality or 0) >= 12,
         "next_steps": (
             [
                 "Complete all required evidence uploads",
@@ -900,15 +901,16 @@ async def get_carbon_dashboard(
 
     current_year = years[0]
 
-    baseline_result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True))
+    baseline_result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True))  # type: ignore[attr-defined]  # SA column  # noqa: E712
     baseline = baseline_result.scalars().first()
 
-    yoy_change = None
+    yoy_change: Optional[float] = None
     if len(years) >= 2:
         prev_year = years[1]
         if prev_year.emissions_per_fte and current_year.emissions_per_fte:
             yoy_change = (
-                (current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte
+                (float(current_year.emissions_per_fte) - float(prev_year.emissions_per_fte))
+                / float(prev_year.emissions_per_fte)
             ) * 100
 
     actions_result = await db.execute(
@@ -916,7 +918,8 @@ async def get_carbon_dashboard(
     )
     actions = list(actions_result.scalars().all())
 
-    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)]
+    dashboard_now = datetime.utcnow()
+    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < dashboard_now]
 
     return {
         "current_year": {
@@ -934,8 +937,8 @@ async def get_carbon_dashboard(
             "scope_3": {"value": current_year.scope_3_total, "label": "Value Chain"},
         },
         "data_quality": {
-            "scope_1_2": (current_year.scope_1_data_quality or 0) + (current_year.scope_2_data_quality or 0),
-            "scope_3": current_year.scope_3_data_quality or 0,
+            "scope_1_2": int(current_year.scope_1_data_quality or 0) + int(current_year.scope_2_data_quality or 0),
+            "scope_3": int(current_year.scope_3_data_quality or 0),
             "target": 12,
         },
         "certification": {

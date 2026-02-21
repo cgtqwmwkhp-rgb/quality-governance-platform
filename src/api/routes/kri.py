@@ -5,13 +5,13 @@ and risk score tracking.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.kri import (
     KRIAlertActionResponse,
@@ -36,6 +36,7 @@ from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
+from src.domain.models.user import User
 from src.domain.services.kri_calculation_service import KRICalculationService
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -95,7 +96,7 @@ async def list_kris(
 async def create_kri(
     kri_data: KRICreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:create"))],
 ):
     """Create a new KRI."""
     _span = tracer.start_span("create_kri") if tracer else None
@@ -109,9 +110,9 @@ async def create_kri(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.DUPLICATE_ENTITY)
 
     kri = KeyRiskIndicator(
-        **kri_data.dict(),
+        **kri_data.model_dump(),
         tenant_id=current_user.tenant_id,
-        created_by=current_user.email,
+        created_by=getattr(current_user, "email", ""),
     )
     db.add(kri)
     await db.commit()
@@ -138,7 +139,7 @@ async def get_kri_dashboard(
 @router.post("/calculate-all", response_model=KRICalculateAllResponse)
 async def calculate_all_kris(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Trigger calculation for all auto-calculate KRIs."""
     kri_service = KRIService(db)
@@ -169,14 +170,14 @@ async def update_kri(
     kri_id: int,
     kri_data: KRIUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Update a KRI."""
     kri = await get_or_404(
         db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
     apply_updates(kri, kri_data, set_updated_at=False)
-    kri.updated_by = current_user.email
+    kri.updated_by = getattr(current_user, "email", "")
 
     await db.commit()
     await db.refresh(kri)
@@ -206,7 +207,7 @@ async def delete_kri(
 async def calculate_kri(
     kri_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Trigger calculation for a specific KRI."""
     await get_or_404(db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id)
@@ -275,7 +276,7 @@ async def get_pending_alerts(
 async def acknowledge_alert(
     alert_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
     notes: Optional[str] = None,
 ):
     """Acknowledge a KRI alert."""
@@ -297,7 +298,7 @@ async def acknowledge_alert(
 async def resolve_alert(
     alert_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
     notes: Optional[str] = None,
 ):
     """Resolve a KRI alert."""
@@ -347,14 +348,14 @@ async def assess_incident_sif(
     incident_id: int,
     assessment: SIFAssessmentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:create"))],
 ):
     """Assess an incident for SIF/pSIF classification."""
     incident = await get_or_404(
         db, Incident, incident_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
 
-    KRICalculationService.apply_sif_assessment(incident, assessment, current_user.id)
+    KRICalculationService.apply_sif_assessment(incident, assessment, int(current_user.id))
 
     if assessment.is_sif or assessment.is_psif:
         scoring_service = RiskScoringService(db)
@@ -365,15 +366,15 @@ async def assess_incident_sif(
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
-        is_sif=incident.is_sif,
-        is_psif=incident.is_psif,
-        sif_classification=incident.sif_classification,
-        sif_assessment_date=incident.sif_assessment_date,
-        sif_assessed_by_id=incident.sif_assessed_by_id,
-        sif_rationale=incident.sif_rationale,
-        life_altering_potential=incident.life_altering_potential,
-        precursor_events=incident.precursor_events,
-        control_failures=incident.control_failures,
+        is_sif=getattr(incident, "is_sif", None),
+        is_psif=getattr(incident, "is_psif", None),
+        sif_classification=getattr(incident, "sif_classification", None),
+        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
+        sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
+        sif_rationale=getattr(incident, "sif_rationale", None),
+        life_altering_potential=getattr(incident, "life_altering_potential", None),
+        precursor_events=getattr(incident, "precursor_events", None),
+        control_failures=getattr(incident, "control_failures", None),
     )
 
 
@@ -388,18 +389,18 @@ async def get_incident_sif_assessment(
         db, Incident, incident_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
 
-    if not incident.sif_classification:
+    if not getattr(incident, "sif_classification", None):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
-        is_sif=incident.is_sif or False,
-        is_psif=incident.is_psif or False,
-        sif_classification=incident.sif_classification,
-        sif_assessment_date=incident.sif_assessment_date,
-        sif_assessed_by_id=incident.sif_assessed_by_id,
-        sif_rationale=incident.sif_rationale,
-        life_altering_potential=incident.life_altering_potential or False,
-        precursor_events=incident.precursor_events,
-        control_failures=incident.control_failures,
+        is_sif=getattr(incident, "is_sif", False) or False,
+        is_psif=getattr(incident, "is_psif", False) or False,
+        sif_classification=getattr(incident, "sif_classification", None),
+        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
+        sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
+        sif_rationale=getattr(incident, "sif_rationale", None),
+        life_altering_potential=getattr(incident, "life_altering_potential", False) or False,
+        precursor_events=getattr(incident, "precursor_events", None),
+        control_failures=getattr(incident, "control_failures", None),
     )

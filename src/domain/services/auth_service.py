@@ -6,6 +6,7 @@ of HTTPException so that the service layer stays framework-agnostic.
 """
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -30,6 +31,11 @@ from src.domain.services.token_service import TokenService
 
 logger = logging.getLogger(__name__)
 
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_DURATION_SECONDS = 15 * 60  # 15 minutes
+
+_failed_login_attempts: dict[str, list[float]] = {}
+
 
 class AuthService:
     """Handles authentication, token lifecycle, and password management."""
@@ -44,17 +50,36 @@ class AuthService:
             Tuple of (user, access_token, refresh_token).
 
         Raises:
-            ValueError: If credentials are invalid.
+            ValueError: If credentials are invalid or account is locked.
             PermissionError: If the user account is inactive.
         """
+        normalized_email = email.lower()
+        now = time.time()
+        cutoff = now - LOCKOUT_DURATION_SECONDS
+
+        attempts = _failed_login_attempts.get(normalized_email, [])
+        recent_attempts = [t for t in attempts if t > cutoff]
+        _failed_login_attempts[normalized_email] = recent_attempts
+
+        if len(recent_attempts) >= MAX_FAILED_ATTEMPTS:
+            most_recent = max(recent_attempts)
+            unlock_in = int(most_recent + LOCKOUT_DURATION_SECONDS - now)
+            raise ValueError(
+                f"Account temporarily locked due to too many failed login attempts. "
+                f"Try again in {unlock_in} seconds."
+            )
+
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
         if user is None or not verify_password(password, user.hashed_password):
+            _failed_login_attempts.setdefault(normalized_email, []).append(now)
             raise ValueError("Invalid email or password")
 
         if not user.is_active:
             raise PermissionError("User account is inactive")
+
+        _failed_login_attempts.pop(normalized_email, None)
 
         user.last_login = datetime.now(timezone.utc).isoformat()
         await self.db.commit()
@@ -184,12 +209,24 @@ class AuthService:
         """Reset a user's password using a reset token.
 
         Raises:
-            ValueError: If the token is invalid/expired or user is inactive.
+            ValueError: If the token is invalid/expired, already used, or user is inactive.
         """
-        user_id = verify_password_reset_token(token)
-        if user_id is None:
+        payload = decode_token(token)
+        if payload is None or payload.get("type") != "password_reset":
             raise ValueError("Invalid or expired password reset token")
 
+        jti = payload.get("jti")
+        if not jti:
+            raise ValueError("Invalid password reset token: missing jti")
+
+        if await is_token_revoked(jti, self.db):
+            raise ValueError("Password reset token has already been used")
+
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
+            raise ValueError("Invalid or expired password reset token")
+
+        user_id = int(user_id_str)
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
 
@@ -197,6 +234,16 @@ class AuthService:
             raise ValueError("Invalid or expired password reset token")
 
         user.hashed_password = get_password_hash(new_password)
+
+        expires_at = datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)
+        await TokenService.revoke_token(
+            db=self.db,
+            jti=jti,
+            user_id=user_id,
+            expires_at=expires_at,
+            reason="password_reset_used",
+        )
+
         await self.db.commit()
         logger.info(f"Password reset successful for user ID {user_id}")
 

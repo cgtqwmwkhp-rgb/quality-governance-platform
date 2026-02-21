@@ -196,9 +196,9 @@ def get_endpoint_key(request: Request) -> str:
 # Rate limit configurations by endpoint pattern
 ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     # Authentication - strict limits
-    "/api/auth/login": RateLimitConfig(requests_per_minute=10, burst_limit=5),
-    "/api/auth/register": RateLimitConfig(requests_per_minute=5, burst_limit=2),
-    "/api/auth/forgot-password": RateLimitConfig(requests_per_minute=3, burst_limit=2),
+    "/api/v1/auth/login": RateLimitConfig(requests_per_minute=10, burst_limit=5),
+    "/api/v1/auth/register": RateLimitConfig(requests_per_minute=5, burst_limit=2),
+    "/api/v1/auth/password-reset/request": RateLimitConfig(requests_per_minute=3, burst_limit=2),
     # Security-sensitive list endpoints with email filters - stricter limits
     # These endpoints accept email filters which could be abused for enumeration
     "/api/v1/incidents": RateLimitConfig(requests_per_minute=30, burst_limit=10),
