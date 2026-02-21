@@ -9,7 +9,7 @@ Provides endpoints for:
 - Key EnterpriseRisk Indicators (KRIs)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -289,7 +289,7 @@ async def delete_risk(
     risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
 
     risk.status = "closed"
-    risk.updated_at = datetime.utcnow()
+    risk.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)

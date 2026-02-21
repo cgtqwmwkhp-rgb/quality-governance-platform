@@ -120,8 +120,7 @@ async def list_complaints(
     db: DbSession,
     current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    params: PaginationParams = Depends(),
     status_filter: Optional[str] = None,
     complainant_email: Optional[str] = Query(None, description="Filter by complainant email"),
 ) -> ComplaintListResponse:
@@ -181,7 +180,6 @@ async def list_complaints(
             query = query.where(Complaint.status == status_filter)
 
         query = query.order_by(Complaint.received_date.desc(), Complaint.id.asc())
-        params = PaginationParams(page=page, page_size=page_size)
         paginated = await paginate(db, query, params)
 
         return ComplaintListResponse(
@@ -193,13 +191,20 @@ async def list_complaints(
         )
     except SQLAlchemyError as e:
         error_str = str(e).lower()
-        logger.exception(f"Error listing complaints: {e}")
+        logger.exception(
+            "Error listing complaints [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
 
         column_errors = ["email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
-            logger.warning("Database column missing - migration may be pending")
+            logger.warning(
+                "Database column missing - migration may be pending [request_id=%s]",
+                request_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=ErrorCode.INTERNAL_ERROR,
@@ -254,8 +259,7 @@ async def list_complaint_investigations(
     complaint_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
+    params: PaginationParams = Depends(),
 ):
     """
     List investigations for a specific complaint (paginated).
@@ -277,7 +281,6 @@ async def list_complaint_investigations(
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
     )
-    params = PaginationParams(page=page, page_size=page_size)
     paginated = await paginate(db, query, params)
 
     return {

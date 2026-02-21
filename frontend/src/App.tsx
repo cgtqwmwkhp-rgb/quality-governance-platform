@@ -1,9 +1,22 @@
 import React, { useState, useEffect, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
+import ErrorBoundary from './components/ErrorBoundary'
 import PageErrorBoundary from './components/PageErrorBoundary'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
+import { useOnlineStatus } from './hooks/useOnlineStatus'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 function LoadingFallback() {
   return (
@@ -103,7 +116,39 @@ function logVersionInfo() {
     })
 }
 
+function RouteFallback({ route }: { route: string }) {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh] p-8">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">{route} failed to load</h2>
+        <p className="text-sm text-gray-500 mb-4">An unexpected error occurred on this page.</p>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+          >
+            Reload Page
+          </button>
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
+  useOnlineStatus()
+
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -140,6 +185,8 @@ function App() {
   }
 
   return (
+    <QueryClientProvider client={queryClient}>
+    <ErrorBoundary>
     <BrowserRouter>
       <PageErrorBoundary>
       <Suspense fallback={<LoadingFallback />}>
@@ -148,9 +195,11 @@ function App() {
         <Route 
           path="/portal/login" 
           element={
-            <PortalAuthProvider>
-              <PortalLogin />
-            </PortalAuthProvider>
+            <ErrorBoundary fallback={<RouteFallback route="Portal Login" />}>
+              <PortalAuthProvider>
+                <PortalLogin />
+              </PortalAuthProvider>
+            </ErrorBoundary>
           } 
         />
         
@@ -158,9 +207,11 @@ function App() {
         <Route 
           path="/portal"
           element={
-            <PortalAuthProvider>
-              <PortalLayout />
-            </PortalAuthProvider>
+            <ErrorBoundary fallback={<RouteFallback route="Employee Portal" />}>
+              <PortalAuthProvider>
+                <PortalLayout />
+              </PortalAuthProvider>
+            </ErrorBoundary>
           }
         >
           {/* Level 1: Portal Home */}
@@ -193,7 +244,9 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <Login onLogin={handleLogin} />
+              <ErrorBoundary fallback={<RouteFallback route="Login" />}>
+                <Login onLogin={handleLogin} />
+              </ErrorBoundary>
             )
           }
         />
@@ -214,66 +267,68 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="incidents" element={<Incidents />} />
-          <Route path="incidents/:id" element={<IncidentDetail />} />
-          <Route path="rtas" element={<RTAs />} />
-          <Route path="rtas/:id" element={<RTADetail />} />
-          <Route path="complaints" element={<Complaints />} />
-          <Route path="complaints/:id" element={<ComplaintDetail />} />
-          <Route path="policies" element={<Policies />} />
+          <Route path="dashboard" element={<ErrorBoundary fallback={<RouteFallback route="Dashboard" />}><Dashboard /></ErrorBoundary>} />
+          <Route path="incidents" element={<ErrorBoundary fallback={<RouteFallback route="Incidents" />}><Incidents /></ErrorBoundary>} />
+          <Route path="incidents/:id" element={<ErrorBoundary fallback={<RouteFallback route="Incident Detail" />}><IncidentDetail /></ErrorBoundary>} />
+          <Route path="rtas" element={<ErrorBoundary fallback={<RouteFallback route="RTAs" />}><RTAs /></ErrorBoundary>} />
+          <Route path="rtas/:id" element={<ErrorBoundary fallback={<RouteFallback route="RTA Detail" />}><RTADetail /></ErrorBoundary>} />
+          <Route path="complaints" element={<ErrorBoundary fallback={<RouteFallback route="Complaints" />}><Complaints /></ErrorBoundary>} />
+          <Route path="complaints/:id" element={<ErrorBoundary fallback={<RouteFallback route="Complaint Detail" />}><ComplaintDetail /></ErrorBoundary>} />
+          <Route path="policies" element={<ErrorBoundary fallback={<RouteFallback route="Policies" />}><Policies /></ErrorBoundary>} />
           <Route path="risks" element={<Navigate to="/risk-register" replace />} />
-          <Route path="audits" element={<Audits />} />
-          <Route path="audit-templates" element={<AuditTemplateLibrary />} />
-          <Route path="audit-templates/new" element={<AuditTemplateBuilder />} />
-          <Route path="audit-templates/:templateId/edit" element={<AuditTemplateBuilder />} />
-          <Route path="audits/:auditId/execute" element={<AuditExecution />} />
-          <Route path="audits/:auditId/mobile" element={<MobileAuditExecution />} />
-          <Route path="investigations" element={<Investigations />} />
-          <Route path="investigations/:id" element={<InvestigationDetail />} />
-          <Route path="standards" element={<Standards />} />
-          <Route path="actions" element={<Actions />} />
-          <Route path="documents" element={<Documents />} />
+          <Route path="audits" element={<ErrorBoundary fallback={<RouteFallback route="Audits" />}><Audits /></ErrorBoundary>} />
+          <Route path="audit-templates" element={<ErrorBoundary fallback={<RouteFallback route="Audit Templates" />}><AuditTemplateLibrary /></ErrorBoundary>} />
+          <Route path="audit-templates/new" element={<ErrorBoundary fallback={<RouteFallback route="Audit Template Builder" />}><AuditTemplateBuilder /></ErrorBoundary>} />
+          <Route path="audit-templates/:templateId/edit" element={<ErrorBoundary fallback={<RouteFallback route="Audit Template Builder" />}><AuditTemplateBuilder /></ErrorBoundary>} />
+          <Route path="audits/:auditId/execute" element={<ErrorBoundary fallback={<RouteFallback route="Audit Execution" />}><AuditExecution /></ErrorBoundary>} />
+          <Route path="audits/:auditId/mobile" element={<ErrorBoundary fallback={<RouteFallback route="Mobile Audit" />}><MobileAuditExecution /></ErrorBoundary>} />
+          <Route path="investigations" element={<ErrorBoundary fallback={<RouteFallback route="Investigations" />}><Investigations /></ErrorBoundary>} />
+          <Route path="investigations/:id" element={<ErrorBoundary fallback={<RouteFallback route="Investigation Detail" />}><InvestigationDetail /></ErrorBoundary>} />
+          <Route path="standards" element={<ErrorBoundary fallback={<RouteFallback route="Standards" />}><Standards /></ErrorBoundary>} />
+          <Route path="actions" element={<ErrorBoundary fallback={<RouteFallback route="Actions" />}><Actions /></ErrorBoundary>} />
+          <Route path="documents" element={<ErrorBoundary fallback={<RouteFallback route="Documents" />}><Documents /></ErrorBoundary>} />
           {/* Enterprise Enhancement Routes */}
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="analytics/advanced" element={<AdvancedAnalytics />} />
-          <Route path="analytics/dashboards" element={<DashboardBuilder />} />
-          <Route path="analytics/reports" element={<ReportGenerator />} />
-          <Route path="search" element={<GlobalSearch />} />
-          <Route path="users" element={<UserManagement />} />
-          <Route path="audit-trail" element={<AuditTrail />} />
-          <Route path="calendar" element={<CalendarView />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="exports" element={<ExportCenter />} />
-          <Route path="compliance" element={<ComplianceEvidence />} />
+          <Route path="analytics" element={<ErrorBoundary fallback={<RouteFallback route="Analytics" />}><Analytics /></ErrorBoundary>} />
+          <Route path="analytics/advanced" element={<ErrorBoundary fallback={<RouteFallback route="Advanced Analytics" />}><AdvancedAnalytics /></ErrorBoundary>} />
+          <Route path="analytics/dashboards" element={<ErrorBoundary fallback={<RouteFallback route="Dashboard Builder" />}><DashboardBuilder /></ErrorBoundary>} />
+          <Route path="analytics/reports" element={<ErrorBoundary fallback={<RouteFallback route="Report Generator" />}><ReportGenerator /></ErrorBoundary>} />
+          <Route path="search" element={<ErrorBoundary fallback={<RouteFallback route="Search" />}><GlobalSearch /></ErrorBoundary>} />
+          <Route path="users" element={<ErrorBoundary fallback={<RouteFallback route="User Management" />}><UserManagement /></ErrorBoundary>} />
+          <Route path="audit-trail" element={<ErrorBoundary fallback={<RouteFallback route="Audit Trail" />}><AuditTrail /></ErrorBoundary>} />
+          <Route path="calendar" element={<ErrorBoundary fallback={<RouteFallback route="Calendar" />}><CalendarView /></ErrorBoundary>} />
+          <Route path="notifications" element={<ErrorBoundary fallback={<RouteFallback route="Notifications" />}><Notifications /></ErrorBoundary>} />
+          <Route path="exports" element={<ErrorBoundary fallback={<RouteFallback route="Export Center" />}><ExportCenter /></ErrorBoundary>} />
+          <Route path="compliance" element={<ErrorBoundary fallback={<RouteFallback route="Compliance" />}><ComplianceEvidence /></ErrorBoundary>} />
           {/* Phase 3: Workflow Automation */}
-          <Route path="workflows" element={<WorkflowCenter />} />
+          <Route path="workflows" element={<ErrorBoundary fallback={<RouteFallback route="Workflows" />}><WorkflowCenter /></ErrorBoundary>} />
           {/* Phase 4: Compliance Automation */}
-          <Route path="compliance-automation" element={<ComplianceAutomation />} />
+          <Route path="compliance-automation" element={<ErrorBoundary fallback={<RouteFallback route="Compliance Automation" />}><ComplianceAutomation /></ErrorBoundary>} />
           {/* Tier 1: Enterprise Risk Register & IMS Unification */}
-          <Route path="risk-register" element={<RiskRegister />} />
-          <Route path="ims" element={<IMSDashboard />} />
+          <Route path="risk-register" element={<ErrorBoundary fallback={<RouteFallback route="Risk Register" />}><RiskRegister /></ErrorBoundary>} />
+          <Route path="ims" element={<ErrorBoundary fallback={<RouteFallback route="IMS Dashboard" />}><IMSDashboard /></ErrorBoundary>} />
           {/* Tier 2: AI Intelligence */}
-          <Route path="ai-intelligence" element={<AIIntelligence />} />
+          <Route path="ai-intelligence" element={<ErrorBoundary fallback={<RouteFallback route="AI Intelligence" />}><AIIntelligence /></ErrorBoundary>} />
           {/* UVDB Achilles Verify */}
-          <Route path="uvdb" element={<UVDBAudits />} />
+          <Route path="uvdb" element={<ErrorBoundary fallback={<RouteFallback route="UVDB Audits" />}><UVDBAudits /></ErrorBoundary>} />
           {/* Planet Mark Carbon Management */}
-          <Route path="planet-mark" element={<PlanetMark />} />
+          <Route path="planet-mark" element={<ErrorBoundary fallback={<RouteFallback route="Planet Mark" />}><PlanetMark /></ErrorBoundary>} />
           {/* Tier 2: Digital Signatures */}
-          <Route path="signatures" element={<DigitalSignatures />} />
+          <Route path="signatures" element={<ErrorBoundary fallback={<RouteFallback route="Digital Signatures" />}><DigitalSignatures /></ErrorBoundary>} />
           
           {/* Admin Configuration Routes */}
-          <Route path="admin" element={<AdminDashboard />} />
-          <Route path="admin/forms" element={<FormsList />} />
-          <Route path="admin/forms/new" element={<FormBuilder />} />
-          <Route path="admin/forms/:templateId" element={<FormBuilder />} />
-          <Route path="admin/contracts" element={<ContractsManagement />} />
-          <Route path="admin/settings" element={<SystemSettings />} />
+          <Route path="admin" element={<ErrorBoundary fallback={<RouteFallback route="Admin" />}><AdminDashboard /></ErrorBoundary>} />
+          <Route path="admin/forms" element={<ErrorBoundary fallback={<RouteFallback route="Forms" />}><FormsList /></ErrorBoundary>} />
+          <Route path="admin/forms/new" element={<ErrorBoundary fallback={<RouteFallback route="Form Builder" />}><FormBuilder /></ErrorBoundary>} />
+          <Route path="admin/forms/:templateId" element={<ErrorBoundary fallback={<RouteFallback route="Form Builder" />}><FormBuilder /></ErrorBoundary>} />
+          <Route path="admin/contracts" element={<ErrorBoundary fallback={<RouteFallback route="Contracts" />}><ContractsManagement /></ErrorBoundary>} />
+          <Route path="admin/settings" element={<ErrorBoundary fallback={<RouteFallback route="System Settings" />}><SystemSettings /></ErrorBoundary>} />
         </Route>
       </Routes>
       </Suspense>
       </PageErrorBoundary>
     </BrowserRouter>
+    </ErrorBoundary>
+    </QueryClientProvider>
   )
 }
 

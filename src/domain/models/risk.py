@@ -80,6 +80,11 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
+    owner: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[owner_id],
+        lazy="noload",
+    )
     controls: Mapped[List["OperationalRiskControl"]] = relationship(
         "OperationalRiskControl",
         back_populates="risk",

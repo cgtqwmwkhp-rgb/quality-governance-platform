@@ -12,15 +12,16 @@ Provides endpoints for:
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
@@ -199,11 +200,13 @@ async def list_entity_types(current_user: CurrentUser) -> Any:
 async def get_audit_stats(
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
     days: int = Query(30, ge=1, le=365),
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """Get audit log statistics for the specified period."""
     tenant_id = current_user.tenant_id
-    date_from = datetime.utcnow() - timedelta(days=days)
+    date_from = datetime.now(timezone.utc) - timedelta(days=days)
 
     try:
         total_result = await db.execute(
@@ -255,7 +258,12 @@ async def get_audit_stats(
             "period_days": days,
         }
     except SQLAlchemyError as e:
-        logger.exception("Failed to get audit stats: %s", e)
+        logger.exception(
+            "Failed to get audit stats [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
+        response.headers["X-Degraded"] = "audit-stats"
         return {
             "total_entries": 0,
             "by_action": {},
@@ -274,7 +282,9 @@ async def get_audit_stats(
 async def list_verifications(
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
     limit: int = Query(10, ge=1, le=50),
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """Get history of chain verifications."""
     tenant_id = current_user.tenant_id
@@ -288,7 +298,12 @@ async def list_verifications(
         )
         return result.scalars().all()
     except SQLAlchemyError as e:
-        logger.exception("Failed to list verifications: %s", e)
+        logger.exception(
+            "Failed to list verifications [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
+        response.headers["X-Degraded"] = "verifications"
         return []
 
 
@@ -301,6 +316,7 @@ async def list_verifications(
 async def list_audit_logs(
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
     action: Optional[str] = None,
@@ -308,6 +324,7 @@ async def list_audit_logs(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     params: PaginationParams = Depends(),
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """List audit log entries with filters and pagination."""
     tenant_id = current_user.tenant_id
@@ -331,7 +348,12 @@ async def list_audit_logs(
         track_metric("audit_trail.accessed", 1)
         return await paginate(db, query, params)
     except SQLAlchemyError as e:
-        logger.exception("Failed to list audit logs: %s", e)
+        logger.exception(
+            "Failed to list audit logs [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
+        response.headers["X-Degraded"] = "audit-logs"
         return {
             "items": [],
             "total": 0,
@@ -346,6 +368,8 @@ async def get_entity_history(
     entity_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """Get complete audit history for a specific entity."""
     tenant_id = current_user.tenant_id
@@ -362,7 +386,12 @@ async def get_entity_history(
         )
         return result.scalars().all()
     except SQLAlchemyError as e:
-        logger.exception("Failed to get entity history: %s", e)
+        logger.exception(
+            "Failed to get entity history [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
+        response.headers["X-Degraded"] = "entity-history"
         return []
 
 
@@ -371,11 +400,13 @@ async def get_user_activity(
     user_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    response: Response,
     days: int = Query(30, ge=1, le=365),
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """Get recent activity for a specific user."""
     tenant_id = current_user.tenant_id
-    date_from = datetime.utcnow() - timedelta(days=days)
+    date_from = datetime.now(timezone.utc) - timedelta(days=days)
 
     try:
         result = await db.execute(
@@ -390,7 +421,12 @@ async def get_user_activity(
         )
         return result.scalars().all()
     except SQLAlchemyError as e:
-        logger.exception("Failed to get user activity: %s", e)
+        logger.exception(
+            "Failed to get user activity [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
+        response.headers["X-Degraded"] = "user-activity"
         return []
 
 
@@ -406,13 +442,19 @@ async def get_audit_entry(
     entry_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """Get a single audit log entry with full details."""
     try:
         result = await db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
         entry = result.scalar_one_or_none()
     except SQLAlchemyError as e:
-        logger.exception("Failed to get audit entry %s: %s", entry_id, e)
+        logger.exception(
+            "Failed to get audit entry %s [request_id=%s]: %s",
+            entry_id,
+            request_id,
+            type(e).__name__,
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ErrorCode.INTERNAL_ERROR)
 
     if not entry:
@@ -432,6 +474,7 @@ async def verify_chain(
     current_user: CurrentUser,
     start_sequence: Optional[int] = None,
     end_sequence: Optional[int] = None,
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """
     Verify the integrity of the audit log hash chain.
@@ -520,7 +563,11 @@ async def verify_chain(
         await db.refresh(verification)
         return verification
     except SQLAlchemyError as e:
-        logger.exception("Failed to verify chain: %s", e)
+        logger.exception(
+            "Failed to verify chain [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ErrorCode.INTERNAL_ERROR)
 
 
@@ -534,6 +581,7 @@ async def export_audit_logs(
     data: ExportRequest,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> Any:
     """Export audit logs for compliance with integrity hash."""
     tenant_id = current_user.tenant_id
@@ -602,5 +650,9 @@ async def export_audit_logs(
             "data": exported_data if data.format == "json" else None,
         }
     except SQLAlchemyError as e:
-        logger.exception("Failed to export audit logs: %s", e)
+        logger.exception(
+            "Failed to export audit logs [request_id=%s]: %s",
+            request_id,
+            type(e).__name__,
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ErrorCode.INTERNAL_ERROR)

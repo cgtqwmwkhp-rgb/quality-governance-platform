@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.api.schemas.validators import sanitize_field
 
 # ============== Risk Control Schemas ==============
 
@@ -30,6 +32,11 @@ class RiskControlBase(BaseModel):
     next_test_date: Optional[datetime] = None
     test_frequency_months: Optional[int] = None
 
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
 
 class RiskControlCreate(RiskControlBase):
     """Schema for creating a Risk Control."""
@@ -52,6 +59,11 @@ class RiskControlUpdate(BaseModel):
     next_test_date: Optional[datetime] = None
     test_frequency_months: Optional[int] = None
     is_active: Optional[bool] = None
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class RiskControlResponse(RiskControlBase):
@@ -93,6 +105,11 @@ class RiskAssessmentBase(BaseModel):
 
     # Assessor
     assessed_by_id: Optional[int] = None
+
+    @field_validator("assessment_notes", "control_effectiveness_notes", mode="before")
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class RiskAssessmentCreate(RiskAssessmentBase):
@@ -169,6 +186,15 @@ class RiskBase(BaseModel):
     treatment_plan: Optional[str] = None
     treatment_due_date: Optional[datetime] = None
 
+    @field_validator(
+        "title", "description", "subcategory", "risk_source", "risk_event",
+        "risk_consequence", "department", "treatment_plan",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
+
 
 class RiskCreate(RiskBase):
     """Schema for creating a Risk."""
@@ -202,6 +228,15 @@ class RiskUpdate(BaseModel):
     treatment_due_date: Optional[datetime] = None
     status: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator(
+        "title", "description", "subcategory", "risk_source", "risk_event",
+        "risk_consequence", "department", "treatment_plan",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class RiskResponse(RiskBase):

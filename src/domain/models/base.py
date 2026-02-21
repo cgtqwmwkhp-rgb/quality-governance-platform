@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -49,6 +49,20 @@ class SoftDeleteMixin:
     def is_deleted(self) -> bool:
         """Check if record is soft deleted."""
         return self.deleted_at is not None
+
+
+class OptimisticLockMixin:
+    """Mixin for optimistic locking using a version counter.
+
+    Uses SQLAlchemy's built-in version_id_col feature. When two concurrent
+    updates target the same row, the second will raise StaleDataError.
+    """
+
+    version: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False, server_default="1"
+    )
+
+    __mapper_args__ = {"version_id_col": version}
 
 
 class AuditTrailMixin:

@@ -6,7 +6,6 @@ for the Quality Governance Platform.
 """
 
 import logging
-import os
 import smtplib
 from datetime import datetime
 from email import encoders
@@ -17,21 +16,24 @@ from email.mime.text import MIMEText
 # pathlib available if needed
 from typing import Any, Dict, List, Optional
 
-# Settings imported if needed: from src.core.config import settings
+from src.core.config import settings
+from src.infrastructure.resilience import CircuitBreaker, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
+
+_email_circuit = CircuitBreaker("email", failure_threshold=5, recovery_timeout=60.0)
 
 
 class EmailService:
     """Enterprise email notification service with HTML templating."""
 
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "smtp.office365.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("FROM_EMAIL", "noreply@qgp.plantexpand.com")
-        self.from_name = os.getenv("FROM_NAME", "Quality Governance Platform")
+        self.smtp_host = settings.smtp_host
+        self.smtp_port = settings.smtp_port
+        self.smtp_user = settings.smtp_user
+        self.smtp_password = settings.smtp_password
+        self.from_email = settings.from_email
+        self.from_name = settings.from_name
         self.enabled = bool(self.smtp_user and self.smtp_password)
 
     def _get_base_template(self) -> str:
@@ -217,45 +219,57 @@ class EmailService:
             return False
 
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = ", ".join(to)
-
-            if cc:
-                msg["Cc"] = ", ".join(cc)
-
-            # Attach HTML content
-            html_part = MIMEText(html_content, "html")
-            msg.attach(html_part)
-
-            # Add attachments if provided
-            if attachments:
-                for attachment in attachments:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(attachment["content"])
-                    encoders.encode_base64(part)
-                    part.add_header(
-                        "Content-Disposition",
-                        f'attachment; filename="{attachment["filename"]}"',
-                    )
-                    msg.attach(part)
-
-            # Calculate all recipients
-            all_recipients = to + (cc or []) + (bcc or [])
-
-            # Send email
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.sendmail(self.from_email, all_recipients, msg.as_string())
-
-            logger.info(f"Email sent successfully to {to}")
-            return True
-
+            return await _email_circuit.call(
+                self._do_send, to, subject, html_content, cc, bcc, attachments
+            )
+        except CircuitBreakerOpenError:
+            logger.warning("Email circuit breaker OPEN – skipping send")
+            return False
         except Exception as e:
             logger.error(f"Failed to send email: {e}")
             return False
+
+    def _do_send(
+        self,
+        to: List[str],
+        subject: str,
+        html_content: str,
+        cc: Optional[List[str]],
+        bcc: Optional[List[str]],
+        attachments: Optional[List[Dict[str, Any]]],
+    ) -> bool:
+        """Perform the actual SMTP send (called inside the circuit breaker)."""
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"{self.from_name} <{self.from_email}>"
+        msg["To"] = ", ".join(to)
+
+        if cc:
+            msg["Cc"] = ", ".join(cc)
+
+        html_part = MIMEText(html_content, "html")
+        msg.attach(html_part)
+
+        if attachments:
+            for attachment in attachments:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(attachment["content"])
+                encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{attachment["filename"]}"',
+                )
+                msg.attach(part)
+
+        all_recipients = to + (cc or []) + (bcc or [])
+
+        with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+            server.starttls()
+            server.login(self.smtp_user, self.smtp_password)
+            server.sendmail(self.from_email, all_recipients, msg.as_string())
+
+        logger.info(f"Email sent successfully to {to}")
+        return True
 
     async def send_incident_notification(
         self,

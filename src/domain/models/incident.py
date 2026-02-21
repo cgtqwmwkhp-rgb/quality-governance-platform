@@ -143,6 +143,11 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     control_failures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of failed controls
 
     # Relationships
+    reporter: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[reporter_id],
+        lazy="noload",
+    )
     actions: Mapped[List["IncidentAction"]] = relationship(
         "IncidentAction",
         back_populates="incident",
