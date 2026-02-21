@@ -62,6 +62,7 @@ interface DashboardListItem {
   description?: string;
   widget_count?: number;
   updated_at?: string;
+  is_default?: boolean;
 }
 
 const widgetTypes = [
@@ -131,14 +132,14 @@ export default function DashboardBuilder() {
         description: data.description || '',
         widgets: (data.widgets || []).map((w: Record<string, unknown>) => ({
           id: `w${w.id}`,
-          type: w.widget_type,
-          title: w.title,
-          dataSource: w.data_source,
-          metric: w.metric,
-          x: w.grid_x,
-          y: w.grid_y,
-          w: w.grid_w,
-          h: w.grid_h,
+          type: String(w.widget_type),
+          title: String(w.title),
+          dataSource: String(w.data_source),
+          metric: String(w.metric),
+          x: Number(w.grid_x),
+          y: Number(w.grid_y),
+          w: Number(w.grid_w),
+          h: Number(w.grid_h),
         })),
       });
     } catch {
@@ -152,7 +153,7 @@ export default function DashboardBuilder() {
     (async () => {
       const list = await loadDashboardList();
       if (list.length > 0) {
-        const defaultDash = list.find((d: DashboardListItem) => (d as Record<string, unknown>).is_default) || list[0];
+        const defaultDash = list.find((d: DashboardListItem) => d.is_default) || list[0];
         await loadDashboard(defaultDash.id);
       } else {
         setLoading(false);

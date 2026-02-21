@@ -177,7 +177,7 @@ export default function RiskRegister() {
       if (filterStatus) params.status = filterStatus
 
       const res = await riskRegisterApi.list(params)
-      const data = res.data as Record<string, unknown>
+      const data = res.data as unknown as Record<string, unknown>
       const rawItems = (data?.risks ?? data?.items ?? []) as Record<string, unknown>[]
       const mapped: Risk[] = rawItems.map((r) => {
         const resScore = Number(r.residual_score || 0)
@@ -211,18 +211,20 @@ export default function RiskRegister() {
       // Load summary from API
       try {
         const summaryRes = await riskRegisterApi.getSummary()
-        const sd = summaryRes.data as Record<string, unknown>
+        const sd = summaryRes.data as unknown as Record<string, unknown>
+        const defaultByLevel = {
+          critical: mapped.filter(r => r.risk_level === 'critical').length,
+          high: mapped.filter(r => r.risk_level === 'high').length,
+          medium: mapped.filter(r => r.risk_level === 'medium').length,
+          low: mapped.filter(r => r.risk_level === 'low').length,
+        }
+        const byLevel = sd?.by_level as { critical: number; high: number; medium: number; low: number } | undefined
         setSummary({
           total_risks: Number(sd?.total_risks || mapped.length),
-          by_level: sd?.by_level || {
-            critical: mapped.filter(r => r.risk_level === 'critical').length,
-            high: mapped.filter(r => r.risk_level === 'high').length,
-            medium: mapped.filter(r => r.risk_level === 'medium').length,
-            low: mapped.filter(r => r.risk_level === 'low').length,
-          },
-          outside_appetite: sd?.outside_appetite || 0,
-          overdue_review: sd?.overdue_review || 0,
-          escalated: sd?.escalated || 0,
+          by_level: byLevel || defaultByLevel,
+          outside_appetite: Number(sd?.outside_appetite || 0),
+          overdue_review: Number(sd?.overdue_review || 0),
+          escalated: Number(sd?.escalated || 0),
         })
       } catch {
         const critical = mapped.filter(r => r.risk_level === 'critical').length
@@ -286,7 +288,7 @@ export default function RiskRegister() {
   const handleEditRisk = async (risk: Risk) => {
     try {
       const res = await riskRegisterApi.get(risk.id)
-      const d = res.data as Record<string, unknown>
+      const d = res.data as unknown as Record<string, unknown>
       setEditForm({
         title: String(d.title || ''),
         description: String(d.description || ''),
@@ -1152,42 +1154,42 @@ export default function RiskRegister() {
                 <div className="grid grid-cols-3 gap-4 bg-muted/50 rounded-xl p-4">
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Inherent</span>
-                    <p className="text-2xl font-bold text-muted-foreground">{detailRisk.inherent_score}</p>
-                    <p className="text-xs text-muted-foreground">{detailRisk.inherent_likelihood} x {detailRisk.inherent_impact}</p>
+                    <p className="text-2xl font-bold text-muted-foreground">{String(detailRisk.inherent_score)}</p>
+                    <p className="text-xs text-muted-foreground">{String(detailRisk.inherent_likelihood)} x {String(detailRisk.inherent_impact)}</p>
                   </div>
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Residual</span>
-                    <p className="text-2xl font-bold" style={{ color: levelToColor(scoreToLevel(detailRisk.residual_score)) }}>{detailRisk.residual_score}</p>
-                    <p className="text-xs text-muted-foreground">{detailRisk.residual_likelihood} x {detailRisk.residual_impact}</p>
+                    <p className="text-2xl font-bold" style={{ color: levelToColor(scoreToLevel(Number(detailRisk.residual_score))) }}>{String(detailRisk.residual_score)}</p>
+                    <p className="text-xs text-muted-foreground">{String(detailRisk.residual_likelihood)} x {String(detailRisk.residual_impact)}</p>
                   </div>
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Target</span>
-                    <p className="text-2xl font-bold text-success">{detailRisk.target_score || '—'}</p>
+                    <p className="text-2xl font-bold text-success">{detailRisk.target_score ? String(detailRisk.target_score) : '—'}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Treatment Strategy</span>
-                    <p className="text-sm text-foreground capitalize">{detailRisk.treatment_strategy}</p>
+                    <p className="text-sm text-foreground capitalize">{String(detailRisk.treatment_strategy)}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Within Appetite</span>
                     <p className="text-sm">
                       {detailRisk.is_within_appetite
                         ? <Badge variant="resolved">Yes</Badge>
-                        : <Badge variant="destructive">No — outside threshold ({detailRisk.appetite_threshold})</Badge>
+                        : <Badge variant="destructive">No — outside threshold ({String(detailRisk.appetite_threshold)})</Badge>
                       }
                     </p>
                   </div>
                 </div>
 
-                {detailRisk.treatment_plan && (
+                {detailRisk.treatment_plan ? (
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Treatment Plan</span>
-                    <p className="text-sm text-foreground mt-1">{detailRisk.treatment_plan}</p>
+                    <p className="text-sm text-foreground mt-1">{String(detailRisk.treatment_plan)}</p>
                   </div>
-                )}
+                ) : null}
 
                 {/* Controls */}
                 {Array.isArray(detailRisk.controls) && detailRisk.controls.length > 0 && (
@@ -1247,11 +1249,11 @@ export default function RiskRegister() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Last Review</span>
-                    <p className="text-foreground">{detailRisk.last_review_date ? new Date(detailRisk.last_review_date).toLocaleDateString('en-GB') : 'Never'}</p>
+                    <p className="text-foreground">{detailRisk.last_review_date ? new Date(String(detailRisk.last_review_date)).toLocaleDateString('en-GB') : 'Never'}</p>
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground uppercase">Next Review</span>
-                    <p className="text-foreground">{detailRisk.next_review_date ? new Date(detailRisk.next_review_date).toLocaleDateString('en-GB') : '—'}</p>
+                    <p className="text-foreground">{detailRisk.next_review_date ? new Date(String(detailRisk.next_review_date)).toLocaleDateString('en-GB') : '—'}</p>
                   </div>
                 </div>
               </div>

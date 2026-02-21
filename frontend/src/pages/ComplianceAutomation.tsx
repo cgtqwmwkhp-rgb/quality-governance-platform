@@ -215,7 +215,7 @@ export default function ComplianceAutomation() {
         setAudits((auditsRes.value.data as Record<string, unknown>).audits as typeof audits ?? []);
       }
       if (scoreRes.status === 'fulfilled') {
-        const s = scoreRes.value.data as ComplianceScoreData;
+        const s = scoreRes.value.data as unknown as ComplianceScoreData;
         setComplianceScore({
           overall_score: s.overall_score ?? 0,
           previous_score: s.previous_score ?? null,
