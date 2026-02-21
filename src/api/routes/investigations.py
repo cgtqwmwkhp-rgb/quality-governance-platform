@@ -9,7 +9,6 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.utils.entity import get_or_404
 from src.api.schemas.investigation import (
     ClosureValidationResponse,
     CommentCreateRequest,
@@ -27,6 +26,7 @@ from src.api.schemas.investigation import (
     TimelineEventResponse,
     TimelineListResponse,
 )
+from src.api.utils.entity import get_or_404
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
