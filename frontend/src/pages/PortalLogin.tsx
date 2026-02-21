@@ -4,6 +4,7 @@ import { Shield, Loader2, AlertCircle, CheckCircle, User } from 'lucide-react';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 export default function PortalLogin() {
@@ -35,9 +36,8 @@ export default function PortalLogin() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Checking authentication...</p>
+        <div className="w-full max-w-md px-4">
+          <CardSkeleton count={1} />
         </div>
       </div>
     );

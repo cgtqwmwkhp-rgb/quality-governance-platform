@@ -19,6 +19,10 @@ from pydantic import BaseModel
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser
 from src.api.schemas.analytics import (
+    BenchmarkComparisonResponse,
+    BenchmarkSummaryResponse,
+    CostBreakdownResponse,
+    CostNonComplianceResponse,
     CostRecordResponse,
     DashboardCreatedResponse,
     DashboardDeletedResponse,
@@ -26,16 +30,28 @@ from src.api.schemas.analytics import (
     DashboardListResponse,
     DashboardUpdatedResponse,
     DrillDownResponse,
+    ExecutiveSummaryResponse,
     ForecastResponse,
     InvestmentActualsResponse,
     InvestmentCreatedResponse,
+    InvestmentRoiResponse,
+    KpiSummaryResponse,
     ReportGeneratedResponse,
     ReportStatusResponse,
+    RoiSummaryResponse,
+    TrendDataResponse,
     WidgetDataResponse,
     WidgetPreviewResponse,
 )
 from src.domain.services.analytics_service import analytics_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -167,7 +183,8 @@ async def list_dashboards(current_user: CurrentUser):
 @router.post("/dashboards", response_model=DashboardCreatedResponse)
 async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser):
     """Create a new custom dashboard."""
-    return {
+    _span = tracer.start_span("create_dashboard") if tracer else None
+    result = {
         "id": 4,
         "name": dashboard.name,
         "description": dashboard.description,
@@ -175,6 +192,10 @@ async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser
         "color": dashboard.color or "#10B981",
         "created_at": datetime.utcnow().isoformat(),
     }
+    track_metric("analytics.dashboards_created", 1)
+    if _span:
+        _span.end()
+    return result
 
 
 @router.get("/dashboards/{dashboard_id}", response_model=DashboardDetailResponse)
@@ -290,7 +311,7 @@ async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
 # ============================================================================
 
 
-@router.get("/kpis", response_model=dict)
+@router.get("/kpis", response_model=KpiSummaryResponse)
 async def get_kpi_summary(
     current_user: CurrentUser,
     time_range: str = Query("last_30_days"),
@@ -300,7 +321,7 @@ async def get_kpi_summary(
     return analytics_service.get_kpi_summary(time_range, tenant_id=current_user.tenant_id)
 
 
-@router.get("/trends/{data_source}", response_model=dict)
+@router.get("/trends/{data_source}", response_model=TrendDataResponse)
 async def get_trend_data(
     data_source: str,
     current_user: CurrentUser,
@@ -402,7 +423,7 @@ async def generate_forecast(request: ForecastRequest, current_user: CurrentUser)
 # ============================================================================
 
 
-@router.get("/benchmarks", response_model=dict)
+@router.get("/benchmarks", response_model=BenchmarkSummaryResponse)
 async def get_benchmark_summary(
     current_user: CurrentUser,
     industry: str = Query("utilities"),
@@ -411,7 +432,7 @@ async def get_benchmark_summary(
     return analytics_service.get_benchmark_summary(industry, tenant_id=current_user.tenant_id)
 
 
-@router.get("/benchmarks/{metric}", response_model=dict)
+@router.get("/benchmarks/{metric}", response_model=BenchmarkComparisonResponse)
 async def get_benchmark_comparison(
     metric: str,
     current_user: CurrentUser,
@@ -427,7 +448,7 @@ async def get_benchmark_comparison(
 # ============================================================================
 
 
-@router.get("/costs/non-compliance", response_model=dict)
+@router.get("/costs/non-compliance", response_model=CostNonComplianceResponse)
 async def get_cost_of_non_compliance(
     current_user: CurrentUser,
     time_range: str = Query("last_12_months"),
@@ -448,7 +469,7 @@ async def record_cost(cost: CostRecord, current_user: CurrentUser):
     }
 
 
-@router.get("/costs/breakdown", response_model=dict)
+@router.get("/costs/breakdown", response_model=CostBreakdownResponse)
 async def get_cost_breakdown(
     current_user: CurrentUser,
     time_range: str = Query("last_12_months"),
@@ -464,13 +485,13 @@ async def get_cost_breakdown(
 # ============================================================================
 
 
-@router.get("/roi", response_model=dict)
+@router.get("/roi", response_model=RoiSummaryResponse)
 async def get_roi_summary(current_user: CurrentUser):
     """Get ROI summary for all investments."""
     return analytics_service.calculate_roi(tenant_id=current_user.tenant_id)
 
 
-@router.get("/roi/{investment_id}", response_model=dict)
+@router.get("/roi/{investment_id}", response_model=InvestmentRoiResponse)
 async def get_investment_roi(investment_id: int, current_user: CurrentUser):
     """Get ROI for a specific investment."""
     return analytics_service.calculate_roi(investment_id, tenant_id=current_user.tenant_id)
@@ -509,7 +530,7 @@ async def update_investment_actuals(
 # ============================================================================
 
 
-@router.get("/reports/executive-summary", response_model=dict)
+@router.get("/reports/executive-summary", response_model=ExecutiveSummaryResponse)
 async def get_executive_summary(
     current_user: CurrentUser,
     time_range: str = Query("last_month"),

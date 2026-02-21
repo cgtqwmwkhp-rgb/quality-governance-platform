@@ -43,6 +43,21 @@ class PresenceResponse(BaseModel):
     active_connections: int
 
 
+class OnlineUsersResponse(BaseModel):
+    """Response for online users list"""
+
+    online_users: list[int]
+    count: int
+
+
+class BroadcastResponse(BaseModel):
+    """Response for broadcast message"""
+
+    success: bool
+    recipients: int
+    channel: Optional[str] = None
+
+
 class BroadcastMessageRequest(BaseModel):
     """Broadcast message payload"""
 
@@ -138,7 +153,7 @@ async def get_connection_stats(current_user: CurrentUser):
     )
 
 
-@router.get("/online-users", response_model=dict)
+@router.get("/online-users", response_model=OnlineUsersResponse)
 async def get_online_users(current_user: CurrentUser):
     """
     Get list of currently online user IDs.
@@ -171,7 +186,7 @@ async def get_user_presence(user_id: int, current_user: CurrentUser):
     return None
 
 
-@router.post("/broadcast", response_model=dict)
+@router.post("/broadcast", response_model=BroadcastResponse)
 async def broadcast_message(message: BroadcastMessageRequest, current_user: CurrentUser, channel: Optional[str] = None):
     """
     Broadcast a message to connected users.

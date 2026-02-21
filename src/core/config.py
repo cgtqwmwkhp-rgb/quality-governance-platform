@@ -60,6 +60,18 @@ class Settings(BaseSettings):
                     "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
                 )
 
+            if len(self.secret_key) < 16:
+                raise ValueError(
+                    "SECURITY ERROR: SECRET_KEY must be at least 16 characters long in production! "
+                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
+            if len(self.jwt_secret_key) < 16:
+                raise ValueError(
+                    "SECURITY ERROR: JWT_SECRET_KEY must be at least 16 characters long in production! "
+                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
             # Ensure database URL is not localhost/127.0.0.1 (ADR-0002)
             if not self.database_url:
                 raise ValueError("CONFIGURATION ERROR: DATABASE_URL must be set in production mode!")

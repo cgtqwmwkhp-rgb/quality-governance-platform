@@ -20,6 +20,16 @@ from sqlalchemy.orm import selectinload
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.tenant import verify_tenant_access
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.tenant import (
+    AcceptInvitationResponse,
+    AddUserToTenantResponse,
+    CreateInvitationResponse,
+    RemoveUserFromTenantResponse,
+    TenantFeaturesResponse,
+    TenantLimitsResponse,
+    TenantUserListResponse,
+    ToggleFeatureResponse,
+)
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.services.tenant_service import TenantService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -210,7 +220,7 @@ async def update_branding(
 # ============================================================================
 
 
-@router.get("/{tenant_id}/users", response_model=dict)
+@router.get("/{tenant_id}/users", response_model=TenantUserListResponse)
 async def list_tenant_users(
     tenant_id: int,
     db: DbSession,
@@ -235,7 +245,7 @@ async def list_tenant_users(
     }
 
 
-@router.post("/{tenant_id}/users", response_model=dict)
+@router.post("/{tenant_id}/users", response_model=AddUserToTenantResponse)
 async def add_user_to_tenant(
     tenant_id: int,
     data: TenantUserAdd,
@@ -262,12 +272,12 @@ async def add_user_to_tenant(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
 
 
-@router.delete("/{tenant_id}/users/{user_id}", response_model=dict)
+@router.delete("/{tenant_id}/users/{user_id}", response_model=RemoveUserFromTenantResponse)
 async def remove_user_from_tenant(
     tenant_id: int,
     user_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Remove a user from a tenant."""
     await verify_tenant_access(tenant_id, current_user)
@@ -287,7 +297,7 @@ async def remove_user_from_tenant(
 # ============================================================================
 
 
-@router.post("/{tenant_id}/invitations", response_model=dict)
+@router.post("/{tenant_id}/invitations", response_model=CreateInvitationResponse)
 async def create_invitation(
     tenant_id: int,
     data: TenantInvite,
@@ -313,7 +323,7 @@ async def create_invitation(
     }
 
 
-@router.post("/invitations/{token}/accept", response_model=dict)
+@router.post("/invitations/{token}/accept", response_model=AcceptInvitationResponse)
 async def accept_invitation(
     token: str,
     db: DbSession,
@@ -334,7 +344,7 @@ async def accept_invitation(
 # ============================================================================
 
 
-@router.get("/{tenant_id}/features", response_model=dict)
+@router.get("/{tenant_id}/features", response_model=TenantFeaturesResponse)
 async def get_features(
     tenant_id: int,
     db: DbSession,
@@ -351,7 +361,7 @@ async def get_features(
     return tenant.features_enabled
 
 
-@router.put("/{tenant_id}/features/{feature}", response_model=dict)
+@router.put("/{tenant_id}/features/{feature}", response_model=ToggleFeatureResponse)
 async def toggle_feature(
     tenant_id: int,
     feature: str,
@@ -376,7 +386,7 @@ async def toggle_feature(
 # ============================================================================
 
 
-@router.get("/{tenant_id}/limits", response_model=dict)
+@router.get("/{tenant_id}/limits", response_model=TenantLimitsResponse)
 async def get_limits(
     tenant_id: int,
     db: DbSession,

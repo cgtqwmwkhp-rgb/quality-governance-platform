@@ -97,4 +97,83 @@ test.describe('User Management', () => {
       }
     });
   });
+
+  test.describe('Edit User Role', () => {
+    test('should open user detail and attempt role change', async ({ page }) => {
+      await page.goto('/users');
+      await page.waitForLoadState('networkidle');
+
+      const rows = page.locator('table tbody tr');
+      const count = await rows.count().catch(() => 0);
+      if (count === 0) return;
+
+      await rows.first().click();
+      await page.waitForLoadState('networkidle');
+
+      const roleSelect = page.getByRole('combobox').first();
+      const editButton = page.getByRole('button', { name: /edit|change role/i });
+      const hasRoleSelect = await roleSelect.isVisible().catch(() => false);
+      const hasEditButton = await editButton.isVisible().catch(() => false);
+
+      if (hasRoleSelect) {
+        await roleSelect.click();
+        await page.waitForTimeout(300);
+        const option = page.getByRole('option').first();
+        const hasOption = await option.isVisible().catch(() => false);
+        if (hasOption) {
+          await option.click();
+          await page.waitForTimeout(500);
+        }
+      } else if (hasEditButton) {
+        await editButton.click();
+        await page.waitForLoadState('networkidle');
+        const dialog = page.locator('[role="dialog"], [class*="modal"]').first();
+        const hasDialog = await dialog.isVisible().catch(() => false);
+        if (hasDialog) {
+          const dialogSelect = dialog.getByRole('combobox').first();
+          const hasDialogSelect = await dialogSelect.isVisible().catch(() => false);
+          if (hasDialogSelect) {
+            await dialogSelect.click();
+            await page.waitForTimeout(300);
+          }
+        }
+      }
+
+      await expect(page.getByRole('heading', { name: /Users|User Management|User Detail/i })).toBeVisible();
+    });
+  });
+
+  test.describe('Search for Specific User', () => {
+    test('should search for a user by name and verify results update', async ({ page }) => {
+      await page.goto('/users');
+      await page.waitForLoadState('networkidle');
+
+      const searchInput = page.getByPlaceholder(/search/i);
+      const hasSearch = await searchInput.isVisible().catch(() => false);
+      if (!hasSearch) {
+        await expect(page.getByRole('heading', { name: /Users|User Management/i })).toBeVisible();
+        return;
+      }
+
+      await searchInput.fill('admin');
+      await page.waitForTimeout(800);
+
+      const rows = page.locator('table tbody tr');
+      const rowCount = await rows.count().catch(() => 0);
+
+      if (rowCount > 0) {
+        const firstRowText = await rows.first().textContent();
+        expect(firstRowText?.toLowerCase()).toContain('admin');
+      }
+
+      await searchInput.clear();
+      await searchInput.fill('nonexistent-user-xyz-12345');
+      await page.waitForTimeout(800);
+
+      const emptyRows = await rows.count().catch(() => 0);
+      const emptyState = page.getByText(/no users|no results|not found/i);
+      const hasEmpty = await emptyState.isVisible().catch(() => false);
+      expect(emptyRows === 0 || hasEmpty).toBeTruthy();
+    });
+  });
 });

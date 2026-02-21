@@ -10,7 +10,8 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { DynamicFormRenderer } from '../components/DynamicForm';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -519,13 +520,11 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     window.location.reload();
   };
 
-  // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading form...</p>
+      <div className="min-h-screen bg-surface">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+          <CardSkeleton count={1} />
         </div>
       </div>
     );

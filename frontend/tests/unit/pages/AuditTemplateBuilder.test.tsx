@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
   auditsApi: {
@@ -9,12 +9,12 @@ vi.mock('../../../src/api/client', () => ({
       data: {
         id: 1,
         name: 'Test Template',
-        description: '',
+        description: 'A test template for audits',
         version: 1,
         is_published: false,
         question_count: 0,
         sections: [],
-        category: '',
+        category: 'quality',
         scoring_method: 'percentage',
         passing_score: 80,
         audit_type: 'inspection',
@@ -57,12 +57,29 @@ vi.mock('../../../src/components/AITemplateGenerator', () => ({
 import AuditTemplateBuilder from '../../../src/pages/AuditTemplateBuilder';
 
 describe('AuditTemplateBuilder', () => {
-  it('renders without crashing', () => {
+  const renderPage = () =>
     render(
-      <MemoryRouter initialEntries={['/audit-templates/new']}>
-        <AuditTemplateBuilder />
+      <MemoryRouter initialEntries={['/audit-templates/1']}>
+        <Routes>
+          <Route path="/audit-templates/:templateId" element={<AuditTemplateBuilder />} />
+        </Routes>
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+
+  it('renders the template name in the input field', async () => {
+    renderPage();
+    expect(await screen.findByDisplayValue('Test Template')).toBeInTheDocument();
+  });
+
+  it('renders the Draft badge', async () => {
+    renderPage();
+    await screen.findByDisplayValue('Test Template');
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+  });
+
+  it('renders Add Section button', async () => {
+    renderPage();
+    await screen.findByDisplayValue('Test Template');
+    expect(screen.getByText(/Add Section/i)).toBeInTheDocument();
   });
 });

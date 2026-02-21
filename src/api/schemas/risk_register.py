@@ -229,3 +229,48 @@ class RiskSummaryResponse(BaseModel):
     overdue_review: int = 0
     escalated: int = 0
     by_category: dict[str, int] = {}
+
+
+# ============================================================================
+# Heat Map Response
+# ============================================================================
+
+
+class HeatMapResponse(BaseModel):
+    matrix: list[list[Any]] = []
+    total_risks: Optional[int] = None
+    filters_applied: Optional[dict[str, Any]] = None
+
+    class Config:
+        extra = "allow"
+
+
+# ============================================================================
+# Bow-Tie Response
+# ============================================================================
+
+
+class BowTieResponse(BaseModel):
+    risk: Optional[dict[str, Any]] = None
+    causes: list[Any] = []
+    prevention_barriers: list[Any] = []
+    consequences: list[Any] = []
+    mitigation_barriers: list[Any] = []
+    escalation_factors: list[Any] = []
+    controls: list[Any] = []
+
+    class Config:
+        extra = "allow"
+
+
+# ============================================================================
+# Enterprise KRI Dashboard Response
+# ============================================================================
+
+
+class EnterpriseKRIDashboardResponse(BaseModel):
+    total_kris: int = 0
+    red_count: int = 0
+    amber_count: int = 0
+    green_count: int = 0
+    kris: list[dict[str, Any]] = []

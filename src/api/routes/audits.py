@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.audit import (
+    ArchiveTemplateResponse,
     AuditFindingCreate,
     AuditFindingListResponse,
     AuditFindingResponse,
@@ -39,6 +40,7 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
+    PurgeExpiredTemplatesResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
@@ -173,7 +175,7 @@ async def list_archived_templates(
     return await paginate(db, query, params)
 
 
-@router.post("/templates/purge-expired", response_model=dict)
+@router.post("/templates/purge-expired", response_model=PurgeExpiredTemplatesResponse)
 async def purge_expired_templates(
     db: DbSession,
     current_user: CurrentSuperuser,
@@ -262,22 +264,22 @@ async def update_template(
         template.version += 1
         template.is_published = False
 
-    update_data = template_data.model_dump(exclude_unset=True, exclude={"standard_ids"})
+    _exclude = {"standard_ids", "is_active", "is_published"}
+    update_data = template_data.model_dump(exclude_unset=True, exclude=_exclude)
     safe_data = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}
 
-    # Handle standard_ids → standard_ids_json mapping
+    # Handle standard_ids -> standard_ids_json mapping
     raw = template_data.model_dump(exclude_unset=True)
     if "standard_ids" in raw:
         safe_data["standard_ids_json"] = raw["standard_ids"]
 
-    # setattr kept: change-tracking requires comparing old vs new values
-    # before assignment, which apply_updates() doesn't support.
-    changed_fields = []
-    for field, value in safe_data.items():
-        old_value = getattr(template, field, None)
-        if old_value != value:
-            changed_fields.append(field)
-            setattr(template, field, value)
+    # Track which fields actually changed (for the audit event)
+    changed_fields = [field for field, value in safe_data.items() if getattr(template, field, None) != value]
+
+    # Apply allowed-field updates
+    apply_updates(template, template_data, exclude=_exclude | {"standard_ids_json"})
+    if "standard_ids" in raw:
+        template.standard_ids_json = raw["standard_ids"]
 
     await db.commit()
     await db.refresh(template)
@@ -472,11 +474,11 @@ async def clone_template(
     return AuditTemplateResponse.model_validate(cloned_template)
 
 
-@router.delete("/templates/{template_id}", status_code=status.HTTP_200_OK, response_model=dict)
+@router.delete("/templates/{template_id}", status_code=status.HTTP_200_OK, response_model=ArchiveTemplateResponse)
 async def archive_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> dict:
     """Archive an audit template (two-stage delete).
 
@@ -672,7 +674,7 @@ async def update_section(
 async def delete_section(
     section_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete an audit section."""
     section = await get_or_404(db, AuditSection, section_id)
@@ -763,20 +765,19 @@ async def update_question(
 
     update_data = question_data.model_dump(exclude_unset=True)
 
-    # setattr kept: schema→model field remapping (e.g. options → options_json)
-    # can't use apply_updates() because the model column name differs from the schema field.
-    _JSON_REMAP = {
-        "options": "options_json",
-        "evidence_requirements": "evidence_requirements_json",
-        "conditional_logic": "conditional_logic_json",
-        "clause_ids": "clause_ids_json",
-        "control_ids": "control_ids_json",
-    }
-    for schema_field, model_field in _JSON_REMAP.items():
-        if schema_field in update_data:
-            setattr(question, model_field, update_data[schema_field])
+    _JSON_REMAP = {"options", "evidence_requirements", "conditional_logic", "clause_ids", "control_ids"}
+    if "options" in update_data:
+        question.options_json = update_data["options"]
+    if "evidence_requirements" in update_data:
+        question.evidence_requirements_json = update_data["evidence_requirements"]
+    if "conditional_logic" in update_data:
+        question.conditional_logic_json = update_data["conditional_logic"]
+    if "clause_ids" in update_data:
+        question.clause_ids_json = update_data["clause_ids"]
+    if "control_ids" in update_data:
+        question.control_ids_json = update_data["control_ids"]
 
-    apply_updates(question, question_data, set_updated_at=False, exclude=set(_JSON_REMAP))
+    apply_updates(question, question_data, set_updated_at=False, exclude=_JSON_REMAP)
 
     await db.commit()
     await db.refresh(question)
@@ -788,7 +789,7 @@ async def update_question(
 async def delete_question(
     question_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete an audit question."""
     question = await get_or_404(db, AuditQuestion, question_id)

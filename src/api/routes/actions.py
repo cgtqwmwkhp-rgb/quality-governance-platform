@@ -18,6 +18,7 @@ from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -362,6 +363,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         logger.info("Action committed successfully, refreshing...")
         await db.refresh(action)
         logger.info(f"Action created successfully: id={action.id}, ref={action.reference_number}")
+        track_metric("actions.created", 1)
     except IntegrityError as e:
         await db.rollback()
         error_msg = str(e.orig) if hasattr(e, "orig") else str(e)
@@ -408,7 +410,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     )
 
 
-@router.get("/{action_id}", response_model=dict)
+@router.get("/{action_id}", response_model=ActionResponse)
 async def get_action(
     action_id: int,
     db: DbSession,

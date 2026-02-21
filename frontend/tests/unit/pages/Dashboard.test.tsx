@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '../../../src/pages/Dashboard';
 
@@ -47,15 +48,14 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('Dashboard', () => {
-  it('renders without crashing', async () => {
+  it('renders the Dashboard heading', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>
     );
-
     const heading = await screen.findByText('Dashboard');
-    expect(heading).toBeTruthy();
+    expect(heading).toBeInTheDocument();
   });
 
   it('shows the subtitle text', async () => {
@@ -64,9 +64,7 @@ describe('Dashboard', () => {
         <Dashboard />
       </MemoryRouter>
     );
-
-    const subtitle = await screen.findByText('Quality Governance Platform Overview');
-    expect(subtitle).toBeTruthy();
+    expect(await screen.findByText('Quality Governance Platform Overview')).toBeInTheDocument();
   });
 
   it('renders the Refresh button', async () => {
@@ -75,9 +73,8 @@ describe('Dashboard', () => {
         <Dashboard />
       </MemoryRouter>
     );
-
     const refreshBtn = await screen.findByText('Refresh');
-    expect(refreshBtn).toBeTruthy();
+    expect(refreshBtn).toBeInTheDocument();
   });
 
   it('renders stat cards after loading', async () => {
@@ -86,13 +83,10 @@ describe('Dashboard', () => {
         <Dashboard />
       </MemoryRouter>
     );
-
-    const openIncidents = await screen.findByText('Open Incidents');
-    expect(openIncidents).toBeTruthy();
-
-    expect(screen.getByText('Open RTAs')).toBeTruthy();
-    expect(screen.getByText('Open Complaints')).toBeTruthy();
-    expect(screen.getByText('Overdue Actions')).toBeTruthy();
+    expect(await screen.findByText('Open Incidents')).toBeInTheDocument();
+    expect(screen.getByText('Open RTAs')).toBeInTheDocument();
+    expect(screen.getByText('Open Complaints')).toBeInTheDocument();
+    expect(screen.getByText('Overdue Actions')).toBeInTheDocument();
   });
 
   it('renders IMS Compliance section', async () => {
@@ -101,9 +95,7 @@ describe('Dashboard', () => {
         <Dashboard />
       </MemoryRouter>
     );
-
-    const compliance = await screen.findByText('IMS Compliance');
-    expect(compliance).toBeTruthy();
+    expect(await screen.findByText('IMS Compliance')).toBeInTheDocument();
   });
 
   it('renders quick action links', async () => {
@@ -112,11 +104,19 @@ describe('Dashboard', () => {
         <Dashboard />
       </MemoryRouter>
     );
+    expect(await screen.findByText('New Incident')).toBeInTheDocument();
+    expect(screen.getByText('Start Audit')).toBeInTheDocument();
+    expect(screen.getByText('View Analytics')).toBeInTheDocument();
+    expect(screen.getByText('Compliance')).toBeInTheDocument();
+  });
 
+  it('renders quick action links as clickable elements', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
     const newIncident = await screen.findByText('New Incident');
-    expect(newIncident).toBeTruthy();
-    expect(screen.getByText('Start Audit')).toBeTruthy();
-    expect(screen.getByText('View Analytics')).toBeTruthy();
-    expect(screen.getByText('Compliance')).toBeTruthy();
+    expect(newIncident.closest('a, button')).not.toBeNull();
   });
 });

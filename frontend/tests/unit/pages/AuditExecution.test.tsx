@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
   auditsApi: {
@@ -9,13 +9,31 @@ vi.mock('../../../src/api/client', () => ({
         id: 1,
         template_id: 1,
         location: 'Test Site',
-        title: 'Test Audit',
+        title: 'Test Audit Run',
         status: 'scheduled',
         responses: [],
       },
     }),
     getTemplate: vi.fn().mockResolvedValue({
-      data: { name: 'Test Template', sections: [] },
+      data: {
+        name: 'Safety Inspection Template',
+        sections: [
+          {
+            id: 1,
+            title: 'General Safety',
+            description: 'Basic safety checks',
+            questions: [
+              {
+                id: 1,
+                question_text: 'Are fire exits clear?',
+                question_type: 'yes_no',
+                is_required: true,
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      },
     }),
     completeRun: vi.fn().mockResolvedValue({}),
     updateRun: vi.fn().mockResolvedValue({}),
@@ -46,12 +64,28 @@ vi.mock('../../../src/utils/auth', () => ({
 import AuditExecution from '../../../src/pages/AuditExecution';
 
 describe('AuditExecution', () => {
-  it('renders without crashing', () => {
+  const renderPage = () =>
     render(
       <MemoryRouter initialEntries={['/audits/1/execute']}>
-        <AuditExecution />
+        <Routes>
+          <Route path="/audits/:auditId/execute" element={<AuditExecution />} />
+        </Routes>
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+
+  it('renders the template name', async () => {
+    renderPage();
+    expect(await screen.findByText('Safety Inspection Template')).toBeInTheDocument();
+  });
+
+  it('renders the audit location', async () => {
+    renderPage();
+    await screen.findByText('Safety Inspection Template');
+    expect(screen.getByText(/Test Site/)).toBeInTheDocument();
+  });
+
+  it('renders the first question', async () => {
+    renderPage();
+    expect(await screen.findByText('Are fire exits clear?')).toBeInTheDocument();
   });
 });

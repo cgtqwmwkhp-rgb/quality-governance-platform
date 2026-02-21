@@ -1,7 +1,7 @@
 """Pydantic schemas for Complaint API."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -95,3 +95,13 @@ class ComplaintListResponse(BaseModel):
     page: int
     page_size: int
     pages: int = Field(..., description="Total number of pages")
+
+
+class ComplaintInvestigationsResponse(BaseModel):
+    """Paginated investigations linked to a complaint."""
+
+    items: List[Any]
+    total: int
+    page: int
+    page_size: int
+    pages: int

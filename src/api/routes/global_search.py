@@ -59,6 +59,7 @@ async def global_search(
     _ = date_from, date_to  # reserved for future date filtering
 
     track_metric("search.query", 1, {"module": module or "all"})
+    track_metric("search.executed", 1)
     query_lower = q.lower()
     all_results: list[SearchResultItem] = []
 

@@ -12,6 +12,7 @@ from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
+from src.api.schemas.investigation import InvestigationRunListResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
@@ -224,7 +225,7 @@ async def list_incidents(
         )
 
 
-@router.get("/{incident_id}/investigations", response_model=dict)
+@router.get("/{incident_id}/investigations", response_model=InvestigationRunListResponse)
 async def list_incident_investigations(
     incident_id: int,
     db: DbSession,

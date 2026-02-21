@@ -11,11 +11,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.auth import (
+    ChangePasswordResponse,
+    ConfirmPasswordResetResponse,
     LoginRequest,
+    LogoutResponse,
     PasswordChangeRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
     RefreshTokenRequest,
+    RequestPasswordResetResponse,
     TokenResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
@@ -27,6 +31,7 @@ from src.core.security import (
     create_refresh_token,
     decode_token,
     get_password_hash,
+    is_token_revoked,
     verify_password,
     verify_password_reset_token,
 )
@@ -206,6 +211,14 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    jti = payload.get("jti")
+    if jti and await is_token_revoked(jti, db):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorCode.TOKEN_EXPIRED,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(
@@ -248,11 +261,11 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
 security_scheme = HTTPBearer()
 
 
-@router.post("/logout", response_model=dict)
+@router.post("/logout", response_model=LogoutResponse)
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: DbSession = None,  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-001
-) -> dict:
+) -> LogoutResponse:
     """Revoke the current access token so it can no longer be used."""
     token = credentials.credentials
     payload = decode_token(token)
@@ -286,7 +299,7 @@ async def logout(
     )
 
     track_metric("auth.logout")
-    return {"message": "Successfully logged out"}
+    return LogoutResponse(message="Successfully logged out")
 
 
 @router.get("/me", response_model=UserResponse)
@@ -334,12 +347,12 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
     )
 
 
-@router.post("/change-password", response_model=dict)
+@router.post("/change-password", response_model=ChangePasswordResponse)
 async def change_password(
     request: PasswordChangeRequest,
     current_user: CurrentUser,
     db: DbSession,
-) -> dict:
+) -> ChangePasswordResponse:
     """Change current user's password."""
     if not verify_password(request.current_password, current_user.hashed_password):
         raise HTTPException(
@@ -350,7 +363,7 @@ async def change_password(
     current_user.hashed_password = get_password_hash(request.new_password)
     await db.commit()
 
-    return {"message": "Password changed successfully"}
+    return ChangePasswordResponse(message="Password changed successfully")
 
 
 # =============================================================================
@@ -358,11 +371,11 @@ async def change_password(
 # =============================================================================
 
 
-@router.post("/password-reset/request", response_model=dict)
+@router.post("/password-reset/request", response_model=RequestPasswordResetResponse)
 async def request_password_reset(
     request: PasswordResetRequest,
     db: DbSession,
-) -> dict:
+) -> RequestPasswordResetResponse:
     """
     Request a password reset email.
 
@@ -401,14 +414,16 @@ async def request_password_reset(
             logger.error(f"Failed to send password reset email: {e}")
 
     # Always return success to prevent email enumeration
-    return {"message": "If an account with that email exists, a password reset link has been sent."}
+    return RequestPasswordResetResponse(
+        message="If an account with that email exists, a password reset link has been sent."
+    )
 
 
-@router.post("/password-reset/confirm", response_model=dict)
+@router.post("/password-reset/confirm", response_model=ConfirmPasswordResetResponse)
 async def confirm_password_reset(
     request: PasswordResetConfirm,
     db: DbSession,
-) -> dict:
+) -> ConfirmPasswordResetResponse:
     """
     Confirm password reset with token and set new password.
 
@@ -442,4 +457,4 @@ async def confirm_password_reset(
 
     logger.info(f"Password reset successful for user ID {user_id}")
 
-    return {"message": "Password has been reset successfully"}
+    return ConfirmPasswordResetResponse(message="Password has been reset successfully")

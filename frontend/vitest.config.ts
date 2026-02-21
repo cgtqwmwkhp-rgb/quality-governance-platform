@@ -7,14 +7,15 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    setupFiles: ['./tests/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       thresholds: {
-        statements: 25,
-        branches: 15,
-        functions: 12,
-        lines: 25
+        statements: 45,
+        branches: 30,
+        functions: 15,
+        lines: 45
       }
     }
   },

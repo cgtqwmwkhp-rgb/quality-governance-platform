@@ -39,6 +39,16 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -50,8 +60,6 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -200,6 +208,7 @@ async def create_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new controlled document"""
+    _span = tracer.start_span("create_document") if tracer else None
     count_result = await db.execute(select(func.count()).select_from(ControlledDocument))
     count = count_result.scalar_one()
     type_prefix = document_data.document_type[:3].upper()
@@ -232,7 +241,10 @@ async def create_document(
     await db.commit()
     await invalidate_tenant_cache(current_user.tenant_id, "document_control")
     track_metric("document.mutation", 1)
+    track_metric("document_control.documents_created", 1)
 
+    if _span:
+        _span.end()
     return {
         "id": document.id,
         "document_number": document_number,
@@ -382,7 +394,7 @@ async def get_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed document information"""
-    document = await get_or_404(db, ControlledDocument, document_id)
+    document = await get_or_404(db, ControlledDocument, document_id, tenant_id=current_user.tenant_id)
 
     versions_result = await db.execute(
         select(ControlledDocumentVersion)
@@ -473,7 +485,7 @@ async def update_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update document metadata"""
-    document = await get_or_404(db, ControlledDocument, document_id)
+    document = await get_or_404(db, ControlledDocument, document_id, tenant_id=current_user.tenant_id)
     apply_updates(document, document_data)
     await db.commit()
     await db.refresh(document)
@@ -494,7 +506,7 @@ async def create_new_version(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
-    document = await get_or_404(db, ControlledDocument, document_id)
+    document = await get_or_404(db, ControlledDocument, document_id, tenant_id=current_user.tenant_id)
 
     if version_data.is_major_version:
         new_major = document.major_version + 1
@@ -592,8 +604,8 @@ async def submit_for_approval(
     workflow_id: int = Query(...),
 ) -> dict[str, Any]:
     """Submit document for approval"""
-    document = await get_or_404(db, ControlledDocument, document_id)
-    workflow = await get_or_404(db, DocumentApprovalWorkflow, workflow_id)
+    document = await get_or_404(db, ControlledDocument, document_id, tenant_id=current_user.tenant_id)
+    workflow = await get_or_404(db, DocumentApprovalWorkflow, workflow_id, tenant_id=current_user.tenant_id)
 
     instance = DocumentApprovalInstance(
         document_id=document_id,
@@ -629,7 +641,7 @@ async def take_approval_action(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    instance = await get_or_404(db, DocumentApprovalInstance, instance_id)
+    instance = await get_or_404(db, DocumentApprovalInstance, instance_id, tenant_id=current_user.tenant_id)
 
     action = DocumentApprovalAction(
         instance_id=instance_id,
@@ -698,7 +710,7 @@ async def distribute_document(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    await get_or_404(db, ControlledDocument, document_id)
+    await get_or_404(db, ControlledDocument, document_id, tenant_id=current_user.tenant_id)
 
     dist = DocumentDistribution(
         document_id=document_id,
@@ -755,7 +767,7 @@ async def mark_document_obsolete(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
-    document = await get_or_404(db, ControlledDocument, document_id)
+    document = await get_or_404(db, ControlledDocument, document_id, tenant_id=current_user.tenant_id)
 
     document.status = "obsolete"
     document.is_current = False

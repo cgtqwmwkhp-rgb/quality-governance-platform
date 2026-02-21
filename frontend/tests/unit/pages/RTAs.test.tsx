@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import RTAs from '../../../src/pages/RTAs';
 
@@ -40,15 +41,13 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('RTAs', () => {
-  it('renders without crashing', async () => {
+  it('renders the Road Traffic Collisions heading', async () => {
     render(
       <MemoryRouter>
         <RTAs />
       </MemoryRouter>
     );
-
-    const heading = await screen.findByText('Road Traffic Collisions');
-    expect(heading).toBeTruthy();
+    expect(await screen.findByText('Road Traffic Collisions')).toBeInTheDocument();
   });
 
   it('renders the Report RTA button', async () => {
@@ -57,9 +56,7 @@ describe('RTAs', () => {
         <RTAs />
       </MemoryRouter>
     );
-
-    const btn = await screen.findByText('Report RTA');
-    expect(btn).toBeTruthy();
+    expect(await screen.findByText('Report RTA')).toBeInTheDocument();
   });
 
   it('renders empty state message', async () => {
@@ -68,8 +65,16 @@ describe('RTAs', () => {
         <RTAs />
       </MemoryRouter>
     );
+    expect(await screen.findByText('No RTAs found')).toBeInTheDocument();
+  });
 
-    const emptyMsg = await screen.findByText('No RTAs found');
-    expect(emptyMsg).toBeTruthy();
+  it('Report RTA button is rendered as a clickable element', async () => {
+    render(
+      <MemoryRouter>
+        <RTAs />
+      </MemoryRouter>
+    );
+    const btn = await screen.findByText('Report RTA');
+    expect(btn.closest('button')).not.toBeNull();
   });
 });

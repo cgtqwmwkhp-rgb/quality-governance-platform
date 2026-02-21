@@ -17,6 +17,7 @@ from src.api.schemas.auditor_competence import (
     AuditorProfileUpdateResponse,
     CertificationCreateResponse,
     CertificationListResponse,
+    CompetenceDashboardResponse,
     CompetenceScoreResponse,
     CompetencyAssessmentResponse,
     CompetencyGapsResponse,
@@ -432,7 +433,7 @@ async def find_qualified_auditors(
 # =============================================================================
 
 
-@router.get("/dashboard", response_model=dict)
+@router.get("/dashboard", response_model=CompetenceDashboardResponse)
 async def get_competence_dashboard(
     db: DbSession,
     current_user: CurrentUser,

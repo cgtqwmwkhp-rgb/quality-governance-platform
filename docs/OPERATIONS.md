@@ -129,3 +129,49 @@ The platform uses Redis (with an in-memory fallback) for caching. Cache TTLs are
 ### Redis connectivity issues
 
 If Redis becomes unreachable, the cache layer automatically falls back to an in-memory LRU cache. Recovery is attempted via the `reconnect()` method, which can be triggered from a health check or manually.
+
+## Redis Failure Recovery
+
+### Symptoms
+- Cache misses spike in monitoring
+- API response times increase
+- `GET /readyz` returns 503 with Redis check failing
+
+### Recovery Steps
+1. Check Redis container status: `docker compose ps redis`
+2. Check Redis logs: `docker compose logs redis --tail=100`
+3. If Redis is down, restart: `docker compose restart redis`
+4. If data corruption, flush and rebuild: `docker compose exec redis redis-cli FLUSHALL`
+5. Trigger cache warmup: the app automatically warms cache on startup via `warmup_cache()`
+6. Monitor recovery via `GET /readyz?verbose=true` — Redis status should show "connected"
+
+## Database Connection Pool Exhaustion
+
+### Symptoms
+- `db.pool_usage_percent` metric exceeds 90%
+- API requests start timing out
+- PostgreSQL logs show "too many connections"
+
+### Recovery Steps
+1. Check current pool usage: `GET /readyz?verbose=true` — look at pool stats
+2. Identify long-running queries: `SELECT pid, now() - pg_stat_activity.query_start AS duration, query FROM pg_stat_activity WHERE state != 'idle' ORDER BY duration DESC;`
+3. Kill long-running queries if safe: `SELECT pg_terminate_backend(pid);`
+4. If persistent, increase pool size in environment: `DATABASE_POOL_SIZE=30 DATABASE_MAX_OVERFLOW=15`
+5. Restart the app to pick up new pool settings
+6. Consider adding `pool_pre_ping=True` (already configured) to prevent stale connections
+
+## Celery Worker Crash Recovery
+
+### Symptoms
+- `celery.queue_depth` metric spikes
+- Scheduled tasks stop executing
+- Flower dashboard shows workers offline
+
+### Recovery Steps
+1. Check worker status: `docker compose ps celery-worker celery-beat`
+2. Check worker logs: `docker compose logs celery-worker --tail=100`
+3. Restart workers: `docker compose restart celery-worker celery-beat`
+4. Check DLQ for failed tasks: query `FailedTask` table for tasks that exhausted retries
+5. Reprocess failed tasks if safe: manually re-enqueue via admin panel or direct task call
+6. Monitor recovery via Flower dashboard at port 5555
+7. If persistent, check resource limits: worker is limited to 1 CPU / 1G memory

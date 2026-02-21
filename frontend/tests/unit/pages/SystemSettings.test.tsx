@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
   settingsApi: {
-    list: vi.fn().mockResolvedValue({ data: [] }),
+    list: vi.fn().mockResolvedValue({
+      items: [
+        { key: 'company_name', value: 'TestCo', category: 'branding', description: 'Company name', value_type: 'string', is_editable: true },
+      ],
+    }),
     get: vi.fn().mockResolvedValue({ data: {} }),
     update: vi.fn(),
   },
@@ -32,12 +37,39 @@ vi.mock('../../../src/utils/auth', () => ({
 import SystemSettings from '../../../src/pages/admin/SystemSettings';
 
 describe('SystemSettings', () => {
-  it('renders without crashing', () => {
+  it('renders the System Settings heading', async () => {
     render(
       <MemoryRouter>
         <SystemSettings />
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+    expect(await screen.findByText('System Settings')).toBeInTheDocument();
+  });
+
+  it('renders setting category navigation items', async () => {
+    render(
+      <MemoryRouter>
+        <SystemSettings />
+      </MemoryRouter>
+    );
+    await screen.findByText('System Settings');
+    const brandingElements = screen.getAllByText('Branding');
+    expect(brandingElements.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Contact Details').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Notifications').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('switches category when a nav item is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SystemSettings />
+      </MemoryRouter>
+    );
+
+    await screen.findByText('System Settings');
+    const securityTab = screen.getByText('Security');
+    await user.click(securityTab);
+    expect(securityTab).toBeInTheDocument();
   });
 });

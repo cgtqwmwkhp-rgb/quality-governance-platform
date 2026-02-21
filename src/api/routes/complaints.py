@@ -9,7 +9,13 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
+from src.api.schemas.complaint import (
+    ComplaintCreate,
+    ComplaintInvestigationsResponse,
+    ComplaintListResponse,
+    ComplaintResponse,
+    ComplaintUpdate,
+)
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
@@ -243,7 +249,7 @@ async def update_complaint(
     return complaint
 
 
-@router.get("/{complaint_id}/investigations", response_model=dict)
+@router.get("/{complaint_id}/investigations", response_model=ComplaintInvestigationsResponse)
 async def list_complaint_investigations(
     complaint_id: int,
     db: DbSession,

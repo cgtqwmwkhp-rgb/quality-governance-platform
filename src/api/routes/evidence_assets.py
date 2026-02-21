@@ -23,11 +23,23 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetResponse,
     EvidenceAssetUpdate,
     EvidenceAssetUploadResponse,
+    FileDownloadMeta,
+    SignedUrlResponse,
 )
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.core.config import settings
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -35,8 +47,6 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -132,6 +142,7 @@ async def upload_evidence_asset(
 
     Stores file in blob storage and creates EvidenceAsset record.
     """
+    _span = tracer.start_span("upload_evidence_asset") if tracer else None
     # Validate source module
     try:
         source_module_enum = EvidenceSourceModule(source_module)
@@ -269,7 +280,10 @@ async def upload_evidence_asset(
     await db.refresh(evidence_asset)
     await invalidate_tenant_cache(current_user.tenant_id, "evidence_assets")
     track_metric("evidence.mutation", 1)
+    track_metric("evidence.uploaded", 1)
 
+    if _span:
+        _span.end()
     return EvidenceAssetUploadResponse(
         id=evidence_asset.id,
         storage_key=evidence_asset.storage_key,
@@ -392,14 +406,12 @@ async def update_evidence_asset(
             },
         )
 
-    # setattr kept for enum fields: visibility and retention_policy require
-    # str → enum conversion that apply_updates() doesn't handle.
     _enum_fields = {"visibility", "retention_policy"}
     update_data = asset_data.model_dump(exclude_unset=True)
     if "visibility" in update_data and update_data["visibility"] is not None:
-        setattr(asset, "visibility", EvidenceVisibility(update_data["visibility"]))
+        asset.visibility = EvidenceVisibility(update_data["visibility"])
     if "retention_policy" in update_data and update_data["retention_policy"] is not None:
-        setattr(asset, "retention_policy", EvidenceRetentionPolicy(update_data["retention_policy"]))
+        asset.retention_policy = EvidenceRetentionPolicy(update_data["retention_policy"])
 
     apply_updates(asset, asset_data, exclude=_enum_fields)
     asset.updated_by_id = current_user.id
@@ -495,7 +507,7 @@ async def link_asset_to_investigation(
     return asset
 
 
-@router.get("/{asset_id}/signed-url", response_model=dict)
+@router.get("/{asset_id}/signed-url", response_model=SignedUrlResponse)
 async def get_signed_download_url(
     asset_id: int,
     db: DbSession,
@@ -542,7 +554,7 @@ async def get_signed_download_url(
     }
 
 
-@router.get("/download", response_model=dict)
+@router.get("/download", response_model=FileDownloadMeta)
 async def download_file_direct(
     key: str = Query(..., description="Storage key"),
     expires: int = Query(..., description="Expiry timestamp"),

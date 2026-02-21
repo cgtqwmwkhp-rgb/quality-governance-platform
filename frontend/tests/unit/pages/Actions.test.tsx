@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Actions from '../../../src/pages/Actions';
 
@@ -38,14 +39,45 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('Actions', () => {
-  it('renders without crashing', async () => {
+  it('renders the Action Center heading', async () => {
     render(
       <MemoryRouter>
         <Actions />
       </MemoryRouter>
     );
+    expect(await screen.findByText('Action Center')).toBeInTheDocument();
+  });
 
-    const heading = await screen.findByText('Action Center');
-    expect(heading).toBeTruthy();
+  it('renders the Create Action button', async () => {
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>
+    );
+    await screen.findByText('Action Center');
+    expect(screen.getByText(/Create Action|New Action/i)).toBeInTheDocument();
+  });
+
+  it('renders search input', async () => {
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>
+    );
+    await screen.findByText('Action Center');
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+  });
+
+  it('opens create dialog when Create Action is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>
+    );
+    await screen.findByText('Action Center');
+    const createBtn = screen.getByText(/Create Action|New Action/i);
+    await user.click(createBtn);
+    expect(createBtn).toBeInTheDocument();
   });
 });

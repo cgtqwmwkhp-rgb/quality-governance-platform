@@ -23,12 +23,94 @@ from typing import Any
 
 import pytest
 
-# Quarantine marker - skip all tests in this module (not runnable yet)
-pytestmark = pytest.mark.skip(reason="Requires database migration infrastructure - pending environment setup")
+# ---------------------------------------------------------------------------
+# Mock-based tests that run without database infrastructure
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowSchemaValidation:
+    """Verify workflow schemas can be imported and validated without a DB."""
+
+    def test_workflow_schemas_importable(self) -> None:
+        """Verify all workflow response schemas are importable."""
+        from src.api.schemas.workflows import (
+            BulkApproveResponse,
+            GetInstanceResponse,
+            ListInstancesResponse,
+            ListTemplatesResponse,
+            StartWorkflowResponse,
+        )
+
+        assert ListTemplatesResponse is not None
+        assert StartWorkflowResponse is not None
+        assert GetInstanceResponse is not None
+        assert ListInstancesResponse is not None
+        assert BulkApproveResponse is not None
+
+    def test_start_workflow_request_validation(self) -> None:
+        """Validate WorkflowStartRequest schema accepts correct data."""
+        from src.api.routes.workflows import WorkflowStartRequest
+
+        req = WorkflowStartRequest(
+            template_code="CAPA",
+            entity_type="action",
+            entity_id="ACT-001",
+            context={"description": "Test"},
+            priority="high",
+        )
+        assert req.template_code == "CAPA"
+        assert req.priority == "high"
+        assert req.context == {"description": "Test"}
+
+    def test_start_workflow_request_defaults(self) -> None:
+        """Validate WorkflowStartRequest applies default priority."""
+        from src.api.routes.workflows import WorkflowStartRequest
+
+        req = WorkflowStartRequest(
+            template_code="NCR",
+            entity_type="incident",
+            entity_id="INC-001",
+        )
+        assert req.priority == "normal"
+        assert req.context is None
+
+    def test_template_summary_item_schema(self) -> None:
+        """Validate TemplateSummaryItem schema round-trips correctly."""
+        from src.api.schemas.workflows import TemplateSummaryItem
+
+        item = TemplateSummaryItem(
+            code="RIDDOR",
+            name="RIDDOR Reporting Workflow",
+            sla_hours=24,
+            steps_count=5,
+        )
+        assert item.code == "RIDDOR"
+        assert item.sla_hours == 24
+        assert item.steps_count == 5
+
+    def test_list_templates_response_schema(self) -> None:
+        """Validate ListTemplatesResponse wraps template items."""
+        from src.api.schemas.workflows import ListTemplatesResponse, TemplateSummaryItem
+
+        items = [
+            TemplateSummaryItem(code="CAPA", name="CAPA Workflow", steps_count=3),
+            TemplateSummaryItem(code="NCR", name="NCR Workflow", steps_count=4),
+        ]
+        resp = ListTemplatesResponse(templates=items)
+        assert len(resp.templates) == 2
+        assert resp.templates[0].code == "CAPA"
+
+    def test_workflow_routes_module_importable(self) -> None:
+        """Verify the workflows routes module imports cleanly."""
+        from src.api.routes import workflows
+
+        assert hasattr(workflows, "router")
 
 
 class TestWorkflowTemplates:
     """Test workflow template operations."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_list_workflow_templates(self, auth_client: Any) -> None:
         """Test listing available workflow templates."""
@@ -68,6 +150,8 @@ class TestWorkflowTemplates:
 
 class TestWorkflowInstances:
     """Test workflow instance operations."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_start_workflow(self, auth_client: Any) -> None:
         """Test starting a new workflow instance."""
@@ -129,6 +213,8 @@ class TestWorkflowInstances:
 class TestApprovals:
     """Test approval management."""
 
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+
     def test_get_pending_approvals(self, auth_client: Any) -> None:
         """Test getting pending approvals for current user."""
         response = auth_client.get("/api/workflows/approvals/pending")
@@ -181,6 +267,8 @@ class TestApprovals:
 class TestDelegation:
     """Test out-of-office delegation."""
 
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+
     def test_get_delegations(self, auth_client: Any) -> None:
         """Test getting current delegations."""
         response = auth_client.get("/api/workflows/delegations")
@@ -218,6 +306,8 @@ class TestDelegation:
 class TestEscalation:
     """Test escalation features."""
 
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+
     def test_get_pending_escalations(self, auth_client: Any) -> None:
         """Test getting workflows pending escalation."""
         response = auth_client.get("/api/workflows/escalations/pending")
@@ -239,6 +329,8 @@ class TestEscalation:
 
 class TestWorkflowStats:
     """Test workflow statistics."""
+
+    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
 
     def test_get_workflow_stats(self, auth_client: Any) -> None:
         """Test getting workflow statistics."""

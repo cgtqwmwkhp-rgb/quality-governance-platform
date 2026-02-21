@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.form_config import (
@@ -41,6 +41,13 @@ from src.domain.models.form_config import Contract, FormField, FormStep, FormTem
 from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -81,6 +88,7 @@ async def create_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Create a new form template."""
+    _span = tracer.start_span("create_form_template") if tracer else None
     # Check for duplicate slug
     existing = await db.execute(select(FormTemplate).where(FormTemplate.slug == data.slug))
     if existing.scalar_one_or_none():
@@ -153,6 +161,7 @@ async def create_form_template(
     await db.refresh(template)
     await invalidate_tenant_cache(current_user.tenant_id, "form_config")
     track_metric("form_config.mutation", 1)
+    track_metric("form_config.templates_created", 1)
 
     await record_audit_event(
         db=db,
@@ -164,6 +173,8 @@ async def create_form_template(
         request_id=request_id,
     )
 
+    if _span:
+        _span.end()
     return template
 
 
@@ -267,7 +278,7 @@ async def publish_form_template(
 async def delete_form_template(
     template_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a form template."""
@@ -345,7 +356,7 @@ async def update_form_step(
     current_user: CurrentUser,
 ) -> FormStep:
     """Update a form step."""
-    step = await get_or_404(db, FormStep, step_id)
+    step = await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
 
     apply_updates(step, data, set_updated_at=False)
 
@@ -359,10 +370,10 @@ async def update_form_step(
 async def delete_form_step(
     step_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Delete a form step."""
-    step = await get_or_404(db, FormStep, step_id)
+    step = await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
 
     await db.delete(step)
     await db.commit()
@@ -379,7 +390,7 @@ async def create_form_field(
     current_user: CurrentUser,
 ) -> FormField:
     """Create a new field in a form step."""
-    await get_or_404(db, FormStep, step_id)
+    await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
 
     field = FormField(
         step_id=step_id,
@@ -416,7 +427,7 @@ async def update_form_field(
     current_user: CurrentUser,
 ) -> FormField:
     """Update a form field."""
-    field = await get_or_404(db, FormField, field_id)
+    field = await get_or_404(db, FormField, field_id, tenant_id=current_user.tenant_id)
 
     apply_updates(field, data, set_updated_at=False)
 
@@ -430,10 +441,10 @@ async def update_form_field(
 async def delete_form_field(
     field_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
 ) -> None:
     """Delete a form field."""
-    field = await get_or_404(db, FormField, field_id)
+    field = await get_or_404(db, FormField, field_id, tenant_id=current_user.tenant_id)
 
     await db.delete(field)
     await db.commit()
@@ -560,7 +571,7 @@ async def update_contract(
 async def delete_contract(
     contract_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a contract."""

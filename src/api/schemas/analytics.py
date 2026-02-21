@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 # ============================================================================
 # Dashboard Schemas
@@ -185,3 +185,44 @@ class ReportStatusResponse(BaseModel):
     status: str
     download_url: Optional[str] = None
     expires_at: Optional[str] = None
+
+
+# ============================================================================
+# Service-backed Response Schemas
+# ============================================================================
+
+
+class KpiSummaryResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class TrendDataResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class BenchmarkSummaryResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class BenchmarkComparisonResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class CostNonComplianceResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class CostBreakdownResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class RoiSummaryResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class InvestmentRoiResponse(RootModel[dict[str, Any]]):
+    pass
+
+
+class ExecutiveSummaryResponse(RootModel[dict[str, Any]]):
+    pass

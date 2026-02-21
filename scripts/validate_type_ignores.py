@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 33  # Current count: 33 (23 prior + 10 OpenTelemetry tracer optional-dependency)
+MAX_TYPE_IGNORES = 48  # Current count: 48 (23 prior + 25 OpenTelemetry tracer optional-dependency)
 ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+|optional-dependency)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"

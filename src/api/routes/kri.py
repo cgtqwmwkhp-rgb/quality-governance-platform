@@ -7,15 +7,18 @@ and risk score tracking.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.kri import (
+    KRIAlertActionResponse,
     KRIAlertListResponse,
     KRIAlertResponse,
+    KRICalculateAllResponse,
+    KRICalculateResponse,
     KRICreate,
     KRIDashboardResponse,
     KRIListResponse,
@@ -29,6 +32,7 @@ from src.api.schemas.kri import (
     SIFAssessmentResponse,
 )
 from src.api.utils.entity import get_or_404
+from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
@@ -36,6 +40,13 @@ from src.domain.services.kri_calculation_service import KRICalculationService
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 
@@ -49,6 +60,7 @@ router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 async def list_kris(
     db: DbSession,
     current_user: CurrentUser,
+    params: PaginationParams = Depends(),
     category: Optional[str] = Query(None, description="Filter by category"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     kri_status: Optional[str] = Query(None, alias="status", description="Filter by current status"),
@@ -76,13 +88,7 @@ async def list_kris(
 
     query = query.order_by(KeyRiskIndicator.category, KeyRiskIndicator.code)
 
-    result = await db.execute(query)
-    kris = result.scalars().all()
-
-    return KRIListResponse(
-        items=[KRIResponse.from_orm(k) for k in kris],
-        total=len(kris),
-    )
+    return await paginate(db, query, params)
 
 
 @router.post("", response_model=KRIResponse, status_code=status.HTTP_201_CREATED)
@@ -92,6 +98,7 @@ async def create_kri(
     current_user: CurrentUser,
 ):
     """Create a new KRI."""
+    _span = tracer.start_span("create_kri") if tracer else None
     existing = await db.execute(
         select(KeyRiskIndicator).where(
             KeyRiskIndicator.tenant_id == current_user.tenant_id,
@@ -111,7 +118,10 @@ async def create_kri(
     await db.refresh(kri)
     await invalidate_tenant_cache(current_user.tenant_id, "kri")
     track_metric("kri.mutation", 1)
+    track_metric("kri.created", 1)
 
+    if _span:
+        _span.end()
     return KRIResponse.from_orm(kri)
 
 
@@ -125,7 +135,7 @@ async def get_kri_dashboard(
     return await kri_service.get_kri_dashboard()
 
 
-@router.post("/calculate-all", response_model=dict)
+@router.post("/calculate-all", response_model=KRICalculateAllResponse)
 async def calculate_all_kris(
     db: DbSession,
     current_user: CurrentUser,
@@ -192,7 +202,7 @@ async def delete_kri(
     track_metric("kri.mutation", 1)
 
 
-@router.post("/{kri_id}/calculate", response_model=dict)
+@router.post("/{kri_id}/calculate", response_model=KRICalculateResponse)
 async def calculate_kri(
     kri_id: int,
     db: DbSession,
@@ -219,23 +229,16 @@ async def get_kri_measurements(
     kri_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    limit: int = Query(50, ge=1, le=200),
+    params: PaginationParams = Depends(),
 ):
     """Get measurement history for a KRI."""
     await get_or_404(db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id)
 
-    result = await db.execute(
-        select(KRIMeasurement)
-        .where(KRIMeasurement.kri_id == kri_id)
-        .order_by(KRIMeasurement.measurement_date.desc())
-        .limit(limit)
+    query = (
+        select(KRIMeasurement).where(KRIMeasurement.kri_id == kri_id).order_by(KRIMeasurement.measurement_date.desc())
     )
-    measurements = result.scalars().all()
 
-    return KRIMeasurementListResponse(
-        items=[KRIMeasurementResponse.from_orm(m) for m in measurements],
-        total=len(measurements),
-    )
+    return await paginate(db, query, params)
 
 
 # =============================================================================
@@ -268,7 +271,7 @@ async def get_pending_alerts(
     )
 
 
-@router.post("/alerts/{alert_id}/acknowledge", response_model=dict)
+@router.post("/alerts/{alert_id}/acknowledge", response_model=KRIAlertActionResponse)
 async def acknowledge_alert(
     alert_id: int,
     db: DbSession,
@@ -290,7 +293,7 @@ async def acknowledge_alert(
     return {"message": "Alert acknowledged", "alert_id": alert_id}
 
 
-@router.post("/alerts/{alert_id}/resolve", response_model=dict)
+@router.post("/alerts/{alert_id}/resolve", response_model=KRIAlertActionResponse)
 async def resolve_alert(
     alert_id: int,
     db: DbSession,

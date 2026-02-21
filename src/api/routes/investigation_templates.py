@@ -46,6 +46,7 @@ async def create_template(
     db.add(template)
     await db.commit()
     await db.refresh(template)
+    track_metric("investigation_templates.created", 1)
 
     return template
 
@@ -87,7 +88,7 @@ async def get_template(
     current_user: CurrentUser,
 ):
     """Get a specific investigation template by ID."""
-    template = await get_or_404(db, InvestigationTemplate, template_id)
+    template = await get_or_404(db, InvestigationTemplate, template_id, tenant_id=current_user.tenant_id)
     return template
 
 
@@ -102,7 +103,7 @@ async def update_template(
 
     Only provided fields will be updated (partial update).
     """
-    template = await get_or_404(db, InvestigationTemplate, template_id)
+    template = await get_or_404(db, InvestigationTemplate, template_id, tenant_id=current_user.tenant_id)
 
     apply_updates(template, template_data)
 
@@ -124,7 +125,7 @@ async def delete_template(
 
     Only safe if no investigation runs reference this template.
     """
-    template = await get_or_404(db, InvestigationTemplate, template_id)
+    template = await get_or_404(db, InvestigationTemplate, template_id, tenant_id=current_user.tenant_id)
 
     # Check if template has investigation runs
     from src.domain.models.investigation import InvestigationRun

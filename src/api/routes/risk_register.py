@@ -20,9 +20,12 @@ from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
+    BowTieResponse,
     ControlCreatedResponse,
     ControlLinkedResponse,
     ControlListItem,
+    EnterpriseKRIDashboardResponse,
+    HeatMapResponse,
     KRICreatedResponse,
     KRIValueUpdatedResponse,
 )
@@ -47,9 +50,17 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
+from src.domain.services.risk_register_service import RiskRegisterService
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -209,13 +220,17 @@ async def create_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new risk"""
+    _span = tracer.start_span("create_risk") if tracer else None
     service = RiskService(db)
     data = risk_data.model_dump()
     data["tenant_id"] = current_user.tenant_id
     risk = await service.create_risk(data)
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
+    track_metric("risk_register.risk_created", 1)
 
+    if _span:
+        _span.end()
     return {
         "id": risk.id,
         "reference": risk.reference,
@@ -303,7 +318,7 @@ async def get_risk_matrix_config(
     }
 
 
-@router.get("/heatmap", response_model=dict)
+@router.get("/heatmap", response_model=HeatMapResponse)
 async def get_risk_heat_map(
     db: DbSession,
     current_user: CurrentUser,
@@ -341,7 +356,7 @@ async def get_risk_forecast(
 # ============ Bow-Tie Analysis Endpoints ============
 
 
-@router.get("/{risk_id}/bowtie", response_model=dict)  # dynamic bow-tie structure from service
+@router.get("/{risk_id}/bowtie", response_model=BowTieResponse)
 async def get_bow_tie(
     risk_id: int,
     db: DbSession,
@@ -413,7 +428,7 @@ async def delete_bow_tie_element(
 # ============ KRI Endpoints ============
 
 
-@router.get("/kris/dashboard", response_model=dict)  # dynamic KRI dashboard from service
+@router.get("/kris/dashboard", response_model=EnterpriseKRIDashboardResponse)
 async def get_kri_dashboard(
     db: DbSession,
     current_user: CurrentUser,
@@ -469,7 +484,7 @@ async def get_kri_history(
     current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Get KRI historical values"""
-    kri = await get_or_404(db, EnterpriseKeyRiskIndicator, kri_id)
+    kri = await get_or_404(db, EnterpriseKeyRiskIndicator, kri_id, tenant_id=current_user.tenant_id)
 
     return kri.historical_values or []
 
@@ -540,7 +555,7 @@ async def link_control_to_risk(
 ) -> dict[str, Any]:
     """Link a control to a risk"""
     await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
-    await get_or_404(db, EnterpriseRiskControl, control_id)
+    await get_or_404(db, EnterpriseRiskControl, control_id, tenant_id=current_user.tenant_id)
 
     existing = (
         await db.execute(
@@ -605,68 +620,7 @@ async def get_risk_summary(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get overall risk register summary"""
-    tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
-    total_risks = await db.scalar(
-        select(func.count()).select_from(EnterpriseRisk).where(tenant_filter, EnterpriseRisk.status != "closed")
-    )
-    critical_risks = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed")
-    )
-    high_risks = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score.between(12, 16), EnterpriseRisk.status != "closed")
-    )
-    medium_risks = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score.between(5, 11), EnterpriseRisk.status != "closed")
-    )
-    low_risks = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed")
-    )
-    outside_appetite = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(
-            tenant_filter, EnterpriseRisk.is_within_appetite == False, EnterpriseRisk.status != "closed"
-        )  # noqa: E712
-    )
-    overdue_review = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.utcnow(), EnterpriseRisk.status != "closed")
-    )
-    escalated = await db.scalar(
-        select(func.count())
-        .select_from(EnterpriseRisk)
-        .where(tenant_filter, EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed")  # noqa: E712
-    )
-
-    result = await db.execute(
-        select(EnterpriseRisk.category, func.count(EnterpriseRisk.id))
-        .where(tenant_filter, EnterpriseRisk.status != "closed")
-        .group_by(EnterpriseRisk.category)
-    )
-    categories = result.all()
-
-    return {
-        "total_risks": total_risks,
-        "by_level": {
-            "critical": critical_risks,
-            "high": high_risks,
-            "medium": medium_risks,
-            "low": low_risks,
-        },
-        "outside_appetite": outside_appetite,
-        "overdue_review": overdue_review,
-        "escalated": escalated,
-        "by_category": {cat: count for cat, count in categories},
-    }
+    return await RiskRegisterService.get_risk_summary(db, int(current_user.tenant_id or 0))
 
 
 # ============ Individual Risk Detail (after all literal GET paths) ============

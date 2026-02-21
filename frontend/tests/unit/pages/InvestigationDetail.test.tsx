@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
   investigationsApi: {
@@ -68,12 +69,40 @@ vi.mock('../../../src/utils/investigationStatusFilter', () => ({
 import InvestigationDetail from '../../../src/pages/InvestigationDetail';
 
 describe('InvestigationDetail', () => {
-  it('renders without crashing', () => {
+  const renderPage = () =>
     render(
       <MemoryRouter initialEntries={['/investigations/1']}>
-        <InvestigationDetail />
+        <Routes>
+          <Route path="/investigations/:id" element={<InvestigationDetail />} />
+        </Routes>
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+
+  it('renders the investigation title', async () => {
+    renderPage();
+    expect(await screen.findByText('Test Investigation')).toBeInTheDocument();
+  });
+
+  it('renders the reference number', async () => {
+    renderPage();
+    expect(await screen.findByText('INV-001')).toBeInTheDocument();
+  });
+
+  it('renders tab navigation with Summary, Timeline, Evidence, Actions', async () => {
+    renderPage();
+    await screen.findByText('Test Investigation');
+    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByText('Timeline')).toBeInTheDocument();
+    expect(screen.getByText('Evidence')).toBeInTheDocument();
+    expect(screen.getByText('Actions')).toBeInTheDocument();
+  });
+
+  it('can switch to Timeline tab', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Test Investigation');
+    const timelineTab = screen.getByText('Timeline');
+    await user.click(timelineTab);
+    expect(timelineTab).toBeInTheDocument();
   });
 });

@@ -122,6 +122,14 @@ class SearchResponse(BaseModel):
     latency_ms: int
 
 
+class DocumentStatsResponse(BaseModel):
+    total_documents: int
+    indexed_documents: int
+    total_chunks: int
+    by_status: dict
+    by_type: dict
+
+
 class AnnotationCreate(BaseModel):
     """Create annotation request."""
 
@@ -542,7 +550,7 @@ async def create_annotation(
 # =============================================================================
 
 
-@router.get("/stats/overview", response_model=dict)
+@router.get("/stats/overview", response_model=DocumentStatsResponse)
 async def get_document_stats(
     db: DbSession,
     current_user: CurrentUser,

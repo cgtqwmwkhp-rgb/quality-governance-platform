@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.compliance_automation import (
+    AddCertificateResponse,
     AuditScheduleCreate,
     CertificateCreate,
     CertificateExpirySummaryResponse,
@@ -23,15 +24,27 @@ from src.api.schemas.compliance_automation import (
     ComplianceScoreResponse,
     ComplianceTrendResponse,
     GapAnalysisListResponse,
+    PrepareRIDDORSubmissionResponse,
     RegulatoryUpdateResponse,
+    ReviewRegulatoryUpdateResponse,
     RIDDORCheckRequest,
     RIDDORCheckResponse,
     RIDDORSubmissionListResponse,
-    RIDDORSubmitResponse,
+    RunGapAnalysisResponse,
+    ScheduleAuditResponse,
     ScheduledAuditListResponse,
+    SubmitRIDDORResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.domain.services.compliance_automation_service import compliance_automation_service
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -63,7 +76,7 @@ async def list_regulatory_updates(
     }
 
 
-@router.post("/regulatory-updates/{update_id}/review", response_model=dict)
+@router.post("/regulatory-updates/{update_id}/review", response_model=ReviewRegulatoryUpdateResponse)
 async def review_regulatory_update(
     update_id: int,
     db: DbSession,
@@ -90,7 +103,7 @@ async def review_regulatory_update(
 # ============================================================================
 
 
-@router.post("/gap-analysis/run", response_model=dict)
+@router.post("/gap-analysis/run", response_model=RunGapAnalysisResponse)
 async def run_gap_analysis(
     db: DbSession,
     current_user: CurrentUser,
@@ -98,11 +111,16 @@ async def run_gap_analysis(
     standard_id: Optional[int] = None,
 ):
     """Run automated gap analysis."""
-    return await compliance_automation_service.run_gap_analysis(
+    _span = tracer.start_span("run_gap_analysis") if tracer else None
+    result = await compliance_automation_service.run_gap_analysis(
         db=db,
         regulatory_update_id=regulatory_update_id,
         standard_id=standard_id,
     )
+    track_metric("compliance_automation.gap_analysis_run", 1)
+    if _span:
+        _span.end()
+    return result
 
 
 @router.get("/gap-analyses", response_model=GapAnalysisListResponse)
@@ -153,7 +171,7 @@ async def get_expiring_certificates_summary(
     return await compliance_automation_service.get_expiring_certificates_summary(db=db)
 
 
-@router.post("/certificates", response_model=dict)
+@router.post("/certificates", response_model=AddCertificateResponse)
 async def add_certificate(
     data: CertificateCreate,
     db: DbSession,
@@ -184,7 +202,7 @@ async def list_scheduled_audits(
     return {"audits": audits, "total": len(audits)}
 
 
-@router.post("/scheduled-audits", response_model=dict)
+@router.post("/scheduled-audits", response_model=ScheduleAuditResponse)
 async def schedule_audit(
     data: AuditScheduleCreate,
     db: DbSession,
@@ -262,7 +280,7 @@ async def check_riddor_required(
     return await compliance_automation_service.check_riddor_required(incident_data.model_dump())
 
 
-@router.post("/riddor/prepare/{incident_id}", response_model=dict)
+@router.post("/riddor/prepare/{incident_id}", response_model=PrepareRIDDORSubmissionResponse)
 async def prepare_riddor_submission(
     incident_id: int,
     riddor_type: str,
@@ -277,7 +295,7 @@ async def prepare_riddor_submission(
     )
 
 
-@router.post("/riddor/submit/{incident_id}", response_model=dict)
+@router.post("/riddor/submit/{incident_id}", response_model=SubmitRIDDORResponse)
 async def submit_riddor(
     incident_id: int,
     db: DbSession,

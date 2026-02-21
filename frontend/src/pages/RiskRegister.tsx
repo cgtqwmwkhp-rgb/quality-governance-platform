@@ -27,7 +27,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { riskRegisterApi } from '../api/client'
 import { ToastContainer, useToast } from '../components/ui/Toast'
-import { TableSkeleton } from '../components/ui/SkeletonLoader'
+import { TableSkeleton, CardSkeleton } from '../components/ui/SkeletonLoader'
 
 interface Risk {
   id: number
@@ -945,8 +945,8 @@ export default function RiskRegister() {
                 <Button onClick={() => setView('register')}>Go to Risk Register</Button>
               </div>
             ) : bowTieLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="py-6">
+                <CardSkeleton count={1} />
               </div>
             ) : bowTieData ? (
               <div>

@@ -3,20 +3,19 @@ import { useAppStore } from '../../../src/stores/useAppStore';
 
 describe('useAppStore', () => {
   beforeEach(() => {
-    useAppStore.setState({
-      isLoading: false,
-      isOnline: true,
-      connectionStatus: 'connected',
-    });
+    const store = useAppStore.getState();
+    store.setLoading(false);
+    store.setConnectionStatus('connected');
   });
 
-  it('should initialize with default state', () => {
+  it('initializes with default state', () => {
     const state = useAppStore.getState();
     expect(state.isLoading).toBe(false);
     expect(state.connectionStatus).toBe('connected');
+    expect(typeof state.isOnline).toBe('boolean');
   });
 
-  it('should track loading state', () => {
+  it('setLoading updates loading state', () => {
     useAppStore.getState().setLoading(true);
     expect(useAppStore.getState().isLoading).toBe(true);
 
@@ -24,22 +23,19 @@ describe('useAppStore', () => {
     expect(useAppStore.getState().isLoading).toBe(false);
   });
 
-  it('should track online status', () => {
-    useAppStore.getState().setOnline(false);
-    expect(useAppStore.getState().isOnline).toBe(false);
-
-    useAppStore.getState().setOnline(true);
-    expect(useAppStore.getState().isOnline).toBe(true);
-  });
-
-  it('should track connection status', () => {
+  it('setConnectionStatus updates connection status', () => {
     useAppStore.getState().setConnectionStatus('disconnected');
     expect(useAppStore.getState().connectionStatus).toBe('disconnected');
 
     useAppStore.getState().setConnectionStatus('reconnecting');
     expect(useAppStore.getState().connectionStatus).toBe('reconnecting');
+  });
 
-    useAppStore.getState().setConnectionStatus('connected');
-    expect(useAppStore.getState().connectionStatus).toBe('connected');
+  it('setOnline updates online status', () => {
+    useAppStore.getState().setOnline(false);
+    expect(useAppStore.getState().isOnline).toBe(false);
+
+    useAppStore.getState().setOnline(true);
+    expect(useAppStore.getState().isOnline).toBe(true);
   });
 });

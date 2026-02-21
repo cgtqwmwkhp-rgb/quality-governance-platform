@@ -8,9 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.investigation import InvestigationRunListResponse
 from src.api.schemas.rta import (
     RTAActionCreate,
     RTAActionListResponse,
@@ -30,6 +31,13 @@ from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
 router = APIRouter(tags=["Road Traffic Collisions"])
 
 
@@ -41,6 +49,7 @@ async def create_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new Road Traffic Collision (RTA)."""
+    _span = tracer.start_span("create_rta") if tracer else None
     ref_number = await ReferenceNumberService.generate(db, "rta", RoadTrafficCollision)
 
     rta = RoadTrafficCollision(
@@ -68,6 +77,9 @@ async def create_rta(
     await db.refresh(rta)
     await invalidate_tenant_cache(current_user.tenant_id, "rtas")
     track_metric("rta.mutation", 1)
+    track_metric("rta.created", 1)
+    if _span:
+        _span.end()
     return rta
 
 
@@ -210,7 +222,7 @@ async def update_rta(
 async def delete_rta(
     rta_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
@@ -343,7 +355,7 @@ async def delete_rta_action(
     rta_id: int,
     action_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA action."""
@@ -370,7 +382,7 @@ async def delete_rta_action(
     await db.commit()
 
 
-@router.get("/{rta_id}/investigations", response_model=dict)
+@router.get("/{rta_id}/investigations", response_model=InvestigationRunListResponse)
 async def list_rta_investigations(
     rta_id: int,
     db: DbSession,

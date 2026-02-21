@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import compression from 'vite-plugin-compression'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { execSync } from 'child_process'
 
 // Get git commit SHA for build versioning
@@ -12,13 +14,18 @@ function getGitCommitSha(): string {
 }
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    compression({ algorithm: 'gzip', threshold: 1024 }),
+    ...(process.env.ANALYZE ? [visualizer({ open: true, filename: 'dist/stats.html' })] : []),
+  ],
   define: {
     // Inject build version for cache busting and debugging
     __BUILD_VERSION__: JSON.stringify(getGitCommitSha()),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   build: {
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks: {

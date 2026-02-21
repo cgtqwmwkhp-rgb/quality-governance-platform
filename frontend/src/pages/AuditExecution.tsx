@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auditsApi } from '../api/client';
 import { useToast, ToastContainer } from '../components/ui/Toast';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import {
   ArrowLeft,
   ArrowRight,
@@ -930,14 +931,10 @@ export default function AuditExecution() {
     }
   };
 
-  // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading audit...</p>
-        </div>
+      <div className="min-h-screen bg-background p-6">
+        <CardSkeleton count={2} />
       </div>
     );
   }

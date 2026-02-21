@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
@@ -9,6 +9,9 @@ vi.mock('../../../src/api/client', () => ({
     deleteTemplate: vi.fn(),
     cloneTemplate: vi.fn(),
     importTemplate: vi.fn(),
+    archiveTemplate: vi.fn(),
+    restoreTemplate: vi.fn(),
+    listArchivedTemplates: vi.fn().mockResolvedValue({ data: { items: [] } }),
   },
 }));
 
@@ -34,12 +37,32 @@ vi.mock('../../../src/utils/auth', () => ({
 import AuditTemplateLibrary from '../../../src/pages/AuditTemplateLibrary';
 
 describe('AuditTemplateLibrary', () => {
-  it('renders without crashing', () => {
+  it('renders the Audit Template Library heading', async () => {
     render(
       <MemoryRouter>
         <AuditTemplateLibrary />
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+    expect(await screen.findByText('Audit Template Library')).toBeInTheDocument();
+  });
+
+  it('renders search input and create button', async () => {
+    render(
+      <MemoryRouter>
+        <AuditTemplateLibrary />
+      </MemoryRouter>
+    );
+    await screen.findByText('Audit Template Library');
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+  });
+
+  it('renders category filter options', async () => {
+    render(
+      <MemoryRouter>
+        <AuditTemplateLibrary />
+      </MemoryRouter>
+    );
+    await screen.findByText('Audit Template Library');
+    expect(screen.getByText('All Categories')).toBeInTheDocument();
   });
 });

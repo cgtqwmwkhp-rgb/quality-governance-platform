@@ -33,9 +33,7 @@ class EvidenceAssetBase(BaseModel):
     description: Optional[str] = Field(None, description="Asset description")
     captured_at: Optional[datetime] = Field(None, description="When the evidence was captured")
     captured_by_role: Optional[str] = Field(
-        None,
-        max_length=100,
-        description="Role of person who captured (driver, technician, etc.)",
+        None, max_length=100, description="Role of person who captured (driver, technician, etc.)"
     )
     latitude: Optional[float] = Field(None, ge=-90, le=90, description="GPS latitude")
     longitude: Optional[float] = Field(None, ge=-180, le=180, description="GPS longitude")
@@ -46,10 +44,7 @@ class EvidenceAssetBase(BaseModel):
         description="Visibility for customer packs (internal_only, internal_customer, external_allowed, public)",
     )
     contains_pii: bool = Field(default=False, description="Whether asset contains PII (faces, plates, etc.)")
-    redaction_required: bool = Field(
-        default=False,
-        description="Whether asset needs redaction before external sharing",
-    )
+    redaction_required: bool = Field(default=False, description="Whether asset needs redaction before external sharing")
     retention_policy: str = Field(default="standard", description="Retention policy")
     metadata_json: Optional[Dict[str, Any]] = Field(None, description="Extended metadata")
 
@@ -247,3 +242,20 @@ class BulkEvidenceAssetResponse(BaseModel):
     failed: List[Dict[str, Any]]  # List of failed items with error details
     total_created: int
     total_failed: int
+
+
+class SignedUrlResponse(BaseModel):
+    """Response containing a signed download URL for an evidence asset."""
+
+    asset_id: int
+    signed_url: str
+    expires_in_seconds: int
+    content_type: Optional[str] = None
+    filename: Optional[str] = None
+
+
+class FileDownloadMeta(BaseModel):
+    """Metadata schema for the direct file download endpoint (actual response is binary)."""
+
+    status: str = "binary_download"
+    message: str = "File content returned as binary response"

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Audits from '../../../src/pages/Audits';
 
@@ -43,14 +44,44 @@ vi.mock('../../../src/utils/auth', () => ({
 }));
 
 describe('Audits', () => {
-  it('renders without crashing', async () => {
+  it('renders the Audit Management heading', async () => {
     render(
       <MemoryRouter>
         <Audits />
       </MemoryRouter>
     );
+    expect(await screen.findByText('Audit Management')).toBeInTheDocument();
+  });
 
-    const heading = await screen.findByText('Audit Management');
-    expect(heading).toBeTruthy();
+  it('renders the New Audit button', async () => {
+    render(
+      <MemoryRouter>
+        <Audits />
+      </MemoryRouter>
+    );
+    await screen.findByText('Audit Management');
+    expect(screen.getByText('New Audit')).toBeInTheDocument();
+  });
+
+  it('renders search input', async () => {
+    render(
+      <MemoryRouter>
+        <Audits />
+      </MemoryRouter>
+    );
+    await screen.findByText('Audit Management');
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+  });
+
+  it('opens modal when New Audit is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Audits />
+      </MemoryRouter>
+    );
+    await screen.findByText('Audit Management');
+    await user.click(screen.getByText('New Audit'));
+    expect(screen.getByText('Schedule New Audit')).toBeInTheDocument();
   });
 });

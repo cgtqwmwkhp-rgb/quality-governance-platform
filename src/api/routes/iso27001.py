@@ -39,6 +39,15 @@ from src.api.schemas.iso27001 import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.infrastructure.monitoring.azure_monitor import track_metric
+
+try:
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+
 from src.domain.models.iso27001 import (
     AccessControlRecord,
     BusinessContinuityPlan,
@@ -51,7 +60,6 @@ from src.domain.models.iso27001 import (
     SupplierSecurityAssessment,
 )
 from src.domain.services.iso27001_service import ISO27001Service
-from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -225,6 +233,7 @@ async def create_asset(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create information asset"""
+    _span = tracer.start_span("create_information_asset") if tracer else None
     asset_id = await _generate_asset_id(db)
 
     asset = InformationAsset(
@@ -237,6 +246,9 @@ async def create_asset(
     await db.commit()
     await db.refresh(asset)
 
+    track_metric("iso27001.assets_created", 1)
+    if _span:
+        _span.end()
     return {"id": asset.id, "asset_id": asset_id, "message": "Asset created"}
 
 
