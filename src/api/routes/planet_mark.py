@@ -22,8 +22,8 @@ from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
