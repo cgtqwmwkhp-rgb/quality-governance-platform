@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-import pytest
+import pytest  # noqa: E402
 
 
 def test_workflow_step_type_enum():

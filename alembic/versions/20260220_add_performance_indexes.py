@@ -7,6 +7,7 @@ Create Date: 2026-02-20
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260220_perf_indexes"
@@ -25,25 +26,38 @@ _TABLES = [
 
 _COLUMNS = ["tenant_id", "status", "created_at"]
 
+_COL_EXISTS = sa.text(
+    "SELECT EXISTS ("
+    "  SELECT 1 FROM information_schema.columns"
+    "  WHERE table_name = :t AND column_name = :c"
+    ")"
+)
+
 
 def upgrade() -> None:
+    conn = op.get_bind()
     for table in _TABLES:
         for column in _COLUMNS:
-            try:
-                op.create_index(
-                    f"ix_{table}_{column}",
-                    table,
-                    [column],
-                    if_not_exists=True,
+            if conn.execute(_COL_EXISTS, {"t": table, "c": column}).scalar():
+                op.execute(
+                    f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} "
+                    f"ON {table} ({column})"
                 )
-            except Exception:
-                pass
 
 
 def downgrade() -> None:
+    conn = op.get_bind()
     for table in reversed(_TABLES):
         for column in reversed(_COLUMNS):
-            try:
-                op.drop_index(f"ix_{table}_{column}", table_name=table)
-            except Exception:
-                pass
+            idx = f"ix_{table}_{column}"
+            result = conn.execute(
+                sa.text(
+                    "SELECT EXISTS ("
+                    "  SELECT 1 FROM pg_indexes"
+                    "  WHERE indexname = :idx"
+                    ")"
+                ),
+                {"idx": idx},
+            )
+            if result.scalar():
+                op.drop_index(idx, table_name=table)

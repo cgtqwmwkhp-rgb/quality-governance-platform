@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.domain.services.workflow_calculation_service import WorkflowCalculationService
+from src.domain.services.workflow_calculation_service import WorkflowCalculationService  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

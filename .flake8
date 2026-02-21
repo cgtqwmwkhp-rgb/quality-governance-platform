@@ -43,7 +43,8 @@ per-file-ignores =
     src/api/routes/workflow.py:E741
     # Schema files
     src/api/schemas/form_config.py:F401
-    # Test files
+    # Test files (E402: sys.path.insert required before src imports)
+    tests/unit/*.py:E402
     tests/security/test_owasp_comprehensive.py:E203
     tests/test_e2e_form_workflow.py:F541
     # Services

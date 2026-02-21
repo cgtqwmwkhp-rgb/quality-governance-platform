@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.domain.services.document_ai_service import DocumentAIService, DocumentAnalysis, DocumentChunk
+from src.domain.services.document_ai_service import DocumentAIService, DocumentAnalysis, DocumentChunk  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

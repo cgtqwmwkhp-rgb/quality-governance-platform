@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-import pytest
+import pytest  # noqa: E402
 
 
 def test_risk_statistics_service_class_exists():

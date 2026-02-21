@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.domain.services.risk_register_service import RiskRegisterService
+from src.domain.services.risk_register_service import RiskRegisterService  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

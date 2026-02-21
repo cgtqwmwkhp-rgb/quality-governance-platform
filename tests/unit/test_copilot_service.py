@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.domain.services.copilot_service import COPILOT_ACTIONS, SYSTEM_PROMPT, CopilotService
+from src.domain.services.copilot_service import COPILOT_ACTIONS, SYSTEM_PROMPT, CopilotService  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
