@@ -147,7 +147,7 @@ export default function FormBuilder() {
               auto_assign_reference: data.auto_assign_reference ?? true,
               reference_prefix: data.reference_prefix,
               notify_on_submit: data.notify_on_submit ?? true,
-              notification_emails: (data as unknown as Record<string, unknown>).notification_emails || '',
+              notification_emails: String((data as unknown as Record<string, unknown>).notification_emails || ''),
               steps: (data.steps || []).map((s, i: number) => ({
                 id: s.id ? String(s.id) : `step-${i}`,
                 name: s.name || `Step ${i + 1}`,

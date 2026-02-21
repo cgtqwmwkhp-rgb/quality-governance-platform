@@ -131,6 +131,9 @@ export interface FormTemplate {
   reference_prefix?: string;
   notify_on_submit: boolean;
   steps: FormStep[];
+  steps_count?: number;
+  fields_count?: number;
+  updated_at?: string;
 }
 
 export interface Contract {
@@ -159,6 +162,7 @@ export interface SystemSetting {
   category: string;
   description?: string;
   value_type: string;
+  is_editable?: boolean;
 }
 
 // Form Templates

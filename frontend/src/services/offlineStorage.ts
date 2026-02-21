@@ -289,7 +289,7 @@ class OfflineStorage {
   async getSetting<T = unknown>(key: string): Promise<T | null> {
     await this.init();
     const result = await this.db!.get('userSettings', key);
-    return result || null;
+    return (result ?? null) as T | null;
   }
 
   // =========================================================================
