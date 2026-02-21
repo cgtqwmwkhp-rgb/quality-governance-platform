@@ -175,7 +175,7 @@ async def create_investigation(
     )
 
     # Generate reference number
-    from src.services.reference_number import ReferenceNumberService
+    from src.domain.services.reference_number import ReferenceNumberService
 
     reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
 
@@ -405,8 +405,8 @@ async def create_investigation_from_record(
         "request_id": "..."
     }
     """
-    from src.services.investigation_service import InvestigationService
-    from src.services.reference_number import ReferenceNumberService
+    from src.domain.services.investigation_service import InvestigationService
+    from src.domain.services.reference_number import ReferenceNumberService
 
     request_id = "N/A"  # TODO: Get from request context
 
@@ -718,7 +718,7 @@ async def autosave_investigation(
     Uses version field to prevent concurrent edit conflicts.
     Returns 409 Conflict if version mismatch.
     """
-    from src.services.investigation_service import InvestigationService
+    from src.domain.services.investigation_service import InvestigationService
 
     request_id = "N/A"
 
@@ -795,7 +795,7 @@ async def add_comment(
         - parent_comment_id: For threading (optional)
     """
     from src.domain.models.investigation import InvestigationComment
-    from src.services.investigation_service import InvestigationService
+    from src.domain.services.investigation_service import InvestigationService
 
     request_id = "N/A"
 
@@ -885,7 +885,7 @@ async def approve_investigation(
 
     Moves investigation to COMPLETED (approved) or back to IN_PROGRESS (rejected).
     """
-    from src.services.investigation_service import InvestigationService
+    from src.domain.services.investigation_service import InvestigationService
 
     request_id = "N/A"
 
@@ -974,7 +974,7 @@ async def generate_customer_pack(
     Returns the generated pack with redaction log.
     """
     from src.domain.models.investigation import CustomerPackAudience
-    from src.services.investigation_service import InvestigationService
+    from src.domain.services.investigation_service import InvestigationService
 
     request_id = "N/A"
 

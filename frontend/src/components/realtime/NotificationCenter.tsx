@@ -65,10 +65,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
 
       if (listRes.status === 'fulfilled') {
         const items = listRes.value.data.items || [];
-        setNotifications(items.map((n: any) => ({
+        setNotifications(items.map((n) => ({
           id: n.id,
           type: n.type || 'info',
-          priority: n.priority || 'medium',
+          priority: (n.priority || 'medium') as Notification['priority'],
           title: n.title || 'Notification',
           message: n.message || '',
           entity_type: n.entity_type,

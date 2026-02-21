@@ -1,10 +1,13 @@
 """Security utilities for authentication and authorization."""
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import jwt
 from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 
@@ -38,6 +41,7 @@ def create_access_token(
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access",
+        "jti": str(uuid.uuid4()),
     }
 
     if additional_claims:
@@ -60,6 +64,7 @@ def create_refresh_token(subject: str | Any) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "refresh",
+        "jti": str(uuid.uuid4()),
     }
 
     encoded_jwt = jwt.encode(
@@ -140,3 +145,11 @@ def verify_password_reset_token(token: str) -> Optional[int]:
         return int(user_id_str)
     except (jwt.PyJWTError, ValueError):
         return None
+
+
+async def is_token_revoked(jti: str, db: AsyncSession) -> bool:
+    """Check whether a token JTI has been revoked (exists in the blacklist)."""
+    from src.domain.models.token_blacklist import TokenBlacklist
+
+    result = await db.execute(select(TokenBlacklist.id).where(TokenBlacklist.jti == jti))
+    return result.scalar_one_or_none() is not None

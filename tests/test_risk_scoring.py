@@ -23,7 +23,7 @@ from src.domain.models.kri import (
     RiskScoreHistory,
     ThresholdStatus,
 )
-from src.services.risk_scoring import KRIService, RiskScoringService
+from src.domain.services.risk_scoring import KRIService, RiskScoringService
 
 
 class TestRiskScoringService:

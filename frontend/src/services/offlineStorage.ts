@@ -21,7 +21,7 @@ interface SyncItem {
   operation: 'create' | 'update' | 'delete';
   entityType: string;
   entityId: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   retryCount: number;
   lastError?: string;
@@ -29,7 +29,7 @@ interface SyncItem {
 
 interface CacheItem {
   key: string;
-  data: any;
+  data: unknown;
   timestamp: number;
   expiresAt?: number;
 }
@@ -47,34 +47,34 @@ interface OfflineDBSchema extends DBSchema {
   };
   incidents: {
     key: string;
-    value: any;
+    value: Record<string, unknown>;
     indexes: { 'by-updated': number; 'by-status': string };
   };
   audits: {
     key: string;
-    value: any;
+    value: Record<string, unknown>;
     indexes: { 'by-updated': number; 'by-status': string };
   };
   risks: {
     key: string;
-    value: any;
+    value: Record<string, unknown>;
     indexes: { 'by-updated': number };
   };
   documents: {
     key: string;
-    value: any;
+    value: Record<string, unknown>;
     indexes: { 'by-updated': number };
   };
   userSettings: {
     key: string;
-    value: any;
+    value: Record<string, unknown>;
   };
   pendingUploads: {
     key: string;
     value: {
       id: string;
       file: Blob;
-      metadata: any;
+      metadata: Record<string, unknown>;
       timestamp: number;
     };
   };
@@ -126,7 +126,7 @@ class OfflineStorage {
             store.createIndex('by-updated', 'updated_at');
             // Only incidents and audits have status index
             if (entityName === 'incidents' || entityName === 'audits') {
-              (store as any).createIndex('by-status', 'status');
+              (store as unknown as { createIndex: (name: string, keyPath: string) => void }).createIndex('by-status', 'status');
             }
           }
         }
@@ -188,7 +188,7 @@ class OfflineStorage {
   // Cache Operations
   // =========================================================================
 
-  async cacheSet(key: string, data: any, ttlSeconds?: number): Promise<void> {
+  async cacheSet(key: string, data: unknown, ttlSeconds?: number): Promise<void> {
     await this.init();
     
     const cacheItem: CacheItem = {
@@ -201,7 +201,7 @@ class OfflineStorage {
     await this.db!.put('cache', cacheItem);
   }
 
-  async cacheGet<T = any>(key: string): Promise<T | null> {
+  async cacheGet<T = unknown>(key: string): Promise<T | null> {
     await this.init();
     
     const item = await this.db!.get('cache', key);
@@ -231,7 +231,7 @@ class OfflineStorage {
   // Entity Storage
   // =========================================================================
 
-  async saveEntity(entityType: keyof OfflineDBSchema, entity: any): Promise<void> {
+  async saveEntity(entityType: keyof OfflineDBSchema, entity: Record<string, unknown>): Promise<void> {
     await this.init();
     const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
     if (entityTypes.includes(entityType as typeof entityTypes[number])) {
@@ -239,7 +239,7 @@ class OfflineStorage {
     }
   }
 
-  async saveEntities(entityType: keyof OfflineDBSchema, entities: any[]): Promise<void> {
+  async saveEntities(entityType: keyof OfflineDBSchema, entities: Record<string, unknown>[]): Promise<void> {
     await this.init();
     const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
     if (entityTypes.includes(entityType as typeof entityTypes[number])) {
@@ -251,7 +251,7 @@ class OfflineStorage {
     }
   }
 
-  async getEntity<T = any>(entityType: keyof OfflineDBSchema, id: string): Promise<T | null> {
+  async getEntity<T = unknown>(entityType: keyof OfflineDBSchema, id: string): Promise<T | null> {
     await this.init();
     const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
     if (entityTypes.includes(entityType as typeof entityTypes[number])) {
@@ -260,7 +260,7 @@ class OfflineStorage {
     return null;
   }
 
-  async getAllEntities<T = any>(entityType: keyof OfflineDBSchema): Promise<T[]> {
+  async getAllEntities<T = unknown>(entityType: keyof OfflineDBSchema): Promise<T[]> {
     await this.init();
     const entityTypes = ['incidents', 'audits', 'risks', 'documents'] as const;
     if (entityTypes.includes(entityType as typeof entityTypes[number])) {
@@ -281,12 +281,12 @@ class OfflineStorage {
   // User Settings
   // =========================================================================
 
-  async setSetting(key: string, value: any): Promise<void> {
+  async setSetting(key: string, value: Record<string, unknown>): Promise<void> {
     await this.init();
     await this.db!.put('userSettings', { key, ...value });
   }
 
-  async getSetting<T = any>(key: string): Promise<T | null> {
+  async getSetting<T = unknown>(key: string): Promise<T | null> {
     await this.init();
     const result = await this.db!.get('userSettings', key);
     return result || null;
@@ -296,7 +296,7 @@ class OfflineStorage {
   // File Uploads
   // =========================================================================
 
-  async queueUpload(file: File, metadata: any): Promise<string> {
+  async queueUpload(file: File, metadata: Record<string, unknown>): Promise<string> {
     await this.init();
     
     const id = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -311,7 +311,7 @@ class OfflineStorage {
     return id;
   }
 
-  async getPendingUploads(): Promise<any[]> {
+  async getPendingUploads(): Promise<Array<{ id: string; file: Blob; metadata: Record<string, unknown>; timestamp: number }>> {
     await this.init();
     return this.db!.getAll('pendingUploads');
   }
@@ -338,10 +338,10 @@ class OfflineStorage {
         try {
           await this.processSyncItem(item);
           await this.removeFromSyncQueue(item.id);
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Update retry count and error
           item.retryCount += 1;
-          item.lastError = error.message;
+          item.lastError = error instanceof Error ? error.message : String(error);
           
           if (item.retryCount >= 3) {
             console.error(`Sync item ${item.id} failed after 3 retries`, error);
@@ -367,7 +367,7 @@ class OfflineStorage {
 
     let url = endpoint;
     let method = 'POST';
-    let body: any = item.data;
+    let body: Record<string, unknown> | undefined = item.data;
 
     switch (item.operation) {
       case 'create':
@@ -492,7 +492,7 @@ export function useOfflineEntity<T>(entityType: string, id: string): {
       setIsLoading(true);
 
       // Try cache first
-      const cached = await offlineStorage.getEntity<T>(entityType as any, id);
+      const cached = await offlineStorage.getEntity<T>(entityType as keyof OfflineDBSchema, id);
       if (cached) {
         setData(cached);
         setIsFromCache(true);
@@ -514,7 +514,7 @@ export function useOfflineEntity<T>(entityType: string, id: string): {
             setIsFromCache(false);
             
             // Update cache
-            await offlineStorage.saveEntity(entityType as any, freshData);
+            await offlineStorage.saveEntity(entityType as keyof OfflineDBSchema, freshData);
           }
         } catch (error) {
           console.warn('Network fetch failed, using cached data');

@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -201,12 +201,12 @@ export default function Incidents() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getSeverityVariant(incident.severity) as any}>
+                        <Badge variant={getSeverityVariant(incident.severity) as BadgeVariant}>
                           {incident.severity}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(incident.status) as any}>
+                        <Badge variant={getStatusVariant(incident.status) as BadgeVariant}>
                           {incident.status.replace('_', ' ')}
                         </Badge>
                       </td>

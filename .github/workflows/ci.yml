@@ -226,7 +226,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --junit-xml=junit-unit.xml
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=50 --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -292,7 +292,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --junit-xml=junit-integration.xml
+          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=30 --junit-xml=junit-integration.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -326,7 +326,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit bandit
+          pip install pip-audit bandit safety
           pip install -r requirements.txt
 
       - name: Validate security waivers (BLOCKING)
@@ -341,6 +341,20 @@ jobs:
           bandit -r src/ -ll -f screen
           echo ""
           echo "[OK] Bandit passed: No High severity issues found"
+
+      - name: Dependency audit with pip-audit
+        run: |
+          echo "=== pip-audit: Dependency Vulnerability Check ==="
+          pip-audit --strict
+          echo ""
+          echo "[OK] pip-audit passed: No known vulnerabilities"
+
+      - name: Safety check
+        run: |
+          echo "=== Safety: Dependency Safety Check ==="
+          safety check --full-report
+          echo ""
+          echo "[OK] Safety check passed"
 
   build-check:
     name: Build Check

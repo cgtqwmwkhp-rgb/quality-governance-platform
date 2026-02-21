@@ -46,7 +46,7 @@ interface Widget {
   y: number;
   w: number;
   h: number;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 }
 
 interface Dashboard {
@@ -129,7 +129,7 @@ export default function DashboardBuilder() {
         id: data.id,
         name: data.name,
         description: data.description || '',
-        widgets: (data.widgets || []).map((w: any) => ({
+        widgets: (data.widgets || []).map((w: Record<string, unknown>) => ({
           id: `w${w.id}`,
           type: w.widget_type,
           title: w.title,
@@ -152,7 +152,7 @@ export default function DashboardBuilder() {
     (async () => {
       const list = await loadDashboardList();
       if (list.length > 0) {
-        const defaultDash = list.find((d: DashboardListItem) => (d as any).is_default) || list[0];
+        const defaultDash = list.find((d: DashboardListItem) => (d as Record<string, unknown>).is_default) || list[0];
         await loadDashboard(defaultDash.id);
       } else {
         setLoading(false);

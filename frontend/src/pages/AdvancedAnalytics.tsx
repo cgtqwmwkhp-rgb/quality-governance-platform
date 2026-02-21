@@ -176,8 +176,8 @@ export default function AdvancedAnalytics() {
       if (roiRes.status === 'fulfilled') setRoi(roiRes.value.data as ROIData);
       if (incTrendRes.status === 'fulfilled') setIncidentTrend(incTrendRes.value.data as TrendDataset);
       if (actTrendRes.status === 'fulfilled') setActionTrend(actTrendRes.value.data as TrendDataset);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load analytics data');
+    } catch (err: unknown) {
+      setError((err instanceof Error) ? err.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);
     }
@@ -382,6 +382,7 @@ export default function AdvancedAnalytics() {
             onClick={loadData}
             variant="outline"
             size="icon"
+            aria-label="Refresh data"
           >
             <RefreshCw className="w-5 h-5" />
           </Button>
@@ -405,7 +406,7 @@ export default function AdvancedAnalytics() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={cn(
               "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
               activeTab === tab.id

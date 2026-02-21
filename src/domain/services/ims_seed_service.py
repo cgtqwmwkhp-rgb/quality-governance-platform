@@ -1280,6 +1280,340 @@ async def _seed_planet_mark_year(db: AsyncSession) -> None:
     logger.info("  Seeded Planet Mark year: %s", reporting_year.year_label)
 
 
+# ============================================================================
+# CROSS-STANDARD MAPPING DATA
+# ============================================================================
+
+_CROSS_STANDARD_MAPPINGS: List[Dict[str, str]] = [
+    # Leadership mappings
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "5.1",
+        "target_standard": "ISO 14001",
+        "target_clause": "5.1",
+        "relationship": "equivalent",
+        "description": "Leadership and commitment",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "5.1",
+        "target_standard": "ISO 45001",
+        "target_clause": "5.1",
+        "relationship": "equivalent",
+        "description": "Leadership and commitment",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "5.1",
+        "target_standard": "ISO 27001",
+        "target_clause": "5.1",
+        "relationship": "equivalent",
+        "description": "Leadership and commitment",
+    },
+    # Context of the organization
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "4.1",
+        "target_standard": "ISO 14001",
+        "target_clause": "4.1",
+        "relationship": "equivalent",
+        "description": "Understanding the organization and its context",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "4.1",
+        "target_standard": "ISO 45001",
+        "target_clause": "4.1",
+        "relationship": "equivalent",
+        "description": "Understanding the organization and its context",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "4.1",
+        "target_standard": "ISO 27001",
+        "target_clause": "4.1",
+        "relationship": "equivalent",
+        "description": "Understanding the organization and its context",
+    },
+    # Interested parties
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "4.2",
+        "target_standard": "ISO 14001",
+        "target_clause": "4.2",
+        "relationship": "equivalent",
+        "description": "Understanding needs and expectations of interested parties",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "4.2",
+        "target_standard": "ISO 45001",
+        "target_clause": "4.2",
+        "relationship": "equivalent",
+        "description": "Understanding needs and expectations of interested parties",
+    },
+    # Risk and opportunity (Planning)
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "6.1",
+        "target_standard": "ISO 14001",
+        "target_clause": "6.1",
+        "relationship": "equivalent",
+        "description": "Actions to address risks and opportunities",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "6.1",
+        "target_standard": "ISO 45001",
+        "target_clause": "6.1",
+        "relationship": "equivalent",
+        "description": "Actions to address risks and opportunities",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "6.1",
+        "target_standard": "ISO 27001",
+        "target_clause": "6.1",
+        "relationship": "equivalent",
+        "description": "Actions to address risks and opportunities",
+    },
+    # Corrective action
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "10.2",
+        "target_standard": "ISO 14001",
+        "target_clause": "10.2",
+        "relationship": "equivalent",
+        "description": "Nonconformity and corrective action",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "10.2",
+        "target_standard": "ISO 45001",
+        "target_clause": "10.2",
+        "relationship": "equivalent",
+        "description": "Incident, nonconformity and corrective action",
+    },
+    # Internal audit
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "9.2",
+        "target_standard": "ISO 14001",
+        "target_clause": "9.2",
+        "relationship": "equivalent",
+        "description": "Internal audit",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "9.2",
+        "target_standard": "ISO 45001",
+        "target_clause": "9.2",
+        "relationship": "equivalent",
+        "description": "Internal audit",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "9.2",
+        "target_standard": "ISO 27001",
+        "target_clause": "9.2",
+        "relationship": "equivalent",
+        "description": "Internal audit",
+    },
+    # Management review
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "9.3",
+        "target_standard": "ISO 14001",
+        "target_clause": "9.3",
+        "relationship": "equivalent",
+        "description": "Management review",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "9.3",
+        "target_standard": "ISO 45001",
+        "target_clause": "9.3",
+        "relationship": "equivalent",
+        "description": "Management review",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "9.3",
+        "target_standard": "ISO 27001",
+        "target_clause": "9.3",
+        "relationship": "equivalent",
+        "description": "Management review",
+    },
+    # Competence
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "7.2",
+        "target_standard": "ISO 14001",
+        "target_clause": "7.2",
+        "relationship": "equivalent",
+        "description": "Competence",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "7.2",
+        "target_standard": "ISO 45001",
+        "target_clause": "7.2",
+        "relationship": "equivalent",
+        "description": "Competence",
+    },
+    # Documented information
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "7.5",
+        "target_standard": "ISO 14001",
+        "target_clause": "7.5",
+        "relationship": "equivalent",
+        "description": "Documented information",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "7.5",
+        "target_standard": "ISO 45001",
+        "target_clause": "7.5",
+        "relationship": "equivalent",
+        "description": "Documented information",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "7.5",
+        "target_standard": "ISO 27001",
+        "target_clause": "7.5",
+        "relationship": "equivalent",
+        "description": "Documented information",
+    },
+    # Continual improvement
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "10.3",
+        "target_standard": "ISO 14001",
+        "target_clause": "10.3",
+        "relationship": "equivalent",
+        "description": "Continual improvement",
+    },
+    {
+        "source_standard": "ISO 9001",
+        "source_clause": "10.3",
+        "target_standard": "ISO 45001",
+        "target_clause": "10.3",
+        "relationship": "equivalent",
+        "description": "Continual improvement",
+    },
+    # Environmental aspects -> OH&S hazards
+    {
+        "source_standard": "ISO 14001",
+        "source_clause": "6.1.2",
+        "target_standard": "ISO 45001",
+        "target_clause": "6.1.2",
+        "relationship": "related",
+        "description": "Environmental aspects / Hazard identification",
+    },
+    # ISO 27001 specific - Information security risk
+    {
+        "source_standard": "ISO 27001",
+        "source_clause": "6.1.2",
+        "target_standard": "ISO 9001",
+        "target_clause": "6.1",
+        "relationship": "related",
+        "description": "Information security risk assessment / Risk-based thinking",
+    },
+    {
+        "source_standard": "ISO 27001",
+        "source_clause": "8.1",
+        "target_standard": "ISO 9001",
+        "target_clause": "8.1",
+        "relationship": "related",
+        "description": "Operational planning and control",
+    },
+]
+
+_CLAUSE_TITLE_MAP: Dict[Tuple[str, str], str] = {}
+for _std_name, _clauses in [
+    ("ISO 9001", _ISO_9001_CLAUSES),
+    ("ISO 14001", _ISO_14001_CLAUSES),
+    ("ISO 45001", _ISO_45001_CLAUSES),
+    ("ISO 27001", _ISO_27001_CLAUSES),
+]:
+    for _num, _title, _desc, _lvl, _parent in _clauses:
+        _CLAUSE_TITLE_MAP[(_std_name, _num)] = _title
+
+
+async def _ensure_ims_requirement(
+    db: AsyncSession,
+    standard: str,
+    clause_number: str,
+    cache: Dict[Tuple[str, str], int],
+) -> int:
+    """Find or create an IMSRequirement for a standard+clause and return its id."""
+    from src.domain.models.ims_unification import IMSRequirement
+
+    key = (standard, clause_number)
+    if key in cache:
+        return cache[key]
+
+    result = await db.execute(
+        select(IMSRequirement).where(
+            IMSRequirement.standard == standard,
+            IMSRequirement.clause_number == clause_number,
+        )
+    )
+    req = result.scalars().first()
+    if req:
+        cache[key] = req.id
+        return req.id
+
+    title = _CLAUSE_TITLE_MAP.get(key, f"Clause {clause_number}")
+    req = IMSRequirement(
+        standard=standard,
+        clause_number=clause_number,
+        clause_title=title,
+        clause_text=title,
+        is_common_requirement=True,
+    )
+    db.add(req)
+    await db.flush()
+    cache[key] = req.id
+    return req.id
+
+
+async def _seed_cross_standard_mappings(db: AsyncSession) -> None:
+    """Seed cross-standard ISO clause mappings (idempotent)."""
+    from src.domain.models.ims_unification import CrossStandardMapping
+
+    count = await db.scalar(select(func.count()).select_from(CrossStandardMapping))
+    if count and count > 0:
+        logger.info("Cross-standard mappings already seeded (%d rows), skipping", count)
+        return
+
+    logger.info("Seeding cross-standard ISO clause mappings (%d mappings)", len(_CROSS_STANDARD_MAPPINGS))
+
+    req_cache: Dict[Tuple[str, str], int] = {}
+
+    for m in _CROSS_STANDARD_MAPPINGS:
+        primary_req_id = await _ensure_ims_requirement(db, m["source_standard"], m["source_clause"], req_cache)
+        mapped_req_id = await _ensure_ims_requirement(db, m["target_standard"], m["target_clause"], req_cache)
+
+        mapping = CrossStandardMapping(
+            primary_requirement_id=primary_req_id,
+            primary_standard=m["source_standard"],
+            primary_clause=m["source_clause"],
+            mapped_requirement_id=mapped_req_id,
+            mapped_standard=m["target_standard"],
+            mapped_clause=m["target_clause"],
+            mapping_type=m["relationship"],
+            mapping_strength=100 if m["relationship"] == "equivalent" else 70,
+            mapping_notes=m["description"],
+        )
+        db.add(mapping)
+
+    await db.flush()
+    logger.info("  Seeded %d cross-standard mappings", len(_CROSS_STANDARD_MAPPINGS))
+
+
 async def seed_all_ims_modules(db: AsyncSession) -> None:
     """Orchestrator: seed all IMS modules if their tables are empty."""
     logger.info("IMS module seed check starting")
@@ -1288,5 +1622,6 @@ async def seed_all_ims_modules(db: AsyncSession) -> None:
     await _seed_iso27001_controls(db)
     await _seed_uvdb_baseline(db)
     await _seed_planet_mark_year(db)
+    await _seed_cross_standard_mappings(db)
 
     logger.info("IMS module seed check complete")

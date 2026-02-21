@@ -147,14 +147,14 @@ export default function FormBuilder() {
               auto_assign_reference: data.auto_assign_reference ?? true,
               reference_prefix: data.reference_prefix,
               notify_on_submit: data.notify_on_submit ?? true,
-              notification_emails: (data as any).notification_emails || '',
-              steps: (data.steps || []).map((s: any, i: number) => ({
+              notification_emails: (data as unknown as Record<string, unknown>).notification_emails || '',
+              steps: (data.steps || []).map((s, i: number) => ({
                 id: s.id ? String(s.id) : `step-${i}`,
                 name: s.name || `Step ${i + 1}`,
                 description: s.description || '',
                 order: s.order ?? i,
                 icon: s.icon,
-                fields: (s.fields || []).map((f: any) => ({
+                fields: (s.fields || []).map((f) => ({
                   id: f.id ? String(f.id) : `field-${Date.now()}-${Math.random()}`,
                   name: f.name || '',
                   label: f.label || '',
@@ -275,7 +275,7 @@ export default function FormBuilder() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         name: template.name,
         slug: template.slug || generateSlug(template.name),
         description: template.description,

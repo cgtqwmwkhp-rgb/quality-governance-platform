@@ -9,7 +9,7 @@ import api from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -419,7 +419,7 @@ export default function Documents() {
 
                   <div className="flex items-center gap-2 mb-2">
                     <span className="font-mono text-xs text-primary">{doc.reference_number}</span>
-                    <Badge variant={getStatusVariant(doc.status) as any} className="text-[10px]">
+                    <Badge variant={getStatusVariant(doc.status) as BadgeVariant} className="text-[10px]">
                       {doc.status}
                     </Badge>
                   </div>
@@ -497,7 +497,7 @@ export default function Documents() {
                     </td>
                     <td className="px-6 py-4 text-sm text-foreground capitalize">{doc.document_type}</td>
                     <td className="px-6 py-4">
-                      <Badge variant={getStatusVariant(doc.status) as any}>
+                      <Badge variant={getStatusVariant(doc.status) as BadgeVariant}>
                         {doc.status}
                       </Badge>
                     </td>
@@ -616,7 +616,7 @@ export default function Documents() {
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Status</p>
-                    <Badge variant={getStatusVariant(selectedDocument.status) as any}>
+                    <Badge variant={getStatusVariant(selectedDocument.status) as BadgeVariant}>
                       {selectedDocument.status}
                     </Badge>
                   </Card>

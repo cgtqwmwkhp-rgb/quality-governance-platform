@@ -42,7 +42,7 @@ interface UseCollaborationReturn {
   connect: () => void;
   disconnect: () => void;
   applyUpdate: (update: Uint8Array) => void;
-  getState: () => any;
+  getState: () => unknown;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -96,10 +96,10 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
   const [canRedo, setCanRedo] = useState(false);
 
   // Document state (simulated)
-  const documentRef = useRef<any>(null);
+  const documentRef = useRef<Record<string, unknown> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const undoStackRef = useRef<any[]>([]);
-  const redoStackRef = useRef<any[]>([]);
+  const undoStackRef = useRef<Uint8Array[]>([]);
+  const redoStackRef = useRef<Uint8Array[]>([]);
 
   // Local user info
   const localUser = useMemo<CollaboratorInfo>(() => ({
@@ -181,28 +181,26 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
   }, []);
 
   // Handle incoming messages
-  const handleMessage = useCallback((message: any) => {
+  const handleMessage = useCallback((message: Record<string, unknown>) => {
     switch (message.type) {
       case 'sync':
-        // Initial sync complete
         setState(prev => ({ ...prev, isSynced: true }));
         onSync?.();
         break;
 
       case 'update':
-        // Apply remote update
         if (message.update) {
-          const update = new Uint8Array(message.update);
+          const update = new Uint8Array(message.update as ArrayBuffer | ArrayLike<number>);
           onUpdate?.(update);
         }
         break;
 
       case 'awareness':
-        // Update collaborator list
         if (message.users) {
-          const collaborators = message.users
-            .filter((u: any) => u.id !== userId)
-            .map((u: any) => ({
+          const users = message.users as CollaboratorInfo[];
+          const collaborators = users
+            .filter((u) => u.id !== userId)
+            .map((u) => ({
               ...u,
               lastActive: new Date(u.lastActive),
             }));
@@ -210,9 +208,9 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
         }
         break;
 
-      case 'cursor':
-        // Update collaborator cursor
-        const { userId: cursorUserId, cursor } = message;
+      case 'cursor': {
+        const cursorUserId = message.userId as string;
+        const cursor = message.cursor as CollaboratorInfo['cursor'];
         setState(prev => ({
           ...prev,
           collaborators: prev.collaborators.map(c =>
@@ -220,6 +218,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
           ),
         }));
         break;
+      }
 
       default:
         console.log('[Collaboration] Unknown message type:', message.type);

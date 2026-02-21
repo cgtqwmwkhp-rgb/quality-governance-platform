@@ -14,7 +14,7 @@ import { API_BASE_URL } from '../config/apiBase';
 
 interface WebSocketMessage {
   type: string;
-  data?: any;
+  data?: Record<string, unknown>;
   timestamp?: string;
 }
 
@@ -53,7 +53,7 @@ interface UseWebSocketReturn {
   disconnect: () => void;
   subscribe: (channel: string) => void;
   unsubscribe: (channel: string) => void;
-  send: (message: any) => void;
+  send: (message: Record<string, unknown>) => void;
   clearNotifications: () => void;
   markAsRead: (notificationId: number) => void;
 }
@@ -120,7 +120,7 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
 
       switch (message.type) {
         case 'notification':
-          const notification = message.data as Notification;
+          const notification = message.data as unknown as Notification;
           setNotifications(prev => [notification, ...prev]);
           if (!notification.is_read) {
             setUnreadCount(prev => prev + 1);
@@ -260,7 +260,7 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
   }, []);
 
   // Send a message
-  const send = useCallback((message: any) => {
+  const send = useCallback((message: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {

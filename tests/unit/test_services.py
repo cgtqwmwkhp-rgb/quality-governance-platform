@@ -543,7 +543,7 @@ class TestWorkflowService:
 
     def test_workflow_service_import(self):
         """Workflow service can be imported."""
-        from src.domain.services.workflow_service import WorkflowService
+        from src.domain.services.workflow_engine import WorkflowService
 
         assert WorkflowService is not None
 

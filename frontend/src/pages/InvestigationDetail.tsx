@@ -721,13 +721,13 @@ export default function InvestigationDetail() {
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Findings</h4>
                     <p className="text-foreground">
-                      {(investigation.data as any)?.findings || 'Not yet documented.'}
+                      {String((investigation.data as Record<string, unknown>)?.findings || "") || 'Not yet documented.'}
                     </p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">Conclusion</h4>
                     <p className="text-foreground">
-                      {(investigation.data as any)?.conclusion || 'Not yet documented.'}
+                      {String((investigation.data as Record<string, unknown>)?.conclusion || "") || 'Not yet documented.'}
                     </p>
                   </div>
                 </div>
@@ -776,7 +776,7 @@ export default function InvestigationDetail() {
                     <div>
                       <p className="text-xs text-muted-foreground">Lead Investigator</p>
                       <p className="text-sm text-foreground">
-                        {(investigation.data as any)?.lead_investigator || 'Not assigned'}
+                        {String((investigation.data as Record<string, unknown>)?.lead_investigator || "") || 'Not assigned'}
                       </p>
                     </div>
                   </div>

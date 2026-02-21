@@ -1,7 +1,7 @@
 """Main FastAPI application entry point."""
 
 import logging
-import os as _os
+import os
 import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -9,15 +9,19 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
 from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
+from src.api.middleware import register_exception_handlers
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
+from src.infrastructure.logging.pii_filter import PIIFilter
+from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -132,6 +136,7 @@ def configure_logging():
         "%(asctime)s %(levelname)s %(name)s %(module)s %(funcName)s %(lineno)d %(message)s"
     )
     json_handler.setFormatter(formatter)
+    json_handler.addFilter(PIIFilter())
     logger.addHandler(json_handler)
 
     # Configure uvicorn logging to use the same handler
@@ -163,6 +168,9 @@ def create_application() -> FastAPI:
         redirect_slashes=True,
         lifespan=lifespan,
     )
+
+    # Initialize OpenTelemetry instrumentation
+    setup_telemetry(app)
 
     # Add Request State Middleware (must be first for request_id propagation)
     app.add_middleware(RequestStateMiddleware)
@@ -204,6 +212,9 @@ def create_application() -> FastAPI:
         ],
         max_age=86400,  # Cache preflight for 24 hours
     )
+
+    # Register standardized exception handlers
+    register_exception_handlers(app)
 
     # Register exception handlers (all include CORS fallback headers)
     app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
@@ -353,8 +364,8 @@ async def health_check(request: Request) -> dict:
     }
 
 
-_BUILD_SHA = _os.environ.get("BUILD_SHA", "dev")
-_BUILD_TIME = _os.environ.get("BUILD_TIME", "local")
+_BUILD_SHA = os.environ.get("BUILD_SHA", "dev")
+_BUILD_TIME = os.environ.get("BUILD_TIME", "local")
 
 
 @app.get("/api/v1/meta/version", tags=["Meta"])
@@ -383,41 +394,49 @@ async def liveness_check(request: Request) -> dict:
 
 
 @app.get("/readyz", tags=["Health"])
-async def readiness_check(request: Request):
+async def readiness_check(request: Request, verbose: bool = False):
     """Readiness probe: Check if application is ready to accept traffic.
 
-    Checks database connectivity. Returns 200 OK if ready, 503 if not ready.
-    Used by load balancers to determine if traffic should be routed to this instance.
+    Checks database and Redis connectivity. Returns 200 OK if ready, 503 if not ready.
+    Use ?verbose=true to include individual check results.
 
     Per ADR-0003: Readiness Probe Database Check
     """
-    from fastapi.responses import JSONResponse
     from sqlalchemy import text
 
     from src.infrastructure.database import async_session_maker
 
-    request_id = getattr(request.state, "request_id", "N/A")
-    logger = logging.getLogger(__name__)
+    checks: dict[str, str] = {}
 
+    # Database check
     try:
-        # Ping database with a simple query
         async with async_session_maker() as session:
             await session.execute(text("SELECT 1"))
+        checks["database"] = "healthy"
+    except Exception:
+        checks["database"] = "unhealthy"
 
-        logger.info("Readiness check passed", extra={"request_id": request_id})
-        return {
-            "status": "ready",
-            "database": "connected",
-            "request_id": request_id,
-        }
-    except Exception as e:
-        logger.error(f"Readiness check failed: {e}", extra={"request_id": request_id, "error": str(e)})
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "not_ready",
-                "database": "disconnected",
-                "error": str(e),
-                "request_id": request_id,
-            },
-        )
+    # Redis check
+    try:
+        import redis.asyncio as aioredis
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = aioredis.from_url(redis_url)
+        await r.ping()
+        await r.aclose()
+        checks["redis"] = "healthy"
+    except Exception:
+        checks["redis"] = "unavailable"
+
+    all_healthy = all(v == "healthy" for v in checks.values() if v != "unavailable")
+
+    response: dict[str, object] = {
+        "status": "healthy" if all_healthy else "unhealthy",
+        "version": os.getenv("APP_VERSION", "1.0.0"),
+    }
+
+    if verbose:
+        response["checks"] = checks
+
+    status_code = 200 if all_healthy else 503
+    return JSONResponse(content=response, status_code=status_code)

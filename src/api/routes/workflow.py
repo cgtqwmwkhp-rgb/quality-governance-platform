@@ -37,7 +37,7 @@ from src.domain.models.workflow_rules import (
     SLATracking,
     WorkflowRule,
 )
-from src.services.workflow_engine import SLAService, WorkflowEngine
+from src.domain.services.workflow_engine import RuleEvaluator, SLAService
 
 router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
 
@@ -518,7 +518,7 @@ async def trigger_sla_check(
     current_user: dict = Depends(get_current_user),
 ):
     """Manually trigger SLA checks (normally run by scheduler)."""
-    engine = WorkflowEngine(db)
+    engine = RuleEvaluator(db)
 
     escalation_results = await engine.check_escalations()
     sla_results = await engine.check_sla_breaches()

@@ -1094,8 +1094,8 @@ export default function AuditTemplateBuilder() {
       await auditsApi.publishTemplate(template.id);
       await refreshTemplate();
       showToast('Template published successfully', 'success');
-    } catch (err: any) {
-      const message = err?.response?.data?.detail || 'Failed to publish. Ensure at least one question exists.';
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to publish. Ensure at least one question exists.';
       showToast(message, 'error');
     } finally {
       setSaving(false);

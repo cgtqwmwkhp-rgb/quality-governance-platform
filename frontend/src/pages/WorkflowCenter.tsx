@@ -120,9 +120,9 @@ export default function WorkflowCenter() {
       ]);
 
       if (approvalsRes.status === 'fulfilled') {
-        const raw = approvalsRes.value.data as any;
+        const raw = approvalsRes.value.data as Record<string, unknown>;
         const items = Array.isArray(raw) ? raw : (raw?.approvals || []);
-        setApprovals(items.map((a: any) => ({
+        setApprovals(items.map((a: Record<string, unknown>) => ({
           id: String(a.id),
           workflow_id: String(a.workflow_id || ''),
           workflow_name: a.workflow_name || a.template_name || 'Workflow',
@@ -140,7 +140,7 @@ export default function WorkflowCenter() {
       if (workflowsRes.status === 'fulfilled') {
         const data = workflowsRes.value.data;
         const items = Array.isArray(data) ? data : (data?.items || []);
-        setWorkflows(items.map((w: any) => ({
+        setWorkflows(items.map((w: Record<string, unknown>) => ({
           id: String(w.id),
           template_code: w.template_code || '',
           template_name: w.template_name || '',
@@ -156,9 +156,9 @@ export default function WorkflowCenter() {
       }
 
       if (templatesRes.status === 'fulfilled') {
-        const raw = templatesRes.value.data as any;
+        const raw = templatesRes.value.data as Record<string, unknown>;
         const items = Array.isArray(raw) ? raw : (raw?.templates || []);
-        setTemplates(items.map((t: any) => ({
+        setTemplates(items.map((t: Record<string, unknown>) => ({
           code: t.code || t.template_code || '',
           name: t.name || '',
           description: t.description || '',

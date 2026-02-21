@@ -116,7 +116,7 @@ export default function ContractsManagement() {
           description: formData.description,
           client_name: formData.client_name,
           is_active: formData.is_active ?? true,
-        } as any);
+        } as Record<string, unknown>);
         setContracts((prev) => [...prev, created]);
       } else if (editingContract) {
         const updated = await contractsApi.update(editingContract.id, formData);

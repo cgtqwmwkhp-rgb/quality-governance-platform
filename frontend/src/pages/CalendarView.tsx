@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import { Badge, type BadgeVariant } from '../components/ui/Badge';
 import { cn } from "../helpers/utils";
 import { auditsApi, actionsApi } from '../api/client';
 import { useToast, ToastContainer } from '../components/ui/Toast';
@@ -58,7 +58,7 @@ export default function CalendarView() {
       const now = new Date();
 
       if (auditsRes.status === 'fulfilled') {
-        (auditsRes.value.data.items || []).forEach((audit: any) => {
+        (auditsRes.value.data.items || []).forEach((audit) => {
           if (audit.scheduled_date) {
             const date = new Date(audit.scheduled_date);
             const dateStr = date.toISOString().split('T')[0];
@@ -80,7 +80,7 @@ export default function CalendarView() {
       }
 
       if (actionsRes.status === 'fulfilled') {
-        (actionsRes.value.data.items || []).forEach((action: any) => {
+        (actionsRes.value.data.items || []).forEach((action) => {
           if (action.due_date && action.status !== 'completed' && action.status !== 'closed') {
             const date = new Date(action.due_date);
             const dateStr = date.toISOString().split('T')[0];
@@ -312,7 +312,7 @@ export default function CalendarView() {
                             {dayEvents.slice(0, 3).map((event) => (
                               <Badge
                                 key={event.id}
-                                variant={eventTypeStyles[event.type].variant as any}
+                                variant={eventTypeStyles[event.type].variant as BadgeVariant}
                                 className="text-[10px] truncate w-full justify-start"
                               >
                                 {event.title}
@@ -351,7 +351,7 @@ export default function CalendarView() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <Badge variant={eventTypeStyles[event.type].variant as any}>
+                        <Badge variant={eventTypeStyles[event.type].variant as BadgeVariant}>
                           {event.type}
                         </Badge>
                         <Badge variant={
@@ -425,7 +425,7 @@ export default function CalendarView() {
                         </>
                       )}
                     </div>
-                    <Badge variant={eventTypeStyles[event.type].variant as any} className="mt-2 text-[10px]">
+                    <Badge variant={eventTypeStyles[event.type].variant as BadgeVariant} className="mt-2 text-[10px]">
                       {event.type}
                     </Badge>
                   </div>
@@ -440,7 +440,7 @@ export default function CalendarView() {
             <div className="space-y-2">
               {Object.entries(eventTypeStyles).map(([type, styles]) => (
                 <div key={type} className="flex items-center gap-2 text-sm">
-                  <Badge variant={styles.variant as any} className="w-3 h-3 p-0 rounded-full" />
+                  <Badge variant={styles.variant as BadgeVariant} className="w-3 h-3 p-0 rounded-full" />
                   <span className="text-foreground capitalize">{type}</span>
                 </div>
               ))}

@@ -11,6 +11,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Complaints"])
 
@@ -48,12 +49,7 @@ async def create_complaint(
                 },
             )
 
-    # Generate reference number: COMP-YYYY-NNNN
-    year = datetime.now().year
-    count_query = select(func.count()).select_from(Complaint)
-    result = await db.execute(count_query)
-    count = result.scalar() or 0
-    ref_num = f"COMP-{year}-{count + 1:04d}"
+    ref_num = await ReferenceNumberService.generate(db, "complaint", Complaint)
 
     complaint = Complaint(
         **complaint_in.model_dump(),

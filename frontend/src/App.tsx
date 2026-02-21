@@ -69,6 +69,7 @@ import ContractsManagement from './pages/admin/ContractsManagement'
 import SystemSettings from './pages/admin/SystemSettings'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
+import PageErrorBoundary from './components/PageErrorBoundary'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 
 import { API_BASE_URL } from './config/apiBase'
@@ -140,6 +141,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <PageErrorBoundary>
       <Routes>
         {/* Portal Login - Public */}
         <Route 
@@ -268,6 +270,7 @@ function App() {
           <Route path="admin/settings" element={<SystemSettings />} />
         </Route>
       </Routes>
+      </PageErrorBoundary>
     </BrowserRouter>
   )
 }

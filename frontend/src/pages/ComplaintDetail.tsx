@@ -22,7 +22,7 @@ import {
 import { complaintsApi, Complaint, ComplaintUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
 import { Input } from '../components/ui/Input'
 import {
@@ -177,12 +177,13 @@ export default function ComplaintDetail() {
         lead_investigator: '',
       })
       navigate('/investigations')
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create investigation:', err)
       
       // Check for 409 Conflict (already exists)
-      if (err.response?.status === 409) {
-        const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: unknown } } };
+      if (axiosErr.response?.status === 409) {
+        const errorData = axiosErr.response?.data?.detail as CreateFromRecordError | undefined
         if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
@@ -306,16 +307,17 @@ export default function ComplaintDetail() {
             variant="outline" 
             size="icon"
             onClick={() => navigate('/complaints')}
+            aria-label="Back to complaints"
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm text-primary">{complaint.reference_number}</span>
-              <Badge variant={getPriorityVariant(complaint.priority) as any}>
+              <Badge variant={getPriorityVariant(complaint.priority) as BadgeVariant}>
                 {complaint.priority}
               </Badge>
-              <Badge variant={getStatusVariant(complaint.status) as any}>
+              <Badge variant={getStatusVariant(complaint.status) as BadgeVariant}>
                 {complaint.status.replace('_', ' ')}
               </Badge>
             </div>
@@ -610,7 +612,7 @@ export default function ComplaintDetail() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={action.status === 'completed' ? 'resolved' : 'in-progress' as any}>
+                      <Badge variant={action.status === 'completed' ? 'resolved' : 'in-progress' as BadgeVariant}>
                         {action.status}
                       </Badge>
                     </div>

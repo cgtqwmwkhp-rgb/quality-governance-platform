@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user, get_db
-from src.services.auditor_competence import AuditorCompetenceService
+from src.domain.services.auditor_competence import AuditorCompetenceService
 
 router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
 

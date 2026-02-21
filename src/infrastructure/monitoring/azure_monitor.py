@@ -1,577 +1,142 @@
-"""
-Azure Monitor & Application Insights Integration
+"""OpenTelemetry instrumentation and Azure Monitor integration."""
 
-Features:
-- Centralized logging to Azure Log Analytics
-- Application Insights APM
-- Custom metrics and traces
-- Exception tracking
-- Dependency tracking
-- Request/response logging
-"""
-
-import json
 import logging
 import os
-import sys
-import time
-import traceback
-from contextlib import contextmanager
-from datetime import datetime
-from functools import wraps
-from typing import Any, Callable, Optional
-from uuid import uuid4
+from typing import Any
 
-from fastapi import Request, Response
+from opentelemetry import metrics, trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.metrics import Counter, Histogram, UpDownCounter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-# ============================================================================
-# Configuration
-# ============================================================================
+logger = logging.getLogger(__name__)
 
+_tracer: trace.Tracer | None = None
+_meter: metrics.Meter | None = None
 
-class MonitoringConfig:
-    """Azure Monitor configuration."""
-
-    INSTRUMENTATION_KEY = os.getenv("APPINSIGHTS_INSTRUMENTATIONKEY", "")
-    CONNECTION_STRING = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
-    LOG_ANALYTICS_WORKSPACE_ID = os.getenv("LOG_ANALYTICS_WORKSPACE_ID", "")
-    LOG_ANALYTICS_KEY = os.getenv("LOG_ANALYTICS_KEY", "")
-    ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-    SERVICE_NAME = "quality-governance-platform"
-    SERVICE_VERSION = os.getenv("SERVICE_VERSION", "1.0.0")
+# Business metric counters
+_incidents_created: Counter | None = None
+_incidents_resolved: Counter | None = None
+_audits_completed: Counter | None = None
+_audit_findings: Counter | None = None
+_api_response_time: Histogram | None = None
+_db_query_time: Histogram | None = None
+_cache_hit_rate: UpDownCounter | None = None
 
 
-# ============================================================================
-# Structured Logger
-# ============================================================================
+def setup_telemetry(app: Any = None, service_name: str = "quality-governance-platform") -> None:
+    """Initialize OpenTelemetry with tracing and metrics."""
+    global _tracer, _meter
+    global _incidents_created, _incidents_resolved
+    global _audits_completed, _audit_findings
+    global _api_response_time, _db_query_time, _cache_hit_rate
 
-
-class StructuredLogger:
-    """
-    Structured logging with Azure Monitor integration.
-    Outputs JSON-formatted logs for easy parsing by Azure Log Analytics.
-    """
-
-    def __init__(self, name: str):
-        self.name = name
-        self.logger = logging.getLogger(name)
-        self._setup_handlers()
-        self._correlation_id: Optional[str] = None
-
-    def _setup_handlers(self):
-        """Configure logging handlers."""
-        if not self.logger.handlers:
-            handler = logging.StreamHandler(sys.stdout)
-            handler.setFormatter(JsonFormatter())
-            self.logger.addHandler(handler)
-            self.logger.setLevel(logging.INFO)
-
-    def set_correlation_id(self, correlation_id: str):
-        """Set correlation ID for request tracing."""
-        self._correlation_id = correlation_id
-
-    def _create_log_entry(
-        self,
-        level: str,
-        message: str,
-        extra: Optional[dict] = None,
-    ) -> dict:
-        """Create structured log entry."""
-        entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "level": level,
-            "logger": self.name,
-            "message": message,
-            "service": MonitoringConfig.SERVICE_NAME,
-            "version": MonitoringConfig.SERVICE_VERSION,
-            "environment": MonitoringConfig.ENVIRONMENT,
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.version": os.getenv("APP_VERSION", "1.0.0"),
+            "deployment.environment": os.getenv("ENVIRONMENT", "development"),
         }
-
-        if self._correlation_id:
-            entry["correlationId"] = self._correlation_id
-
-        if extra:
-            entry["properties"] = extra
-
-        return entry
-
-    def info(self, message: str, **extra):
-        """Log info message."""
-        self.logger.info(json.dumps(self._create_log_entry("INFO", message, extra)))
-
-    def warning(self, message: str, **extra):
-        """Log warning message."""
-        self.logger.warning(json.dumps(self._create_log_entry("WARNING", message, extra)))
-
-    def error(self, message: str, exception: Optional[Exception] = None, **extra):
-        """Log error message with optional exception."""
-        if exception:
-            extra["exception"] = {
-                "type": type(exception).__name__,
-                "message": str(exception),
-                "stackTrace": traceback.format_exc(),
-            }
-        self.logger.error(json.dumps(self._create_log_entry("ERROR", message, extra)))
-
-    def critical(self, message: str, exception: Optional[Exception] = None, **extra):
-        """Log critical message."""
-        if exception:
-            extra["exception"] = {
-                "type": type(exception).__name__,
-                "message": str(exception),
-                "stackTrace": traceback.format_exc(),
-            }
-        self.logger.critical(json.dumps(self._create_log_entry("CRITICAL", message, extra)))
-
-    def debug(self, message: str, **extra):
-        """Log debug message."""
-        self.logger.debug(json.dumps(self._create_log_entry("DEBUG", message, extra)))
-
-    def audit(self, action: str, resource: str, user_id: Optional[int] = None, **extra):
-        """Log audit event."""
-        extra["audit"] = {
-            "action": action,
-            "resource": resource,
-            "userId": user_id,
-        }
-        self.logger.info(json.dumps(self._create_log_entry("AUDIT", f"Audit: {action} on {resource}", extra)))
-
-
-class JsonFormatter(logging.Formatter):
-    """JSON log formatter."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        if isinstance(record.msg, str):
-            try:
-                # Check if already JSON
-                json.loads(record.msg)
-                return record.msg
-            except json.JSONDecodeError:
-                pass
-
-        return json.dumps(
-            {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "level": record.levelname,
-                "logger": record.name,
-                "message": record.getMessage(),
-            }
-        )
-
-
-# ============================================================================
-# Application Insights Client
-# ============================================================================
-
-
-class ApplicationInsightsClient:
-    """
-    Application Insights telemetry client.
-    Tracks requests, dependencies, exceptions, and custom events.
-    """
-
-    def __init__(self):
-        self.instrumentation_key = MonitoringConfig.INSTRUMENTATION_KEY
-        self.connection_string = MonitoringConfig.CONNECTION_STRING
-        self._client = None
-        self._initialized = False
-        self._init_client()
-
-    def _init_client(self):
-        """Initialize Application Insights client."""
-        if not self.instrumentation_key and not self.connection_string:
-            return
-
-        try:
-            from opencensus.ext.azure import metrics_exporter
-            from opencensus.ext.azure.log_exporter import AzureLogHandler
-            from opencensus.ext.azure.trace_exporter import AzureExporter
-            from opencensus.trace import config_integration
-            from opencensus.trace.samplers import ProbabilitySampler
-            from opencensus.trace.tracer import Tracer
-
-            # Configure integrations
-            config_integration.trace_integrations(["requests", "sqlalchemy"])
-
-            # Create exporter
-            connection = self.connection_string or f"InstrumentationKey={self.instrumentation_key}"
-            self._exporter = AzureExporter(connection_string=connection)
-
-            # Create tracer
-            self._tracer = Tracer(
-                exporter=self._exporter,
-                sampler=ProbabilitySampler(1.0),  # Sample 100% in production
-            )
-
-            self._initialized = True
-
-        except ImportError:
-            # opencensus not installed
-            pass
-
-    def track_request(
-        self,
-        name: str,
-        url: str,
-        success: bool,
-        duration_ms: float,
-        response_code: int,
-        properties: Optional[dict] = None,
-    ):
-        """Track HTTP request telemetry."""
-        if not self._initialized:
-            return
-
-        try:
-            from opencensus.trace import span as trace_span
-
-            with self._tracer.span(name=name) as span:
-                span.add_attribute("http.url", url)
-                span.add_attribute("http.status_code", response_code)
-                span.add_attribute("http.success", success)
-                span.add_attribute("duration_ms", duration_ms)
-
-                if properties:
-                    for key, value in properties.items():
-                        span.add_attribute(key, str(value))
-        except Exception:
-            pass
-
-    def track_exception(
-        self,
-        exception: Exception,
-        properties: Optional[dict] = None,
-    ):
-        """Track exception telemetry."""
-        if not self._initialized:
-            return
-
-        try:
-            from opencensus.trace.status import Status
-
-            with self._tracer.span(name="exception") as span:
-                span.status = Status(
-                    code=2,  # Unknown error
-                    message=str(exception),
-                )
-                span.add_attribute("exception.type", type(exception).__name__)
-                span.add_attribute("exception.message", str(exception))
-                span.add_attribute("exception.stacktrace", traceback.format_exc())
-
-                if properties:
-                    for key, value in properties.items():
-                        span.add_attribute(key, str(value))
-        except Exception:
-            pass
-
-    def track_dependency(
-        self,
-        name: str,
-        dependency_type: str,
-        target: str,
-        success: bool,
-        duration_ms: float,
-        properties: Optional[dict] = None,
-    ):
-        """Track external dependency call."""
-        if not self._initialized:
-            return
-
-        try:
-            with self._tracer.span(name=name) as span:
-                span.add_attribute("dependency.type", dependency_type)
-                span.add_attribute("dependency.target", target)
-                span.add_attribute("dependency.success", success)
-                span.add_attribute("duration_ms", duration_ms)
-
-                if properties:
-                    for key, value in properties.items():
-                        span.add_attribute(key, str(value))
-        except Exception:
-            pass
-
-    def track_event(
-        self,
-        name: str,
-        properties: Optional[dict] = None,
-        measurements: Optional[dict] = None,
-    ):
-        """Track custom event."""
-        if not self._initialized:
-            return
-
-        try:
-            with self._tracer.span(name=name) as span:
-                span.add_attribute("event.name", name)
-
-                if properties:
-                    for key, value in properties.items():
-                        span.add_attribute(f"custom.{key}", str(value))
-
-                if measurements:
-                    for key, value in measurements.items():
-                        span.add_attribute(f"metric.{key}", value)
-        except Exception:
-            pass
-
-    def track_metric(
-        self,
-        name: str,
-        value: float,
-        properties: Optional[dict] = None,
-    ):
-        """Track custom metric."""
-        if not self._initialized:
-            return
-
-        try:
-            # Would use metrics exporter here
-            pass
-        except Exception:
-            pass
-
-
-# ============================================================================
-# Middleware
-# ============================================================================
-
-
-async def monitoring_middleware(request: Request, call_next: Callable) -> Response:
-    """
-    FastAPI middleware for request monitoring.
-
-    Tracks:
-    - Request duration
-    - Response status codes
-    - Correlation IDs
-    - Request/response details
-    """
-    # Generate correlation ID
-    correlation_id = request.headers.get("X-Correlation-ID", str(uuid4()))
-
-    # Create logger for this request
-    logger = StructuredLogger("http.request")
-    logger.set_correlation_id(correlation_id)
-
-    # Start timing
-    start_time = time.time()
-
-    # Log request
-    logger.info(
-        f"Request started: {request.method} {request.url.path}",
-        method=request.method,
-        path=request.url.path,
-        query=str(request.query_params),
-        userAgent=request.headers.get("User-Agent", ""),
-        clientIP=request.client.host if request.client else "",
     )
 
-    try:
-        # Process request
-        response = await call_next(request)
+    tracer_provider = TracerProvider(resource=resource)
 
-        # Calculate duration
-        duration_ms = (time.time() - start_time) * 1000
+    connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    if connection_string:
+        try:
+            from azure.monitor.opentelemetry.exporter import AzureMonitorMetricExporter, AzureMonitorTraceExporter
 
-        # Log response
-        logger.info(
-            f"Request completed: {response.status_code}",
-            statusCode=response.status_code,
-            durationMs=round(duration_ms, 2),
-        )
+            trace_exporter = AzureMonitorTraceExporter(connection_string=connection_string)
+            tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
 
-        # Track in Application Insights
-        app_insights = ApplicationInsightsClient()
-        app_insights.track_request(
-            name=f"{request.method} {request.url.path}",
-            url=str(request.url),
-            success=response.status_code < 400,
-            duration_ms=duration_ms,
-            response_code=response.status_code,
-            properties={
-                "correlationId": correlation_id,
-                "method": request.method,
-                "path": request.url.path,
-            },
-        )
+            metric_exporter = AzureMonitorMetricExporter(connection_string=connection_string)
+            metric_reader = PeriodicExportingMetricReader(metric_exporter)
+            meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+        except ImportError:
+            logger.warning("Azure Monitor exporter not available, using default providers")
+            meter_provider = MeterProvider(resource=resource)
+    else:
+        meter_provider = MeterProvider(resource=resource)
 
-        # Add correlation ID to response
-        response.headers["X-Correlation-ID"] = correlation_id
+    trace.set_tracer_provider(tracer_provider)
+    metrics.set_meter_provider(meter_provider)
 
-        return response
+    _tracer = trace.get_tracer(__name__)
+    _meter = metrics.get_meter(__name__)
 
-    except Exception as e:
-        # Calculate duration
-        duration_ms = (time.time() - start_time) * 1000
+    _incidents_created = _meter.create_counter("incidents.created", description="Number of incidents created")
+    _incidents_resolved = _meter.create_counter("incidents.resolved", description="Number of incidents resolved")
+    _audits_completed = _meter.create_counter("audits.completed", description="Number of audits completed")
+    _audit_findings = _meter.create_counter("audits.findings", description="Number of audit findings")
+    _api_response_time = _meter.create_histogram(
+        "api.response_time_ms", description="API response time in milliseconds", unit="ms"
+    )
+    _db_query_time = _meter.create_histogram(
+        "db.query_time_ms", description="Database query time in milliseconds", unit="ms"
+    )
+    _cache_hit_rate = _meter.create_up_down_counter("cache.operations", description="Cache hit/miss counter")
 
-        # Log error
-        logger.error(
-            f"Request failed: {str(e)}",
-            exception=e,
-            durationMs=round(duration_ms, 2),
-        )
+    if app:
+        FastAPIInstrumentor.instrument_app(app)
+        try:
+            from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
-        # Track exception
-        app_insights = ApplicationInsightsClient()
-        app_insights.track_exception(
-            exception=e,
-            properties={
-                "correlationId": correlation_id,
-                "method": request.method,
-                "path": request.url.path,
-            },
-        )
+            SQLAlchemyInstrumentor().instrument()
+        except ImportError:
+            pass
+        try:
+            from opentelemetry.instrumentation.redis import RedisInstrumentor
 
-        raise
+            RedisInstrumentor().instrument()
+        except ImportError:
+            pass
+
+    logger.info("OpenTelemetry instrumentation initialized for %s", service_name)
 
 
-# ============================================================================
-# Decorators
-# ============================================================================
+def track_metric(name: str, value: float = 1.0, tags: dict[str, str] | None = None) -> None:
+    """Track a business metric."""
 
-
-def track_dependency(
-    dependency_type: str = "HTTP",
-    name: Optional[str] = None,
-):
-    """
-    Decorator to track function as a dependency call.
-
-    Usage:
-        @track_dependency(dependency_type="SQL", name="get_user")
-        async def get_user_from_db(user_id: int):
-            ...
-    """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            dep_name = name or func.__name__
-            start_time = time.time()
-            success = True
-
-            try:
-                result = await func(*args, **kwargs)
-                return result
-            except Exception as e:
-                success = False
-                raise
-            finally:
-                duration_ms = (time.time() - start_time) * 1000
-                app_insights = ApplicationInsightsClient()
-                app_insights.track_dependency(
-                    name=dep_name,
-                    dependency_type=dependency_type,
-                    target=func.__module__,
-                    success=success,
-                    duration_ms=duration_ms,
-                )
-
-        return wrapper
-
-    return decorator
-
-
-def track_event_decorator(event_name: str):
-    """
-    Decorator to track function execution as a custom event.
-    """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            start_time = time.time()
-
-            try:
-                result = await func(*args, **kwargs)
-                duration_ms = (time.time() - start_time) * 1000
-
-                app_insights = ApplicationInsightsClient()
-                app_insights.track_event(
-                    name=event_name,
-                    properties={
-                        "function": func.__name__,
-                        "module": func.__module__,
-                    },
-                    measurements={
-                        "durationMs": duration_ms,
-                    },
-                )
-
-                return result
-            except Exception as e:
-                app_insights = ApplicationInsightsClient()
-                app_insights.track_exception(
-                    exception=e,
-                    properties={
-                        "event": event_name,
-                        "function": func.__name__,
-                    },
-                )
-                raise
-
-        return wrapper
-
-    return decorator
-
-
-@contextmanager
-def track_operation(operation_name: str):
-    """
-    Context manager for tracking operations.
-
-    Usage:
-        with track_operation("process_report"):
-            # ... operation code ...
-    """
-    logger = StructuredLogger(operation_name)
-    start_time = time.time()
-
-    logger.info(f"Operation started: {operation_name}")
-
-    try:
-        yield logger
-        duration_ms = (time.time() - start_time) * 1000
-        logger.info(
-            f"Operation completed: {operation_name}",
-            durationMs=round(duration_ms, 2),
-        )
-    except Exception as e:
-        duration_ms = (time.time() - start_time) * 1000
-        logger.error(
-            f"Operation failed: {operation_name}",
-            exception=e,
-            durationMs=round(duration_ms, 2),
-        )
-        raise
-
-
-# ============================================================================
-# Health Checks
-# ============================================================================
-
-
-def get_monitoring_health() -> dict:
-    """Get monitoring system health status."""
-    return {
-        "appInsights": {
-            "configured": bool(MonitoringConfig.INSTRUMENTATION_KEY or MonitoringConfig.CONNECTION_STRING),
-            "instrumentationKey": (
-                MonitoringConfig.INSTRUMENTATION_KEY[:8] + "..." if MonitoringConfig.INSTRUMENTATION_KEY else None
-            ),
-        },
-        "logAnalytics": {
-            "configured": bool(MonitoringConfig.LOG_ANALYTICS_WORKSPACE_ID),
-        },
-        "environment": MonitoringConfig.ENVIRONMENT,
-        "serviceVersion": MonitoringConfig.SERVICE_VERSION,
+    metric_map: dict[str, Counter | None] = {
+        "incidents.created": _incidents_created,
+        "incidents.resolved": _incidents_resolved,
+        "audits.completed": _audits_completed,
+        "audits.findings": _audit_findings,
     }
 
+    counter = metric_map.get(name)
+    if counter:
+        counter.add(int(value), attributes=tags or {})
+    elif _meter:
+        dynamic = _meter.create_counter(name, description=f"Dynamic metric: {name}")
+        dynamic.add(int(value), attributes=tags or {})
 
-# ============================================================================
-# Global Logger Instance
-# ============================================================================
+
+def track_response_time(endpoint: str, duration_ms: float) -> None:
+    """Record API response time."""
+    if _api_response_time:
+        _api_response_time.record(duration_ms, attributes={"endpoint": endpoint})
 
 
-# Create default logger
-logger = StructuredLogger("qgp")
+def track_query_time(query: str, duration_ms: float) -> None:
+    """Record database query time."""
+    if _db_query_time:
+        _db_query_time.record(duration_ms, attributes={"query": query[:100]})
+
+
+def track_cache_operation(hit: bool) -> None:
+    """Record a cache hit or miss."""
+    if _cache_hit_rate:
+        _cache_hit_rate.add(1 if hit else -1, attributes={"result": "hit" if hit else "miss"})
+
+
+def get_tracer() -> trace.Tracer:
+    """Get the OpenTelemetry tracer."""
+    global _tracer
+    if _tracer is None:
+        _tracer = trace.get_tracer(__name__)
+    return _tracer

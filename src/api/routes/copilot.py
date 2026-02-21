@@ -88,6 +88,7 @@ class SuggestedAction(BaseModel):
 async def create_session(
     data: SessionCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
@@ -111,7 +112,7 @@ async def create_session(
 
 
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
-async def get_active_session(db: DbSession):
+async def get_active_session(db: DbSession, current_user: CurrentUser):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
@@ -125,7 +126,7 @@ async def get_active_session(db: DbSession):
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: int, db: DbSession):
+async def get_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
@@ -139,7 +140,7 @@ async def get_session(session_id: int, db: DbSession):
 
 
 @router.delete("/sessions/{session_id}")
-async def close_session(session_id: int, db: DbSession):
+async def close_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
@@ -152,6 +153,7 @@ async def close_session(session_id: int, db: DbSession):
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
     db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(20, ge=1, le=100),
 ):
     """List user's recent sessions."""
@@ -182,6 +184,7 @@ async def send_message(
     session_id: int,
     data: MessageCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
@@ -206,6 +209,7 @@ async def send_message(
 async def get_messages(
     session_id: int,
     db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get messages for a session."""
@@ -222,6 +226,7 @@ async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
@@ -252,7 +257,7 @@ async def submit_feedback(
 
 
 @router.get("/actions", response_model=list[dict])
-async def list_actions(category: Optional[str] = None):
+async def list_actions(current_user: CurrentUser, category: Optional[str] = None):
     """List available copilot actions."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
@@ -268,6 +273,7 @@ async def list_actions(category: Optional[str] = None):
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
@@ -285,6 +291,7 @@ async def execute_action(
 
 @router.get("/actions/suggest", response_model=list[SuggestedAction])
 async def suggest_actions(
+    current_user: CurrentUser,
     page: Optional[str] = None,
     context_type: Optional[str] = None,
     context_id: Optional[str] = None,
@@ -365,6 +372,7 @@ async def suggest_actions(
 @router.get("/knowledge/search")
 async def search_knowledge(
     db: DbSession,
+    current_user: CurrentUser,
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
@@ -402,6 +410,7 @@ async def add_knowledge(
     content: str,
     category: str,
     db: DbSession,
+    current_user: CurrentUser,
     tags: Optional[list[str]] = None,
 ):
     """Add to the knowledge base."""

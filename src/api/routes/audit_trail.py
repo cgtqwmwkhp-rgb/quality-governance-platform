@@ -19,13 +19,11 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
-from src.api.dependencies import DbSession
+from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-DEFAULT_TENANT_ID = 1
 
 
 # ============================================================================
@@ -182,10 +180,11 @@ async def list_entity_types() -> Any:
 @router.get("/stats", response_model=AuditStatsResponse)
 async def get_audit_stats(
     db: DbSession,
+    current_user: CurrentUser,
     days: int = Query(30, ge=1, le=365),
 ) -> Any:
     """Get audit log statistics for the specified period."""
-    tenant_id = DEFAULT_TENANT_ID
+    tenant_id = current_user.tenant_id
     date_from = datetime.utcnow() - timedelta(days=days)
 
     try:
@@ -256,10 +255,11 @@ async def get_audit_stats(
 @router.get("/verifications", response_model=list[VerificationResponse])
 async def list_verifications(
     db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(10, ge=1, le=50),
 ) -> Any:
     """Get history of chain verifications."""
-    tenant_id = DEFAULT_TENANT_ID
+    tenant_id = current_user.tenant_id
 
     try:
         result = await db.execute(
@@ -282,6 +282,7 @@ async def list_verifications(
 @router.get("/", response_model=AuditLogListResponse)
 async def list_audit_logs(
     db: DbSession,
+    current_user: CurrentUser,
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
     action: Optional[str] = None,
@@ -292,7 +293,7 @@ async def list_audit_logs(
     per_page: int = Query(50, ge=1, le=100),
 ) -> Any:
     """List audit log entries with filters and pagination."""
-    tenant_id = DEFAULT_TENANT_ID
+    tenant_id = current_user.tenant_id
 
     try:
         conditions = [AuditLogEntry.tenant_id == tenant_id]
@@ -343,9 +344,10 @@ async def get_entity_history(
     entity_type: str,
     entity_id: str,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Get complete audit history for a specific entity."""
-    tenant_id = DEFAULT_TENANT_ID
+    tenant_id = current_user.tenant_id
 
     try:
         result = await db.execute(
@@ -367,10 +369,11 @@ async def get_entity_history(
 async def get_user_activity(
     user_id: int,
     db: DbSession,
+    current_user: CurrentUser,
     days: int = Query(30, ge=1, le=365),
 ) -> Any:
     """Get recent activity for a specific user."""
-    tenant_id = DEFAULT_TENANT_ID
+    tenant_id = current_user.tenant_id
     date_from = datetime.utcnow() - timedelta(days=days)
 
     try:
@@ -424,6 +427,7 @@ async def get_audit_entry(
 @router.post("/verify", response_model=VerificationResponse)
 async def verify_chain(
     db: DbSession,
+    current_user: CurrentUser,
     start_sequence: Optional[int] = None,
     end_sequence: Optional[int] = None,
 ) -> Any:
@@ -432,8 +436,8 @@ async def verify_chain(
 
     Recomputes cryptographic hashes and checks for tampering.
     """
-    tenant_id = DEFAULT_TENANT_ID
-    verified_by = 1
+    tenant_id = current_user.tenant_id
+    verified_by = current_user.id
 
     try:
         stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)
@@ -527,10 +531,11 @@ async def verify_chain(
 async def export_audit_logs(
     data: ExportRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> Any:
     """Export audit logs for compliance with integrity hash."""
-    tenant_id = DEFAULT_TENANT_ID
-    exported_by = 1
+    tenant_id = current_user.tenant_id
+    exported_by = current_user.id
 
     try:
         stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)

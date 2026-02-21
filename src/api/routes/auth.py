@@ -3,7 +3,8 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -29,6 +30,7 @@ from src.core.security import (
 )
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
+from src.domain.services.token_service import TokenService
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +217,49 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
         access_token=access_token,
         refresh_token=new_refresh_token,
     )
+
+
+security_scheme = HTTPBearer()
+
+
+@router.post("/logout")
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+    db: DbSession = None,  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-001
+) -> dict:
+    """Revoke the current access token so it can no longer be used."""
+    token = credentials.credentials
+    payload = decode_token(token)
+
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    jti = payload.get("jti")
+    if jti is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token does not contain a jti claim",
+        )
+
+    exp_timestamp = payload.get("exp")
+    expires_at = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else datetime.now(timezone.utc)
+
+    user_id_raw = payload.get("sub")
+    user_id = int(user_id_raw) if user_id_raw else None
+
+    await TokenService.revoke_token(
+        db=db,
+        jti=jti,
+        user_id=user_id,
+        expires_at=expires_at,
+        reason="logout",
+    )
+
+    return {"message": "Successfully logged out"}
 
 
 @router.get("/me", response_model=UserResponse)

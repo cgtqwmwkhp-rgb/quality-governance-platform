@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.security import decode_token
+from src.core.security import decode_token, is_token_revoked
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
 
@@ -31,6 +31,10 @@ async def get_current_user(
     payload = decode_token(token)
 
     if payload is None:
+        raise credentials_exception
+
+    jti = payload.get("jti")
+    if jti and await is_token_revoked(jti, db):
         raise credentials_exception
 
     user_id_raw = payload.get("sub")
@@ -140,3 +144,6 @@ CurrentActiveUser = Annotated[User, Depends(get_current_active_user)]
 CurrentSuperuser = Annotated[User, Depends(get_current_superuser)]
 OptionalCurrentUser = Annotated[Optional[User], Depends(get_optional_current_user)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+# Tenant isolation – imported after CurrentUser is defined to avoid circular imports
+from src.api.dependencies.tenant import verify_tenant_access  # noqa: E402

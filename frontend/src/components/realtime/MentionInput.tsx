@@ -58,10 +58,10 @@ const MentionInput: React.FC<MentionInputProps> = ({
         const query = searchQuery || '';
         const res = await usersApi.search(query);
         if (cancelled) return;
-        const rawData = res.data as any;
-        const items = Array.isArray(rawData) ? rawData : (rawData?.items || []);
+        const rawData = res.data;
+        const items = Array.isArray(rawData) ? rawData : [];
         setUsers(
-          (Array.isArray(items) ? items : []).slice(0, 8).map((u: any) => ({
+          items.slice(0, 8).map((u) => ({
             id: u.id,
             display_name: u.display_name || u.full_name || u.email || 'Unknown',
             email: u.email || '',

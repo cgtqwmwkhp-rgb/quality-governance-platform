@@ -20,6 +20,7 @@ from src.api.schemas.rta import (
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Road Traffic Collisions"])
 
@@ -32,14 +33,7 @@ async def create_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new Road Traffic Collision (RTA)."""
-    # Generate reference number (format: RTA-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
-
-    # Count existing RTAs for this year to generate sequence
-    query = select(func.count()).select_from(RoadTrafficCollision)
-    result = await db.execute(query)
-    count = result.scalar() or 0
-    ref_number = f"RTA-{year}-{count + 1:04d}"
+    ref_number = await ReferenceNumberService.generate(db, "rta", RoadTrafficCollision)
 
     rta = RoadTrafficCollision(
         **rta_in.model_dump(),
@@ -278,12 +272,7 @@ async def create_rta_action(
             detail=f"RTA with id {rta_id} not found",
         )
 
-    # Generate reference number (format: RTAACT-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
-    query = select(func.count()).select_from(RTAAction)
-    result = await db.execute(query)
-    count = result.scalar() or 0
-    ref_number = f"RTAACT-{year}-{count + 1:04d}"
+    ref_number = await ReferenceNumberService.generate(db, "rta_action", RTAAction)
 
     action = RTAAction(
         **action_in.model_dump(),

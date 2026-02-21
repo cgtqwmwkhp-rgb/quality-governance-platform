@@ -76,6 +76,7 @@ class BatchFindingRequest(BaseModel):
 @router.post("/analyze/text", response_model=dict)
 async def analyze_text(
     request: TextAnalysisRequest,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Analyze text for keywords, severity, and entities"""
     keywords = TextAnalyzer.extract_keywords(request.text)
@@ -92,6 +93,7 @@ async def analyze_text(
 @router.get("/predict/risk-factors", response_model=list)
 async def predict_risk_factors(
     db: DbSession,
+    current_user: CurrentUser,
     lookback_days: int = Query(365, ge=30, le=730),
 ) -> list[dict[str, Any]]:
     """Identify conditions that predict higher incident likelihood"""
@@ -103,6 +105,7 @@ async def predict_risk_factors(
 async def find_similar_incidents(
     request: TextAnalysisRequest,
     db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(5, ge=1, le=20),
 ) -> list[dict[str, Any]]:
     """Find similar past incidents based on description"""
@@ -116,6 +119,7 @@ async def find_similar_incidents(
 @router.get("/anomalies/frequency", response_model=dict)
 async def detect_frequency_anomalies(
     db: DbSession,
+    current_user: CurrentUser,
     entity: str = Query(..., description="Entity name (department, location)"),
     entity_type: str = Query("department", description="Type: department or location"),
     lookback_days: int = Query(90, ge=30, le=365),
@@ -128,6 +132,7 @@ async def detect_frequency_anomalies(
 @router.get("/anomalies/patterns", response_model=list)
 async def detect_pattern_anomalies(
     db: DbSession,
+    current_user: CurrentUser,
     lookback_days: int = Query(30, ge=7, le=90),
 ) -> list[dict[str, Any]]:
     """Detect unusual patterns across all incidents"""
@@ -142,6 +147,7 @@ async def detect_pattern_anomalies(
 async def get_corrective_action_recommendations(
     request: RecommendationRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Get recommended corrective actions for an incident"""
     engine = RecommendationEngine(db)
@@ -157,6 +163,7 @@ async def get_corrective_action_recommendations(
 @router.get("/root-cause/clusters", response_model=list)
 async def get_incident_clusters(
     db: DbSession,
+    current_user: CurrentUser,
     lookback_days: int = Query(180, ge=30, le=365),
 ) -> list[dict[str, Any]]:
     """Cluster similar incidents to identify systemic issues"""
@@ -168,6 +175,7 @@ async def get_incident_clusters(
 async def analyze_5_whys(
     request: FiveWhysRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Analyze 5 Whys and suggest root cause"""
     analyzer = RootCauseAnalyzer(db)
@@ -181,6 +189,7 @@ async def analyze_5_whys(
 async def generate_audit_questions(
     request: QuestionGenerationRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Generate audit questions for a specific clause"""
     generator = AuditQuestionGenerator(db)
@@ -195,6 +204,7 @@ async def generate_audit_questions(
 async def generate_audit_checklist(
     request: ChecklistRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Generate complete audit checklist for a standard"""
     generator = AuditQuestionGenerator(db)
@@ -209,6 +219,7 @@ async def find_evidence(
     standard: str,
     clause: str,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Find evidence matching a clause requirement"""
     matcher = EvidenceMatcher(db)
@@ -219,6 +230,7 @@ async def find_evidence(
 async def get_evidence_gaps(
     audit_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Identify clauses lacking sufficient evidence"""
     matcher = EvidenceMatcher(db)
@@ -229,6 +241,7 @@ async def get_evidence_gaps(
 async def classify_finding(
     request: FindingClassificationRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Classify a finding by severity and root cause"""
     classifier = FindingClassifier(db)
@@ -239,6 +252,7 @@ async def classify_finding(
 async def classify_findings_batch(
     request: BatchFindingRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Classify multiple findings"""
     classifier = FindingClassifier(db)
@@ -249,6 +263,7 @@ async def classify_findings_batch(
 async def generate_executive_summary(
     audit_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> dict[str, str]:
     """Generate executive summary for an audit"""
     generator = AuditReportGenerator(db)
@@ -260,6 +275,7 @@ async def generate_executive_summary(
 async def generate_findings_report(
     audit_id: int,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Generate detailed findings report"""
     generator = AuditReportGenerator(db)
@@ -272,6 +288,7 @@ async def generate_findings_report(
 @router.get("/audit/trends", response_model=dict)
 async def get_audit_trends(
     db: DbSession,
+    current_user: CurrentUser,
     months: int = Query(24, ge=6, le=60),
 ) -> dict[str, Any]:
     """Get audit finding trends over time"""
@@ -282,6 +299,7 @@ async def get_audit_trends(
 @router.get("/audit/recurring-findings", response_model=list)
 async def get_recurring_findings(
     db: DbSession,
+    current_user: CurrentUser,
     min_occurrences: int = Query(3, ge=2, le=10),
 ) -> list[dict[str, Any]]:
     """Identify recurring findings across audits"""
@@ -293,7 +311,7 @@ async def get_recurring_findings(
 
 
 @router.get("/health", response_model=dict)
-async def ai_health_check() -> dict[str, Any]:
+async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
     """Check AI service availability"""
     import os
 

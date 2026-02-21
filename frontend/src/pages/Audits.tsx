@@ -5,7 +5,7 @@ import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -131,10 +131,11 @@ export default function Audits() {
         setSuccessMessage(null)
       }, 2000)
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create audit:', err)
       showToast('Failed to schedule audit. Please try again.', 'error')
-      const errorMessage = err.response?.data?.detail || 'Failed to schedule audit. Please try again.'
+      const axiosErr = err as { response?: { data?: { detail?: string } } }
+      const errorMessage = axiosErr.response?.data?.detail || 'Failed to schedule audit. Please try again.'
       setFormError(errorMessage)
     } finally {
       setIsSubmitting(false)
@@ -483,10 +484,10 @@ export default function Audits() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="font-mono text-xs text-primary">{finding.reference_number}</span>
-                      <Badge variant={getSeverityVariant(finding.severity) as any}>
+                      <Badge variant={getSeverityVariant(finding.severity) as BadgeVariant}>
                         {finding.severity}
                       </Badge>
-                      <Badge variant={getStatusVariant(finding.status) as any}>
+                      <Badge variant={getStatusVariant(finding.status) as BadgeVariant}>
                         {finding.status.replace('_', ' ')}
                       </Badge>
                     </div>

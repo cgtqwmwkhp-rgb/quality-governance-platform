@@ -1,25 +1,21 @@
 """Monitoring and observability infrastructure."""
 
 from src.infrastructure.monitoring.azure_monitor import (
-    ApplicationInsightsClient,
-    MonitoringConfig,
-    StructuredLogger,
-    get_monitoring_health,
+    get_tracer,
     logger,
-    monitoring_middleware,
-    track_dependency,
-    track_event_decorator,
-    track_operation,
+    setup_telemetry,
+    track_cache_operation,
+    track_metric,
+    track_query_time,
+    track_response_time,
 )
 
 __all__ = [
-    "ApplicationInsightsClient",
-    "MonitoringConfig",
-    "StructuredLogger",
-    "get_monitoring_health",
+    "get_tracer",
     "logger",
-    "monitoring_middleware",
-    "track_dependency",
-    "track_event_decorator",
-    "track_operation",
+    "setup_telemetry",
+    "track_cache_operation",
+    "track_metric",
+    "track_query_time",
+    "track_response_time",
 ]

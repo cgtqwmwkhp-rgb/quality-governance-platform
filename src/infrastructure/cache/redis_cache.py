@@ -126,7 +126,10 @@ class InMemoryCache:
 
 
 class RedisCache:
-    """Redis-backed cache with connection pooling."""
+    """Redis-backed cache with connection pooling and retry logic."""
+
+    _MAX_RETRIES = 3
+    _RETRY_BACKOFF = 2.0  # seconds; doubles each attempt
 
     def __init__(self, redis_url: str, key_prefix: str = "qgp:"):
         self._redis_url = redis_url
@@ -134,24 +137,47 @@ class RedisCache:
         self._redis = None
         self._fallback = InMemoryCache()
         self._use_fallback = False
+        self._consecutive_failures = 0
 
     async def _get_redis(self):
-        """Get or create Redis connection."""
+        """Get or create Redis connection with explicit pool config and retry."""
         if self._redis is None and not self._use_fallback:
             try:
                 import redis.asyncio as redis
+                from redis.asyncio.connection import ConnectionPool
 
-                self._redis = redis.from_url(
+                pool = ConnectionPool.from_url(
                     self._redis_url,
-                    encoding="utf-8",
+                    max_connections=20,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                    retry_on_timeout=True,
                     decode_responses=False,
+                    health_check_interval=30,
                 )
+                self._redis = redis.Redis(connection_pool=pool)
                 await self._redis.ping()
+                self._consecutive_failures = 0
             except Exception as e:
-                print(f"[Cache] Redis connection failed, using fallback: {e}")
-                self._use_fallback = True
+                self._consecutive_failures += 1
+                print(f"[Cache] Redis connection failed ({self._consecutive_failures}/{self._MAX_RETRIES}): {e}")
                 self._redis = None
+                if self._consecutive_failures >= self._MAX_RETRIES:
+                    print("[Cache] Max retries reached, falling back to in-memory cache")
+                    self._use_fallback = True
         return self._redis
+
+    async def reconnect(self) -> bool:
+        """Attempt to reconnect to Redis after fallback.
+
+        Can be called periodically (e.g. from a health check) to recover
+        from transient Redis outages without restarting the process.
+        """
+        self._use_fallback = False
+        self._consecutive_failures = 0
+        self._redis = None
+        conn = await self._get_redis()
+        return conn is not None
 
     def _make_key(self, key: str) -> str:
         """Create prefixed key."""

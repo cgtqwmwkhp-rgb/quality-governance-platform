@@ -42,6 +42,14 @@ from src.api.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
 )
+from src.api.schemas.responses import (
+    ErrorDetail,
+    ErrorResponse,
+    HealthResponse,
+    PaginatedMeta,
+    PaginatedResponse,
+    SuccessResponse,
+)
 from src.api.schemas.risk import (
     RiskAssessmentBase,
     RiskAssessmentCreate,
@@ -171,4 +179,11 @@ __all__ = [
     "RiskMatrixCell",
     "RiskMatrixResponse",
     "RiskStatistics",
+    # Response schemas
+    "ErrorDetail",
+    "ErrorResponse",
+    "HealthResponse",
+    "PaginatedMeta",
+    "PaginatedResponse",
+    "SuccessResponse",
 ]

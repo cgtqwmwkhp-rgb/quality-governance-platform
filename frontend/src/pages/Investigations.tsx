@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Search, FlaskConical, ArrowRight, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw, WifiOff, Wifi, CheckCircle, GitBranch } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError } from '../api/client'
+import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError, type CreateFromRecordRequest } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -191,16 +191,16 @@ function CreateInvestigationModal({
 
     try {
       await investigationsApi.createFromRecord({
-        source_type: sourceType as any,
+        source_type: sourceType as CreateFromRecordRequest['source_type'],
         source_id: selectedRecord.source_id,
         title: title.trim(),
       })
       onCreated()
       resetForm()
-    } catch (err: any) {
-      // Safe error handling - check for 409 Conflict (already exists)
-      if (err.response?.status === 409) {
-        const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: unknown } } };
+      if (axiosErr.response?.status === 409) {
+        const errorData = axiosErr.response?.data?.detail as CreateFromRecordError | undefined
         if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
@@ -491,7 +491,7 @@ export default function Investigations() {
       
       // Client-side status filtering for multi-value filters (like 'open' = draft + in_progress)
       if (statusFilter !== 'all' && statusValues.length > 0) {
-        items = items.filter(inv => statusValues.includes(inv.status as any))
+        items = items.filter(inv => statusValues.includes(inv.status))
       }
       
       setInvestigations(items)
@@ -577,7 +577,7 @@ export default function Investigations() {
       })
       // Reload actions to show the new one
       loadActionsForInvestigation(selectedInvestigation)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create action:', err)
       const errorMessage = getApiErrorMessage(err)
       setActionError(errorMessage)
@@ -613,7 +613,7 @@ export default function Investigations() {
       await loadActionsForInvestigation(selectedInvestigation)
       // Update selected action locally
       setSelectedAction(prev => prev ? { ...prev, status: newStatus, completion_notes: completionNotes } : null)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to update action:', err)
       const errorMessage = getApiErrorMessage(err)
       setActionUpdateError(errorMessage)
@@ -635,7 +635,7 @@ export default function Investigations() {
   const filteredInvestigations = investigations.filter(
     i => i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
          i.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         (i.data as any)?.lead_investigator?.toLowerCase().includes(searchTerm.toLowerCase())
+         String((i.data as Record<string, unknown>)?.lead_investigator || "").toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const stats = {
@@ -906,7 +906,7 @@ export default function Investigations() {
                         </Badge>
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {(investigation.data as any)?.lead_investigator || '—'}
+                        {String((investigation.data as Record<string, unknown>)?.lead_investigator || "") || '—'}
                       </td>
                       <td className="px-4 py-4">
                         <Badge variant="outline">

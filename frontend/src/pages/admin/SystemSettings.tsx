@@ -90,7 +90,7 @@ export default function SystemSettings() {
       setLoading(true);
       setError(null);
       const data = await settingsApi.list();
-      const mapped: Setting[] = (data.items || []).map((s: any) => ({
+      const mapped: Setting[] = (data.items || []).map((s) => ({
         key: String(s.key || ''),
         value: String(s.value ?? ''),
         category: String(s.category || 'general'),

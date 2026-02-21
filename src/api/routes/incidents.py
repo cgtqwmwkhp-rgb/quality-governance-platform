@@ -12,6 +12,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.domain.models.incident import Incident
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 
@@ -50,13 +51,7 @@ async def create_incident(
                 detail=f"Incident with reference number {reference_number} already exists",
             )
     else:
-        # Generate reference number (format: INC-YYYY-NNNN)
-        year = datetime.now(timezone.utc).year
-
-        # Get the count of incidents created this year
-        count_result = await db.execute(select(sa_func.count()).select_from(Incident))
-        count = count_result.scalar_one()
-        reference_number = f"INC-{year}-{count + 1:04d}"
+        reference_number = await ReferenceNumberService.generate(db, "incident", Incident)
 
     # Create new incident
     incident = Incident(

@@ -5,13 +5,19 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { TooltipProvider } from './components/ui/Tooltip'
 import './index.css'
 
+if (import.meta.env.DEV) {
+  import('@axe-core/react').then((axe) => {
+    axe.default(React, ReactDOM, 1000);
+  });
+}
+
 // Build version stamp for deployment verification
 const BUILD_SHA = import.meta.env.VITE_BUILD_SHA || 'dev'
 const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || new Date().toISOString()
 
 // Expose for debugging (no secrets)
-;(window as any).__BUILD_SHA__ = BUILD_SHA
-;(window as any).__BUILD_TIME__ = BUILD_TIME
+;(window as unknown as Record<string, string>).__BUILD_SHA__ = BUILD_SHA
+;(window as unknown as Record<string, string>).__BUILD_TIME__ = BUILD_TIME
 
 // Log once on startup for deployment verification
 console.log(`[QGP] Build: ${BUILD_SHA} @ ${BUILD_TIME}`)

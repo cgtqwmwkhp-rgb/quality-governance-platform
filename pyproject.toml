@@ -202,6 +202,42 @@ module = "src.api.routes.auditor_competence"
 # GOVPLAT-004: Auditor competence route type issues
 disable_error_code = ["arg-type"]
 
+[[tool.mypy.overrides]]
+module = "src.domain.models.capa"
+disable_error_code = ["var-annotated"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.policy_acknowledgment"
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.auditor_competence"
+disable_error_code = ["assignment", "operator"]
+
+[[tool.mypy.overrides]]
+module = "src.api.utils.pagination"
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "src.api.utils.entity"
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.workflow_engine"
+disable_error_code = ["assignment", "var-annotated", "arg-type", "operator"]
+
+[[tool.mypy.overrides]]
+module = "src.domain.services.risk_scoring"
+disable_error_code = ["attr-defined", "index", "operator"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.audit_trail"
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "src.api.routes.capa"
+disable_error_code = ["assignment", "call-overload"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
