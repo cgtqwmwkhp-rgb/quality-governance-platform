@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../src/config/apiBase', () => ({
@@ -31,15 +32,71 @@ vi.mock('../../../src/utils/auth', () => ({
   clearTokens: vi.fn(),
 }));
 
+vi.mock('../../../src/components/FuzzySearchDropdown', () => ({
+  default: ({ label, placeholder }: { label: string; placeholder: string }) => (
+    <div data-testid="fuzzy-search">
+      <label>{label}</label>
+      <input placeholder={placeholder} />
+    </div>
+  ),
+}));
+
 import PortalRTAForm from '../../../src/pages/PortalRTAForm';
 
 describe('PortalRTAForm', () => {
-  it('renders without crashing', () => {
+  it('renders step 1 heading and progress indicator', () => {
     render(
       <MemoryRouter>
         <PortalRTAForm />
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+    expect(screen.getByText('Your Details')).toBeInTheDocument();
+    expect(screen.getByText('Driver and vehicle information')).toBeInTheDocument();
+    expect(screen.getByText('RTA Report')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 5')).toBeInTheDocument();
+  });
+
+  it('renders the Your Name input field', () => {
+    render(
+      <MemoryRouter>
+        <PortalRTAForm />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Your Name *')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Full name...')).toBeInTheDocument();
+  });
+
+  it('renders the passenger question with Yes/No options', () => {
+    render(
+      <MemoryRouter>
+        <PortalRTAForm />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Any passengers? *')).toBeInTheDocument();
+    const yesButtons = screen.getAllByText('Yes');
+    const noButtons = screen.getAllByText('No');
+    expect(yesButtons.length).toBeGreaterThanOrEqual(1);
+    expect(noButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders the Continue button on step 1', () => {
+    render(
+      <MemoryRouter>
+        <PortalRTAForm />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Continue')).toBeInTheDocument();
+  });
+
+  it('allows typing a name into the Your Name field', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <PortalRTAForm />
+      </MemoryRouter>
+    );
+    const nameInput = screen.getByPlaceholderText('Full name...');
+    await user.type(nameInput, 'Jane Driver');
+    expect(nameInput).toHaveValue('Jane Driver');
   });
 });

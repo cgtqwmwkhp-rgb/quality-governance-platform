@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../src/api/client', () => ({
@@ -45,12 +46,65 @@ vi.mock('../../../src/components/ui/ThemeToggle', () => ({
 import Login from '../../../src/pages/Login';
 
 describe('Login', () => {
-  it('renders without crashing', () => {
+  const mockOnLogin = vi.fn();
+
+  it('renders the platform heading and subtitle', async () => {
     render(
       <MemoryRouter>
-        <Login />
+        <Login onLogin={mockOnLogin} />
       </MemoryRouter>
     );
-    expect(document.body).toBeTruthy();
+    expect(await screen.findByText('Quality Governance Platform')).toBeInTheDocument();
+    expect(screen.getByText('Sign in to manage your governance')).toBeInTheDocument();
+  });
+
+  it('renders email and password input fields with labels', async () => {
+    render(
+      <MemoryRouter>
+        <Login onLogin={mockOnLogin} />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Password')).toBeInTheDocument();
+    expect(screen.getByTestId('email-input')).toBeInTheDocument();
+    expect(screen.getByTestId('password-input')).toBeInTheDocument();
+  });
+
+  it('renders the Sign In button and forgot password link', async () => {
+    render(
+      <MemoryRouter>
+        <Login onLogin={mockOnLogin} />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Sign In')).toBeInTheDocument();
+    expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+    expect(screen.getByText('Forgot password?')).toBeInTheDocument();
+  });
+
+  it('renders the Microsoft SSO button', async () => {
+    render(
+      <MemoryRouter>
+        <Login onLogin={mockOnLogin} />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Sign in with Microsoft')).toBeInTheDocument();
+    expect(screen.getByTestId('microsoft-sso-button')).toBeInTheDocument();
+  });
+
+  it('allows typing in email and password fields', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Login onLogin={mockOnLogin} />
+      </MemoryRouter>
+    );
+    const emailInput = screen.getByTestId('email-input');
+    const passwordInput = screen.getByTestId('password-input');
+
+    await user.type(emailInput, 'admin@example.com');
+    expect(emailInput).toHaveValue('admin@example.com');
+
+    await user.type(passwordInput, 'secret123');
+    expect(passwordInput).toHaveValue('secret123');
   });
 });

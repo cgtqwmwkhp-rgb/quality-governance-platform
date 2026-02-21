@@ -9,3 +9,5 @@ export { useFeatureFlag, setFeatureFlagOverride, clearFeatureFlagOverride } from
 export { useGeolocation } from './useGeolocation';
 export { useVoiceToText } from './useVoiceToText';
 export { useDataFetch } from './useDataFetch';
+export { useKeyboardShortcuts, getRegisteredShortcuts } from './useKeyboardShortcuts';
+export type { Shortcut } from './useKeyboardShortcuts';

@@ -59,12 +59,12 @@ ALERT_RULES: list[AlertRule] = [
     ),
     AlertRule(
         name="cache_miss_rate",
-        metric="cache.miss_rate",
-        condition="greater_than",
+        metric="cache.hit_rate",
+        condition="less_than",
         threshold=50.0,
         window_minutes=15,
         severity=AlertSeverity.MEDIUM,
-        description="Cache miss rate exceeds 50% over 15 minutes",
+        description="Cache hit rate drops below 50% over 15 minutes",
     ),
     AlertRule(
         name="db_pool_exhaustion",
@@ -137,6 +137,15 @@ ALERT_RULES: list[AlertRule] = [
         window_minutes=60,
         severity=AlertSeverity.HIGH,
         description="More than 5 failed signatures in 1 hour",
+    ),
+    AlertRule(
+        name="dlq_growth",
+        metric="dlq.size",
+        condition="gt",
+        threshold=5,
+        window_minutes=60,
+        severity=AlertSeverity.HIGH,
+        description="More than 5 failed tasks added to DLQ in 1 hour",
     ),
 ]
 

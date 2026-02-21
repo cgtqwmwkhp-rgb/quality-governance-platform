@@ -61,6 +61,10 @@ celery_app.conf.beat_schedule = {
         "task": "src.infrastructure.tasks.monitor_tasks.log_task_queue_depth",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
     },
+    "replay-dlq-entries": {
+        "task": "src.infrastructure.tasks.dlq_replay.replay_failed_tasks",
+        "schedule": crontab(minute=0, hour="*/6"),  # Every 6 hours
+    },
 }
 
 celery_app.autodiscover_tasks(

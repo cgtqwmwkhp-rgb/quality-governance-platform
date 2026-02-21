@@ -28,7 +28,7 @@ import {
   Minus,
 } from 'lucide-react';
 import { cn } from '../helpers/utils';
-import { CardSkeleton } from '../components/ui/SkeletonLoader';
+import { TableSkeleton } from '../components/ui/SkeletonLoader';
 import { Button } from '../components/ui/Button';
 import { complianceAutomationApi } from '../api/client';
 import { ToastContainer, useToast } from '../components/ui/Toast';
@@ -339,7 +339,12 @@ export default function ComplianceAutomation() {
   const scoreChange = complianceScore.change ?? 0;
 
   if (loading) {
-    return <CardSkeleton />;
+    return (
+      <div className="p-6 space-y-6">
+        <div className="h-8 w-64 rounded bg-muted animate-pulse" />
+        <TableSkeleton rows={6} columns={4} />
+      </div>
+    );
   }
 
   return (

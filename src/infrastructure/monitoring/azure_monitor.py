@@ -12,6 +12,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,13 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
         }
     )
 
-    tracer_provider = TracerProvider(resource=resource)
+    environment = os.getenv("ENVIRONMENT", "development")
+    default_sample_rate = 0.1 if environment == "production" else 1.0
+    sample_rate = float(os.getenv("OTEL_TRACE_SAMPLE_RATE", str(default_sample_rate)))
+    sampler = ParentBased(root=TraceIdRatioBased(sample_rate))
+
+    tracer_provider = TracerProvider(resource=resource, sampler=sampler)
+    logger.info("Trace sampling configured at %.0f%% (environment=%s)", sample_rate * 100, environment)
 
     connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
     if connection_string:
@@ -88,9 +95,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     _audits_completed = _meter.create_counter("audits.completed", description="Number of audits completed")
     _audit_findings = _meter.create_counter("audits.findings", description="Number of audit findings")
     _api_response_time = _meter.create_histogram(
-        "api.response_time_ms",
-        description="API response time in milliseconds",
-        unit="ms",
+        "api.response_time_ms", description="API response time in milliseconds", unit="ms"
     )
     _db_query_time = _meter.create_histogram(
         "db.query_time_ms", description="Database query time in milliseconds", unit="ms"
@@ -113,9 +118,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     _documents_uploaded = _meter.create_counter("documents.uploaded", description="Number of documents uploaded")
     _workflows_completed = _meter.create_counter("workflows.completed", description="Number of workflows completed")
     _workflow_completion_time = _meter.create_histogram(
-        "workflow.completion_time_hours",
-        description="Workflow completion time in hours",
-        unit="h",
+        "workflow.completion_time_hours", description="Workflow completion time in hours", unit="h"
     )
 
     _error_rate_5xx = _meter.create_counter("api.error_rate_5xx", description="Count of 5xx HTTP errors")
