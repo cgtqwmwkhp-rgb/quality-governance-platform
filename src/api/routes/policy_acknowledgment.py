@@ -125,7 +125,7 @@ async def get_my_pending_acknowledgments(
 ):
     """Get current user's pending acknowledgments."""
     service = PolicyAcknowledgmentService(db)
-    pending = await service.get_user_pending_acknowledgments(current_user.get("id"))
+    pending = await service.get_user_pending_acknowledgments(current_user.id)
 
     return PolicyAcknowledgmentListResponse(
         items=[PolicyAcknowledgmentResponse.from_orm(a) for a in pending],
@@ -294,7 +294,7 @@ async def log_document_read(
     log = await service.log_document_access(
         document_type=log_data.document_type,
         document_id=log_data.document_id,
-        user_id=current_user.get("id"),
+        user_id=current_user.id,
         document_version=log_data.document_version,
         duration_seconds=log_data.duration_seconds,
         scroll_percentage=log_data.scroll_percentage,

@@ -250,7 +250,7 @@ class CollaborationService:
                 CollaborativeSession.last_seen_at >= timeout,
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def cleanup_stale_sessions(self) -> int:
         """Clean up stale sessions. Returns count of cleaned sessions."""
@@ -262,7 +262,7 @@ class CollaborationService:
                 CollaborativeSession.last_seen_at < timeout,
             )
         )
-        stale = result.scalars().all()
+        stale = list(result.scalars().all())
 
         for session in stale:
             session.is_active = False
@@ -322,7 +322,7 @@ class CollaborationService:
         stmt = stmt.order_by(CollaborativeChange.version).limit(limit)
 
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Comments
@@ -397,7 +397,7 @@ class CollaborationService:
         stmt = stmt.order_by(Comment.created_at)
 
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def resolve_comment(
         self,
@@ -498,7 +498,7 @@ class CollaborationService:
                 Presence.last_seen_at >= timeout,
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_users_viewing_entity(
         self,
@@ -518,7 +518,7 @@ class CollaborationService:
                 Presence.last_seen_at >= timeout,
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def set_offline(self, user_id: int) -> Optional[Presence]:
         """Set user as offline."""

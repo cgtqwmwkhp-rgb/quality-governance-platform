@@ -389,7 +389,7 @@ async def list_instances(
         count_q = count_q.where(and_(*filters))
 
     total_res = await db.execute(count_q)
-    total = total_res.scalar() or 0
+    total: int = total_res.scalar() or 0  # type: ignore[assignment]  # scalar returns Row|None, coerced to int
 
     query = query.order_by(WorkflowInstance.started_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -414,7 +414,7 @@ async def advance_workflow(
 
     # Find current step
     steps = await get_instance_steps(db, instance_id)
-    current_idx = instance.current_step
+    current_idx: int = instance.current_step  # type: ignore[assignment]  # SA column value
     if current_idx >= len(steps):
         raise ValueError("Workflow already completed")
 
@@ -1079,9 +1079,9 @@ class ActionExecutor:
         result = await self.db.execute(
             select(EscalationLevel).where(
                 and_(
-                    EscalationLevel.entity_type == entity_type,
-                    EscalationLevel.level == new_level,
-                    EscalationLevel.is_active == True,
+                    EscalationLevel.entity_type == entity_type,  # type: ignore[arg-type]  # SA column comparison
+                    EscalationLevel.level == new_level,  # type: ignore[attr-defined]  # SA column
+                    EscalationLevel.is_active == True,  # type: ignore[attr-defined]  # SA column  # noqa: E712
                 )
             )
         )
@@ -1326,8 +1326,12 @@ class RuleEvaluator:
             if not config:
                 continue
 
-            total_duration = (tracking.resolution_due - tracking.started_at).total_seconds() / 3600
-            elapsed = (now - tracking.started_at).total_seconds() / 3600
+            resolution_due = tracking.resolution_due
+            started_at = tracking.started_at
+            if not resolution_due or not started_at:
+                continue
+            total_duration = (resolution_due - started_at).total_seconds() / 3600
+            elapsed = (now - started_at).total_seconds() / 3600
             percent_elapsed = (elapsed / total_duration) * 100 if total_duration > 0 else 100
 
             if percent_elapsed >= config.warning_threshold_percent and not tracking.warning_sent:
@@ -1455,7 +1459,7 @@ class SLAService:
 
     async def resume_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         tracking = await self._get_tracking(entity_type, entity_id)
-        if tracking and tracking.is_paused:
+        if tracking and tracking.is_paused and tracking.paused_at is not None:
             paused_duration = (datetime.now(timezone.utc) - tracking.paused_at).total_seconds() / 3600
             tracking.total_paused_hours += paused_duration
             tracking.is_paused = False
@@ -1528,30 +1532,33 @@ class SLAService:
         if not config.business_hours_only:
             return start + timedelta(hours=hours)
 
+        biz_start: int = int(config.business_start_hour or 9)
+        biz_end: int = int(config.business_end_hour or 17)
+
         current = start
         remaining_hours = hours
 
         while remaining_hours > 0:
-            if current.hour < config.business_start_hour:
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
-            elif current.hour >= config.business_end_hour:
+            if current.hour < biz_start:
+                current = current.replace(hour=biz_start, minute=0, second=0)
+            elif current.hour >= biz_end:
                 current = current + timedelta(days=1)
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(hour=biz_start, minute=0, second=0)
 
             if config.exclude_weekends and current.weekday() >= 5:
                 days_until_monday = 7 - current.weekday()
                 current = current + timedelta(days=days_until_monday)
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(hour=biz_start, minute=0, second=0)
                 continue
 
-            hours_today = config.business_end_hour - current.hour
+            hours_today = biz_end - current.hour
             if remaining_hours <= hours_today:
                 current = current + timedelta(hours=remaining_hours)
                 remaining_hours = 0
             else:
                 remaining_hours -= hours_today
                 current = current + timedelta(days=1)
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(hour=biz_start, minute=0, second=0)
 
         return current
 

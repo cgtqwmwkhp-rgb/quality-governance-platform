@@ -154,7 +154,7 @@ async def update_auditor_profile(
     """Update auditor profile."""
     service = AuditorCompetenceService(db)
 
-    updates = request.dict(exclude_unset=True)
+    updates = request.model_dump(exclude_unset=True)
     profile = await service.update_profile(user_id, **updates)
 
     if not profile:

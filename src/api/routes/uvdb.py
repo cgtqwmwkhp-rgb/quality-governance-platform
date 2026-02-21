@@ -548,16 +548,16 @@ async def list_audits(
     """List UVDB audits"""
     stmt = (
         select(UVDBAudit)
-        .options(selectinload(UVDBAudit.responses))
-        .where(UVDBAudit.tenant_id == current_user.tenant_id)
+        .options(selectinload(UVDBAudit.responses))  # type: ignore[attr-defined]  # SA relationship
+        .where(UVDBAudit.tenant_id == current_user.tenant_id)  # type: ignore[attr-defined]  # SA column
     )
 
     if status:
-        stmt = stmt.where(UVDBAudit.status == status)
+        stmt = stmt.where(UVDBAudit.status == status)  # type: ignore[attr-defined]  # SA column
     if company_name:
-        stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))
+        stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))  # type: ignore[attr-defined]  # SA column
 
-    stmt = stmt.order_by(UVDBAudit.audit_date.desc())
+    stmt = stmt.order_by(UVDBAudit.audit_date.desc())  # type: ignore[attr-defined]  # SA column
     result = await paginate(db, stmt, params)
 
     return {
@@ -591,7 +591,7 @@ async def create_audit(
     count = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
     audit_reference = UVDBService.generate_audit_reference(count)
 
-    audit = UVDBAudit(
+    audit = UVDBAudit(  # type: ignore[misc]  # SA model kwargs
         audit_reference=audit_reference,
         status="scheduled",
         **audit_data.model_dump(),
@@ -679,7 +679,7 @@ async def create_response(
     """Record an audit response"""
     await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
-    response = UVDBAuditResponse(
+    response = UVDBAuditResponse(  # type: ignore[misc]  # SA model kwargs
         audit_id=audit_id,
         **response_data.model_dump(),
     )
@@ -738,7 +738,7 @@ async def add_kpi_record(
         kpi_data.total_man_hours,
     )
 
-    kpi = UVDBKPIRecord(
+    kpi = UVDBKPIRecord(  # type: ignore[misc]  # SA model kwargs
         audit_id=audit_id,
         ltifr=ltifr,
         **kpi_data.model_dump(),
@@ -836,26 +836,29 @@ async def get_uvdb_dashboard(
     active_audits = (
         await db.scalar(
             select(func.count()).select_from(
-                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()
+                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()  # type: ignore[attr-defined]  # SA column
             )
         )
         or 0
     )
     completed_audits = (
         await db.scalar(
-            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())
+            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())  # type: ignore[attr-defined]  # SA column
         )
         or 0
     )
 
     result = await db.execute(
-        select(UVDBAudit).where(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None))
+        select(UVDBAudit).where(
+            UVDBAudit.status == "completed",  # type: ignore[attr-defined]  # SA column
+            UVDBAudit.percentage_score.isnot(None),  # type: ignore[attr-defined]  # SA column
+        )
     )
     completed = result.scalars().all()
 
-    avg_score = 0
+    avg_score: float = 0
     if completed:
-        avg_score = sum(a.percentage_score for a in completed) / len(completed)
+        avg_score = sum(float(a.percentage_score) for a in completed if a.percentage_score is not None) / len(completed)
 
     return {
         "summary": {

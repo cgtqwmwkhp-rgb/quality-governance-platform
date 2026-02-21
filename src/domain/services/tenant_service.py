@@ -137,14 +137,14 @@ class TenantService:
         result = await self.db.execute(
             select(TenantUser).where(TenantUser.user_id == user_id, TenantUser.is_active == True)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_tenant_users(self, tenant_id: int) -> list[TenantUser]:
         """Get all users in a tenant."""
         result = await self.db.execute(
             select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def add_user_to_tenant(
         self,
@@ -287,7 +287,7 @@ class TenantService:
         if not invitation:
             raise ValueError("Invalid or expired invitation")
 
-        if invitation.expires_at < datetime.now(timezone.utc):
+        if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc):
             invitation.status = "expired"
             await self.db.commit()
             raise ValueError("Invitation has expired")
@@ -359,7 +359,7 @@ class TenantService:
         )
         current_users = result.scalar_one()
 
-        return current_users, tenant.max_users
+        return current_users, int(tenant.max_users)
 
     async def can_add_user(self, tenant_id: int) -> bool:
         """Check if a new user can be added to the tenant."""

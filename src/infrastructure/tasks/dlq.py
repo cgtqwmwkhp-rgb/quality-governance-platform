@@ -7,7 +7,7 @@ for manual review and retry.
 import logging
 from datetime import datetime, timezone
 
-from celery.signals import task_failure
+from celery.signals import task_failure  # type: ignore[import-untyped]
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session
 

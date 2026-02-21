@@ -50,7 +50,7 @@ async def paginate(
     pages = (total + params.page_size - 1) // params.page_size if total > 0 else 0
 
     return PaginatedResponse(
-        items=items,
+        items=list(items),
         total=total,
         page=params.page,
         page_size=params.page_size,

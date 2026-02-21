@@ -3,6 +3,8 @@
 from datetime import datetime
 from enum import Enum as PyEnum
 
+from typing import Any
+
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -46,10 +48,10 @@ class CAPAAction(Base):
     reference_number = Column(String(50), unique=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    capa_type = Column(Enum(CAPAType), nullable=False)
-    status = Column(Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True)
-    priority = Column(Enum(CAPAPriority), default=CAPAPriority.MEDIUM, nullable=False)
-    source_type = Column(Enum(CAPASource), nullable=True)
+    capa_type: Any = Column(Enum(CAPAType), nullable=False)
+    status: Any = Column(Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True)
+    priority: Any = Column(Enum(CAPAPriority), default=CAPAPriority.MEDIUM, nullable=False)
+    source_type: Any = Column(Enum(CAPASource), nullable=True)
     source_id = Column(Integer, nullable=True)
 
     root_cause = Column(Text, nullable=True)

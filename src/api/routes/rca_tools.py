@@ -228,7 +228,7 @@ async def complete_five_whys_analysis(
     try:
         analysis = await service.complete_analysis(
             analysis_id=analysis_id,
-            user_id=current_user.get("id"),
+            user_id=current_user.id,
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
@@ -389,7 +389,7 @@ async def complete_fishbone_diagram(
     try:
         diagram = await service.complete_diagram(
             diagram_id=diagram_id,
-            user_id=current_user.get("id"),
+            user_id=current_user.id,
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
@@ -477,7 +477,7 @@ async def verify_capa(
     try:
         capa = await service.verify_capa(
             capa_id=capa_id,
-            user_id=current_user.get("id"),
+            user_id=current_user.id,
             verification_notes=request.verification_notes,
             is_effective=request.is_effective,
         )

@@ -56,7 +56,7 @@ class InMemoryCache:
     """Thread-safe in-memory LRU cache with TTL support."""
 
     def __init__(self, max_size: int = 1000):
-        self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[Any, Optional[float]]] = OrderedDict()
         self._max_size = max_size
         self._lock = asyncio.Lock()
         self._stats = {"hits": 0, "misses": 0, "sets": 0, "deletes": 0}
@@ -447,9 +447,9 @@ def cached(
             ...
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             cache = get_cache()
 
             # Build cache key
@@ -472,15 +472,15 @@ def cached(
             return result
 
         # Add cache invalidation helper
-        async def invalidate(*args, **kwargs):
+        async def invalidate(*args: Any, **kwargs: Any) -> None:
             cache = get_cache()
             prefix = key_prefix or f"{func.__module__}.{func.__name__}"
             arg_key = make_cache_key(*args, **kwargs)
             cache_key = f"{prefix}:{arg_key}"
             await cache.delete(cache_key)
 
-        wrapper.invalidate = invalidate
-        wrapper.invalidate_all = lambda: get_cache().delete_pattern(
+        wrapper.invalidate = invalidate  # type: ignore[attr-defined]  # dynamic attribute on wrapper
+        wrapper.invalidate_all = lambda: get_cache().delete_pattern(  # type: ignore[attr-defined]
             f"{key_prefix or func.__module__}.{func.__name__}:*"
         )
 
@@ -499,9 +499,9 @@ def invalidate_cache(pattern: str):
             ...
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             result = await func(*args, **kwargs)
             cache = get_cache()
             await cache.delete_pattern(pattern)
@@ -515,6 +515,17 @@ def invalidate_cache(pattern: str):
 # ============================================================================
 # Cache Warmup
 # ============================================================================
+
+
+async def close_redis() -> None:
+    """Close the global Redis connection if one exists."""
+    global _cache
+    if _cache is not None and isinstance(_cache, RedisCache) and _cache._redis is not None:
+        try:
+            await _cache._redis.aclose()
+        except Exception:
+            pass
+        _cache._redis = None
 
 
 async def warmup_cache():
