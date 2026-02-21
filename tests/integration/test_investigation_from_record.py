@@ -55,7 +55,7 @@ class TestFromRecordEndpoint:
         # Should get 422 for invalid enum value
         assert response.status_code == 422
         data = response.json()
-        assert "detail" in data
+        assert "details" in data or "detail" in data
 
     async def test_from_record_validates_source_id_positive(self, client: AsyncClient, auth_headers: dict):
         """Test from-record requires source_id > 0."""

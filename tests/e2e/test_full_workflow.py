@@ -153,7 +153,7 @@ class TestFullWorkflowSchemaValidation:
 class TestIncidentLifecycle:
     """Test complete incident workflow from report to closure."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_full_incident_workflow(self, client, auth_headers):
         """
@@ -227,7 +227,7 @@ class TestIncidentLifecycle:
 class TestAuditWorkflow:
     """Test complete audit workflow from planning to closure."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_audit_template_creation_and_execution(self, client, auth_headers):
         """
@@ -288,7 +288,7 @@ class TestAuditWorkflow:
 class TestRiskManagementWorkflow:
     """Test complete risk management lifecycle."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_risk_identification_to_treatment(self, client, auth_headers):
         """
@@ -332,7 +332,7 @@ class TestRiskManagementWorkflow:
 class TestComplianceWorkflow:
     """Test compliance evidence and gap analysis workflow."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_evidence_collection_workflow(self, client, auth_headers):
         """
@@ -375,7 +375,7 @@ class TestComplianceWorkflow:
 class TestEmployeePortalFlow:
     """Test complete employee portal user journey."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_portal_complete_journey(self, client):
         """
@@ -450,7 +450,7 @@ class TestEmployeePortalFlow:
 class TestDocumentControlFlow:
     """Test document control and approval workflow."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_document_lifecycle(self, client, auth_headers):
         """
@@ -475,7 +475,7 @@ class TestDocumentControlFlow:
 class TestNotificationWorkflow:
     """Test notification and workflow automation."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_notification_flow(self, client, auth_headers):
         """Test notification delivery and preferences."""
@@ -510,7 +510,7 @@ class TestNotificationWorkflow:
 class TestAnalyticsReporting:
     """Test analytics and reporting workflows."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_analytics_dashboard(self, client, auth_headers):
         """Test analytics dashboard data retrieval."""
@@ -548,7 +548,7 @@ class TestAnalyticsReporting:
 class TestIMSManagement:
     """Test Integrated Management System workflows."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_ims_dashboard_access(self, client, auth_headers):
         """Test IMS dashboard data retrieval."""
@@ -604,7 +604,7 @@ class TestIMSManagement:
 class TestUserManagement:
     """Test user management workflows."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_user_profile(self, client, auth_headers):
         """Test user profile access."""
@@ -637,7 +637,7 @@ class TestUserManagement:
 class TestSearchDiscovery:
     """Test search and discovery features."""
 
-    pytestmark = pytest.mark.skip(reason="Requires database infrastructure")
+    pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
     def test_global_search(self, client, auth_headers):
         """Test global search functionality."""

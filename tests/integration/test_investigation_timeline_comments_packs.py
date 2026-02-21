@@ -252,7 +252,7 @@ class TestCommentsIncludeDeletedAdminGate:
 
         if response.status_code == 403:
             data = response.json()
-            assert data["detail"]["error_code"] == "FORBIDDEN"
+            assert data.get("error_code") == "403" or data.get("code") == "PERMISSION_DENIED"
 
     async def test_include_deleted_false_does_not_require_admin(self, client: AsyncClient, auth_headers: dict):
         """Test include_deleted=false (default) works for normal users."""

@@ -221,23 +221,153 @@ async def test_get_notifications_returns_empty_without_db():
     assert result == []
 
 
+# ---------------------------------------------------------------------------
+# SOS / emergency alert
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_send_sos_alert_creates_notifications_for_safety_team():
+    """SOS alert creates one CRITICAL notification per safety team member."""
+    svc = NotificationService(db=None)
+
+    with patch.object(svc, "_deliver_in_app", new_callable=AsyncMock):
+        notifications = await svc.send_sos_alert(
+            reporter_id=1,
+            reporter_name="Alice",
+            location="Building A",
+            safety_team_ids=[10, 20],
+        )
+
+    assert len(notifications) == 2
+    for n in notifications:
+        assert n.priority == NotificationPriority.CRITICAL
+        assert n.type == NotificationType.SOS_ALERT
+
+
+@pytest.mark.asyncio
+async def test_send_sos_alert_empty_team():
+    """SOS with no safety_team_ids produces no notifications."""
+    svc = NotificationService(db=None)
+    notifications = await svc.send_sos_alert(
+        reporter_id=1,
+        reporter_name="Bob",
+        location="Warehouse",
+        safety_team_ids=[],
+    )
+    assert notifications == []
+
+
+# ---------------------------------------------------------------------------
+# RIDDOR alert
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_send_riddor_alert_creates_critical_notifications():
+    """RIDDOR alert creates CRITICAL notifications for compliance team."""
+    svc = NotificationService(db=None)
+
+    with patch.object(svc, "_deliver_in_app", new_callable=AsyncMock):
+        notifications = await svc.send_riddor_alert(
+            incident_id="INC-001",
+            incident_type="Major injury",
+            location="Site B",
+            compliance_team_ids=[5, 6, 7],
+        )
+
+    assert len(notifications) == 3
+    for n in notifications:
+        assert n.priority == NotificationPriority.CRITICAL
+        assert n.type == NotificationType.RIDDOR_INCIDENT
+        assert n.entity_id == "INC-001"
+
+
+# ---------------------------------------------------------------------------
+# Assignment creation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_assignment_notifies_user():
+    """Creating an assignment sends a notification to the assignee."""
+    svc = NotificationService(db=None)
+
+    with patch.object(svc, "_deliver_in_app", new_callable=AsyncMock) as mock_deliver:
+        assignment = await svc.create_assignment(
+            entity_type="action",
+            entity_id="ACT-100",
+            assigned_to_user_id=50,
+            assigned_by_user_id=1,
+            priority="high",
+            notes="Please complete by Friday",
+        )
+
+    assert assignment.entity_type == "action"
+    assert assignment.assigned_to_user_id == 50
+    assert mock_deliver.call_count >= 1
+
+
+# ---------------------------------------------------------------------------
+# Process mentions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_mentions_creates_notifications():
+    """Processing mentions notifies mentioned users (not the author)."""
+    svc = NotificationService(db=None)
+    user_lookup = {"alice": 10, "bob": 20}
+
+    with patch.object(svc, "_deliver_in_app", new_callable=AsyncMock):
+        mentions = await svc.process_mentions(
+            text="Hey @alice and @bob, please review",
+            content_type="incident",
+            content_id="INC-50",
+            mentioned_by_user_id=99,
+            user_lookup=user_lookup,
+        )
+
+    assert len(mentions) == 2
+    mentioned_ids = {m.mentioned_user_id for m in mentions}
+    assert mentioned_ids == {10, 20}
+
+
+@pytest.mark.asyncio
+async def test_process_mentions_skips_self_mention():
+    """Author mentioning themselves does not create a mention record."""
+    svc = NotificationService(db=None)
+    user_lookup = {"alice": 99}
+
+    with patch.object(svc, "_deliver_in_app", new_callable=AsyncMock):
+        mentions = await svc.process_mentions(
+            text="Reminder to myself @alice",
+            content_type="action",
+            content_id="ACT-1",
+            mentioned_by_user_id=99,
+            user_lookup=user_lookup,
+        )
+
+    assert len(mentions) == 0
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("NOTIFICATION SERVICE UNIT TESTS")
     print("=" * 60)
 
     test_parse_mentions_simple_username()
-    print("✓ parse_mentions simple username")
+    print("  parse_mentions simple username")
     test_parse_mentions_bracket_format()
-    print("✓ parse_mentions bracket format")
+    print("  parse_mentions bracket format")
     test_parse_mentions_multiple()
-    print("✓ parse_mentions multiple")
+    print("  parse_mentions multiple")
     test_parse_mentions_no_mentions()
-    print("✓ parse_mentions no mentions")
+    print("  parse_mentions no mentions")
     test_mention_regex_pattern()
-    print("✓ mention regex pattern")
+    print("  mention regex pattern")
 
     print()
     print("=" * 60)
-    print("ALL NOTIFICATION SERVICE TESTS PASSED ✅")
+    print("ALL NOTIFICATION SERVICE TESTS PASSED")
     print("=" * 60)

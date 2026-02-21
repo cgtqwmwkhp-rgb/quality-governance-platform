@@ -16,8 +16,7 @@ Reason: Test expects /api/portal/report but actual endpoint is /api/portal/repor
 import pytest
 from fastapi.testclient import TestClient
 
-# Quarantine marker - skip all tests in this module (not runnable yet)
-pytestmark = pytest.mark.skip(reason="Requires database migration infrastructure - pending environment setup")
+pytestmark = pytest.mark.xfail(reason="GOVPLAT-002: API contract needs alignment", strict=False)
 
 
 @pytest.fixture
