@@ -46,7 +46,7 @@ class PlanetMarkService:
     @staticmethod
     def get_data_quality_score(level: str) -> int:
         """Map a quality level string to its 0-4 score."""
-        return DATA_QUALITY_CRITERIA.get(level, {"score": 2})["score"]
+        return int(DATA_QUALITY_CRITERIA.get(level, {"score": 2})["score"])
 
     @staticmethod
     def calculate_scope_quality(scope_sources: list) -> dict:
@@ -83,7 +83,7 @@ class PlanetMarkService:
     @staticmethod
     def calculate_overall_data_quality(scope1_score: float, scope2_score: float, scope3_score: float) -> int:
         """Average the three scope scores into a single 0-16 integer."""
-        return round((scope1_score + scope2_score + scope3_score) / 3, 0)
+        return int(round((scope1_score + scope2_score + scope3_score) / 3, 0))
 
     @staticmethod
     def calculate_avg_quality(sources: list) -> int:
@@ -97,7 +97,7 @@ class PlanetMarkService:
     def calculate_fleet_co2e(fuel_litres: float, fuel_type: str) -> tuple[float, dict]:
         """Return *(co2e_kg, emission_factor_dict)* for a fleet fuel record."""
         ef = EMISSION_FACTORS.get(f"{fuel_type.lower()}_litres", EMISSION_FACTORS["diesel_litres"])
-        return fuel_litres * ef["factor"], ef
+        return fuel_litres * float(ef["factor"]), ef
 
     @staticmethod
     def calculate_fuel_efficiency(fuel_litres: float, mileage: float | None) -> float | None:

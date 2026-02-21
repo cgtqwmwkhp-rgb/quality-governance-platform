@@ -76,6 +76,7 @@ class TestStandardsRoutes:
             code="ISO 9001",
             name="Quality Management",
             full_name="ISO 9001:2015 Quality Management Systems",
+            version="2015",
         )
         assert data.code == "ISO 9001"
         assert data.name == "Quality Management"

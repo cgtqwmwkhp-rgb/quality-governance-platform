@@ -40,7 +40,7 @@ try:
 
     tracer = trace.get_tracer(__name__)
 except ImportError:
-    tracer = None
+    tracer = None  # type: ignore[assignment]
 
 router = APIRouter()
 

@@ -430,7 +430,7 @@ async def get_current_soa(
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
         "implementation_percentage": ISO27001Service.calculate_soa_compliance_percentage(
-            soa.implemented_controls, soa.applicable_controls
+            int(soa.implemented_controls), int(soa.applicable_controls)
         ),
         "status": soa.status,
         "document_link": soa.document_link,
