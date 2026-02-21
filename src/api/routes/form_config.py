@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -55,7 +56,11 @@ async def list_form_templates(
     is_active: Optional[bool] = Query(None),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
-    query = select(FormTemplate).where(FormTemplate.tenant_id == current_user.tenant_id)
+    query = (
+        select(FormTemplate)
+        .where(FormTemplate.tenant_id == current_user.tenant_id)
+        .options(selectinload(FormTemplate.steps))
+    )
 
     if form_type:
         query = query.where(FormTemplate.form_type == form_type)
@@ -67,11 +72,7 @@ async def list_form_templates(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/templates",
-    response_model=FormTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/templates", response_model=FormTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_form_template(
     data: FormTemplateCreate,
     db: DbSession,
@@ -290,11 +291,7 @@ async def delete_form_template(
 # ==================== Form Step Routes ====================
 
 
-@router.post(
-    "/templates/{template_id}/steps",
-    response_model=FormStepResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/templates/{template_id}/steps", response_model=FormStepResponse, status_code=status.HTTP_201_CREATED)
 async def create_form_step(
     template_id: int,
     data: FormStepCreate,
@@ -373,11 +370,7 @@ async def delete_form_step(
 # ==================== Form Field Routes ====================
 
 
-@router.post(
-    "/steps/{step_id}/fields",
-    response_model=FormFieldResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/steps/{step_id}/fields", response_model=FormFieldResponse, status_code=status.HTTP_201_CREATED)
 async def create_form_field(
     step_id: int,
     data: FormFieldCreate,
@@ -613,11 +606,7 @@ async def list_system_settings(
     )
 
 
-@router.post(
-    "/settings",
-    response_model=SystemSettingResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/settings", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
 async def create_system_setting(
     data: SystemSettingCreate,
     db: DbSession,
@@ -716,11 +705,7 @@ async def list_lookup_options(
     )
 
 
-@router.post(
-    "/lookup/{category}",
-    response_model=LookupOptionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/lookup/{category}", response_model=LookupOptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_lookup_option(
     category: str,
     data: LookupOptionCreate,

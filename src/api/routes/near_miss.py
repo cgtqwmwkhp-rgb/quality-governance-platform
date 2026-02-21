@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
@@ -84,7 +85,16 @@ async def list_near_misses(
 
     Ordered by event_date DESC, id ASC for deterministic results.
     """
-    query = select(NearMiss).where(NearMiss.tenant_id == current_user.tenant_id)
+    query = (
+        select(NearMiss)
+        .where(NearMiss.tenant_id == current_user.tenant_id)
+        .options(
+            selectinload(NearMiss.assigned_to),
+            selectinload(NearMiss.created_by),
+            selectinload(NearMiss.updated_by),
+            selectinload(NearMiss.closed_by),
+        )
+    )
 
     if reporter_email:
         query = query.where(NearMiss.reporter_email == reporter_email)
@@ -148,11 +158,7 @@ async def update_near_miss(
         entity_id=str(near_miss.id),
         action="update",
         description=f"Near Miss {near_miss.reference_number} updated",
-        payload={
-            "updates": update_data,
-            "old_status": old_status,
-            "new_status": near_miss.status,
-        },
+        payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
         user_id=current_user.id,
         request_id=request_id,
     )

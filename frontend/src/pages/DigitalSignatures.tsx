@@ -37,6 +37,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { cn } from "../helpers/utils";
+import { TableSkeleton } from '../components/ui/SkeletonLoader';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -89,7 +90,7 @@ const DigitalSignatures: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [signatureRequests, setSignatureRequests] = useState<SignatureRequest[]>([]);
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const mapApiRequest = (r: SignatureRequestEntry): SignatureRequest => ({
     id: r.id,
@@ -175,6 +176,10 @@ const DigitalSignatures: React.FC = () => {
     if (searchQuery && !req.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
+  if (loading) {
+    return <TableSkeleton />;
+  }
 
   return (
     <div className="space-y-6">

@@ -53,6 +53,7 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
+from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -113,11 +114,7 @@ async def list_templates(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/templates",
-    response_model=AuditTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
@@ -225,10 +222,7 @@ async def get_template(
             selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
             selectinload(AuditTemplate.questions),
         )
-        .where(
-            AuditTemplate.id == template_id,
-            AuditTemplate.tenant_id == current_user.tenant_id,
-        )
+        .where(AuditTemplate.id == template_id, AuditTemplate.tenant_id == current_user.tenant_id)
     )
     template = result.scalar_one_or_none()
 
@@ -304,10 +298,7 @@ async def publish_template(
     result = await db.execute(
         select(AuditTemplate)
         .options(selectinload(AuditTemplate.questions))
-        .where(
-            AuditTemplate.id == template_id,
-            AuditTemplate.tenant_id == current_user.tenant_id,
-        )
+        .where(AuditTemplate.id == template_id, AuditTemplate.tenant_id == current_user.tenant_id)
     )
     template = result.scalar_one_or_none()
 
@@ -342,9 +333,7 @@ async def publish_template(
 
 
 @router.post(
-    "/templates/{template_id}/clone",
-    response_model=AuditTemplateResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/templates/{template_id}/clone", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
 )
 async def clone_template(
     template_id: int,
@@ -358,10 +347,7 @@ async def clone_template(
             selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
             selectinload(AuditTemplate.questions),
         )
-        .where(
-            AuditTemplate.id == template_id,
-            AuditTemplate.tenant_id == current_user.tenant_id,
-        )
+        .where(AuditTemplate.id == template_id, AuditTemplate.tenant_id == current_user.tenant_id)
     )
     original = result.scalar_one_or_none()
 
@@ -612,9 +598,7 @@ async def permanently_delete_template(
 
 
 @router.post(
-    "/templates/{template_id}/sections",
-    response_model=AuditSectionResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/templates/{template_id}/sections", response_model=AuditSectionResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_section(
     template_id: int,
@@ -692,9 +676,7 @@ async def delete_section(
 
 
 @router.post(
-    "/templates/{template_id}/questions",
-    response_model=AuditQuestionResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/templates/{template_id}/questions", response_model=AuditQuestionResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_question(
     template_id: int,
@@ -1013,13 +995,10 @@ async def complete_run(
             detail="Audit run must be in progress to complete",
         )
 
-    scored_responses = [r for r in run.responses if not r.is_na]
-    total_score = sum(r.score or 0 for r in scored_responses)
-    max_score = sum(r.max_score or 0 for r in scored_responses)
-
-    run.score = total_score
-    run.max_score = max_score
-    run.score_percentage = (total_score / max_score * 100) if max_score > 0 else 0
+    score = AuditScoringService.calculate_run_score(run.responses)
+    run.score = score.total_score
+    run.max_score = score.max_score
+    run.score_percentage = score.score_percentage
 
     # Get template to check passing score
     template_result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
@@ -1041,11 +1020,7 @@ async def complete_run(
 # ============== Response Endpoints ==============
 
 
-@router.post(
-    "/runs/{run_id}/responses",
-    response_model=AuditResponseResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/runs/{run_id}/responses", response_model=AuditResponseResponse, status_code=status.HTTP_201_CREATED)
 async def create_response(
     run_id: int,
     response_data: AuditResponseCreate,
@@ -1156,11 +1131,7 @@ async def list_findings(
     return await paginate(db, query, params)
 
 
-@router.post(
-    "/runs/{run_id}/findings",
-    response_model=AuditFindingResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)
 async def create_finding(
     run_id: int,
     finding_data: AuditFindingCreate,
@@ -1225,12 +1196,7 @@ async def update_finding(
     if "risk_ids" in update_data:
         finding.risk_ids_json = update_data["risk_ids"]
 
-    apply_updates(
-        finding,
-        finding_data,
-        set_updated_at=False,
-        exclude={"clause_ids", "control_ids", "risk_ids"},
-    )
+    apply_updates(finding, finding_data, set_updated_at=False, exclude={"clause_ids", "control_ids", "risk_ids"})
 
     await db.commit()
     await db.refresh(finding)

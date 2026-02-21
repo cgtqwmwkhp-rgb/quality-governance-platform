@@ -21,6 +21,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, validator
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser
 
@@ -277,7 +278,7 @@ async def receive_event(event: TelemetryEvent, current_user: CurrentUser):
     # Aggregate to local file (fault-tolerant)
     try:
         aggregate_event(event)
-    except Exception as e:
+    except (SQLAlchemyError, ValueError) as e:
         # Log but don't fail - telemetry should never block clients
         logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 
@@ -306,7 +307,7 @@ async def receive_events_batch(batch: TelemetryBatch, current_user: CurrentUser)
         try:
             aggregate_event(event)
             processed += 1
-        except Exception as e:
+        except (SQLAlchemyError, ValueError) as e:
             # Log but don't fail - telemetry should never block clients
             logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 

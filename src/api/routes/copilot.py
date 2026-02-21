@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 
 router = APIRouter()
 
@@ -95,7 +96,7 @@ async def create_session(
 
     service = CopilotService(db)
 
-    tenant_id = getattr(current_user, "tenant_id", 1)
+    tenant_id = current_user.tenant_id
     user_id = current_user.id
 
     session = await service.create_session(
@@ -132,12 +133,12 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return session
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete("/sessions/{session_id}", response_model=dict)
 async def close_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
@@ -198,7 +199,7 @@ async def send_message(
         )
         return message
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
@@ -217,7 +218,7 @@ async def get_messages(
     return messages
 
 
-@router.post("/messages/{message_id}/feedback")
+@router.post("/messages/{message_id}/feedback", response_model=dict)
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
@@ -229,7 +230,7 @@ async def submit_feedback(
 
     service = CopilotService(db)
 
-    tenant_id = getattr(current_user, "tenant_id", 1)
+    tenant_id = current_user.tenant_id
     user_id = current_user.id
 
     try:
@@ -243,7 +244,7 @@ async def submit_feedback(
         )
         return {"status": "submitted", "feedback_id": feedback.id}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
 
 # ============================================================================
@@ -264,7 +265,7 @@ async def list_actions(current_user: CurrentUser, category: Optional[str] = None
     return actions
 
 
-@router.post("/actions/execute")
+@router.post("/actions/execute", response_model=dict)
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
@@ -274,10 +275,7 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Action {data.action_name} not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "status": "executed",
@@ -367,7 +365,7 @@ async def suggest_actions(
 # ============================================================================
 
 
-@router.get("/knowledge/search")
+@router.get("/knowledge/search", response_model=list[dict])
 async def search_knowledge(
     db: DbSession,
     current_user: CurrentUser,
@@ -380,7 +378,7 @@ async def search_knowledge(
 
     service = CopilotService(db)
 
-    tenant_id = getattr(current_user, "tenant_id", 1)
+    tenant_id = current_user.tenant_id
 
     results = await service.search_knowledge(
         query=query,
@@ -401,7 +399,7 @@ async def search_knowledge(
     ]
 
 
-@router.post("/knowledge")
+@router.post("/knowledge", response_model=dict)
 async def add_knowledge(
     title: str,
     content: str,
@@ -415,7 +413,7 @@ async def add_knowledge(
 
     service = CopilotService(db)
 
-    tenant_id = getattr(current_user, "tenant_id", 1)
+    tenant_id = current_user.tenant_id
 
     knowledge = await service.add_knowledge(
         title=title,
@@ -523,7 +521,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
                         await service.submit_feedback(
                             message_id=data["message_id"],
                             user_id=ws_user_id,
-                            tenant_id=int(payload.get("tenant_id", 1)),
+                            tenant_id=int(payload.get("tenant_id", 0)),
                             rating=data["rating"],
                             feedback_type=data.get("feedback_type", "other"),
                         )

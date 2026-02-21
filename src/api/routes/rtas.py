@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -143,18 +144,11 @@ async def list_rtas(
             "page_size": paginated.page_size,
             "pages": paginated.pages,
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         error_str = str(e).lower()
-        logger.error(f"Error listing RTAs: {e}", exc_info=True)
+        logger.exception(f"Error listing RTAs: {e}")
 
-        column_errors = [
-            "reporter_email",
-            "column",
-            "does not exist",
-            "unknown column",
-            "programmingerror",
-            "relation",
-        ]
+        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
@@ -241,11 +235,7 @@ async def delete_rta(
 # RTA Actions endpoints
 
 
-@router.post(
-    "/{rta_id}/actions",
-    response_model=RTAActionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{rta_id}/actions", response_model=RTAActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,

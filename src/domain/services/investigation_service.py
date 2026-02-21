@@ -27,6 +27,17 @@ from src.domain.models.investigation import (
 )
 
 
+class InvestigationStatusManager:
+    @staticmethod
+    def apply_status_timestamps(investigation, new_status: str) -> None:
+        if new_status == "in_progress" and not investigation.started_at:
+            investigation.started_at = datetime.utcnow()
+        elif new_status == "completed" and not investigation.completed_at:
+            investigation.completed_at = datetime.utcnow()
+        elif new_status == "closed" and not investigation.closed_at:
+            investigation.closed_at = datetime.utcnow()
+
+
 class MappingReasonCode:
     """Reason codes for field mapping (Mapping Contract v1)."""
 
@@ -79,15 +90,9 @@ class InvestigationService:
         """
         model_map = {
             AssignedEntityType.NEAR_MISS: ("src.domain.models.near_miss", "NearMiss"),
-            AssignedEntityType.ROAD_TRAFFIC_COLLISION: (
-                "src.domain.models.rta",
-                "RoadTrafficCollision",
-            ),
+            AssignedEntityType.ROAD_TRAFFIC_COLLISION: ("src.domain.models.rta", "RoadTrafficCollision"),
             AssignedEntityType.COMPLAINT: ("src.domain.models.complaint", "Complaint"),
-            AssignedEntityType.REPORTING_INCIDENT: (
-                "src.domain.models.incident",
-                "Incident",
-            ),
+            AssignedEntityType.REPORTING_INCIDENT: ("src.domain.models.incident", "Incident"),
         }
 
         if source_type not in model_map:
@@ -194,11 +199,7 @@ class InvestigationService:
             map_field("persons_involved", "section_1_details", "persons_involved")
             map_field("witness_names", "section_1_details", "witnesses")
             map_field("potential_consequences", "section_1_details", "immediate_harm")
-            map_field(
-                "preventive_action_suggested",
-                "section_2_immediate_actions",
-                "actions_taken",
-            )
+            map_field("preventive_action_suggested", "section_2_immediate_actions", "actions_taken")
 
             # Determine level from severity
             severity = getattr(record, "potential_severity", "medium")
@@ -435,10 +436,7 @@ class InvestigationService:
                     can_include = True
                 else:
                     exclusion_reason = "INTERNAL_CUSTOMER_ONLY"
-            elif asset.visibility in (
-                EvidenceVisibility.EXTERNAL_ALLOWED,
-                EvidenceVisibility.PUBLIC,
-            ):
+            elif asset.visibility in (EvidenceVisibility.EXTERNAL_ALLOWED, EvidenceVisibility.PUBLIC):
                 can_include = True
                 # Check if redaction is required
                 if audience == CustomerPackAudience.EXTERNAL_CUSTOMER:
@@ -450,10 +448,10 @@ class InvestigationService:
                 {
                     "asset_id": asset.id,
                     "title": asset.title,
-                    "asset_type": (asset.asset_type.value if asset.asset_type else "other"),
+                    "asset_type": asset.asset_type.value if asset.asset_type else "other",
                     "included": can_include,
                     "exclusion_reason": exclusion_reason,
-                    "visibility": (asset.visibility.value if asset.visibility else "unknown"),
+                    "visibility": asset.visibility.value if asset.visibility else "unknown",
                     "contains_pii": asset.contains_pii,
                     "redaction_required": asset.redaction_required,
                 }
@@ -534,11 +532,7 @@ async def get_or_create_default_template(
                     "fields": [
                         {"id": "problem_statement", "type": "text", "required": True},
                         {"id": "root_cause", "type": "text", "required": True},
-                        {
-                            "id": "contributing_factors",
-                            "type": "array",
-                            "required": False,
-                        },
+                        {"id": "contributing_factors", "type": "array", "required": False},
                         {"id": "corrective_actions", "type": "array", "required": True},
                     ],
                 }

@@ -11,12 +11,12 @@ import {
   List,
   Grid3X3,
   Bell,
-  Loader2,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge, type BadgeVariant } from '../components/ui/Badge';
 import { cn } from "../helpers/utils";
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { auditsApi, actionsApi } from '../api/client';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 
@@ -173,11 +173,7 @@ export default function CalendarView() {
     .slice(0, 5);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    );
+    return <CardSkeleton />;
   }
 
   return (

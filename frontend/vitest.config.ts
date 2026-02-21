@@ -11,10 +11,10 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       thresholds: {
-        statements: 8,
-        branches: 5,
-        functions: 8,
-        lines: 8
+        statements: 20,
+        branches: 15,
+        functions: 20,
+        lines: 20
       }
     }
   },

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, update
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.notification import Notification, NotificationPreference, NotificationPriority, NotificationType
@@ -142,7 +143,7 @@ async def list_notifications(
     )
 
 
-@router.get("/unread-count")
+@router.get("/unread-count", response_model=dict)
 async def get_unread_count(db: DbSession, current_user: CurrentUser):
     """Get the count of unread notifications for the current user.
 
@@ -160,7 +161,7 @@ async def get_unread_count(db: DbSession, current_user: CurrentUser):
     return {"unread_count": count}
 
 
-@router.post("/{notification_id}/read")
+@router.post("/{notification_id}/read", response_model=dict)
 async def mark_notification_read(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Mark a specific notification as read."""
     result = await db.execute(
@@ -171,7 +172,7 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     notification.is_read = True
     notification.read_at = datetime.utcnow()
@@ -181,7 +182,7 @@ async def mark_notification_read(notification_id: int, db: DbSession, current_us
     return {"success": True, "notification_id": notification_id}
 
 
-@router.post("/{notification_id}/unread")
+@router.post("/{notification_id}/unread", response_model=dict)
 async def mark_notification_unread(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Mark a specific notification as unread."""
     result = await db.execute(
@@ -192,7 +193,7 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     notification.is_read = False
     notification.read_at = None
@@ -202,7 +203,7 @@ async def mark_notification_unread(notification_id: int, db: DbSession, current_
     return {"success": True, "notification_id": notification_id}
 
 
-@router.post("/read-all")
+@router.post("/read-all", response_model=dict)
 async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
     """Mark all notifications as read for the current user."""
     result = await db.execute(
@@ -219,7 +220,7 @@ async def mark_all_notifications_read(db: DbSession, current_user: CurrentUser):
     return {"success": True, "count": result.rowcount}
 
 
-@router.delete("/{notification_id}")
+@router.delete("/{notification_id}", response_model=dict)
 async def delete_notification(notification_id: int, db: DbSession, current_user: CurrentUser):
     """Delete a specific notification."""
     result = await db.execute(
@@ -230,7 +231,7 @@ async def delete_notification(notification_id: int, db: DbSession, current_user:
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
 
     await db.delete(notification)
     await db.commit()
@@ -239,7 +240,7 @@ async def delete_notification(notification_id: int, db: DbSession, current_user:
     return {"success": True, "notification_id": notification_id}
 
 
-@router.get("/preferences")
+@router.get("/preferences", response_model=dict)
 async def get_notification_preferences(db: DbSession, current_user: CurrentUser):
     """Get notification preferences for the current user."""
     result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
@@ -273,7 +274,7 @@ async def get_notification_preferences(db: DbSession, current_user: CurrentUser)
     }
 
 
-@router.put("/preferences")
+@router.put("/preferences", response_model=dict)
 async def update_notification_preferences(
     preferences: NotificationPreferencesUpdate,
     db: DbSession,
@@ -332,7 +333,7 @@ async def search_users_for_mention(
     ]
 
 
-@router.post("/test-notification")
+@router.post("/test-notification", response_model=dict)
 async def send_test_notification(current_user: CurrentUser):
     """
     Send a test notification to the current user.

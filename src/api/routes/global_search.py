@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
 
@@ -93,7 +94,7 @@ async def global_search(
                     highlights=[w for w in words if w in title_lower or w in desc_lower],
                 )
             )
-    except Exception:
+    except (SQLAlchemyError, ValueError) as e:
         pass
 
     try:
@@ -125,7 +126,7 @@ async def global_search(
                     highlights=query_lower.split(),
                 )
             )
-    except Exception:
+    except (SQLAlchemyError, ValueError) as e:
         pass
 
     try:
@@ -157,7 +158,7 @@ async def global_search(
                     highlights=query_lower.split(),
                 )
             )
-    except Exception:
+    except (SQLAlchemyError, ValueError) as e:
         pass
 
     try:
@@ -189,7 +190,7 @@ async def global_search(
                     highlights=query_lower.split(),
                 )
             )
-    except Exception:
+    except (SQLAlchemyError, ValueError) as e:
         pass
 
     if module:

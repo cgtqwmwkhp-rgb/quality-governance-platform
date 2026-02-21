@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from "../helpers/utils";
+import { TableSkeleton } from '../components/ui/SkeletonLoader';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
@@ -139,11 +140,7 @@ export default function UserManagement() {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   return (

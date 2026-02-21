@@ -18,7 +18,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -96,11 +96,7 @@ SCOPE3_CATEGORIES = [
         "name": "Processing of sold products",
         "description": "Processing of intermediate products sold by downstream companies",
     },
-    {
-        "number": 11,
-        "name": "Use of sold products",
-        "description": "End use of goods and services sold",
-    },
+    {"number": 11, "name": "Use of sold products", "description": "End use of goods and services sold"},
     {
         "number": 12,
         "name": "End-of-life treatment of sold products",
@@ -117,41 +113,13 @@ SCOPE3_CATEGORIES = [
 
 # DEFRA 2024 Emission Factors (simplified)
 EMISSION_FACTORS = {
-    "diesel_litres": {
-        "factor": 2.51229,
-        "unit": "kgCO2e/litre",
-        "source": "DEFRA 2024",
-    },
-    "petrol_litres": {
-        "factor": 2.16802,
-        "unit": "kgCO2e/litre",
-        "source": "DEFRA 2024",
-    },
-    "natural_gas_kwh": {
-        "factor": 0.18254,
-        "unit": "kgCO2e/kWh",
-        "source": "DEFRA 2024",
-    },
-    "electricity_kwh_uk": {
-        "factor": 0.20705,
-        "unit": "kgCO2e/kWh",
-        "source": "DEFRA 2024 (location)",
-    },
-    "electricity_kwh_market": {
-        "factor": 0.43360,
-        "unit": "kgCO2e/kWh",
-        "source": "DEFRA 2024 (market)",
-    },
-    "waste_general_kg": {
-        "factor": 0.44672,
-        "unit": "kgCO2e/kg",
-        "source": "DEFRA 2024",
-    },
-    "waste_recycled_kg": {
-        "factor": 0.02140,
-        "unit": "kgCO2e/kg",
-        "source": "DEFRA 2024",
-    },
+    "diesel_litres": {"factor": 2.51229, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
+    "petrol_litres": {"factor": 2.16802, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
+    "natural_gas_kwh": {"factor": 0.18254, "unit": "kgCO2e/kWh", "source": "DEFRA 2024"},
+    "electricity_kwh_uk": {"factor": 0.20705, "unit": "kgCO2e/kWh", "source": "DEFRA 2024 (location)"},
+    "electricity_kwh_market": {"factor": 0.43360, "unit": "kgCO2e/kWh", "source": "DEFRA 2024 (market)"},
+    "waste_general_kg": {"factor": 0.44672, "unit": "kgCO2e/kg", "source": "DEFRA 2024"},
+    "waste_recycled_kg": {"factor": 0.02140, "unit": "kgCO2e/kg", "source": "DEFRA 2024"},
     "rail_km": {"factor": 0.03549, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
     "flight_short_km": {"factor": 0.24587, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
     "car_average_km": {"factor": 0.17081, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
@@ -264,8 +232,8 @@ async def list_reporting_years(
             next_action="Run database migrations with: alembic upgrade head",
             request_id=get_request_id(request),
         )
-    except Exception as e:
-        logger.error(
+    except SQLAlchemyError as e:
+        logger.exception(
             "Planet Mark years query failed unexpectedly: %s: %s",
             type(e).__name__,
             str(e)[:500],
@@ -327,11 +295,7 @@ async def create_reporting_year(
         db.add(scope3)
     await db.commit()
 
-    return {
-        "id": year.id,
-        "year_label": year.year_label,
-        "message": "Reporting year created",
-    }
+    return {"id": year.id, "year_label": year.year_label, "message": "Reporting year created"}
 
 
 @router.get("/years/{year_id}", response_model=dict)
@@ -390,7 +354,7 @@ async def get_reporting_year(
         "certification": {
             "status": year.certification_status,
             "certificate_number": year.certificate_number,
-            "certification_date": (year.certification_date.isoformat() if year.certification_date else None),
+            "certification_date": year.certification_date.isoformat() if year.certification_date else None,
             "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         },
     }
@@ -472,7 +436,7 @@ async def list_emission_sources(
                 "activity_value": s.activity_value,
                 "activity_unit": s.activity_unit,
                 "co2e_tonnes": s.co2e_tonnes,
-                "percentage": (round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0),
+                "percentage": round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0,
                 "data_quality": s.data_quality_level,
             }
             for s in sources
@@ -520,7 +484,7 @@ async def get_scope3_breakdown(
                 "is_relevant": c.is_relevant,
                 "is_measured": c.is_measured,
                 "total_co2e": c.total_co2e,
-                "percentage": (round((c.total_co2e / total * 100), 1) if total > 0 else 0),
+                "percentage": round((c.total_co2e / total * 100), 1) if total > 0 else 0,
                 "data_quality_score": c.data_quality_score,
                 "calculation_method": c.calculation_method,
                 "exclusion_reason": c.exclusion_reason,
@@ -560,7 +524,7 @@ async def list_improvement_actions(
             "completed": completed,
             "in_progress": in_progress,
             "overdue": overdue,
-            "completion_rate": (round((completed / len(actions) * 100), 1) if actions else 0),
+            "completion_rate": round((completed / len(actions) * 100), 1) if actions else 0,
         },
         "actions": [
             {
@@ -606,11 +570,7 @@ async def create_improvement_action(
     await db.commit()
     await db.refresh(action)
 
-    return {
-        "id": action.id,
-        "action_id": action_id,
-        "message": "Improvement action created",
-    }
+    return {"id": action.id, "action_id": action_id, "message": "Improvement action created"}
 
 
 @router.put("/years/{year_id}/actions/{action_id}", response_model=dict)
@@ -623,8 +583,7 @@ async def update_action_status(
     """Update improvement action status"""
     result = await db.execute(
         select(ImprovementAction).where(
-            ImprovementAction.id == action_id,
-            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.id == action_id, ImprovementAction.reporting_year_id == year_id
         )
     )
     action = result.scalar_one_or_none()
@@ -655,11 +614,7 @@ async def get_data_quality_assessment(
     # Calculate quality by scope
     def calc_scope_quality(scope_sources):
         if not scope_sources:
-            return {
-                "score": 0,
-                "actual_pct": 0,
-                "recommendations": ["No data recorded"],
-            }
+            return {"score": 0, "actual_pct": 0, "recommendations": ["No data recorded"]}
 
         total_emissions = sum(s.co2e_tonnes for s in scope_sources)
         weighted_score = sum(s.data_quality_score * s.co2e_tonnes for s in scope_sources)
@@ -699,18 +654,9 @@ async def get_data_quality_assessment(
             "scope_3": scope3,
         },
         "priority_improvements": [
-            {
-                "action": "Complete fuel-card audit for 100% fleet coverage",
-                "impact": "Scope 1 +2 points",
-            },
-            {
-                "action": "Install smart electricity meters",
-                "impact": "Scope 2 +3 points",
-            },
-            {
-                "action": "Engage top 10 suppliers for specific data",
-                "impact": "Scope 3 +2 points",
-            },
+            {"action": "Complete fuel-card audit for 100% fleet coverage", "impact": "Scope 1 +2 points"},
+            {"action": "Install smart electricity meters", "impact": "Scope 2 +3 points"},
+            {"action": "Engage top 10 suppliers for specific data", "impact": "Scope 3 +2 points"},
         ],
         "target_scores": {
             "scope_1_2": "≥12/16 (Planet Mark requirement)",
@@ -812,11 +758,7 @@ async def get_fleet_summary(
 # ============ Utility Integration ============
 
 
-@router.post(
-    "/years/{year_id}/utilities",
-    response_model=dict,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/years/{year_id}/utilities", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
@@ -861,30 +803,15 @@ async def get_certification_status(
             "description": "Electricity bills (12 months)",
             "required": True,
         },
-        {
-            "type": "utility_bill",
-            "category": "scope_1",
-            "description": "Gas bills (12 months)",
-            "required": True,
-        },
+        {"type": "utility_bill", "category": "scope_1", "description": "Gas bills (12 months)", "required": True},
         {
             "type": "fuel_card_report",
             "category": "scope_1",
             "description": "Fleet fuel card statements",
             "required": True,
         },
-        {
-            "type": "waste_manifest",
-            "category": "scope_3",
-            "description": "Waste transfer notes",
-            "required": False,
-        },
-        {
-            "type": "travel_expense",
-            "category": "scope_3",
-            "description": "Business travel records",
-            "required": False,
-        },
+        {"type": "waste_manifest", "category": "scope_3", "description": "Waste transfer notes", "required": False},
+        {"type": "travel_expense", "category": "scope_3", "description": "Business travel records", "required": False},
         {
             "type": "improvement_action",
             "category": "certification",
@@ -908,7 +835,7 @@ async def get_certification_status(
         "year_label": year.year_label,
         "status": year.certification_status,
         "certificate_number": year.certificate_number,
-        "certification_date": (year.certification_date.isoformat() if year.certification_date else None),
+        "certification_date": year.certification_date.isoformat() if year.certification_date else None,
         "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         "readiness_percent": round(readiness, 0),
         "evidence_checklist": required_evidence,
@@ -952,8 +879,8 @@ async def get_carbon_dashboard(
             next_action="Run database migrations with: alembic upgrade head",
             request_id=get_request_id(request),
         )
-    except Exception as e:
-        logger.error(
+    except SQLAlchemyError as e:
+        logger.exception(
             "Planet Mark dashboard query failed unexpectedly: %s: %s",
             type(e).__name__,
             str(e)[:500],
@@ -1005,14 +932,8 @@ async def get_carbon_dashboard(
             "on_track": yoy_change is not None and yoy_change <= -5,
         },
         "emissions_breakdown": {
-            "scope_1": {
-                "value": current_year.scope_1_total,
-                "label": "Direct (Fleet, Gas)",
-            },
-            "scope_2": {
-                "value": current_year.scope_2_market,
-                "label": "Indirect (Electricity)",
-            },
+            "scope_1": {"value": current_year.scope_1_total, "label": "Direct (Fleet, Gas)"},
+            "scope_2": {"value": current_year.scope_2_market, "label": "Indirect (Electricity)"},
             "scope_3": {"value": current_year.scope_3_total, "label": "Value Chain"},
         },
         "data_quality": {
@@ -1022,7 +943,7 @@ async def get_carbon_dashboard(
         },
         "certification": {
             "status": current_year.certification_status,
-            "expiry_date": (current_year.expiry_date.isoformat() if current_year.expiry_date else None),
+            "expiry_date": current_year.expiry_date.isoformat() if current_year.expiry_date else None,
         },
         "actions": {
             "total": len(actions),
@@ -1034,12 +955,7 @@ async def get_carbon_dashboard(
             "target_per_fte": current_year.target_emissions_per_fte,
         },
         "historical_years": [
-            {
-                "label": y.year_label,
-                "total": y.total_emissions,
-                "per_fte": y.emissions_per_fte,
-            }
-            for y in years
+            {"label": y.year_label, "total": y.total_emissions, "per_fte": y.emissions_per_fte} for y in years
         ],
     }
 

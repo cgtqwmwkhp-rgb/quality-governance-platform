@@ -19,6 +19,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from "../helpers/utils";
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { analyticsApi } from '../api/client';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 
@@ -45,7 +46,7 @@ interface ModuleStats {
 export default function Analytics() {
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [kpis, setKpis] = useState<KPICard[]>([]);
   const [moduleStats, setModuleStats] = useState<ModuleStats[]>([]);
@@ -163,6 +164,10 @@ export default function Analytics() {
       </div>
     );
   };
+
+  if (isLoading) {
+    return <CardSkeleton />;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

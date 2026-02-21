@@ -52,8 +52,7 @@ class ActionUpdate(BaseModel):
     action_type: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = Field(
-        None,
-        description="One of: open, in_progress, pending_verification, completed, cancelled",
+        None, description="One of: open, in_progress, pending_verification, completed, cancelled"
     )
     due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
@@ -107,7 +106,7 @@ def _action_to_response(
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
+        status=action.status.value if hasattr(action.status, "value") else str(action.status),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=source_type,
@@ -136,7 +135,12 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "incident"
     if not source_type or source_type == "incident":
-        incident_query = select(IncidentAction).options(selectinload(IncidentAction.incident))
+        incident_query = (
+            select(IncidentAction)
+            .join(Incident)
+            .where(Incident.tenant_id == current_user.tenant_id)
+            .options(selectinload(IncidentAction.incident))
+        )
         if status_filter:
             incident_query = incident_query.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
@@ -148,7 +152,9 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "rta"
     if not source_type or source_type == "rta":
-        rta_query = select(RTAAction).options(selectinload(RTAAction.rta))
+        rta_query = (
+            select(RTAAction).where(RTAAction.tenant_id == current_user.tenant_id).options(selectinload(RTAAction.rta))
+        )
         if status_filter:
             rta_query = rta_query.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
@@ -160,7 +166,12 @@ async def list_actions(
 
     # Only query if source_type not specified or matches "complaint"
     if not source_type or source_type == "complaint":
-        complaint_query = select(ComplaintAction).options(selectinload(ComplaintAction.complaint))
+        complaint_query = (
+            select(ComplaintAction)
+            .join(Complaint)
+            .where(Complaint.tenant_id == current_user.tenant_id)
+            .options(selectinload(ComplaintAction.complaint))
+        )
         if status_filter:
             complaint_query = complaint_query.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
@@ -173,7 +184,12 @@ async def list_actions(
     # Only query if source_type not specified or matches "investigation"
     # This fixes the "Cannot add action" defect by including investigation actions
     if not source_type or source_type == "investigation":
-        investigation_query = select(InvestigationAction).options(selectinload(InvestigationAction.investigation))
+        investigation_query = (
+            select(InvestigationAction)
+            .join(InvestigationRun)
+            .where(InvestigationRun.tenant_id == current_user.tenant_id)
+            .options(selectinload(InvestigationAction.investigation))
+        )
         if status_filter:
             investigation_query = investigation_query.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:
@@ -220,14 +236,14 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
 
     # Validate that the source entity exists
     if src_type == "incident":
-        await get_or_404(db, Incident, src_id)
+        await get_or_404(db, Incident, src_id, tenant_id=current_user.tenant_id)
     elif src_type == "rta":
-        await get_or_404(db, RoadTrafficCollision, src_id)
+        await get_or_404(db, RoadTrafficCollision, src_id, tenant_id=current_user.tenant_id)
     elif src_type == "complaint":
-        await get_or_404(db, Complaint, src_id)
+        await get_or_404(db, Complaint, src_id, tenant_id=current_user.tenant_id)
     elif src_type == "investigation":
         logger.info(f"Validating investigation exists: id={src_id}")
-        investigation = await get_or_404(db, InvestigationRun, src_id)
+        investigation = await get_or_404(db, InvestigationRun, src_id, tenant_id=current_user.tenant_id)
         logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
     else:
         raise HTTPException(
@@ -380,7 +396,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
+        status=action.status.value if hasattr(action.status, "value") else str(action.status),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=src_type,
@@ -391,7 +407,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     )
 
 
-@router.get("/{action_id}")
+@router.get("/{action_id}", response_model=dict)
 async def get_action(
     action_id: int,
     db: DbSession,
@@ -403,15 +419,18 @@ async def get_action(
 
     if src_type == "incident":
         action = await get_or_404(db, IncidentAction, action_id)
+        await get_or_404(db, Incident, action.incident_id, tenant_id=current_user.tenant_id)
         return _action_to_response(action, "incident", action.incident_id)
     elif src_type == "rta":
-        action = await get_or_404(db, RTAAction, action_id)
+        action = await get_or_404(db, RTAAction, action_id, tenant_id=current_user.tenant_id)
         return _action_to_response(action, "rta", action.rta_id)
     elif src_type == "complaint":
         action = await get_or_404(db, ComplaintAction, action_id)
+        await get_or_404(db, Complaint, action.complaint_id, tenant_id=current_user.tenant_id)
         return _action_to_response(action, "complaint", action.complaint_id)
     elif src_type == "investigation":
         action = await get_or_404(db, InvestigationAction, action_id)
+        await get_or_404(db, InvestigationRun, action.investigation_id, tenant_id=current_user.tenant_id)
         return _action_to_response(action, "investigation", action.investigation_id)
 
     raise HTTPException(
@@ -466,15 +485,18 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
 
     if src_type == "incident":
         action = await get_or_404(db, IncidentAction, action_id)
+        await get_or_404(db, Incident, action.incident_id, tenant_id=current_user.tenant_id)
         source_id = action.incident_id
     elif src_type == "rta":
-        action = await get_or_404(db, RTAAction, action_id)
+        action = await get_or_404(db, RTAAction, action_id, tenant_id=current_user.tenant_id)
         source_id = action.rta_id
     elif src_type == "complaint":
         action = await get_or_404(db, ComplaintAction, action_id)
+        await get_or_404(db, Complaint, action.complaint_id, tenant_id=current_user.tenant_id)
         source_id = action.complaint_id
     elif src_type == "investigation":
         action = await get_or_404(db, InvestigationAction, action_id)
+        await get_or_404(db, InvestigationRun, action.investigation_id, tenant_id=current_user.tenant_id)
         source_id = action.investigation_id
     else:
         raise HTTPException(

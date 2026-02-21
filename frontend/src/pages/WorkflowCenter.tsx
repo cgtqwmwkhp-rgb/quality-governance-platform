@@ -28,6 +28,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { cn } from "../helpers/utils";
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -255,11 +256,7 @@ export default function WorkflowCenter() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <CardSkeleton />;
   }
 
   return (

@@ -260,7 +260,7 @@ class PushNotificationService:
                 )
                 self.db.add(log)
 
-            except Exception as e:
+            except (ConnectionError, TimeoutError, ValueError) as e:
                 results.append({"success": False, "error": str(e)})
 
         await self.db.commit()
@@ -294,11 +294,7 @@ class PushNotificationService:
             return {"success": True, "endpoint": subscription.endpoint}
 
         except ImportError:
-            return {
-                "success": True,
-                "endpoint": subscription.endpoint,
-                "simulated": True,
-            }
+            return {"success": True, "endpoint": subscription.endpoint, "simulated": True}
 
         except Exception as e:
             error_msg = str(e)

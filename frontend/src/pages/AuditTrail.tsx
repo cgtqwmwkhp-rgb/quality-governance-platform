@@ -20,6 +20,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useToast, ToastContainer } from '../components/ui/Toast';
+import { TableSkeleton } from '../components/ui/SkeletonLoader';
 
 interface AuditEntry {
   id: string;
@@ -49,7 +50,7 @@ export default function AuditTrail() {
   const [selectedModule, setSelectedModule] = useState<string>('all');
   const [dateRange, setDateRange] = useState<string>('today');
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [page, setPage] = useState(1);
 
@@ -130,6 +131,10 @@ export default function AuditTrail() {
       showToast('Failed to export.', 'error');
     }
   };
+
+  if (isLoading) {
+    return <TableSkeleton />;
+  }
 
   return (
     <div className="space-y-6">

@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.investigation import (
+    AutosaveRequest,
     ClosureValidationResponse,
     CommentCreateRequest,
     CommentListResponse,
@@ -268,14 +269,10 @@ async def update_investigation(
 
     investigation.updated_by_id = current_user.id
 
-    # Update status timestamps
     if investigation_data.status:
-        if investigation_data.status == "in_progress" and not investigation.started_at:
-            setattr(investigation, "started_at", datetime.utcnow())
-        elif investigation_data.status == "completed" and not investigation.completed_at:
-            setattr(investigation, "completed_at", datetime.utcnow())
-        elif investigation_data.status == "closed" and not investigation.closed_at:
-            setattr(investigation, "closed_at", datetime.utcnow())
+        from src.domain.services.investigation_service import InvestigationStatusManager
+
+        InvestigationStatusManager.apply_status_timestamps(investigation, investigation_data.status)
 
     await db.commit()
     await db.refresh(investigation)
@@ -287,11 +284,7 @@ async def update_investigation(
 # === Stage 2 Endpoints ===
 
 
-@router.post(
-    "/from-record",
-    response_model=InvestigationRunResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/from-record", response_model=InvestigationRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation_from_record(
     request_body: CreateFromRecordRequest,
     db: DbSession,
@@ -445,8 +438,7 @@ async def list_source_records(
     db: DbSession,
     current_user: CurrentUser,
     source_type: str = Query(
-        ...,
-        description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)",
+        ..., description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)"
     ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     params: PaginationParams = Depends(),
@@ -572,7 +564,7 @@ async def list_source_records(
                 status=record_status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
-                investigation_reference=(str(existing_inv.reference_number) if existing_inv else None),
+                investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
             )
         )
 
@@ -589,8 +581,7 @@ async def list_source_records(
 @router.patch("/{investigation_id}/autosave", response_model=InvestigationRunResponse)
 async def autosave_investigation(
     investigation_id: int,
-    data: dict,
-    version: int,
+    payload: AutosaveRequest,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -606,14 +597,14 @@ async def autosave_investigation(
     investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Optimistic locking: check version
-    if investigation.version != version:
+    if investigation.version != payload.version:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "VERSION_CONFLICT",
                 "message": "Investigation was modified by another user",
                 "details": {
-                    "expected_version": version,
+                    "expected_version": payload.version,
                     "current_version": investigation.version,
                 },
                 "request_id": request_id,
@@ -624,7 +615,7 @@ async def autosave_investigation(
     old_data = investigation.data
 
     # Update data and increment version
-    investigation.data = data  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
+    investigation.data = payload.data  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
     investigation.version += 1  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
     investigation.updated_by_id = current_user.id
 
@@ -635,7 +626,7 @@ async def autosave_investigation(
         event_type="DATA_UPDATED",
         actor_id=current_user.id,
         old_value=old_data,
-        new_value=data,
+        new_value=payload.data,
     )
 
     await db.commit()
@@ -644,11 +635,7 @@ async def autosave_investigation(
     return investigation
 
 
-@router.post(
-    "/{investigation_id}/comments",
-    status_code=status.HTTP_201_CREATED,
-    response_model=CommentResponse,
-)
+@router.post("/{investigation_id}/comments", status_code=status.HTTP_201_CREATED, response_model=CommentResponse)
 async def add_comment(
     investigation_id: int,
     request_body: CommentCreateRequest,
@@ -751,10 +738,7 @@ async def approve_investigation(
     investigation = await get_or_404(db, InvestigationRun, investigation_id, tenant_id=current_user.tenant_id)
 
     # Check status allows approval
-    if investigation.status not in (
-        InvestigationStatus.UNDER_REVIEW,
-        InvestigationStatus.IN_PROGRESS,
-    ):
+    if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={

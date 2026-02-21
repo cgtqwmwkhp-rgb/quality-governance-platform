@@ -34,17 +34,14 @@ router = APIRouter()
 async def search_users(
     db: DbSession,
     current_user: CurrentUser,
-    q: str = Query(
-        ...,
-        min_length=1,
-        description="Search query for email, first name, or last name",
-    ),
+    q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
     search_filter = f"%{q}%"
     query = (
         select(User)
         .options(selectinload(User.roles))
+        .where(User.tenant_id == current_user.tenant_id)
         .where(
             (User.email.ilike(search_filter))
             | (User.first_name.ilike(search_filter))
@@ -71,7 +68,7 @@ async def list_users(
     is_active: Optional[bool] = None,
 ) -> UserListResponse:
     """List all users with pagination and filtering."""
-    query = select(User).options(selectinload(User.roles))
+    query = select(User).options(selectinload(User.roles)).where(User.tenant_id == current_user.tenant_id)
 
     if search:
         search_filter = f"%{search}%"

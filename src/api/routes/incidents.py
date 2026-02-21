@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -180,9 +181,9 @@ async def list_incidents(
         query = query.order_by(Incident.reported_date.desc(), Incident.id.asc())
 
         return await paginate(db, query, params)
-    except Exception as e:
+    except SQLAlchemyError as e:
         error_str = str(e).lower()
-        logger.error(f"Error listing incidents: {e}", exc_info=True)
+        logger.exception(f"Error listing incidents: {e}")
 
         column_errors = [
             "reporter_email",
@@ -300,10 +301,7 @@ async def delete_incident(
         entity_id=str(incident.id),
         action="delete",
         description=f"Incident {incident.reference_number} deleted",
-        payload={
-            "incident_id": incident_id,
-            "reference_number": incident.reference_number,
-        },
+        payload={"incident_id": incident_id, "reference_number": incident.reference_number},
         user_id=current_user.id,
         request_id=request_id,
     )

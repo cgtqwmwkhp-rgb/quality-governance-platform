@@ -28,6 +28,7 @@ import {
   Minus,
 } from 'lucide-react';
 import { cn } from '../helpers/utils';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import { Button } from '../components/ui/Button';
 import { complianceAutomationApi } from '../api/client';
 import { ToastContainer, useToast } from '../components/ui/Toast';
@@ -338,11 +339,7 @@ export default function ComplianceAutomation() {
   const scoreChange = complianceScore.change ?? 0;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <CardSkeleton />;
   }
 
   return (

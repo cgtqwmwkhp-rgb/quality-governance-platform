@@ -181,8 +181,7 @@ class CreateFromRecordRequest(BaseModel):
     """Request schema for creating investigation from source record."""
 
     source_type: str = Field(
-        ...,
-        description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)",
+        ..., description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)"
     )
     source_id: int = Field(..., gt=0, description="Source record ID")
     title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
@@ -311,6 +310,13 @@ class PackListResponse(BaseModel):
     page: int
     page_size: int
     investigation_id: int
+
+
+class AutosaveRequest(BaseModel):
+    """Request schema for autosaving investigation data with optimistic locking."""
+
+    data: Dict[str, Any] = Field(..., description="Investigation data to save")
+    version: int = Field(..., gt=0, description="Expected version for optimistic locking")
 
 
 class ClosureValidationResponse(BaseModel):
