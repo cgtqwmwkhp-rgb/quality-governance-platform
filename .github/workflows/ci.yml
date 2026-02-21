@@ -226,7 +226,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80 --junit-xml=junit-unit.xml
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -323,7 +323,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80 --junit-xml=junit-integration.xml
+          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-integration.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4

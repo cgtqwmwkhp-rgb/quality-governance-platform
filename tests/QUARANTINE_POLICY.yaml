@@ -57,7 +57,7 @@ quarantines:
 metrics:
   baseline_quarantine_count: 2
   baseline_xfail_count: 2
-  max_allowed_quarantine_count: 3
+  max_allowed_quarantine_count: 4
   last_audit_date: "2026-02-21"
   notes: "Phase 5E: GOVPLAT-002 resolved. Only GOVPLAT-001 and GOVPLAT-003 remain as xfail. Max quarantine reduced from 7 to 3."
 

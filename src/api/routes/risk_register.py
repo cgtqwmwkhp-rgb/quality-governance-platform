@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
@@ -51,6 +50,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
+from src.domain.models.user import User
 from src.domain.services.risk_register_service import RiskRegisterService
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache

@@ -94,7 +94,7 @@ class ErrorReportingService {
 
   private initWebVitals() {
     import("web-vitals")
-      .then(({ onCLS, onFID, onLCP, onFCP, onTTFB, onINP }) => {
+      .then(({ onCLS, onLCP, onFCP, onTTFB, onINP }) => {
         const handle = (metric: Metric) => {
           this.perfQueue.push({
             name: metric.name,
@@ -106,7 +106,6 @@ class ErrorReportingService {
           });
         };
         onCLS(handle);
-        onFID(handle);
         onLCP(handle);
         onFCP(handle);
         onTTFB(handle);
