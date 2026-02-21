@@ -414,7 +414,7 @@ async def add_emission_source(
     )
     dq_score = PlanetMarkService.get_data_quality_score(source_data.data_quality_level)
 
-    source = EmissionSource(  # type: ignore[misc]  # SA model kwargs
+    source = EmissionSource(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         reporting_year_id=year_id,
         emission_factor=emission_factor["factor"],
         emission_factor_unit=emission_factor["unit"],
@@ -536,12 +536,12 @@ async def list_improvement_actions(
     status_filter: Optional[str] = Query(None, alias="status"),
 ) -> dict[str, Any]:
     """List SMART improvement actions"""
-    stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)  # type: ignore[attr-defined]  # SA column
+    stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
 
     if status_filter:
-        stmt = stmt.where(ImprovementAction.status == status_filter)  # type: ignore[attr-defined]  # SA column
+        stmt = stmt.where(ImprovementAction.status == status_filter)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
 
-    result = await db.execute(stmt.order_by(ImprovementAction.time_bound))  # type: ignore[attr-defined]  # SA column
+    result = await db.execute(stmt.order_by(ImprovementAction.time_bound))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
     actions = result.scalars().all()
 
     now = datetime.utcnow()
@@ -593,7 +593,7 @@ async def create_improvement_action(
     count = count_result.scalar_one()
     action_id = f"ACT-{(count + 1):03d}"
 
-    action = ImprovementAction(  # type: ignore[misc]  # SA model kwargs
+    action = ImprovementAction(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         reporting_year_id=year_id,
         action_id=action_id,
         status="planned",
@@ -688,7 +688,7 @@ async def add_fleet_record(
     co2e_kg, _ = PlanetMarkService.calculate_fleet_co2e(fleet_data.fuel_litres, fleet_data.fuel_type)
     l_per_100km = PlanetMarkService.calculate_fuel_efficiency(fleet_data.fuel_litres, fleet_data.mileage)
 
-    record = FleetEmissionRecord(  # type: ignore[misc]  # SA model kwargs
+    record = FleetEmissionRecord(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         reporting_year_id=year_id,
         co2e_kg=co2e_kg,
         litres_per_100km=l_per_100km,
@@ -769,7 +769,7 @@ async def add_utility_reading(
     """Add utility meter reading"""
     await get_or_404(db, CarbonReportingYear, year_id, tenant_id=current_user.tenant_id)
 
-    reading = UtilityMeterReading(  # type: ignore[misc]  # SA model kwargs
+    reading = UtilityMeterReading(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         reporting_year_id=year_id,
         **reading_data.model_dump(),
     )
@@ -901,7 +901,7 @@ async def get_carbon_dashboard(
 
     current_year = years[0]
 
-    baseline_result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True))  # type: ignore[attr-defined]  # SA column  # noqa: E712
+    baseline_result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True))  # type: ignore[attr-defined]  # SA column  # noqa: E712  # TYPE-IGNORE: MYPY-OVERRIDE
     baseline = baseline_result.scalars().first()
 
     yoy_change: Optional[float] = None
