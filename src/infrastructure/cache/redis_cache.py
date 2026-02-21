@@ -479,8 +479,8 @@ def cached(
             cache_key = f"{prefix}:{arg_key}"
             await cache.delete(cache_key)
 
-        wrapper.invalidate = invalidate  # type: ignore[attr-defined]  # dynamic attribute on wrapper
-        wrapper.invalidate_all = lambda: get_cache().delete_pattern(  # type: ignore[attr-defined]
+        wrapper.invalidate = invalidate  # type: ignore[attr-defined]  # dynamic attribute on wrapper  # TYPE-IGNORE: MYPY-OVERRIDE
+        wrapper.invalidate_all = lambda: get_cache().delete_pattern(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             f"{key_prefix or func.__module__}.{func.__name__}:*"
         )
 

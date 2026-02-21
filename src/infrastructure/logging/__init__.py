@@ -13,12 +13,12 @@ class CorrelationFilter(logging.Filter):
     """Injects correlation IDs from contextvars into every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.correlation_id = get_request_id() or ""  # type: ignore[attr-defined]
+        record.correlation_id = get_request_id() or ""  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         from src.infrastructure.logging.trace_context import get_span_id, get_trace_id
 
-        record.trace_id = get_trace_id() or ""  # type: ignore[attr-defined]
-        record.span_id = get_span_id() or ""  # type: ignore[attr-defined]
+        record.trace_id = get_trace_id() or ""  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+        record.span_id = get_span_id() or ""  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         return True
 
 

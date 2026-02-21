@@ -50,7 +50,7 @@ class PushNotificationServiceDomain:
         keys = data.get("keys", {})
 
         result = await self.db.execute(
-            select(PushSubscription).filter(PushSubscription.endpoint == endpoint)  # type: ignore[attr-defined]
+            select(PushSubscription).filter(PushSubscription.endpoint == endpoint)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         existing = result.scalars().first()
 
@@ -92,7 +92,7 @@ class PushNotificationServiceDomain:
         from src.api.routes.push_notifications import PushSubscription
 
         result = await self.db.execute(
-            select(PushSubscription).filter(PushSubscription.endpoint == endpoint)  # type: ignore[attr-defined]
+            select(PushSubscription).filter(PushSubscription.endpoint == endpoint)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         subscription = result.scalars().first()
 
@@ -112,7 +112,7 @@ class PushNotificationServiceDomain:
 
         pref_result = await self.db.execute(
             select(NotificationPreference).filter(
-                NotificationPreference.user_id == user_id  # type: ignore[attr-defined]
+                NotificationPreference.user_id == user_id  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         prefs = pref_result.scalars().first()
@@ -149,7 +149,7 @@ class PushNotificationServiceDomain:
 
         pref_result = await self.db.execute(
             select(NotificationPreference).filter(
-                NotificationPreference.user_id == user_id  # type: ignore[attr-defined]
+                NotificationPreference.user_id == user_id  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         prefs = pref_result.scalars().first()
@@ -183,7 +183,7 @@ class PushNotificationServiceDomain:
 
         result = await self.db.execute(
             select(NotificationPreference).filter(
-                NotificationPreference.user_id == user_id  # type: ignore[attr-defined]
+                NotificationPreference.user_id == user_id  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         prefs = result.scalars().first()
@@ -193,8 +193,8 @@ class PushNotificationServiceDomain:
 
         result = await self.db.execute(
             select(PushSubscription).filter(
-                PushSubscription.user_id == user_id,  # type: ignore[attr-defined]
-                PushSubscription.is_active == True,  # type: ignore[attr-defined]  # noqa: E712
+                PushSubscription.user_id == user_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                PushSubscription.is_active == True,  # type: ignore[attr-defined]  # noqa: E712  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         subscriptions = result.scalars().all()
@@ -251,7 +251,7 @@ class PushNotificationServiceDomain:
     async def _send_web_push(self, subscription: Any, payload: str) -> dict[str, Any]:
         """Send actual Web Push message using pywebpush."""
         try:
-            from pywebpush import webpush  # type: ignore[import-untyped]
+            from pywebpush import webpush  # type: ignore[import-untyped]  # TYPE-IGNORE: MYPY-OVERRIDE
 
             subscription_info = {
                 "endpoint": subscription.endpoint,
@@ -332,8 +332,8 @@ class PushNotificationServiceDomain:
 
         sub_result = await self.db.execute(
             select(PushSubscription).filter(
-                PushSubscription.is_active == True,  # type: ignore[attr-defined]  # noqa: E712
-                PushSubscription.user_id.isnot(None),  # type: ignore[attr-defined]
+                PushSubscription.is_active == True,  # type: ignore[attr-defined]  # noqa: E712  # TYPE-IGNORE: MYPY-OVERRIDE
+                PushSubscription.user_id.isnot(None),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         subscriptions = sub_result.scalars().all()

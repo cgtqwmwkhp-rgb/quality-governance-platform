@@ -69,7 +69,7 @@ class RiskScoringService:
 
         # Get linked risks
         linked_risk_ids = []
-        if getattr(incident, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column
+        if getattr(incident, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             try:
                 linked_risk_ids = [int(x.strip()) for x in str(incident.linked_risk_ids).split(",") if x.strip()]
             except ValueError:
@@ -80,8 +80,8 @@ class RiskScoringService:
             result = await self.db.execute(
                 select(Risk).where(
                     and_(
-                        Risk.department == incident.department,  # type: ignore[attr-defined]
-                        Risk.is_active == True,  # noqa: E712  # type: ignore[attr-defined]
+                        Risk.department == incident.department,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                        Risk.is_active == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                     )
                 )
             )
@@ -123,7 +123,7 @@ class RiskScoringService:
 
         # Get linked risks
         linked_risk_ids = []
-        if getattr(near_miss, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column
+        if getattr(near_miss, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             try:
                 linked_risk_ids = [int(x.strip()) for x in str(near_miss.linked_risk_ids).split(",") if x.strip()]
             except ValueError:
@@ -440,7 +440,7 @@ class KRIService:
         """Count currently open incidents."""
         result = await self.db.execute(
             select(func.count(Incident.id)).where(
-                Incident.status.in_(  # type: ignore[attr-defined]
+                Incident.status.in_(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                     [
                         IncidentStatus.REPORTED,
                         IncidentStatus.UNDER_INVESTIGATION,
@@ -539,8 +539,8 @@ class KRIService:
             result = await self.db.execute(
                 select(Complaint.received_date, Complaint.resolved_date).where(
                     and_(
-                        Complaint.status.in_([ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED]),  # type: ignore[attr-defined]
-                        Complaint.resolved_date.isnot(None),  # type: ignore[attr-defined]
+                        Complaint.status.in_([ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                        Complaint.resolved_date.isnot(None),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                         Complaint.created_at >= cutoff,
                     )
                 )
@@ -561,7 +561,7 @@ class KRIService:
                 select(Incident.created_at, Incident.closed_at).where(
                     and_(
                         Incident.status == IncidentStatus.CLOSED,
-                        Incident.closed_at.isnot(None),  # type: ignore[attr-defined]
+                        Incident.closed_at.isnot(None),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                         Incident.created_at >= cutoff,
                     )
                 )
@@ -593,8 +593,8 @@ class KRIService:
         result = await self.db.execute(
             select(func.count(AuditFinding.id)).where(
                 and_(
-                    AuditFinding.severity.in_(["critical", "high"]),  # type: ignore[attr-defined]
-                    AuditFinding.status.in_([FindingStatus.OPEN, FindingStatus.IN_PROGRESS]),  # type: ignore[attr-defined]
+                    AuditFinding.severity.in_(["critical", "high"]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    AuditFinding.status.in_([FindingStatus.OPEN, FindingStatus.IN_PROGRESS]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -605,8 +605,8 @@ class KRIService:
         result = await self.db.execute(
             select(func.count(Risk.id)).where(
                 and_(
-                    Risk.risk_level.in_(["high", "critical"]),  # type: ignore[attr-defined]
-                    Risk.is_active == True,  # noqa: E712  # type: ignore[attr-defined]
+                    Risk.risk_level.in_(["high", "critical"]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    Risk.is_active == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -622,7 +622,7 @@ class KRIService:
             select(func.count(IncidentAction.id)).where(
                 and_(
                     IncidentAction.due_date < now,
-                    IncidentAction.status.in_([ActionStatus.OPEN, ActionStatus.IN_PROGRESS]),  # type: ignore[attr-defined]
+                    IncidentAction.status.in_([ActionStatus.OPEN, ActionStatus.IN_PROGRESS]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -638,7 +638,7 @@ class KRIService:
         result = await self.db.execute(
             select(KRIMeasurement)
             .where(KRIMeasurement.kri_id == kri.id)
-            .order_by(KRIMeasurement.measurement_date.desc())  # type: ignore[attr-defined]
+            .order_by(KRIMeasurement.measurement_date.desc())  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             .limit(3)
         )
         measurements = result.scalars().all()
@@ -672,7 +672,7 @@ class KRIService:
     ) -> None:
         """Check if thresholds are breached and create alerts."""
         # Check if status worsened (compare enum ordinal values)
-        if kri.current_status and str(new_status.value) > str(kri.current_status.value):  # type: ignore[operator]  # ThresholdStatus enum comparison
+        if kri.current_status and str(new_status.value) > str(kri.current_status.value):  # type: ignore[operator]  # ThresholdStatus enum comparison  # TYPE-IGNORE: MYPY-OVERRIDE
             # Status worsened - create alert
             threshold = kri.amber_threshold if new_status == ThresholdStatus.AMBER else kri.red_threshold
 
@@ -695,8 +695,8 @@ class KRIService:
         result = await self.db.execute(
             select(KeyRiskIndicator).where(
                 and_(
-                    KeyRiskIndicator.is_active == True,  # noqa: E712  # type: ignore[attr-defined]
-                    KeyRiskIndicator.auto_calculate == True,  # noqa: E712  # type: ignore[attr-defined]
+                    KeyRiskIndicator.is_active == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    KeyRiskIndicator.auto_calculate == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -714,7 +714,7 @@ class KRIService:
         """Get KRI dashboard summary."""
         result = await self.db.execute(
             select(KeyRiskIndicator).where(KeyRiskIndicator.is_active == True)
-        )  # noqa: E712  # type: ignore[attr-defined]
+        )  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         kris = result.scalars().all()
 
         summary = {
@@ -757,8 +757,8 @@ class KRIService:
         alert_result = await self.db.execute(
             select(func.count(KRIAlert.id)).where(
                 and_(
-                    KRIAlert.is_acknowledged == False,  # noqa: E712  # type: ignore[attr-defined]
-                    KRIAlert.is_resolved == False,  # noqa: E712  # type: ignore[attr-defined]
+                    KRIAlert.is_acknowledged == False,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    KRIAlert.is_resolved == False,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -815,5 +815,5 @@ def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
     """
     score = likelihood * impact
     row = RISK_MATRIX.get(likelihood, {})
-    level, color = row.get(impact, ("medium", "#eab308"))  # type: ignore[union-attr]  # dict.get always returns dict here
+    level, color = row.get(impact, ("medium", "#eab308"))  # type: ignore[union-attr]  # dict.get always returns dict here  # TYPE-IGNORE: MYPY-OVERRIDE
     return score, level, color

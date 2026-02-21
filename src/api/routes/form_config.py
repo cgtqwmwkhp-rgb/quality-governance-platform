@@ -97,7 +97,7 @@ async def create_form_template(
             detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
-    template = FormTemplate(  # type: ignore[call-arg]  # SA model kwargs
+    template = FormTemplate(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         name=data.name,
         slug=data.slug,
         description=data.description,
@@ -122,7 +122,7 @@ async def create_form_template(
     # Create steps if provided
     if data.steps:
         for step_order, step_data in enumerate(data.steps):
-            step = FormStep(  # type: ignore[call-arg]  # SA model kwargs
+            step = FormStep(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
                 template_id=template.id,
                 name=step_data.name,
                 description=step_data.description,
@@ -136,7 +136,7 @@ async def create_form_template(
             # Create fields if provided
             if step_data.fields:
                 for field_order, field_data in enumerate(step_data.fields):
-                    field = FormField(  # type: ignore[call-arg]  # SA model kwargs
+                    field = FormField(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
                         step_id=step.id,
                         name=field_data.name,
                         label=field_data.label,
@@ -313,7 +313,7 @@ async def create_form_step(
     """Create a new step in a form template."""
     await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
 
-    step = FormStep(  # type: ignore[call-arg]  # SA model kwargs
+    step = FormStep(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         template_id=template_id,
         name=data.name,
         description=data.description,
@@ -328,7 +328,7 @@ async def create_form_step(
     # Create fields if provided
     if data.fields:
         for field_order, field_data in enumerate(data.fields):
-            field = FormField(  # type: ignore[call-arg]  # SA model kwargs
+            field = FormField(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
                 step_id=step.id,
                 name=field_data.name,
                 label=field_data.label,
@@ -392,7 +392,7 @@ async def create_form_field(
     """Create a new field in a form step."""
     await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
 
-    field = FormField(  # type: ignore[call-arg]  # SA model kwargs
+    field = FormField(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         step_id=step_id,
         name=data.name,
         label=data.label,
@@ -491,7 +491,7 @@ async def create_contract(
             detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
-    contract = Contract(  # type: ignore[call-arg]  # SA model kwargs
+    contract = Contract(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         name=data.name,
         code=data.code,
         description=data.description,
@@ -633,7 +633,7 @@ async def create_system_setting(
             detail=ErrorCode.DUPLICATE_ENTITY,
         )
 
-    setting = SystemSetting(  # type: ignore[call-arg]  # SA model kwargs
+    setting = SystemSetting(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         key=data.key,
         value=data.value,
         category=data.category,
@@ -729,7 +729,7 @@ async def create_lookup_option(
     if data.category != category:
         data.category = category
 
-    option = LookupOption(  # type: ignore[call-arg]  # SA model kwargs
+    option = LookupOption(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
         category=data.category,
         code=data.code,
         label=data.label,

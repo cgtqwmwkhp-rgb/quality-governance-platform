@@ -66,7 +66,7 @@ class CAPAService:
             )
 
         query = query.order_by(CAPAAction.created_at.desc())
-        params = PaginationParams(page=page, page_size=page_size)  # type: ignore[call-arg]
+        params = PaginationParams(page=page, page_size=page_size)  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
         return await paginate(self.db, query, params)
 
     async def create_capa_action(

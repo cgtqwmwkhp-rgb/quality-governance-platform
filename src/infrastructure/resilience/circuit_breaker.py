@@ -196,7 +196,7 @@ def retry_with_backoff(
                             exc,
                         )
                         await asyncio.sleep(delay + jitter)
-                raise last_exc  # type: ignore[misc]
+                raise last_exc  # type: ignore[misc]  # TYPE-IGNORE: MYPY-OVERRIDE
 
             return async_wrapper
         else:
@@ -222,7 +222,7 @@ def retry_with_backoff(
                             exc,
                         )
                         time.sleep(delay + jitter)
-                raise last_exc  # type: ignore[misc]
+                raise last_exc  # type: ignore[misc]  # TYPE-IGNORE: MYPY-OVERRIDE
 
             return sync_wrapper
 

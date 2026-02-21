@@ -389,7 +389,7 @@ async def list_instances(
         count_q = count_q.where(and_(*filters))
 
     total_res = await db.execute(count_q)
-    total: int = total_res.scalar() or 0  # type: ignore[assignment]  # scalar returns Row|None, coerced to int
+    total: int = total_res.scalar() or 0  # type: ignore[assignment]  # scalar returns Row|None, coerced to int  # TYPE-IGNORE: MYPY-OVERRIDE
 
     query = query.order_by(WorkflowInstance.started_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -414,7 +414,7 @@ async def advance_workflow(
 
     # Find current step
     steps = await get_instance_steps(db, instance_id)
-    current_idx: int = instance.current_step  # type: ignore[assignment]  # SA column value
+    current_idx: int = instance.current_step  # type: ignore[assignment]  # SA column value  # TYPE-IGNORE: MYPY-OVERRIDE
     if current_idx >= len(steps):
         raise ValueError("Workflow already completed")
 
@@ -1079,9 +1079,9 @@ class ActionExecutor:
         result = await self.db.execute(
             select(EscalationLevel).where(
                 and_(
-                    EscalationLevel.entity_type == entity_type,  # type: ignore[arg-type]  # SA column comparison
-                    EscalationLevel.level == new_level,  # type: ignore[attr-defined]  # SA column
-                    EscalationLevel.is_active == True,  # type: ignore[attr-defined]  # SA column  # noqa: E712
+                    EscalationLevel.entity_type == entity_type,  # type: ignore[arg-type]  # SA column comparison  # TYPE-IGNORE: MYPY-OVERRIDE
+                    EscalationLevel.level == new_level,  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+                    EscalationLevel.is_active == True,  # type: ignore[attr-defined]  # SA column  # noqa: E712  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )

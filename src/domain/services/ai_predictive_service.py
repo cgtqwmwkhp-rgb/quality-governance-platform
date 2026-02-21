@@ -23,7 +23,7 @@ from src.core.config import settings
 
 # AI Integration
 try:
-    import anthropic  # type: ignore[import-not-found]
+    import anthropic  # type: ignore[import-not-found]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     CLAUDE_AVAILABLE = True
 except ImportError:
@@ -178,15 +178,15 @@ class AnomalyDetector:
         # Get incidents for this entity
         if entity_type == "department":
             result = await self.db.execute(
-                select(Incident).where(and_(Incident.department == entity, Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA columns
+                select(Incident).where(and_(Incident.department == entity, Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA columns  # TYPE-IGNORE: MYPY-OVERRIDE
             )
             recent_incidents = result.scalars().all()
         elif entity_type == "location":
             result = await self.db.execute(
                 select(Incident).where(
                     and_(
-                        Incident.location.ilike(f"%{entity}%"),  # type: ignore[attr-defined]  # SA column
-                        Incident.reported_date >= cutoff,  # type: ignore[attr-defined]  # SA column
+                        Incident.location.ilike(f"%{entity}%"),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+                        Incident.reported_date >= cutoff,  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
                     )
                 )
             )
@@ -238,7 +238,7 @@ class AnomalyDetector:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA column
+        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
         recent = result.scalars().all()
 
         anomalies = []
@@ -301,7 +301,7 @@ class IncidentPredictor:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA column
+        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
         incidents = result.scalars().all()
 
         if not incidents:
@@ -388,7 +388,7 @@ class IncidentPredictor:
 
         # Simple keyword-based similarity
         result = await self.db.execute(
-            select(Incident).where(Incident.description.isnot(None)).order_by(desc(Incident.reported_date)).limit(1000)  # type: ignore[attr-defined]  # SA columns
+            select(Incident).where(Incident.description.isnot(None)).order_by(desc(Incident.reported_date)).limit(1000)  # type: ignore[attr-defined]  # SA columns  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         all_incidents = result.scalars().all()
 
@@ -597,7 +597,7 @@ class RootCauseAnalyzer:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         result = await self.db.execute(
-            select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))  # type: ignore[attr-defined]  # SA columns
+            select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))  # type: ignore[attr-defined]  # SA columns  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         incidents = result.scalars().all()
 

@@ -70,7 +70,7 @@ class SMSService:
 
         if self.enabled:
             try:
-                from twilio.rest import Client  # type: ignore[import-not-found]
+                from twilio.rest import Client  # type: ignore[import-not-found]  # TYPE-IGNORE: MYPY-OVERRIDE
 
                 self.client = Client(self.account_sid, self.auth_token)
                 logger.info("Twilio SMS service initialized")

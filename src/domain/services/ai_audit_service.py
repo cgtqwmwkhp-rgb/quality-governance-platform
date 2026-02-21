@@ -22,7 +22,7 @@ from src.core.config import settings
 
 # AI Integration
 try:
-    import anthropic  # type: ignore[import-not-found]
+    import anthropic  # type: ignore[import-not-found]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     CLAUDE_AVAILABLE = True
 except ImportError:
@@ -624,7 +624,7 @@ Format as JSON array with objects containing: question, type (compliance/effecti
         )
 
         try:
-            content = message.content[0].text  # type: ignore[union-attr]  # ContentBlock variants
+            content = message.content[0].text  # type: ignore[union-attr]  # ContentBlock variants  # TYPE-IGNORE: MYPY-OVERRIDE
             json_match = re.search(r"\[[\s\S]*\]", content)
             if json_match:
                 questions = json.loads(json_match.group())
@@ -693,7 +693,7 @@ class EvidenceMatcher:
         # Search compliance evidence
         result = await self.db.execute(
             select(ComplianceEvidence).where(
-                ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}])  # type: ignore[attr-defined]  # SA column
+                ComplianceEvidence.iso_clauses.contains([{"standard": standard, "clause": clause}])  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         compliance_evidence = result.scalars().all()
@@ -717,8 +717,8 @@ class EvidenceMatcher:
             select(ControlledDocument)
             .where(
                 and_(
-                    ControlledDocument.relevant_clauses.isnot(None),  # type: ignore[attr-defined]  # SA column
-                    ControlledDocument.status == "active",  # type: ignore[attr-defined]  # SA column
+                    ControlledDocument.relevant_clauses.isnot(None),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+                    ControlledDocument.status == "active",  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
             .limit(100)
@@ -752,8 +752,8 @@ class EvidenceMatcher:
         result = await self.db.execute(
             select(AuditFinding).where(
                 and_(
-                    AuditFinding.audit_id == audit_id,  # type: ignore[attr-defined]  # SA column
-                    AuditFinding.conformance.in_(["minor_nc", "major_nc", "observation"]),  # type: ignore[attr-defined]  # SA column
+                    AuditFinding.audit_id == audit_id,  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+                    AuditFinding.conformance.in_(["minor_nc", "major_nc", "observation"]),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -881,7 +881,7 @@ class AuditReportGenerator:
         if not audit:
             return "Audit not found"
 
-        result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit_id))  # type: ignore[attr-defined]  # SA column
+        result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit_id))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
         findings = result.scalars().all()
 
         # Count findings by type
@@ -937,10 +937,10 @@ RECOMMENDATION:
 
         result = await self.db.execute(
             select(AuditFinding)
-            .where(AuditFinding.audit_id == audit_id)  # type: ignore[attr-defined]  # SA column
+            .where(AuditFinding.audit_id == audit_id)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             .order_by(
-                desc(AuditFinding.conformance == "major_nc"),  # type: ignore[attr-defined]  # SA column
-                desc(AuditFinding.conformance == "minor_nc"),  # type: ignore[attr-defined]  # SA column
+                desc(AuditFinding.conformance == "major_nc"),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+                desc(AuditFinding.conformance == "minor_nc"),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             )
         )
         findings = result.scalars().all()
@@ -979,7 +979,7 @@ class AuditTrendAnalyzer:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
 
-        result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))  # type: ignore[attr-defined]  # SA column
+        result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
         audits = result.scalars().all()
 
         monthly_data: dict[str, dict] = defaultdict(
@@ -991,7 +991,7 @@ class AuditTrendAnalyzer:
                 continue
             month_key = audit.audit_date.strftime("%Y-%m")
 
-            result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit.id))  # type: ignore[attr-defined]  # SA column
+            result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit.id))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             findings = result.scalars().all()
 
             for finding in findings:
@@ -1048,7 +1048,7 @@ class AuditTrendAnalyzer:
         clause_findings: dict[str, list] = defaultdict(list)
 
         result = await self.db.execute(
-            select(AuditFinding).where(AuditFinding.conformance.in_(["major_nc", "minor_nc"]))  # type: ignore[attr-defined]  # SA column
+            select(AuditFinding).where(AuditFinding.conformance.in_(["major_nc", "minor_nc"]))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         findings = result.scalars().all()
 
