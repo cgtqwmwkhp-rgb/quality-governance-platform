@@ -519,7 +519,7 @@ def invalidate_cache(pattern: str):
 
 async def close_redis() -> None:
     """Close the global Redis connection if one exists."""
-    global _cache
+    global _cache  # noqa: F824
     if _cache is not None and isinstance(_cache, RedisCache) and _cache._redis is not None:
         try:
             await _cache._redis.aclose()
