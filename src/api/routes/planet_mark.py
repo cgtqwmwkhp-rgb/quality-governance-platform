@@ -15,13 +15,13 @@ import logging
 from datetime import datetime
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.planet_mark import (
     ActionCreatedResponse,
     ActionListResponse,
@@ -129,7 +129,7 @@ class UtilityReadingCreate(BaseModel):
 async def list_reporting_years(
     request: Request,
     db: DbSession,
-) -> dict[str, Any]:
+) -> Any:
     """List all carbon reporting years with comparison"""
     try:
         return await PlanetMarkService.list_reporting_years(db)
@@ -139,22 +139,28 @@ async def list_reporting_years(
             str(e)[:200],
             extra={"request_id": get_request_id(request)},
         )
-        return setup_required_response(
-            module="planet-mark",
-            message="Planet Mark module not initialized. Database migrations may need to be applied.",
-            next_action="Run database migrations with: alembic upgrade head",
-            request_id=get_request_id(request),
+        return JSONResponse(
+            content=setup_required_response(
+                module="planet-mark",
+                message="Planet Mark module not initialized. Database migrations may need to be applied.",
+                next_action="Run database migrations with: alembic upgrade head",
+                request_id=get_request_id(request),
+            )
         )
-    except SQLAlchemyError as e:
-        req_id = get_request_id(request)
-        logger.exception(
-            "Planet Mark years query failed [request_id=%s]: %s",
-            req_id,
+    except Exception as e:
+        logger.warning(
+            "Planet Mark years query failed [request_id=%s]: %s: %s",
+            get_request_id(request),
             type(e).__name__,
+            str(e)[:200],
         )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ErrorCode.INTERNAL_ERROR,
+        return JSONResponse(
+            content=setup_required_response(
+                module="planet-mark",
+                message="Planet Mark module not available. Database setup may be required.",
+                next_action="Run database migrations with: alembic upgrade head",
+                request_id=get_request_id(request),
+            )
         )
 
 
@@ -326,7 +332,7 @@ async def get_certification_status(
 async def get_carbon_dashboard(
     request: Request,
     db: DbSession,
-) -> dict[str, Any]:
+) -> Any:
     """Get Planet Mark carbon management dashboard"""
     try:
         result = await PlanetMarkService.get_carbon_dashboard(db)
@@ -336,30 +342,38 @@ async def get_carbon_dashboard(
             str(e)[:200],
             extra={"request_id": get_request_id(request)},
         )
-        return setup_required_response(
-            module="planet-mark",
-            message="Planet Mark module not initialized. Database migrations may need to be applied.",
-            next_action="Run database migrations with: alembic upgrade head",
-            request_id=get_request_id(request),
+        return JSONResponse(
+            content=setup_required_response(
+                module="planet-mark",
+                message="Planet Mark module not initialized. Database migrations may need to be applied.",
+                next_action="Run database migrations with: alembic upgrade head",
+                request_id=get_request_id(request),
+            )
         )
-    except SQLAlchemyError as e:
-        req_id = get_request_id(request)
-        logger.exception(
-            "Planet Mark dashboard query failed [request_id=%s]: %s",
-            req_id,
+    except Exception as e:
+        logger.warning(
+            "Planet Mark dashboard query failed [request_id=%s]: %s: %s",
+            get_request_id(request),
             type(e).__name__,
+            str(e)[:200],
         )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ErrorCode.INTERNAL_ERROR,
+        return JSONResponse(
+            content=setup_required_response(
+                module="planet-mark",
+                message="Planet Mark module not available. Database setup may be required.",
+                next_action="Run database migrations with: alembic upgrade head",
+                request_id=get_request_id(request),
+            )
         )
 
     if result is None:
-        return setup_required_response(
-            module="planet-mark",
-            message="No carbon reporting years configured",
-            next_action="Create a reporting year via POST /api/v1/planet-mark/years",
-            request_id=get_request_id(request),
+        return JSONResponse(
+            content=setup_required_response(
+                module="planet-mark",
+                message="No carbon reporting years configured",
+                next_action="Create a reporting year via POST /api/v1/planet-mark/years",
+                request_id=get_request_id(request),
+            )
         )
 
     return result
