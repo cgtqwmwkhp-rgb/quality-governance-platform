@@ -44,3 +44,4 @@ export { Avatar } from "./Avatar";
 export { Switch } from "./Switch";
 export { ThemeToggle } from "./ThemeToggle";
 export { LiveAnnouncerProvider, useLiveAnnouncer } from "./LiveAnnouncer";
+export { EmptyState } from "./EmptyState";

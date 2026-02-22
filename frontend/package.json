@@ -11,7 +11,11 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:staging": "playwright test tests/e2e/staging-verification.spec.ts",
-    "test:e2e:all": "playwright test --reporter=html,list,json"
+    "test:e2e:all": "playwright test --reporter=html,list,json",
+    "lint": "eslint src/ --ext .ts,.tsx",
+    "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

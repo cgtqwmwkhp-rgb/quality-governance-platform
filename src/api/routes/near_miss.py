@@ -5,13 +5,14 @@ Thin controller layer — all business logic lives in NearMissService.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.investigation import InvestigationRunListResponse, InvestigationRunResponse
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import NotFoundError
 from src.domain.services.near_miss_service import NearMissService
 
 router = APIRouter(tags=["Near Misses"])
@@ -32,7 +33,7 @@ async def create_near_miss(
         tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-    return near_miss  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
+    return near_miss
 
 
 @router.get("/", response_model=NearMissListResponse)
@@ -76,9 +77,9 @@ async def get_near_miss(
     """Get a near miss by ID."""
     service = NearMissService(db)
     try:
-        return await service.get_near_miss(near_miss_id, tenant_id=current_user.tenant_id)  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
+        return await service.get_near_miss(near_miss_id, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Near miss not found")
+        raise NotFoundError("Near miss not found")
 
 
 @router.patch("/{near_miss_id}", response_model=NearMissResponse)
@@ -92,7 +93,7 @@ async def update_near_miss(
     """Update a near miss."""
     service = NearMissService(db)
     try:
-        return await service.update_near_miss(  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
+        return await service.update_near_miss(
             near_miss_id,
             data,
             user_id=current_user.id,
@@ -100,7 +101,7 @@ async def update_near_miss(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Near miss not found")
+        raise NotFoundError("Near miss not found")
 
 
 @router.delete("/{near_miss_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -120,7 +121,7 @@ async def delete_near_miss(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Near miss not found")
+        raise NotFoundError("Near miss not found")
 
 
 @router.get("/{near_miss_id}/investigations", response_model=InvestigationRunListResponse)
@@ -141,7 +142,7 @@ async def list_near_miss_investigations(
             params=params,
         )
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Near miss not found")
+        raise NotFoundError("Near miss not found")
 
     return {
         "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],

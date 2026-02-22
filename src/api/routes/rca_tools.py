@@ -6,7 +6,7 @@ Provides endpoints for 5-Whys, Fishbone diagrams, and CAPA management.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -29,6 +29,7 @@ from src.api.schemas.rca_tools import (
     UpdateCAPAStatusResponse,
     VerifyCAPAResponse,
 )
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -146,7 +147,7 @@ async def get_five_whys_analysis(
     analysis = await service.get_analysis(analysis_id)
 
     if not analysis:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -180,7 +181,7 @@ async def add_why_iteration(
             evidence=request.evidence,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -206,7 +207,7 @@ async def set_five_whys_root_cause(
             contributing_factors=request.contributing_factors,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -232,7 +233,7 @@ async def complete_five_whys_analysis(
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": analysis.id,
@@ -307,7 +308,7 @@ async def get_fishbone_diagram(
     diagram = await service.get_diagram(diagram_id)
 
     if not diagram:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": diagram.id,
@@ -340,7 +341,7 @@ async def add_fishbone_cause(
             sub_causes=request.sub_causes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": diagram.id,
@@ -367,7 +368,7 @@ async def set_fishbone_root_cause(
             primary_causes=request.primary_causes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": diagram.id,
@@ -393,7 +394,7 @@ async def complete_fishbone_diagram(
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": diagram.id,
@@ -455,7 +456,7 @@ async def update_capa_status(
             notes=request.notes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": capa.id,
@@ -482,7 +483,7 @@ async def verify_capa(
             is_effective=request.is_effective,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": capa.id,

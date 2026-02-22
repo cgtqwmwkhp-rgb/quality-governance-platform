@@ -1,15 +1,11 @@
 """Form configuration API routes for admin form builder."""
 
-from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import delete, select
-from sqlalchemy.orm import selectinload
+from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.form_config import (
     ContractCreate,
     ContractListResponse,
@@ -34,13 +30,10 @@ from src.api.schemas.form_config import (
     SystemSettingResponse,
     SystemSettingUpdate,
 )
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.api.utils.pagination import PaginationParams
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
-from src.domain.services.audit_service import record_audit_event
+from src.domain.services.form_config_service import FormConfigService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:
     from opentelemetry import trace
@@ -64,20 +57,14 @@ async def list_form_templates(
     is_active: Optional[bool] = Query(None),
 ) -> Any:
     """List all form templates with pagination."""
-    query = (
-        select(FormTemplate)
-        .where(FormTemplate.tenant_id == current_user.tenant_id)
-        .options(selectinload(FormTemplate.steps))
+    svc = FormConfigService(db)
+    return await svc.list_templates(
+        tenant_id=current_user.tenant_id,
+        form_type=form_type,
+        is_active=is_active,
+        page=params.page,
+        page_size=params.page_size,
     )
-
-    if form_type:
-        query = query.where(FormTemplate.form_type == form_type)
-    if is_active is not None:
-        query = query.where(FormTemplate.is_active == is_active)
-
-    query = query.order_by(FormTemplate.name)
-
-    return await paginate(db, query, params)
 
 
 @router.post("/templates", response_model=FormTemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -89,89 +76,14 @@ async def create_form_template(
 ) -> FormTemplate:
     """Create a new form template."""
     _span = tracer.start_span("create_form_template") if tracer else None
-    # Check for duplicate slug
-    existing = await db.execute(select(FormTemplate).where(FormTemplate.slug == data.slug))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
 
-    template = FormTemplate(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-        name=data.name,
-        slug=data.slug,
-        description=data.description,
-        form_type=data.form_type,
-        icon=data.icon,
-        color=data.color,
-        allow_drafts=data.allow_drafts,
-        allow_attachments=data.allow_attachments,
-        require_signature=data.require_signature,
-        auto_assign_reference=data.auto_assign_reference,
-        reference_prefix=data.reference_prefix,
-        notify_on_submit=data.notify_on_submit,
-        notification_emails=data.notification_emails,
-        workflow_id=data.workflow_id,
-        created_by_id=current_user.id,
-        updated_by_id=current_user.id,
-    )
-
-    db.add(template)
-    await db.flush()
-
-    # Create steps if provided
-    if data.steps:
-        for step_order, step_data in enumerate(data.steps):
-            step = FormStep(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-                template_id=template.id,
-                name=step_data.name,
-                description=step_data.description,
-                order=step_order,
-                icon=step_data.icon,
-                show_condition=step_data.show_condition,
-            )
-            db.add(step)
-            await db.flush()
-
-            # Create fields if provided
-            if step_data.fields:
-                for field_order, field_data in enumerate(step_data.fields):
-                    field = FormField(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-                        step_id=step.id,
-                        name=field_data.name,
-                        label=field_data.label,
-                        field_type=field_data.field_type,
-                        order=field_order,
-                        placeholder=field_data.placeholder,
-                        help_text=field_data.help_text,
-                        is_required=field_data.is_required,
-                        min_length=field_data.min_length,
-                        max_length=field_data.max_length,
-                        min_value=field_data.min_value,
-                        max_value=field_data.max_value,
-                        pattern=field_data.pattern,
-                        default_value=field_data.default_value,
-                        options=field_data.options,
-                        show_condition=field_data.show_condition,
-                        width=field_data.width,
-                    )
-                    db.add(field)
-
-    await db.commit()
-    await db.refresh(template)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-    track_metric("form_config.templates_created", 1)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="form_template",
-        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="created",
+    svc = FormConfigService(db)
+    template = await svc.create_template(
+        data=data,
         user_id=current_user.id,
-        details={"name": template.name, "form_type": template.form_type},
         request_id=request_id,
     )
+    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
 
     if _span:
         _span.end()
@@ -185,7 +97,8 @@ async def get_form_template(
     current_user: CurrentUser,
 ) -> FormTemplate:
     """Get a form template by ID."""
-    return await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
+    svc = FormConfigService(db)
+    return await svc.get_template(template_id, tenant_id=current_user.tenant_id)
 
 
 @router.get("/templates/by-slug/{slug}", response_model=FormTemplateResponse)
@@ -194,21 +107,8 @@ async def get_form_template_by_slug(
     db: DbSession,
 ) -> FormTemplate:
     """Get a form template by slug (public endpoint for portal)."""
-    result = await db.execute(
-        select(FormTemplate)
-        .where(FormTemplate.slug == slug)
-        .where(FormTemplate.is_active == True)
-        .where(FormTemplate.is_published == True)
-    )
-    template = result.scalar_one_or_none()
-
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
-
-    return template
+    svc = FormConfigService(db)
+    return await svc.get_template_by_slug(slug)
 
 
 @router.patch("/templates/{template_id}", response_model=FormTemplateResponse)
@@ -220,28 +120,14 @@ async def update_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Update a form template."""
-    template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
-
-    update_data = apply_updates(template, data)
-    template.updated_by_id = current_user.id
-    template.version += 1
-
-    await db.commit()
-    await db.refresh(template)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="form_template",
-        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="updated",
+    svc = FormConfigService(db)
+    return await svc.update_template(
+        template_id,
+        data=data,
         user_id=current_user.id,
-        details=update_data,
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-
-    return template
 
 
 @router.post("/templates/{template_id}/publish", response_model=FormTemplateResponse)
@@ -252,26 +138,13 @@ async def publish_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Publish a form template to make it available in the portal."""
-    template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
-
-    template.is_published = True
-    template.published_at = datetime.now(timezone.utc)
-    template.updated_by_id = current_user.id
-
-    await db.commit()
-    await db.refresh(template)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="form_template",
-        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="published",
+    svc = FormConfigService(db)
+    return await svc.publish_template(
+        template_id,
         user_id=current_user.id,
-        details={"published_at": template.published_at.isoformat()},
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-
-    return template
 
 
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -282,22 +155,13 @@ async def delete_form_template(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a form template."""
-    template = await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="form_template",
-        entity_id=template.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="deleted",
+    svc = FormConfigService(db)
+    await svc.delete_template(
+        template_id,
         user_id=current_user.id,
-        details={"name": template.name},
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-
-    await db.delete(template)
-    await db.commit()
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
 
 
 # ==================== Form Step Routes ====================
@@ -311,41 +175,12 @@ async def create_form_step(
     current_user: CurrentUser,
 ) -> FormStep:
     """Create a new step in a form template."""
-    await get_or_404(db, FormTemplate, template_id, tenant_id=current_user.tenant_id)
-
-    step = FormStep(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-        template_id=template_id,
-        name=data.name,
-        description=data.description,
-        order=data.order,
-        icon=data.icon,
-        show_condition=data.show_condition,
+    svc = FormConfigService(db)
+    return await svc.create_step(
+        template_id,
+        data=data,
+        tenant_id=current_user.tenant_id,
     )
-
-    db.add(step)
-    await db.flush()
-
-    # Create fields if provided
-    if data.fields:
-        for field_order, field_data in enumerate(data.fields):
-            field = FormField(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-                step_id=step.id,
-                name=field_data.name,
-                label=field_data.label,
-                field_type=field_data.field_type,
-                order=field_order,
-                placeholder=field_data.placeholder,
-                help_text=field_data.help_text,
-                is_required=field_data.is_required,
-                options=field_data.options,
-                width=field_data.width,
-            )
-            db.add(field)
-
-    await db.commit()
-    await db.refresh(step)
-
-    return step
 
 
 @router.patch("/steps/{step_id}", response_model=FormStepResponse)
@@ -356,14 +191,12 @@ async def update_form_step(
     current_user: CurrentUser,
 ) -> FormStep:
     """Update a form step."""
-    step = await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
-
-    apply_updates(step, data, set_updated_at=False)
-
-    await db.commit()
-    await db.refresh(step)
-
-    return step
+    svc = FormConfigService(db)
+    return await svc.update_step(
+        step_id,
+        data=data,
+        tenant_id=current_user.tenant_id,
+    )
 
 
 @router.delete("/steps/{step_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -373,10 +206,8 @@ async def delete_form_step(
     current_user: CurrentSuperuser,
 ) -> None:
     """Delete a form step."""
-    step = await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
-
-    await db.delete(step)
-    await db.commit()
+    svc = FormConfigService(db)
+    await svc.delete_step(step_id, tenant_id=current_user.tenant_id)
 
 
 # ==================== Form Field Routes ====================
@@ -390,33 +221,12 @@ async def create_form_field(
     current_user: CurrentUser,
 ) -> FormField:
     """Create a new field in a form step."""
-    await get_or_404(db, FormStep, step_id, tenant_id=current_user.tenant_id)
-
-    field = FormField(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-        step_id=step_id,
-        name=data.name,
-        label=data.label,
-        field_type=data.field_type,
-        order=data.order,
-        placeholder=data.placeholder,
-        help_text=data.help_text,
-        is_required=data.is_required,
-        min_length=data.min_length,
-        max_length=data.max_length,
-        min_value=data.min_value,
-        max_value=data.max_value,
-        pattern=data.pattern,
-        default_value=data.default_value,
-        options=data.options,
-        show_condition=data.show_condition,
-        width=data.width,
+    svc = FormConfigService(db)
+    return await svc.create_field(
+        step_id,
+        data=data,
+        tenant_id=current_user.tenant_id,
     )
-
-    db.add(field)
-    await db.commit()
-    await db.refresh(field)
-
-    return field
 
 
 @router.patch("/fields/{field_id}", response_model=FormFieldResponse)
@@ -427,14 +237,12 @@ async def update_form_field(
     current_user: CurrentUser,
 ) -> FormField:
     """Update a form field."""
-    field = await get_or_404(db, FormField, field_id, tenant_id=current_user.tenant_id)
-
-    apply_updates(field, data, set_updated_at=False)
-
-    await db.commit()
-    await db.refresh(field)
-
-    return field
+    svc = FormConfigService(db)
+    return await svc.update_field(
+        field_id,
+        data=data,
+        tenant_id=current_user.tenant_id,
+    )
 
 
 @router.delete("/fields/{field_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -444,10 +252,8 @@ async def delete_form_field(
     current_user: CurrentSuperuser,
 ) -> None:
     """Delete a form field."""
-    field = await get_or_404(db, FormField, field_id, tenant_id=current_user.tenant_id)
-
-    await db.delete(field)
-    await db.commit()
+    svc = FormConfigService(db)
+    await svc.delete_field(field_id, tenant_id=current_user.tenant_id)
 
 
 # ==================== Contract Routes ====================
@@ -460,15 +266,11 @@ async def list_contracts(
     is_active: Optional[bool] = Query(None),
 ) -> Any:
     """List all contracts."""
-    query = select(Contract).where(Contract.tenant_id == current_user.tenant_id)
-
-    if is_active is not None:
-        query = query.where(Contract.is_active == is_active)
-
-    query = query.order_by(Contract.display_order, Contract.name)
-    result = await db.execute(query)
-    contracts = result.scalars().all()
-
+    svc = FormConfigService(db)
+    contracts = await svc.list_contracts(
+        tenant_id=current_user.tenant_id,
+        is_active=is_active,
+    )
     return ContractListResponse(
         items=[ContractResponse.model_validate(c) for c in contracts],
         total=len(contracts),
@@ -483,46 +285,13 @@ async def create_contract(
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Create a new contract."""
-    # Check for duplicate code
-    existing = await db.execute(select(Contract).where(Contract.code == data.code))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
-
-    contract = Contract(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-        name=data.name,
-        code=data.code,
-        description=data.description,
-        client_name=data.client_name,
-        client_contact=data.client_contact,
-        client_email=data.client_email,
-        is_active=data.is_active,
-        start_date=data.start_date,
-        end_date=data.end_date,
-        display_order=data.display_order,
-        created_by_id=current_user.id,
-        updated_by_id=current_user.id,
-    )
-
-    db.add(contract)
-    await db.commit()
-    await db.refresh(contract)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="contract",
-        entity_id=contract.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="created",
+    svc = FormConfigService(db)
+    return await svc.create_contract(
+        data=data,
         user_id=current_user.id,
-        details={"name": contract.name, "code": contract.code},
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-
-    return contract
 
 
 @router.get("/contracts/{contract_id}", response_model=ContractResponse)
@@ -532,7 +301,8 @@ async def get_contract(
     current_user: CurrentUser,
 ) -> Contract:
     """Get a contract by ID."""
-    return await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
+    svc = FormConfigService(db)
+    return await svc.get_contract(contract_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/contracts/{contract_id}", response_model=ContractResponse)
@@ -544,27 +314,14 @@ async def update_contract(
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Update a contract."""
-    contract = await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
-
-    update_data = apply_updates(contract, data)
-    contract.updated_by_id = current_user.id
-
-    await db.commit()
-    await db.refresh(contract)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="contract",
-        entity_id=contract.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="updated",
+    svc = FormConfigService(db)
+    return await svc.update_contract(
+        contract_id,
+        data=data,
         user_id=current_user.id,
-        details=update_data,
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-
-    return contract
 
 
 @router.delete("/contracts/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -575,22 +332,13 @@ async def delete_contract(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a contract."""
-    contract = await get_or_404(db, Contract, contract_id, tenant_id=current_user.tenant_id)
-
-    await record_audit_event(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-        db=db,
-        entity_type="contract",
-        entity_id=contract.id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        action="deleted",
+    svc = FormConfigService(db)
+    await svc.delete_contract(
+        contract_id,
         user_id=current_user.id,
-        details={"name": contract.name},
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-
-    await db.delete(contract)
-    await db.commit()
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
 
 
 # ==================== System Setting Routes ====================
@@ -603,15 +351,11 @@ async def list_system_settings(
     category: Optional[str] = Query(None),
 ) -> Any:
     """List all system settings."""
-    query = select(SystemSetting).where(SystemSetting.tenant_id == current_user.tenant_id)
-
-    if category:
-        query = query.where(SystemSetting.category == category)
-
-    query = query.order_by(SystemSetting.category, SystemSetting.key)
-    result = await db.execute(query)
-    settings = result.scalars().all()
-
+    svc = FormConfigService(db)
+    settings = await svc.list_settings(
+        tenant_id=current_user.tenant_id,
+        category=category,
+    )
     return SystemSettingListResponse(
         items=[SystemSettingResponse.model_validate(s) for s in settings],
         total=len(settings),
@@ -625,33 +369,12 @@ async def create_system_setting(
     current_user: CurrentUser,
 ) -> SystemSetting:
     """Create a new system setting."""
-    # Check for duplicate key
-    existing = await db.execute(select(SystemSetting).where(SystemSetting.key == data.key))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
-
-    setting = SystemSetting(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-        key=data.key,
-        value=data.value,
-        category=data.category,
-        description=data.description,
-        value_type=data.value_type,
-        is_public=data.is_public,
-        is_editable=data.is_editable,
-        created_by_id=current_user.id,
-        updated_by_id=current_user.id,
+    svc = FormConfigService(db)
+    return await svc.create_setting(
+        data=data,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
-
-    db.add(setting)
-    await db.commit()
-    await db.refresh(setting)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    return setting
 
 
 @router.patch("/settings/{key}", response_model=SystemSettingResponse)
@@ -662,30 +385,13 @@ async def update_system_setting(
     current_user: CurrentUser,
 ) -> SystemSetting:
     """Update a system setting by key."""
-    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
-    setting = result.scalar_one_or_none()
-
-    if not setting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
-
-    if not setting.is_editable:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
-
-    apply_updates(setting, data)
-    setting.updated_by_id = current_user.id
-
-    await db.commit()
-    await db.refresh(setting)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    return setting
+    svc = FormConfigService(db)
+    return await svc.update_setting(
+        key,
+        data=data,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
 
 
 # ==================== Lookup Option Routes ====================
@@ -699,18 +405,12 @@ async def list_lookup_options(
     is_active: Optional[bool] = Query(True),
 ) -> Any:
     """List lookup options by category."""
-    query = select(LookupOption).where(
-        LookupOption.category == category,
-        LookupOption.tenant_id == current_user.tenant_id,
+    svc = FormConfigService(db)
+    options = await svc.list_lookup_options(
+        category,
+        tenant_id=current_user.tenant_id,
+        is_active=is_active,
     )
-
-    if is_active is not None:
-        query = query.where(LookupOption.is_active == is_active)
-
-    query = query.order_by(LookupOption.display_order, LookupOption.label)
-    result = await db.execute(query)
-    options = result.scalars().all()
-
     return LookupOptionListResponse(
         items=[LookupOptionResponse.model_validate(o) for o in options],
         total=len(options),
@@ -725,27 +425,12 @@ async def create_lookup_option(
     current_user: CurrentUser,
 ) -> LookupOption:
     """Create a new lookup option."""
-    # Ensure category matches
-    if data.category != category:
-        data.category = category
-
-    option = LookupOption(  # type: ignore[call-arg]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
-        category=data.category,
-        code=data.code,
-        label=data.label,
-        description=data.description,
-        is_active=data.is_active,
-        display_order=data.display_order,
-        parent_id=data.parent_id,
+    svc = FormConfigService(db)
+    return await svc.create_lookup_option(
+        category,
+        data=data,
+        tenant_id=current_user.tenant_id,
     )
-
-    db.add(option)
-    await db.commit()
-    await db.refresh(option)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    return option
 
 
 @router.patch("/lookup/{category}/{option_id}", response_model=LookupOptionResponse)
@@ -757,25 +442,13 @@ async def update_lookup_option(
     current_user: CurrentUser,
 ) -> LookupOption:
     """Update a lookup option."""
-    result = await db.execute(
-        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+    svc = FormConfigService(db)
+    return await svc.update_lookup_option(
+        category,
+        option_id,
+        data=data,
+        tenant_id=current_user.tenant_id,
     )
-    option = result.scalar_one_or_none()
-
-    if not option:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
-
-    apply_updates(option, data, set_updated_at=False)
-
-    await db.commit()
-    await db.refresh(option)
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)
-
-    return option
 
 
 @router.delete("/lookup/{category}/{option_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -786,18 +459,9 @@ async def delete_lookup_option(
     current_user: CurrentUser,
 ) -> None:
     """Delete a lookup option."""
-    result = await db.execute(
-        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+    svc = FormConfigService(db)
+    await svc.delete_lookup_option(
+        category,
+        option_id,
+        tenant_id=current_user.tenant_id,
     )
-    option = result.scalar_one_or_none()
-
-    if not option:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
-
-    await db.delete(option)
-    await db.commit()
-    await invalidate_tenant_cache(current_user.tenant_id, "form_config")
-    track_metric("form_config.mutation", 1)

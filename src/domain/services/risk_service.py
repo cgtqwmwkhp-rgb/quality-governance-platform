@@ -15,6 +15,7 @@ from typing import Any, Optional
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.exceptions import NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -456,6 +457,25 @@ class KRIService:
             return "decreasing"
         return "stable"
 
+    async def create_kri(self, risk_id: int, tenant_id: int, data: dict[str, Any]) -> EnterpriseKeyRiskIndicator:
+        """Create a Key Risk Indicator after verifying the parent risk exists."""
+        risk = (
+            await self.db.execute(
+                select(EnterpriseRisk).where(
+                    EnterpriseRisk.id == risk_id,
+                    EnterpriseRisk.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not risk:
+            raise NotFoundError(f"Risk {risk_id} not found")
+
+        kri = EnterpriseKeyRiskIndicator(**data)
+        self.db.add(kri)
+        await self.db.commit()
+        await self.db.refresh(kri)
+        return kri
+
 
 class BowTieService:
     """Bow-Tie Analysis Service"""
@@ -579,3 +599,19 @@ class BowTieService:
         await self.db.refresh(element)
 
         return element
+
+    async def delete_element(self, risk_id: int, element_id: int, tenant_id: int) -> None:
+        """Delete a bow-tie element by ID, scoped to risk and tenant."""
+        result = await self.db.execute(
+            select(BowTieElement).where(
+                BowTieElement.id == element_id,
+                BowTieElement.risk_id == risk_id,
+                BowTieElement.tenant_id == tenant_id,
+            )
+        )
+        element = result.scalar_one_or_none()
+        if not element:
+            raise NotFoundError(f"Bow-tie element {element_id} not found")
+
+        await self.db.delete(element)
+        await self.db.commit()

@@ -7,7 +7,7 @@ DB models and request schemas remain here as they are route-level definitions.
 from datetime import datetime
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, select
 from sqlalchemy.dialects.postgresql import JSONB
@@ -21,6 +21,7 @@ from src.api.schemas.push_notification import (
     UnsubscribePushNotificationResponse,
     UpdateNotificationPreferencesResponse,
 )
+from src.domain.exceptions import NotFoundError
 from src.domain.models.user import User
 from src.domain.services.push_notification_service import PushNotificationServiceDomain
 from src.infrastructure.database import Base
@@ -175,7 +176,7 @@ async def unsubscribe_from_push(
     try:
         await service.unsubscribe(endpoint)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        raise NotFoundError("Subscription not found")
     return {"success": True, "message": "Unsubscribed from push notifications"}
 
 

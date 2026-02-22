@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
@@ -22,6 +22,7 @@ from src.api.schemas.standard import (
     StandardResponse,
     StandardUpdate,
 )
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.standard_service import StandardService
 
 router = APIRouter()
@@ -62,10 +63,7 @@ async def create_standard(
     try:
         standard = await service.create_standard(standard_data)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
+        raise ValidationError(ErrorCode.DUPLICATE_ENTITY)
     return StandardResponse.model_validate(standard)
 
 
@@ -80,10 +78,7 @@ async def get_standard(
     try:
         standard = await service.get_standard(standard_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return StandardDetailResponse.model_validate(standard)
 
 
@@ -99,10 +94,7 @@ async def update_standard(
     try:
         standard = await service.update_standard(standard_id, standard_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return StandardResponse.model_validate(standard)
 
 
@@ -117,10 +109,7 @@ async def get_compliance_score(
     try:
         score = await service.get_compliance_score(standard_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ComplianceScoreResponse(**score)
 
 
@@ -135,10 +124,7 @@ async def list_standard_controls(
     try:
         rows = await service.list_standard_controls(standard_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {"data": [ControlListItem(**row) for row in rows]}
 
 
@@ -157,10 +143,7 @@ async def list_clauses(
     try:
         clauses = await service.list_clauses(standard_id, parent_clause_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {"data": [ClauseResponse.model_validate(c) for c in clauses]}
 
 
@@ -180,10 +163,7 @@ async def create_clause(
     try:
         clause = await service.create_clause(standard_id, clause_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ClauseResponse.model_validate(clause)
 
 
@@ -198,10 +178,7 @@ async def get_clause(
     try:
         clause = await service.get_clause(clause_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ClauseResponse.model_validate(clause)
 
 
@@ -217,10 +194,7 @@ async def update_clause(
     try:
         clause = await service.update_clause(clause_id, clause_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ClauseResponse.model_validate(clause)
 
 
@@ -243,10 +217,7 @@ async def create_control(
     try:
         control = await service.create_control(clause_id, control_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ControlResponse.model_validate(control)
 
 
@@ -261,10 +232,7 @@ async def get_control(
     try:
         control = await service.get_control(control_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ControlResponse.model_validate(control)
 
 
@@ -280,8 +248,5 @@ async def update_control(
     try:
         control = await service.update_control(control_id, control_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ControlResponse.model_validate(control)

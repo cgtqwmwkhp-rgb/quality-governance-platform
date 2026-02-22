@@ -3,18 +3,19 @@
 import asyncio
 import logging
 import secrets
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
-from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
 from src.api.middleware import register_exception_handlers
+from src.api.middleware.idempotency import IdempotencyMiddleware
+from src.api.middleware.json_depth import JsonDepthMiddleware
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
@@ -71,7 +72,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             f"img-src 'self' data: https:; "
             f"font-src 'self'; "
             f"connect-src 'self' https://*.azurestaticapps.net; "
-            f"frame-ancestors 'none'"
+            f"frame-ancestors 'none'; "
+            f"report-uri /api/v1/telemetry/csp-report; "
+            f"report-to csp-endpoint"
+        )
+        response.headers["Report-To"] = (
+            '{"group":"csp-endpoint","max_age":86400,' '"endpoints":[{"url":"/api/v1/telemetry/csp-report"}]}'
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
@@ -249,6 +255,19 @@ def create_application() -> FastAPI:
         ],
     )
 
+    # Sentry error tracking (conditional on DSN being configured)
+    if settings.sentry_dsn:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.app_env,
+            traces_sample_rate=0.1,
+            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        )
+
     # Initialize OpenTelemetry instrumentation
     setup_telemetry(app)
 
@@ -264,14 +283,32 @@ def create_application() -> FastAPI:
     # Must be early in stack to block writes before they reach handlers
     app.add_middleware(UATSafetyMiddleware)
 
+    # Add JSON Depth Limiting Middleware (reject deeply nested payloads)
+    app.add_middleware(JsonDepthMiddleware)
+
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
 
     # Add API Version Middleware (tracks version header for future migration)
     app.add_middleware(APIVersionMiddleware)
 
+    # Add Tenant Context Middleware (sets app.current_tenant_id for RLS)
+    # Must be after auth sets request.state.user / request.state.tenant_id
+    from src.infrastructure.middleware.tenant_context import TenantContextMiddleware
+
+    app.add_middleware(TenantContextMiddleware)
+
+    # Add Audit Logging Middleware (logs all mutating requests)
+    # Must be before rate limit middleware to capture rate-limited requests too
+    from src.api.middleware.audit_middleware import AuditLoggingMiddleware
+
+    app.add_middleware(AuditLoggingMiddleware)
+
     # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
     app.add_middleware(RateLimitMiddleware)
+
+    # Add Idempotency Middleware (handles Idempotency-Key header for POST requests)
+    app.add_middleware(IdempotencyMiddleware)
 
     # Configure CORS - explicit allowlist + regex for staging/preview
     # Production origins are explicit in cors_origins for security
@@ -291,6 +328,7 @@ def create_application() -> FastAPI:
             "X-UAT-Issue-Id",
             "X-UAT-Owner",
             "X-UAT-Expiry",
+            "Idempotency-Key",
         ],
         expose_headers=[
             "X-Request-Id",
@@ -303,13 +341,8 @@ def create_application() -> FastAPI:
         max_age=86400,  # Cache preflight for 24 hours
     )
 
-    # Register standardized exception handlers
+    # Register all exception handlers (DomainError, HTTPException, validation, generic)
     register_exception_handlers(app)
-
-    # Register exception handlers (all include CORS fallback headers)
-    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
-    app.add_exception_handler(Exception, generic_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 Catch-all for 500s with CORS
 
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")
@@ -464,6 +497,7 @@ async def health_check(request: Request) -> dict:
 
 _BUILD_SHA = settings.build_sha
 _BUILD_TIME = settings.build_time
+_STARTUP_TIME = time.time()
 
 
 @app.get("/api/v1/meta/version", tags=["Meta"])
@@ -566,6 +600,63 @@ def _collect_circuit_breaker_health() -> list[dict]:
     return result
 
 
+def _check_disk_space() -> dict[str, object]:
+    """Return disk free space info; warn if < 1 GB free."""
+    import shutil
+
+    try:
+        usage = shutil.disk_usage("/")
+        free_gb = usage.free / (1024**3)
+        return {
+            "status": "ok" if free_gb >= 1.0 else "warning",
+            "free_gb": round(free_gb, 2),
+            "total_gb": round(usage.total / (1024**3), 2),
+            "used_pct": round(usage.used / usage.total * 100, 1),
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)[:120]}
+
+
+def _check_memory() -> dict[str, object]:
+    """Return process memory info; warn if system memory usage > 90%."""
+    import os
+
+    try:
+        import psutil
+
+        vm = psutil.virtual_memory()
+        process = psutil.Process(os.getpid())
+        rss_mb = process.memory_info().rss / (1024**2)
+        return {
+            "status": "ok" if vm.percent <= 90 else "warning",
+            "system_used_pct": round(vm.percent, 1),
+            "process_rss_mb": round(rss_mb, 1),
+            "system_available_mb": round(vm.available / (1024**2), 1),
+        }
+    except ImportError:
+        import resource
+
+        rusage = resource.getrusage(resource.RUSAGE_SELF)
+        return {
+            "status": "ok",
+            "process_maxrss_mb": round(rusage.ru_maxrss / 1024, 1),
+            "detail": "psutil not installed; limited memory info",
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)[:120]}
+
+
+def _get_uptime() -> dict[str, object]:
+    elapsed = time.time() - _STARTUP_TIME
+    days, rem = divmod(int(elapsed), 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return {
+        "seconds": round(elapsed, 1),
+        "human": f"{days}d {hours}h {minutes}m {seconds}s",
+    }
+
+
 @app.get("/readyz", tags=["Health"])
 async def readiness_check(request: Request, verbose: bool = False):
     """Readiness probe: Check if application is ready to accept traffic.
@@ -582,19 +673,34 @@ async def readiness_check(request: Request, verbose: bool = False):
         "azure_storage": _check_azure_storage(),
     }
 
+    disk = _check_disk_space()
+    memory = _check_memory()
+    uptime = _get_uptime()
+
     ignored = ("unavailable", "not_configured", "sdk_not_installed")
     all_healthy = all(v in ("healthy", "ok") for v in checks.values() if v not in ignored)
+
+    warnings: list[str] = []
+    if disk.get("status") == "warning":
+        warnings.append(f"Low disk space: {disk.get('free_gb')} GB free")
+    if memory.get("status") == "warning":
+        warnings.append(f"High memory usage: {memory.get('system_used_pct')}%")
 
     request_id = getattr(request.state, "request_id", "N/A")
     response: dict[str, object] = {
         "status": "healthy" if all_healthy else "unhealthy",
         "version": settings.app_version,
+        "uptime": uptime,
         "flower_url": "http://flower:5555",
         "request_id": request_id,
     }
+    if warnings:
+        response["warnings"] = warnings
 
     if verbose:
         response["checks"] = checks
+        response["disk"] = disk
+        response["memory"] = memory
         response["circuit_breakers"] = _collect_circuit_breaker_health()
 
     status_code = 200 if all_healthy else 503

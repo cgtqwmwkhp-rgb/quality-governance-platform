@@ -7,12 +7,13 @@ WebSocket lifecycle stays here as it is a transport concern.
 import logging
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.core.security import decode_token, is_token_revoked
+from src.domain.exceptions import AuthorizationError
 from src.domain.models.user import User
 from src.domain.services.realtime_service import RealtimeService
 from src.infrastructure.websocket.connection_manager import connection_manager
@@ -130,7 +131,7 @@ async def broadcast_message(
 ):
     """Broadcast a message to connected users. Admin only."""
     if not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ErrorCode.PERMISSION_DENIED)
+        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
     service = RealtimeService()
     return await service.broadcast(message.model_dump(), channel=channel)

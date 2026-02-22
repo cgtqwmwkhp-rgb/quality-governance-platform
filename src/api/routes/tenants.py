@@ -11,7 +11,7 @@ Provides endpoints for:
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from src.api.schemas.tenant import (
     ToggleFeatureResponse,
 )
 from src.api.utils.pagination import PaginationParams, paginate
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.tenant_service import TenantService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -122,7 +123,7 @@ async def create_tenant(
         track_metric("tenant.mutation", 1)
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
+        raise ValidationError(ErrorCode.INTERNAL_ERROR)
 
 
 @router.get("/", response_model=list[TenantResponse])
@@ -147,7 +148,7 @@ async def get_current_tenant(
     tenant = await service.get_tenant(1)
 
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return tenant
 
@@ -164,7 +165,7 @@ async def get_tenant(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return tenant
 
@@ -187,7 +188,7 @@ async def update_tenant(
         track_metric("tenant.mutation", 1)
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
+        raise ValidationError(ErrorCode.INTERNAL_ERROR)
 
 
 # ============================================================================
@@ -212,7 +213,7 @@ async def update_branding(
         track_metric("tenant.mutation", 1)
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
+        raise ValidationError(ErrorCode.INTERNAL_ERROR)
 
 
 # ============================================================================
@@ -257,7 +258,7 @@ async def add_user_to_tenant(
     service = TenantService(db)
 
     if not await service.can_add_user(tenant_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     try:
         tenant_user = await service.add_user_to_tenant(
@@ -269,7 +270,7 @@ async def add_user_to_tenant(
         track_metric("tenant.mutation", 1)
         return {"id": tenant_user.id, "role": tenant_user.role}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
+        raise ValidationError(ErrorCode.INTERNAL_ERROR)
 
 
 @router.delete("/{tenant_id}/users/{user_id}", response_model=RemoveUserFromTenantResponse)
@@ -289,7 +290,7 @@ async def remove_user_from_tenant(
         track_metric("tenant.mutation", 1)
         return {"status": "removed"}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
+        raise ValidationError(ErrorCode.INTERNAL_ERROR)
 
 
 # ============================================================================
@@ -336,7 +337,7 @@ async def accept_invitation(
         tenant_user = await service.accept_invitation(token, user_id=current_user.id)
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.INTERNAL_ERROR)
+        raise ValidationError(ErrorCode.INTERNAL_ERROR)
 
 
 # ============================================================================
@@ -356,7 +357,7 @@ async def get_features(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return tenant.features_enabled
 
@@ -398,7 +399,7 @@ async def get_limits(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     current_users, max_users = await service.check_user_limit(tenant_id)
 

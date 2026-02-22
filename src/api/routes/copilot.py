@@ -7,7 +7,7 @@ Interactive conversational AI assistant for QHSE management.
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -21,6 +21,7 @@ from src.api.schemas.copilot import (
     SubmitFeedbackResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import NotFoundError
 from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -155,7 +156,7 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return session
 
@@ -221,7 +222,7 @@ async def send_message(
         )
         return message
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
@@ -266,7 +267,7 @@ async def submit_feedback(
         )
         return SubmitFeedbackResponse(status="submitted", feedback_id=feedback.id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 # ============================================================================
@@ -297,7 +298,7 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return ExecuteActionResponse(
         status="executed",

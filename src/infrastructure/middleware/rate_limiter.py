@@ -19,6 +19,7 @@ from typing import Callable, Optional
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.routing import APIRoute
+from sqlalchemy import select
 
 
 @dataclass
@@ -193,6 +194,60 @@ def get_endpoint_key(request: Request) -> str:
     return normalized
 
 
+# Tenant tier rate limits (requests per minute)
+TENANT_TIER_LIMITS = {
+    "free": 100,  # 100 req/min
+    "standard": 500,  # 500 req/min
+    "enterprise": 2000,  # 2000 req/min
+}
+
+# Cache for tenant tier lookups (tenant_id -> (tier, timestamp))
+_tenant_tier_cache: dict[int, tuple[str, float]] = {}
+_cache_ttl = 300  # 5 minutes
+
+
+async def get_tenant_tier(tenant_id: int) -> str:
+    """
+    Get tenant subscription tier from database with caching.
+
+    Args:
+        tenant_id: The tenant ID to look up
+
+    Returns:
+        Subscription tier string (defaults to "standard" if not found)
+    """
+    # Check cache first
+    now = time.time()
+    if tenant_id in _tenant_tier_cache:
+        tier, cached_time = _tenant_tier_cache[tenant_id]
+        if now - cached_time < _cache_ttl:
+            return tier
+        # Cache expired, remove it
+        del _tenant_tier_cache[tenant_id]
+
+    # Query database
+    try:
+        from src.domain.models.tenant import Tenant
+        from src.infrastructure.database import async_session_maker
+
+        async with async_session_maker() as session:
+            result = await session.execute(select(Tenant.subscription_tier).where(Tenant.id == tenant_id))
+            tier = result.scalar_one_or_none()
+
+            if tier:
+                # Cache the result
+                _tenant_tier_cache[tenant_id] = (tier, now)
+                return tier
+    except Exception as e:
+        # Log error but don't fail - fall back to default
+        print(f"[RateLimit] Error looking up tenant tier: {e}")
+
+    # Default to "standard" if not found or on error
+    default_tier = "standard"
+    _tenant_tier_cache[tenant_id] = (default_tier, now)
+    return default_tier
+
+
 # Rate limit configurations by endpoint pattern
 ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     # Authentication - strict limits
@@ -250,14 +305,45 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     endpoint_key = get_endpoint_key(request)
     config = get_limit_config(request.url.path)
 
+    # Extract tenant_id from request
+    tenant_id = getattr(request.state, "tenant_id", None)
+
+    # If not in request.state, try to get from JWT payload
+    if tenant_id is None:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from src.core.security import decode_token
+
+                token = auth_header[7:]
+                payload = decode_token(token)
+                if payload:
+                    tenant_id = payload.get("tenant_id")
+            except Exception:
+                pass
+
     # Authenticated users get higher limits
     is_authenticated = client_id.startswith("user:")
     limit = config.requests_per_minute
     if is_authenticated:
         limit = int(limit * config.authenticated_multiplier)
 
-    # Create composite key
-    rate_key = f"{client_id}:{endpoint_key}"
+    # Apply tenant-level rate limits if tenant_id is available
+    tenant_limit = None
+    if tenant_id:
+        try:
+            tenant_tier = await get_tenant_tier(tenant_id)
+            tenant_limit = TENANT_TIER_LIMITS.get(tenant_tier, TENANT_TIER_LIMITS["standard"])
+            # Use the minimum of per-user limit and tenant limit
+            limit = min(limit, tenant_limit)
+        except Exception as e:
+            # If tenant lookup fails, continue with per-user limits
+            print(f"[RateLimit] Error applying tenant limits: {e}")
+
+    # Create composite key: {tenant_id}:{client_id}:{endpoint_key}
+    # Use "no-tenant" if tenant_id is not available
+    tenant_key = str(tenant_id) if tenant_id else "no-tenant"
+    rate_key = f"{tenant_key}:{client_id}:{endpoint_key}"
 
     # Check rate limit
     is_allowed, remaining, reset_time = await limiter.is_allowed(

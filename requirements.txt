@@ -58,6 +58,10 @@ redis>=5.0.0,<6.0.0
 celery>=5.3
 flower>=2.0
 
+# Type Stubs
+types-redis>=4.6.0
+celery-types>=0.18.0
+
 # Push Notifications
 pywebpush>=1.14.0,<2.0.0
 

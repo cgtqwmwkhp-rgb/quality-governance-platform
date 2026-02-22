@@ -73,7 +73,6 @@ jobs:
         run: |
           bandit -r src/ -f json -o bandit-report.json --severity-level high || true
           bandit -r src/ -ll
-        continue-on-error: true
 
       - name: Upload Bandit Report
         uses: actions/upload-artifact@v4
@@ -133,7 +132,6 @@ jobs:
           image-ref: 'qgp-backend:scan'
           format: 'sarif'
           output: 'trivy-results.sarif'
-        continue-on-error: true
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -155,7 +153,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
   sast-codeql:
     name: CodeQL Analysis

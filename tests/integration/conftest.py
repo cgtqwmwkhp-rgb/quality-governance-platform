@@ -352,20 +352,28 @@ def superuser_auth_headers() -> dict[str, str]:
 
 @pytest.fixture
 async def test_session():
-    """Async database session – requires DATABASE_URL pointing at PostgreSQL."""
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url or "sqlite" in db_url:
-        pytest.skip("Async DB session requires PostgreSQL DATABASE_URL")
-    try:
-        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-        from sqlalchemy.orm import sessionmaker
+    """Async database session using the application's database connection.
 
-        engine = create_async_engine(db_url, echo=False)
-        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
-            yield session
-            await session.rollback()
-        await engine.dispose()
+    Creates a transaction that is rolled back after each test to ensure
+    test isolation and automatic cleanup of test data.
+
+    Tests can call session.commit() to persist data within the test transaction,
+    and all changes will be automatically rolled back after the test completes.
+    """
+    try:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from src.infrastructure.database import async_session_maker
+
+        async with async_session_maker() as session:
+            # Start a nested transaction (savepoint) for test isolation
+            # This allows tests to call commit() while still being able to rollback
+            async with session.begin() as transaction:
+                try:
+                    yield session
+                finally:
+                    # Rollback to clean up test data
+                    await transaction.rollback()
     except Exception as exc:
         pytest.skip(f"DB session setup failed: {exc}")
 
@@ -376,8 +384,66 @@ async def test_session():
 
 
 @pytest.fixture
-def test_user():
-    """Test user fixture – returns a mock user dict."""
+async def test_tenant(test_session):
+    """Create a test tenant in the database and return the tenant_id.
+
+    The tenant is automatically cleaned up after the test via transaction rollback.
+    """
+    import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.domain.models.tenant import Tenant
+
+    tenant = Tenant(
+        name="Test Tenant",
+        slug=f"test-tenant-{uuid.uuid4().hex[:8]}",
+        admin_email="admin@test.example.com",
+        is_active=True,
+    )
+    test_session.add(tenant)
+    await test_session.flush()  # Flush to get the ID without committing
+    await test_session.refresh(tenant)
+
+    yield tenant
+
+    # Cleanup handled by transaction rollback in test_session fixture
+
+
+@pytest.fixture
+async def test_user(test_session, test_tenant):
+    """Create a test user in the database with the correct tenant_id.
+
+    The user is automatically cleaned up after the test via transaction rollback.
+    """
+    import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.core.security import get_password_hash
+    from src.domain.models.user import User
+
+    user = User(
+        email=f"test-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=get_password_hash("testpassword123"),
+        first_name="Test",
+        last_name="User",
+        is_active=True,
+        is_superuser=False,
+        tenant_id=test_tenant.id,
+    )
+    test_session.add(user)
+    await test_session.flush()  # Flush to get the ID without committing
+    await test_session.refresh(user)
+
+    yield user
+
+    # Cleanup handled by transaction rollback in test_session fixture
+
+
+@pytest.fixture
+def test_user_dict():
+    """Test user fixture – returns a mock user dict (for backward compatibility)."""
     return {
         "id": "1",
         "email": "test@example.com",

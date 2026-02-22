@@ -13,7 +13,7 @@ Features:
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -37,6 +37,7 @@ from src.api.schemas.workflows import (
     RejectStepResponse,
     StartWorkflowResponse,
 )
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.user import User
 from src.domain.services import workflow_engine as engine
 from src.domain.services.workflow_calculation_service import WorkflowCalculationService
@@ -125,7 +126,7 @@ async def get_workflow_template(template_code: str, db: DbSession, current_user:
     """Get workflow template details."""
     t = await engine.get_template(db, template_code)
     if t is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
         "id": t.id,
         "code": t.code,
@@ -169,7 +170,7 @@ async def start_workflow(
             priority=request.priority,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     track_metric("workflow.started", 1, {"template": request.template_code})
     if _span:
@@ -238,7 +239,7 @@ async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: C
     """Get workflow instance details with all steps."""
     inst = await engine.get_instance(db, workflow_id)
     if inst is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     steps = await engine.get_instance_steps(db, workflow_id)
     progress = WorkflowCalculationService.calculate_progress(steps)
@@ -303,7 +304,7 @@ async def advance_workflow(
             notes=notes,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return result
 
 
@@ -318,7 +319,7 @@ async def cancel_workflow(
     try:
         inst = await engine.cancel_workflow(db, workflow_id, current_user.id, reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return {
         "workflow_id": inst.id,
         "status": inst.status,
@@ -351,7 +352,7 @@ async def approve_request(
     try:
         result = await engine.approve_step(db, step_id, current_user.id, response.effective_notes)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return result
 
 
@@ -364,11 +365,11 @@ async def reject_request(
 ):
     """Reject a workflow step."""
     if not response.reason:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     try:
         result = await engine.reject_step(db, step_id, current_user.id, response.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return result
 
 
@@ -412,7 +413,7 @@ async def escalate_workflow(
             new_priority=request.new_priority,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return result
 
 
@@ -472,7 +473,7 @@ async def cancel_delegation(delegation_id: int, db: DbSession, current_user: Cur
     """Cancel a delegation."""
     success = await engine.cancel_delegation(db, delegation_id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",

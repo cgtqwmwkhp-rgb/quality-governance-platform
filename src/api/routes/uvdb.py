@@ -12,7 +12,7 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -37,6 +37,7 @@ from src.api.schemas.uvdb import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import NotFoundError
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -498,7 +499,7 @@ async def list_sections(
                 "number": section["number"],
                 "title": section["title"],
                 "max_score": section["max_score"],
-                "question_count": len(section.get("questions", [])),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+                "question_count": len(section.get("questions", [])),
                 "iso_mapping": section.get("iso_mapping", {}),
             }
         )
@@ -523,7 +524,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "section_number": section_data["number"],
@@ -794,7 +795,7 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     mappings = []
 
     for section in UVDB_B2_SECTIONS:
-        for question in section.get("questions", []):  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+        for question in section.get("questions", []):
             if "iso_mapping" in question and question["iso_mapping"]:
                 mappings.append(
                     {

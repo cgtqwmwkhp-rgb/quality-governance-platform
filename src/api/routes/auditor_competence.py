@@ -7,7 +7,7 @@ training, and competency assessments.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -28,6 +28,7 @@ from src.api.schemas.auditor_competence import (
     TrainingCreateResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.auditor_competence import AuditorCompetenceService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -126,7 +127,7 @@ async def get_auditor_profile(
     profile = await service.get_profile(user_id)
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": profile.id,
@@ -158,7 +159,7 @@ async def update_auditor_profile(
     profile = await service.update_profile(user_id, **updates)
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": profile.id,
@@ -214,7 +215,7 @@ async def add_certification(
             certification_level=request.certification_level,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": cert.id,
@@ -310,7 +311,7 @@ async def add_training(
             duration_hours=request.duration_hours,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": training.id,
@@ -338,7 +339,7 @@ async def complete_training(
             cpd_hours_earned=request.cpd_hours_earned,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "id": training.id,
@@ -369,12 +370,12 @@ async def assess_competency(
             user_id=user_id,
             competency_area_id=request.competency_area_id,
             current_level=request.current_level,
-            assessor_id=getattr(current_user, "id", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+            assessor_id=getattr(current_user, "id", None),
             assessment_method=request.assessment_method,
             evidence_summary=request.evidence_summary,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return {
         "id": competency.id,

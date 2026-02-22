@@ -9,21 +9,26 @@ T = TypeVar("T")
 
 
 class ErrorDetail(BaseModel):
-    """Structured error detail."""
+    """Structured error detail for field-level errors."""
 
     field: str | None = None
     message: str
     code: str | None = None
 
 
-class ErrorResponse(BaseModel):
-    """Standard error response format."""
+class ErrorEnvelope(BaseModel):
+    """Inner error object matching the actual handler output."""
 
-    error: str
+    code: str
     message: str
-    details: list[ErrorDetail] | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
     request_id: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response wrapper — matches handler output exactly."""
+
+    error: ErrorEnvelope
 
 
 class SuccessResponse(BaseModel):
@@ -40,16 +45,17 @@ class PaginatedMeta(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
     has_next: bool
     has_prev: bool
 
 
-class PaginatedResponse(BaseModel):
+class PaginatedResponse(BaseModel, Generic[T]):
     """Standard paginated response."""
 
     items: list[Any]
     meta: PaginatedMeta
+    _links: dict[str, str] | None = None
 
 
 class HealthResponse(BaseModel):

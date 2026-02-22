@@ -110,8 +110,6 @@ class TestWorkflowSchemaValidation:
 class TestWorkflowTemplates:
     """Test workflow template operations."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_list_workflow_templates(self, auth_client: Any) -> None:
         """Test listing available workflow templates."""
         response = auth_client.get("/api/v1/workflows/templates")
@@ -150,8 +148,6 @@ class TestWorkflowTemplates:
 
 class TestWorkflowInstances:
     """Test workflow instance operations."""
-
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_start_workflow(self, auth_client: Any) -> None:
         """Test starting a new workflow instance."""
@@ -213,8 +209,6 @@ class TestWorkflowInstances:
 class TestApprovals:
     """Test approval management."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_get_pending_approvals(self, auth_client: Any) -> None:
         """Test getting pending approvals for current user."""
         response = auth_client.get("/api/v1/workflows/approvals/pending")
@@ -267,8 +261,6 @@ class TestApprovals:
 class TestDelegation:
     """Test out-of-office delegation."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_get_delegations(self, auth_client: Any) -> None:
         """Test getting current delegations."""
         response = auth_client.get("/api/v1/workflows/delegations")
@@ -306,8 +298,6 @@ class TestDelegation:
 class TestEscalation:
     """Test escalation features."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_get_pending_escalations(self, auth_client: Any) -> None:
         """Test getting workflows pending escalation."""
         response = auth_client.get("/api/v1/workflows/escalations/pending")
@@ -329,8 +319,6 @@ class TestEscalation:
 
 class TestWorkflowStats:
     """Test workflow statistics."""
-
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_get_workflow_stats(self, auth_client: Any) -> None:
         """Test getting workflow statistics."""

@@ -7,7 +7,7 @@ and risk score tracking.
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
@@ -34,6 +34,7 @@ from src.api.schemas.kri import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.domain.models.user import User
@@ -107,7 +108,7 @@ async def create_kri(
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.DUPLICATE_ENTITY)
+        raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
 
     kri = KeyRiskIndicator(
         **kri_data.model_dump(),
@@ -177,7 +178,7 @@ async def update_kri(
         db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
     )
     apply_updates(kri, kri_data, set_updated_at=False)
-    kri.updated_by = getattr(current_user, "email", "")  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+    kri.updated_by = getattr(current_user, "email", "")
 
     await db.commit()
     await db.refresh(kri)
@@ -215,7 +216,7 @@ async def calculate_kri(
     result = await kri_service.calculate_kri(kri_id)
 
     if not result:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return result
 
@@ -366,13 +367,13 @@ async def assess_incident_sif(
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
-        is_sif=getattr(incident, "is_sif", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        is_psif=getattr(incident, "is_psif", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        sif_classification=getattr(incident, "sif_classification", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        sif_assessment_date=getattr(incident, "sif_assessment_date", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        is_sif=getattr(incident, "is_sif", None),
+        is_psif=getattr(incident, "is_psif", None),
+        sif_classification=getattr(incident, "sif_classification", None),
+        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
         sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
         sif_rationale=getattr(incident, "sif_rationale", None),
-        life_altering_potential=getattr(incident, "life_altering_potential", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        life_altering_potential=getattr(incident, "life_altering_potential", None),
         precursor_events=getattr(incident, "precursor_events", None),
         control_failures=getattr(incident, "control_failures", None),
     )
@@ -390,14 +391,14 @@ async def get_incident_sif_assessment(
     )
 
     if not getattr(incident, "sif_classification", None):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
         is_sif=getattr(incident, "is_sif", False) or False,
         is_psif=getattr(incident, "is_psif", False) or False,
-        sif_classification=getattr(incident, "sif_classification", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
-        sif_assessment_date=getattr(incident, "sif_assessment_date", None),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        sif_classification=getattr(incident, "sif_classification", None),
+        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
         sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
         sif_rationale=getattr(incident, "sif_rationale", None),
         life_altering_potential=getattr(incident, "life_altering_potential", False) or False,

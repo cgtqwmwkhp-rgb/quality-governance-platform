@@ -16,6 +16,7 @@ from src.api.dependencies import DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.core.config import settings
 from src.core.security import get_password_hash
+from src.domain.exceptions import AuthenticationError, AuthorizationError
 from src.domain.models.user import Role, User
 
 logger = logging.getLogger(__name__)
@@ -143,10 +144,7 @@ async def ensure_test_user(
     # Security check 1: Only staging
     if not is_staging_env():
         logger.warning("Attempt to access testing endpoint in non-staging environment")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
+        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
     # Security check 2: Require CI secret
     ci_secret = settings.ci_test_secret
@@ -159,10 +157,7 @@ async def ensure_test_user(
 
     if not x_ci_secret or x_ci_secret != ci_secret:
         logger.warning("Invalid or missing X-CI-Secret header")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
+        raise AuthenticationError(ErrorCode.PERMISSION_DENIED)
 
     # Check if user exists - EAGER LOAD roles to avoid MissingGreenlet
     result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))

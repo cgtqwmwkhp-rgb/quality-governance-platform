@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -18,6 +18,7 @@ from src.api.schemas.notification import (
     UnreadCountResponse,
     UpdatePreferencesResponse,
 )
+from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPriority, NotificationType
 from src.domain.models.user import User
 from src.domain.services.notification_service import NotificationService
@@ -155,7 +156,7 @@ async def mark_notification_read(
     try:
         await service.mark_as_read(notification_id, current_user.id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     await invalidate_tenant_cache(current_user.tenant_id, "notifications")
     track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
@@ -172,7 +173,7 @@ async def mark_notification_unread(
     try:
         await service.mark_as_unread(notification_id, current_user.id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     await invalidate_tenant_cache(current_user.tenant_id, "notifications")
     track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
@@ -206,7 +207,7 @@ async def delete_notification(
     try:
         await service.delete_notification(notification_id, current_user.id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     await invalidate_tenant_cache(current_user.tenant_id, "notifications")
     track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}

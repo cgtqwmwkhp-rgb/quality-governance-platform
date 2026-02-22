@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +29,7 @@ from src.api.schemas.risk import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import NotFoundError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.domain.models.user import User
 from src.domain.services.reference_number import ReferenceNumberService
@@ -183,10 +184,7 @@ async def get_risk(
     risk = result.scalar_one_or_none()
 
     if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     response = RiskDetailResponse.model_validate(risk)
     response.control_count = len(risk.controls)

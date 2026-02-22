@@ -5,7 +5,7 @@ Thin controller layer — all business logic lives in AuthService.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -15,6 +15,11 @@ from src.api.schemas.auth import (
     ConfirmPasswordResetResponse,
     LoginRequest,
     LogoutResponse,
+    MFADisableRequest,
+    MFADisableResponse,
+    MFASetupResponse,
+    MFAVerifyRequest,
+    MFAVerifyResponse,
     PasswordChangeRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
@@ -24,6 +29,7 @@ from src.api.schemas.auth import (
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
+from src.domain.exceptions import AuthenticationError, AuthorizationError, ValidationError
 from src.domain.services.auth_service import AuthService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -79,17 +85,9 @@ async def exchange_azure_token(
     try:
         user, access_token, refresh_token = await service.exchange_azure_token(request.id_token)
     except ValueError as exc:
-        detail = ErrorCode.VALIDATION_ERROR
         if "Invalid Azure AD token" in str(exc):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorCode.AUTHENTICATION_REQUIRED,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=detail,
-        )
+            raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return AzureTokenExchangeResponse(
         access_token=access_token,
@@ -111,16 +109,9 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     try:
         _user, access_token, refresh_token = await service.authenticate(request.email, request.password)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorCode.AUTHENTICATION_REQUIRED,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
     except PermissionError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
+        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
     track_metric("auth.login")
     if _span:
@@ -135,11 +126,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     try:
         access_token, new_refresh_token = await service.refresh_tokens(request.refresh_token)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorCode.TOKEN_EXPIRED,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthenticationError(ErrorCode.TOKEN_EXPIRED)
 
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
@@ -158,15 +145,8 @@ async def logout(
         await service.logout(credentials.credentials)
     except ValueError as exc:
         if "missing jti" in str(exc):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ErrorCode.VALIDATION_ERROR,
-            )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorCode.TOKEN_EXPIRED,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+            raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise AuthenticationError(ErrorCode.TOKEN_EXPIRED)
 
     track_metric("auth.logout")
     return LogoutResponse(message="Successfully logged out")
@@ -227,10 +207,7 @@ async def change_password(
     try:
         await service.change_password(current_user, request.current_password, request.new_password)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.VALIDATION_ERROR,
-        )
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return ChangePasswordResponse(message="Password changed successfully")
 
@@ -278,9 +255,85 @@ async def confirm_password_reset(
     try:
         await service.confirm_password_reset(request.token, request.new_password)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.TOKEN_EXPIRED,
-        )
+        raise ValidationError(ErrorCode.TOKEN_EXPIRED)
 
     return ConfirmPasswordResetResponse(message="Password has been reset successfully")
+
+
+# =============================================================================
+# MFA / TOTP
+# =============================================================================
+
+
+@router.post("/mfa/setup", response_model=MFASetupResponse)
+async def mfa_setup(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> MFASetupResponse:
+    """Generate a TOTP secret and return the provisioning URI.
+
+    The user must then verify the code via /mfa/verify to activate MFA.
+    """
+    try:
+        import pyotp
+    except ImportError:
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+
+    if current_user.mfa_enabled:
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+
+    secret = pyotp.random_base32()
+    current_user.totp_secret = secret
+    await db.commit()
+
+    totp = pyotp.TOTP(secret)
+    provisioning_uri = totp.provisioning_uri(
+        name=current_user.email,
+        issuer_name="Quality Governance Platform",
+    )
+
+    return MFASetupResponse(secret=secret, provisioning_uri=provisioning_uri)
+
+
+@router.post("/mfa/verify", response_model=MFAVerifyResponse)
+async def mfa_verify(
+    request: MFAVerifyRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> MFAVerifyResponse:
+    """Verify a TOTP code and enable MFA for the user."""
+    try:
+        import pyotp
+    except ImportError:
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+
+    if not current_user.totp_secret:
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+
+    totp = pyotp.TOTP(current_user.totp_secret)
+    if not totp.verify(request.code):
+        raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
+
+    current_user.mfa_enabled = True
+    await db.commit()
+
+    return MFAVerifyResponse(message="MFA enabled successfully", mfa_enabled=True)
+
+
+@router.post("/mfa/disable", response_model=MFADisableResponse)
+async def mfa_disable(
+    request: MFADisableRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> MFADisableResponse:
+    """Disable MFA for the user (requires current password)."""
+    from src.core.security import verify_password
+
+    if not verify_password(request.password, current_user.hashed_password):
+        raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
+
+    current_user.mfa_enabled = False
+    current_user.totp_secret = None
+    await db.commit()
+
+    return MFADisableResponse(message="MFA disabled successfully", mfa_enabled=False)

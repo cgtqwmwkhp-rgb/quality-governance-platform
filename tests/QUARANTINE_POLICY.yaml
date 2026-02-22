@@ -10,7 +10,7 @@
 # 4. Quarantine count must not increase without explicit policy update
 
 version: "1.0"
-last_updated: "2026-02-21"
+last_updated: "2026-02-22"
 
 # Global settings
 settings:
@@ -19,47 +19,17 @@ settings:
   block_on_expiry: true
 
 # Quarantine entries
-# NOTE: As of 2026-02-21 all formerly-skipped E2E tests have been converted
-# from pytest.mark.skip to pytest.mark.xfail(strict=False).  They now RUN and
-# REPORT but do not BLOCK CI.  Entries below are kept for tracking until the
-# root causes are fully resolved.
-quarantines:
-  # Phase 3/4 incomplete features — now xfail (tests run, don't block)
-  - id: GOVPLAT-001
-    description: "Phase 3/4 endpoint tests - features incomplete (xfail)"
-    expiry_date: "2026-03-23"
-    owner: "platform-team"
-    reason: "Phase 3 (Workflow Center) and Phase 4 (Compliance Automation) not implemented"
-    marker: "phase34"
-    status: "xfail"
-    files:
-      - tests/smoke/test_phase3_phase4_smoke.py
-      - tests/e2e/test_workflows.py
-      - tests/e2e/test_compliance_automation.py
-    resolution_plan: "Complete Phase 3/4 implementation; tests will auto-promote when passing"
-
-  # GOVPLAT-002 (E2E API contract mismatch) — RESOLVED in Phase 4
-  # Removed: tests now pass after API contract alignment
-
-  # AsyncSession fixture alignment — now xfail (tests run, don't block)
-  - id: GOVPLAT-003
-    description: "Planet Mark / UVDB AsyncSession fixture mismatch (xfail)"
-    expiry_date: "2026-03-23"
-    owner: "platform-team"
-    reason: "Backend routes use AsyncSession.query which is not compatible with test fixtures"
-    marker: "async_session"
-    status: "xfail"
-    files:
-      - tests/e2e/test_planetmark_uvdb_e2e.py
-    resolution_plan: "Align AsyncSession fixtures; tests will auto-promote when passing"
+# NOTE: As of 2026-02-22, GOVPLAT-001 and GOVPLAT-003 have been resolved.
+# xfail markers have been removed from test files. Tests now run normally.
+quarantines: []
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 2
-  baseline_xfail_count: 2
+  baseline_quarantine_count: 0
+  baseline_xfail_count: 0
   max_allowed_quarantine_count: 4
-  last_audit_date: "2026-02-21"
-  notes: "Phase 5E: GOVPLAT-002 resolved. Only GOVPLAT-001 and GOVPLAT-003 remain as xfail. Max quarantine reduced from 7 to 3."
+  last_audit_date: "2026-02-22"
+  notes: "All quarantine issues resolved: GOVPLAT-001 (Phase 3/4 endpoints) and GOVPLAT-003 (AsyncSession fixture) fixed. xfail markers removed from test files."
 
 # Active test suites (must pass)
 active_suites:

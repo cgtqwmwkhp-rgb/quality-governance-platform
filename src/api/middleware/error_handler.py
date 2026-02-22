@@ -1,4 +1,8 @@
-"""Global exception handler for consistent error responses."""
+"""Global exception handler for consistent error responses.
+
+Handles DomainError subclasses, HTTPException, RequestValidationError,
+and uncaught exceptions — all with a unified error envelope.
+"""
 
 import logging
 import traceback
@@ -10,6 +14,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import DomainError
 
 logger = logging.getLogger(__name__)
 
@@ -18,29 +23,55 @@ _STATUS_TO_ERROR_CODE: dict[int, str] = {
     401: ErrorCode.AUTHENTICATION_REQUIRED,
     403: ErrorCode.PERMISSION_DENIED,
     404: ErrorCode.ENTITY_NOT_FOUND,
+    409: ErrorCode.DUPLICATE_ENTITY,
     429: ErrorCode.RATE_LIMIT_EXCEEDED,
     500: ErrorCode.INTERNAL_ERROR,
 }
 
 
+def _build_envelope(
+    code: str,
+    message: str,
+    request_id: str,
+    details: dict | None = None,
+) -> dict:
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "details": details or {},
+            "request_id": request_id,
+        }
+    }
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers on the FastAPI app."""
+
+    @app.exception_handler(DomainError)
+    async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+        request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+        logger.warning(
+            "Domain error [%s] %s: %s",
+            exc.code,
+            type(exc).__name__,
+            exc.message,
+            extra={"request_id": request_id, "error_code": exc.code},
+        )
+        return JSONResponse(
+            status_code=exc.http_status,
+            content=_build_envelope(exc.code, exc.message, request_id, exc.details),
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         code = _STATUS_TO_ERROR_CODE.get(exc.status_code, f"HTTP_{exc.status_code}")
         details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
+        message = exc.detail if isinstance(exc.detail, str) else _status_phrase(exc.status_code)
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": code,
-                    "message": _status_phrase(exc.status_code),
-                    "details": details,
-                    "request_id": request_id,
-                }
-            },
+            content=_build_envelope(code, message, request_id, details),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -58,14 +89,12 @@ def register_exception_handlers(app: FastAPI) -> None:
             )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "error": {
-                    "code": ErrorCode.VALIDATION_ERROR,
-                    "message": "Request validation failed",
-                    "details": {"errors": field_errors},
-                    "request_id": request_id,
-                }
-            },
+            content=_build_envelope(
+                ErrorCode.VALIDATION_ERROR,
+                "Request validation failed",
+                request_id,
+                {"errors": field_errors},
+            ),
         )
 
     @app.exception_handler(Exception)
@@ -79,14 +108,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "error": {
-                    "code": ErrorCode.INTERNAL_ERROR,
-                    "message": "Internal server error",
-                    "details": {},
-                    "request_id": request_id,
-                }
-            },
+            content=_build_envelope(ErrorCode.INTERNAL_ERROR, "Internal server error", request_id),
         )
 
 

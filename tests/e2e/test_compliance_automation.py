@@ -99,8 +99,6 @@ class TestComplianceSchemaValidation:
 class TestRegulatoryMonitoring:
     """Test regulatory update monitoring."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_list_regulatory_updates(self, auth_client: Any) -> None:
         """Test listing regulatory updates."""
         response = auth_client.get("/api/v1/compliance-automation/regulatory-updates")
@@ -154,8 +152,6 @@ class TestRegulatoryMonitoring:
 class TestGapAnalysis:
     """Test gap analysis functionality."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_run_gap_analysis(self, auth_client: Any) -> None:
         """Test running automated gap analysis."""
         response = auth_client.post(
@@ -191,8 +187,6 @@ class TestGapAnalysis:
 
 class TestCertificateTracking:
     """Test certificate expiry tracking."""
-
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_list_certificates(self, auth_client: Any) -> None:
         """Test listing all certificates."""
@@ -245,8 +239,6 @@ class TestCertificateTracking:
 class TestScheduledAudits:
     """Test scheduled audit management."""
 
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
-
     def test_list_scheduled_audits(self, auth_client: Any) -> None:
         """Test listing scheduled audits."""
         response = auth_client.get("/api/v1/compliance-automation/scheduled-audits")
@@ -276,8 +268,6 @@ class TestScheduledAudits:
 
 class TestComplianceScoring:
     """Test compliance score calculation."""
-
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_get_compliance_score(self, auth_client: Any) -> None:
         """Test getting current compliance score."""
@@ -325,8 +315,6 @@ class TestComplianceScoring:
 
 class TestRIDDORAutomation:
     """Test RIDDOR automation features."""
-
-    pytestmark = pytest.mark.xfail(reason="GOVPLAT-001: Phase 3/4 feature pending", strict=False)
 
     def test_check_riddor_required_death(self, auth_client: Any) -> None:
         """Test RIDDOR check for fatality."""

@@ -106,9 +106,11 @@ class Settings(BaseSettings):
 
     # JWT Authentication
     jwt_secret_key: str = "change-me-in-production"
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str = "HS256"  # Fallback; RS256 used when RSA key files are configured
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
+    jwt_private_key_path: str = ""
+    jwt_public_key_path: str = ""
 
     # Azure AD Authentication (for portal users)
     azure_client_id: str = ""
@@ -152,6 +154,9 @@ class Settings(BaseSettings):
     vapid_public_key: str = ""
     vapid_email: str = "admin@plantexpand.com"
 
+    # Field Encryption (PII)
+    field_encryption_key: str = ""
+
     # AI Providers
     ai_provider: str = "openai"
     openai_api_key: str = ""
@@ -167,6 +172,7 @@ class Settings(BaseSettings):
     # Monitoring / Telemetry
     applicationinsights_connection_string: str = ""
     otel_trace_sample_rate: Optional[float] = None
+    sentry_dsn: str = ""
 
     # Cache
     cache_recovery_interval: int = 60

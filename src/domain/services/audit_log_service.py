@@ -309,6 +309,38 @@ class AuditLogService:
             date_from=date_from,
         )
 
+    def build_list_query(
+        self,
+        tenant_id: int,
+        *,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        action: str | None = None,
+        user_id: int | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ):
+        """Return an un-executed *Select* for filtered audit log listing."""
+        stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)
+        if entity_type:
+            stmt = stmt.where(AuditLogEntry.entity_type == entity_type)
+        if entity_id:
+            stmt = stmt.where(AuditLogEntry.entity_id == entity_id)
+        if action:
+            stmt = stmt.where(AuditLogEntry.action == action)
+        if user_id:
+            stmt = stmt.where(AuditLogEntry.user_id == user_id)
+        if date_from:
+            stmt = stmt.where(AuditLogEntry.timestamp >= date_from)
+        if date_to:
+            stmt = stmt.where(AuditLogEntry.timestamp <= date_to)
+        return stmt.order_by(desc(AuditLogEntry.timestamp))
+
+    async def get_entry_by_id(self, entry_id: int) -> AuditLogEntry | None:
+        """Get a single audit log entry by ID."""
+        result = await self.db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
+        return result.scalar_one_or_none()
+
     # =========================================================================
     # Verification
     # =========================================================================
@@ -521,7 +553,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.action)
         )
-        by_action: dict[str, int] = dict(result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        by_action: dict[str, int] = dict(result.all())
 
         # By entity type
         result = await self.db.execute(
@@ -532,7 +564,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.entity_type)
         )
-        by_entity: dict[str, int] = dict(result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        by_entity: dict[str, int] = dict(result.all())
 
         # Most active users
         result = await self.db.execute(
