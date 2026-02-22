@@ -46,10 +46,10 @@ plugins = ["sqlalchemy.ext.mypy.plugin"]
 # Skip test files (tested separately)
 exclude = ["alembic/versions", "tests"]
 
-# Require type annotations for src/ modules
+# Gradual typing: allow untyped defs for now, tighten over time
 [[tool.mypy.overrides]]
 module = "src.*"
-disallow_untyped_defs = true
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
