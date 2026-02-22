@@ -114,9 +114,7 @@ SCOPE3_CATEGORIES = [
 ]
 
 
-async def _get_entity(
-    db: AsyncSession, model: type, entity_id: int, *, tenant_id: int | None = None
-) -> Any:
+async def _get_entity(db: AsyncSession, model: type, entity_id: int, *, tenant_id: int | None = None) -> Any:
     """Fetch entity by PK or raise ``NotFoundError``."""
     stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined]
     if tenant_id is not None:
@@ -746,7 +744,12 @@ class PlanetMarkService:
                 "required": True,
             },
             {"type": "waste_manifest", "category": "scope_3", "description": "Waste transfer notes", "required": False},
-            {"type": "travel_expense", "category": "scope_3", "description": "Business travel records", "required": False},
+            {
+                "type": "travel_expense",
+                "category": "scope_3",
+                "description": "Business travel records",
+                "required": False,
+            },
             {
                 "type": "improvement_action",
                 "category": "certification",
@@ -819,7 +822,9 @@ class PlanetMarkService:
         actions = list(actions_result.scalars().all())
 
         dashboard_now = datetime.utcnow()
-        overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < dashboard_now]
+        overdue_actions = [
+            a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < dashboard_now
+        ]
 
         return {
             "current_year": {

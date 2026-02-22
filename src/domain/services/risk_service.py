@@ -457,9 +457,7 @@ class KRIService:
             return "decreasing"
         return "stable"
 
-    async def create_kri(
-        self, risk_id: int, tenant_id: int, data: dict[str, Any]
-    ) -> EnterpriseKeyRiskIndicator:
+    async def create_kri(self, risk_id: int, tenant_id: int, data: dict[str, Any]) -> EnterpriseKeyRiskIndicator:
         """Create a Key Risk Indicator after verifying the parent risk exists."""
         risk = (
             await self.db.execute(
@@ -602,9 +600,7 @@ class BowTieService:
 
         return element
 
-    async def delete_element(
-        self, risk_id: int, element_id: int, tenant_id: int
-    ) -> None:
+    async def delete_element(self, risk_id: int, element_id: int, tenant_id: int) -> None:
         """Delete a bow-tie element by ID, scoped to risk and tenant."""
         result = await self.db.execute(
             select(BowTieElement).where(

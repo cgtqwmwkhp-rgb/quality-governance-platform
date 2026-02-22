@@ -81,9 +81,7 @@ async def list_templates(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links(
-            "audits/templates", result.page, result.page_size, result.pages
-        ),
+        "links": build_collection_links("audits/templates", result.page, result.page_size, result.pages),
     }
 
 
@@ -143,7 +141,8 @@ async def purge_expired_templates(
     """
     service = AuditService(db)
     purged_count, purged_names = await service.purge_expired_templates(
-        current_user.tenant_id, current_user.id,
+        current_user.tenant_id,
+        current_user.id,
     )
     return {
         "purged_count": purged_count,
@@ -407,9 +406,7 @@ async def list_runs(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links(
-            "audits/runs", result.page, result.page_size, result.pages
-        ),
+        "links": build_collection_links("audits/runs", result.page, result.page_size, result.pages),
     }
 
 
@@ -552,9 +549,7 @@ async def list_findings(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links(
-            "audits/findings", result.page, result.page_size, result.pages
-        ),
+        "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
     }
 
 

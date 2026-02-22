@@ -173,9 +173,7 @@ async def update_capa_action(
 ):
     service = CAPAService(db)
     try:
-        return await service.update_capa_action(
-            capa_id, data, tenant_id=current_user.tenant_id
-        )
+        return await service.update_capa_action(capa_id, data, tenant_id=current_user.tenant_id)
     except LookupError:
         raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 

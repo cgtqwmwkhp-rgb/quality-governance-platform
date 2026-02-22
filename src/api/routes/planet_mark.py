@@ -190,9 +190,7 @@ async def add_emission_source(
     current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
-    return await PlanetMarkService.add_emission_source(
-        db, year_id, current_user.tenant_id, source_data.model_dump()
-    )
+    return await PlanetMarkService.add_emission_source(db, year_id, current_user.tenant_id, source_data.model_dump())
 
 
 @router.get("/years/{year_id}/sources", response_model=EmissionSourceListResponse)
@@ -280,9 +278,7 @@ async def add_fleet_record(
     current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
-    return await PlanetMarkService.add_fleet_record(
-        db, year_id, current_user.tenant_id, fleet_data.model_dump()
-    )
+    return await PlanetMarkService.add_fleet_record(db, year_id, current_user.tenant_id, fleet_data.model_dump())
 
 
 @router.get("/years/{year_id}/fleet/summary", response_model=FleetSummaryResponse)
@@ -307,9 +303,7 @@ async def add_utility_reading(
     current_user: Annotated[User, Depends(require_permission("planetmark:create"))],
 ) -> dict[str, Any]:
     """Add utility meter reading"""
-    return await PlanetMarkService.add_utility_reading(
-        db, year_id, current_user.tenant_id, reading_data.model_dump()
-    )
+    return await PlanetMarkService.add_utility_reading(db, year_id, current_user.tenant_id, reading_data.model_dump())
 
 
 # ============ Certification ============

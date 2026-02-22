@@ -187,9 +187,7 @@ def validate_route_file(file_path: Path) -> List[Tuple[int, str, str]]:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate that mutating endpoints use permission checks"
-    )
+    parser = argparse.ArgumentParser(description="Validate that mutating endpoints use permission checks")
     parser.add_argument(
         "--warn-only",
         action="store_true",

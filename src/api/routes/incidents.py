@@ -120,9 +120,7 @@ async def list_incidents(
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not await service.check_reporter_email_access(
-            reporter_email, user_email, has_view_all, is_superuser
-        ):
+        if not await service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
             raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         await record_audit_event(
@@ -154,9 +152,7 @@ async def list_incidents(
             "page": paginated.page,
             "page_size": paginated.page_size,
             "pages": paginated.pages,
-            "links": build_collection_links(
-                "incidents", paginated.page, paginated.page_size, paginated.pages
-            ),
+            "links": build_collection_links("incidents", paginated.page, paginated.page_size, paginated.pages),
         }
     except SQLAlchemyError as e:
         error_str = str(e).lower()

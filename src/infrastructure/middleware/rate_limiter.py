@@ -196,9 +196,9 @@ def get_endpoint_key(request: Request) -> str:
 
 # Tenant tier rate limits (requests per minute)
 TENANT_TIER_LIMITS = {
-    "free": 100,       # 100 req/min
-    "standard": 500,   # 500 req/min
-    "enterprise": 2000, # 2000 req/min
+    "free": 100,  # 100 req/min
+    "standard": 500,  # 500 req/min
+    "enterprise": 2000,  # 2000 req/min
 }
 
 # Cache for tenant tier lookups (tenant_id -> (tier, timestamp))
@@ -209,10 +209,10 @@ _cache_ttl = 300  # 5 minutes
 async def get_tenant_tier(tenant_id: int) -> str:
     """
     Get tenant subscription tier from database with caching.
-    
+
     Args:
         tenant_id: The tenant ID to look up
-        
+
     Returns:
         Subscription tier string (defaults to "standard" if not found)
     """
@@ -224,18 +224,16 @@ async def get_tenant_tier(tenant_id: int) -> str:
             return tier
         # Cache expired, remove it
         del _tenant_tier_cache[tenant_id]
-    
+
     # Query database
     try:
         from src.infrastructure.database import async_session_maker
         from src.domain.models.tenant import Tenant
-        
+
         async with async_session_maker() as session:
-            result = await session.execute(
-                select(Tenant.subscription_tier).where(Tenant.id == tenant_id)
-            )
+            result = await session.execute(select(Tenant.subscription_tier).where(Tenant.id == tenant_id))
             tier = result.scalar_one_or_none()
-            
+
             if tier:
                 # Cache the result
                 _tenant_tier_cache[tenant_id] = (tier, now)
@@ -243,7 +241,7 @@ async def get_tenant_tier(tenant_id: int) -> str:
     except Exception as e:
         # Log error but don't fail - fall back to default
         print(f"[RateLimit] Error looking up tenant tier: {e}")
-    
+
     # Default to "standard" if not found or on error
     default_tier = "standard"
     _tenant_tier_cache[tenant_id] = (default_tier, now)
@@ -309,20 +307,21 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
 
     # Extract tenant_id from request
     tenant_id = getattr(request.state, "tenant_id", None)
-    
+
     # If not in request.state, try to get from JWT payload
     if tenant_id is None:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             try:
                 from src.core.security import decode_token
+
                 token = auth_header[7:]
                 payload = decode_token(token)
                 if payload:
                     tenant_id = payload.get("tenant_id")
             except Exception:
                 pass
-    
+
     # Authenticated users get higher limits
     is_authenticated = client_id.startswith("user:")
     limit = config.requests_per_minute

@@ -1,4 +1,5 @@
 """Tests for HATEOAS link builder."""
+
 from src.api.utils.hateoas import build_links
 
 

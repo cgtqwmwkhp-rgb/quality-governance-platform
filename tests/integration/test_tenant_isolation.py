@@ -128,11 +128,6 @@ async def test_user_cannot_see_other_tenant_data(
         "is_superuser": False,
     }
     token_a = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-        user_id=str(user_a.id),
-        tenant_id=tenant_a.id,
-        role="admin",
-        is_superuser=False,
-    )
     headers_a = {"Authorization": f"Bearer {token_a}"}
 
     # Query incidents as user A - should only see tenant A's incidents
@@ -143,7 +138,7 @@ async def test_user_cannot_see_other_tenant_data(
 
     assert response.status_code == 200
     data = response.json()
-    
+
     # Should only see tenant A's incidents
     incident_ids = [inc["id"] for inc in data.get("items", [])]
     assert incident_a1.id in incident_ids, "Tenant A should see incident_a1"
@@ -239,6 +234,7 @@ async def test_cross_tenant_access_denied(
     )
 
     # Should return 403 (Forbidden) or 404 (Not Found) - tenant isolation enforced
-    assert response.status_code in [403, 404], (
-        f"Expected 403 or 404 for cross-tenant access, got {response.status_code}"
-    )
+    assert response.status_code in [
+        403,
+        404,
+    ], f"Expected 403 or 404 for cross-tenant access, got {response.status_code}"

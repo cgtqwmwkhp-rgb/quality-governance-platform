@@ -94,9 +94,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Optimist
     # Full-text search (populated by DB trigger)
     search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
 
-    __table_args__ = (
-        Index("ix_risks_search_vector", "search_vector", postgresql_using="gin"),
-    )
+    __table_args__ = (Index("ix_risks_search_vector", "search_vector", postgresql_using="gin"),)
 
     # Relationships
     owner: Mapped[Optional["User"]] = relationship(

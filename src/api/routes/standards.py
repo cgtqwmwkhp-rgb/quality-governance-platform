@@ -43,9 +43,7 @@ async def list_standards(
 ) -> StandardListResponse:
     """List all standards with pagination."""
     service = StandardService(db)
-    paginated = await service.list_standards(
-        page=page, page_size=page_size, search=search, is_active=is_active
-    )
+    paginated = await service.list_standards(page=page, page_size=page_size, search=search, is_active=is_active)
     return StandardListResponse(
         items=[StandardResponse.model_validate(s) for s in paginated.items],
         total=paginated.total,

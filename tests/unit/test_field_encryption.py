@@ -1,4 +1,5 @@
 """Tests for PII field encryption."""
+
 import pytest
 import os
 

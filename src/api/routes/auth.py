@@ -108,9 +108,7 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     _span = tracer.start_span("login") if tracer else None
     service = AuthService(db)
     try:
-        _user, access_token, refresh_token = await service.authenticate(
-            request.email, request.password
-        )
+        _user, access_token, refresh_token = await service.authenticate(request.email, request.password)
     except ValueError:
         raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
     except PermissionError:

@@ -120,8 +120,10 @@ export function useIntersectionObserver(
     observerRef.current = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        setIsIntersecting(entry.isIntersecting);
-        setEntry(entry);
+        if (entry) {
+          setIsIntersecting(entry.isIntersecting);
+          setEntry(entry);
+        }
       },
       {
         root,

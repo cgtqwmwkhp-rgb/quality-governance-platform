@@ -338,9 +338,7 @@ class AuditLogService:
 
     async def get_entry_by_id(self, entry_id: int) -> AuditLogEntry | None:
         """Get a single audit log entry by ID."""
-        result = await self.db.execute(
-            select(AuditLogEntry).where(AuditLogEntry.id == entry_id)
-        )
+        result = await self.db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
         return result.scalar_one_or_none()
 
     # =========================================================================

@@ -106,15 +106,11 @@ async def list_complaints(
     if complainant_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
-            current_user.has_permission("complaint:view_all")
-            if hasattr(current_user, "has_permission")
-            else False
+            current_user.has_permission("complaint:view_all") if hasattr(current_user, "has_permission") else False
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not service.check_complainant_email_access(
-            complainant_email, user_email, has_view_all, is_superuser
-        ):
+        if not service.check_complainant_email_access(complainant_email, user_email, has_view_all, is_superuser):
             raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         await record_audit_event(
@@ -156,8 +152,12 @@ async def list_complaints(
             type(e).__name__,
         )
         column_errors = [
-            "email", "column", "does not exist",
-            "unknown column", "programmingerror", "relation",
+            "email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
         ]
         if any(err in error_str for err in column_errors):
             logger.warning(
@@ -207,9 +207,7 @@ async def list_complaint_investigations(
     """List investigations for a specific complaint (paginated)."""
     service = ComplaintService(db)
     try:
-        paginated = await service.list_complaint_investigations(
-            complaint_id, current_user.tenant_id, params
-        )
+        paginated = await service.list_complaint_investigations(complaint_id, current_user.tenant_id, params)
     except LookupError:
         raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {

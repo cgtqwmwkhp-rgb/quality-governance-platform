@@ -1,4 +1,5 @@
 """Tests for tenant scope utility."""
+
 from unittest.mock import MagicMock
 from src.api.utils.tenant import tenant_scope
 

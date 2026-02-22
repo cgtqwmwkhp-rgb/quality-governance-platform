@@ -84,9 +84,7 @@ class NearMiss(Base):
     # Full-text search (populated by DB trigger)
     search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
 
-    __table_args__ = (
-        Index("ix_near_misses_search_vector", "search_vector", postgresql_using="gin"),
-    )
+    __table_args__ = (Index("ix_near_misses_search_vector", "search_vector", postgresql_using="gin"),)
 
     # Audit fields
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

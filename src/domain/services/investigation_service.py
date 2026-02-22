@@ -42,6 +42,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 # Result types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PaginatedResult:
     """Generic paginated result returned by service methods."""
@@ -101,6 +102,7 @@ class CustomerPackResult:
 # ---------------------------------------------------------------------------
 # Closure validation reason codes
 # ---------------------------------------------------------------------------
+
 
 class ClosureReasonCode:
     """Stable reason codes for closure validation failures."""

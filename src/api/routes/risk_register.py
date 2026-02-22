@@ -233,9 +233,7 @@ async def update_risk(
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
     service = RiskRegisterService(db)
-    risk = await service.update_risk(
-        risk_id, current_user.tenant_id, risk_data.model_dump(exclude_unset=True)
-    )
+    risk = await service.update_risk(risk_id, current_user.tenant_id, risk_data.model_dump(exclude_unset=True))
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
 
@@ -417,9 +415,7 @@ async def create_kri(
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
     service = KRIService(db)
-    kri = await service.create_kri(
-        kri_data.risk_id, current_user.tenant_id, kri_data.model_dump()
-    )
+    kri = await service.create_kri(kri_data.risk_id, current_user.tenant_id, kri_data.model_dump())
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
 
@@ -515,7 +511,9 @@ async def link_control_to_risk(
     """Link a control to a risk"""
     service = RiskRegisterService(db)
     await service.link_control_to_risk(
-        risk_id, control_id, current_user.tenant_id,
+        risk_id,
+        control_id,
+        current_user.tenant_id,
         reduces_likelihood=reduces_likelihood,
         reduces_impact=reduces_impact,
     )

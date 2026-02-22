@@ -1,4 +1,5 @@
 """Tests for resilience patterns."""
+
 import asyncio
 import importlib.util
 import time
@@ -33,9 +34,7 @@ class TestCircuitBreaker:
         assert not cb.can_execute()
 
     def test_recovers_after_timeout(self):
-        cb = CircuitBreaker(
-            name="test_recover", failure_threshold=2, recovery_timeout=0.01
-        )
+        cb = CircuitBreaker(name="test_recover", failure_threshold=2, recovery_timeout=0.01)
         cb.record_failure()
         cb.record_failure()
         assert cb.state == CircuitState.OPEN
@@ -44,9 +43,7 @@ class TestCircuitBreaker:
         assert cb.state == CircuitState.HALF_OPEN
 
     def test_success_closes_half_open(self):
-        cb = CircuitBreaker(
-            name="test_close", failure_threshold=1, recovery_timeout=0.01
-        )
+        cb = CircuitBreaker(name="test_close", failure_threshold=1, recovery_timeout=0.01)
         cb.record_failure()
         time.sleep(0.02)
         cb.can_execute()

@@ -211,9 +211,7 @@ async def update_control(
     current_user: Annotated[User, Depends(require_permission("iso27001:update"))],
 ) -> dict[str, Any]:
     """Update control implementation status"""
-    return await ISO27001Service.update_control(
-        db, control_id, control_data.model_dump(exclude_unset=True)
-    )
+    return await ISO27001Service.update_control(db, control_id, control_data.model_dump(exclude_unset=True))
 
 
 # ============ Statement of Applicability ============
@@ -258,9 +256,7 @@ async def create_security_risk(
     current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create information security risk"""
-    return await ISO27001Service.create_security_risk(
-        db, current_user.tenant_id, risk_data.model_dump()
-    )
+    return await ISO27001Service.create_security_risk(db, current_user.tenant_id, risk_data.model_dump())
 
 
 # ============ Security Incidents ============
@@ -293,9 +289,7 @@ async def create_security_incident(
     current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create security incident"""
-    return await ISO27001Service.create_security_incident(
-        db, current_user.tenant_id, incident_data.model_dump()
-    )
+    return await ISO27001Service.create_security_incident(db, current_user.tenant_id, incident_data.model_dump())
 
 
 @router.put("/incidents/{incident_id}", response_model=IncidentUpdateResponse)
@@ -339,9 +333,7 @@ async def create_supplier_assessment(
     current_user: Annotated[User, Depends(require_permission("iso27001:create"))],
 ) -> dict[str, Any]:
     """Create supplier security assessment"""
-    return await ISO27001Service.create_supplier_assessment(
-        db, current_user.tenant_id, assessment_data.model_dump()
-    )
+    return await ISO27001Service.create_supplier_assessment(db, current_user.tenant_id, assessment_data.model_dump())
 
 
 # ============ ISMS Dashboard Summary ============

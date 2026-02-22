@@ -149,9 +149,7 @@ async def list_policies(
         "page": paginated.page,
         "page_size": paginated.page_size,
         "pages": paginated.pages,
-        "links": build_collection_links(
-            "policies", paginated.page, paginated.page_size, paginated.pages
-        ),
+        "links": build_collection_links("policies", paginated.page, paginated.page_size, paginated.pages),
     }
 
 

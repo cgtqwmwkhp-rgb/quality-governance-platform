@@ -196,18 +196,14 @@ class SearchService:
             )
         return results
 
-    async def _search_rtas(
-        self, query: str, tenant_id: int | None, request_id: str | None
-    ) -> list[SearchResultItem]:
+    async def _search_rtas(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
         try:
             from src.domain.models.rta import RTA
 
             inline_vector = func.to_tsvector(
                 "english",
-                func.coalesce(cast(RTA.location, String), "")
-                + " "
-                + func.coalesce(cast(RTA.description, String), ""),
+                func.coalesce(cast(RTA.location, String), "") + " " + func.coalesce(cast(RTA.description, String), ""),
             )
             tsquery = self._ts_query(query)
             rank = func.ts_rank(inline_vector, tsquery)
@@ -309,9 +305,7 @@ class SearchService:
             )
         return results
 
-    async def _search_risks(
-        self, query: str, tenant_id: int | None, request_id: str | None
-    ) -> list[SearchResultItem]:
+    async def _search_risks(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
         try:
             from src.domain.models.risk import Risk

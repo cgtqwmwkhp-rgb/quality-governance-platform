@@ -78,9 +78,7 @@ async def list_rtas(
         has_view_all = current_user.has_permission("rta:view_all") if hasattr(current_user, "has_permission") else False
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not service.check_reporter_email_access(
-            reporter_email, user_email, has_view_all, is_superuser
-        ):
+        if not service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
             raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         await record_audit_event(
@@ -123,8 +121,12 @@ async def list_rtas(
             type(e).__name__,
         )
         column_errors = [
-            "reporter_email", "column", "does not exist",
-            "unknown column", "programmingerror", "relation",
+            "reporter_email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
         ]
         if any(err in error_str for err in column_errors):
             logger.warning(
@@ -232,9 +234,7 @@ async def list_rta_actions(
     """List actions for an RTA with deterministic ordering and pagination."""
     service = RTAService(db)
     try:
-        paginated = await service.list_rta_actions(
-            rta_id, current_user.tenant_id, params
-        )
+        paginated = await service.list_rta_actions(rta_id, current_user.tenant_id, params)
     except LookupError:
         raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
@@ -302,9 +302,7 @@ async def list_rta_investigations(
     """List investigations for a specific RTA (paginated)."""
     service = RTAService(db)
     try:
-        paginated = await service.list_rta_investigations(
-            rta_id, current_user.tenant_id, params
-        )
+        paginated = await service.list_rta_investigations(rta_id, current_user.tenant_id, params)
     except LookupError:
         raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {

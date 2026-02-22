@@ -11,11 +11,15 @@ import pytest
 #   -> routes/form_config -> form_config_service (cycle!)
 # We stub the triggering module before importing the service under test.
 _error_codes_stub = ModuleType("src.api.schemas.error_codes")
-_error_codes_stub.ErrorCode = type("ErrorCode", (), {  # type: ignore[attr-defined]
-    "DUPLICATE_ENTITY": "DUPLICATE_ENTITY",
-    "ENTITY_NOT_FOUND": "ENTITY_NOT_FOUND",
-    "PERMISSION_DENIED": "PERMISSION_DENIED",
-})()
+_error_codes_stub.ErrorCode = type(
+    "ErrorCode",
+    (),
+    {  # type: ignore[attr-defined]
+        "DUPLICATE_ENTITY": "DUPLICATE_ENTITY",
+        "ENTITY_NOT_FOUND": "ENTITY_NOT_FOUND",
+        "PERMISSION_DENIED": "PERMISSION_DENIED",
+    },
+)()
 
 _patches = {
     "src.api.schemas.error_codes": _error_codes_stub,

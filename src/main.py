@@ -77,8 +77,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             f"report-to csp-endpoint"
         )
         response.headers["Report-To"] = (
-            '{"group":"csp-endpoint","max_age":86400,'
-            '"endpoints":[{"url":"/api/v1/telemetry/csp-report"}]}'
+            '{"group":"csp-endpoint","max_age":86400,' '"endpoints":[{"url":"/api/v1/telemetry/csp-report"}]}'
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
@@ -212,9 +211,7 @@ def configure_logging():
 
     log_dir = getattr(settings, "log_dir", None)
     configure_structured_logging(level=settings.log_level, log_dir=log_dir)
-    logging.getLogger(__name__).info(
-        "Logging configured successfully", extra={"app_name": settings.app_name}
-    )
+    logging.getLogger(__name__).info("Logging configured successfully", extra={"app_name": settings.app_name})
 
 
 def create_application() -> FastAPI:
@@ -235,7 +232,10 @@ def create_application() -> FastAPI:
             {"name": "Incidents", "description": "Incident reporting, tracking, and resolution"},
             {"name": "Risk Register", "description": "Risk assessment, controls, and mitigation"},
             {"name": "Audits & Inspections", "description": "Audit templates, runs, findings, and scoring"},
-            {"name": "ISO Compliance & Evidence", "description": "ISO clause mapping, evidence links, and gap analysis"},
+            {
+                "name": "ISO Compliance & Evidence",
+                "description": "ISO clause mapping, evidence links, and gap analysis",
+            },
             {"name": "Standards Library", "description": "ISO standards, clauses, and controls catalogue"},
             {"name": "Document Library", "description": "Document upload, AI analysis, and semantic search"},
             {"name": "Policy Library", "description": "Policy lifecycle management and acknowledgments"},

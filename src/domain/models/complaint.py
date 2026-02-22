@@ -137,9 +137,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Opt
     # Full-text search (populated by DB trigger)
     search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
 
-    __table_args__ = (
-        Index("ix_complaints_search_vector", "search_vector", postgresql_using="gin"),
-    )
+    __table_args__ = (Index("ix_complaints_search_vector", "search_vector", postgresql_using="gin"),)
 
     # Relationships
     actions: Mapped[List["ComplaintAction"]] = relationship(

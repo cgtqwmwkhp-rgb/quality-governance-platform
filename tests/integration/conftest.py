@@ -32,6 +32,7 @@ TEST_JWT_ALGORITHM = settings.jwt_algorithm
 # Mock User / Role (no SQLAlchemy session required)
 # ---------------------------------------------------------------------------
 
+
 class _MockRole:
     """Lightweight role stand-in for integration tests."""
 
@@ -88,38 +89,72 @@ class _MockUser:
 # Permission sets
 # ---------------------------------------------------------------------------
 
-_ADMIN_PERMS = ",".join([
-    "incident:create", "incident:read", "incident:update", "incident:delete",
-    "complaint:create", "complaint:read", "complaint:update", "complaint:delete",
-    "rta:create", "rta:read", "rta:update", "rta:delete",
-    "policy:create", "policy:read", "policy:update", "policy:delete",
-    "action:create", "action:read", "action:update", "action:delete",
-    "investigation:create", "investigation:read", "investigation:update",
-    "audit:create", "audit:read", "audit:update", "audit:delete",
-    "standard:create", "standard:read", "standard:update",
-    "risk:create", "risk:read", "risk:update",
-    "near_miss:create", "near_miss:read", "near_miss:update",
-    "audit_template:create", "audit_template:read", "audit_template:update", "audit_template:delete",
-])
+_ADMIN_PERMS = ",".join(
+    [
+        "incident:create",
+        "incident:read",
+        "incident:update",
+        "incident:delete",
+        "complaint:create",
+        "complaint:read",
+        "complaint:update",
+        "complaint:delete",
+        "rta:create",
+        "rta:read",
+        "rta:update",
+        "rta:delete",
+        "policy:create",
+        "policy:read",
+        "policy:update",
+        "policy:delete",
+        "action:create",
+        "action:read",
+        "action:update",
+        "action:delete",
+        "investigation:create",
+        "investigation:read",
+        "investigation:update",
+        "audit:create",
+        "audit:read",
+        "audit:update",
+        "audit:delete",
+        "standard:create",
+        "standard:read",
+        "standard:update",
+        "risk:create",
+        "risk:read",
+        "risk:update",
+        "near_miss:create",
+        "near_miss:read",
+        "near_miss:update",
+        "audit_template:create",
+        "audit_template:read",
+        "audit_template:update",
+        "audit_template:delete",
+    ]
+)
 
-_VIEWER_PERMS = ",".join([
-    "incident:read",
-    "complaint:read",
-    "rta:read",
-    "policy:read",
-    "action:read",
-    "investigation:read",
-    "audit:read",
-    "standard:read",
-    "risk:read",
-    "near_miss:read",
-    "audit_template:read",
-])
+_VIEWER_PERMS = ",".join(
+    [
+        "incident:read",
+        "complaint:read",
+        "rta:read",
+        "policy:read",
+        "action:read",
+        "investigation:read",
+        "audit:read",
+        "standard:read",
+        "risk:read",
+        "near_miss:read",
+        "audit_template:read",
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
+
 
 def _generate_test_jwt(
     user_id: str = "1",
@@ -166,6 +201,7 @@ def _mock_user_from_jwt(payload: dict) -> _MockUser:
 # Dependency override – validates JWT but skips DB user lookup
 # ---------------------------------------------------------------------------
 
+
 async def _test_get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> _MockUser:
@@ -192,6 +228,7 @@ async def _test_get_current_user(
 # Autouse fixture – install override for every integration test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _override_auth():
     """Replace ``get_current_user`` with a DB-free mock for all integration tests."""
@@ -203,6 +240,7 @@ def _override_auth():
 # ---------------------------------------------------------------------------
 # Test clients
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def sync_client() -> Generator[TestClient, None, None]:
@@ -282,6 +320,7 @@ async def superuser_client() -> AsyncGenerator[AsyncClient, None]:
 # Auth header fixtures (for tests using client + auth_headers separately)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
     """Test authentication headers with valid JWT (admin role, NOT superuser)."""
@@ -310,13 +349,14 @@ def superuser_auth_headers() -> dict[str, str]:
 # Database fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def test_session():
     """Async database session using the application's database connection.
-    
+
     Creates a transaction that is rolled back after each test to ensure
     test isolation and automatic cleanup of test data.
-    
+
     Tests can call session.commit() to persist data within the test transaction,
     and all changes will be automatically rolled back after the test completes.
     """
@@ -341,16 +381,17 @@ async def test_session():
 # Data fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def test_tenant(test_session):
     """Create a test tenant in the database and return the tenant_id.
-    
+
     The tenant is automatically cleaned up after the test via transaction rollback.
     """
     from sqlalchemy.ext.asyncio import AsyncSession
     from src.domain.models.tenant import Tenant
     import uuid
-    
+
     tenant = Tenant(
         name="Test Tenant",
         slug=f"test-tenant-{uuid.uuid4().hex[:8]}",
@@ -360,23 +401,23 @@ async def test_tenant(test_session):
     test_session.add(tenant)
     await test_session.flush()  # Flush to get the ID without committing
     await test_session.refresh(tenant)
-    
+
     yield tenant
-    
+
     # Cleanup handled by transaction rollback in test_session fixture
 
 
 @pytest.fixture
 async def test_user(test_session, test_tenant):
     """Create a test user in the database with the correct tenant_id.
-    
+
     The user is automatically cleaned up after the test via transaction rollback.
     """
     from sqlalchemy.ext.asyncio import AsyncSession
     from src.domain.models.user import User
     from src.core.security import get_password_hash
     import uuid
-    
+
     user = User(
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",
         hashed_password=get_password_hash("testpassword123"),
@@ -389,9 +430,9 @@ async def test_user(test_session, test_tenant):
     test_session.add(user)
     await test_session.flush()  # Flush to get the ID without committing
     await test_session.refresh(user)
-    
+
     yield user
-    
+
     # Cleanup handled by transaction rollback in test_session fixture
 
 
@@ -434,6 +475,7 @@ def database_url() -> str:
 # ---------------------------------------------------------------------------
 # Pytest hooks
 # ---------------------------------------------------------------------------
+
 
 def pytest_configure(config):
     """Register custom markers."""

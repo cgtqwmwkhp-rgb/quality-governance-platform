@@ -26,9 +26,7 @@ from src.domain.models.iso27001 import (
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 
-async def _get_entity(
-    db: AsyncSession, model: type, entity_id: int, *, tenant_id: int | None = None
-) -> Any:
+async def _get_entity(db: AsyncSession, model: type, entity_id: int, *, tenant_id: int | None = None) -> Any:
     """Fetch entity by PK or raise ``NotFoundError``."""
     stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined]
     if tenant_id is not None:
@@ -217,9 +215,7 @@ class ISO27001Service:
         implemented = result.scalar_one()
 
         result = await db.execute(
-            select(func.count())
-            .select_from(ISO27001Control)
-            .where(ISO27001Control.implementation_status == "partial")
+            select(func.count()).select_from(ISO27001Control).where(ISO27001Control.implementation_status == "partial")
         )
         partial = result.scalar_one()
 
@@ -563,9 +559,7 @@ class ISO27001Service:
                     "iso27001_certified": s.iso27001_certified,
                     "soc2_certified": s.soc2_certified,
                     "risk_level": s.risk_level,
-                    "next_assessment_date": (
-                        s.next_assessment_date.isoformat() if s.next_assessment_date else None
-                    ),
+                    "next_assessment_date": (s.next_assessment_date.isoformat() if s.next_assessment_date else None),
                 }
                 for s in paginated.items
             ],
@@ -581,9 +575,7 @@ class ISO27001Service:
             assessment_date=datetime.now(timezone.utc),
             tenant_id=tenant_id,
             next_assessment_date=datetime.now(timezone.utc)
-            + timedelta(
-                days=int(assessment_data.pop("assessment_frequency_months", None) or 365)
-            ),
+            + timedelta(days=int(assessment_data.pop("assessment_frequency_months", None) or 365)),
             **assessment_data,
         )
         db.add(assessment)
@@ -632,9 +624,7 @@ class ISO27001Service:
         implemented_controls = result.scalar_one()
 
         result = await db.execute(
-            select(func.count())
-            .select_from(ISO27001Control)
-            .where(ISO27001Control.is_applicable == True)  # noqa: E712
+            select(func.count()).select_from(ISO27001Control).where(ISO27001Control.is_applicable == True)  # noqa: E712
         )
         applicable_controls = result.scalar_one()
 

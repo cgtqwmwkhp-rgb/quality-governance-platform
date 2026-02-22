@@ -310,9 +310,7 @@ async def get_entity_history(
     """Get complete audit history for a specific entity."""
     try:
         service = AuditLogService(db)
-        return await service.get_entity_history(
-            current_user.tenant_id, entity_type, entity_id
-        )
+        return await service.get_entity_history(current_user.tenant_id, entity_type, entity_id)
     except SQLAlchemyError as e:
         logger.exception(
             "Failed to get entity history [request_id=%s]: %s",
@@ -335,9 +333,7 @@ async def get_user_activity(
     """Get recent activity for a specific user."""
     try:
         service = AuditLogService(db)
-        return await service.get_user_activity(
-            current_user.tenant_id, user_id, days
-        )
+        return await service.get_user_activity(current_user.tenant_id, user_id, days)
     except SQLAlchemyError as e:
         logger.exception(
             "Failed to get user activity [request_id=%s]: %s",

@@ -54,8 +54,19 @@ def upgrade() -> None:
     )
 
     for table in RLS_TABLES:
-        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-        op.execute(_POLICY_SQL.format(table=table))
+        # Only enable RLS on tables that have a tenant_id column
+        op.execute(
+            f"DO $$ BEGIN "
+            f"  IF EXISTS ("
+            f"    SELECT 1 FROM information_schema.columns "
+            f"    WHERE table_name = '{table}' AND column_name = 'tenant_id'"
+            f"  ) THEN "
+            f"    EXECUTE 'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY'; "
+            f"    EXECUTE 'CREATE POLICY tenant_isolation ON {table} "
+            f"      USING (tenant_id = current_setting(''app.current_tenant_id'', true)::int)'; "
+            f"  END IF; "
+            f"END $$"
+        )
 
 
 def downgrade() -> None:

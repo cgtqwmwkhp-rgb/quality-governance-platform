@@ -151,7 +151,11 @@ async def get_workflow_template(template_code: str, db: DbSession, current_user:
 
 
 @router.post("/start", response_model=StartWorkflowResponse)
-async def start_workflow(request: WorkflowStartRequest, db: DbSession, current_user: Annotated[User, Depends(require_permission("workflow:execute"))]):
+async def start_workflow(
+    request: WorkflowStartRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
+):
     """Start a new workflow instance."""
     _span = tracer.start_span("start_workflow") if tracer else None
     if _span:
@@ -339,7 +343,12 @@ async def get_pending_approvals(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/approvals/{step_id}/approve", response_model=ApproveStepResponse)
-async def approve_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: Annotated[User, Depends(require_permission("workflow:execute"))]):
+async def approve_request(
+    step_id: int,
+    response: ApprovalResponse,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
+):
     """Approve a workflow step."""
     try:
         result = await engine.approve_step(db, step_id, current_user.id, response.effective_notes)
@@ -349,7 +358,12 @@ async def approve_request(step_id: int, response: ApprovalResponse, db: DbSessio
 
 
 @router.post("/approvals/{step_id}/reject", response_model=RejectStepResponse)
-async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession, current_user: Annotated[User, Depends(require_permission("workflow:execute"))]):
+async def reject_request(
+    step_id: int,
+    response: ApprovalResponse,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
+):
     """Reject a workflow step."""
     if not response.reason:
         raise ValidationError(ErrorCode.VALIDATION_ERROR)
@@ -361,7 +375,11 @@ async def reject_request(step_id: int, response: ApprovalResponse, db: DbSession
 
 
 @router.post("/approvals/bulk-approve", response_model=BulkApproveResponse)
-async def bulk_approve_requests(request: BulkApprovalRequest, db: DbSession, current_user: Annotated[User, Depends(require_permission("workflow:execute"))]):
+async def bulk_approve_requests(
+    request: BulkApprovalRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
+):
     """Bulk approve multiple workflow steps."""
     result = await engine.bulk_approve(db, request.approval_ids, current_user.id, request.notes)
     return result
@@ -425,7 +443,11 @@ async def get_my_delegations(db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/delegations", response_model=CreateDelegationResponse)
-async def create_delegation(request: DelegationRequest, db: DbSession, current_user: Annotated[User, Depends(require_permission("workflow:create"))]):
+async def create_delegation(
+    request: DelegationRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
+):
     """Set up out-of-office delegation."""
     d = await engine.set_delegation(
         db,

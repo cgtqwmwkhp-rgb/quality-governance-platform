@@ -1,4 +1,5 @@
 """Tests for domain exception hierarchy."""
+
 import pytest
 from src.domain.exceptions import (
     DomainError,

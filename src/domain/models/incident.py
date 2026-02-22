@@ -157,9 +157,7 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Opti
     # Full-text search (populated by DB trigger)
     search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
 
-    __table_args__ = (
-        Index("ix_incidents_search_vector", "search_vector", postgresql_using="gin"),
-    )
+    __table_args__ = (Index("ix_incidents_search_vector", "search_vector", postgresql_using="gin"),)
 
     # Relationships
     reporter: Mapped[Optional["User"]] = relationship(

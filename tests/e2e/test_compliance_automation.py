@@ -154,7 +154,9 @@ class TestGapAnalysis:
 
     def test_run_gap_analysis(self, auth_client: Any) -> None:
         """Test running automated gap analysis."""
-        response = auth_client.post("/api/v1/compliance-automation/gap-analysis/run", params={"regulatory_update_id": 1})
+        response = auth_client.post(
+            "/api/v1/compliance-automation/gap-analysis/run", params={"regulatory_update_id": 1}
+        )
         assert response.status_code == 200
 
         analysis = response.json()

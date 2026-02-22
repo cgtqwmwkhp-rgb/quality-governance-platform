@@ -140,19 +140,21 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 # Return cached response
                 logger.debug(f"Idempotency cache hit: {idempotency_key}")
-                
+
                 # Handle body encoding (may be base64 if original was binary)
                 body_content = cached_response["body"]
                 if cached_response["headers"].get("X-Idempotency-Body-Encoding") == "base64":
                     import base64
+
                     body_content = base64.b64decode(body_content)
                     # Remove the encoding header from response
-                    response_headers = {k: v for k, v in cached_response["headers"].items() 
-                                      if k != "X-Idempotency-Body-Encoding"}
+                    response_headers = {
+                        k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"
+                    }
                 else:
                     response_headers = cached_response["headers"]
                     body_content = body_content.encode("utf-8") if isinstance(body_content, str) else body_content
-                
+
                 response = Response(
                     content=body_content,
                     status_code=cached_response["status_code"],
@@ -192,11 +194,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 "transfer-encoding",
                 "upgrade",
             }
-            response_headers = {
-                k: v
-                for k, v in response.headers.items()
-                if k.lower() not in hop_by_hop_headers
-            }
+            response_headers = {k: v for k, v in response.headers.items() if k.lower() not in hop_by_hop_headers}
 
             # Decode body to string for storage (handle both text and binary)
             try:

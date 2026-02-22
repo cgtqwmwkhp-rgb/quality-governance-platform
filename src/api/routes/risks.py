@@ -91,9 +91,7 @@ async def list_risks(
         "page": paginated.page,
         "page_size": paginated.page_size,
         "pages": paginated.pages,
-        "links": build_collection_links(
-            "risks", paginated.page, paginated.page_size, paginated.pages
-        ),
+        "links": build_collection_links("risks", paginated.page, paginated.page_size, paginated.pages),
     }
 
 

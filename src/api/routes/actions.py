@@ -65,8 +65,14 @@ class ActionUpdate(BaseModel):
     completion_notes: Optional[str] = Field(None, description="Notes on completion")
 
     @field_validator(
-        "title", "description", "action_type", "priority", "status",
-        "assigned_to_email", "completion_notes", mode="before",
+        "title",
+        "description",
+        "action_type",
+        "priority",
+        "status",
+        "assigned_to_email",
+        "completion_notes",
+        mode="before",
     )
     @classmethod
     def _sanitize(cls, v):

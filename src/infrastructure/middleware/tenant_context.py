@@ -14,15 +14,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 
-SKIP_PATHS = frozenset({
-    "/",
-    "/health",
-    "/healthz",
-    "/readyz",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
-})
+SKIP_PATHS = frozenset(
+    {
+        "/",
+        "/health",
+        "/healthz",
+        "/readyz",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+    }
+)
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
@@ -51,9 +53,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         if tenant_id is None:
             return await call_next(request)
 
-        is_superuser = getattr(
-            getattr(request.state, "user", None), "is_superuser", False
-        )
+        is_superuser = getattr(getattr(request.state, "user", None), "is_superuser", False)
         if is_superuser:
             return await call_next(request)
 

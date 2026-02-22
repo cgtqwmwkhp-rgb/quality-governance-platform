@@ -98,9 +98,7 @@ class _MetricsCollector:
         budget_target = 99.9
         error_budget_total = (100.0 - budget_target) / 100.0 * total if total else 0
         budget_remaining_pct = (
-            ((error_budget_total - failed) / error_budget_total * 100)
-            if error_budget_total > 0
-            else 100.0
+            ((error_budget_total - failed) / error_budget_total * 100) if error_budget_total > 0 else 100.0
         )
 
         p50 = _percentile(sorted_latencies, 0.50)
@@ -135,12 +133,14 @@ class _MetricsCollector:
             from src.infrastructure.cache.redis_cache import get_cache
 
             cache = get_cache()
-            data = json.dumps({
-                "total": self._total_requests,
-                "failed": self._failed_requests,
-                "status_counts": self._status_counts,
-                "ts": now,
-            })
+            data = json.dumps(
+                {
+                    "total": self._total_requests,
+                    "failed": self._failed_requests,
+                    "status_counts": self._status_counts,
+                    "ts": now,
+                }
+            )
             await cache.set(_REDIS_KEY, data, ttl=_WINDOW_SECONDS)
         except Exception:
             logger.debug("SLO metric persist to Redis skipped (unavailable)")
