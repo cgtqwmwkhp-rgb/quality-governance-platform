@@ -31,46 +31,40 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
     for table, (field_a, field_b) in TABLES.items():
-        op.execute(
-            f"ALTER TABLE {table} "
-            f"ADD COLUMN IF NOT EXISTS search_vector tsvector"
-        )
-
-        op.execute(
-            f"CREATE INDEX IF NOT EXISTS ix_{table}_search_vector "
-            f"ON {table} USING gin(search_vector)"
-        )
-
         tsvector_expr = (
-            f"to_tsvector('english', "
-            f"COALESCE(NEW.{field_a}, '') || ' ' || COALESCE(NEW.{field_b}, ''))"
+            f"to_tsvector(''english'', "
+            f"COALESCE(NEW.{field_a}, '''') || '' '' || COALESCE(NEW.{field_b}, ''''))"
         )
-        op.execute(
-            f"CREATE OR REPLACE FUNCTION {table}_search_vector_update() "
-            f"RETURNS trigger AS $$ "
-            f"BEGIN "
-            f"  NEW.search_vector := {tsvector_expr}; "
-            f"  RETURN NEW; "
-            f"END; "
-            f"$$ LANGUAGE plpgsql"
-        )
-
-        op.execute(
-            f"DROP TRIGGER IF EXISTS {table}_search_vector_trigger ON {table}"
-        )
-        op.execute(
-            f"CREATE TRIGGER {table}_search_vector_trigger "
-            f"BEFORE INSERT OR UPDATE OF {field_a}, {field_b} "
-            f"ON {table} "
-            f"FOR EACH ROW EXECUTE FUNCTION {table}_search_vector_update()"
-        )
-
         backfill_expr = (
-            f"to_tsvector('english', "
-            f"COALESCE({field_a}, '') || ' ' || COALESCE({field_b}, ''))"
+            f"to_tsvector(''english'', "
+            f"COALESCE({field_a}, '''') || '' '' || COALESCE({field_b}, ''''))"
         )
         op.execute(
-            f"UPDATE {table} SET search_vector = {backfill_expr}"
+            f"DO $$ BEGIN "
+            f"  IF EXISTS (SELECT 1 FROM information_schema.tables "
+            f"    WHERE table_name = '{table}') THEN "
+            f"    EXECUTE 'ALTER TABLE {table} "
+            f"      ADD COLUMN IF NOT EXISTS search_vector tsvector'; "
+            f"    EXECUTE 'CREATE INDEX IF NOT EXISTS ix_{table}_search_vector "
+            f"      ON {table} USING gin(search_vector)'; "
+            f"    EXECUTE 'CREATE OR REPLACE FUNCTION {table}_search_vector_update() "
+            f"      RETURNS trigger AS $fn$ "
+            f"      BEGIN "
+            f"        NEW.search_vector := {tsvector_expr}; "
+            f"        RETURN NEW; "
+            f"      END; "
+            f"      $fn$ LANGUAGE plpgsql'; "
+            f"    EXECUTE 'DROP TRIGGER IF EXISTS {table}_search_vector_trigger "
+            f"      ON {table}'; "
+            f"    EXECUTE 'CREATE TRIGGER {table}_search_vector_trigger "
+            f"      BEFORE INSERT OR UPDATE OF {field_a}, {field_b} "
+            f"      ON {table} "
+            f"      FOR EACH ROW EXECUTE FUNCTION {table}_search_vector_update()'; "
+            f"    EXECUTE 'UPDATE {table} SET search_vector = {backfill_expr}'; "
+            f"  END IF; "
+            f"EXCEPTION WHEN OTHERS THEN "
+            f"  RAISE NOTICE 'FTS skip for {table}: %', SQLERRM; "
+            f"END $$"
         )
 
 

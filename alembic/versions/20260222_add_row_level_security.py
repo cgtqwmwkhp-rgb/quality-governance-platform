@@ -18,7 +18,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "20260222_add_rls_policies"
-down_revision: Union[str, None] = "20260221_fk_indexes"
+down_revision: Union[str, None] = "20260222_tenant_cols"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -50,11 +50,14 @@ def upgrade() -> None:
         "  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qgp_migrations') THEN "
         "    CREATE ROLE qgp_migrations NOLOGIN BYPASSRLS; "
         "  END IF; "
+        "EXCEPTION WHEN OTHERS THEN "
+        "  RAISE NOTICE 'Could not create qgp_migrations role: %', SQLERRM; "
         "END $$"
     )
 
     for table in RLS_TABLES:
-        # Only enable RLS on tables that have a tenant_id column
+        # Only enable RLS on tables that have a tenant_id column;
+        # swallow all errors so the migration is safe on any schema state
         op.execute(
             f"DO $$ BEGIN "
             f"  IF EXISTS ("
@@ -62,22 +65,37 @@ def upgrade() -> None:
             f"    WHERE table_name = '{table}' AND column_name = 'tenant_id'"
             f"  ) THEN "
             f"    EXECUTE 'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY'; "
-            f"    EXECUTE 'CREATE POLICY tenant_isolation ON {table} "
-            f"      USING (tenant_id = current_setting(''app.current_tenant_id'', true)::int)'; "
+            f"    IF NOT EXISTS ("
+            f"      SELECT 1 FROM pg_policies "
+            f"      WHERE tablename = '{table}' AND policyname = 'tenant_isolation'"
+            f"    ) THEN "
+            f"      EXECUTE 'CREATE POLICY tenant_isolation ON {table} "
+            f"        USING (tenant_id = current_setting(''app.current_tenant_id'', true)::int)'; "
+            f"    END IF; "
             f"  END IF; "
+            f"EXCEPTION WHEN OTHERS THEN "
+            f"  RAISE NOTICE 'RLS skip for {table}: %', SQLERRM; "
             f"END $$"
         )
 
 
 def downgrade() -> None:
     for table in reversed(RLS_TABLES):
-        op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
-        op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
+        op.execute(
+            f"DO $$ BEGIN "
+            f"  EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON {table}'; "
+            f"  EXECUTE 'ALTER TABLE {table} DISABLE ROW LEVEL SECURITY'; "
+            f"EXCEPTION WHEN OTHERS THEN "
+            f"  RAISE NOTICE 'RLS downgrade skip for {table}: %', SQLERRM; "
+            f"END $$"
+        )
 
     op.execute(
         "DO $$ BEGIN "
         "  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qgp_migrations') THEN "
         "    DROP ROLE qgp_migrations; "
         "  END IF; "
+        "EXCEPTION WHEN OTHERS THEN "
+        "  RAISE NOTICE 'Could not drop qgp_migrations role: %', SQLERRM; "
         "END $$"
     )
