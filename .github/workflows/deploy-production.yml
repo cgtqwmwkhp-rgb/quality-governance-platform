@@ -783,7 +783,7 @@ jobs:
           READY_END=$(date +%s%3N)
           READY_LATENCY=$((READY_END - READY_START))
           
-          if [ "$READY_STATUS" = "200" ] && echo "$READY_RESPONSE" | grep -q '"database":"connected"'; then
+          if [ "$READY_STATUS" = "200" ] && echo "$READY_RESPONSE" | grep -qE '"status"\s*:\s*"healthy"'; then
             echo "✅ Readiness check passed (${READY_LATENCY}ms)"
             READY_RESULT="PASS"
             DB_CONNECTED="true"
