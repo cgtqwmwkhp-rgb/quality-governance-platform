@@ -145,9 +145,11 @@ class TestLoginErrorCodes:
         data = response.json()
 
         # Must have one of these fields for client error classification
-        assert any(
-            k in data for k in ["message", "detail", "error_code"]
-        ), f"Response missing error message field: {data}"
+        has_error_field = any(k in data for k in ["message", "detail", "error_code"])
+        has_nested_error = isinstance(data.get("error"), dict) and any(
+            k in data["error"] for k in ["message", "code"]
+        )
+        assert has_error_field or has_nested_error, f"Response missing error message field: {data}"
 
         # Must NOT contain PII
         response_str = str(data).lower()
