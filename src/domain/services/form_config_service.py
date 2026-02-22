@@ -99,26 +99,26 @@ class FormConfigService:
     ) -> FormTemplate:
         """Create a new form template with optional nested steps and fields."""
         existing = await self.db.execute(
-            select(FormTemplate).where(FormTemplate.slug == data.slug)  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            select(FormTemplate).where(FormTemplate.slug == data.slug)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         if existing.scalar_one_or_none():
             raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
 
-        template = FormTemplate(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-            name=data.name,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            slug=data.slug,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            form_type=data.form_type,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            icon=data.icon,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            color=data.color,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            allow_drafts=data.allow_drafts,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            allow_attachments=data.allow_attachments,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            require_signature=data.require_signature,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            auto_assign_reference=data.auto_assign_reference,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            reference_prefix=data.reference_prefix,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            notify_on_submit=data.notify_on_submit,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            notification_emails=data.notification_emails,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-            workflow_id=data.workflow_id,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+        template = FormTemplate(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            name=data.name,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            slug=data.slug,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            description=data.description,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            form_type=data.form_type,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            icon=data.icon,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            color=data.color,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            allow_drafts=data.allow_drafts,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            allow_attachments=data.allow_attachments,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            require_signature=data.require_signature,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            auto_assign_reference=data.auto_assign_reference,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            reference_prefix=data.reference_prefix,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            notify_on_submit=data.notify_on_submit,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            notification_emails=data.notification_emails,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            workflow_id=data.workflow_id,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
             created_by_id=user_id,
             updated_by_id=user_id,
         )
@@ -126,8 +126,8 @@ class FormConfigService:
         await self.db.flush()
 
         if getattr(data, "steps", None):
-            for step_order, step_data in enumerate(data.steps):  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
-                step = FormStep(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
+            for step_order, step_data in enumerate(data.steps):  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                step = FormStep(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                     template_id=template.id,
                     name=step_data.name,
                     description=step_data.description,
