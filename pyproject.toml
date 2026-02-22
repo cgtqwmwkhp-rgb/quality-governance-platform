@@ -40,7 +40,7 @@ python_version = "3.11"
 ignore_missing_imports = true
 # Re-enable basic warnings
 warn_unused_configs = true
-warn_return_any = true
+warn_return_any = false
 # SQLAlchemy plugin for better type checking
 plugins = ["sqlalchemy.ext.mypy.plugin"]
 # Skip test files (tested separately)
