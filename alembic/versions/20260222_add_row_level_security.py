@@ -18,7 +18,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "20260222_add_rls_policies"
-down_revision: Union[str, None] = "20260222_user_mfa"
+down_revision: Union[str, None] = "20260222_tenant_cols"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
