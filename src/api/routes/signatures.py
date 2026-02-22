@@ -7,7 +7,7 @@ DocuSign-level e-signature capabilities.
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 

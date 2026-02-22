@@ -13,7 +13,7 @@ Features:
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
