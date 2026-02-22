@@ -1,5 +1,6 @@
 """User, Role, and Permission models."""
 
+import json
 from typing import List, Optional
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, Text
@@ -82,8 +83,15 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         if self.is_superuser:
             return True
         for role in self.roles:
-            if role.permissions and permission in role.permissions:
-                return True
+            if not role.permissions:
+                continue
+            try:
+                perms = json.loads(role.permissions)
+                if isinstance(perms, list) and permission in perms:
+                    return True
+            except (json.JSONDecodeError, TypeError):
+                if permission in role.permissions:
+                    return True
         return False
 
     def __repr__(self) -> str:

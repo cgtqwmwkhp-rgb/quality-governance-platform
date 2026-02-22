@@ -1,4 +1,13 @@
 import type { Metric } from "web-vitals";
+import { API_BASE_URL } from "../config/apiBase";
+
+function getWebVitalsUrl(): string {
+  const base = API_BASE_URL || "";
+  if (!base || base === "/" || !base.startsWith("http")) {
+    return "";
+  }
+  return `${base}/api/v1/telemetry/web-vitals`;
+}
 
 function reportMetric(metric: Metric) {
   const isProd = import.meta.env.PROD;
@@ -10,7 +19,9 @@ function reportMetric(metric: Metric) {
     return;
   }
 
-  // Report to telemetry endpoint in production
+  const url = getWebVitalsUrl();
+  if (!url) return;
+
   const body = JSON.stringify({
     name: metric.name,
     value: metric.value,
@@ -20,16 +31,20 @@ function reportMetric(metric: Metric) {
     navigationType: metric.navigationType,
   });
 
-  // Use sendBeacon for reliable delivery during page unload
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon("/api/telemetry/web-vitals", body);
-  } else {
-    fetch("/api/telemetry/web-vitals", {
-      method: "POST",
-      body,
-      headers: { "Content-Type": "application/json" },
-      keepalive: true,
-    }).catch(() => {});
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: "application/json" });
+      navigator.sendBeacon(url, blob);
+    } else {
+      fetch(url, {
+        method: "POST",
+        body,
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+      }).catch(() => {});
+    }
+  } catch {
+    // Silently ignore telemetry failures
   }
 }
 

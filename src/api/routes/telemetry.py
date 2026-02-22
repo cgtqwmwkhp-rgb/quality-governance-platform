@@ -8,6 +8,8 @@ import logging
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Request, status
+
+from src.domain.exceptions import AuthorizationError, NotFoundError
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, require_permission
@@ -17,7 +19,6 @@ from src.api.schemas.telemetry import (
     ReceiveEventResponse,
     ResetMetricsResponse,
 )
-from src.domain.exceptions import AuthorizationError, NotFoundError
 from src.domain.models.user import User
 from src.domain.services.telemetry_service import TelemetryService
 
@@ -111,7 +112,31 @@ class TelemetryBatch(BaseModel):
 # ============================================================================
 
 
+vitals_logger = logging.getLogger("web_vitals")
+perf_logger = logging.getLogger("performance")
 csp_logger = logging.getLogger("csp_report")
+
+
+@router.post("/web-vitals", status_code=status.HTTP_204_NO_CONTENT)
+async def receive_web_vitals(request: Request):
+    """Receive Web Vitals metrics from the browser (unauthenticated, fire-and-forget)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    vitals_logger.info("web_vitals", extra={"metrics": body})
+    return None
+
+
+@router.post("/performance", status_code=status.HTTP_204_NO_CONTENT)
+async def receive_performance(request: Request):
+    """Receive performance metrics from the browser (unauthenticated, fire-and-forget)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    perf_logger.info("performance_metrics", extra={"metrics": body})
+    return None
 
 
 @router.post("/csp-report", status_code=status.HTTP_204_NO_CONTENT)

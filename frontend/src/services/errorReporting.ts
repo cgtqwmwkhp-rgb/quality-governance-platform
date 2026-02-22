@@ -1,4 +1,5 @@
 import type { Metric } from "web-vitals";
+import { API_BASE_URL } from "../config/apiBase";
 
 interface ErrorReport {
   message: string;
@@ -116,11 +117,21 @@ class ErrorReportingService {
       });
   }
 
+  private isValidBaseUrl(): boolean {
+    return !!(
+      API_BASE_URL &&
+      API_BASE_URL !== "/" &&
+      API_BASE_URL.startsWith("http")
+    );
+  }
+
   private async flush() {
+    if (!this.isValidBaseUrl()) return;
+
     if (this.queue.length > 0) {
       const batch = this.queue.splice(0);
       try {
-        await fetch("/api/v1/telemetry/errors", {
+        await fetch(`${API_BASE_URL}/api/v1/telemetry/errors`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ errors: batch }),
@@ -133,7 +144,7 @@ class ErrorReportingService {
     if (this.perfQueue.length > 0) {
       const perfBatch = this.perfQueue.splice(0);
       try {
-        await fetch("/api/v1/telemetry/performance", {
+        await fetch(`${API_BASE_URL}/api/v1/telemetry/performance`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ metrics: perfBatch }),

@@ -291,6 +291,9 @@ class AuthService:
             await self.db.refresh(user)
             logger.info(f"Created new user from Azure AD: {email}")
         else:
+            if not user.is_active:
+                raise PermissionError("User account is inactive")
+
             if azure_oid and not user.azure_oid:
                 user.azure_oid = azure_oid
                 await self.db.commit()

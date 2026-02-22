@@ -15,8 +15,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from src.api import router as api_router
 from src.api.middleware import register_exception_handlers
 from src.api.middleware.idempotency import IdempotencyMiddleware
-from src.api.middleware.json_depth import JsonDepthMiddleware
 from src.core.config import settings
+from src.api.middleware.json_depth import JsonDepthMiddleware
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
@@ -77,7 +77,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             f"report-to csp-endpoint"
         )
         response.headers["Report-To"] = (
-            '{"group":"csp-endpoint","max_age":86400,' '"endpoints":[{"url":"/api/v1/telemetry/csp-report"}]}'
+            '{"group":"csp-endpoint","max_age":86400,'
+            '"endpoints":[{"url":"/api/v1/telemetry/csp-report"}]}'
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
@@ -211,7 +212,9 @@ def configure_logging():
 
     log_dir = getattr(settings, "log_dir", None)
     configure_structured_logging(level=settings.log_level, log_dir=log_dir)
-    logging.getLogger(__name__).info("Logging configured successfully", extra={"app_name": settings.app_name})
+    logging.getLogger(__name__).info(
+        "Logging configured successfully", extra={"app_name": settings.app_name}
+    )
 
 
 def create_application() -> FastAPI:
@@ -224,7 +227,7 @@ def create_application() -> FastAPI:
         docs_url="/docs",  # Always enable API docs
         redoc_url="/redoc",
         openapi_url="/openapi.json",
-        redirect_slashes=True,
+        redirect_slashes=False,
         lifespan=lifespan,
         openapi_tags=[
             {"name": "Authentication", "description": "Authentication, authorization, and session management"},
@@ -232,10 +235,7 @@ def create_application() -> FastAPI:
             {"name": "Incidents", "description": "Incident reporting, tracking, and resolution"},
             {"name": "Risk Register", "description": "Risk assessment, controls, and mitigation"},
             {"name": "Audits & Inspections", "description": "Audit templates, runs, findings, and scoring"},
-            {
-                "name": "ISO Compliance & Evidence",
-                "description": "ISO clause mapping, evidence links, and gap analysis",
-            },
+            {"name": "ISO Compliance & Evidence", "description": "ISO clause mapping, evidence links, and gap analysis"},
             {"name": "Standards Library", "description": "ISO standards, clauses, and controls catalogue"},
             {"name": "Document Library", "description": "Document upload, AI analysis, and semantic search"},
             {"name": "Policy Library", "description": "Policy lifecycle management and acknowledgments"},
@@ -679,7 +679,11 @@ async def readiness_check(request: Request, verbose: bool = False):
 
     ignored = ("unavailable", "not_configured", "sdk_not_installed")
     non_critical = {"redis", "celery"}
-    all_healthy = all(v in ("healthy", "ok") for k, v in checks.items() if v not in ignored and k not in non_critical)
+    all_healthy = all(
+        v in ("healthy", "ok")
+        for k, v in checks.items()
+        if v not in ignored and k not in non_critical
+    )
 
     warnings: list[str] = []
     if disk.get("status") == "warning":

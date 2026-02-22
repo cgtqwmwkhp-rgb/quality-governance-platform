@@ -16,6 +16,7 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,
@@ -45,7 +46,6 @@ from src.api.schemas.audit import (
 )
 from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.pagination import PaginationParams
-from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
 
 router = APIRouter()
@@ -81,7 +81,9 @@ async def list_templates(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links("audits/templates", result.page, result.page_size, result.pages),
+        "links": build_collection_links(
+            "audits/templates", result.page, result.page_size, result.pages
+        ),
     }
 
 
@@ -89,7 +91,7 @@ async def list_templates(
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Create a new audit template."""
     service = AuditService(db)
@@ -141,8 +143,7 @@ async def purge_expired_templates(
     """
     service = AuditService(db)
     purged_count, purged_names = await service.purge_expired_templates(
-        current_user.tenant_id,
-        current_user.id,
+        current_user.tenant_id, current_user.id,
     )
     return {
         "purged_count": purged_count,
@@ -172,7 +173,7 @@ async def update_template(
     template_id: int,
     template_data: AuditTemplateUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Update an audit template."""
     service = AuditService(db)
@@ -189,7 +190,7 @@ async def update_template(
 async def publish_template(
     template_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Publish an audit template, making it available for use."""
     service = AuditService(db)
@@ -207,7 +208,7 @@ async def publish_template(
 async def clone_template(
     template_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Clone an existing audit template."""
     service = AuditService(db)
@@ -248,7 +249,7 @@ async def archive_template(
 async def restore_template(
     template_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Restore an archived template back to active status."""
     service = AuditService(db)
@@ -288,7 +289,7 @@ async def create_section(
     template_id: int,
     section_data: AuditSectionCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditSectionResponse:
     """Create a new section in an audit template."""
     service = AuditService(db)
@@ -305,7 +306,7 @@ async def update_section(
     section_id: int,
     section_data: AuditSectionUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditSectionResponse:
     """Update an audit section."""
     service = AuditService(db)
@@ -338,7 +339,7 @@ async def create_question(
     template_id: int,
     question_data: AuditQuestionCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Create a new question in an audit template."""
     service = AuditService(db)
@@ -355,7 +356,7 @@ async def update_question(
     question_id: int,
     question_data: AuditQuestionUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Update an audit question."""
     service = AuditService(db)
@@ -406,7 +407,9 @@ async def list_runs(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links("audits/runs", result.page, result.page_size, result.pages),
+        "links": build_collection_links(
+            "audits/runs", result.page, result.page_size, result.pages
+        ),
     }
 
 
@@ -414,7 +417,7 @@ async def list_runs(
 async def create_run(
     run_data: AuditRunCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Create a new audit run from a template."""
     service = AuditService(db)
@@ -448,7 +451,7 @@ async def update_run(
     run_id: int,
     run_data: AuditRunUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Update an audit run."""
     service = AuditService(db)
@@ -464,7 +467,7 @@ async def update_run(
 async def start_run(
     run_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Start an audit run."""
     service = AuditService(db)
@@ -476,7 +479,7 @@ async def start_run(
 async def complete_run(
     run_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
     service = AuditService(db)
@@ -492,7 +495,7 @@ async def create_response(
     run_id: int,
     response_data: AuditResponseCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditResponseResponse:
     """Submit a response to an audit question."""
     service = AuditService(db)
@@ -509,7 +512,7 @@ async def update_response(
     response_id: int,
     response_data: AuditResponseUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    current_user: CurrentUser,
 ) -> AuditResponseResponse:
     """Update an audit response."""
     service = AuditService(db)
@@ -549,7 +552,9 @@ async def list_findings(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
+        "links": build_collection_links(
+            "audits/findings", result.page, result.page_size, result.pages
+        ),
     }
 
 
@@ -558,7 +563,7 @@ async def create_finding(
     run_id: int,
     finding_data: AuditFindingCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    current_user: CurrentUser,
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
     service = AuditService(db)
