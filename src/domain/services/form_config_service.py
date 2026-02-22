@@ -99,26 +99,26 @@ class FormConfigService:
     ) -> FormTemplate:
         """Create a new form template with optional nested steps and fields."""
         existing = await self.db.execute(
-            select(FormTemplate).where(FormTemplate.slug == data.slug)  # type: ignore[union-attr]
+            select(FormTemplate).where(FormTemplate.slug == data.slug)  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         if existing.scalar_one_or_none():
             raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
 
-        template = FormTemplate(  # type: ignore[call-arg]
-            name=data.name,  # type: ignore[union-attr]
-            slug=data.slug,  # type: ignore[union-attr]
-            description=data.description,  # type: ignore[union-attr]
-            form_type=data.form_type,  # type: ignore[union-attr]
-            icon=data.icon,  # type: ignore[union-attr]
-            color=data.color,  # type: ignore[union-attr]
-            allow_drafts=data.allow_drafts,  # type: ignore[union-attr]
-            allow_attachments=data.allow_attachments,  # type: ignore[union-attr]
-            require_signature=data.require_signature,  # type: ignore[union-attr]
-            auto_assign_reference=data.auto_assign_reference,  # type: ignore[union-attr]
-            reference_prefix=data.reference_prefix,  # type: ignore[union-attr]
-            notify_on_submit=data.notify_on_submit,  # type: ignore[union-attr]
-            notification_emails=data.notification_emails,  # type: ignore[union-attr]
-            workflow_id=data.workflow_id,  # type: ignore[union-attr]
+        template = FormTemplate(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
+            name=data.name,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            slug=data.slug,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            form_type=data.form_type,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            icon=data.icon,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            color=data.color,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            allow_drafts=data.allow_drafts,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            allow_attachments=data.allow_attachments,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            require_signature=data.require_signature,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            auto_assign_reference=data.auto_assign_reference,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            reference_prefix=data.reference_prefix,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            notify_on_submit=data.notify_on_submit,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            notification_emails=data.notification_emails,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            workflow_id=data.workflow_id,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             created_by_id=user_id,
             updated_by_id=user_id,
         )
@@ -126,8 +126,8 @@ class FormConfigService:
         await self.db.flush()
 
         if getattr(data, "steps", None):
-            for step_order, step_data in enumerate(data.steps):  # type: ignore[union-attr]
-                step = FormStep(  # type: ignore[call-arg]
+            for step_order, step_data in enumerate(data.steps):  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+                step = FormStep(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
                     template_id=template.id,
                     name=step_data.name,
                     description=step_data.description,
@@ -140,7 +140,7 @@ class FormConfigService:
 
                 if getattr(step_data, "fields", None):
                     for field_order, field_data in enumerate(step_data.fields):
-                        field = FormField(  # type: ignore[call-arg]
+                        field = FormField(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
                             step_id=step.id,
                             name=field_data.name,
                             label=field_data.label,
@@ -303,20 +303,20 @@ class FormConfigService:
         """Create a new step in a form template."""
         await self._get_or_raise(FormTemplate, template_id, tenant_id=tenant_id)
 
-        step = FormStep(  # type: ignore[call-arg]
+        step = FormStep(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
             template_id=template_id,
-            name=data.name,  # type: ignore[union-attr]
-            description=data.description,  # type: ignore[union-attr]
-            order=data.order,  # type: ignore[union-attr]
-            icon=data.icon,  # type: ignore[union-attr]
-            show_condition=data.show_condition,  # type: ignore[union-attr]
+            name=data.name,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            order=data.order,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            icon=data.icon,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            show_condition=data.show_condition,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         self.db.add(step)
         await self.db.flush()
 
         if getattr(data, "fields", None):
-            for field_order, field_data in enumerate(data.fields):  # type: ignore[union-attr]
-                field = FormField(  # type: ignore[call-arg]
+            for field_order, field_data in enumerate(data.fields):  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+                field = FormField(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
                     step_id=step.id,
                     name=field_data.name,
                     label=field_data.label,
@@ -373,24 +373,24 @@ class FormConfigService:
         """Create a new field in a form step."""
         await self._get_or_raise(FormStep, step_id, tenant_id=tenant_id)
 
-        field = FormField(  # type: ignore[call-arg]
+        field = FormField(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
             step_id=step_id,
-            name=data.name,  # type: ignore[union-attr]
-            label=data.label,  # type: ignore[union-attr]
-            field_type=data.field_type,  # type: ignore[union-attr]
-            order=data.order,  # type: ignore[union-attr]
-            placeholder=data.placeholder,  # type: ignore[union-attr]
-            help_text=data.help_text,  # type: ignore[union-attr]
-            is_required=data.is_required,  # type: ignore[union-attr]
-            min_length=data.min_length,  # type: ignore[union-attr]
-            max_length=data.max_length,  # type: ignore[union-attr]
-            min_value=data.min_value,  # type: ignore[union-attr]
-            max_value=data.max_value,  # type: ignore[union-attr]
-            pattern=data.pattern,  # type: ignore[union-attr]
-            default_value=data.default_value,  # type: ignore[union-attr]
-            options=data.options,  # type: ignore[union-attr]
-            show_condition=data.show_condition,  # type: ignore[union-attr]
-            width=data.width,  # type: ignore[union-attr]
+            name=data.name,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            label=data.label,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            field_type=data.field_type,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            order=data.order,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            placeholder=data.placeholder,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            help_text=data.help_text,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            is_required=data.is_required,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            min_length=data.min_length,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            max_length=data.max_length,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            min_value=data.min_value,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            max_value=data.max_value,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            pattern=data.pattern,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            default_value=data.default_value,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            options=data.options,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            show_condition=data.show_condition,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            width=data.width,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         self.db.add(field)
         await self.db.commit()
@@ -449,21 +449,21 @@ class FormConfigService:
         request_id: str,
     ) -> Contract:
         """Create a new contract."""
-        existing = await self.db.execute(select(Contract).where(Contract.code == data.code))  # type: ignore[union-attr]
+        existing = await self.db.execute(select(Contract).where(Contract.code == data.code))  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         if existing.scalar_one_or_none():
             raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
 
-        contract = Contract(  # type: ignore[call-arg]
-            name=data.name,  # type: ignore[union-attr]
-            code=data.code,  # type: ignore[union-attr]
-            description=data.description,  # type: ignore[union-attr]
-            client_name=data.client_name,  # type: ignore[union-attr]
-            client_contact=data.client_contact,  # type: ignore[union-attr]
-            client_email=data.client_email,  # type: ignore[union-attr]
-            is_active=data.is_active,  # type: ignore[union-attr]
-            start_date=data.start_date,  # type: ignore[union-attr]
-            end_date=data.end_date,  # type: ignore[union-attr]
-            display_order=data.display_order,  # type: ignore[union-attr]
+        contract = Contract(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
+            name=data.name,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            code=data.code,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            client_name=data.client_name,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            client_contact=data.client_contact,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            client_email=data.client_email,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            is_active=data.is_active,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            start_date=data.start_date,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            end_date=data.end_date,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            display_order=data.display_order,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             created_by_id=user_id,
             updated_by_id=user_id,
         )
@@ -579,19 +579,19 @@ class FormConfigService:
     ) -> SystemSetting:
         """Create a new system setting."""
         existing = await self.db.execute(
-            select(SystemSetting).where(SystemSetting.key == data.key)  # type: ignore[union-attr]
+            select(SystemSetting).where(SystemSetting.key == data.key)  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         if existing.scalar_one_or_none():
             raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
 
-        setting = SystemSetting(  # type: ignore[call-arg]
-            key=data.key,  # type: ignore[union-attr]
-            value=data.value,  # type: ignore[union-attr]
-            category=data.category,  # type: ignore[union-attr]
-            description=data.description,  # type: ignore[union-attr]
-            value_type=data.value_type,  # type: ignore[union-attr]
-            is_public=data.is_public,  # type: ignore[union-attr]
-            is_editable=data.is_editable,  # type: ignore[union-attr]
+        setting = SystemSetting(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
+            key=data.key,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            value=data.value,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            category=data.category,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            value_type=data.value_type,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            is_public=data.is_public,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            is_editable=data.is_editable,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             created_by_id=user_id,
             updated_by_id=user_id,
         )
@@ -658,16 +658,16 @@ class FormConfigService:
     ) -> LookupOption:
         """Create a new lookup option."""
         if getattr(data, "category", None) != category:
-            data.category = category  # type: ignore[union-attr]
+            data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
 
-        option = LookupOption(  # type: ignore[call-arg]
-            category=data.category,  # type: ignore[union-attr]
-            code=data.code,  # type: ignore[union-attr]
-            label=data.label,  # type: ignore[union-attr]
-            description=data.description,  # type: ignore[union-attr]
-            is_active=data.is_active,  # type: ignore[union-attr]
-            display_order=data.display_order,  # type: ignore[union-attr]
-            parent_id=data.parent_id,  # type: ignore[union-attr]
+        option = LookupOption(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
+            category=data.category,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            code=data.code,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            label=data.label,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            is_active=data.is_active,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            display_order=data.display_order,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            parent_id=data.parent_id,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
         )
         self.db.add(option)
         await self.db.commit()

@@ -28,9 +28,9 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 
 async def _get_entity(db: AsyncSession, model: type, entity_id: int, *, tenant_id: int | None = None) -> Any:
     """Fetch entity by PK or raise ``NotFoundError``."""
-    stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined]
+    stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
     if tenant_id is not None:
-        stmt = stmt.where(model.tenant_id == tenant_id)  # type: ignore[attr-defined]
+        stmt = stmt.where(model.tenant_id == tenant_id)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
     result = await db.execute(stmt)
     entity = result.scalar_one_or_none()
     if entity is None:

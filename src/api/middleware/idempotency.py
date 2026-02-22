@@ -171,7 +171,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         async def receive():
             return {"type": "http.request", "body": body_bytes}
 
-        request._receive = receive  # type: ignore[attr-defined]
+        request._receive = receive  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         # Execute the request
         response = await call_next(request)
