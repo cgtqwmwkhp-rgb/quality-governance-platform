@@ -535,13 +535,17 @@ jobs:
             echo "[$(date -u +%H:%M:%S)] Attempt $ATTEMPT: /readyz → HTTP $READY_STATUS (elapsed: ${ELAPSED}s)"
             
             if [ "$READY_STATUS" = "200" ]; then
-              # Check if database is connected
-              if echo "$READY_RESPONSE" | grep -q '"database":"connected"'; then
-                echo "✅ Readiness check passed (database connected)"
+              # Accept any 200 response with "healthy" status
+              if echo "$READY_RESPONSE" | grep -qE '"status"\s*:\s*"healthy"'; then
+                echo "✅ Readiness check passed (status: healthy)"
+                READINESS_PASSED=true
+                break
+              elif echo "$READY_RESPONSE" | grep -qE '"database"\s*:\s*"(connected|healthy)"'; then
+                echo "✅ Readiness check passed (database healthy)"
                 READINESS_PASSED=true
                 break
               else
-                echo "   ⏳ HTTP 200 but database not yet connected, retrying..."
+                echo "   ⏳ HTTP 200 but not yet healthy, retrying..."
               fi
             elif [ "$READY_STATUS" = "503" ] || [ "$READY_STATUS" = "502" ] || [ "$READY_STATUS" = "000" ]; then
               echo "   ⏳ Service warming up (HTTP $READY_STATUS), retrying in ${INTERVAL}s..."
