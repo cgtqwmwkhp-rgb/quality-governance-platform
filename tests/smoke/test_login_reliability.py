@@ -146,9 +146,7 @@ class TestLoginErrorCodes:
 
         # Must have one of these fields for client error classification
         has_error_field = any(k in data for k in ["message", "detail", "error_code"])
-        has_nested_error = isinstance(data.get("error"), dict) and any(
-            k in data["error"] for k in ["message", "code"]
-        )
+        has_nested_error = isinstance(data.get("error"), dict) and any(k in data["error"] for k in ["message", "code"])
         assert has_error_field or has_nested_error, f"Response missing error message field: {data}"
 
         # Must NOT contain PII
@@ -161,9 +159,11 @@ class TestLoginErrorCodes:
 
         assert response.status_code == 422
 
-        # Should have validation details
+        # Should have validation details (top-level or nested error envelope)
         data = response.json()
-        assert "detail" in data or "message" in data
+        has_top_level = "detail" in data or "message" in data
+        has_nested = isinstance(data.get("error"), dict) and ("message" in data["error"] or "details" in data["error"])
+        assert has_top_level or has_nested, f"Response missing validation details: {data}"
 
 
 class TestLoginPerformanceBuckets:
