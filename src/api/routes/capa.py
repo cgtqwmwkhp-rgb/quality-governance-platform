@@ -3,7 +3,9 @@
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -159,10 +161,7 @@ async def get_capa_action(
     try:
         return await service.get_capa_action(capa_id, current_user.tenant_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.patch("/{capa_id}", response_model=CAPAResponse)
@@ -174,12 +173,11 @@ async def update_capa_action(
 ):
     service = CAPAService(db)
     try:
-        return await service.update_capa_action(capa_id, data, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
+        return await service.update_capa_action(
+            capa_id, data, tenant_id=current_user.tenant_id
         )
+    except LookupError:
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.post("/{capa_id}/transition", response_model=CAPAResponse)
@@ -199,15 +197,9 @@ async def transition_capa_status(
             comment=data.comment,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.INVALID_STATE_TRANSITION,
-        )
+        raise ValidationError(ErrorCode.INVALID_STATE_TRANSITION)
 
 
 @router.delete("/{capa_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -224,7 +216,4 @@ async def delete_capa_action(
             tenant_id=current_user.tenant_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)

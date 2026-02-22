@@ -3,11 +3,14 @@
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.pagination import DataListResponse
@@ -30,7 +33,6 @@ from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
-from src.domain.models.user import User
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
 from src.domain.services.risk_statistics_service import RiskStatisticsService
@@ -89,7 +91,9 @@ async def list_risks(
         "page": paginated.page,
         "page_size": paginated.page_size,
         "pages": paginated.pages,
-        "links": build_collection_links("risks", paginated.page, paginated.page_size, paginated.pages),
+        "links": build_collection_links(
+            "risks", paginated.page, paginated.page_size, paginated.pages
+        ),
     }
 
 
@@ -183,10 +187,7 @@ async def get_risk(
     risk = result.scalar_one_or_none()
 
     if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     response = RiskDetailResponse.model_validate(risk)
     response.control_count = len(risk.controls)

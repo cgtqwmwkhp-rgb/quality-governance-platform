@@ -1,5 +1,7 @@
 """Analytics API response schemas."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Optional
 
@@ -226,3 +228,41 @@ class InvestmentRoiResponse(RootModel[dict[str, Any]]):
 
 class ExecutiveSummaryResponse(RootModel[dict[str, Any]]):
     pass
+
+
+# ============================================================================
+# Analytics Response Models
+# ============================================================================
+
+
+class TrendDataPoint(BaseModel):
+    """Response model for trend data point."""
+
+    date: str
+    value: float
+    label: Optional[str] = None
+
+
+class KPIResponse(BaseModel):
+    """Response model for KPI."""
+
+    name: str
+    value: float
+    target: Optional[float] = None
+    trend: Optional[str] = None
+    change_pct: Optional[float] = None
+
+
+class DashboardWidgetResponse(BaseModel):
+    """Response model for dashboard widget."""
+
+    widget_type: str
+    title: str
+    data: Any
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    """Response model for analytics summary."""
+
+    kpis: list[KPIResponse] = []
+    trends: list[TrendDataPoint] = []

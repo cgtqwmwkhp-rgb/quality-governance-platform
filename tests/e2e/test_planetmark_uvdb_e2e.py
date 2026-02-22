@@ -23,9 +23,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-pytestmark = pytest.mark.xfail(reason="AsyncSession fixture alignment needed", strict=False)
-
-
 @pytest.fixture(scope="module")
 def client():
     """Create test client for the application."""

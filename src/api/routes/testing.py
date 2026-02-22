@@ -8,6 +8,8 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
+
+from src.domain.exceptions import AuthenticationError, AuthorizationError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -143,10 +145,7 @@ async def ensure_test_user(
     # Security check 1: Only staging
     if not is_staging_env():
         logger.warning("Attempt to access testing endpoint in non-staging environment")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
+        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
     # Security check 2: Require CI secret
     ci_secret = settings.ci_test_secret
@@ -159,10 +158,7 @@ async def ensure_test_user(
 
     if not x_ci_secret or x_ci_secret != ci_secret:
         logger.warning("Invalid or missing X-CI-Secret header")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
+        raise AuthenticationError(ErrorCode.PERMISSION_DENIED)
 
     # Check if user exists - EAGER LOAD roles to avoid MissingGreenlet
     result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))

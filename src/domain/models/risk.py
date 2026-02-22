@@ -8,10 +8,17 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import TSVECTOR
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import (
+    AuditTrailMixin,
+    OptimisticLockMixin,
+    ReferenceNumberMixin,
+    SoftDeleteMixin,
+    TimestampMixin,
+)
 from src.infrastructure.database import Base
 
 if TYPE_CHECKING:
@@ -28,7 +35,7 @@ class RiskStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
-class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
+class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, OptimisticLockMixin, SoftDeleteMixin):
     """Risk model for the risk register."""
 
     __tablename__ = "risks"
@@ -83,6 +90,13 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Full-text search (populated by DB trigger)
+    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
+
+    __table_args__ = (
+        Index("ix_risks_search_vector", "search_vector", postgresql_using="gin"),
+    )
 
     # Relationships
     owner: Mapped[Optional["User"]] = relationship(

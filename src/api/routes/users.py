@@ -5,7 +5,9 @@ Thin controller layer — all business logic lives in UserService.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError, ValidationError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
@@ -92,10 +94,7 @@ async def create_user(
             role_ids=user_data.role_ids,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
+        raise ValidationError(ErrorCode.DUPLICATE_ENTITY)
 
     track_metric("user.mutation", 1)
     return UserResponse.model_validate(user)
@@ -112,10 +111,7 @@ async def get_user(
     try:
         user = await service.get_user(user_id, current_user.tenant_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return UserResponse.model_validate(user)
 
 
@@ -131,10 +127,7 @@ async def update_user(
     try:
         user = await service.update_user(user_id, current_user.tenant_id, user_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     track_metric("user.mutation", 1)
     return UserResponse.model_validate(user)
@@ -151,15 +144,9 @@ async def delete_user(
     try:
         await service.delete_user(user_id, current_user.tenant_id, current_user.id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.VALIDATION_ERROR,
-        )
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     track_metric("user.mutation", 1)
 
@@ -189,10 +176,7 @@ async def create_role(
     try:
         role = await service.create_role(role_data)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
+        raise ValidationError(ErrorCode.DUPLICATE_ENTITY)
     return RoleResponse.model_validate(role)
 
 
@@ -208,13 +192,7 @@ async def update_role(
     try:
         role = await service.update_role(role_id, role_data)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     except PermissionError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.VALIDATION_ERROR,
-        )
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return RoleResponse.model_validate(role)

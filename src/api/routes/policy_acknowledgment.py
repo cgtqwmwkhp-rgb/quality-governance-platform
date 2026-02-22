@@ -6,7 +6,9 @@ tracking user acknowledgments, and compliance reporting.
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Query, Request, status
+
+from src.domain.exceptions import NotFoundError, ValidationError
 from sqlalchemy import and_, select
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -62,7 +64,7 @@ async def create_acknowledgment_requirement(
     service = PolicyAcknowledgmentService(db)
     requirement = await service.create_requirement(
         policy_id=requirement_data.policy_id,
-        acknowledgment_type=requirement_data.acknowledgment_type,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        acknowledgment_type=requirement_data.acknowledgment_type,
         required_for_all=requirement_data.required_for_all,
         required_departments=requirement_data.required_departments,
         required_roles=requirement_data.required_roles,
@@ -105,7 +107,7 @@ async def assign_acknowledgments(
             policy_version=assign_data.policy_version,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     return PolicyAcknowledgmentListResponse(
         items=[PolicyAcknowledgmentResponse.from_orm(a) for a in acknowledgments],
@@ -155,7 +157,7 @@ async def record_policy_opened(
     ack = await service.record_policy_opened(acknowledgment_id)
 
     if not ack:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {"message": "Policy opened recorded", "first_opened_at": ack.first_opened_at}
 
@@ -172,7 +174,7 @@ async def update_reading_time(
     ack = await service.update_reading_time(acknowledgment_id, additional_seconds)
 
     if not ack:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {"message": "Reading time updated", "total_seconds": ack.time_spent_seconds}
 
@@ -202,7 +204,7 @@ async def record_acknowledgment(
             user_agent=user_agent,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     track_metric("policy_acknowledgment.recorded")
     track_metric("policy.acknowledged", 1)

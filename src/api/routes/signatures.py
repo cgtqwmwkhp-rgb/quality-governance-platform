@@ -7,11 +7,14 @@ DocuSign-level e-signature capabilities.
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
+
+from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.signatures import (
     DeclineSigningResponse,
@@ -25,7 +28,6 @@ from src.api.schemas.signatures import (
     TemplateUseResponse,
     VoidRequestResponse,
 )
-from src.domain.models.user import User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -157,7 +159,7 @@ async def create_signature_request(
     tenant_id = current_user.tenant_id
 
     request = await service.create_request(
-        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        tenant_id=tenant_id,
         title=data.title,
         initiated_by_id=current_user.id,
         document_type=data.document_type,
@@ -219,7 +221,7 @@ async def get_pending_requests(
     tenant_id = current_user.tenant_id
 
     requests = await service.get_pending_requests(
-        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        tenant_id=tenant_id,
         user_id=current_user.id,
         email=current_user.email,
     )
@@ -240,7 +242,7 @@ async def get_signature_request(
     request = await service.get_request(request_id)
 
     if not request:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return _format_request(request)
 
@@ -262,7 +264,7 @@ async def send_signature_request(
         track_metric("signature.mutation", 1)
         return {"status": "sent", "reference": request.reference_number}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 @router.post("/requests/{request_id}/void", response_model=VoidRequestResponse)
@@ -283,7 +285,7 @@ async def void_signature_request(
         track_metric("signature.mutation", 1)
         return {"status": "voided", "reference": request.reference_number}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 @router.get("/requests/{request_id}/audit-log", response_model=list[AuditLogResponse])
@@ -319,7 +321,7 @@ async def get_signing_page(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     sig_request = signer.request
 
@@ -364,7 +366,7 @@ async def sign_document(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     try:
         signature = await service.sign(
@@ -384,7 +386,7 @@ async def sign_document(
             "request_status": signer.request.status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 @router.post("/sign/{token}/decline", response_model=DeclineSigningResponse)
@@ -401,7 +403,7 @@ async def decline_signing(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     try:
         signer = await service.decline(
@@ -416,7 +418,7 @@ async def decline_signing(
             "declined_at": signer.declined_at.isoformat() if signer.declined_at else None,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 # ============================================================================
@@ -438,7 +440,7 @@ async def create_template(
     tenant_id = current_user.tenant_id
 
     template = await service.create_template(
-        tenant_id=tenant_id,  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+        tenant_id=tenant_id,
         name=data.name,
         created_by_id=current_user.id,
         description=data.description,
@@ -501,7 +503,7 @@ async def use_template(
 
         return _format_request(request)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 # ============================================================================
@@ -524,7 +526,7 @@ async def get_signature_stats(
         .where(SignatureRequest.tenant_id == tenant_id)
         .group_by(SignatureRequest.status)
     )
-    status_counts: dict[str, int] = dict(status_result.all())  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+    status_counts: dict[str, int] = dict(status_result.all())
 
     total_signatures = await db.scalar(select(func.count(Signature.id)).where(Signature.tenant_id == tenant_id)) or 0
 
@@ -563,7 +565,7 @@ async def send_reminders(
 
     tenant_id = current_user.tenant_id
 
-    count = await service.send_reminders(tenant_id)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+    count = await service.send_reminders(tenant_id)
 
     return {"reminders_sent": count}
 
@@ -580,7 +582,7 @@ async def expire_old_requests(
 
     tenant_id = current_user.tenant_id
 
-    count = await service.expire_old_requests(tenant_id)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+    count = await service.expire_old_requests(tenant_id)
 
     return {"expired_count": count}
 

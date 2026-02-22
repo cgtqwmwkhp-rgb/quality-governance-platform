@@ -4,9 +4,12 @@ Thin controller layer — all business logic lives in TelemetryService.
 Validation schemas remain here (they are request-level concerns).
 """
 
+import logging
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Request, status
+
+from src.domain.exceptions import AuthorizationError, NotFoundError
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, require_permission
@@ -109,6 +112,31 @@ class TelemetryBatch(BaseModel):
 # ============================================================================
 
 
+csp_logger = logging.getLogger("csp_report")
+
+
+@router.post("/csp-report", status_code=status.HTTP_204_NO_CONTENT)
+async def csp_report(request: Request):
+    """Receive Content-Security-Policy violation reports from browsers."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    report = body.get("csp-report", body)
+    csp_logger.warning(
+        "CSP violation",
+        extra={
+            "blocked_uri": report.get("blocked-uri", "unknown"),
+            "document_uri": report.get("document-uri", "unknown"),
+            "violated_directive": report.get("violated-directive", "unknown"),
+            "original_policy": report.get("original-policy", ""),
+            "source_file": report.get("source-file", ""),
+            "line_number": report.get("line-number", ""),
+        },
+    )
+    return None
+
+
 @router.post("/events", response_model=ReceiveEventResponse)
 async def receive_event(
     event: TelemetryEvent,
@@ -141,16 +169,16 @@ async def get_metrics(experiment_id: str, current_user: CurrentUser):
     try:
         return TelemetryService.get_metrics(experiment_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+        raise NotFoundError("Experiment not found")
 
 
 @router.delete("/metrics/{experiment_id}", response_model=ResetMetricsResponse)
 async def reset_metrics(experiment_id: str, current_user: CurrentSuperuser):
     """Reset metrics for an experiment (staging only, for testing)."""
     if not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        raise AuthorizationError("Permission denied")
     try:
         result = TelemetryService.reset_metrics(experiment_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+        raise NotFoundError("Experiment not found")
     return ResetMetricsResponse(status=result)

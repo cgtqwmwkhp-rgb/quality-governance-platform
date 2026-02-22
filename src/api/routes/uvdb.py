@@ -12,7 +12,9 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -498,7 +500,7 @@ async def list_sections(
                 "number": section["number"],
                 "title": section["title"],
                 "max_score": section["max_score"],
-                "question_count": len(section.get("questions", [])),  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-OVERRIDE
+                "question_count": len(section.get("questions", [])),
                 "iso_mapping": section.get("iso_mapping", {}),
             }
         )
@@ -523,7 +525,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return {
         "section_number": section_data["number"],
@@ -548,16 +550,16 @@ async def list_audits(
     """List UVDB audits"""
     stmt = (
         select(UVDBAudit)
-        .options(selectinload(UVDBAudit.responses))  # type: ignore[attr-defined]  # SA relationship  # TYPE-IGNORE: MYPY-OVERRIDE
-        .where(UVDBAudit.tenant_id == current_user.tenant_id)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+        .options(selectinload(UVDBAudit.responses))  # type: ignore[attr-defined]  # SA relationship
+        .where(UVDBAudit.tenant_id == current_user.tenant_id)  # type: ignore[attr-defined]  # SA column
     )
 
     if status:
-        stmt = stmt.where(UVDBAudit.status == status)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+        stmt = stmt.where(UVDBAudit.status == status)  # type: ignore[attr-defined]  # SA column
     if company_name:
-        stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+        stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))  # type: ignore[attr-defined]  # SA column
 
-    stmt = stmt.order_by(UVDBAudit.audit_date.desc())  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+    stmt = stmt.order_by(UVDBAudit.audit_date.desc())  # type: ignore[attr-defined]  # SA column
     result = await paginate(db, stmt, params)
 
     return {
@@ -591,7 +593,7 @@ async def create_audit(
     count = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
     audit_reference = UVDBService.generate_audit_reference(count)
 
-    audit = UVDBAudit(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
+    audit = UVDBAudit(  # type: ignore[misc]  # SA model kwargs
         audit_reference=audit_reference,
         status="scheduled",
         **audit_data.model_dump(),
@@ -679,7 +681,7 @@ async def create_response(
     """Record an audit response"""
     await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
 
-    response = UVDBAuditResponse(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
+    response = UVDBAuditResponse(  # type: ignore[misc]  # SA model kwargs
         audit_id=audit_id,
         **response_data.model_dump(),
     )
@@ -738,7 +740,7 @@ async def add_kpi_record(
         kpi_data.total_man_hours,
     )
 
-    kpi = UVDBKPIRecord(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
+    kpi = UVDBKPIRecord(  # type: ignore[misc]  # SA model kwargs
         audit_id=audit_id,
         ltifr=ltifr,
         **kpi_data.model_dump(),
@@ -794,7 +796,7 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     mappings = []
 
     for section in UVDB_B2_SECTIONS:
-        for question in section.get("questions", []):  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+        for question in section.get("questions", []):
             if "iso_mapping" in question and question["iso_mapping"]:
                 mappings.append(
                     {
@@ -836,22 +838,22 @@ async def get_uvdb_dashboard(
     active_audits = (
         await db.scalar(
             select(func.count()).select_from(
-                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()  # type: ignore[attr-defined]  # SA column
             )
         )
         or 0
     )
     completed_audits = (
         await db.scalar(
-            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())  # type: ignore[attr-defined]  # SA column
         )
         or 0
     )
 
     result = await db.execute(
         select(UVDBAudit).where(
-            UVDBAudit.status == "completed",  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-            UVDBAudit.percentage_score.isnot(None),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+            UVDBAudit.status == "completed",  # type: ignore[attr-defined]  # SA column
+            UVDBAudit.percentage_score.isnot(None),  # type: ignore[attr-defined]  # SA column
         )
     )
     completed = result.scalars().all()

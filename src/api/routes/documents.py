@@ -12,13 +12,15 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.exceptions import FileValidationError
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.pagination import DataListResponse
 from src.api.utils.entity import get_or_404
@@ -33,7 +35,6 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
-from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -189,10 +190,7 @@ async def upload_document(
     try:
         file_type = FileType(file_ext)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.VALIDATION_ERROR,
-        )
+        raise FileValidationError(ErrorCode.VALIDATION_ERROR)
 
     content = await file.read()
     file_size = len(content)

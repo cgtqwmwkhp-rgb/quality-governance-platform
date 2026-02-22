@@ -8,10 +8,17 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import TSVECTOR
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import (
+    AuditTrailMixin,
+    OptimisticLockMixin,
+    ReferenceNumberMixin,
+    SoftDeleteMixin,
+    TimestampMixin,
+)
 from src.infrastructure.database import Base
 
 if TYPE_CHECKING:
@@ -63,7 +70,7 @@ class ActionStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
+class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, OptimisticLockMixin, SoftDeleteMixin):
     """Incident model for workplace incidents, near misses, and hazards."""
 
     __tablename__ = "incidents"
@@ -146,6 +153,13 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     life_altering_potential: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
     precursor_events: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of precursor indicators
     control_failures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of failed controls
+
+    # Full-text search (populated by DB trigger)
+    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
+
+    __table_args__ = (
+        Index("ix_incidents_search_vector", "search_vector", postgresql_using="gin"),
+    )
 
     # Relationships
     reporter: Mapped[Optional["User"]] = relationship(

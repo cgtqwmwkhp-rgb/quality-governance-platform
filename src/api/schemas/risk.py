@@ -1,5 +1,7 @@
 """Pydantic schemas for Risk Register API."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -187,14 +189,8 @@ class RiskBase(BaseModel):
     treatment_due_date: Optional[datetime] = None
 
     @field_validator(
-        "title",
-        "description",
-        "subcategory",
-        "risk_source",
-        "risk_event",
-        "risk_consequence",
-        "department",
-        "treatment_plan",
+        "title", "description", "subcategory", "risk_source", "risk_event",
+        "risk_consequence", "department", "treatment_plan",
         mode="before",
     )
     @classmethod
@@ -236,14 +232,8 @@ class RiskUpdate(BaseModel):
     is_active: Optional[bool] = None
 
     @field_validator(
-        "title",
-        "description",
-        "subcategory",
-        "risk_source",
-        "risk_event",
-        "risk_consequence",
-        "department",
-        "treatment_plan",
+        "title", "description", "subcategory", "risk_source", "risk_event",
+        "risk_consequence", "department", "treatment_plan",
         mode="before",
     )
     @classmethod
@@ -302,18 +292,15 @@ class RiskMatrixCell(BaseModel):
 
     likelihood: int
     impact: int
-    score: int
+    count: int
     level: str
-    color: str
-    risk_count: int = 0
 
 
 class RiskMatrixResponse(BaseModel):
     """Schema for risk matrix response."""
 
-    matrix: List[List[RiskMatrixCell]]
-    total_risks: int
-    risks_by_level: dict
+    cells: List[RiskMatrixCell] = []
+    levels: List[str] = []
 
 
 # ============== Risk Statistics Schemas ==============
@@ -329,3 +316,27 @@ class RiskStatistics(BaseModel):
     risks_requiring_review: int
     overdue_treatments: int
     average_risk_score: float
+
+
+# ============================================================================
+# Risk Scoring Response Models
+# ============================================================================
+
+
+class RiskScoreResult(BaseModel):
+    """Response model for risk score calculation."""
+
+    likelihood: int
+    impact: int
+    score: int
+    level: str
+    color: str
+
+
+class RiskStatisticsResponse(BaseModel):
+    """Response model for risk statistics."""
+
+    total_risks: int
+    by_level: dict
+    by_status: dict
+    avg_score: float

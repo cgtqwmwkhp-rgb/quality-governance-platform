@@ -4,6 +4,8 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -58,16 +60,15 @@ async def create_complaint(
         msg = str(e)
         if msg.startswith("DUPLICATE_EXTERNAL_REF:"):
             parts = msg.split(":")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "DUPLICATE_EXTERNAL_REF",
-                    "message": f"Complaint with external_ref '{complaint_in.external_ref}' already exists",
+            raise ConflictError(
+                f"Complaint with external_ref '{complaint_in.external_ref}' already exists",
+                code="DUPLICATE_EXTERNAL_REF",
+                details={
                     "existing_id": int(parts[1]),
                     "existing_reference_number": parts[2],
                 },
             )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise ValidationError(str(e))
     finally:
         if _span:
             _span.end()
@@ -86,10 +87,7 @@ async def get_complaint(
     try:
         complaint = await service.get_complaint(complaint_id, current_user.tenant_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ComplaintResponse.model_validate(complaint)
 
 
@@ -108,15 +106,16 @@ async def list_complaints(
     if complainant_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
-            current_user.has_permission("complaint:view_all") if hasattr(current_user, "has_permission") else False
+            current_user.has_permission("complaint:view_all")
+            if hasattr(current_user, "has_permission")
+            else False
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not service.check_complainant_email_access(complainant_email, user_email, has_view_all, is_superuser):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ErrorCode.PERMISSION_DENIED,
-            )
+        if not service.check_complainant_email_access(
+            complainant_email, user_email, has_view_all, is_superuser
+        ):
+            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         await record_audit_event(
             db=db,
@@ -157,12 +156,8 @@ async def list_complaints(
             type(e).__name__,
         )
         column_errors = [
-            "email",
-            "column",
-            "does not exist",
-            "unknown column",
-            "programmingerror",
-            "relation",
+            "email", "column", "does not exist",
+            "unknown column", "programmingerror", "relation",
         ]
         if any(err in error_str for err in column_errors):
             logger.warning(
@@ -198,10 +193,7 @@ async def update_complaint(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ComplaintResponse.model_validate(complaint)
 
 
@@ -215,12 +207,11 @@ async def list_complaint_investigations(
     """List investigations for a specific complaint (paginated)."""
     service = ComplaintService(db)
     try:
-        paginated = await service.list_complaint_investigations(complaint_id, current_user.tenant_id, params)
-    except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
+        paginated = await service.list_complaint_investigations(
+            complaint_id, current_user.tenant_id, params
         )
+    except LookupError:
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
         "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
         "total": paginated.total,

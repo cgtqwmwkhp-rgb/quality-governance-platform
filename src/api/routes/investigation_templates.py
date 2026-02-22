@@ -2,10 +2,11 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.domain.exceptions import ValidationError
 from src.api.schemas.investigation import (
     InvestigationTemplateCreate,
     InvestigationTemplateListResponse,
@@ -134,13 +135,10 @@ async def delete_template(
     run_count = await db.scalar(count_query)
 
     if run_count and run_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_code": "TEMPLATE_IN_USE",
-                "message": f"Cannot delete template with {run_count} investigation run(s)",
-                "details": {"template_id": template_id, "run_count": run_count},
-            },
+        raise ValidationError(
+            f"Cannot delete template with {run_count} investigation run(s)",
+            code="TEMPLATE_IN_USE",
+            details={"template_id": template_id, "run_count": run_count},
         )
 
     await db.delete(template)

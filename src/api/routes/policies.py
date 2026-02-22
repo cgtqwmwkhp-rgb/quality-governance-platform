@@ -3,7 +3,9 @@
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import AuthorizationError, ConflictError
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -46,19 +48,13 @@ async def create_policy(
     if policy_data.reference_number:
         # Guard: Only authorized users can set explicit reference numbers
         if not current_user.has_permission("policy:set_reference_number"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ErrorCode.PERMISSION_DENIED,
-            )
+            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         reference_number = policy_data.reference_number
         # Check for duplicate reference number
         existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
         if existing.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=ErrorCode.DUPLICATE_ENTITY,
-            )
+            raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
     else:
         # Generate reference number (format: POL-YYYY-NNNN)
         year = datetime.now(timezone.utc).year
@@ -153,7 +149,9 @@ async def list_policies(
         "page": paginated.page,
         "page_size": paginated.page_size,
         "pages": paginated.pages,
-        "links": build_collection_links("policies", paginated.page, paginated.page_size, paginated.pages),
+        "links": build_collection_links(
+            "policies", paginated.page, paginated.page_size, paginated.pages
+        ),
     }
 
 

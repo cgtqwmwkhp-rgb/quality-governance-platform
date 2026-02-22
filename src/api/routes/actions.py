@@ -4,6 +4,8 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -63,14 +65,8 @@ class ActionUpdate(BaseModel):
     completion_notes: Optional[str] = Field(None, description="Notes on completion")
 
     @field_validator(
-        "title",
-        "description",
-        "action_type",
-        "priority",
-        "status",
-        "assigned_to_email",
-        "completion_notes",
-        mode="before",
+        "title", "description", "action_type", "priority", "status",
+        "assigned_to_email", "completion_notes", mode="before",
     )
     @classmethod
     def _sanitize(cls, v):
@@ -167,19 +163,10 @@ async def create_action(
     except ValueError as e:
         msg = str(e)
         if "Duplicate" in msg:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=ErrorCode.DUPLICATE_ENTITY,
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.VALIDATION_ERROR,
-        )
+            raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     except Exception:
         logger.exception("Unexpected error creating action")
         raise HTTPException(
@@ -201,10 +188,7 @@ async def get_action(
     try:
         result = await service.get_action(action_id, source_type, current_user.tenant_id)
     except (LookupError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ActionResponse(**result)
 
 
@@ -233,13 +217,7 @@ async def update_action(
             completion_notes=action_data.completion_notes,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorCode.VALIDATION_ERROR,
-        )
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ActionResponse(**result)

@@ -6,10 +6,11 @@ Thin controller layer — all business logic lives in PortalService.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, EmailStr, Field
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.api.schemas.error_codes import ErrorCode
 from src.domain.services.portal_service import PortalService
 
@@ -124,7 +125,7 @@ async def submit_quick_report(
     try:
         return await service.submit_report(report)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 @router.get("/reports/{reference_number}/", response_model=ReportStatusResponse)
@@ -138,9 +139,9 @@ async def track_report(
     try:
         return await service.track_report(reference_number)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+        raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
 
 @router.get("/stats/", response_model=PortalStatsResponse)

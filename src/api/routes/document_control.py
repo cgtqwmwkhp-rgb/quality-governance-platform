@@ -5,11 +5,12 @@ Thin controller layer — all business logic lives in DocumentControlService.
 
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.exceptions import NotFoundError
 from src.api.schemas.document_control import (
     AcknowledgmentResponse,
     ApprovalActionResponse,
@@ -27,9 +28,9 @@ from src.api.schemas.document_control import (
     VersionDiffResponse,
     WorkflowCreateResponse,
 )
-from src.api.utils.pagination import PaginationParams
 from src.domain.models.user import User
 from src.domain.services.document_control_service import DocumentControlService
+from src.api.utils.pagination import PaginationParams
 
 try:
     from opentelemetry import trace
@@ -210,7 +211,7 @@ async def get_document(
     try:
         return await service.get_document(document_id, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise NotFoundError("Document not found")
 
 
 @router.put("/{document_id}", response_model=DocumentUpdateResponse)
@@ -225,7 +226,7 @@ async def update_document(
     try:
         return await service.update_document(document_id, document_data, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise NotFoundError("Document not found")
 
 
 # ============ Version Control Endpoints ============
@@ -243,7 +244,7 @@ async def create_new_version(
     try:
         return await service.create_version(document_id, version_data, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise NotFoundError("Document not found")
 
 
 @router.get("/{document_id}/versions/{version_id}/diff", response_model=VersionDiffResponse)
@@ -259,7 +260,7 @@ async def get_version_diff(
     try:
         return await service.get_version_diff(document_id, version_id, compare_to=compare_to)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+        raise NotFoundError("Version not found")
 
 
 # ============ Approval Submission & Actions ============
@@ -277,7 +278,7 @@ async def submit_for_approval(
     try:
         return await service.submit_for_approval(document_id, workflow_id, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document or workflow not found")
+        raise NotFoundError("Document or workflow not found")
 
 
 @router.post("/approvals/{instance_id}/action", response_model=ApprovalActionResponse)
@@ -292,7 +293,7 @@ async def take_approval_action(
     try:
         return await service.take_approval_action(instance_id, action_request, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval instance not found")
+        raise NotFoundError("Approval instance not found")
 
 
 # ============ Distribution Endpoints ============
@@ -310,7 +311,7 @@ async def distribute_document(
     try:
         return await service.distribute_document(document_id, distribution, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise NotFoundError("Document not found")
 
 
 @router.post("/{document_id}/distributions/{distribution_id}/acknowledge", response_model=AcknowledgmentResponse)
@@ -325,7 +326,7 @@ async def acknowledge_distribution(
     try:
         return await service.acknowledge_distribution(document_id, distribution_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Distribution not found")
+        raise NotFoundError("Distribution not found")
 
 
 # ============ Obsolete Document Handling ============
@@ -343,7 +344,7 @@ async def mark_document_obsolete(
     try:
         return await service.mark_obsolete(document_id, obsolete_data, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise NotFoundError("Document not found")
 
 
 # ============ Access Logs ============

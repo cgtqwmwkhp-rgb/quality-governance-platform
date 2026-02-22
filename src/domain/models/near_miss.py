@@ -3,8 +3,9 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import TSVECTOR
 
 from src.infrastructure.database import Base
 
@@ -79,6 +80,13 @@ class NearMiss(Base):
     corrective_actions_taken: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Full-text search (populated by DB trigger)
+    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
+
+    __table_args__ = (
+        Index("ix_near_misses_search_vector", "search_vector", postgresql_using="gin"),
+    )
 
     # Audit fields
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

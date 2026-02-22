@@ -9,14 +9,15 @@ Provides endpoints for:
 - Key EnterpriseRisk Indicators (KRIs)
 """
 
-from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
@@ -40,17 +41,10 @@ from src.api.schemas.risk_register import (
 )
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
 from src.domain.models.risk_register import (
-    BowTieElement,
     EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
-    EnterpriseRiskControl,
-    RiskAppetiteStatement,
-    RiskAssessmentHistory,
-    RiskControlMapping,
 )
-from src.domain.models.user import User
 from src.domain.services.risk_register_service import RiskRegisterService
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -167,24 +161,15 @@ async def list_risks(
     params: PaginationParams = Depends(),
 ) -> dict[str, Any]:
     """List risks with filtering options"""
-    conditions = [EnterpriseRisk.tenant_id == current_user.tenant_id]
-
-    if category:
-        conditions.append(EnterpriseRisk.category == category)
-    if department:
-        conditions.append(EnterpriseRisk.department == department)
-    if status:
-        conditions.append(EnterpriseRisk.status == status)
-    if min_score:
-        conditions.append(EnterpriseRisk.residual_score >= min_score)
-    if outside_appetite:
-        conditions.append(EnterpriseRisk.is_within_appetite == False)  # noqa: E712
-
-    stmt = select(EnterpriseRisk)
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
-
-    query = stmt.order_by(EnterpriseRisk.residual_score.desc())
+    service = RiskRegisterService(db)
+    query = service.build_risk_list_query(
+        current_user.tenant_id,
+        category=category,
+        department=department,
+        status=status,
+        min_score=min_score,
+        outside_appetite=outside_appetite,
+    )
     paginated = await paginate(db, query, params)
 
     return {
@@ -247,10 +232,10 @@ async def update_risk(
     current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> dict[str, Any]:
     """Update risk details (not scores)"""
-    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
-    apply_updates(risk, risk_data)
-    await db.commit()
-    await db.refresh(risk)
+    service = RiskRegisterService(db)
+    risk = await service.update_risk(
+        risk_id, current_user.tenant_id, risk_data.model_dump(exclude_unset=True)
+    )
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
 
@@ -277,7 +262,7 @@ async def assess_risk(
             "is_within_appetite": risk.is_within_appetite,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
+        raise NotFoundError(ErrorCode.INTERNAL_ERROR)
 
 
 @router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -287,11 +272,8 @@ async def delete_risk(
     current_user: CurrentSuperuser,
 ) -> None:
     """Delete a risk (soft delete by changing status)"""
-    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
-
-    risk.status = "closed"
-    risk.updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    service = RiskRegisterService(db)
+    await service.soft_delete_risk(risk_id, current_user.tenant_id)
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
 
@@ -369,7 +351,7 @@ async def get_bow_tie(
     try:
         return await service.get_bow_tie(risk_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
+        raise NotFoundError(ErrorCode.INTERNAL_ERROR)
 
 
 @router.post(
@@ -410,20 +392,8 @@ async def delete_bow_tie_element(
     current_user: CurrentSuperuser,
 ) -> None:
     """Delete bow-tie element"""
-    result = await db.execute(
-        select(BowTieElement).where(
-            BowTieElement.id == element_id,
-            BowTieElement.risk_id == risk_id,
-            BowTieElement.tenant_id == current_user.tenant_id,
-        )
-    )
-    element = result.scalar_one_or_none()
-
-    if not element:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
-
-    await db.delete(element)
-    await db.commit()
+    service = BowTieService(db)
+    await service.delete_element(risk_id, element_id, current_user.tenant_id)
 
 
 # ============ KRI Endpoints ============
@@ -446,12 +416,10 @@ async def create_kri(
     current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
-    await get_or_404(db, EnterpriseRisk, kri_data.risk_id, tenant_id=current_user.tenant_id)
-
-    kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
-    db.add(kri)
-    await db.commit()
-    await db.refresh(kri)
+    service = KRIService(db)
+    kri = await service.create_kri(
+        kri_data.risk_id, current_user.tenant_id, kri_data.model_dump()
+    )
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
 
@@ -475,7 +443,7 @@ async def update_kri_value(
             "current_status": kri.current_status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.INTERNAL_ERROR)
+        raise NotFoundError(ErrorCode.INTERNAL_ERROR)
 
 
 @router.get("/kris/{kri_id}/history", response_model=list)
@@ -499,10 +467,8 @@ async def list_controls(
     current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """List all risk controls"""
-    result = await db.execute(
-        select(EnterpriseRiskControl).where(EnterpriseRiskControl.is_active == True)  # noqa: E712
-    )
-    controls = result.scalars().all()
+    service = RiskRegisterService(db)
+    controls = await service.list_controls()
 
     return [
         {
@@ -527,20 +493,12 @@ async def create_control(
     current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> dict[str, Any]:
     """Create a risk control"""
-    count = await db.scalar(select(func.count()).select_from(EnterpriseRiskControl)) or 0
-    reference = f"CTRL-{(count + 1):04d}"
-
-    control = EnterpriseRiskControl(
-        reference=reference,
-        **control_data.model_dump(),
-    )
-    db.add(control)
-    await db.commit()
-    await db.refresh(control)
+    service = RiskRegisterService(db)
+    control = await service.create_control(control_data.model_dump())
     await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
     track_metric("risk_register.mutation", 1)
 
-    return {"id": control.id, "reference": reference, "message": "Control created"}
+    return {"id": control.id, "reference": control.reference, "message": "Control created"}
 
 
 @router.post(
@@ -555,29 +513,12 @@ async def link_control_to_risk(
     reduces_impact: bool = False,
 ) -> dict[str, Any]:
     """Link a control to a risk"""
-    await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
-    await get_or_404(db, EnterpriseRiskControl, control_id, tenant_id=current_user.tenant_id)
-
-    existing = (
-        await db.execute(
-            select(RiskControlMapping).where(
-                RiskControlMapping.risk_id == risk_id,
-                RiskControlMapping.control_id == control_id,
-            )
-        )
-    ).scalar_one_or_none()
-
-    if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.DUPLICATE_ENTITY)
-
-    mapping = RiskControlMapping(
-        risk_id=risk_id,
-        control_id=control_id,
+    service = RiskRegisterService(db)
+    await service.link_control_to_risk(
+        risk_id, control_id, current_user.tenant_id,
         reduces_likelihood=reduces_likelihood,
         reduces_impact=reduces_impact,
     )
-    db.add(mapping)
-    await db.commit()
 
     return {"message": "Control linked to risk"}
 
@@ -591,10 +532,8 @@ async def list_appetite_statements(
     current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """List risk appetite statements by category"""
-    result = await db.execute(
-        select(RiskAppetiteStatement).where(RiskAppetiteStatement.is_active == True)  # noqa: E712
-    )
-    statements = result.scalars().all()
+    service = RiskRegisterService(db)
+    statements = await service.list_appetite_statements()
 
     return [
         {
@@ -634,29 +573,12 @@ async def get_risk(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed risk information"""
-    risk = await get_or_404(db, EnterpriseRisk, risk_id, tenant_id=current_user.tenant_id)
-
-    mapping_result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
-    control_mappings = mapping_result.scalars().all()
-    control_ids = [m.control_id for m in control_mappings]
-    if control_ids:
-        ctrl_result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
-        controls = ctrl_result.scalars().all()
-    else:
-        controls = []
-
-    kri_result = await db.execute(
-        select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id)
-    )
-    kris = kri_result.scalars().all()
-
-    hist_result = await db.execute(
-        select(RiskAssessmentHistory)
-        .where(RiskAssessmentHistory.risk_id == risk_id)
-        .order_by(RiskAssessmentHistory.assessment_date.desc())
-        .limit(10)
-    )
-    history = hist_result.scalars().all()
+    service = RiskRegisterService(db)
+    detail = await service.get_risk_detail(risk_id, current_user.tenant_id)
+    risk = detail["risk"]
+    controls = detail["controls"]
+    kris = detail["kris"]
+    history = detail["assessment_history"]
 
     return {
         "id": risk.id,

@@ -11,10 +11,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.investigation import InvestigationRunListResponse
-from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.incident import Incident
@@ -65,15 +66,9 @@ async def create_incident(
             request_id=request_id,
         )
     except PermissionError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorCode.PERMISSION_DENIED,
-        )
+        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=ErrorCode.DUPLICATE_ENTITY,
-        )
+        raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
 
     track_metric("incidents.created")
     if _span:
@@ -125,11 +120,10 @@ async def list_incidents(
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not await service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ErrorCode.PERMISSION_DENIED,
-            )
+        if not await service.check_reporter_email_access(
+            reporter_email, user_email, has_view_all, is_superuser
+        ):
+            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         await record_audit_event(
             db=db,
@@ -154,13 +148,15 @@ async def list_incidents(
             params=params,
             reporter_email=reporter_email,
         )
-        return {  # type: ignore[return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
+        return {
             "items": paginated.items,
             "total": paginated.total,
             "page": paginated.page,
             "page_size": paginated.page_size,
             "pages": paginated.pages,
-            "links": build_collection_links("incidents", paginated.page, paginated.page_size, paginated.pages),
+            "links": build_collection_links(
+                "incidents", paginated.page, paginated.page_size, paginated.pages
+            ),
         }
     except SQLAlchemyError as e:
         error_str = str(e).lower()
@@ -212,7 +208,6 @@ async def list_incident_investigations(
     Deterministic ordering: created_at DESC, id ASC.
     """
     from sqlalchemy import select
-
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
     await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
@@ -252,10 +247,7 @@ async def update_incident(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return incident
 
 
@@ -280,7 +272,4 @@ async def delete_incident(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)

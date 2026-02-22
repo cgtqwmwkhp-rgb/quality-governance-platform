@@ -11,17 +11,19 @@ Provides endpoints for:
 from datetime import datetime, timezone
 from typing import Annotated, Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.pagination import DataListResponse
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
-from src.domain.models.user import User
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -220,7 +222,7 @@ async def list_clauses(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+            raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     if search:
         clauses = iso_compliance_service.search_clauses(search)
@@ -252,7 +254,7 @@ async def get_clause(clause_id: str):
     """Get a specific ISO clause by ID."""
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return ClauseResponse(
         id=clause.id,
         standard=clause.standard.value,
@@ -287,7 +289,7 @@ async def link_evidence(
     _span = tracer.start_span("link_evidence") if tracer else None
     for clause_id in request.clause_ids:
         if not iso_compliance_service.get_clause(clause_id):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+            raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     method = EvidenceLinkMethod.MANUAL
     if request.linked_by == "auto":
@@ -421,7 +423,7 @@ async def get_compliance_coverage(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+            raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.calculate_compliance_coverage(links, std_enum)
@@ -439,7 +441,7 @@ async def get_compliance_gaps(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+            raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     coverage = iso_compliance_service.calculate_compliance_coverage(links, std_enum)
@@ -459,7 +461,7 @@ async def generate_compliance_report(
         try:
             std_enum = ISOStandard(standard)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorCode.VALIDATION_ERROR)
+            raise ValidationError(ErrorCode.VALIDATION_ERROR)
 
     links = await _load_evidence_links(db, current_user.tenant_id, std_enum)
     return iso_compliance_service.generate_audit_report(links, std_enum, include_evidence)

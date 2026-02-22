@@ -226,7 +226,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-unit.xml
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80 --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -264,6 +264,38 @@ jobs:
       - name: Run frontend tests
         working-directory: frontend
         run: npx vitest run --coverage
+
+  sbom:
+    name: SBOM Generation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install cyclonedx-bom
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          echo "=== SBOM Generation (CycloneDX) ==="
+          cyclonedx-py environment --output sbom.json --output-format json
+          echo "[OK] SBOM generated: sbom.json"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+          retention-days: 90
 
   integration-tests:
     name: Integration Tests
@@ -323,7 +355,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-integration.xml
+          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80 --junit-xml=junit-integration.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4

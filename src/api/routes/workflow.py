@@ -6,11 +6,14 @@ escalation levels, and status checking.
 
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+
+from src.domain.exceptions import NotFoundError
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
@@ -34,7 +37,6 @@ from src.api.schemas.workflow import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.user import User
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
@@ -128,7 +130,7 @@ async def update_workflow_rule(
     """Update a workflow rule."""
     rule = await get_or_404(db, WorkflowRule, rule_id, tenant_id=current_user.tenant_id)
     apply_updates(rule, rule_data)
-    rule.updated_by = current_user.email  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+    rule.updated_by = current_user.email
 
     await db.commit()
     await db.refresh(rule)
@@ -234,7 +236,7 @@ async def update_sla_configuration(
     """Update an SLA configuration."""
     config = await get_or_404(db, SLAConfiguration, config_id, tenant_id=current_user.tenant_id)
     apply_updates(config, config_data)
-    config.updated_by = current_user.email  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+    config.updated_by = current_user.email
 
     await db.commit()
     await db.refresh(config)
@@ -286,7 +288,7 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     now = datetime.now(timezone.utc)
 
@@ -333,7 +335,7 @@ async def pause_sla_tracking(
     tracking = await sla_service.pause_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -350,7 +352,7 @@ async def resume_sla_tracking(
     tracking = await sla_service.resume_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
     return SLATrackingResponse.from_orm(tracking)
 

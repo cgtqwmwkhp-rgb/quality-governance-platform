@@ -23,6 +23,7 @@ from src.api.routes import (
     evidence_assets,
     executive_dashboard,
     form_config,
+    gdpr,
     global_search,
     health,
     ims_dashboard,
@@ -115,6 +116,8 @@ router.include_router(signatures.router, prefix="/signatures", tags=["Digital Si
 router.include_router(tenants.router, prefix="/tenants", tags=["Multi-Tenancy"])
 # Immutable Audit Trail (Tier 1)
 router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Trail"])
+# GDPR Compliance (Right of Access & Right to Erasure)
+router.include_router(gdpr.router, tags=["GDPR"])
 # Admin Form Builder & Configuration
 router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
 # Near Misses

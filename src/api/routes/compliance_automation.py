@@ -12,9 +12,11 @@ Features:
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.api.schemas.compliance_automation import (
     AddCertificateResponse,
     AuditScheduleCreate,
@@ -36,7 +38,6 @@ from src.api.schemas.compliance_automation import (
     SubmitRIDDORResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
-from src.domain.models.user import User
 from src.domain.services.compliance_automation_service import compliance_automation_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -96,7 +97,7 @@ async def review_regulatory_update(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 # ============================================================================
@@ -310,4 +311,4 @@ async def submit_riddor(
             submitted_by=current_user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)

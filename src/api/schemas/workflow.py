@@ -324,3 +324,45 @@ class SLACheckResponse(BaseModel):
     sla_events: int
     escalation_details: List[Any] = []
     sla_details: List[Any] = []
+
+
+# ============================================================================
+# Workflow Engine Response Models
+# ============================================================================
+
+
+class WorkflowStepResponse(BaseModel):
+    """Response model for workflow step."""
+
+    id: int
+    name: str
+    step_type: str
+    order: int
+    config: Dict[str, Any]
+    status: str
+
+
+class WorkflowInstanceResponse(BaseModel):
+    """Response model for workflow instance."""
+
+    id: int
+    workflow_id: int
+    entity_type: str
+    entity_id: int
+    current_step: int
+    status: str
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    steps: List[WorkflowStepResponse] = []
+
+
+class WorkflowDefinitionResponse(BaseModel):
+    """Response model for workflow definition."""
+
+    id: int
+    name: str
+    description: Optional[str] = None
+    entity_type: str
+    steps: List[Dict[str, Any]] = []
+    is_active: bool
+    created_at: datetime

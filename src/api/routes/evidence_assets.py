@@ -10,6 +10,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 from src.api.schemas.evidence_asset import (
     EvidenceAssetListResponse,
     EvidenceAssetResponse,
@@ -81,9 +82,9 @@ async def upload_evidence_asset(
             redaction_required=redaction_required,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise ValidationError(str(e))
     except LookupError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise NotFoundError(str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -123,7 +124,7 @@ async def list_evidence_assets(
             include_deleted=include_deleted,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise ValidationError(str(e))
 
 
 @router.get("/{asset_id}", response_model=EvidenceAssetResponse)
@@ -137,7 +138,7 @@ async def get_evidence_asset(
     try:
         return await service.get_asset(asset_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence asset not found")
+        raise NotFoundError("Evidence asset not found")
 
 
 @router.patch("/{asset_id}", response_model=EvidenceAssetResponse)
@@ -157,7 +158,7 @@ async def update_evidence_asset(
             tenant_id=current_user.tenant_id,
         )
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence asset not found")
+        raise NotFoundError("Evidence asset not found")
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -171,7 +172,7 @@ async def delete_evidence_asset(
     try:
         await service.delete_asset(asset_id, user_id=current_user.id, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence asset not found")
+        raise NotFoundError("Evidence asset not found")
     return None
 
 
@@ -192,7 +193,7 @@ async def link_asset_to_investigation(
             tenant_id=current_user.tenant_id,
         )
     except LookupError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.get("/{asset_id}/signed-url", response_model=SignedUrlResponse)
@@ -207,7 +208,7 @@ async def get_signed_download_url(
     try:
         return await service.get_signed_url(asset_id, expires_in=expires_in)
     except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence asset not found")
+        raise NotFoundError("Evidence asset not found")
 
 
 @router.get("/download", response_model=FileDownloadMeta)
@@ -229,14 +230,11 @@ async def download_file_direct(
 
     svc = storage_service()
     if not isinstance(svc, LocalFileStorageService):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Direct download not available in production",
-        )
+        raise ValidationError("Direct download not available in production")
 
     now_ts = int(datetime.now(timezone.utc).timestamp())
     if expires < now_ts:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Download URL has expired")
+        raise AuthorizationError("Download URL has expired")
 
     message = f"{key}:{expires}"
     expected_sig = hmac_lib.new(
@@ -246,12 +244,12 @@ async def download_file_direct(
     ).hexdigest()[:16]
 
     if not hmac_lib.compare_digest(sig, expected_sig):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid download signature")
+        raise AuthorizationError("Invalid download signature")
 
     try:
         content = await svc.download(key)
     except StorageError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise NotFoundError(str(e))
 
     import mimetypes
 

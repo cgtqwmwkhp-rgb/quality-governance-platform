@@ -4,6 +4,8 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from src.domain.exceptions import AuthorizationError, NotFoundError
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -76,11 +78,10 @@ async def list_rtas(
         has_view_all = current_user.has_permission("rta:view_all") if hasattr(current_user, "has_permission") else False
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ErrorCode.PERMISSION_DENIED,
-            )
+        if not service.check_reporter_email_access(
+            reporter_email, user_email, has_view_all, is_superuser
+        ):
+            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
 
         await record_audit_event(
             db=db,
@@ -122,12 +123,8 @@ async def list_rtas(
             type(e).__name__,
         )
         column_errors = [
-            "reporter_email",
-            "column",
-            "does not exist",
-            "unknown column",
-            "programmingerror",
-            "relation",
+            "reporter_email", "column", "does not exist",
+            "unknown column", "programmingerror", "relation",
         ]
         if any(err in error_str for err in column_errors):
             logger.warning(
@@ -155,10 +152,7 @@ async def get_rta(
     try:
         return await service.get_rta(rta_id, current_user.tenant_id)
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.patch("/{rta_id}", response_model=RTAResponse)
@@ -180,10 +174,7 @@ async def update_rta(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.delete("/{rta_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -203,10 +194,7 @@ async def delete_rta(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 # RTA Actions endpoints
@@ -231,10 +219,7 @@ async def create_rta_action(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.get("/{rta_id}/actions", response_model=RTAActionListResponse)
@@ -247,12 +232,11 @@ async def list_rta_actions(
     """List actions for an RTA with deterministic ordering and pagination."""
     service = RTAService(db)
     try:
-        paginated = await service.list_rta_actions(rta_id, current_user.tenant_id, params)
-    except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
+        paginated = await service.list_rta_actions(
+            rta_id, current_user.tenant_id, params
         )
+    except LookupError:
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
         "items": paginated.items,
         "total": paginated.total,
@@ -283,10 +267,7 @@ async def update_rta_action(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.delete("/{rta_id}/actions/{action_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -308,10 +289,7 @@ async def delete_rta_action(
             request_id=request_id,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
-        )
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.get("/{rta_id}/investigations", response_model=InvestigationRunListResponse)
@@ -324,12 +302,11 @@ async def list_rta_investigations(
     """List investigations for a specific RTA (paginated)."""
     service = RTAService(db)
     try:
-        paginated = await service.list_rta_investigations(rta_id, current_user.tenant_id, params)
-    except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorCode.ENTITY_NOT_FOUND,
+        paginated = await service.list_rta_investigations(
+            rta_id, current_user.tenant_id, params
         )
+    except LookupError:
+        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
         "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
         "total": paginated.total,

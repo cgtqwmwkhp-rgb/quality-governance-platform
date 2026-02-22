@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from src.api.dependencies import CurrentSuperuser
+from src.domain.exceptions import ConflictError, NotFoundError
 
 router = APIRouter(prefix="/admin/dlq")
 logger = logging.getLogger(__name__)
@@ -71,9 +72,9 @@ async def retry_dlq_entry(entry_id: int, current_user: CurrentSuperuser):
         result = await session.execute(select(FailedTask).where(FailedTask.id == entry_id))
         entry = result.scalar_one_or_none()
         if not entry:
-            raise HTTPException(status_code=404, detail="DLQ entry not found")
+            raise NotFoundError("DLQ entry not found")
         if entry.retried:
-            raise HTTPException(status_code=409, detail="Entry already retried")
+            raise ConflictError("Entry already retried")
 
         # Attempt to re-dispatch via Celery
         try:
