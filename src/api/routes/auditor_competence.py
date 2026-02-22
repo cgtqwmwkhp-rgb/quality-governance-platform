@@ -8,8 +8,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, status
-
-from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -30,6 +28,7 @@ from src.api.schemas.auditor_competence import (
     TrainingCreateResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.auditor_competence import AuditorCompetenceService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

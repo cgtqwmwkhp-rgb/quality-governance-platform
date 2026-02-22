@@ -1,22 +1,23 @@
 """Tests for domain exception hierarchy."""
 
 import pytest
+
 from src.domain.exceptions import (
-    DomainError,
-    NotFoundError,
-    ConflictError,
-    ValidationError,
     AuthenticationError,
     AuthorizationError,
-    TenantAccessError,
-    StateTransitionError,
-    RateLimitError,
+    ConflictError,
+    DomainError,
     ExternalServiceError,
-    IdempotencyConflictError,
-    GDPRError,
     FileValidationError,
+    GDPRError,
+    IdempotencyConflictError,
+    NotFoundError,
+    RateLimitError,
+    StateTransitionError,
+    TenantAccessError,
     TokenError,
     TokenRevokedError,
+    ValidationError,
 )
 
 

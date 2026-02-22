@@ -16,7 +16,6 @@ from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import NotFoundError
-from src.infrastructure.monitoring.azure_monitor import track_business_event
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -26,6 +25,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
+from src.infrastructure.monitoring.azure_monitor import track_business_event
 
 
 class RiskScoringEngine:

@@ -8,13 +8,10 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.kri import (
     KRIAlertActionResponse,
@@ -37,8 +34,10 @@ from src.api.schemas.kri import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
+from src.domain.models.user import User
 from src.domain.services.kri_calculation_service import KRICalculationService
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache

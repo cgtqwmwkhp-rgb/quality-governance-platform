@@ -4,8 +4,6 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import AuthorizationError, ConflictError
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -18,6 +16,7 @@ from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyRespo
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import AuthorizationError, ConflictError
 from src.domain.models.policy import Policy
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event

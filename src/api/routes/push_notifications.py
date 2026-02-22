@@ -8,8 +8,6 @@ from datetime import datetime
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, status
-
-from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel, Field
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, select
 from sqlalchemy.dialects.postgresql import JSONB
@@ -23,6 +21,7 @@ from src.api.schemas.push_notification import (
     UnsubscribePushNotificationResponse,
     UpdateNotificationPreferencesResponse,
 )
+from src.domain.exceptions import NotFoundError
 from src.domain.models.user import User
 from src.domain.services.push_notification_service import PushNotificationServiceDomain
 from src.infrastructure.database import Base

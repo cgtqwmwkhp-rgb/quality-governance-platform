@@ -16,7 +16,6 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,
@@ -46,6 +45,7 @@ from src.api.schemas.audit import (
 )
 from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.pagination import PaginationParams
+from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
 
 router = APIRouter()

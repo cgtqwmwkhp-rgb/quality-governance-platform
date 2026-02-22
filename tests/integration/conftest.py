@@ -362,6 +362,7 @@ async def test_session():
     """
     try:
         from sqlalchemy.ext.asyncio import AsyncSession
+
         from src.infrastructure.database import async_session_maker
 
         async with async_session_maker() as session:
@@ -388,9 +389,11 @@ async def test_tenant(test_session):
 
     The tenant is automatically cleaned up after the test via transaction rollback.
     """
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from src.domain.models.tenant import Tenant
     import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.domain.models.tenant import Tenant
 
     tenant = Tenant(
         name="Test Tenant",
@@ -413,10 +416,12 @@ async def test_user(test_session, test_tenant):
 
     The user is automatically cleaned up after the test via transaction rollback.
     """
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from src.domain.models.user import User
-    from src.core.security import get_password_hash
     import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.core.security import get_password_hash
+    from src.domain.models.user import User
 
     user = User(
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",

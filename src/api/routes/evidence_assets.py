@@ -10,7 +10,6 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 from src.api.schemas.evidence_asset import (
     EvidenceAssetListResponse,
     EvidenceAssetResponse,
@@ -21,6 +20,7 @@ from src.api.schemas.evidence_asset import (
 )
 from src.api.utils.pagination import PaginationParams
 from src.core.config import settings
+from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 from src.domain.models.user import User
 from src.domain.services.evidence_service import EvidenceService
 

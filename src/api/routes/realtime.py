@@ -8,13 +8,12 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
-
-from src.domain.exceptions import AuthorizationError
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.core.security import decode_token, is_token_revoked
+from src.domain.exceptions import AuthorizationError
 from src.domain.models.user import User
 from src.domain.services.realtime_service import RealtimeService
 from src.infrastructure.websocket.connection_manager import connection_manager

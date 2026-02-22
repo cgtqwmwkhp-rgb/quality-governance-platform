@@ -13,8 +13,6 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -39,6 +37,7 @@ from src.api.schemas.uvdb import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import NotFoundError
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,

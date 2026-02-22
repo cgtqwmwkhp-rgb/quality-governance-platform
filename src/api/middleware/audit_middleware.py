@@ -155,10 +155,11 @@ async def _log_audit_entry(
     """
     try:
         # Conditional import to avoid circular dependencies
+        from sqlalchemy import select
+
+        from src.domain.models.user import User
         from src.domain.services.audit_log_service import AuditLogService
         from src.infrastructure.database import async_session_maker
-        from sqlalchemy import select
-        from src.domain.models.user import User
 
         # If we have user_id but no tenant_id, try to get it from database
         # This is OK in background task since it doesn't block the response

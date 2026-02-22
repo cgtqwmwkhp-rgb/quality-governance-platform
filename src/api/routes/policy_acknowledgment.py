@@ -7,8 +7,6 @@ tracking user acknowledgments, and compliance reporting.
 from typing import Optional
 
 from fastapi import APIRouter, Query, Request, status
-
-from src.domain.exceptions import NotFoundError, ValidationError
 from sqlalchemy import and_, select
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -31,6 +29,7 @@ from src.api.schemas.policy_acknowledgment import (
     UpdateReadingTimeResponse,
 )
 from src.api.utils.entity import get_or_404
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.policy_acknowledgment import (
     AcknowledgmentStatus,
     PolicyAcknowledgment,

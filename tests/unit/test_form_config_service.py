@@ -34,8 +34,8 @@ for _k, _v in _patches.items():
     if _k not in sys.modules:
         sys.modules[_k] = _v
 
-from src.domain.services.form_config_service import FormConfigService  # noqa: E402
 from src.domain.exceptions import NotFoundError  # noqa: E402
+from src.domain.services.form_config_service import FormConfigService  # noqa: E402
 
 
 def _make_mock_db():

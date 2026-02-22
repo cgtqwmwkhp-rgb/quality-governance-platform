@@ -4,8 +4,6 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -20,6 +18,7 @@ from src.api.schemas.complaint import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.investigation import InvestigationRunResponse
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.complaint_service import ComplaintService

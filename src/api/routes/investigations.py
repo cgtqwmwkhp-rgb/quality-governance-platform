@@ -5,8 +5,6 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.exceptions import AuthorizationError
-from src.domain.models.user import User
 from src.api.schemas.investigation import (
     AutosaveRequest,
     ClosureValidationResponse,
@@ -27,10 +25,9 @@ from src.api.schemas.investigation import (
     TimelineListResponse,
 )
 from src.api.utils.pagination import PaginationParams
-from src.domain.services.investigation_service import (
-    ClosureReasonCode,
-    InvestigationService,
-)
+from src.domain.exceptions import AuthorizationError
+from src.domain.models.user import User
+from src.domain.services.investigation_service import ClosureReasonCode, InvestigationService
 
 # Re-export for backward compatibility with tests
 _user_can_access_investigation = InvestigationService.user_can_access_investigation

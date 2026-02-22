@@ -1,10 +1,11 @@
 """Unit tests for GDPRService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.domain.services.gdpr_service import GDPRService
+import pytest
+
 from src.domain.exceptions import NotFoundError
+from src.domain.services.gdpr_service import GDPRService
 
 
 def _make_mock_db():

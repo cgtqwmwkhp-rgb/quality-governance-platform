@@ -4,14 +4,13 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.validators import sanitize_field
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.capa import CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.user import User
 from src.domain.services.capa_service import CAPAService

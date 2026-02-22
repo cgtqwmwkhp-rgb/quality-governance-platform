@@ -7,8 +7,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
 
-from src.domain.exceptions import NotFoundError, ValidationError
-
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import (
@@ -21,6 +19,7 @@ from src.api.schemas.user import (
     UserUpdate,
 )
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.user_service import UserService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

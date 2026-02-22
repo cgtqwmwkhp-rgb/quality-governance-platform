@@ -4,8 +4,6 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from src.domain.exceptions import AuthorizationError, NotFoundError
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -23,6 +21,7 @@ from src.api.schemas.rta import (
     RTAUpdate,
 )
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import AuthorizationError, NotFoundError
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.rta_service import RTAService

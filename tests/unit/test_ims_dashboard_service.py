@@ -1,7 +1,8 @@
 """Unit tests for IMSDashboardService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.domain.services.ims_dashboard_service import IMSDashboardService
 

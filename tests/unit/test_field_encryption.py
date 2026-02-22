@@ -1,7 +1,8 @@
 """Tests for PII field encryption."""
 
-import pytest
 import os
+
+import pytest
 
 
 class TestFieldEncryption:

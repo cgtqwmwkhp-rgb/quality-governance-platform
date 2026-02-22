@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
-from src.domain.exceptions import ValidationError
 from src.api.schemas.investigation import (
     InvestigationTemplateCreate,
     InvestigationTemplateListResponse,
@@ -16,6 +15,7 @@ from src.api.schemas.investigation import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import ValidationError
 from src.domain.models.investigation import InvestigationTemplate
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

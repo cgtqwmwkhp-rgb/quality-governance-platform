@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.exceptions import NotFoundError
 from src.api.schemas.document_control import (
     AcknowledgmentResponse,
     ApprovalActionResponse,
@@ -28,9 +27,10 @@ from src.api.schemas.document_control import (
     VersionDiffResponse,
     WorkflowCreateResponse,
 )
+from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import NotFoundError
 from src.domain.models.user import User
 from src.domain.services.document_control_service import DocumentControlService
-from src.api.utils.pagination import PaginationParams
 
 try:
     from opentelemetry import trace

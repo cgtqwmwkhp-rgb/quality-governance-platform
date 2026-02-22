@@ -1,7 +1,8 @@
 """Unit tests for IdempotencyMiddleware."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.api.middleware.idempotency import IdempotencyMiddleware
 

@@ -7,13 +7,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
 
-from src.domain.exceptions import NotFoundError
-
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.investigation import InvestigationRunListResponse, InvestigationRunResponse
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import NotFoundError
 from src.domain.services.near_miss_service import NearMissService
 
 router = APIRouter(tags=["Near Misses"])

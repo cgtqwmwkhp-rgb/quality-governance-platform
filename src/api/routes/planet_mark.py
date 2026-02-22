@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
+from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.planet_mark import (
     ActionCreatedResponse,
@@ -41,7 +41,7 @@ from src.api.schemas.planet_mark import (
     UtilityReadingCreatedResponse,
 )
 from src.api.schemas.setup_required import setup_required_response
-from src.api.dependencies.request_context import get_request_id
+from src.domain.models.user import User
 from src.domain.services.planet_mark_service import PlanetMarkService
 
 logger = logging.getLogger(__name__)

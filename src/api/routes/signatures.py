@@ -8,13 +8,10 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
-
-from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.signatures import (
     DeclineSigningResponse,
@@ -28,6 +25,8 @@ from src.api.schemas.signatures import (
     TemplateUseResponse,
     VoidRequestResponse,
 )
+from src.domain.exceptions import NotFoundError, ValidationError
+from src.domain.models.user import User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

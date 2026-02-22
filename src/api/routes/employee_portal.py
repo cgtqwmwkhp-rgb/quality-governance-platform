@@ -10,8 +10,8 @@ from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, EmailStr, Field
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.exceptions import NotFoundError, ValidationError
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.portal_service import PortalService
 
 router = APIRouter(tags=["Employee Portal"])

@@ -7,8 +7,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, status
-
-from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -31,6 +29,7 @@ from src.api.schemas.rca_tools import (
     UpdateCAPAStatusResponse,
     VerifyCAPAResponse,
 )
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric

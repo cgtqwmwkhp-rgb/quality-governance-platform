@@ -6,8 +6,6 @@ Thin controller layer — all business logic lives in AuthService.
 import logging
 
 from fastapi import APIRouter, Depends, status
-
-from src.domain.exceptions import AuthenticationError, AuthorizationError, ValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -31,6 +29,7 @@ from src.api.schemas.auth import (
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
+from src.domain.exceptions import AuthenticationError, AuthorizationError, ValidationError
 from src.domain.services.auth_service import AuthService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

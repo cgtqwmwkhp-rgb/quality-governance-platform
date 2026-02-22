@@ -18,14 +18,7 @@ from sqlalchemy.orm import selectinload
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.update import apply_updates
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
-from src.domain.models.form_config import (
-    Contract,
-    FormField,
-    FormStep,
-    FormTemplate,
-    LookupOption,
-    SystemSetting,
-)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric

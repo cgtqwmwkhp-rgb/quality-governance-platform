@@ -4,13 +4,10 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import NotFoundError
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.pagination import DataListResponse
@@ -32,7 +29,9 @@ from src.api.schemas.risk import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import NotFoundError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
+from src.domain.models.user import User
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
 from src.domain.services.risk_statistics_service import RiskStatisticsService

@@ -227,8 +227,8 @@ async def get_tenant_tier(tenant_id: int) -> str:
 
     # Query database
     try:
-        from src.infrastructure.database import async_session_maker
         from src.domain.models.tenant import Tenant
+        from src.infrastructure.database import async_session_maker
 
         async with async_session_maker() as session:
             result = await session.execute(select(Tenant.subscription_tier).where(Tenant.id == tenant_id))

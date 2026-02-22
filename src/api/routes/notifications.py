@@ -4,8 +4,6 @@ from datetime import datetime
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -20,6 +18,7 @@ from src.api.schemas.notification import (
     UnreadCountResponse,
     UpdatePreferencesResponse,
 )
+from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPriority, NotificationType
 from src.domain.models.user import User
 from src.domain.services.notification_service import NotificationService

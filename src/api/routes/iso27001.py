@@ -19,7 +19,6 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.iso27001 import (
     AssetCreateResponse,
     ControlUpdateResponse,
@@ -37,6 +36,7 @@ from src.api.schemas.iso27001 import (
     SupplierSecurityAssessmentListResponse,
 )
 from src.api.utils.pagination import PaginationParams
+from src.domain.models.user import User
 from src.domain.services.iso27001_service import ISO27001Service
 
 router = APIRouter()

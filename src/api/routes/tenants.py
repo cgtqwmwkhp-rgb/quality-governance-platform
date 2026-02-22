@@ -12,8 +12,6 @@ from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, status
-
-from src.domain.exceptions import NotFoundError, ValidationError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +31,7 @@ from src.api.schemas.tenant import (
     ToggleFeatureResponse,
 )
 from src.api.utils.pagination import PaginationParams, paginate
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.services.tenant_service import TenantService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric

@@ -12,8 +12,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.exceptions import NotFoundError
-from src.domain.models.user import User
 from src.api.schemas.copilot import (
     ActionDetailResponse,
     AddKnowledgeResponse,
@@ -23,6 +21,8 @@ from src.api.schemas.copilot import (
     SubmitFeedbackResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 try:

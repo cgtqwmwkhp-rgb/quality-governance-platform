@@ -5,18 +5,19 @@ Tests verify that:
 2. Cross-tenant access attempts are denied (403 or empty results)
 """
 
-import pytest
 import uuid
-import jwt
 from datetime import datetime, timedelta, timezone
+
+import jwt
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
+from src.core.security import get_password_hash
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
-from src.core.security import get_password_hash
-from src.core.config import settings
 
 
 @pytest.mark.asyncio

@@ -14,8 +14,6 @@ from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-
-from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -23,6 +21,7 @@ from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.pagination import PaginationParams, paginate
+from src.domain.exceptions import NotFoundError
 from src.domain.services.audit_log_service import AuditLogService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

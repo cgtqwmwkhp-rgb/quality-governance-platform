@@ -61,8 +61,9 @@ async def get_erasure_status(
 
     Returns status information about the user's data erasure request.
     """
-    from src.domain.models.user import User
     from sqlalchemy import select
+
+    from src.domain.models.user import User
 
     result = await db.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()

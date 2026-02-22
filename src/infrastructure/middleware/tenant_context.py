@@ -61,6 +61,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         request.state.tenant_id = tenant_id
 
         from sqlalchemy import text
+
         from src.infrastructure.database import async_session_maker
 
         async with async_session_maker() as session:

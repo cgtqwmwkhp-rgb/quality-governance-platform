@@ -7,13 +7,10 @@ escalation levels, and status checking.
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import NotFoundError
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
@@ -37,6 +34,8 @@ from src.api.schemas.workflow import (
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,

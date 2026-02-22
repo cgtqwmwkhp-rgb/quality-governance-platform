@@ -8,8 +8,6 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
-
-from src.domain.exceptions import AuthenticationError, AuthorizationError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -18,6 +16,7 @@ from src.api.dependencies import DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.core.config import settings
 from src.core.security import get_password_hash
+from src.domain.exceptions import AuthenticationError, AuthorizationError
 from src.domain.models.user import Role, User
 
 logger = logging.getLogger(__name__)

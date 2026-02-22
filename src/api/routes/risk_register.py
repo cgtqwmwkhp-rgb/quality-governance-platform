@@ -12,12 +12,9 @@ Provides endpoints for:
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-
-from src.domain.exceptions import NotFoundError
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk_register import (
     BowTieElementCreatedResponse,
@@ -41,10 +38,9 @@ from src.api.schemas.risk_register import (
 )
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
-from src.domain.models.risk_register import (
-    EnterpriseKeyRiskIndicator,
-    EnterpriseRisk,
-)
+from src.domain.exceptions import NotFoundError
+from src.domain.models.risk_register import EnterpriseKeyRiskIndicator, EnterpriseRisk
+from src.domain.models.user import User
 from src.domain.services.risk_register_service import RiskRegisterService
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache

@@ -11,13 +11,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
-from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.investigation import InvestigationRunListResponse
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.entity import get_or_404
 from src.api.utils.pagination import PaginationParams, paginate
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -204,6 +204,7 @@ async def list_incident_investigations(
     Deterministic ordering: created_at DESC, id ASC.
     """
     from sqlalchemy import select
+
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
     await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
