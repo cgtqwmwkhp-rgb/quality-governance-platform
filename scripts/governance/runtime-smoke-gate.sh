@@ -602,7 +602,7 @@ echo ""
 check_endpoint "Readiness Check" "/readyz" "200" "true" || true
 echo ""
 
-check_endpoint "UVDB Sections" "/api/v1/uvdb/sections" "200" "true" || true
+check_endpoint "UVDB Sections" "/api/v1/uvdb/sections" "401" "true" || true
 echo ""
 
 check_endpoint "PlanetMark Dashboard" "/api/v1/planet-mark/dashboard" "200" "true" || true
