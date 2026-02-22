@@ -137,7 +137,7 @@ class TestLoginErrorCodes:
         """401 response should have bounded error structure."""
         response = client.post(
             "/api/v1/auth/login",
-            json={"email": "test@example.com", "password": "wrong"},
+            json={"email": "test@example.com", "password": "WrongPass1!"},
         )
 
         assert response.status_code == 401

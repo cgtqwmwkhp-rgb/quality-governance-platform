@@ -15,8 +15,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from src.api import router as api_router
 from src.api.middleware import register_exception_handlers
 from src.api.middleware.idempotency import IdempotencyMiddleware
-from src.core.config import settings
 from src.api.middleware.json_depth import JsonDepthMiddleware
+from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
