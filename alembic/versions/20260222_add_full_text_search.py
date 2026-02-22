@@ -28,7 +28,13 @@ TABLES = {
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+    op.execute(
+        "DO $$ BEGIN "
+        "  EXECUTE 'CREATE EXTENSION IF NOT EXISTS pg_trgm'; "
+        "EXCEPTION WHEN OTHERS THEN "
+        "  RAISE NOTICE 'pg_trgm extension not available: %', SQLERRM; "
+        "END $$"
+    )
 
     for table, (field_a, field_b) in TABLES.items():
         tsvector_expr = (
