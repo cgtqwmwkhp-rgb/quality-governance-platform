@@ -279,7 +279,7 @@ jobs:
           attempt=1
           
           while [ $attempt -le $MAX_ATTEMPTS ]; do
-            REVISION_STATUS=$(az containerapp revision show \
+            REVISION_STATUS=$(timeout 20s az containerapp revision show \
               --name "${{ env.ACA_NAME }}" \
               --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
               --revision "${{ env.ACA_REVISION }}" \
