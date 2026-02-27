@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText } from 'lucide-react'
 import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '../components/ui/Dialog'
-import { cn } from "../helpers/utils"
+import { cn, decodeHtmlEntities } from "../helpers/utils"
 
 type ViewMode = 'kanban' | 'list' | 'findings'
 
@@ -52,6 +52,7 @@ export default function Audits() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [showVersionSelector, setShowVersionSelector] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -62,12 +63,11 @@ export default function Audits() {
       const [auditsRes, findingsRes, templatesRes] = await Promise.all([
         auditsApi.listRuns(1, 100),
         auditsApi.listFindings(1, 100),
-        auditsApi.listTemplates(1, 100),
+        auditsApi.listTemplates(1, 100, { is_published: true }),
       ])
       setAudits(auditsRes.data.items || [])
       setFindings(findingsRes.data.items || [])
-      // Only show published templates
-      setTemplates((templatesRes.data.items || []).filter(t => t.is_published))
+      setTemplates(templatesRes.data.items || [])
     } catch (err) {
       console.error('Failed to load audits:', err)
       setAudits([])
@@ -78,17 +78,70 @@ export default function Audits() {
     }
   }
 
+  const templateFamilies = useMemo(() => {
+    const families = new Map<string, { key: string; label: string; versions: AuditTemplate[] }>()
+    templates.forEach((template) => {
+      const label = decodeHtmlEntities(template.name || 'Untitled Template').trim()
+      const familyKey = `${label.toLowerCase()}::${(template.audit_type || '').toLowerCase()}`
+      const existing = families.get(familyKey)
+      if (existing) {
+        existing.versions.push(template)
+      } else {
+        families.set(familyKey, {
+          key: familyKey,
+          label,
+          versions: [template],
+        })
+      }
+    })
+
+    return Array.from(families.values())
+      .map((family) => ({
+        ...family,
+        versions: [...family.versions].sort((a, b) => b.version - a.version),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [templates])
+
+  const latestPublishedTemplates = useMemo(
+    () => templateFamilies.map((family) => family.versions[0]).filter(Boolean),
+    [templateFamilies]
+  )
+
+  const selectedTemplate = templates.find((template) => template.id === formData.template_id)
+  const selectedTemplateFamily = useMemo(() => {
+    if (!selectedTemplate) return null
+    return templateFamilies.find((family) => family.versions.some((version) => version.id === selectedTemplate.id)) ?? null
+  }, [selectedTemplate, templateFamilies])
+
+  const latestSelectedTemplate =
+    selectedTemplateFamily?.versions[0] ?? latestPublishedTemplates[0] ?? null
+
+  const buildDefaultForm = (): CreateAuditForm => {
+    if (!latestPublishedTemplates.length) {
+      return INITIAL_FORM_STATE
+    }
+    const preferred = latestPublishedTemplates[0]
+    return {
+      ...INITIAL_FORM_STATE,
+      template_id: preferred.id,
+      title: decodeHtmlEntities(preferred.name),
+    }
+  }
+
   const handleOpenModal = () => {
-    setFormData(INITIAL_FORM_STATE)
+    setFormData(buildDefaultForm())
     setFormError(null)
     setSuccessMessage(null)
+    setShowVersionSelector(false)
     setShowModal(true)
   }
 
   const handleCloseModal = () => {
     setShowModal(false)
-    setFormData(INITIAL_FORM_STATE)
+    setFormData(buildDefaultForm())
     setFormError(null)
+    setShowVersionSelector(false)
   }
 
   const handleSubmitAudit = async (e: React.FormEvent) => {
@@ -175,7 +228,6 @@ export default function Audits() {
               (audits.filter(a => a.score_percentage).length || 1),
     openFindings: findings.filter(f => f.status === 'open').length,
   }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -299,7 +351,12 @@ export default function Audits() {
                         className="p-4 cursor-pointer"
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <span className="font-mono text-xs text-primary">{audit.reference_number}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-primary">{audit.reference_number}</span>
+                            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                              v{audit.template_version}
+                            </Badge>
+                          </div>
                           {audit.score_percentage !== undefined && (
                             <span className={cn("text-sm font-bold", getScoreColor(audit.score_percentage))}>
                               {audit.score_percentage.toFixed(0)}%
@@ -342,6 +399,7 @@ export default function Audits() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Template</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
@@ -350,7 +408,7 @@ export default function Audits() {
                 <tbody className="divide-y divide-border">
                   {audits.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                      <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
                         <ClipboardCheck className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                         <p>No audits found</p>
                       </td>
@@ -368,6 +426,11 @@ export default function Audits() {
                           <p className="text-sm font-medium text-foreground truncate max-w-xs">{audit.title || 'Untitled'}</p>
                         </td>
                         <td className="px-6 py-4 text-sm text-foreground">{audit.location || '-'}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant="secondary" className="text-xs">
+                            v{audit.template_version}
+                          </Badge>
+                        </td>
                         <td className="px-6 py-4">
                           <Badge variant={
                             audit.status === 'completed' ? 'resolved' :
@@ -484,42 +547,78 @@ export default function Audits() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid gap-2 max-h-48 overflow-y-auto">
-                    {templates.map((template) => (
-                      <button
-                        key={template.id}
-                        type="button"
-                        onClick={() => setFormData(prev => ({ 
-                          ...prev, 
-                          template_id: template.id,
-                          title: prev.title || template.name
-                        }))}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
-                          formData.template_id === template.id
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                            : "border-border hover:border-primary/50 hover:bg-surface"
+                  <div className="space-y-2">
+                    <select
+                      value={formData.template_id ?? ''}
+                      onChange={(e) => {
+                        const templateId = Number(e.target.value)
+                        const template = latestPublishedTemplates.find((item) => item.id === templateId)
+                        setFormData((prev) => ({
+                          ...prev,
+                          template_id: Number.isNaN(templateId) ? null : templateId,
+                          title: prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
+                        }))
+                        setShowVersionSelector(false)
+                      }}
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">Select a published template (latest version)...</option>
+                      {latestPublishedTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {decodeHtmlEntities(template.name)} (Latest v{template.version}) - {template.reference_number}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedTemplateFamily && selectedTemplateFamily.versions.length > 1 && (
+                      <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowVersionSelector((prev) => !prev)}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          {showVersionSelector ? 'Hide older versions' : 'Need an older version? Choose here'}
+                        </button>
+                        {showVersionSelector && (
+                          <select
+                            value={formData.template_id ?? ''}
+                            onChange={(e) => {
+                              const templateId = Number(e.target.value)
+                              const template = selectedTemplateFamily.versions.find((item) => item.id === templateId)
+                              setFormData((prev) => ({
+                                ...prev,
+                                template_id: Number.isNaN(templateId) ? null : templateId,
+                                title: prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
+                              }))
+                            }}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          >
+                            {selectedTemplateFamily.versions.map((template) => (
+                              <option key={template.id} value={template.id}>
+                                v{template.version} - {template.reference_number}
+                              </option>
+                            ))}
+                          </select>
                         )}
-                      >
-                        <div className={cn(
-                          "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                          formData.template_id === template.id
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-surface text-muted-foreground"
-                        )}>
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">{template.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {template.category || template.audit_type} • {template.reference_number}
+                      </div>
+                    )}
+                    {latestSelectedTemplate && (
+                      <p className="text-xs text-muted-foreground">
+                        Defaulting to latest published version: v{latestSelectedTemplate.version}
+                      </p>
+                    )}
+                    {selectedTemplate && (
+                      <div className="rounded-xl border border-border bg-surface p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="w-4 h-4 text-primary" />
+                          <p className="text-sm font-medium text-foreground">
+                            {decodeHtmlEntities(selectedTemplate.name)}
                           </p>
                         </div>
-                        {formData.template_id === template.id && (
-                          <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
-                        )}
-                      </button>
-                    ))}
+                        <p className="text-xs text-muted-foreground">
+                          {selectedTemplate.category || selectedTemplate.audit_type} • v{selectedTemplate.version} • {selectedTemplate.reference_number}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

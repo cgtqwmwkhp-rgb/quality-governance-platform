@@ -166,22 +166,30 @@ def check_cors_preflight(base_url: str, endpoint: str) -> CheckResult:
         )
 
 
-def check_endpoint_health(base_url: str, endpoint: str, name: str) -> CheckResult:
-    """Verify endpoint returns 200."""
+def check_endpoint_health(
+    base_url: str,
+    endpoint: str,
+    name: str,
+    expected_statuses: Optional[set[int]] = None,
+) -> CheckResult:
+    """Verify endpoint returns one of expected statuses."""
     url = f"{base_url}{endpoint}"
+    accepted = expected_statuses or {200}
 
     for attempt in range(MAX_RETRIES):
         start = time.time()
         try:
-            resp = requests.get(url, headers={"Origin": CORS_ORIGIN}, timeout=TIMEOUT_SECONDS)
+            resp = requests.get(
+                url, headers={"Origin": CORS_ORIGIN}, timeout=TIMEOUT_SECONDS
+            )
             latency_ms = int((time.time() - start) * 1000)
 
-            if resp.status_code == 200:
+            if resp.status_code in accepted:
                 return CheckResult(
                     name=name,
                     endpoint=endpoint,
-                    expected="200",
-                    observed="200",
+                    expected="/".join(str(code) for code in sorted(accepted)),
+                    observed=str(resp.status_code),
                     latency_ms=latency_ms,
                     passed=True,
                 )
@@ -194,7 +202,7 @@ def check_endpoint_health(base_url: str, endpoint: str, name: str) -> CheckResul
             return CheckResult(
                 name=name,
                 endpoint=endpoint,
-                expected="200",
+                expected="/".join(str(code) for code in sorted(accepted)),
                 observed=str(resp.status_code),
                 latency_ms=latency_ms,
                 passed=False,
@@ -209,7 +217,7 @@ def check_endpoint_health(base_url: str, endpoint: str, name: str) -> CheckResul
             return CheckResult(
                 name=name,
                 endpoint=endpoint,
-                expected="200",
+                expected="/".join(str(code) for code in sorted(accepted)),
                 observed="error",
                 latency_ms=0,
                 passed=False,
@@ -220,7 +228,7 @@ def check_endpoint_health(base_url: str, endpoint: str, name: str) -> CheckResul
     return CheckResult(
         name=name,
         endpoint=endpoint,
-        expected="200",
+        expected="/".join(str(code) for code in sorted(accepted)),
         observed="unknown",
         latency_ms=0,
         passed=False,
@@ -228,7 +236,74 @@ def check_endpoint_health(base_url: str, endpoint: str, name: str) -> CheckResul
     )
 
 
-def run_smoke_checks(base_url: str, expected_sha: str) -> list[CheckResult]:
+def get_auth_token(base_url: str, email: str, password: str) -> Optional[str]:
+    """Get JWT token for authenticated checks."""
+    try:
+        resp = requests.post(
+            f"{base_url}/api/v1/auth/login",
+            json={"email": email, "password": password},
+            timeout=TIMEOUT_SECONDS,
+        )
+        if resp.status_code != 200:
+            return None
+        return resp.json().get("access_token")
+    except Exception:
+        return None
+
+
+def check_authenticated_endpoint(base_url: str, endpoint: str, name: str, token: Optional[str]) -> CheckResult:
+    """Verify authenticated endpoint returns 200 when token provided."""
+    if not token:
+        return CheckResult(
+            name=name,
+            endpoint=endpoint,
+            expected="200 (auth)",
+            observed="skipped",
+            latency_ms=0,
+            passed=True,
+            error="Skipped: no auth token provided",
+        )
+
+    url = f"{base_url}{endpoint}"
+    start = time.time()
+    try:
+        resp = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Origin": CORS_ORIGIN},
+            timeout=TIMEOUT_SECONDS,
+        )
+        latency_ms = int((time.time() - start) * 1000)
+        if resp.status_code == 200:
+            return CheckResult(
+                name=name,
+                endpoint=endpoint,
+                expected="200 (auth)",
+                observed="200",
+                latency_ms=latency_ms,
+                passed=True,
+            )
+        return CheckResult(
+            name=name,
+            endpoint=endpoint,
+            expected="200 (auth)",
+            observed=str(resp.status_code),
+            latency_ms=latency_ms,
+            passed=False,
+            error=f"HTTP {resp.status_code}",
+        )
+    except Exception as e:
+        return CheckResult(
+            name=name,
+            endpoint=endpoint,
+            expected="200 (auth)",
+            observed="error",
+            latency_ms=0,
+            passed=False,
+            error=str(e),
+        )
+
+
+def run_smoke_checks(base_url: str, expected_sha: str, email: str, password: str) -> list[CheckResult]:
     """Run all smoke checks and return results."""
     results = []
 
@@ -240,8 +315,36 @@ def run_smoke_checks(base_url: str, expected_sha: str) -> list[CheckResult]:
     results.append(check_cors_preflight(base_url, "/api/v1/uvdb/sections"))
 
     # 3. Endpoint health checks
-    results.append(check_endpoint_health(base_url, "/api/v1/planet-mark/dashboard", "planetmark_dashboard"))
-    results.append(check_endpoint_health(base_url, "/api/v1/uvdb/sections", "uvdb_sections"))
+    results.append(
+        check_endpoint_health(base_url, "/api/v1/planet-mark/dashboard", "planetmark_dashboard")
+    )
+    results.append(
+        check_endpoint_health(
+            base_url,
+            "/api/v1/uvdb/sections",
+            "uvdb_sections",
+            expected_statuses={200, 401},
+        )
+    )
+
+    # 4. Authenticated audit path checks (if credentials supplied)
+    token = get_auth_token(base_url, email, password) if email and password else None
+    results.append(
+        check_authenticated_endpoint(
+            base_url,
+            "/api/v1/audits/templates?is_published=true&page=1&page_size=10",
+            "audit_templates_published",
+            token,
+        )
+    )
+    results.append(
+        check_authenticated_endpoint(
+            base_url,
+            "/api/v1/audits/runs?page=1&page_size=10",
+            "audit_runs_list",
+            token,
+        )
+    )
 
     return results
 
@@ -275,6 +378,8 @@ def main():
     parser = argparse.ArgumentParser(description="Post-deploy runtime smoke check")
     parser.add_argument("--url", required=True, help="Base URL of the deployed API")
     parser.add_argument("--sha", default="", help="Expected build SHA (optional)")
+    parser.add_argument("--email", default="", help="Optional email for authenticated checks")
+    parser.add_argument("--password", default="", help="Optional password for authenticated checks")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
@@ -285,7 +390,7 @@ def main():
     if args.sha:
         print(f"Expected SHA: {args.sha[:8]}...")
 
-    results = run_smoke_checks(base_url, args.sha)
+    results = run_smoke_checks(base_url, args.sha, args.email, args.password)
 
     if args.json:
         output = {

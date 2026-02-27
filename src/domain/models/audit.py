@@ -197,6 +197,31 @@ class AuditQuestion(Base, TimestampMixin):
     def __repr__(self) -> str:
         return f"<AuditQuestion(id={self.id}, type='{self.question_type}')>"
 
+    @property
+    def options(self) -> Optional[list]:
+        """Expose options_json for schema compatibility."""
+        return self.options_json
+
+    @property
+    def evidence_requirements(self) -> Optional[dict]:
+        """Expose evidence_requirements_json for schema compatibility."""
+        return self.evidence_requirements_json
+
+    @property
+    def conditional_logic(self) -> Optional[list]:
+        """Expose conditional_logic_json for schema compatibility."""
+        return self.conditional_logic_json
+
+    @property
+    def clause_ids(self) -> Optional[list]:
+        """Expose clause_ids_json for schema compatibility."""
+        return self.clause_ids_json
+
+    @property
+    def control_ids(self) -> Optional[list]:
+        """Expose control_ids_json for schema compatibility."""
+        return self.control_ids_json
+
 
 class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Audit run model for actual audit executions."""

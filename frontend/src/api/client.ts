@@ -499,6 +499,7 @@ export interface AuditRun {
   id: number
   reference_number: string
   template_id: number
+  template_version: number
   title?: string
   location?: string
   status: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
@@ -534,6 +535,7 @@ export interface AuditTemplate {
   description?: string
   category?: string
   audit_type: string
+  version: number
   is_active: boolean
   is_published: boolean
   created_at: string
@@ -850,8 +852,16 @@ export const risksApi = {
 
 export const auditsApi = {
   // Templates
-  listTemplates: (page = 1, size = 10) =>
-    api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?page=${page}&size=${size}`),
+  listTemplates: (page = 1, size = 10, filters?: { is_published?: boolean }) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(size),
+    })
+    if (filters?.is_published !== undefined) {
+      params.set('is_published', String(filters.is_published))
+    }
+    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${params.toString()}`)
+  },
   getTemplate: (id: number) =>
     api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
 

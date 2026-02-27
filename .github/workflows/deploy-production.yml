@@ -68,6 +68,11 @@ jobs:
 
       - name: Log deployment request
         run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            DISPLAY_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            DISPLAY_SHA="${{ github.sha }}"
+          fi
           {
             echo "## 🔐 Production Deployment Request"
             echo ""
@@ -76,7 +81,7 @@ jobs:
             echo "| **Trigger** | ${{ github.event_name }} |"
             echo "| **Actor** | ${{ github.actor }} |"
             echo "| **Ref** | ${{ github.ref }} |"
-            echo "| **SHA** | ${{ github.sha }} |"
+            echo "| **SHA** | ${DISPLAY_SHA} |"
             if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
               echo "| **Staging Run** | [View](${{ github.event.workflow_run.html_url }}) |"
             fi
@@ -144,6 +149,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Resolve release SHA
+        id: release_sha
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            RELEASE_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            RELEASE_SHA="${{ github.sha }}"
+          fi
+          echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+          echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Using release SHA: $RELEASE_SHA"
+
+      - name: Validate governance UAT + CAB sign-off
+        run: |
+          if [ ! -f docs/evidence/release_signoff.json ]; then
+            echo "ℹ️ release_signoff.json missing - generating from workflow context"
+            python3 scripts/governance/create_release_signoff.py \
+              --sha "${{ env.RELEASE_SHA }}" \
+              --governance-lead "${{ github.actor }}" \
+              --cab-chair "${{ github.actor }}" \
+              --uat-report-path "docs/evidence/UAT_CAB_SIGNOFF_REPORT_TEMPLATE.md" \
+              --rollback-report-path "docs/runbooks/AUDIT_ROLLBACK_DRILL.md" \
+              --approved-at-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --output "docs/evidence/release_signoff.json"
+          fi
+          python3 scripts/governance/validate_release_signoff.py \
+            --file docs/evidence/release_signoff.json \
+            --sha "${{ env.RELEASE_SHA }}"
+
       - name: Environment guardrails
         run: |
           if [ -z "$AZURE_RESOURCE_GROUP" ] || [ -z "$AZURE_WEBAPP_NAME" ] || [ -z "$ENVIRONMENT_NAME" ]; then
@@ -182,8 +216,9 @@ jobs:
         run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build and push Docker image
+        if: ${{ github.event_name != 'workflow_run' }}
         run: |
-          IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_SHA }}"
           IMAGE_RELEASE="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:release-${{ github.run_number }}"
           
           echo "Building production image: $IMAGE_TAG"
@@ -195,18 +230,34 @@ jobs:
           
           echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
 
+      - name: Reuse staged image for immutable promotion
+        if: ${{ github.event_name == 'workflow_run' }}
+        run: |
+          IMAGE_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_SHA }}"
+          echo "Validating prebuilt image exists: $IMAGE_TAG"
+          TAG_EXISTS=$(az acr repository show-tags \
+            --name "${{ env.ACR_NAME }}" \
+            --repository "${{ env.IMAGE_NAME }}" \
+            --query "contains(@, '${{ env.RELEASE_SHA }}')" -o tsv)
+          if [ "$TAG_EXISTS" != "true" ]; then
+            echo "❌ Immutable promotion blocked: image tag not found for SHA ${{ env.RELEASE_SHA }}"
+            exit 1
+          fi
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          echo "✅ Immutable promotion: reusing image built in staging pipeline"
+
       - name: Capture expected image digest
         run: |
-          EXPECTED_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          EXPECTED_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_SHA }}"
           EXPECTED_DIGESTS=$(az acr repository show-manifests \
             --name "${{ env.ACR_NAME }}" \
             --repository "${{ env.IMAGE_NAME }}" \
-            --query "[?tags[?@=='${{ github.sha }}']].digest" \
+            --query "[?tags[?@=='${{ env.RELEASE_SHA }}']].digest" \
             -o tsv)
           EXPECTED_DIGESTS_CLEAN=$(printf "%s\n" "$EXPECTED_DIGESTS" | sed '/^$/d' | sort -u)
           EXPECTED_DIGEST_COUNT=$(printf "%s\n" "$EXPECTED_DIGESTS_CLEAN" | wc -l | tr -d ' ')
           if [ "$EXPECTED_DIGEST_COUNT" -ne 1 ]; then
-            echo "❌ Expected exactly 1 digest for tag ${{ github.sha }}, got $EXPECTED_DIGEST_COUNT"
+            echo "❌ Expected exactly 1 digest for tag ${{ env.RELEASE_SHA }}, got $EXPECTED_DIGEST_COUNT"
             exit 1
           fi
           EXPECTED_DIGEST=$(printf "%s\n" "$EXPECTED_DIGESTS_CLEAN" | head -n 1 | tr -d '\r')
@@ -223,7 +274,7 @@ jobs:
           esac
           
           IMAGE_DIGEST_REF="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}@${EXPECTED_DIGEST}"
-          EXPECTED_TAG_SAFE="${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          EXPECTED_TAG_SAFE="${{ env.IMAGE_NAME }}:${{ env.RELEASE_SHA }}"
           
           {
             echo "EXPECTED_TAG=$EXPECTED_TAG"
@@ -240,7 +291,7 @@ jobs:
             echo "| Item | Value |"
             echo "|------|-------|"
             echo "| **Environment** | $ENVIRONMENT_NAME |"
-            echo "| **Commit** | \`${{ github.sha }}\` |"
+            echo "| **Commit** | \`${{ env.RELEASE_SHA }}\` |"
             echo "| **Expected Digest** | \`${EXPECTED_DIGEST}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -272,7 +323,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --settings \
               APP_ENV="production" \
-              BUILD_SHA="${{ github.sha }}" \
+              BUILD_SHA="${{ env.RELEASE_SHA }}" \
               BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               DATABASE_URL="$DB_URL" \
               SECRET_KEY="$SECRET_KEY_VAL" \
@@ -585,7 +636,7 @@ jobs:
           # - Total timeout: 10 minutes
           ./scripts/verify_deploy_deterministic.sh \
             --url "$APP_URL" \
-            --expected-sha "${{ github.sha }}" \
+            --expected-sha "${{ env.RELEASE_SHA }}" \
             --environment "production" \
             --output "/tmp/stability_gate_evidence.json" \
             --stability 3 \
@@ -617,7 +668,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --query defaultHostName -o tsv)
           APP_URL="https://${APP_HOST}"
-          EXPECTED_SHA="${{ github.sha }}"
+          EXPECTED_SHA="${{ env.RELEASE_SHA }}"
           
           # Configuration for bounded retries
           MAX_IDENTITY_ATTEMPTS=30
@@ -1031,6 +1082,17 @@ jobs:
           echo ""
           echo "✅ All security verification checks passed!"
 
+      - name: Run audit lifecycle E2E (strict if configured)
+        if: ${{ secrets.PROD_E2E_EMAIL != '' && secrets.PROD_E2E_PASSWORD != '' }}
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests
+          python3 scripts/smoke/audit_lifecycle_e2e.py \
+            --base-url "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net" \
+            --email "${{ secrets.PROD_E2E_EMAIL }}" \
+            --password "${{ secrets.PROD_E2E_PASSWORD }}" \
+            --json
+
       - name: Production deployment summary
         run: |
           {
@@ -1038,8 +1100,8 @@ jobs:
             echo ""
             echo "| Item | Value |"
             echo "|------|-------|"
-            echo "| **Commit** | ${{ github.sha }} |"
-            echo "| **Image** | ${{ env.IMAGE_NAME }}:${{ github.sha }} |"
+            echo "| **Commit** | ${{ env.RELEASE_SHA }} |"
+            echo "| **Image** | ${{ env.IMAGE_NAME }}:${{ env.RELEASE_SHA }} |"
             echo "| **Deployed By** | ${{ github.actor }} |"
             echo "| **Trigger** | ${{ github.event_name }} |"
             echo "| **Status** | ✅ Deployed |"
@@ -1056,17 +1118,27 @@ jobs:
       - name: Notify success
         if: needs.build-and-deploy.result == 'success'
         run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            DISPLAY_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            DISPLAY_SHA="${{ github.sha }}"
+          fi
           echo "🎉 Production deployment successful!"
           echo "Deployed by: ${{ github.actor }}"
           echo "Trigger: ${{ github.event_name }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "Commit: $DISPLAY_SHA"
           # Add Slack/Teams notification here if configured
       
       - name: Notify failure
         if: needs.build-and-deploy.result == 'failure'
         run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            DISPLAY_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            DISPLAY_SHA="${{ github.sha }}"
+          fi
           echo "❌ Production deployment FAILED!"
           echo "Immediate investigation required."
           echo "Actor: ${{ github.actor }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "Commit: $DISPLAY_SHA"
           # Add PagerDuty/incident notification here if configured

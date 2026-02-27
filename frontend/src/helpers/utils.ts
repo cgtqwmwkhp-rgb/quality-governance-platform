@@ -76,3 +76,13 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
     timeout = setTimeout(() => func(...args), wait)
   }
 }
+
+/**
+ * Decode HTML entities from API/content strings (e.g. "&amp;" -> "&").
+ */
+export function decodeHtmlEntities(value: string): string {
+  if (!value || !value.includes('&')) return value
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(value, 'text/html')
+  return doc.documentElement.textContent ?? value
+}

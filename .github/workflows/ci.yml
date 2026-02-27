@@ -824,10 +824,22 @@ jobs:
           retention-days: 30
         if: always()
 
+  audit-acceptance-artifacts:
+    name: Audit Acceptance Artifacts Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate acceptance pack artifacts
+        run: |
+          python3 scripts/governance/validate_audit_acceptance_pack.py --repo-root .
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [code-quality, workflow-lint, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, api-path-drift, quality-trend, openapi-contract-check]
+    needs: [code-quality, workflow-lint, config-failfast-proof, unit-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts]
     
     steps:
       - name: Checkout code
