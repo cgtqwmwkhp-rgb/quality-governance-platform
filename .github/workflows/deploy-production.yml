@@ -555,7 +555,8 @@ jobs:
           APP_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           
           # Configuration: bounded exponential backoff
-          MAX_ATTEMPTS=30
+          # ACA revisions can take longer than 5 minutes under cold starts.
+          MAX_ATTEMPTS=90
           INITIAL_INTERVAL=2
           MAX_INTERVAL=20
           TOTAL_TIMEOUT=600  # 10 minutes max

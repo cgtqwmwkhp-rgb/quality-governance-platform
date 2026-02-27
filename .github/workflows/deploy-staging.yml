@@ -273,7 +273,8 @@ jobs:
         run: |
           echo "⏳ Waiting for new revision to be ready..."
           
-          MAX_ATTEMPTS=30
+          # ACA revisions can take longer than 5 minutes under cold starts.
+          MAX_ATTEMPTS=90
           INTERVAL=10
           attempt=1
           
@@ -305,6 +306,12 @@ jobs:
           
           if [ $attempt -gt $MAX_ATTEMPTS ]; then
             echo "❌ Timeout waiting for revision to be ready"
+            echo "📋 Revision details:"
+            az containerapp revision show \
+              --name "${{ env.ACA_NAME }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --revision "${{ env.ACA_REVISION }}" \
+              --output jsonc || true
             exit 1
           fi
 
