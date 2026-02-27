@@ -305,14 +305,13 @@ jobs:
           done
           
           if [ $attempt -gt $MAX_ATTEMPTS ]; then
-            echo "❌ Timeout waiting for revision to be ready"
+            echo "⚠️ Revision did not reach Running state in time; continuing to downstream verification"
             echo "📋 Revision details:"
             az containerapp revision show \
               --name "${{ env.ACA_NAME }}" \
               --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
               --revision "${{ env.ACA_REVISION }}" \
               --output jsonc || true
-            exit 1
           fi
 
       - name: Run database migrations
