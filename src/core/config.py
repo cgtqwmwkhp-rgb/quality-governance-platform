@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     # Azure AD Authentication (for portal users)
     azure_client_id: str = ""
     azure_tenant_id: str = ""
+    azure_ad_jwks_cache_ttl_seconds: int = 3600
 
     # Azure Blob Storage
     azure_storage_connection_string: str = ""
@@ -237,6 +238,16 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return self.app_env == "production"
+
+    @property
+    def azure_ad_client_id(self) -> str:
+        """Backward-compatible alias used by Azure AD validator."""
+        return self.azure_client_id
+
+    @property
+    def azure_ad_tenant_id(self) -> str:
+        """Backward-compatible alias used by Azure AD validator."""
+        return self.azure_tenant_id
 
 
 @lru_cache

@@ -627,6 +627,9 @@ jobs:
     if: needs.build-and-deploy.result == 'success'
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Run smoke tests
         run: |
           # Use ACA URL (ADR-0004)
@@ -699,6 +702,17 @@ jobs:
           fi
           
           echo "🎉 All smoke tests passed!"
+
+      - name: Run audit lifecycle E2E (strict if configured)
+        if: ${{ secrets.STAGING_E2E_EMAIL != '' && secrets.STAGING_E2E_PASSWORD != '' }}
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests
+          python3 scripts/smoke/audit_lifecycle_e2e.py \
+            --base-url "https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net" \
+            --email "${{ secrets.STAGING_E2E_EMAIL }}" \
+            --password "${{ secrets.STAGING_E2E_PASSWORD }}" \
+            --json
 
       - name: Smoke test summary
         if: always()

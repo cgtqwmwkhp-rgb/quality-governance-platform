@@ -571,27 +571,22 @@ export interface RiskCreate {
 
 // ============ Audit Types ============
 export interface AuditRun {
-  id: number;
-  reference_number: string;
-  template_id: number;
-  title?: string;
-  location?: string;
-  status:
-    | "draft"
-    | "scheduled"
-    | "in_progress"
-    | "pending_review"
-    | "completed"
-    | "cancelled";
-  scheduled_date?: string;
-  due_date?: string;
-  started_at?: string;
-  completed_at?: string;
-  score?: number;
-  max_score?: number;
-  score_percentage?: number;
-  passed?: boolean;
-  created_at: string;
+  id: number
+  reference_number: string
+  template_id: number
+  template_version: number
+  title?: string
+  location?: string
+  status: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
+  scheduled_date?: string
+  due_date?: string
+  started_at?: string
+  completed_at?: string
+  score?: number
+  max_score?: number
+  score_percentage?: number
+  passed?: boolean
+  created_at: string
 }
 
 export interface AuditFinding {
@@ -614,58 +609,16 @@ export interface AuditFinding {
 }
 
 export interface AuditTemplate {
-  id: number;
-  reference_number: string;
-  name: string;
-  description?: string;
-  category?: string;
-  audit_type: string;
-  frequency?: string;
-  version: number;
-  scoring_method: string;
-  passing_score?: number;
-  allow_offline: boolean;
-  require_gps: boolean;
-  require_signature: boolean;
-  require_approval: boolean;
-  auto_create_findings: boolean;
-  is_active: boolean;
-  is_published: boolean;
-  archived_at?: string | null;
-  archived_by_id?: number | null;
-  created_by_id?: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AuditTemplateCreate {
-  name: string;
-  description?: string;
-  category?: string;
-  audit_type?: string;
-  frequency?: string;
-  scoring_method?: string;
-  passing_score?: number;
-  allow_offline?: boolean;
-  require_gps?: boolean;
-  require_signature?: boolean;
-  require_approval?: boolean;
-  auto_create_findings?: boolean;
-}
-
-export interface AuditTemplateUpdate {
-  name?: string;
-  description?: string;
-  category?: string;
-  audit_type?: string;
-  frequency?: string;
-  scoring_method?: string;
-  passing_score?: number;
-  allow_offline?: boolean;
-  require_gps?: boolean;
-  require_signature?: boolean;
-  require_approval?: boolean;
-  auto_create_findings?: boolean;
+  id: number
+  reference_number: string
+  name: string
+  description?: string
+  category?: string
+  audit_type: string
+  version: number
+  is_active: boolean
+  is_published: boolean
+  created_at: string
 }
 
 export interface AuditRunCreate {
@@ -1094,23 +1047,16 @@ export const risksApi = {
 };
 
 export const auditsApi = {
-  // Templates - Full CRUD
-  listTemplates: (
-    page = 1,
-    size = 20,
-    params?: { search?: string; category?: string; is_published?: boolean },
-  ) => {
-    const searchParams = new URLSearchParams({
+  // Templates
+  listTemplates: (page = 1, size = 10, filters?: { is_published?: boolean }) => {
+    const params = new URLSearchParams({
       page: String(page),
-      page_size: String(size),
-    });
-    if (params?.search) searchParams.set("search", params.search);
-    if (params?.category) searchParams.set("category", params.category);
-    if (params?.is_published !== undefined)
-      searchParams.set("is_published", String(params.is_published));
-    return api.get<PaginatedResponse<AuditTemplate>>(
-      `/api/v1/audits/templates?${searchParams}`,
-    );
+      size: String(size),
+    })
+    if (filters?.is_published !== undefined) {
+      params.set('is_published', String(filters.is_published))
+    }
+    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${params.toString()}`)
   },
   getTemplate: (id: number) =>
     api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),

@@ -1,0 +1,11 @@
+{
+  "release_sha": "REPLACE_WITH_RELEASE_SHA",
+  "governance_lead": "REPLACE_WITH_NAME",
+  "governance_lead_approved": false,
+  "cab_chair": "REPLACE_WITH_NAME",
+  "cab_approved": false,
+  "uat_report_path": "docs/evidence/REPLACE_WITH_UAT_REPORT.md",
+  "rollback_drill_path": "docs/evidence/REPLACE_WITH_ROLLBACK_DRILL.md",
+  "notes": "Optional notes",
+  "approved_at_utc": "2026-02-27T00:00:00Z"
+}
