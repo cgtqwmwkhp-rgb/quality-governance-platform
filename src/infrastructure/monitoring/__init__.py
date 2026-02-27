@@ -1,6 +1,7 @@
 """Monitoring and observability infrastructure."""
 
 from src.infrastructure.monitoring.azure_monitor import (
+    StructuredLogger,
     get_tracer,
     logger,
     setup_telemetry,
@@ -11,6 +12,7 @@ from src.infrastructure.monitoring.azure_monitor import (
 )
 
 __all__ = [
+    "StructuredLogger",
     "get_tracer",
     "logger",
     "setup_telemetry",

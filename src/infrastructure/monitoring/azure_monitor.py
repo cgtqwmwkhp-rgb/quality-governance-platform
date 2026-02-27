@@ -1,5 +1,6 @@
 """OpenTelemetry instrumentation and Azure Monitor integration."""
 
+import json
 import logging
 from typing import Any
 
@@ -14,6 +15,34 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 
 logger = logging.getLogger(__name__)
+
+
+class StructuredLogger:
+    """Lightweight structured logger that emits JSON-formatted log lines.
+
+    Compatible with Azure Monitor / Application Insights log ingestion and
+    local console debugging.  Each call produces a single JSON object so
+    downstream log aggregators can parse fields without regex.
+    """
+
+    def __init__(self, name: str) -> None:
+        self._logger = logging.getLogger(name)
+
+    def _emit(self, level: int, event: str, **kwargs: Any) -> None:
+        payload = {"event": event, **kwargs}
+        self._logger.log(level, json.dumps(payload, default=str))
+
+    def info(self, event: str, **kwargs: Any) -> None:
+        self._emit(logging.INFO, event, **kwargs)
+
+    def warning(self, event: str, **kwargs: Any) -> None:
+        self._emit(logging.WARNING, event, **kwargs)
+
+    def error(self, event: str, **kwargs: Any) -> None:
+        self._emit(logging.ERROR, event, **kwargs)
+
+    def debug(self, event: str, **kwargs: Any) -> None:
+        self._emit(logging.DEBUG, event, **kwargs)
 
 _tracer: trace.Tracer | None = None
 _meter: metrics.Meter | None = None
