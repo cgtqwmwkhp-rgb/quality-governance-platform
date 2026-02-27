@@ -1083,14 +1083,20 @@ jobs:
           echo "✅ All security verification checks passed!"
 
       - name: Run audit lifecycle E2E (strict if configured)
-        if: ${{ secrets.PROD_E2E_EMAIL != '' && secrets.PROD_E2E_PASSWORD != '' }}
+        env:
+          PROD_E2E_EMAIL: ${{ secrets.PROD_E2E_EMAIL }}
+          PROD_E2E_PASSWORD: ${{ secrets.PROD_E2E_PASSWORD }}
         run: |
+          if [ -z "$PROD_E2E_EMAIL" ] || [ -z "$PROD_E2E_PASSWORD" ]; then
+            echo "ℹ️ PROD_E2E_EMAIL/PROD_E2E_PASSWORD not configured. Skipping audit lifecycle E2E."
+            exit 0
+          fi
           python3 -m pip install --upgrade pip
           python3 -m pip install requests
           python3 scripts/smoke/audit_lifecycle_e2e.py \
             --base-url "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net" \
-            --email "${{ secrets.PROD_E2E_EMAIL }}" \
-            --password "${{ secrets.PROD_E2E_PASSWORD }}" \
+            --email "$PROD_E2E_EMAIL" \
+            --password "$PROD_E2E_PASSWORD" \
             --json
 
       - name: Production deployment summary

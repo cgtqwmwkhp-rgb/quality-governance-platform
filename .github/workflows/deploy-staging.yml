@@ -630,14 +630,20 @@ jobs:
           echo "🎉 All smoke tests passed!"
 
       - name: Run audit lifecycle E2E (strict if configured)
-        if: ${{ secrets.STAGING_E2E_EMAIL != '' && secrets.STAGING_E2E_PASSWORD != '' }}
+        env:
+          STAGING_E2E_EMAIL: ${{ secrets.STAGING_E2E_EMAIL }}
+          STAGING_E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
         run: |
+          if [ -z "$STAGING_E2E_EMAIL" ] || [ -z "$STAGING_E2E_PASSWORD" ]; then
+            echo "ℹ️ STAGING_E2E_EMAIL/STAGING_E2E_PASSWORD not configured. Skipping audit lifecycle E2E."
+            exit 0
+          fi
           python3 -m pip install --upgrade pip
           python3 -m pip install requests
           python3 scripts/smoke/audit_lifecycle_e2e.py \
             --base-url "https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net" \
-            --email "${{ secrets.STAGING_E2E_EMAIL }}" \
-            --password "${{ secrets.STAGING_E2E_PASSWORD }}" \
+            --email "$STAGING_E2E_EMAIL" \
+            --password "$STAGING_E2E_PASSWORD" \
             --json
 
       - name: Smoke test summary
