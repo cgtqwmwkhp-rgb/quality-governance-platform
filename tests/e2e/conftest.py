@@ -1,8 +1,16 @@
-"""E2E Test Configuration."""
+"""E2E Test Configuration.
+
+Uses the per-test transaction rollback pattern for complete isolation.
+"""
 
 import asyncio
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.infrastructure.database import engine, get_db
+from src.main import app
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -31,3 +39,30 @@ def _seed_default_tenant():
         asyncio.run(_seed())
     except Exception:
         pass
+
+
+@pytest.fixture(autouse=True)
+async def _db_rollback():
+    """Wrap every E2E test in a rolled-back transaction for isolation."""
+    connection = await engine.connect()
+    transaction = await connection.begin()
+
+    session = AsyncSession(bind=connection, expire_on_commit=False)
+    await connection.begin_nested()
+
+    @event.listens_for(session.sync_session, "after_transaction_end")
+    def _restart_savepoint(sync_session, trans):
+        if trans.nested and not trans._parent.nested:
+            sync_session.begin_nested()
+
+    async def _override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    yield session
+
+    app.dependency_overrides.pop(get_db, None)
+    await session.close()
+    await transaction.rollback()
+    await connection.close()
