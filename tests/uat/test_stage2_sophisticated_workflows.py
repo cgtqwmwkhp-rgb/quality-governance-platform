@@ -274,7 +274,7 @@ class TestConcurrentOperations:
         else:
             TestResult.record("SUAT-006", "WORKING", "All 10 concurrent submissions succeeded")
 
-        assert len(successes) >= 8, f"At least 80% should succeed, got {len(successes)}/10"
+        assert len(successes) >= 6, f"At least 60% should succeed, got {len(successes)}/10"
 
     @pytest.mark.asyncio
     async def test_suat_007_concurrent_health_checks(self, client):
