@@ -281,11 +281,12 @@ jobs:
           CI: true
         run: |
           echo "[TEST] Running Playwright E2E tests against staging..."
+          mkdir -p playwright-report
           
           # Validation mode handling
           SIMULATE_NO_TESTS="${{ github.event.inputs.simulate_no_tests }}"
           
-          # Run tests and capture exit code explicitly
+          # Run tests with config-defined reporters (json/junit/html output)
           set +e
           if [ "$SIMULATE_NO_TESTS" = "true" ]; then
             echo "[WARN] VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
@@ -297,6 +298,8 @@ jobs:
           set -e
           echo "playwright_exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           echo "Playwright exit code: $EXIT_CODE"
+          echo "[DEBUG] Contents of playwright-report/:"
+          ls -la playwright-report/ 2>/dev/null || echo "  (directory not found)"
       
       # ========================================================================
       # VALIDATION MODE: Inject deterministic conditions for classification testing
