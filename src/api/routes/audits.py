@@ -632,6 +632,10 @@ async def create_run(
                 AuditTemplate.id == run_data.template_id,
                 AuditTemplate.is_published == True,
                 AuditTemplate.is_active == True,
+                or_(
+                    AuditTemplate.tenant_id == current_user.tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
     )
@@ -654,6 +658,7 @@ async def create_run(
         template_version=template.version,
         status=AuditStatus.SCHEDULED,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     # Generate reference number
@@ -722,7 +727,14 @@ async def complete_run(
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
     started = time.perf_counter()
-    result = await db.execute(select(AuditRun).options(selectinload(AuditRun.responses)).where(AuditRun.id == run_id))
+    result = await db.execute(
+        select(AuditRun)
+        .options(selectinload(AuditRun.responses))
+        .where(
+            AuditRun.id == run_id,
+            or_(AuditRun.tenant_id == current_user.tenant_id, AuditRun.tenant_id.is_(None)),
+        )
+    )
     run = result.scalar_one_or_none()
 
     if not run:
@@ -749,9 +761,9 @@ async def complete_run(
             detail="Audit run must be in progress to complete",
         )
 
-    # Calculate scores
-    total_score = sum(r.score or 0 for r in run.responses)
-    max_score = sum(r.max_score or 0 for r in run.responses)
+    scored_responses = [r for r in run.responses if not getattr(r, "is_na", False)]
+    total_score = sum(r.score or 0 for r in scored_responses)
+    max_score = sum(r.max_score or 0 for r in scored_responses)
 
     run.score = total_score
     run.max_score = max_score
@@ -788,7 +800,12 @@ async def create_response(
     """Submit a response to an audit question."""
     started = time.perf_counter()
     # Verify run exists and is in progress
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    result = await db.execute(
+        select(AuditRun).where(
+            AuditRun.id == run_id,
+            or_(AuditRun.tenant_id == current_user.tenant_id, AuditRun.tenant_id.is_(None)),
+        )
+    )
     run = result.scalar_one_or_none()
 
     if not run:
@@ -913,8 +930,13 @@ async def create_finding(
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
     started = time.perf_counter()
-    # Verify run exists
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    # Verify run exists and belongs to user's tenant
+    result = await db.execute(
+        select(AuditRun).where(
+            AuditRun.id == run_id,
+            or_(AuditRun.tenant_id == current_user.tenant_id, AuditRun.tenant_id.is_(None)),
+        )
+    )
     run = result.scalar_one_or_none()
 
     if not run:
@@ -940,6 +962,7 @@ async def create_finding(
         run_id=run_id,
         status=FindingStatus.OPEN,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         **finding_dict,
     )
 
