@@ -30,7 +30,9 @@ class TestActionsAPIAuth:
 
         assert response.status_code == 401
         data = response.json()
-        assert "error_code" in data or "detail" in data or "message" in data
+        assert "error" in data
+        error = data.get("error", {})
+        assert "code" in error or "message" in error
         # Verify we get a proper error response, not a crash
         assert response.headers.get("content-type") == "application/json"
 
@@ -52,7 +54,9 @@ class TestActionsAPIAuth:
 
         assert response.status_code == 401
         data = response.json()
-        assert "error_code" in data or "detail" in data or "message" in data
+        assert "error" in data
+        error = data.get("error", {})
+        assert "code" in error or "message" in error
 
     @pytest.mark.asyncio
     async def test_create_action_with_malformed_token_returns_401(self, client: AsyncClient):
@@ -79,7 +83,9 @@ class TestActionsAPIAuth:
 
         assert response.status_code == 401
         data = response.json()
-        assert "error_code" in data or "detail" in data or "message" in data
+        assert "error" in data
+        error = data.get("error", {})
+        assert "code" in error or "message" in error
 
 
 class TestActionsAPIValidation:
@@ -261,7 +267,7 @@ class TestActionsAPIAuthenticatedNegative:
             f"Expected 404 for non-existent source_id, got {response.status_code}. "
             "This should NOT be 500 - source entity validation must happen before commit."
         )
-        assert "not found" in response.json().get("detail", "").lower()
+        assert "not found" in response.json().get("error", {}).get("message", "").lower()
 
     @pytest.mark.asyncio
     async def test_create_action_invalid_investigation_id_returns_404(
@@ -301,7 +307,7 @@ class TestActionsAPIAuthenticatedNegative:
         response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
         assert response.status_code == 400, f"Expected 400 for invalid source_type, got {response.status_code}"
-        assert "invalid source_type" in response.json().get("detail", "").lower()
+        assert "invalid source_type" in response.json().get("error", {}).get("message", "").lower()
 
     @pytest.mark.asyncio
     async def test_create_action_bad_due_date_parsed_gracefully(

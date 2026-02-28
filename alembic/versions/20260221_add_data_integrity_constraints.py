@@ -47,13 +47,13 @@ def upgrade() -> None:
     # --- CHECK constraints on status fields ---
     for table, cname, condition in [
         ("incidents", "ck_incidents_status",
-         "status IN (''open'', ''investigating'', ''resolved'', ''closed'')"),
+         "status IN (''reported'', ''under_investigation'', ''pending_actions'', ''actions_in_progress'', ''pending_review'', ''closed'')"),
         ("risks", "ck_risks_status",
          "status IN (''open'', ''mitigating'', ''accepted'', ''closed'')"),
         ("audits", "ck_audits_status",
          "status IN (''planned'', ''in_progress'', ''completed'', ''cancelled'')"),
         ("complaints", "ck_complaints_status",
-         "status IN (''open'', ''investigating'', ''resolved'', ''closed'')"),
+         "status IN (''received'', ''acknowledged'', ''under_investigation'', ''pending_response'', ''awaiting_customer'', ''resolved'', ''closed'', ''escalated'')"),
     ]:
         conn.execute(sa.text(
             f"DO $$ BEGIN "

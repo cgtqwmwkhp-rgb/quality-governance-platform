@@ -14,10 +14,6 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.links import build_collection_links, build_resource_links
-from src.api.utils.pagination import PaginationParams
-from src.domain.models.user import User
-from src.domain.services.audit_service import AuditService
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,
@@ -45,6 +41,8 @@ from src.api.schemas.audit import (
     AuditTemplateUpdate,
     PurgeExpiredTemplatesResponse,
 )
+from src.api.schemas.links import build_collection_links, build_resource_links
+from src.api.utils.pagination import PaginationParams
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -55,8 +53,10 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
-from src.infrastructure.monitoring.azure_monitor import StructuredLogger
+from src.domain.models.user import User
+from src.domain.services.audit_service import AuditService
 from src.domain.services.reference_number import ReferenceNumberService
+from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 
 router = APIRouter()
 observability_logger = StructuredLogger("audit.observability")
@@ -248,7 +248,8 @@ async def purge_expired_templates(
     """
     service = AuditService(db)
     purged_count, purged_names = await service.purge_expired_templates(
-        current_user.tenant_id, current_user.id,
+        current_user.tenant_id,
+        current_user.id,
     )
     return {
         "purged_count": purged_count,
@@ -477,9 +478,7 @@ async def create_question(
             question_dict[field] = html.unescape(question_dict[field])
 
     if question_dict.get("options"):
-        options_list = [
-            opt.model_dump() if hasattr(opt, "model_dump") else opt for opt in question_dict["options"]
-        ]
+        options_list = [opt.model_dump() if hasattr(opt, "model_dump") else opt for opt in question_dict["options"]]
         question_dict["options_json"] = _decode_option_list(options_list)
     del question_dict["options"]
 
@@ -607,9 +606,7 @@ async def list_runs(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links(
-            "audits/runs", result.page, result.page_size, result.pages
-        ),
+        "links": build_collection_links("audits/runs", result.page, result.page_size, result.pages),
     }
 
 
@@ -896,9 +893,7 @@ async def list_findings(
         "page": result.page,
         "page_size": result.page_size,
         "pages": result.pages,
-        "links": build_collection_links(
-            "audits/findings", result.page, result.page_size, result.pages
-        ),
+        "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
     }
 
 

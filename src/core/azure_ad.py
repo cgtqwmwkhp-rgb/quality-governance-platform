@@ -84,10 +84,7 @@ class AzureADTokenValidator:
         now = time.time()
 
         # Check if we need to refresh the client
-        if (
-            self._jwks_client is None
-            or (now - self._jwks_client_created_at) > self.cache_ttl_seconds
-        ):
+        if self._jwks_client is None or (now - self._jwks_client_created_at) > self.cache_ttl_seconds:
             self._jwks_client = PyJWKClient(self._jwks_uri)
             self._jwks_client_created_at = now
             logger.debug("Refreshed JWKS client cache")
@@ -167,9 +164,7 @@ def get_azure_ad_validator() -> AzureADTokenValidator:
     """Get the singleton Azure AD validator instance."""
     global _azure_ad_validator
     if _azure_ad_validator is None:
-        _azure_ad_validator = AzureADTokenValidator(
-            cache_ttl_seconds=settings.azure_ad_jwks_cache_ttl_seconds
-        )
+        _azure_ad_validator = AzureADTokenValidator(cache_ttl_seconds=settings.azure_ad_jwks_cache_ttl_seconds)
     return _azure_ad_validator
 
 

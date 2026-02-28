@@ -75,11 +75,6 @@ export default function Audits() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showVersionSelector, setShowVersionSelector] = useState(false)
 
-  const audits = runsData?.items ?? [];
-  const findings = findingsData?.items ?? [];
-  const templates = templatesData?.items ?? [];
-  const loading = runsLoading || findingsLoading || templatesLoading;
-
   const loadData = async () => {
     try {
       const [auditsRes, findingsRes, templatesRes] = await Promise.all([

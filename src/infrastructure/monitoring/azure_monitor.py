@@ -44,6 +44,7 @@ class StructuredLogger:
     def debug(self, event: str, **kwargs: Any) -> None:
         self._emit(logging.DEBUG, event, **kwargs)
 
+
 _tracer: trace.Tracer | None = None
 _meter: metrics.Meter | None = None
 

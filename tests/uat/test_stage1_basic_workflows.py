@@ -104,6 +104,7 @@ class TestEmployeePortalWorkflows:
         """UAT-007: QR code data can be generated for report tracking."""
         # Submit report
         submit_response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
+        assert submit_response.status_code == 201, f"Expected 201, got {submit_response.status_code}: {submit_response.text}"
         ref_number = submit_response.json()["reference_number"]
 
         # Get QR data
@@ -139,7 +140,10 @@ class TestEmployeePortalWorkflows:
 
         response = await client.post("/api/v1/portal/reports/", json=invalid_report)
 
-        assert response.status_code == 400
+        assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.text}"
+        # Verify error response format
+        data = response.json()
+        assert "message" in data or ("error" in data and isinstance(data["error"], dict))
 
     @pytest.mark.asyncio
     async def test_uat_010_track_nonexistent_report(self, client):
@@ -316,7 +320,8 @@ class TestComplaintManagementWorkflows:
 
         assert response.status_code == 401
         data = response.json()
-        assert "detail" in data or "error" in data or "message" in data
+        # Check for canonical error format: message at top level or nested in error
+        assert "message" in data or ("error" in data and isinstance(data["error"], dict))
 
     @pytest.mark.asyncio
     async def test_uat_030_complaint_content_type(self, client):
