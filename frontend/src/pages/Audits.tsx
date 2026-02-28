@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText } from 'lucide-react'
+import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText, Play } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 };
 
 export default function Audits() {
+  const navigate = useNavigate()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
@@ -76,7 +78,7 @@ export default function Audits() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showVersionSelector, setShowVersionSelector] = useState(false)
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+  const { toasts, dismiss: dismissToast } = useToast()
 
   const loadData = async () => {
     try {
@@ -128,7 +130,7 @@ export default function Audits() {
   }, [templates])
 
   const latestPublishedTemplates = useMemo(
-    () => templateFamilies.map((family) => family.versions[0]).filter(Boolean),
+    () => templateFamilies.map((family) => family.versions[0]).filter((t): t is AuditTemplate => t != null),
     [templateFamilies]
   )
 
@@ -145,7 +147,7 @@ export default function Audits() {
     if (!latestPublishedTemplates.length) {
       return INITIAL_FORM_STATE
     }
-    const preferred = latestPublishedTemplates[0]
+    const preferred = latestPublishedTemplates[0]!
     return {
       ...INITIAL_FORM_STATE,
       template_id: preferred.id,

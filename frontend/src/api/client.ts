@@ -619,6 +619,23 @@ export interface AuditTemplate {
   is_active: boolean
   is_published: boolean
   created_at: string
+  updated_at?: string
+  archived_at?: string | null
+  scoring_method?: string
+}
+
+export interface AuditTemplateCreate {
+  name: string
+  description?: string
+  category?: string
+  audit_type?: string
+}
+
+export interface AuditTemplateUpdate {
+  name?: string
+  description?: string
+  category?: string
+  audit_type?: string
 }
 
 export interface AuditRunCreate {

@@ -55,12 +55,8 @@ async def _seed_default_data():
         from src.infrastructure.database import engine
 
         async with engine.begin() as conn:
-            await conn.execute(
-                text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))")
-            )
-            await conn.execute(
-                text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))")
-            )
+            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
+            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
     except Exception:
         pass
 
@@ -69,19 +65,50 @@ async def _seed_default_data():
 # Auth override – every E2E test gets a superuser mock
 # ---------------------------------------------------------------------------
 
-_ADMIN_PERMS = ",".join([
-    "incident:create", "incident:read", "incident:update", "incident:delete",
-    "complaint:create", "complaint:read", "complaint:update", "complaint:delete",
-    "rta:create", "rta:read", "rta:update", "rta:delete",
-    "policy:create", "policy:read", "policy:update", "policy:delete",
-    "action:create", "action:read", "action:update", "action:delete",
-    "investigation:create", "investigation:read", "investigation:update",
-    "audit:create", "audit:read", "audit:update", "audit:delete",
-    "standard:create", "standard:read", "standard:update",
-    "risk:create", "risk:read", "risk:update",
-    "near_miss:create", "near_miss:read", "near_miss:update",
-    "audit_template:create", "audit_template:read", "audit_template:update", "audit_template:delete",
-])
+_ADMIN_PERMS = ",".join(
+    [
+        "incident:create",
+        "incident:read",
+        "incident:update",
+        "incident:delete",
+        "complaint:create",
+        "complaint:read",
+        "complaint:update",
+        "complaint:delete",
+        "rta:create",
+        "rta:read",
+        "rta:update",
+        "rta:delete",
+        "policy:create",
+        "policy:read",
+        "policy:update",
+        "policy:delete",
+        "action:create",
+        "action:read",
+        "action:update",
+        "action:delete",
+        "investigation:create",
+        "investigation:read",
+        "investigation:update",
+        "audit:create",
+        "audit:read",
+        "audit:update",
+        "audit:delete",
+        "standard:create",
+        "standard:read",
+        "standard:update",
+        "risk:create",
+        "risk:read",
+        "risk:update",
+        "near_miss:create",
+        "near_miss:read",
+        "near_miss:update",
+        "audit_template:create",
+        "audit_template:read",
+        "audit_template:update",
+        "audit_template:delete",
+    ]
+)
 
 
 class _MockRole:
@@ -156,9 +183,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Auto-skip quarantined tests."""
-    skip_phase34 = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23"
-    )
+    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23")
     for item in items:
         if "phase34" in item.keywords:
             item.add_marker(skip_phase34)
