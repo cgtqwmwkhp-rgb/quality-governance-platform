@@ -580,7 +580,7 @@ export default function Audits() {
                             audit.status === 'pending_review' ? 'acknowledged' :
                             'submitted'
                           }>
-                            {audit.status.replaceAll('_', ' ')}
+                            {(audit.status as string).replace(/_/g, ' ')}
                           </Badge>
                         </td>
                         <td className="px-6 py-4">
