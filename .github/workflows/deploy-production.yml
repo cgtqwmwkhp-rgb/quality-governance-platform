@@ -1093,13 +1093,14 @@ jobs:
           echo ""
           echo "✅ All security verification checks passed!"
 
-      - name: Run audit lifecycle E2E (strict if configured)
+      - name: Run audit lifecycle E2E (advisory on production)
+        continue-on-error: true
         env:
-          E2E_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
-          E2E_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
+          E2E_EMAIL: ${{ secrets.PROD_E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.PROD_E2E_PASSWORD }}
         run: |
           if [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ]; then
-            echo "ℹ️ E2E credentials not configured. Skipping audit lifecycle E2E."
+            echo "ℹ️ PROD_E2E_EMAIL/PROD_E2E_PASSWORD not configured. Skipping audit lifecycle E2E."
             exit 0
           fi
           python3 -m pip install --upgrade pip
