@@ -289,7 +289,15 @@ async def update_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Update an audit template."""
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -468,8 +476,15 @@ async def create_question(
     current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Create a new question in an audit template."""
-    # Verify template exists
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -533,7 +548,17 @@ async def update_question(
     current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Update an audit question."""
-    result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
+    result = await db.execute(
+        select(AuditQuestion)
+        .join(AuditTemplate, AuditQuestion.template_id == AuditTemplate.id)
+        .where(
+            AuditQuestion.id == question_id,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+        )
+    )
     question = result.scalar_one_or_none()
 
     if not question:
