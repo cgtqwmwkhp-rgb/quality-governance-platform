@@ -71,6 +71,7 @@ async def _seed_default_data():
             await session.commit()
 
         from sqlalchemy import text
+
         from src.infrastructure.database import engine
 
         async with engine.begin() as conn:

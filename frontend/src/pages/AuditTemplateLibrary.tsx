@@ -240,7 +240,7 @@ export default function AuditTemplateLibrary() {
     return [...templates].sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       return (
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        new Date(b.updated_at ?? b.created_at).getTime() - new Date(a.updated_at ?? a.created_at).getTime()
       );
     });
   }, [templates, sortBy]);
@@ -678,7 +678,7 @@ export default function AuditTemplateLibrary() {
                       <Clock className="w-3 h-3" />
                       <span>
                         Updated{" "}
-                        {new Date(template.updated_at).toLocaleDateString()}
+                        {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
                       </span>
                     </div>
                     <Badge variant="secondary">{template.scoring_method}</Badge>
@@ -782,7 +782,7 @@ export default function AuditTemplateLibrary() {
                         v{template.version}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {new Date(template.updated_at).toLocaleDateString()}
+                        {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 relative">
                         <Button
