@@ -1,20 +1,19 @@
 """Audits & Inspections API routes.
 
-import html
-import time
-from datetime import datetime, timezone
-from typing import Any, Optional
-
 All business logic and data access is delegated to
 :class:`~src.domain.services.audit_service.AuditService`.
 """
 
-from datetime import timedelta
+import html
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.utils.pagination import PaginationParams
 from src.domain.models.user import User
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
