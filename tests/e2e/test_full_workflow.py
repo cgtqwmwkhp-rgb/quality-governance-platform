@@ -197,7 +197,7 @@ class TestIncidentLifecycle:
 
         # Search by status
         response = client.get(
-            "/api/v1/incidents?status=open",
+            "/api/v1/incidents?status=reported",
             headers=auth_headers,
         )
         assert response.status_code == 200
@@ -721,7 +721,7 @@ class TestSearchDiscovery:
             pytest.skip("Authentication required")
 
         response = client.get(
-            "/api/v1/search?q=incident&module=incidents&status=open",
+            "/api/v1/search?q=incident&module=incidents&status=reported",
             headers=auth_headers,
         )
         # TODO: Remove 404 when endpoint is implemented

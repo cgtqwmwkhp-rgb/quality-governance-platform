@@ -1,5 +1,7 @@
 """E2E test: Full incident workflow lifecycle."""
 
+from datetime import datetime
+
 import pytest
 
 
@@ -17,6 +19,7 @@ class TestWorkflowLifecycle:
                 "title": "E2E Test Incident",
                 "description": "Automated E2E test",
                 "severity": "medium",
+                "reported_date": datetime.now().isoformat(),
             },
             headers=auth_headers,
         )
@@ -33,7 +36,7 @@ class TestWorkflowLifecycle:
         resp = client.patch(
             f"/api/v1/incidents/{incident_id}",
             json={
-                "status": "investigating",
+                "status": "under_investigation",
             },
             headers=auth_headers,
         )

@@ -142,6 +142,7 @@ class TestIncidentLifecycleE2E:
                 "severity": "high",
                 "incident_type": "safety",
                 "location": "Production Floor",
+                "reported_date": datetime.now().isoformat(),
             },
             headers=auth_headers,
         )
@@ -173,7 +174,7 @@ class TestIncidentLifecycleE2E:
 
         # Filter by status
         open_response = client.get(
-            "/api/v1/incidents?status=open",
+            "/api/v1/incidents?status=reported",
             headers=auth_headers,
         )
         assert open_response.status_code == 200
@@ -727,7 +728,7 @@ class TestSafetyManagerJourneyE2E:
 
         # === Step 2: Review open incidents ===
         open_response = client.get(
-            "/api/v1/incidents?status=open",
+            "/api/v1/incidents?status=reported",
             headers=auth_headers,
         )
         assert open_response.status_code == 200

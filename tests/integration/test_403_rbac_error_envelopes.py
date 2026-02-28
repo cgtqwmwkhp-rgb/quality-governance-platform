@@ -34,16 +34,13 @@ class Test403RBACErrorEnvelopes:
         assert "details" in data.get("error", {})
         assert "request_id" in data.get("error", {})
 
-        # Verify error_code is string and equals "403"
         assert isinstance(data["error"]["code"], str)
-        assert data["error"]["code"] == "403"
+        assert data["error"]["code"] == "PERMISSION_DENIED"
 
-        # Verify request_id is non-empty
         assert data["error"]["request_id"] is not None
         assert isinstance(data["error"]["request_id"], str)
         assert len(data["error"]["request_id"]) > 0
 
-        # Verify message contains permission requirement
         assert "policy:set_reference_number" in data["error"]["message"]
 
     @pytest.mark.asyncio
@@ -66,22 +63,18 @@ class Test403RBACErrorEnvelopes:
         assert response.status_code == 403
 
         data = response.json()
-        # Verify canonical error envelope keys
         assert "code" in data.get("error", {})
         assert "message" in data.get("error", {})
         assert "details" in data.get("error", {})
         assert "request_id" in data.get("error", {})
 
-        # Verify error_code is string and equals "403"
         assert isinstance(data["error"]["code"], str)
-        assert data["error"]["code"] == "403"
+        assert data["error"]["code"] == "PERMISSION_DENIED"
 
-        # Verify request_id is non-empty
         assert data["error"]["request_id"] is not None
         assert isinstance(data["error"]["request_id"], str)
         assert len(data["error"]["request_id"]) > 0
 
-        # Verify message contains permission requirement
         assert "incident:set_reference_number" in data["error"]["message"]
 
     @pytest.mark.asyncio
@@ -91,17 +84,14 @@ class Test403RBACErrorEnvelopes:
         assert response.status_code == 404
 
         data = response.json()
-        # Verify canonical error envelope keys
         assert "code" in data.get("error", {})
         assert "message" in data.get("error", {})
         assert "details" in data.get("error", {})
         assert "request_id" in data.get("error", {})
 
-        # Verify error_code is string and equals "404"
         assert isinstance(data["error"]["code"], str)
-        assert data["error"]["code"] == "404"
+        assert data["error"]["code"] == "ENTITY_NOT_FOUND"
 
-        # Verify request_id is non-empty
         assert data["error"]["request_id"] is not None
         assert isinstance(data["error"]["request_id"], str)
         assert len(data["error"]["request_id"]) > 0
