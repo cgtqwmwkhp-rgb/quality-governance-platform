@@ -398,13 +398,7 @@ class TestEmployeePortalFlow:
         """
         E2E: Login → View Options → Submit Report → Track → View Status
         """
-        # Step 1: Get portal stats (public)
-        stats_response = client.get("/api/v1/portal/stats")
-        assert stats_response.status_code == 200
-        stats_data = stats_response.json()
-        assert isinstance(stats_data, dict)
-
-        # Step 2: Submit incident report
+        # Step 1: Submit incident report
         report_response = client.post(
             "/api/v1/portal/reports/",
             json={

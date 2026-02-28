@@ -9,7 +9,6 @@ from typing import Any, AsyncGenerator
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
 
@@ -32,7 +31,14 @@ engine_kwargs: dict[str, Any] = {
 }
 
 if _is_testing:
-    engine_kwargs["poolclass"] = NullPool
+    engine_kwargs.update(
+        {
+            "pool_pre_ping": True,
+            "pool_size": 5,
+            "max_overflow": 10,
+            "pool_recycle": 1800,
+        }
+    )
 elif "postgresql" in settings.database_url:
     engine_kwargs.update(
         {
