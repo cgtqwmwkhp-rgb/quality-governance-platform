@@ -160,6 +160,8 @@ async def list_templates(
     total = await db.scalar(count_query) or 0
 
     # Apply pagination
+    page = params.page
+    page_size = params.page_size
     query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(AuditTemplate.name)
 
