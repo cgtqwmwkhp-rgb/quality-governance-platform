@@ -144,7 +144,10 @@ async def list_templates(
 ) -> Any:
     """List all audit templates with pagination and filtering."""
     started = time.perf_counter()
-    query = select(AuditTemplate).where(AuditTemplate.is_active == True)
+    query = select(AuditTemplate).where(
+        AuditTemplate.is_active == True,
+        AuditTemplate.tenant_id == current_user.tenant_id,
+    )
 
     if search:
         search_filter = f"%{search}%"

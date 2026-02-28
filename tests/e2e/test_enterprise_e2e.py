@@ -657,7 +657,13 @@ class TestNewEmployeeJourneyE2E:
     def test_new_employee_complete_journey(self, client):
         """E2E: New employee uses portal for first time."""
 
-        # === Step 1: Submit first incident ===
+        # === Step 1: View portal stats ===
+        stats_response = client.get("/api/v1/portal/stats")
+        assert stats_response.status_code == 200
+        stats_data = stats_response.json()
+        assert isinstance(stats_data, dict)
+
+        # === Step 2: Submit first incident ===
         incident_response = client.post(
             "/api/v1/portal/reports/",
             json={

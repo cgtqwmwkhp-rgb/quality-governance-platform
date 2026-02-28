@@ -996,9 +996,9 @@ export const authApi = {
 // FastAPI routes are defined with trailing slashes and redirect_slashes is disabled
 
 export const incidentsApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Incident>>(
-      `/api/v1/incidents/?page=${page}&size=${size}`,
+      `/api/v1/incidents/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: IncidentCreate) =>
     api.post<Incident>("/api/v1/incidents", data),
@@ -1008,8 +1008,8 @@ export const incidentsApi = {
 };
 
 export const rtasApi = {
-  list: (page = 1, size = 10) =>
-    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&size=${size}`),
+  list: (page = 1, pageSize = 10) =>
+    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&page_size=${pageSize}`),
   create: (data: RTACreate) => api.post<RTA>("/api/v1/rtas", data),
   get: (id: number) => api.get<RTA>(`/api/v1/rtas/${id}`),
   update: (id: number, data: RTAUpdate) =>
@@ -1017,9 +1017,9 @@ export const rtasApi = {
 };
 
 export const complaintsApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Complaint>>(
-      `/api/v1/complaints/?page=${page}&size=${size}`,
+      `/api/v1/complaints/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: ComplaintCreate) =>
     api.post<Complaint>("/api/v1/complaints", data),
@@ -1029,18 +1029,18 @@ export const complaintsApi = {
 };
 
 export const policiesApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Policy>>(
-      `/api/v1/policies/?page=${page}&size=${size}`,
+      `/api/v1/policies/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: PolicyCreate) => api.post<Policy>("/api/v1/policies", data),
   get: (id: number) => api.get<Policy>(`/api/v1/policies/${id}`),
 };
 
 export const risksApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Risk>>(
-      `/api/v1/risks/?page=${page}&size=${size}`,
+      `/api/v1/risks/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: RiskCreate) => api.post<Risk>("/api/v1/risks", data),
   get: (id: number) => api.get<Risk>(`/api/v1/risks/${id}`),
@@ -1048,13 +1048,22 @@ export const risksApi = {
 
 export const auditsApi = {
   // Templates
-  listTemplates: (page = 1, size = 10, filters?: { is_published?: boolean }) => {
+  listTemplates: (page = 1, pageSize = 10, filters?: { is_published?: boolean; search?: string; category?: string; audit_type?: string }) => {
     const params = new URLSearchParams({
       page: String(page),
-      size: String(size),
+      page_size: String(pageSize),
     })
     if (filters?.is_published !== undefined) {
       params.set('is_published', String(filters.is_published))
+    }
+    if (filters?.search) {
+      params.set('search', filters.search)
+    }
+    if (filters?.category) {
+      params.set('category', filters.category)
+    }
+    if (filters?.audit_type) {
+      params.set('audit_type', filters.audit_type)
     }
     return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${params.toString()}`)
   },
@@ -1099,9 +1108,9 @@ export const auditsApi = {
     api.delete(`/api/v1/audits/questions/${questionId}`),
 
   // Runs
-  listRuns: (page = 1, size = 10) =>
+  listRuns: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<AuditRun>>(
-      `/api/v1/audits/runs?page=${page}&size=${size}`,
+      `/api/v1/audits/runs?page=${page}&page_size=${pageSize}`,
     ),
   createRun: (data: AuditRunCreate) =>
     api.post<AuditRun>("/api/v1/audits/runs", data),
@@ -1120,9 +1129,9 @@ export const auditsApi = {
     api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data),
 
   // Findings
-  listFindings: (page = 1, size = 10, runId?: number) =>
+  listFindings: (page = 1, pageSize = 10, runId?: number) =>
     api.get<PaginatedResponse<AuditFinding>>(
-      `/api/v1/audits/findings/?page=${page}&size=${size}${runId ? `&run_id=${runId}` : ""}`,
+      `/api/v1/audits/findings/?page=${page}&page_size=${pageSize}${runId ? `&run_id=${runId}` : ""}`,
     ),
   createFinding: (runId: number, data: AuditFindingCreate) =>
     api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
@@ -1212,10 +1221,10 @@ export interface ClosureValidation {
 }
 
 export const investigationsApi = {
-  list: (page = 1, size = 10, status?: string) => {
+  list: (page = 1, pageSize = 10, status?: string) => {
     const params = new URLSearchParams({
       page: String(page),
-      size: String(size),
+      page_size: String(pageSize),
     });
     if (status) params.set("status", status);
     return api.get<PaginatedResponse<Investigation>>(
@@ -1373,13 +1382,13 @@ export const actionsApi = {
    */
   list: (
     page = 1,
-    size = 10,
+    pageSize = 10,
     status?: string,
     source_type?: string,
     source_id?: number,
   ) =>
     api.get<PaginatedResponse<Action>>(
-      `/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ""}${source_type ? `&source_type=${source_type}` : ""}${source_id ? `&source_id=${source_id}` : ""}`,
+      `/api/v1/actions/?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ""}${source_type ? `&source_type=${source_type}` : ""}${source_id ? `&source_id=${source_id}` : ""}`,
     ),
   /**
    * Create a new action linked to a source entity.
@@ -1624,9 +1633,9 @@ export const uvdbApi = {
   /**
    * List UVDB audits.
    */
-  listAudits: (page = 1, size = 10) =>
+  listAudits: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<UVDBAudit>>(
-      `/api/v1/uvdb/audits?page=${page}&size=${size}`,
+      `/api/v1/uvdb/audits?page=${page}&page_size=${pageSize}`,
     ),
 
   /**

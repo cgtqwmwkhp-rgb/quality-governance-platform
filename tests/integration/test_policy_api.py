@@ -250,7 +250,7 @@ async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers:
         title="Policy to Delete",
         document_type=DocumentType.POLICY,
         status=DocumentStatus.DRAFT,
-        reference_number=f"POL-DEL-{uuid.uuid4().hex[:8]}",
+        reference_number="POL-2026-DEL-001",
         created_by_id=test_user.id,
         updated_by_id=test_user.id,
     )
