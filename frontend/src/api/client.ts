@@ -1023,7 +1023,7 @@ export const incidentsApi = {
       `/api/v1/incidents/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: IncidentCreate) =>
-    api.post<Incident>("/api/v1/incidents", data),
+    api.post<Incident>("/api/v1/incidents/", data),
   get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
   update: (id: number, data: IncidentUpdate) =>
     api.patch<Incident>(`/api/v1/incidents/${id}`, data),
@@ -1032,7 +1032,7 @@ export const incidentsApi = {
 export const rtasApi = {
   list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&page_size=${pageSize}`),
-  create: (data: RTACreate) => api.post<RTA>("/api/v1/rtas", data),
+  create: (data: RTACreate) => api.post<RTA>("/api/v1/rtas/", data),
   get: (id: number) => api.get<RTA>(`/api/v1/rtas/${id}`),
   update: (id: number, data: RTAUpdate) =>
     api.patch<RTA>(`/api/v1/rtas/${id}`, data),
@@ -1044,7 +1044,7 @@ export const complaintsApi = {
       `/api/v1/complaints/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: ComplaintCreate) =>
-    api.post<Complaint>("/api/v1/complaints", data),
+    api.post<Complaint>("/api/v1/complaints/", data),
   get: (id: number) => api.get<Complaint>(`/api/v1/complaints/${id}`),
   update: (id: number, data: ComplaintUpdate) =>
     api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
@@ -1053,7 +1053,7 @@ export const complaintsApi = {
 export const policiesApi = {
   list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Policy>>(
-      `/api/v1/policies/?page=${page}&page_size=${pageSize}`,
+      `/api/v1/policies?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: PolicyCreate) => api.post<Policy>("/api/v1/policies", data),
   get: (id: number) => api.get<Policy>(`/api/v1/policies/${id}`),
@@ -1064,7 +1064,7 @@ export const risksApi = {
     api.get<PaginatedResponse<Risk>>(
       `/api/v1/risks/?page=${page}&page_size=${pageSize}`,
     ),
-  create: (data: RiskCreate) => api.post<Risk>("/api/v1/risks", data),
+  create: (data: RiskCreate) => api.post<Risk>("/api/v1/risks/", data),
   get: (id: number) => api.get<Risk>(`/api/v1/risks/${id}`),
 };
 
@@ -1374,7 +1374,7 @@ export const standardsApi = {
   get: (id: number) =>
     api.get<Standard & { clauses: Clause[] }>(`/api/v1/standards/${id}`),
   getClauses: (standardId: number) =>
-    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses/`),
+    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses`),
   getControls: (standardId: number) =>
     api.get<ControlListItem[]>(`/api/v1/standards/${standardId}/controls`),
   getComplianceScore: (standardId: number) =>
@@ -1415,7 +1415,7 @@ export const actionsApi = {
   /**
    * Create a new action linked to a source entity.
    */
-  create: (data: ActionCreate) => api.post<Action>("/api/v1/actions", data),
+  create: (data: ActionCreate) => api.post<Action>("/api/v1/actions/", data),
   /**
    * Get a single action by ID. Requires source_type.
    */

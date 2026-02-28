@@ -148,7 +148,7 @@ export default function Documents() {
   const loadData = async () => {
     try {
       const [docsRes, statsRes] = await Promise.all([
-        api.get("/api/v1/documents?page=1&page_size=50"),
+        api.get("/api/v1/documents/?page=1&page_size=50"),
         api.get("/api/v1/documents/stats/overview"),
       ]);
       setDocuments(docsRes.data.items || []);
