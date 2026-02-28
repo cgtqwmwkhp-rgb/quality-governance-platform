@@ -307,7 +307,10 @@ class TestActionsAPIAuthenticatedNegative:
 
         response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
-        assert response.status_code in (400, 422), f"Expected 400/422 for invalid source_type, got {response.status_code}"
+        assert response.status_code in (
+            400,
+            422,
+        ), f"Expected 400/422 for invalid source_type, got {response.status_code}"
         error_data = response.json().get("error", response.json())
         error_msg = error_data.get("message", "").lower()
         assert "invalid" in error_msg or "source_type" in error_msg or "validation" in error_msg

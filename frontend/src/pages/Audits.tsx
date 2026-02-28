@@ -96,6 +96,10 @@ export default function Audits() {
     }
   }
 
+  useEffect(() => {
+    loadData()
+  }, [])
+
   const templateFamilies = useMemo(() => {
     const families = new Map<string, { key: string; label: string; versions: AuditTemplate[] }>()
     templates.forEach((template) => {
@@ -262,17 +266,6 @@ export default function Audits() {
     );
   }
 
-  if (runsError) {
-    return (
-      <div className="p-6">
-        <ErrorState
-          title="Failed to load audits"
-          message="Could not fetch audit data. Please try again."
-          onRetry={() => refetchRuns()}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">

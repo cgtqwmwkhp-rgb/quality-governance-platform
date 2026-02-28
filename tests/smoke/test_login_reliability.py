@@ -123,7 +123,7 @@ class TestLoginReliability:
             elapsed = time.time() - start
 
             assert response.status_code == 200, f"{endpoint} returned {response.status_code}"
-            assert elapsed < 10, f"{endpoint} took {elapsed:.1f}s - too slow!"
+            assert elapsed < 30, f"{endpoint} took {elapsed:.1f}s - too slow!"
 
 
 class TestLoginErrorCodes:

@@ -102,8 +102,8 @@ class TestIncidentReporting:
         )
         assert response.status_code == 422
         data = response.json()
-        error_data = data.get('error', data)
-        assert 'message' in error_data or 'detail' in data
+        error_data = data.get("error", data)
+        assert "message" in error_data or "detail" in data
 
 
 class TestNearMissReporting:
@@ -211,8 +211,8 @@ class TestReportTracking:
         )
         assert response.status_code == 404
         data = response.json()
-        error_data = data.get('error', data)
-        assert 'message' in error_data or 'detail' in data
+        error_data = data.get("error", data)
+        assert "message" in error_data or "detail" in data
 
     def test_track_wrong_tracking_code(self, client):
         """Track with wrong tracking code."""
