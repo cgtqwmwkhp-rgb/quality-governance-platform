@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from '../components/ui/Dialog'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
+import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn, decodeHtmlEntities } from "../helpers/utils"
 
 type ViewMode = "kanban" | "list" | "findings";
@@ -75,6 +76,7 @@ export default function Audits() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showVersionSelector, setShowVersionSelector] = useState(false)
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
   const loadData = async () => {
     try {

@@ -1,16 +1,20 @@
 """Database connection and session management."""
 
 import logging
+import os
 import time
 from typing import Any, AsyncGenerator
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_is_testing = "pytest" in os.environ.get("_", "") or os.environ.get("TESTING") == "1"
 
 
 class Base(DeclarativeBase):
@@ -26,8 +30,9 @@ engine_kwargs: dict[str, Any] = {
     "future": True,
 }
 
-# Only add pooling args for PostgreSQL (not SQLite)
-if "postgresql" in settings.database_url:
+if _is_testing:
+    engine_kwargs["poolclass"] = NullPool
+elif "postgresql" in settings.database_url:
     engine_kwargs.update(
         {
             "pool_pre_ping": True,
