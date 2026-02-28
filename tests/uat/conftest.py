@@ -51,26 +51,24 @@ def pytest_configure(config):
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _seed_default_tenant():
     """Ensure a default tenant exists for UAT tests that create entities."""
-    from sqlalchemy import text
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-    from src.infrastructure.database import engine
+    from src.domain.models.tenant import Tenant
+    from src.infrastructure.database import async_session_maker
 
     try:
-        async with engine.begin() as conn:
-            result = await conn.execute(text("SELECT id FROM tenants WHERE id = 1"))
-            if result.fetchone() is None:
-                await conn.execute(
-                    text(
-                        "INSERT INTO tenants "
-                        "(id, name, slug, admin_email, is_active, subscription_tier, "
-                        "primary_color, secondary_color, accent_color, theme_mode, "
-                        "country, settings, features_enabled, max_users, max_storage_gb) "
-                        "VALUES (1, 'UAT Test Tenant', 'uat-test', 'uat@example.com', "
-                        "true, 'standard', '#3B82F6', '#10B981', '#8B5CF6', 'dark', "
-                        "'United Kingdom', '{}', '{}', 50, 10) "
-                        "ON CONFLICT (id) DO NOTHING"
-                    )
+        async with async_session_maker() as session:
+            result = await session.execute(select(Tenant).where(Tenant.id == 1))
+            if result.scalar_one_or_none() is None:
+                tenant = Tenant(
+                    id=1,
+                    name="UAT Test Tenant",
+                    slug="uat-test",
+                    admin_email="uat@example.com",
                 )
+                session.add(tenant)
+                await session.commit()
     except Exception:
         pass
 
