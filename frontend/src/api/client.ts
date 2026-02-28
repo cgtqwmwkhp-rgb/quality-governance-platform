@@ -1013,8 +1013,9 @@ export const authApi = {
     api.post<LoginResponse>("/api/v1/auth/login", data),
 };
 
-// NOTE: All list endpoints use trailing slash (e.g., /incidents/) because
-// FastAPI routes are defined with trailing slashes and redirect_slashes is disabled
+// NOTE: FastAPI has redirect_slashes=False. Trailing slashes MUST match
+// the backend route definition exactly: routes with "/" need a trailing
+// slash; routes like "/templates" must NOT have one.
 
 export const incidentsApi = {
   list: (page = 1, pageSize = 10) =>
@@ -1086,7 +1087,7 @@ export const auditsApi = {
     if (filters?.audit_type) {
       params.set('audit_type', filters.audit_type)
     }
-    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${params.toString()}`)
+    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates?${params.toString()}`)
   },
   getTemplate: (id: number) =>
     api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
@@ -1152,7 +1153,7 @@ export const auditsApi = {
   // Findings
   listFindings: (page = 1, pageSize = 10, runId?: number) =>
     api.get<PaginatedResponse<AuditFinding>>(
-      `/api/v1/audits/findings/?page=${page}&page_size=${pageSize}${runId ? `&run_id=${runId}` : ""}`,
+      `/api/v1/audits/findings?page=${page}&page_size=${pageSize}${runId ? `&run_id=${runId}` : ""}`,
     ),
   createFinding: (runId: number, data: AuditFindingCreate) =>
     api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
@@ -1249,11 +1250,11 @@ export const investigationsApi = {
     });
     if (status) params.set("status", status);
     return api.get<PaginatedResponse<Investigation>>(
-      `/api/v1/investigations?${params}`,
+      `/api/v1/investigations/?${params}`,
     );
   },
   create: (data: InvestigationCreate) =>
-    api.post<Investigation>("/api/v1/investigations", data),
+    api.post<Investigation>("/api/v1/investigations/", data),
   get: (id: number) => api.get<Investigation>(`/api/v1/investigations/${id}`),
   /**
    * Update investigation with partial data.
