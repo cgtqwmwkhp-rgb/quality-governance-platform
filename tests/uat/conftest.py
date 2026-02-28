@@ -69,6 +69,14 @@ async def _seed_default_data():
                     )
                 )
             await session.commit()
+
+        from sqlalchemy import text
+
+        from src.infrastructure.database import engine
+
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
+            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
     except Exception:
         pass
 
