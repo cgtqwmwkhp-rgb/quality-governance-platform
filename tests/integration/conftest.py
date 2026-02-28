@@ -239,25 +239,49 @@ def _override_auth():
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def _seed_default_tenant():
-    """Ensure a default tenant exists for tests that create entities with tenant_id=1."""
+async def _seed_default_data():
+    """Seed a default tenant and user for FK integrity.
+
+    The mock auth override returns user id=1, so many API handlers set
+    ``created_by_id=1``.  This user MUST exist in the ``users`` table
+    to satisfy FK constraints.
+    """
     try:
         from sqlalchemy import select
 
+        from src.core.security import get_password_hash
         from src.domain.models.tenant import Tenant
+        from src.domain.models.user import User
         from src.infrastructure.database import async_session_maker
 
         async with async_session_maker() as session:
             result = await session.execute(select(Tenant).where(Tenant.id == 1))
             if result.scalar_one_or_none() is None:
-                tenant = Tenant(
-                    id=1,
-                    name="Test Tenant",
-                    slug="test-tenant",
-                    admin_email="admin@test.example.com",
+                session.add(
+                    Tenant(
+                        id=1,
+                        name="Test Tenant",
+                        slug="test-tenant",
+                        admin_email="admin@test.example.com",
+                    )
                 )
-                session.add(tenant)
-                await session.commit()
+                await session.flush()
+
+            result = await session.execute(select(User).where(User.id == 1))
+            if result.scalar_one_or_none() is None:
+                session.add(
+                    User(
+                        id=1,
+                        email="test@example.com",
+                        hashed_password=get_password_hash("testpassword123"),
+                        first_name="Test",
+                        last_name="User",
+                        is_active=True,
+                        is_superuser=False,
+                        tenant_id=1,
+                    )
+                )
+            await session.commit()
     except Exception:
         pass
 
@@ -282,7 +306,6 @@ _CLEANUP_TABLES = [
     "risks",
     "policies",
     "standards",
-    "users",
 ]
 
 
@@ -290,8 +313,11 @@ _CLEANUP_TABLES = [
 async def _cleanup_test_data():
     """Delete test data after each test for isolation.
 
-    Uses DELETE (not TRUNCATE) to avoid lock contention and to preserve
-    the session-scoped tenant seed.  Runs AFTER the test (yield first).
+    Preserves the session-scoped tenant (id=1) and user (id=1) seeds.
+    Deletes from child tables first to respect FK constraints.
+    Users created by individual tests are cleaned; the seed user persists
+    because ``users`` is not in the cleanup list (kept for FK integrity).
+    Extra test users are cleaned via DELETE ... WHERE id != 1.
     """
     yield
 
@@ -303,6 +329,7 @@ async def _cleanup_test_data():
         async with async_session_maker() as session:
             for table in _CLEANUP_TABLES:
                 await session.execute(text(f"DELETE FROM {table}"))
+            await session.execute(text("DELETE FROM users WHERE id != 1"))
             await session.commit()
     except Exception:
         pass

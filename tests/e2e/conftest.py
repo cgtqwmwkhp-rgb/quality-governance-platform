@@ -1,6 +1,7 @@
 """E2E Test Configuration.
 
 Uses per-test database cleanup for isolation.
+Seeds default tenant and user for FK integrity.
 """
 
 import pytest
@@ -21,30 +22,48 @@ _CLEANUP_TABLES = [
     "risks",
     "policies",
     "standards",
-    "users",
 ]
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def _seed_default_tenant():
-    """Ensure a default tenant exists for E2E tests."""
+async def _seed_default_data():
+    """Seed default tenant and user for E2E tests."""
     from sqlalchemy import select
 
+    from src.core.security import get_password_hash
     from src.domain.models.tenant import Tenant
+    from src.domain.models.user import User
     from src.infrastructure.database import async_session_maker
 
     try:
         async with async_session_maker() as session:
             result = await session.execute(select(Tenant).where(Tenant.id == 1))
             if result.scalar_one_or_none() is None:
-                tenant = Tenant(
-                    id=1,
-                    name="E2E Test Tenant",
-                    slug="e2e-test",
-                    admin_email="e2e@test.example.com",
+                session.add(
+                    Tenant(
+                        id=1,
+                        name="E2E Test Tenant",
+                        slug="e2e-test",
+                        admin_email="e2e@test.example.com",
+                    )
                 )
-                session.add(tenant)
-                await session.commit()
+                await session.flush()
+
+            result = await session.execute(select(User).where(User.id == 1))
+            if result.scalar_one_or_none() is None:
+                session.add(
+                    User(
+                        id=1,
+                        email="test@example.com",
+                        hashed_password=get_password_hash("testpassword123"),
+                        first_name="Test",
+                        last_name="User",
+                        is_active=True,
+                        is_superuser=False,
+                        tenant_id=1,
+                    )
+                )
+            await session.commit()
     except Exception:
         pass
 
@@ -62,6 +81,7 @@ async def _cleanup_test_data():
         async with async_session_maker() as session:
             for table in _CLEANUP_TABLES:
                 await session.execute(text(f"DELETE FROM {table}"))
+            await session.execute(text("DELETE FROM users WHERE id != 1"))
             await session.commit()
     except Exception:
         pass
