@@ -329,10 +329,8 @@ async def _cleanup_test_data():
     """Delete test data after each test for isolation.
 
     Preserves the session-scoped tenant (id=1) and user (id=1) seeds.
-    Deletes from child tables first to respect FK constraints.
-    Users created by individual tests are cleaned; the seed user persists
-    because ``users`` is not in the cleanup list (kept for FK integrity).
-    Extra test users are cleaned via DELETE ... WHERE id != 1.
+    Each DELETE is individually error-handled so a missing table does
+    not break cleanup of other tables.
     """
     yield
 
@@ -343,8 +341,14 @@ async def _cleanup_test_data():
     try:
         async with async_session_maker() as session:
             for table in _CLEANUP_TABLES:
-                await session.execute(text(f"DELETE FROM {table}"))
-            await session.execute(text("DELETE FROM users WHERE id != 1"))
+                try:
+                    await session.execute(text(f"DELETE FROM {table}"))
+                except Exception:
+                    await session.rollback()
+            try:
+                await session.execute(text("DELETE FROM users WHERE id != 1"))
+            except Exception:
+                await session.rollback()
             await session.commit()
     except Exception:
         pass

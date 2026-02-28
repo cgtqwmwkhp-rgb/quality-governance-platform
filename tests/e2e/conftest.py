@@ -95,8 +95,14 @@ async def _cleanup_test_data():
     try:
         async with async_session_maker() as session:
             for table in _CLEANUP_TABLES:
-                await session.execute(text(f"DELETE FROM {table}"))
-            await session.execute(text("DELETE FROM users WHERE id != 1"))
+                try:
+                    await session.execute(text(f"DELETE FROM {table}"))
+                except Exception:
+                    await session.rollback()
+            try:
+                await session.execute(text("DELETE FROM users WHERE id != 1"))
+            except Exception:
+                await session.rollback()
             await session.commit()
     except Exception:
         pass
