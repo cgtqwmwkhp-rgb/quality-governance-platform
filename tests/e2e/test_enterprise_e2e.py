@@ -143,7 +143,7 @@ class TestIncidentLifecycleE2E:
                 "severity": "high",
                 "incident_type": "safety",
                 "location": "Production Floor",
-                "reported_date": datetime.now().isoformat(),
+                "incident_date": datetime.now().isoformat(),
             },
             headers=auth_headers,
         )

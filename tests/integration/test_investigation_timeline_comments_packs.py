@@ -39,7 +39,7 @@ class TestTimelineEndpoint:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_timeline_pagination_params_validated(self, client: AsyncClient):
         """Test timeline validates pagination parameters."""
@@ -79,7 +79,7 @@ class TestCommentsEndpoint:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_comments_include_deleted_param_accepted(self, client: AsyncClient):
         """Test comments accepts include_deleted parameter."""
@@ -105,7 +105,7 @@ class TestPacksEndpoint:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_packs_does_not_expose_content_in_list(self, client: AsyncClient, auth_headers: dict):
         """Test packs list response schema excludes full content."""
@@ -142,7 +142,7 @@ class TestClosureValidationEndpoint:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_closure_validation_response_schema(self, client: AsyncClient, auth_headers: dict):
         """Test closure-validation returns expected response shape."""
@@ -303,7 +303,7 @@ class TestInvestigationAuthorizationNegativeCase:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_comments_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
         """Test user without access to investigation gets 404 for comments."""
@@ -317,7 +317,7 @@ class TestInvestigationAuthorizationNegativeCase:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_packs_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
         """Test user without access to investigation gets 404 for packs."""
@@ -331,7 +331,7 @@ class TestInvestigationAuthorizationNegativeCase:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
     async def test_closure_validation_unauthorized_user_gets_404(self, client: AsyncClient, auth_headers: dict):
         """Test user without access to investigation gets 404 for closure-validation."""
@@ -345,7 +345,7 @@ class TestInvestigationAuthorizationNegativeCase:
         assert response.status_code == 404
         data = response.json()
         error = data.get("error", data.get("detail", data))
-        assert error.get("code", error.get("error_code")) == "INVESTIGATION_NOT_FOUND"
+        assert error.get("code", error.get("error_code")) == "ENTITY_NOT_FOUND"
 
 
 # =============================================================================

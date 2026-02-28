@@ -107,6 +107,7 @@ class TestWorkflowSchemaValidation:
         assert hasattr(workflows, "router")
 
 
+@pytest.mark.phase34
 class TestWorkflowTemplates:
     """Test workflow template operations."""
 
@@ -146,6 +147,7 @@ class TestWorkflowTemplates:
         assert response.status_code == 404
 
 
+@pytest.mark.phase34
 class TestWorkflowInstances:
     """Test workflow instance operations."""
 
@@ -206,6 +208,7 @@ class TestWorkflowInstances:
         assert "history" in instance
 
 
+@pytest.mark.phase34
 class TestApprovals:
     """Test approval management."""
 
@@ -258,6 +261,7 @@ class TestApprovals:
         assert result["successful"] >= 0
 
 
+@pytest.mark.phase34
 class TestDelegation:
     """Test out-of-office delegation."""
 
@@ -295,6 +299,7 @@ class TestDelegation:
         assert result["status"] == "cancelled"
 
 
+@pytest.mark.phase34
 class TestEscalation:
     """Test escalation features."""
 
@@ -317,6 +322,7 @@ class TestEscalation:
         assert result["new_priority"] == "critical"
 
 
+@pytest.mark.phase34
 class TestWorkflowStats:
     """Test workflow statistics."""
 

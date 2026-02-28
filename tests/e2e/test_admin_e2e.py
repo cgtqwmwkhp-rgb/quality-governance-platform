@@ -87,7 +87,7 @@ class TestIncidentManagement:
                 "severity": "medium",
                 "incident_type": "safety",
                 "location": "Office Building",
-                "reported_date": datetime.now().isoformat(),
+                "incident_date": datetime.now().isoformat(),
             },
             headers=auth_headers,
         )

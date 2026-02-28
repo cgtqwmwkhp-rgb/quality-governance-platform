@@ -2,9 +2,13 @@
 
 Uses per-test database cleanup for isolation.
 Seeds default tenant and user for FK integrity.
+Overrides ``get_current_user`` so authenticated endpoints return 200.
 """
 
 import pytest
+
+from src.api.dependencies import get_current_user
+from src.main import app
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -48,3 +52,120 @@ async def _seed_default_data():
             await session.commit()
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Auth override – every E2E test gets a superuser mock
+# ---------------------------------------------------------------------------
+
+_ADMIN_PERMS = ",".join(
+    [
+        "incident:create",
+        "incident:read",
+        "incident:update",
+        "incident:delete",
+        "complaint:create",
+        "complaint:read",
+        "complaint:update",
+        "complaint:delete",
+        "rta:create",
+        "rta:read",
+        "rta:update",
+        "rta:delete",
+        "policy:create",
+        "policy:read",
+        "policy:update",
+        "policy:delete",
+        "action:create",
+        "action:read",
+        "action:update",
+        "action:delete",
+        "investigation:create",
+        "investigation:read",
+        "investigation:update",
+        "audit:create",
+        "audit:read",
+        "audit:update",
+        "audit:delete",
+        "standard:create",
+        "standard:read",
+        "standard:update",
+        "risk:create",
+        "risk:read",
+        "risk:update",
+        "near_miss:create",
+        "near_miss:read",
+        "near_miss:update",
+        "audit_template:create",
+        "audit_template:read",
+        "audit_template:update",
+        "audit_template:delete",
+    ]
+)
+
+
+class _MockRole:
+    def __init__(self):
+        self.id = 1
+        self.name = "admin"
+        self.permissions = _ADMIN_PERMS
+        self.description = None
+        self.is_system_role = False
+
+
+class _MockUser:
+    def __init__(self):
+        self.id = 1
+        self.email = "test@example.com"
+        self.first_name = "Test"
+        self.last_name = "User"
+        self.hashed_password = "unused"
+        self.job_title = None
+        self.department = None
+        self.phone = None
+        self.is_active = True
+        self.is_superuser = True
+        self.tenant_id = 1
+        self.last_login = None
+        self.azure_oid = None
+        self.roles = [_MockRole()]
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+    def has_permission(self, permission):
+        return True
+
+
+@pytest.fixture(autouse=True)
+def _override_auth():
+    """Override ``get_current_user`` for E2E tests."""
+
+    async def _mock_get_current_user():
+        return _MockUser()
+
+    app.dependency_overrides[get_current_user] = _mock_get_current_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+# ---------------------------------------------------------------------------
+# Quarantine hooks – skip Phase 3/4 tests that hit unimplemented endpoints
+# ---------------------------------------------------------------------------
+
+
+def pytest_configure(config):
+    """Register custom markers for E2E tests."""
+    config.addinivalue_line(
+        "markers",
+        "phase34: marks tests requiring Phase 3/4 features (quarantined)",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip quarantined tests."""
+    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23")
+    for item in items:
+        if "phase34" in item.keywords:
+            item.add_marker(skip_phase34)

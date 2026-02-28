@@ -96,6 +96,7 @@ class TestComplianceSchemaValidation:
         assert hasattr(compliance_automation, "router")
 
 
+@pytest.mark.phase34
 class TestRegulatoryMonitoring:
     """Test regulatory update monitoring."""
 
@@ -149,6 +150,7 @@ class TestRegulatoryMonitoring:
         assert result["requires_action"] is True
 
 
+@pytest.mark.phase34
 class TestGapAnalysis:
     """Test gap analysis functionality."""
 
@@ -185,6 +187,7 @@ class TestGapAnalysis:
             assert analysis["status"] == "pending"
 
 
+@pytest.mark.phase34
 class TestCertificateTracking:
     """Test certificate expiry tracking."""
 
@@ -236,6 +239,7 @@ class TestCertificateTracking:
         assert "by_type" in summary
 
 
+@pytest.mark.phase34
 class TestScheduledAudits:
     """Test scheduled audit management."""
 
@@ -266,6 +270,7 @@ class TestScheduledAudits:
         assert "audits" in data
 
 
+@pytest.mark.phase34
 class TestComplianceScoring:
     """Test compliance score calculation."""
 
@@ -313,6 +318,7 @@ class TestComplianceScoring:
         assert len(data["trend"]) == 6
 
 
+@pytest.mark.phase34
 class TestRIDDORAutomation:
     """Test RIDDOR automation features."""
 

@@ -121,6 +121,7 @@ class TestNearMissReporting:
                 "description": "Forklift nearly struck pedestrian in aisle.",
                 "severity": "high",
                 "location": "Warehouse Aisle 5",
+                "reporter_name": "Test Reporter",
             },
         )
         # May be accepted as incident if near_miss type not distinct
@@ -142,6 +143,7 @@ class TestComplaintReporting:
                 "title": f"Delivery Delay Complaint - {uuid4().hex[:8]}",
                 "description": "Customer complained about delivery being 3 days late.",
                 "severity": "medium",
+                "reporter_name": "Test Customer",
             },
         )
         assert response.status_code in [200, 201]

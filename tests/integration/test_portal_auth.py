@@ -8,6 +8,8 @@ Tests for the portal authentication flow including:
 - Read-your-writes guarantee for report creation
 """
 
+import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -152,27 +154,20 @@ class TestReadYourWritesGuarantee:
     @pytest.fixture
     async def test_user_with_token(self):
         """Create a test user and return (user, token) tuple."""
-        test_email = "read-your-writes-test@example.com"
+        test_email = f"ryw-{uuid.uuid4().hex[:8]}@example.com"
 
         async with async_session_maker() as session:
-            # Check if user exists
-            result = await session.execute(select(User).where(User.email == test_email))
-            user = result.scalar_one_or_none()
+            user = User(
+                email=test_email,
+                first_name="Test",
+                last_name="User",
+                hashed_password="not-used",
+                is_active=True,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
 
-            if not user:
-                # Create test user
-                user = User(
-                    email=test_email,
-                    first_name="Test",
-                    last_name="User",
-                    hashed_password="not-used",
-                    is_active=True,
-                )
-                session.add(user)
-                await session.commit()
-                await session.refresh(user)
-
-            # Generate platform token for this user
             token = create_access_token(subject=user.id)
 
             return user, token
@@ -279,10 +274,9 @@ class TestReadYourWritesGuarantee:
         assert create_response.status_code == 201
         reference_number = create_response.json()["reference_number"]
 
-        # Create a different user and token
         async with async_session_maker() as session:
             other_user = User(
-                email="other-user@example.com",
+                email=f"other-{uuid.uuid4().hex[:8]}@example.com",
                 first_name="Other",
                 last_name="User",
                 hashed_password="not-used",

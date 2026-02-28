@@ -20,7 +20,7 @@ class TestWorkflowLifecycle:
                 "title": f"E2E Test Incident - {uuid4().hex[:8]}",
                 "description": "Automated E2E test",
                 "severity": "medium",
-                "reported_date": datetime.now().isoformat(),
+                "incident_date": datetime.now().isoformat(),
             },
             headers=auth_headers,
         )

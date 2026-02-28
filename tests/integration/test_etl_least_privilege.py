@@ -30,7 +30,9 @@ async def etl_user_token(client: AsyncClient, test_session):
 
     from src.core.security import get_password_hash
 
-    # First, ensure etl_user role exists
+    etl_email = f"etl-{uuid.uuid4().hex[:8]}@example.com"
+    etl_password = "etl-test-password"
+
     result = await test_session.execute(select(Role).where(Role.name == "etl_user"))
     etl_role = result.scalar_one_or_none()
 
@@ -54,24 +56,22 @@ async def etl_user_token(client: AsyncClient, test_session):
         await test_session.commit()
         await test_session.refresh(etl_role)
 
-    # Create ETL user (NOT superuser)
     etl_user = User(
-        email="etl-test@example.com",
-        hashed_password=get_password_hash("etl-test-password"),
+        email=etl_email,
+        hashed_password=get_password_hash(etl_password),
         first_name="ETL",
         last_name="TestUser",
         is_active=True,
-        is_superuser=False,  # CRITICAL: NOT a superuser
+        is_superuser=False,
     )
     etl_user.roles = [etl_role]
     test_session.add(etl_user)
     await test_session.commit()
     await test_session.refresh(etl_user)
 
-    # Get auth token
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "etl-test@example.com", "password": "etl-test-password"},
+        data={"username": etl_email, "password": etl_password},
     )
     assert response.status_code == 200, f"Login failed: {response.text}"
     token = response.json()["access_token"]
