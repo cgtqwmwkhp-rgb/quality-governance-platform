@@ -531,17 +531,31 @@ class AuditFindingUpdate(BaseModel):
         return sanitize_field(v)
 
 
-class AuditFindingResponse(AuditFindingBase):
-    """Schema for Audit Finding response."""
+class AuditFindingResponse(BaseModel):
+    """Schema for Audit Finding response.
+
+    Deliberately does NOT inherit AuditFindingBase so that input-only
+    validators (sanitize, min_length, pattern) don't re-run on output
+    serialization and cause 500s when legacy data doesn't match.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     reference_number: str
     run_id: int
-    question_id: Optional[int]
+    question_id: Optional[int] = None
+    title: str
+    description: str
+    severity: str
+    finding_type: str
     status: str
-    created_by_id: Optional[int]
+    clause_ids: Optional[List[int]] = None
+    control_ids: Optional[List[int]] = None
+    risk_ids: Optional[List[int]] = None
+    corrective_action_required: bool = True
+    corrective_action_due_date: Optional[datetime] = None
+    created_by_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
