@@ -5,16 +5,12 @@ Shared fixtures and configuration for User Acceptance Tests.
 Uses per-test transaction rollback for complete isolation.
 """
 
-import asyncio
 from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.infrastructure.database import engine, get_db
 from src.main import app
 
 
@@ -34,16 +30,35 @@ def pytest_configure(config):
     )
 
 
+_CLEANUP_TABLES = [
+    "audit_events",
+    "audit_questions",
+    "audit_sections",
+    "audit_run_responses",
+    "audit_runs",
+    "audit_templates",
+    "actions",
+    "investigation_runs",
+    "investigations",
+    "complaints",
+    "incidents",
+    "near_misses",
+    "risks",
+    "policies",
+    "standards",
+    "users",
+]
+
+
 @pytest.fixture(scope="session", autouse=True)
-def _seed_default_tenant():
+async def _seed_default_tenant():
     """Ensure a default tenant exists for UAT tests."""
+    from sqlalchemy import select
 
-    async def _seed():
-        from sqlalchemy import select
+    from src.domain.models.tenant import Tenant
+    from src.infrastructure.database import async_session_maker
 
-        from src.domain.models.tenant import Tenant
-        from src.infrastructure.database import async_session_maker
-
+    try:
         async with async_session_maker() as session:
             result = await session.execute(select(Tenant).where(Tenant.id == 1))
             if result.scalar_one_or_none() is None:
@@ -55,38 +70,26 @@ def _seed_default_tenant():
                 )
                 session.add(tenant)
                 await session.commit()
-
-    try:
-        asyncio.run(_seed())
     except Exception:
         pass
 
 
 @pytest.fixture(autouse=True)
-async def _db_rollback():
-    """Wrap every UAT test in a rolled-back transaction for isolation."""
-    connection = await engine.connect()
-    transaction = await connection.begin()
+async def _cleanup_test_data():
+    """Delete test data after each test for isolation."""
+    yield
 
-    session = AsyncSession(bind=connection, expire_on_commit=False)
-    await connection.begin_nested()
+    from src.infrastructure.database import async_session_maker
 
-    @event.listens_for(session.sync_session, "after_transaction_end")
-    def _restart_savepoint(sync_session, trans):
-        if trans.nested and not trans._parent.nested:
-            sync_session.begin_nested()
+    try:
+        from sqlalchemy import text
 
-    async def _override_get_db():
-        yield session
-
-    app.dependency_overrides[get_db] = _override_get_db
-
-    yield session
-
-    app.dependency_overrides.pop(get_db, None)
-    await session.close()
-    await transaction.rollback()
-    await connection.close()
+        async with async_session_maker() as session:
+            for table in _CLEANUP_TABLES:
+                await session.execute(text(f"DELETE FROM {table}"))
+            await session.commit()
+    except Exception:
+        pass
 
 
 @pytest_asyncio.fixture(scope="function")

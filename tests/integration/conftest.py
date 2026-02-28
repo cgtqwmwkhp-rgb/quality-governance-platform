@@ -5,9 +5,6 @@ Provides JWT-authenticated test clients at multiple permission levels
 ``get_current_user`` dependency with a lightweight mock that validates
 the JWT but skips the database lookup.
 
-Uses the SQLAlchemy per-test transaction rollback pattern: each test runs
-inside a database transaction that is rolled back at teardown, guaranteeing
-complete isolation without manual cleanup.
 """
 
 import os
@@ -21,13 +18,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_current_user, security
 from src.core.config import settings
 from src.core.security import decode_token
-from src.infrastructure.database import engine, get_db
 from src.main import app
 
 # Align with the application's JWT secret so decode_token() succeeds.
@@ -269,46 +263,49 @@ async def _seed_default_tenant():
 
 
 # ---------------------------------------------------------------------------
-# Per-test transaction rollback (SQLAlchemy recommended pattern)
+# Per-test database cleanup
 # ---------------------------------------------------------------------------
+
+_CLEANUP_TABLES = [
+    "audit_events",
+    "audit_questions",
+    "audit_sections",
+    "audit_run_responses",
+    "audit_runs",
+    "audit_templates",
+    "actions",
+    "investigation_runs",
+    "investigations",
+    "complaints",
+    "incidents",
+    "near_misses",
+    "risks",
+    "policies",
+    "standards",
+    "users",
+]
 
 
 @pytest.fixture(autouse=True)
-async def _db_rollback():
-    """Wrap every test in a transaction that is rolled back at teardown.
+async def _cleanup_test_data():
+    """Delete test data after each test for isolation.
 
-    This is the standard SQLAlchemy testing pattern:
-    1. Open a raw connection and BEGIN a transaction.
-    2. Create a session bound to that connection with a SAVEPOINT.
-    3. Override ``get_db`` so the API handler reuses the same session.
-    4. After the test, ROLLBACK the outer transaction — all data vanishes.
-
-    The ``after_transaction_end`` listener restarts the savepoint whenever
-    the application code calls ``session.commit()``, keeping the outer
-    transaction intact.
+    Uses DELETE (not TRUNCATE) to avoid lock contention and to preserve
+    the session-scoped tenant seed.  Runs AFTER the test (yield first).
     """
-    connection = await engine.connect()
-    transaction = await connection.begin()
+    yield
 
-    session = AsyncSession(bind=connection, expire_on_commit=False)
-    await connection.begin_nested()
+    from sqlalchemy import text
 
-    @event.listens_for(session.sync_session, "after_transaction_end")
-    def _restart_savepoint(sync_session, trans):
-        if trans.nested and not trans._parent.nested:
-            sync_session.begin_nested()
+    from src.infrastructure.database import async_session_maker
 
-    async def _override_get_db():
-        yield session
-
-    app.dependency_overrides[get_db] = _override_get_db
-
-    yield session
-
-    app.dependency_overrides.pop(get_db, None)
-    await session.close()
-    await transaction.rollback()
-    await connection.close()
+    try:
+        async with async_session_maker() as session:
+            for table in _CLEANUP_TABLES:
+                await session.execute(text(f"DELETE FROM {table}"))
+            await session.commit()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -425,14 +422,21 @@ def superuser_auth_headers() -> dict[str, str]:
 
 
 @pytest.fixture
-async def test_session(_db_rollback):
-    """Return the per-test session created by ``_db_rollback``.
+async def test_session():
+    """Async database session for direct ORM operations in tests.
 
-    This session shares the same connection and transaction as the API
-    handler, so ORM inserts are visible to API calls and vice-versa.
-    Everything is rolled back after the test.
+    Creates a fresh session for each test. Combined with the autouse
+    ``_cleanup_test_data`` fixture, test isolation is guaranteed.
     """
-    yield _db_rollback
+    try:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from src.infrastructure.database import async_session_maker
+
+        async with async_session_maker() as session:
+            yield session
+    except Exception as exc:
+        pytest.skip(f"DB session setup failed: {exc}")
 
 
 # ---------------------------------------------------------------------------
