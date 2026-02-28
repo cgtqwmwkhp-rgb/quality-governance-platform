@@ -6,38 +6,17 @@ Seeds default tenant and user for FK integrity.
 
 import pytest
 
-_CLEANUP_TABLES = [
-    "audit_findings",
-    "audit_responses",
-    "audit_events",
-    "audit_questions",
-    "audit_sections",
-    "audit_runs",
-    "audit_templates",
-    "capa_actions",
-    "investigation_actions",
-    "investigation_comments",
-    "investigation_revision_events",
-    "investigation_customer_packs",
-    "investigation_runs",
-    "investigation_templates",
-    "actions",
-    "complaint_actions",
-    "complaints",
-    "incident_actions",
-    "incidents",
-    "rta_actions",
-    "road_traffic_collisions",
-    "near_misses",
-    "risk_controls",
-    "risk_assessments",
-    "risks",
-    "clauses",
-    "controls",
-    "standards",
-    "policy_versions",
-    "policies",
-]
+_CLEANUP_TABLES = (
+    "audit_findings, audit_responses, audit_events, audit_questions, "
+    "audit_sections, audit_runs, audit_templates, capa_actions, "
+    "investigation_actions, investigation_comments, "
+    "investigation_revision_events, investigation_customer_packs, "
+    "investigation_runs, investigation_templates, actions, "
+    "complaint_actions, complaints, incident_actions, incidents, "
+    "rta_actions, road_traffic_collisions, near_misses, "
+    "risk_controls, risk_assessments, risks, clauses, controls, "
+    "standards, policy_versions, policies"
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -90,19 +69,11 @@ async def _cleanup_test_data():
 
     from sqlalchemy import text
 
-    from src.infrastructure.database import async_session_maker
+    from src.infrastructure.database import engine
 
     try:
-        async with async_session_maker() as session:
-            for table in _CLEANUP_TABLES:
-                try:
-                    await session.execute(text(f"DELETE FROM {table}"))
-                except Exception:
-                    await session.rollback()
-            try:
-                await session.execute(text("DELETE FROM users WHERE id != 1"))
-            except Exception:
-                await session.rollback()
-            await session.commit()
+        async with engine.begin() as conn:
+            await conn.execute(text(f"TRUNCATE {_CLEANUP_TABLES} CASCADE"))
+            await conn.execute(text("DELETE FROM users WHERE id != 1"))
     except Exception:
         pass

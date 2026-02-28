@@ -286,70 +286,37 @@ async def _seed_default_data():
         pass
 
 
-# ---------------------------------------------------------------------------
-# Per-test database cleanup
-# ---------------------------------------------------------------------------
-
-_CLEANUP_TABLES = [
-    "audit_findings",
-    "audit_responses",
-    "audit_events",
-    "audit_questions",
-    "audit_sections",
-    "audit_runs",
-    "audit_templates",
-    "capa_actions",
-    "investigation_actions",
-    "investigation_comments",
-    "investigation_revision_events",
-    "investigation_customer_packs",
-    "investigation_runs",
-    "investigation_templates",
-    "actions",
-    "complaint_actions",
-    "complaints",
-    "incident_actions",
-    "incidents",
-    "rta_actions",
-    "road_traffic_collisions",
-    "near_misses",
-    "risk_controls",
-    "risk_assessments",
-    "risks",
-    "clauses",
-    "controls",
-    "standards",
-    "policy_versions",
-    "policies",
-]
+_CLEANUP_TABLES = (
+    "audit_findings, audit_responses, audit_events, audit_questions, "
+    "audit_sections, audit_runs, audit_templates, capa_actions, "
+    "investigation_actions, investigation_comments, "
+    "investigation_revision_events, investigation_customer_packs, "
+    "investigation_runs, investigation_templates, actions, "
+    "complaint_actions, complaints, incident_actions, incidents, "
+    "rta_actions, road_traffic_collisions, near_misses, "
+    "risk_controls, risk_assessments, risks, clauses, controls, "
+    "standards, policy_versions, policies"
+)
 
 
 @pytest.fixture(autouse=True)
 async def _cleanup_test_data():
     """Delete test data after each test for isolation.
 
-    Preserves the session-scoped tenant (id=1) and user (id=1) seeds.
-    Each DELETE is individually error-handled so a missing table does
-    not break cleanup of other tables.
+    Uses a single TRUNCATE ... CASCADE to avoid creating excessive
+    asyncpg connections (which cause segfaults with NullPool).
+    Preserves tenants and user id=1.
     """
     yield
 
     from sqlalchemy import text
 
-    from src.infrastructure.database import async_session_maker
+    from src.infrastructure.database import engine
 
     try:
-        async with async_session_maker() as session:
-            for table in _CLEANUP_TABLES:
-                try:
-                    await session.execute(text(f"DELETE FROM {table}"))
-                except Exception:
-                    await session.rollback()
-            try:
-                await session.execute(text("DELETE FROM users WHERE id != 1"))
-            except Exception:
-                await session.rollback()
-            await session.commit()
+        async with engine.begin() as conn:
+            await conn.execute(text(f"TRUNCATE {_CLEANUP_TABLES} CASCADE"))
+            await conn.execute(text("DELETE FROM users WHERE id != 1"))
     except Exception:
         pass
 
