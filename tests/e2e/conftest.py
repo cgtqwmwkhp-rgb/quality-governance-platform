@@ -16,8 +16,13 @@ async def _seed_default_tenant():
             if result.fetchone() is None:
                 await conn.execute(
                     text(
-                        "INSERT INTO tenants (id, name, slug, admin_email) "
-                        "VALUES (1, 'E2E Test Tenant', 'e2e-test', 'e2e@test.example.com') "
+                        "INSERT INTO tenants "
+                        "(id, name, slug, admin_email, is_active, subscription_tier, "
+                        "primary_color, secondary_color, accent_color, theme_mode, "
+                        "country, settings, features_enabled, max_users, max_storage_gb) "
+                        "VALUES (1, 'E2E Test Tenant', 'e2e-test', 'e2e@test.example.com', "
+                        "true, 'standard', '#3B82F6', '#10B981', '#8B5CF6', 'dark', "
+                        "'United Kingdom', '{}', '{}', 50, 10) "
                         "ON CONFLICT (id) DO NOTHING"
                     )
                 )

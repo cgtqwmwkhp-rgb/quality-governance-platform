@@ -55,16 +55,24 @@ async def _seed_default_tenant():
 
     from src.infrastructure.database import engine
 
-    async with engine.begin() as conn:
-        result = await conn.execute(text("SELECT id FROM tenants WHERE id = 1"))
-        if result.fetchone() is None:
-            await conn.execute(
-                text(
-                    "INSERT INTO tenants (id, name, slug, admin_email) "
-                    "VALUES (1, 'UAT Test Tenant', 'uat-test', 'uat@example.com') "
-                    "ON CONFLICT (id) DO NOTHING"
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT id FROM tenants WHERE id = 1"))
+            if result.fetchone() is None:
+                await conn.execute(
+                    text(
+                        "INSERT INTO tenants "
+                        "(id, name, slug, admin_email, is_active, subscription_tier, "
+                        "primary_color, secondary_color, accent_color, theme_mode, "
+                        "country, settings, features_enabled, max_users, max_storage_gb) "
+                        "VALUES (1, 'UAT Test Tenant', 'uat-test', 'uat@example.com', "
+                        "true, 'standard', '#3B82F6', '#10B981', '#8B5CF6', 'dark', "
+                        "'United Kingdom', '{}', '{}', 50, 10) "
+                        "ON CONFLICT (id) DO NOTHING"
+                    )
                 )
-            )
+    except Exception:
+        pass
 
 
 @pytest_asyncio.fixture(scope="function")
