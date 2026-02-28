@@ -139,8 +139,15 @@ class _MockUser:
 
 
 @pytest.fixture(autouse=True)
-def _override_auth():
-    """Override ``get_current_user`` for E2E tests."""
+def _override_auth(request):
+    """Override ``get_current_user`` for E2E tests.
+
+    Tests marked with ``@pytest.mark.no_auth_override`` are excluded so
+    they can verify 401 / authentication behaviour.
+    """
+    if "no_auth_override" in request.keywords:
+        yield
+        return
 
     async def _mock_get_current_user():
         return _MockUser()
@@ -160,6 +167,10 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "phase34: marks tests requiring Phase 3/4 features (quarantined)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "no_auth_override: skip the autouse auth override for this test",
     )
 
 

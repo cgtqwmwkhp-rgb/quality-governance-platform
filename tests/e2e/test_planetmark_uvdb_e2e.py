@@ -221,19 +221,9 @@ class TestFrontendBackendIntegration:
 # ============================================================================
 
 
+@pytest.mark.no_auth_override
 class TestBoundedErrorResponses:
     """Tests verifying API returns bounded error classes."""
-
-    @pytest.fixture(autouse=True)
-    def _remove_auth_override(self):
-        """Remove global auth override so these tests can verify 401."""
-        from src.api.dependencies import get_current_user
-        from src.main import app
-
-        saved = app.dependency_overrides.pop(get_current_user, None)
-        yield
-        if saved is not None:
-            app.dependency_overrides[get_current_user] = saved
 
     def test_unauthorized_returns_401(self, client):
         """Unauthenticated requests return 401."""
