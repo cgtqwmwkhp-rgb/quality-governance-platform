@@ -11,6 +11,7 @@ and a version column for optimistic locking on frequently updated tables.
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260221_integrity"
@@ -30,60 +31,70 @@ def upgrade() -> None:
         ("audits", "reference_number", "uq_audits_reference"),
         ("complaints", "reference_number", "uq_complaints_reference"),
     ]:
-        conn.execute(sa.text(
-            f"DO $$ BEGIN "
-            f"  IF EXISTS (SELECT 1 FROM information_schema.columns "
-            f"    WHERE table_name = '{table}' AND column_name = '{col}') "
-            f"  AND NOT EXISTS (SELECT 1 FROM pg_constraint "
-            f"    WHERE conname = '{cname}') THEN "
-            f"    EXECUTE 'ALTER TABLE {table} "
-            f"      ADD CONSTRAINT {cname} UNIQUE ({col})'; "
-            f"  END IF; "
-            f"EXCEPTION WHEN OTHERS THEN "
-            f"  RAISE NOTICE 'skip {cname}: %', SQLERRM; "
-            f"END $$"
-        ))
+        conn.execute(
+            sa.text(
+                f"DO $$ BEGIN "
+                f"  IF EXISTS (SELECT 1 FROM information_schema.columns "
+                f"    WHERE table_name = '{table}' AND column_name = '{col}') "
+                f"  AND NOT EXISTS (SELECT 1 FROM pg_constraint "
+                f"    WHERE conname = '{cname}') THEN "
+                f"    EXECUTE 'ALTER TABLE {table} "
+                f"      ADD CONSTRAINT {cname} UNIQUE ({col})'; "
+                f"  END IF; "
+                f"EXCEPTION WHEN OTHERS THEN "
+                f"  RAISE NOTICE 'skip {cname}: %', SQLERRM; "
+                f"END $$"
+            )
+        )
 
     # --- CHECK constraints on status fields ---
     for table, cname, condition in [
-        ("incidents", "ck_incidents_status",
-         "status IN (''reported'', ''under_investigation'', ''pending_actions'', ''actions_in_progress'', ''pending_review'', ''closed'')"),
-        ("risks", "ck_risks_status",
-         "status IN (''open'', ''mitigating'', ''accepted'', ''closed'')"),
-        ("audits", "ck_audits_status",
-         "status IN (''planned'', ''in_progress'', ''completed'', ''cancelled'')"),
-        ("complaints", "ck_complaints_status",
-         "status IN (''received'', ''acknowledged'', ''under_investigation'', ''pending_response'', ''awaiting_customer'', ''resolved'', ''closed'', ''escalated'')"),
+        (
+            "incidents",
+            "ck_incidents_status",
+            "status IN (''REPORTED'', ''UNDER_INVESTIGATION'', ''PENDING_ACTIONS'', ''ACTIONS_IN_PROGRESS'', ''PENDING_REVIEW'', ''CLOSED'')",
+        ),
+        ("risks", "ck_risks_status", "status IN (''OPEN'', ''MITIGATING'', ''ACCEPTED'', ''CLOSED'')"),
+        ("audits", "ck_audits_status", "status IN (''PLANNED'', ''IN_PROGRESS'', ''COMPLETED'', ''CANCELLED'')"),
+        (
+            "complaints",
+            "ck_complaints_status",
+            "status IN (''RECEIVED'', ''ACKNOWLEDGED'', ''UNDER_INVESTIGATION'', ''PENDING_RESPONSE'', ''AWAITING_CUSTOMER'', ''RESOLVED'', ''CLOSED'', ''ESCALATED'')",
+        ),
     ]:
-        conn.execute(sa.text(
-            f"DO $$ BEGIN "
-            f"  IF EXISTS (SELECT 1 FROM information_schema.tables "
-            f"    WHERE table_name = '{table}') "
-            f"  AND NOT EXISTS (SELECT 1 FROM pg_constraint "
-            f"    WHERE conname = '{cname}') THEN "
-            f"    EXECUTE 'ALTER TABLE {table} "
-            f"      ADD CONSTRAINT {cname} CHECK ({condition})'; "
-            f"  END IF; "
-            f"EXCEPTION WHEN OTHERS THEN "
-            f"  RAISE NOTICE 'skip {cname}: %', SQLERRM; "
-            f"END $$"
-        ))
+        conn.execute(
+            sa.text(
+                f"DO $$ BEGIN "
+                f"  IF EXISTS (SELECT 1 FROM information_schema.tables "
+                f"    WHERE table_name = '{table}') "
+                f"  AND NOT EXISTS (SELECT 1 FROM pg_constraint "
+                f"    WHERE conname = '{cname}') THEN "
+                f"    EXECUTE 'ALTER TABLE {table} "
+                f"      ADD CONSTRAINT {cname} CHECK ({condition})'; "
+                f"  END IF; "
+                f"EXCEPTION WHEN OTHERS THEN "
+                f"  RAISE NOTICE 'skip {cname}: %', SQLERRM; "
+                f"END $$"
+            )
+        )
 
     # --- Version column for optimistic locking ---
     for table in ("incidents", "risks", "audits", "complaints"):
-        conn.execute(sa.text(
-            f"DO $$ BEGIN "
-            f"  IF EXISTS (SELECT 1 FROM information_schema.tables "
-            f"    WHERE table_name = '{table}') "
-            f"  AND NOT EXISTS (SELECT 1 FROM information_schema.columns "
-            f"    WHERE table_name = '{table}' AND column_name = 'version') THEN "
-            f"    EXECUTE 'ALTER TABLE {table} "
-            f"      ADD COLUMN version INTEGER NOT NULL DEFAULT 1'; "
-            f"  END IF; "
-            f"EXCEPTION WHEN OTHERS THEN "
-            f"  RAISE NOTICE 'skip version for {table}: %', SQLERRM; "
-            f"END $$"
-        ))
+        conn.execute(
+            sa.text(
+                f"DO $$ BEGIN "
+                f"  IF EXISTS (SELECT 1 FROM information_schema.tables "
+                f"    WHERE table_name = '{table}') "
+                f"  AND NOT EXISTS (SELECT 1 FROM information_schema.columns "
+                f"    WHERE table_name = '{table}' AND column_name = 'version') THEN "
+                f"    EXECUTE 'ALTER TABLE {table} "
+                f"      ADD COLUMN version INTEGER NOT NULL DEFAULT 1'; "
+                f"  END IF; "
+                f"EXCEPTION WHEN OTHERS THEN "
+                f"  RAISE NOTICE 'skip version for {table}: %', SQLERRM; "
+                f"END $$"
+            )
+        )
 
 
 def downgrade() -> None:

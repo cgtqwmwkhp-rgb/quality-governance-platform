@@ -3,18 +3,8 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.api.routes.audits import (
-    create_run,
-    create_template,
-    get_template,
-    publish_template,
-    update_template,
-)
-from src.api.schemas.audit import (
-    AuditRunCreate,
-    AuditTemplateCreate,
-    AuditTemplateUpdate,
-)
+from src.api.routes.audits import create_run, create_template, get_template, publish_template, update_template
+from src.api.schemas.audit import AuditRunCreate, AuditTemplateCreate, AuditTemplateUpdate
 from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditTemplate
 from src.domain.models.user import User
 

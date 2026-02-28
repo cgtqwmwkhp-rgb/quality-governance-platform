@@ -175,6 +175,7 @@ export default function Audits() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const payload: AuditRunCreate = {
         template_id: formData.template_id,
@@ -183,11 +184,14 @@ export default function Audits() {
         scheduled_date: formData.scheduled_date || undefined,
       };
 
-      const result = await createAuditRun.mutateAsync(payload);
+      const res = await auditsApi.createRun(payload);
+      const result = res.data;
 
       setSuccessMessage(
         `Audit scheduled successfully! Reference: ${result.reference_number}`,
       );
+
+      await loadData();
 
       // STATIC_UI_CONFIG_OK: UX delay to show success before closing modal
       setTimeout(() => {
@@ -196,12 +200,13 @@ export default function Audits() {
       }, 2000);
     } catch (err: unknown) {
       console.error("Failed to create audit:", err);
-      showToast("Failed to schedule audit. Please try again.", "error");
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       const errorMessage =
         axiosErr.response?.data?.detail ||
         "Failed to schedule audit. Please try again.";
       setFormError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -881,19 +886,19 @@ export default function Audits() {
                   type="button"
                   variant="outline"
                   onClick={handleCloseModal}
-                  disabled={createAuditRun.isPending}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={
-                    createAuditRun.isPending ||
+                    isSubmitting ||
                     templates.length === 0 ||
                     !formData.template_id
                   }
                 >
-                  {createAuditRun.isPending ? (
+                  {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Scheduling...

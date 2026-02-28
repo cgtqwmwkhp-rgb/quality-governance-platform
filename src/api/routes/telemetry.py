@@ -8,8 +8,6 @@ import logging
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Request, status
-
-from src.domain.exceptions import AuthorizationError, NotFoundError
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, require_permission
@@ -19,6 +17,7 @@ from src.api.schemas.telemetry import (
     ReceiveEventResponse,
     ResetMetricsResponse,
 )
+from src.domain.exceptions import AuthorizationError, NotFoundError
 from src.domain.models.user import User
 from src.domain.services.telemetry_service import TelemetryService
 

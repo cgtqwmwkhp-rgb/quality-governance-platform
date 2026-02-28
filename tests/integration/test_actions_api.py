@@ -500,6 +500,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=1,
             title="Lifecycle Test Investigation",
+            reference_number="INV-LIFECYCLE-001",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -548,6 +549,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=2,
             title="Status Update Test Investigation",
+            reference_number="INV-STATUS-001",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -598,6 +600,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=3,
             title="Complete Action Test Investigation",
+            reference_number="INV-COMPLETE-001",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -662,6 +665,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=4,
             title="Status Clear Test Investigation",
+            reference_number="INV-CLEAR-001",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -715,6 +719,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=5,
             title="List Status Test Investigation",
+            reference_number="INV-LIST-001",
         )
         test_session.add(investigation)
         await test_session.commit()
