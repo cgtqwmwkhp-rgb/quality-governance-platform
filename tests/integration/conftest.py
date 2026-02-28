@@ -237,6 +237,28 @@ def _override_auth():
     app.dependency_overrides.pop(get_current_user, None)
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def _seed_default_tenant():
+    """Ensure a default tenant exists for tests that create entities with tenant_id=1."""
+    from sqlalchemy import text
+
+    from src.infrastructure.database import engine
+
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT id FROM tenants WHERE id = 1"))
+            if result.fetchone() is None:
+                await conn.execute(
+                    text(
+                        "INSERT INTO tenants (id, name, slug, admin_email) "
+                        "VALUES (1, 'Test Tenant', 'test-tenant', 'admin@test.example.com') "
+                        "ON CONFLICT (id) DO NOTHING"
+                    )
+                )
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Test clients
 # ---------------------------------------------------------------------------

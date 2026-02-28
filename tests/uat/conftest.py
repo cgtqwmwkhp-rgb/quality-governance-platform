@@ -48,28 +48,31 @@ def pytest_configure(config):
     )
 
 
-@pytest_asyncio.fixture(scope="function")
-async def client() -> AsyncGenerator[AsyncClient, None]:
-    """
-    Async HTTP client for UAT tests with proper lifecycle management.
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _seed_default_tenant():
+    """Ensure a default tenant exists for UAT tests that create entities."""
+    from sqlalchemy import text
 
-    This fixture ensures:
-    1. Each test gets a fresh AsyncClient
-    2. The app's lifespan events are properly triggered
-    3. Database connections are disposed after each test
-
-    IMPORTANT: Database engine is disposed after each test to prevent
-    event loop contamination from asyncpg connection pool futures.
-    """
     from src.infrastructure.database import engine
 
+    async with engine.begin() as conn:
+        result = await conn.execute(text("SELECT id FROM tenants WHERE id = 1"))
+        if result.fetchone() is None:
+            await conn.execute(
+                text(
+                    "INSERT INTO tenants (id, name, slug, admin_email) "
+                    "VALUES (1, 'UAT Test Tenant', 'uat-test', 'uat@example.com') "
+                    "ON CONFLICT (id) DO NOTHING"
+                )
+            )
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTP client for UAT tests with proper lifecycle management."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    # Dispose engine to prevent event loop contamination
-    # This ensures each test gets fresh connections
-    await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")

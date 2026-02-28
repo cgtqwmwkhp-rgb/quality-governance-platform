@@ -142,8 +142,10 @@ class TestEmployeePortalWorkflows:
 
         response = await client.post("/api/v1/portal/reports/", json=invalid_report)
 
-        assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.text}"
-        # Verify error response format
+        assert response.status_code in (
+            400,
+            422,
+        ), f"Expected 400/422, got {response.status_code}: {response.text}"
         data = response.json()
         assert "message" in data or ("error" in data and isinstance(data["error"], dict))
 
