@@ -281,8 +281,8 @@ export default function Audits() {
     total: filteredAudits.length,
     inProgress: filteredAudits.filter(a => a.status === 'in_progress').length,
     completed: filteredAudits.filter(a => a.status === 'completed').length,
-    avgScore: filteredAudits.filter(a => a.score_percentage).reduce((acc, a) => acc + (a.score_percentage || 0), 0) / 
-              (filteredAudits.filter(a => a.score_percentage).length || 1),
+    avgScore: filteredAudits.filter(a => a.score_percentage != null).reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) / 
+              (filteredAudits.filter(a => a.score_percentage != null).length || 1),
     openFindings: findings.filter(f => f.status === 'open').length,
   }
   if (loading) {
@@ -369,7 +369,7 @@ export default function Audits() {
           },
           {
             label: "Avg Score",
-            value: `${stats.avgScore.toFixed(0)}%`,
+            value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
             icon: BarChart3,
             variant: "primary" as const,
           },
@@ -464,7 +464,7 @@ export default function Audits() {
                               v{audit.template_version}
                             </Badge>
                           </div>
-                          {audit.score_percentage !== undefined && (
+                          {audit.score_percentage != null && (
                             <span className={cn("text-sm font-bold", getScoreColor(audit.score_percentage))}>
                               {audit.score_percentage.toFixed(0)}%
                             </span>

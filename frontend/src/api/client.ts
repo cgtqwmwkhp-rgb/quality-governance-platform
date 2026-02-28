@@ -582,10 +582,10 @@ export interface AuditRun {
   due_date?: string
   started_at?: string
   completed_at?: string
-  score?: number
-  max_score?: number
-  score_percentage?: number
-  passed?: boolean
+  score?: number | null
+  max_score?: number | null
+  score_percentage?: number | null
+  passed?: boolean | null
   created_at: string
 }
 
