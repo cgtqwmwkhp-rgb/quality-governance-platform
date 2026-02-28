@@ -630,6 +630,7 @@ export interface AuditTemplateCreate {
   category?: string
   audit_type?: string
   scoring_method?: string
+  passing_score?: number
 }
 
 export interface AuditTemplateUpdate {
@@ -638,6 +639,7 @@ export interface AuditTemplateUpdate {
   category?: string
   audit_type?: string
   scoring_method?: string
+  passing_score?: number
 }
 
 export interface AuditRunCreate {
