@@ -201,7 +201,9 @@ class TestAuditTemplateCRUD:
         )
 
         assert response.status_code == 400
-        assert "at least one question" in response.json()["detail"].lower()
+        resp_data = response.json()
+        error_msg = resp_data.get("error", {}).get("message", resp_data.get("detail", ""))
+        assert "at least one question" in error_msg.lower()
 
     @pytest.mark.asyncio
     async def test_update_nonexistent_template_returns_404(

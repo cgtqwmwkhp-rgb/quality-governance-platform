@@ -4,6 +4,8 @@ End-to-End Tests for Employee Portal
 Comprehensive E2E coverage for all portal user journeys.
 """
 
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -43,7 +45,7 @@ class TestIncidentReporting:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Test Incident - Minimal",
+                "title": f"Test Incident - Minimal - {uuid4().hex[:8]}",
                 "description": "This is a test incident with minimal fields.",
                 "severity": "low",
             },
@@ -58,7 +60,7 @@ class TestIncidentReporting:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Test Incident - Full Details",
+                "title": f"Test Incident - Full Details - {uuid4().hex[:8]}",
                 "description": "Comprehensive test incident with all fields populated for E2E testing.",
                 "severity": "high",
                 "location": "Warehouse Building A, Section 3",
@@ -80,7 +82,7 @@ class TestIncidentReporting:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Anonymous Safety Report",
+                "title": f"Anonymous Safety Report - {uuid4().hex[:8]}",
                 "description": "Anonymous report for safety concern.",
                 "severity": "medium",
                 "is_anonymous": True,
@@ -115,7 +117,7 @@ class TestNearMissReporting:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "near_miss",
-                "title": "Near Miss - Forklift",
+                "title": f"Near Miss - Forklift - {uuid4().hex[:8]}",
                 "description": "Forklift nearly struck pedestrian in aisle.",
                 "severity": "high",
                 "location": "Warehouse Aisle 5",
@@ -137,7 +139,7 @@ class TestComplaintReporting:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "complaint",
-                "title": "Delivery Delay Complaint",
+                "title": f"Delivery Delay Complaint - {uuid4().hex[:8]}",
                 "description": "Customer complained about delivery being 3 days late.",
                 "severity": "medium",
             },
@@ -181,7 +183,7 @@ class TestReportTracking:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Tracking Test Incident",
+                "title": f"Tracking Test Incident - {uuid4().hex[:8]}",
                 "description": "Test incident for tracking functionality.",
                 "severity": "low",
             },
@@ -221,7 +223,7 @@ class TestReportTracking:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Wrong Code Test",
+                "title": f"Wrong Code Test - {uuid4().hex[:8]}",
                 "description": "Test for wrong tracking code.",
                 "severity": "low",
             },

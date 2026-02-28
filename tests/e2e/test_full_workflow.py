@@ -9,6 +9,7 @@ Run with:
 """
 
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -153,7 +154,7 @@ class TestIncidentLifecycle:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "E2E Test - Slip hazard in warehouse",
+                "title": f"E2E Test - Slip hazard in warehouse - {uuid4().hex[:8]}",
                 "description": "Water leak causing slippery floor near loading bay A.",
                 "severity": "high",
                 "location": "Warehouse - Loading Bay A",
@@ -408,7 +409,7 @@ class TestEmployeePortalFlow:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Portal E2E Test - Near miss",
+                "title": f"Portal E2E Test - Near miss - {uuid4().hex[:8]}",
                 "description": "Forklift nearly struck pedestrian in aisle 5",
                 "severity": "medium",
                 "location": "Warehouse Aisle 5",

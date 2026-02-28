@@ -354,6 +354,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
+          TESTING: "1"
         run: |
           pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-integration.xml
 
@@ -519,6 +520,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key-minimum16chars
           JWT_SECRET_KEY: test-jwt-secret-min16chars
+          TESTING: "1"
         run: |
           echo "=== SMOKE TESTS - CRITICAL (BLOCKING) ==="
           pytest tests/smoke/ -v --tb=short -x --junit-xml=junit-smoke.xml
@@ -687,6 +689,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
+          TESTING: "1"
         run: |
           echo "=== E2E TESTS - Full User Journeys ==="
           pytest tests/e2e/ -v --tb=short --junit-xml=junit-e2e.xml
@@ -794,6 +797,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
+          TESTING: "1"
         run: |
           echo "=== UAT STAGE 1 - Basic Workflow Tests (50 tests) ==="
           pytest tests/uat/test_stage1_basic_workflows.py -v --tb=short --junit-xml=junit-uat-stage1.xml
@@ -805,6 +809,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
+          TESTING: "1"
         run: |
           echo "=== UAT STAGE 2 - Sophisticated Workflow Tests (20 tests) ==="
           pytest tests/uat/test_stage2_sophisticated_workflows.py -v --tb=short --junit-xml=junit-uat-stage2.xml

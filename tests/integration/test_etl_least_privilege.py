@@ -8,6 +8,7 @@ Permission Matrix for ETL User:
 - DENIED: *:delete, *:admin, user:*, role:*, investigation:*, action:*
 """
 
+import uuid
 from datetime import datetime
 
 import pytest
@@ -125,7 +126,7 @@ async def test_etl_user_cannot_delete_complaint(client: AsyncClient, etl_user_to
         description="Testing delete restriction.",
         received_date=datetime.now(),
         complainant_name="Test User",
-        reference_number="DEL-TEST-001",
+        reference_number=f"DEL-TEST-{uuid.uuid4().hex[:8]}",
     )
     test_session.add(complaint)
     await test_session.commit()

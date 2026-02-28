@@ -1,5 +1,7 @@
 """Integration tests for Policy Library API."""
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -45,7 +47,7 @@ async def test_get_policy_by_id(client: AsyncClient, test_user: User, auth_heade
         description="Test description",
         document_type=DocumentType.POLICY,
         status=DocumentStatus.DRAFT,
-        reference_number="POL-2026-TEST-001",
+        reference_number=f"POL-TEST-{uuid.uuid4().hex[:8]}",
         created_by_id=test_user.id,
         updated_by_id=test_user.id,
     )
@@ -199,7 +201,7 @@ async def test_update_policy(client: AsyncClient, test_user: User, auth_headers:
         description="Original description",
         document_type=DocumentType.POLICY,
         status=DocumentStatus.DRAFT,
-        reference_number="POL-2026-UPD-001",
+        reference_number=f"POL-UPD-{uuid.uuid4().hex[:8]}",
         created_by_id=test_user.id,
         updated_by_id=test_user.id,
     )
@@ -248,7 +250,7 @@ async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers:
         title="Policy to Delete",
         document_type=DocumentType.POLICY,
         status=DocumentStatus.DRAFT,
-        reference_number="POL-2026-DEL-001",
+        reference_number=f"POL-DEL-{uuid.uuid4().hex[:8]}",
         created_by_id=test_user.id,
         updated_by_id=test_user.id,
     )

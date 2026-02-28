@@ -1,6 +1,7 @@
 """E2E test: Full incident workflow lifecycle."""
 
 from datetime import datetime
+from uuid import uuid4
 
 import pytest
 
@@ -16,7 +17,7 @@ class TestWorkflowLifecycle:
         resp = client.post(
             "/api/v1/incidents",
             json={
-                "title": "E2E Test Incident",
+                "title": f"E2E Test Incident - {uuid4().hex[:8]}",
                 "description": "Automated E2E test",
                 "severity": "medium",
                 "reported_date": datetime.now().isoformat(),

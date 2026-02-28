@@ -4,6 +4,9 @@ End-to-End Tests for Admin Dashboard
 Comprehensive E2E coverage for admin workflows.
 """
 
+from datetime import datetime
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -75,14 +78,16 @@ class TestIncidentManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
+        uid = uuid4().hex[:8]
         response = client.post(
             "/api/v1/incidents",
             json={
-                "title": "Admin Created Incident",
+                "title": f"Admin Created Incident - {uid}",
                 "description": "Incident created by admin for E2E testing.",
                 "severity": "medium",
                 "incident_type": "safety",
                 "location": "Office Building",
+                "reported_date": datetime.now().isoformat(),
             },
             headers=auth_headers,
         )
@@ -92,7 +97,8 @@ class TestIncidentManagement:
             assert "id" in data or "reference" in data
         elif response.status_code == 422:
             data = response.json()
-            assert "detail" in data or "message" in data
+            error_data = data.get("error", data)
+            assert "message" in error_data or "detail" in data
 
     def test_filter_incidents(self, client, auth_headers):
         """Filter incidents by various criteria."""
@@ -182,10 +188,11 @@ class TestRiskManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
+        uid = uuid4().hex[:8]
         response = client.post(
             "/api/v1/risks",
             json={
-                "title": "E2E Test Risk",
+                "title": f"E2E Test Risk - {uid}",
                 "description": "Risk created for E2E testing.",
                 "category": "operational",
                 "likelihood": 3,
@@ -199,7 +206,8 @@ class TestRiskManagement:
             assert "id" in data or "reference" in data
         elif response.status_code == 422:
             data = response.json()
-            assert "detail" in data or "message" in data
+            error_data = data.get("error", data)
+            assert "message" in error_data or "detail" in data
 
 
 class TestCompliance:

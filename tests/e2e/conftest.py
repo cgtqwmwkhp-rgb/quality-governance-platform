@@ -1,18 +1,16 @@
 """E2E Test Configuration."""
 
+import asyncio
+
 import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def _seed_default_tenant():
+def _seed_default_tenant():
     """Ensure a default tenant exists for E2E tests."""
-    from sqlalchemy import text
 
-    from src.infrastructure.database import engine
-
-    try:
+    async def _seed():
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         from src.domain.models.tenant import Tenant
         from src.infrastructure.database import async_session_maker
@@ -28,5 +26,8 @@ async def _seed_default_tenant():
                 )
                 session.add(tenant)
                 await session.commit()
+
+    try:
+        asyncio.run(_seed())
     except Exception:
         pass
