@@ -54,7 +54,7 @@ from src.domain.models.audit import (
     FindingStatus,
 )
 from src.infrastructure.monitoring.azure_monitor import StructuredLogger
-from src.services.reference_number import ReferenceNumberService
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 observability_logger = StructuredLogger("audit.observability")
