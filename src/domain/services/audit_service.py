@@ -15,7 +15,7 @@ import dataclasses
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -222,7 +222,12 @@ class AuditService:
         model_any: Any = model
         stmt = select(model).where(model_any.id == entity_id)
         if tenant_id is not None:
-            stmt = stmt.where(model_any.tenant_id == tenant_id)
+            stmt = stmt.where(
+                or_(
+                    model_any.tenant_id == tenant_id,
+                    model_any.tenant_id.is_(None),
+                )
+            )
         result = await self.db.execute(stmt)
         entity = result.scalar_one_or_none()
         if entity is None:
@@ -301,7 +306,10 @@ class AuditService:
         query = select(AuditTemplate).where(
             AuditTemplate.is_active == True,  # noqa: E712
             AuditTemplate.archived_at.is_(None),
-            AuditTemplate.tenant_id == tenant_id,
+            or_(
+                AuditTemplate.tenant_id == tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
         )
         if search:
             pattern = f"%{search}%"
@@ -361,7 +369,10 @@ class AuditService:
             select(AuditTemplate)
             .where(
                 AuditTemplate.archived_at.isnot(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
             .order_by(AuditTemplate.archived_at.desc())
         )
@@ -377,7 +388,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.archived_at.isnot(None),
                 AuditTemplate.archived_at < cutoff,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         expired = result.scalars().all()
@@ -415,7 +429,10 @@ class AuditService:
             )
             .where(
                 AuditTemplate.id == template_id,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -487,7 +504,10 @@ class AuditService:
             .options(selectinload(AuditTemplate.questions))
             .where(
                 AuditTemplate.id == template_id,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -528,7 +548,10 @@ class AuditService:
             )
             .where(
                 AuditTemplate.id == template_id,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         original = result.scalar_one_or_none()
@@ -599,7 +622,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.id == template_id,
                 AuditTemplate.archived_at.is_(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -634,7 +660,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.id == template_id,
                 AuditTemplate.archived_at.isnot(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -669,7 +698,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.id == template_id,
                 AuditTemplate.archived_at.isnot(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -847,7 +879,9 @@ class AuditService:
         template_id: int | None = None,
         assigned_to_id: int | None = None,
     ) -> PaginatedResult:
-        query = select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == tenant_id)
+        query = select(AuditRun).options(selectinload(AuditRun.template)).where(
+            or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None))
+        )
         if status_filter:
             query = query.where(AuditRun.status == status_filter)
         if template_id:
@@ -915,7 +949,10 @@ class AuditService:
                 selectinload(AuditRun.findings),
                 selectinload(AuditRun.template),
             )
-            .where(AuditRun.id == run_id, AuditRun.tenant_id == tenant_id)
+            .where(
+                AuditRun.id == run_id,
+                or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
+            )
         )
         run = result.scalar_one_or_none()
         if not run:
@@ -1006,7 +1043,10 @@ class AuditService:
         result = await self.db.execute(
             select(AuditRun)
             .options(selectinload(AuditRun.responses))
-            .where(AuditRun.id == run_id, AuditRun.tenant_id == tenant_id)
+            .where(
+                AuditRun.id == run_id,
+                or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
+            )
         )
         run = result.scalar_one_or_none()
         if not run:
@@ -1119,7 +1159,10 @@ class AuditService:
         run_id: int | None = None,
     ) -> PaginatedResult:
         query = select(AuditFinding).where(
-            AuditFinding.tenant_id == tenant_id,
+            or_(
+                AuditFinding.tenant_id == tenant_id,
+                AuditFinding.tenant_id.is_(None),
+            ),
         )
         if status_filter:
             query = query.where(AuditFinding.status == status_filter)

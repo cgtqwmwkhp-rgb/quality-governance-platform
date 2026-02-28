@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -146,7 +146,10 @@ async def list_templates(
     started = time.perf_counter()
     query = select(AuditTemplate).where(
         AuditTemplate.is_active == True,
-        AuditTemplate.tenant_id == current_user.tenant_id,
+        or_(
+            AuditTemplate.tenant_id == current_user.tenant_id,
+            AuditTemplate.tenant_id.is_(None),
+        ),
     )
 
     if search:
@@ -200,6 +203,7 @@ async def create_template(
     template = AuditTemplate(
         **template_data_dict,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     # Generate reference number
