@@ -416,7 +416,7 @@ jobs:
           # - Polls /api/v1/meta/version until build_sha matches expected
           # - Requires 3 consecutive matching responses (stability gate)
           # - Bounded retries with exponential backoff
-          # - Total timeout: 20 minutes (ACA cold starts can exceed 10 min)
+          # - Total timeout: 20 minutes (App Service cold starts can exceed 10 min)
           ./scripts/verify_deploy_deterministic.sh \
             --url "$APP_URL" \
             --expected-sha "${{ github.sha }}" \
@@ -631,19 +631,19 @@ jobs:
 
       - name: Run audit lifecycle E2E (strict if configured)
         env:
-          STAGING_E2E_EMAIL: ${{ secrets.STAGING_E2E_EMAIL }}
-          STAGING_E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+          E2E_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
         run: |
-          if [ -z "$STAGING_E2E_EMAIL" ] || [ -z "$STAGING_E2E_PASSWORD" ]; then
-            echo "ℹ️ STAGING_E2E_EMAIL/STAGING_E2E_PASSWORD not configured. Skipping audit lifecycle E2E."
+          if [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ]; then
+            echo "ℹ️ E2E credentials not configured. Skipping audit lifecycle E2E."
             exit 0
           fi
           python3 -m pip install --upgrade pip
           python3 -m pip install requests
           python3 scripts/smoke/audit_lifecycle_e2e.py \
             --base-url "https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net" \
-            --email "$STAGING_E2E_EMAIL" \
-            --password "$STAGING_E2E_PASSWORD" \
+            --email "$E2E_EMAIL" \
+            --password "$E2E_PASSWORD" \
             --json
 
       - name: Smoke test summary
