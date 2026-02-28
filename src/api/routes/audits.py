@@ -10,11 +10,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.utils.pagination import PaginationParams
 from src.domain.models.user import User
+from src.domain.services.audit_service import AuditService
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,
@@ -318,26 +321,6 @@ async def publish_template(
         tenant_id=current_user.tenant_id,
         actor_user_id=current_user.id,
     )
-    template = result.scalar_one_or_none()
-
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
-        )
-
-    # Validate template has at least one question
-    question_count = sum(len(s.questions) for s in template.sections)
-    if question_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Template must have at least one question before publishing",
-        )
-
-    template.is_published = True
-    await db.commit()
-    await db.refresh(template)
-
     return _decode_template_response_entities(AuditTemplateResponse.model_validate(template))
 
 
@@ -377,36 +360,7 @@ async def archive_template(
         tenant_id=current_user.tenant_id,
         actor_user_id=current_user.id,
     )
-    db.add(cloned_template)
-    await db.flush()  # Get the ID for the cloned template
-
-    # Clone sections and questions
-    for original_section in original.sections:
-        cloned_section = AuditSection(
-            template_id=cloned_template.id,
-            title=original_section.title,
-            description=original_section.description,
-            sort_order=original_section.sort_order,
-        )
-        db.add(cloned_section)
-        await db.flush()  # Get the ID for the cloned section
-
-        for original_question in original_section.questions:
-            cloned_question = AuditQuestion(
-                template_id=cloned_template.id,
-                section_id=cloned_section.id,
-                question_text=original_question.question_text,
-                question_type=original_question.question_type,
-                is_required=original_question.is_required,
-                weight=original_question.weight,
-                options_json=original_question.options_json,
-            )
-            db.add(cloned_question)
-
-    await db.commit()
-    await db.refresh(cloned_template)
-
-    return _decode_template_response_entities(AuditTemplateResponse.model_validate(cloned_template))
+    return ArchiveTemplateResponse.model_validate(template)
 
 
 @router.post("/templates/{template_id}/restore", response_model=AuditTemplateResponse)
