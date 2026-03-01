@@ -82,6 +82,19 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )
+
+    # Archive support
+    archived_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
     # Relationships
     sections: Mapped[List["AuditSection"]] = relationship(
         "AuditSection",
@@ -228,6 +241,11 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )
+
     # Scoring
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     max_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -314,6 +332,11 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
