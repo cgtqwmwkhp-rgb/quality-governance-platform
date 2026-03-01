@@ -17,6 +17,7 @@ try:
     from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
     from opentelemetry.sdk.trace.export import BatchSpanProcessor  # noqa: F401
     from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased  # noqa: F401
+
     _HAS_OTEL = True
 except ImportError:
     _HAS_OTEL = False

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 _is_testing = "pytest" in os.environ.get("_", "") or os.environ.get("TESTING") == "1" or "pytest" in sys.modules
 
+
 class Base(DeclarativeBase):
     """Base class for all database models."""
 
