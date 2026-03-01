@@ -63,6 +63,9 @@ class InformationAsset(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Identification
     asset_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -236,6 +239,9 @@ class InformationSecurityRisk(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Identification
     risk_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -290,6 +296,9 @@ class SecurityIncident(Base):
     __tablename__ = "security_incidents"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Identification
     incident_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
@@ -457,6 +466,9 @@ class SupplierSecurityAssessment(Base):
     __tablename__ = "supplier_security_assessments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Supplier
     supplier_name: Mapped[str] = mapped_column(String(255), nullable=False)

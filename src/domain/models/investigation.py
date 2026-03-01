@@ -124,6 +124,9 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Template reference
     template_id = Column(Integer, ForeignKey("investigation_templates.id"), nullable=False, index=True)
 

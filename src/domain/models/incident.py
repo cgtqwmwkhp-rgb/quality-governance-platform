@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
@@ -64,6 +64,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "incidents"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Incident identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)

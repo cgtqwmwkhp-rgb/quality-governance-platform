@@ -82,6 +82,9 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Rule identification
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -176,6 +179,9 @@ class SLAConfiguration(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # What this SLA applies to
     entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
 
@@ -218,6 +224,9 @@ class SLATracking(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Entity being tracked
     entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
@@ -263,6 +272,9 @@ class EscalationLevel(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Entity type this applies to
     entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)

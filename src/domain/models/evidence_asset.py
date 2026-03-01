@@ -80,6 +80,9 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Storage reference
     storage_key: Mapped[str] = mapped_column(
         String(500), nullable=False, unique=True, index=True

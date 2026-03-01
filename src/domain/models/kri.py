@@ -53,6 +53,9 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # KRI identification
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
@@ -169,6 +172,9 @@ class KRIAlert(Base, TimestampMixin):
     kri_id: Mapped[int] = mapped_column(
         ForeignKey("key_risk_indicators.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Alert details
     alert_type: Mapped[str] = mapped_column(String(50), nullable=False)  # threshold_breach, trend_warning

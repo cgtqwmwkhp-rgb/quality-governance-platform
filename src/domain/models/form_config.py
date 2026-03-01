@@ -58,6 +58,9 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Template identification
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
@@ -184,6 +187,9 @@ class Contract(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Contract details
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
@@ -213,6 +219,9 @@ class SystemSetting(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Setting identification
     key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
@@ -236,6 +245,9 @@ class LookupOption(Base, TimestampMixin):
     __tablename__ = "lookup_options"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Option identification
     category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # e.g., 'roles', 'departments'
