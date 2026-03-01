@@ -925,23 +925,34 @@ async def list_findings(
     run_id: Optional[int] = None,
 ) -> Any:
     """List all audit findings with pagination and filtering."""
-    service = AuditService(db)
-    result = await service.list_findings(
-        current_user.tenant_id,
-        page=params.page,
-        page_size=params.page_size,
-        status_filter=status_filter,
-        severity=severity,
-        run_id=run_id,
-    )
-    return {
-        "items": result.items,
-        "total": result.total,
-        "page": result.page,
-        "page_size": result.page_size,
-        "pages": result.pages,
-        "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
-    }
+    import traceback as _tb
+
+    try:
+        service = AuditService(db)
+        result = await service.list_findings(
+            current_user.tenant_id,
+            page=params.page,
+            page_size=params.page_size,
+            status_filter=status_filter,
+            severity=severity,
+            run_id=run_id,
+        )
+        response_dict = {
+            "items": result.items,
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+            "pages": result.pages,
+            "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
+        }
+        # Validate before returning to catch serialization errors
+        AuditFindingListResponse.model_validate(response_dict)
+        return response_dict
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(exc).__name__}: {exc}\n{''.join(_tb.format_tb(exc.__traceback__)[-3:])}",
+        ) from exc
 
 
 @router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)
