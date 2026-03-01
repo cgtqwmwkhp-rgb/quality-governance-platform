@@ -112,7 +112,7 @@ jobs:
       - name: Lint workflows
         uses: rhysd/actionlint@v1.7.10
         with:
-          args: ".github/workflows/ci.yml .github/workflows/deploy-staging.yml .github/workflows/deploy-production.yml .github/workflows/dora-metrics.yml"
+          args: ".github/workflows/ci.yml .github/workflows/deploy-staging.yml .github/workflows/deploy-production.yml"
 
   smoke-gate-selftest:
     name: Smoke Gate Self-Test

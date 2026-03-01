@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 try:
@@ -34,6 +35,7 @@ class StructuredLogger:
     """
 
     def __init__(self, name: str) -> None:
+        self.name = name
         self._logger = logging.getLogger(name)
 
     def _emit(self, level: int, event: str, **kwargs: Any) -> None:
@@ -251,5 +253,20 @@ def get_tracer() -> trace.Tracer:
     """Get the OpenTelemetry tracer."""
     global _tracer
     if _tracer is None:
-        _tracer = trace.get_tracer(__name__)
+        if _HAS_OTEL:
+            _tracer = trace.get_tracer(__name__)
     return _tracer
+
+
+class MonitoringConfig:
+    """Static configuration for monitoring."""
+
+    SERVICE_NAME = "quality-governance-platform"
+    ENVIRONMENT = os.environ.get("ENVIRONMENT", "")
+
+
+class ApplicationInsightsClient:
+    """Lightweight wrapper for Application Insights telemetry."""
+
+    def __init__(self) -> None:
+        self.connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", "")
