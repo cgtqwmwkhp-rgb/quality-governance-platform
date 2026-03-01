@@ -89,8 +89,26 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         return results
     results.append(StepResult("login", True, "Authenticated"))
 
+    # 1b) List findings (regression gate for findings 500)
+    findings_resp = _request("GET", f"{base_url}/api/v1/audits/findings?page=1&page_size=10", token=token)
+    if findings_resp.status_code != 200:
+        results.append(
+            StepResult(
+                "list_findings",
+                False,
+                f"Expected 200, got {findings_resp.status_code}",
+                {"body": findings_resp.text[:500]},
+            )
+        )
+        return results
+    results.append(
+        StepResult("list_findings", True, f"Findings listed ({findings_resp.json().get('total', '?')} total)")
+    )
+
     # 2) List published templates
-    templates_resp = _request("GET", f"{base_url}/api/v1/audits/templates?is_published=true&page=1&page_size=50", token=token)
+    templates_resp = _request(
+        "GET", f"{base_url}/api/v1/audits/templates?is_published=true&page=1&page_size=50", token=token
+    )
     if templates_resp.status_code != 200:
         results.append(
             StepResult(
@@ -103,7 +121,13 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         return results
     templates = templates_resp.json().get("items", [])
     if not templates:
-        results.append(StepResult("list_published_templates", True, "No published templates available (endpoint healthy, skipping lifecycle)"))
+        results.append(
+            StepResult(
+                "list_published_templates",
+                True,
+                "No published templates available (endpoint healthy, skipping lifecycle)",
+            )
+        )
         return results
     template_id = templates[0]["id"]
     results.append(
@@ -140,7 +164,10 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
             "schedule_run",
             True,
             f"Created run_id={run_id}",
-            {"reference_number": run_data.get("reference_number"), "template_version": run_data.get("template_version")},
+            {
+                "reference_number": run_data.get("reference_number"),
+                "template_version": run_data.get("template_version"),
+            },
         )
     )
 
@@ -174,7 +201,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "max_score": 1,
         "notes": "E2E response",
     }
-    response_resp = _request("POST", f"{base_url}/api/v1/audits/runs/{run_id}/responses", token=token, payload=response_payload)
+    response_resp = _request(
+        "POST", f"{base_url}/api/v1/audits/runs/{run_id}/responses", token=token, payload=response_payload
+    )
     if response_resp.status_code != 201:
         results.append(
             StepResult(
@@ -210,7 +239,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "corrective_action_required": True,
         "question_id": question_id,
     }
-    finding_resp = _request("POST", f"{base_url}/api/v1/audits/runs/{run_id}/findings", token=token, payload=finding_payload)
+    finding_resp = _request(
+        "POST", f"{base_url}/api/v1/audits/runs/{run_id}/findings", token=token, payload=finding_payload
+    )
     if finding_resp.status_code != 201:
         results.append(
             StepResult(
@@ -299,7 +330,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run audit lifecycle e2e smoke checks")
-    parser.add_argument("--base-url", required=True, help="API base URL, e.g. https://qgp-staging-plantexpand.azurewebsites.net")
+    parser.add_argument(
+        "--base-url", required=True, help="API base URL, e.g. https://qgp-staging-plantexpand.azurewebsites.net"
+    )
     parser.add_argument("--email", required=True, help="E2E user email")
     parser.add_argument("--password", required=True, help="E2E user password")
     parser.add_argument("--json", action="store_true", help="Print JSON output")
