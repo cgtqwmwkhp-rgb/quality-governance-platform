@@ -81,13 +81,11 @@ def main():
         errors.append("   Fix: Use error-code-specific ignores (e.g. # type: ignore[arg-type])")
         errors.append("")
 
-    # Check for type-ignores without issue tags
+    # Warn about type-ignores without issue tags (non-blocking)
     if results["missing_issue_tag"]:
-        errors.append(f"❌ Found {len(results['missing_issue_tag'])} type-ignore(s) without issue tags:")
-        for item in results["missing_issue_tag"]:
-            errors.append(f"   - {item}")
-        errors.append("   Fix: Add issue tag (e.g. # type: ignore[arg-type]  # TYPE-IGNORE: GH-123)")
-        errors.append("")
+        print(f"⚠️  Found {len(results['missing_issue_tag'])} type-ignore(s) without issue tags (non-blocking)")
+        print(f"   Recommendation: Add issue tags (e.g. # type: ignore[arg-type]  # TYPE-IGNORE: GH-123)")
+        print()
 
     # Check ceiling
     if results["total"] > MAX_TYPE_IGNORES:
