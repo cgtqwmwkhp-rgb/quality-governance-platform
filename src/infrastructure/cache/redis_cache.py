@@ -417,3 +417,13 @@ async def invalidate_pattern(pattern: str):
     cache = get_cache()
     count = await cache.delete_pattern(pattern)
     return {"success": True, "invalidated": count}
+
+
+async def invalidate_tenant_cache(tenant_id: int, namespace: str) -> None:
+    """Invalidate all cache entries for a specific tenant and namespace."""
+    try:
+        cache = get_cache()
+        pattern = f"tenant:{tenant_id}:{namespace}:*"
+        await cache.delete_pattern(pattern)
+    except Exception:
+        pass
