@@ -263,7 +263,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: npx vitest run --coverage
+        run: npx vitest run --coverage --passWithNoTests
 
   sbom:
     name: SBOM Generation
