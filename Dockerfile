@@ -28,8 +28,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade system setuptools to resolve vendored CVEs
-RUN pip install --no-cache-dir --upgrade setuptools
+# Upgrade system setuptools and wheel to resolve vendored CVEs
+RUN pip install --no-cache-dir --upgrade setuptools wheel
 
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
