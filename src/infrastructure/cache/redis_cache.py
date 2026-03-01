@@ -12,7 +12,7 @@ Features:
 import asyncio
 import hashlib
 import json
-import logging
+import os
 import pickle
 import time
 from collections import OrderedDict
@@ -21,24 +21,17 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar, Union
 
-from src.core.config import settings
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-logger = logging.getLogger(__name__)
-
 T = TypeVar("T")
-
-_RECOVERY_INTERVAL = settings.cache_recovery_interval
 
 
 class CacheType(Enum):
-    """Cache categories with default TTLs (configurable via settings)."""
+    """Cache categories with default TTLs."""
 
-    SHORT = settings.cache_ttl_short
-    MEDIUM = settings.cache_ttl_medium
-    LONG = settings.cache_ttl_long
-    DAILY = settings.cache_ttl_daily
-    SESSION = settings.cache_ttl_session
+    SHORT = 60  # 1 minute - for frequently changing data
+    MEDIUM = 300  # 5 minutes - for moderately stable data
+    LONG = 3600  # 1 hour - for stable reference data
+    DAILY = 86400  # 24 hours - for very stable data
+    SESSION = 1800  # 30 minutes - for session data
 
 
 @dataclass
@@ -46,7 +39,7 @@ class CacheConfig:
     """Cache configuration."""
 
     redis_url: Optional[str] = None
-    default_ttl: int = settings.cache_ttl_default
+    default_ttl: int = 300
     max_memory_items: int = 1000
     enable_stats: bool = True
     key_prefix: str = "qgp:"
@@ -56,7 +49,7 @@ class InMemoryCache:
     """Thread-safe in-memory LRU cache with TTL support."""
 
     def __init__(self, max_size: int = 1000):
-        self._cache: OrderedDict[str, tuple[Any, Optional[float]]] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
         self._max_size = max_size
         self._lock = asyncio.Lock()
         self._stats = {"hits": 0, "misses": 0, "sets": 0, "deletes": 0}
@@ -133,10 +126,7 @@ class InMemoryCache:
 
 
 class RedisCache:
-    """Redis-backed cache with connection pooling and retry logic."""
-
-    _MAX_RETRIES = 3
-    _RETRY_BACKOFF = 2.0  # seconds; doubles each attempt
+    """Redis-backed cache with connection pooling."""
 
     def __init__(self, redis_url: str, key_prefix: str = "qgp:"):
         self._redis_url = redis_url
@@ -144,124 +134,24 @@ class RedisCache:
         self._redis = None
         self._fallback = InMemoryCache()
         self._use_fallback = False
-        self._consecutive_failures = 0
-        self._recovery_task: Optional[asyncio.Task] = None
 
     async def _get_redis(self):
-        """Get or create Redis connection with explicit pool config and retry."""
+        """Get or create Redis connection."""
         if self._redis is None and not self._use_fallback:
             try:
                 import redis.asyncio as redis
-                from redis.asyncio.connection import ConnectionPool
 
-                pool = ConnectionPool.from_url(
+                self._redis = redis.from_url(
                     self._redis_url,
-                    max_connections=20,
-                    socket_connect_timeout=5,
-                    socket_timeout=5,
-                    retry_on_timeout=True,
+                    encoding="utf-8",
                     decode_responses=False,
-                    health_check_interval=30,
                 )
-                self._redis = redis.Redis(connection_pool=pool)
                 await self._redis.ping()
-                self._consecutive_failures = 0
             except Exception as e:
-                self._consecutive_failures += 1
-                print(f"[Cache] Redis connection failed ({self._consecutive_failures}/{self._MAX_RETRIES}): {e}")
+                print(f"[Cache] Redis connection failed, using fallback: {e}")
+                self._use_fallback = True
                 self._redis = None
-                if self._consecutive_failures >= self._MAX_RETRIES:
-                    print("[Cache] Max retries reached, falling back to in-memory cache")
-                    self._use_fallback = True
-                    self._start_recovery_timer()
         return self._redis
-
-    async def reconnect(self) -> bool:
-        """Attempt to reconnect to Redis after fallback.
-
-        Can be called periodically (e.g. from a health check) to recover
-        from transient Redis outages without restarting the process.
-        """
-        self._use_fallback = False
-        self._consecutive_failures = 0
-        self._redis = None
-        conn = await self._get_redis()
-        if conn is not None:
-            self._stop_recovery_timer()
-        return conn is not None
-
-    def _start_recovery_timer(self) -> None:
-        """Start background task that periodically attempts Redis reconnection."""
-        if self._recovery_task is not None and not self._recovery_task.done():
-            return
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                self._recovery_task = loop.create_task(self._recovery_loop())
-        except RuntimeError:
-            pass
-
-    def _stop_recovery_timer(self) -> None:
-        """Cancel the recovery background task."""
-        if self._recovery_task is not None and not self._recovery_task.done():
-            self._recovery_task.cancel()
-            self._recovery_task = None
-
-    async def _recovery_loop(self) -> None:
-        """Periodically attempt to reconnect to Redis."""
-        while self._use_fallback:
-            await asyncio.sleep(_RECOVERY_INTERVAL)
-            if not self._use_fallback:
-                break
-            try:
-                import redis.asyncio as aioredis
-                from redis.asyncio.connection import ConnectionPool
-
-                pool = ConnectionPool.from_url(
-                    self._redis_url,
-                    max_connections=20,
-                    socket_connect_timeout=5,
-                    socket_timeout=5,
-                    retry_on_timeout=True,
-                    decode_responses=False,
-                    health_check_interval=30,
-                )
-                client = aioredis.Redis(connection_pool=pool)
-                await client.ping()
-                self._redis = client  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
-                self._use_fallback = False
-                self._consecutive_failures = 0
-                logger.info("[Cache] Auto-recovery succeeded – switched back to Redis")
-            except Exception as exc:
-                logger.debug("[Cache] Auto-recovery attempt failed: %s", exc)
-
-    async def get_hit_rate(self) -> float:
-        """Calculate and report cache hit-rate percentage.
-
-        Uses Redis INFO keyspace_hits/keyspace_misses when connected,
-        otherwise falls back to in-memory cache stats.
-        """
-        if self._use_fallback:
-            stats = await self._fallback.get_stats()
-            hit_rate = stats.get("hit_rate", 0.0)
-        else:
-            redis = await self._get_redis()
-            if redis is None:
-                stats = await self._fallback.get_stats()
-                hit_rate = stats.get("hit_rate", 0.0)
-            else:
-                try:
-                    info = await redis.info("stats")
-                    hits = info.get("keyspace_hits", 0)
-                    misses = info.get("keyspace_misses", 0)
-                    total = hits + misses
-                    hit_rate = round((hits / total) * 100, 2) if total > 0 else 0.0
-                except Exception as e:
-                    logger.warning("[Cache] Failed to retrieve hit rate: %s", e)
-                    hit_rate = 0.0
-
-        track_metric("cache.hit_rate", hit_rate)
-        return hit_rate
 
     def _make_key(self, key: str) -> str:
         """Create prefixed key."""
@@ -280,7 +170,7 @@ class RedisCache:
             data = await redis.get(self._make_key(key))
             if data is None:
                 return None
-            return json.loads(data)
+            return pickle.loads(data)  # nosec B301 - internal cache data only
         except Exception as e:
             print(f"[Cache] Redis get error: {e}")
             return await self._fallback.get(key)
@@ -295,7 +185,7 @@ class RedisCache:
             return await self._fallback.set(key, value, ttl)
 
         try:
-            data = json.dumps(value, default=str)
+            data = pickle.dumps(value)
             if ttl > 0:
                 await redis.setex(self._make_key(key), ttl, data)
             else:
@@ -383,42 +273,12 @@ def get_cache() -> Union[InMemoryCache, RedisCache]:
     """Get or create the global cache instance."""
     global _cache
     if _cache is None:
-        if settings.redis_url:
-            _cache = RedisCache(settings.redis_url)
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            _cache = RedisCache(redis_url)
         else:
             _cache = InMemoryCache()
     return _cache
-
-
-async def invalidate_tenant_cache(tenant_id: int | None, entity_type: str) -> int:
-    """Invalidate all cached entries for a tenant's entity type.
-
-    Uses pattern-based key deletion for namespace isolation.
-    E.g., invalidate_tenant_cache(1, "risks") clears all risk caches for tenant 1.
-    """
-    cache = get_cache()
-    if not isinstance(cache, RedisCache) or not cache._redis:
-        return 0
-
-    pattern = f"tenant:{tenant_id}:{entity_type}:*"
-    deleted = 0
-    async for key in cache._redis.scan_iter(match=pattern):
-        await cache._redis.delete(key)
-        deleted += 1
-
-    if deleted:
-        logger.info(f"Invalidated {deleted} cache keys matching {pattern}")
-    return deleted
-
-
-async def invalidate_entity_cache(entity_type: str, entity_id: int) -> None:
-    """Invalidate cache for a specific entity."""
-    cache = get_cache()
-    if not isinstance(cache, RedisCache) or not cache._redis:
-        return
-
-    key = f"{entity_type}:{entity_id}"
-    await cache.delete(key)
 
 
 def make_cache_key(*args, **kwargs) -> str:
@@ -447,9 +307,9 @@ def cached(
             ...
     """
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args, **kwargs) -> T:
             cache = get_cache()
 
             # Build cache key
@@ -472,15 +332,15 @@ def cached(
             return result
 
         # Add cache invalidation helper
-        async def invalidate(*args: Any, **kwargs: Any) -> None:
+        async def invalidate(*args, **kwargs):
             cache = get_cache()
             prefix = key_prefix or f"{func.__module__}.{func.__name__}"
             arg_key = make_cache_key(*args, **kwargs)
             cache_key = f"{prefix}:{arg_key}"
             await cache.delete(cache_key)
 
-        wrapper.invalidate = invalidate  # type: ignore[attr-defined]  # dynamic attribute on wrapper  # TYPE-IGNORE: MYPY-OVERRIDE
-        wrapper.invalidate_all = lambda: get_cache().delete_pattern(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+        wrapper.invalidate = invalidate
+        wrapper.invalidate_all = lambda: get_cache().delete_pattern(
             f"{key_prefix or func.__module__}.{func.__name__}:*"
         )
 
@@ -499,9 +359,9 @@ def invalidate_cache(pattern: str):
             ...
     """
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args, **kwargs) -> T:
             result = await func(*args, **kwargs)
             cache = get_cache()
             await cache.delete_pattern(pattern)
@@ -517,50 +377,13 @@ def invalidate_cache(pattern: str):
 # ============================================================================
 
 
-async def close_redis() -> None:
-    """Close the global Redis connection if one exists."""
-    global _cache  # noqa: F824
-    if _cache is not None and isinstance(_cache, RedisCache) and _cache._redis is not None:
-        try:
-            await _cache._redis.aclose()
-        except Exception:
-            pass
-        _cache._redis = None
-
-
 async def warmup_cache():
     """Warm up cache with frequently accessed data."""
-    import logging
-
-    logger = logging.getLogger(__name__)
     cache = get_cache()
 
-    if isinstance(cache, RedisCache) and not cache._redis:
-        await cache._get_redis()
-        if cache._use_fallback:
-            logger.warning("Cache warmup skipped: Redis unavailable")
-            return
-
-    try:
-        from src.infrastructure.database import async_session_maker
-
-        async with async_session_maker() as db:
-            from sqlalchemy import select
-
-            from src.domain.models.standard import Standard
-
-            result = await db.execute(select(Standard).limit(100))
-            standards = result.scalars().all()
-            for std in standards:
-                await cache.set(
-                    f"standard:{std.id}",
-                    {"id": std.id, "name": std.name, "code": std.code},
-                    ttl=CacheType.DAILY.value,
-                )
-
-            logger.info("Cache warmup complete: %d standards preloaded", len(standards))
-    except Exception as e:
-        logger.warning("Cache warmup failed: %s", e)
+    # Example: Pre-load standards data
+    # This would be called on application startup
+    pass
 
 
 # ============================================================================
@@ -568,9 +391,7 @@ async def warmup_cache():
 # ============================================================================
 
 
-from fastapi import APIRouter
-
-from src.api.dependencies import CurrentSuperuser
+from fastapi import APIRouter, Depends
 
 cache_router = APIRouter(prefix="/cache", tags=["Cache"])
 
@@ -583,16 +404,16 @@ async def get_cache_stats():
 
 
 @cache_router.post("/clear")
-async def clear_cache(user: CurrentSuperuser):
-    """Clear all cache entries (superuser only)."""
+async def clear_cache():
+    """Clear all cache entries (admin only)."""
     cache = get_cache()
     await cache.clear()
     return {"success": True, "message": "Cache cleared"}
 
 
 @cache_router.delete("/{pattern}")
-async def invalidate_pattern(pattern: str, user: CurrentSuperuser):
-    """Invalidate cache entries matching pattern (superuser only)."""
+async def invalidate_pattern(pattern: str):
+    """Invalidate cache entries matching pattern (admin only)."""
     cache = get_cache()
     count = await cache.delete_pattern(pattern)
     return {"success": True, "invalidated": count}

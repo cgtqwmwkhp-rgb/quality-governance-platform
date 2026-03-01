@@ -1,12 +1,9 @@
 """Application configuration settings."""
 
-import logging
 from functools import lru_cache
-from typing import List, Optional
+from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -25,29 +22,16 @@ class Settings(BaseSettings):
 
     def _validate_production_settings(self) -> None:
         """Validate critical settings, especially for production."""
-        placeholder_keys = [
-            "change-me-in-production",
-            "__CHANGE_ME__",
-            "changeme",
-            "your-secret-key-here",
-            "secret",
-            "dev-secret",
-            "",
-        ]
-
-        if not self.is_production:
-            if self.secret_key in placeholder_keys:
-                logger.warning(
-                    "SECRET_KEY is using a placeholder value. "
-                    "This is acceptable for development but MUST be changed before deploying to production."
-                )
-            if self.jwt_secret_key in placeholder_keys:
-                logger.warning(
-                    "JWT_SECRET_KEY is using a placeholder value. "
-                    "This is acceptable for development but MUST be changed before deploying to production."
-                )
-
         if self.is_production:
+            # Check for placeholder secret keys (ADR-0002)
+            placeholder_keys = [
+                "change-me-in-production",
+                "__CHANGE_ME__",
+                "changeme",
+                "your-secret-key-here",
+                "secret",
+                "dev-secret",
+            ]
             if self.secret_key in placeholder_keys:
                 raise ValueError(
                     "SECURITY ERROR: SECRET_KEY contains a placeholder value in production! "
@@ -57,18 +41,6 @@ class Settings(BaseSettings):
             if self.jwt_secret_key in placeholder_keys:
                 raise ValueError(
                     "SECURITY ERROR: JWT_SECRET_KEY contains a placeholder value in production! "
-                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
-                )
-
-            if len(self.secret_key) < 16:
-                raise ValueError(
-                    "SECURITY ERROR: SECRET_KEY must be at least 16 characters long in production! "
-                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
-                )
-
-            if len(self.jwt_secret_key) < 16:
-                raise ValueError(
-                    "SECURITY ERROR: JWT_SECRET_KEY must be at least 16 characters long in production! "
                     "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
                 )
 
@@ -95,22 +67,15 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: str = "change-me-in-production"
 
-    # Build / version
-    build_sha: str = "dev"
-    build_time: str = "local"
-    app_version: str = "1.0.0"
-
     # Database
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/quality_governance"
     database_echo: bool = False
 
     # JWT Authentication
     jwt_secret_key: str = "change-me-in-production"
-    jwt_algorithm: str = "HS256"  # Fallback; RS256 used when RSA key files are configured
+    jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
-    jwt_private_key_path: str = ""
-    jwt_public_key_path: str = ""
 
     # Azure AD Authentication (for portal users)
     azure_client_id: str = ""
@@ -121,74 +86,11 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = ""
     azure_storage_container_name: str = "attachments"
 
-    # Frontend
-    frontend_url: str = "https://app-qgp-prod.azurestaticapps.net"
-
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
-
-    # Celery
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_result_backend: str = "redis://localhost:6379/2"
-
-    # Email (SMTP)
-    smtp_host: str = "smtp.office365.com"
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    from_email: str = "noreply@qgp.plantexpand.com"
-    from_name: str = "Quality Governance Platform"
-
     # Email Ingestion
     email_imap_server: str = ""
     email_imap_port: int = 993
     email_username: str = ""
     email_password: str = ""
-
-    # Twilio / SMS
-    twilio_account_sid: str = ""
-    twilio_auth_token: str = ""
-    twilio_from_number: str = ""
-
-    # VAPID (Push Notifications)
-    vapid_private_key: str = ""
-    vapid_public_key: str = ""
-    vapid_email: str = "admin@plantexpand.com"
-
-    # Field Encryption (PII)
-    field_encryption_key: str = ""
-
-    # AI Providers
-    ai_provider: str = "openai"
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4-turbo-preview"
-    azure_openai_endpoint: str = ""
-    azure_openai_key: str = ""
-    azure_openai_deployment: str = ""
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-opus-20240229"
-    local_model_path: str = ""
-    embedding_model: str = "text-embedding-3-small"
-
-    # Monitoring / Telemetry
-    applicationinsights_connection_string: str = ""
-    otel_trace_sample_rate: Optional[float] = None
-    sentry_dsn: str = ""
-
-    # Cache
-    cache_recovery_interval: int = 60
-    cache_ttl_short: int = 60
-    cache_ttl_medium: int = 300
-    cache_ttl_long: int = 3600
-    cache_ttl_daily: int = 86400
-    cache_ttl_session: int = 1800
-    cache_ttl_default: int = 300
-
-    # Metrics
-    metrics_dir: str = ""
-
-    # Testing (staging only)
-    ci_test_secret: str = ""
 
     # CORS - explicit allowlist for production safety
     # Production SWA origins must be listed explicitly (no wildcards)

@@ -11,11 +11,11 @@ Provides blockchain-style audit logging with:
 
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import and_, desc, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, desc, func
+from sqlalchemy.orm import Session
 
 from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
 
@@ -28,14 +28,14 @@ class AuditLogService:
     # Genesis hash for first entry
     GENESIS_HASH = "0" * 64
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
     # =========================================================================
     # Logging
     # =========================================================================
 
-    async def log(
+    def log(
         self,
         tenant_id: int,
         entity_type: str,
@@ -63,13 +63,12 @@ class AuditLogService:
         creating a tamper-evident chain.
         """
         # Get the previous entry for hash chain
-        result = await self.db.execute(
-            select(AuditLogEntry)
-            .where(AuditLogEntry.tenant_id == tenant_id)
+        previous_entry = (
+            self.db.query(AuditLogEntry)
+            .filter(AuditLogEntry.tenant_id == tenant_id)
             .order_by(desc(AuditLogEntry.sequence))
-            .limit(1)
+            .first()
         )
-        previous_entry = result.scalar_one_or_none()
 
         if previous_entry:
             sequence = previous_entry.sequence + 1
@@ -85,7 +84,7 @@ class AuditLogService:
                 k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
             ]
 
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.utcnow()
 
         # Compute entry hash
         entry_hash = AuditLogEntry.compute_hash(
@@ -128,12 +127,12 @@ class AuditLogService:
         )
 
         self.db.add(entry)
-        await self.db.commit()
-        await self.db.refresh(entry)
+        self.db.commit()
+        self.db.refresh(entry)
 
         return entry
 
-    async def log_create(
+    def log_create(
         self,
         tenant_id: int,
         entity_type: str,
@@ -142,7 +141,7 @@ class AuditLogService:
         **kwargs,
     ) -> AuditLogEntry:
         """Log a create action."""
-        return await self.log(
+        return self.log(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
@@ -151,7 +150,7 @@ class AuditLogService:
             **kwargs,
         )
 
-    async def log_update(
+    def log_update(
         self,
         tenant_id: int,
         entity_type: str,
@@ -161,7 +160,7 @@ class AuditLogService:
         **kwargs,
     ) -> AuditLogEntry:
         """Log an update action."""
-        return await self.log(
+        return self.log(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
@@ -171,7 +170,7 @@ class AuditLogService:
             **kwargs,
         )
 
-    async def log_delete(
+    def log_delete(
         self,
         tenant_id: int,
         entity_type: str,
@@ -180,7 +179,7 @@ class AuditLogService:
         **kwargs,
     ) -> AuditLogEntry:
         """Log a delete action."""
-        return await self.log(
+        return self.log(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
@@ -189,7 +188,7 @@ class AuditLogService:
             **kwargs,
         )
 
-    async def log_view(
+    def log_view(
         self,
         tenant_id: int,
         entity_type: str,
@@ -197,7 +196,7 @@ class AuditLogService:
         **kwargs,
     ) -> AuditLogEntry:
         """Log a view/read action."""
-        return await self.log(
+        return self.log(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
@@ -205,7 +204,7 @@ class AuditLogService:
             **kwargs,
         )
 
-    async def log_auth(
+    def log_auth(
         self,
         tenant_id: int,
         action: str,  # login, logout, login_failed, password_change, etc.
@@ -213,7 +212,7 @@ class AuditLogService:
         **kwargs,
     ) -> AuditLogEntry:
         """Log an authentication action."""
-        return await self.log(
+        return self.log(
             tenant_id=tenant_id,
             entity_type="auth",
             entity_id=str(user_id) if user_id else "anonymous",
@@ -223,7 +222,7 @@ class AuditLogService:
             **kwargs,
         )
 
-    async def log_admin(
+    def log_admin(
         self,
         tenant_id: int,
         action: str,
@@ -232,7 +231,7 @@ class AuditLogService:
         **kwargs,
     ) -> AuditLogEntry:
         """Log an administrative action."""
-        return await self.log(
+        return self.log(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
@@ -245,7 +244,7 @@ class AuditLogService:
     # Querying
     # =========================================================================
 
-    async def get_entries(
+    def get_entries(
         self,
         tenant_id: int,
         entity_type: Optional[str] = None,
@@ -258,94 +257,60 @@ class AuditLogService:
         offset: int = 0,
     ) -> list[AuditLogEntry]:
         """Query audit log entries with filters."""
-        stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)
+        query = self.db.query(AuditLogEntry).filter(AuditLogEntry.tenant_id == tenant_id)
 
         if entity_type:
-            stmt = stmt.where(AuditLogEntry.entity_type == entity_type)
+            query = query.filter(AuditLogEntry.entity_type == entity_type)
         if entity_id:
-            stmt = stmt.where(AuditLogEntry.entity_id == entity_id)
+            query = query.filter(AuditLogEntry.entity_id == entity_id)
         if action:
-            stmt = stmt.where(AuditLogEntry.action == action)
+            query = query.filter(AuditLogEntry.action == action)
         if user_id:
-            stmt = stmt.where(AuditLogEntry.user_id == user_id)
+            query = query.filter(AuditLogEntry.user_id == user_id)
         if date_from:
-            stmt = stmt.where(AuditLogEntry.timestamp >= date_from)
+            query = query.filter(AuditLogEntry.timestamp >= date_from)
         if date_to:
-            stmt = stmt.where(AuditLogEntry.timestamp <= date_to)
+            query = query.filter(AuditLogEntry.timestamp <= date_to)
 
-        stmt = stmt.order_by(desc(AuditLogEntry.timestamp)).offset(offset).limit(limit)
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        return query.order_by(desc(AuditLogEntry.timestamp)).offset(offset).limit(limit).all()
 
-    async def get_entity_history(
+    def get_entity_history(
         self,
         tenant_id: int,
         entity_type: str,
         entity_id: str,
     ) -> list[AuditLogEntry]:
         """Get complete history for an entity."""
-        result = await self.db.execute(
-            select(AuditLogEntry)
-            .where(
+        return (
+            self.db.query(AuditLogEntry)
+            .filter(
                 AuditLogEntry.tenant_id == tenant_id,
                 AuditLogEntry.entity_type == entity_type,
                 AuditLogEntry.entity_id == entity_id,
             )
             .order_by(AuditLogEntry.timestamp)
+            .all()
         )
-        return list(result.scalars().all())
 
-    async def get_user_activity(
+    def get_user_activity(
         self,
         tenant_id: int,
         user_id: int,
         days: int = 30,
     ) -> list[AuditLogEntry]:
         """Get recent activity for a user."""
-        date_from = datetime.now(timezone.utc) - timedelta(days=days)
-        return await self.get_entries(
+        date_from = datetime.utcnow() - timedelta(days=days)
+        return self.get_entries(
             tenant_id=tenant_id,
             user_id=user_id,
             date_from=date_from,
         )
 
-    def build_list_query(
-        self,
-        tenant_id: int,
-        *,
-        entity_type: str | None = None,
-        entity_id: str | None = None,
-        action: str | None = None,
-        user_id: int | None = None,
-        date_from: datetime | None = None,
-        date_to: datetime | None = None,
-    ):
-        """Return an un-executed *Select* for filtered audit log listing."""
-        stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)
-        if entity_type:
-            stmt = stmt.where(AuditLogEntry.entity_type == entity_type)
-        if entity_id:
-            stmt = stmt.where(AuditLogEntry.entity_id == entity_id)
-        if action:
-            stmt = stmt.where(AuditLogEntry.action == action)
-        if user_id:
-            stmt = stmt.where(AuditLogEntry.user_id == user_id)
-        if date_from:
-            stmt = stmt.where(AuditLogEntry.timestamp >= date_from)
-        if date_to:
-            stmt = stmt.where(AuditLogEntry.timestamp <= date_to)
-        return stmt.order_by(desc(AuditLogEntry.timestamp))
-
-    async def get_entry_by_id(self, entry_id: int) -> AuditLogEntry | None:
-        """Get a single audit log entry by ID."""
-        result = await self.db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
-        return result.scalar_one_or_none()
-
     # =========================================================================
     # Verification
     # =========================================================================
 
-    async def verify_chain(
+    def verify_chain(
         self,
         tenant_id: int,
         start_sequence: Optional[int] = None,
@@ -357,16 +322,14 @@ class AuditLogService:
 
         Detects any tampering by recomputing and comparing hashes.
         """
-        stmt = select(AuditLogEntry).where(AuditLogEntry.tenant_id == tenant_id)
+        query = self.db.query(AuditLogEntry).filter(AuditLogEntry.tenant_id == tenant_id)
 
         if start_sequence is not None:
-            stmt = stmt.where(AuditLogEntry.sequence >= start_sequence)
+            query = query.filter(AuditLogEntry.sequence >= start_sequence)
         if end_sequence is not None:
-            stmt = stmt.where(AuditLogEntry.sequence <= end_sequence)
+            query = query.filter(AuditLogEntry.sequence <= end_sequence)
 
-        stmt = stmt.order_by(AuditLogEntry.sequence)
-        result = await self.db.execute(stmt)
-        entries = result.scalars().all()
+        entries = query.order_by(AuditLogEntry.sequence).all()
 
         if not entries:
             # No entries to verify
@@ -431,30 +394,30 @@ class AuditLogService:
         )
 
         self.db.add(verification)
-        await self.db.commit()
-        await self.db.refresh(verification)
+        self.db.commit()
+        self.db.refresh(verification)
 
         return verification
 
-    async def get_verifications(
+    def get_verifications(
         self,
         tenant_id: int,
         limit: int = 10,
     ) -> list[AuditLogVerification]:
         """Get recent verification records."""
-        result = await self.db.execute(
-            select(AuditLogVerification)
-            .where(AuditLogVerification.tenant_id == tenant_id)
+        return (
+            self.db.query(AuditLogVerification)
+            .filter(AuditLogVerification.tenant_id == tenant_id)
             .order_by(desc(AuditLogVerification.verified_at))
             .limit(limit)
+            .all()
         )
-        return list(result.scalars().all())
 
     # =========================================================================
     # Export
     # =========================================================================
 
-    async def export_logs(
+    def export_logs(
         self,
         tenant_id: int,
         exported_by_id: int,
@@ -470,7 +433,7 @@ class AuditLogService:
         Returns:
             Tuple of (exported_data, export_record)
         """
-        entries = await self.get_entries(
+        entries = self.get_entries(
             tenant_id=tenant_id,
             entity_type=entity_type,
             date_from=date_from,
@@ -522,8 +485,8 @@ class AuditLogService:
         )
 
         self.db.add(export_record)
-        await self.db.commit()
-        await self.db.refresh(export_record)
+        self.db.commit()
+        self.db.refresh(export_record)
 
         return data, export_record
 
@@ -531,45 +494,46 @@ class AuditLogService:
     # Statistics
     # =========================================================================
 
-    async def get_stats(self, tenant_id: int, days: int = 30) -> dict:
+    def get_stats(self, tenant_id: int, days: int = 30) -> dict:
         """Get audit log statistics."""
-        date_from = datetime.now(timezone.utc) - timedelta(days=days)
+        date_from = datetime.utcnow() - timedelta(days=days)
 
         # Total entries
-        result = await self.db.execute(
-            select(func.count(AuditLogEntry.id)).where(
+        total = (
+            self.db.query(func.count(AuditLogEntry.id))
+            .filter(
                 AuditLogEntry.tenant_id == tenant_id,
                 AuditLogEntry.timestamp >= date_from,
             )
+            .scalar()
         )
-        total: int = result.scalar() or 0
 
         # By action
-        result = await self.db.execute(
-            select(AuditLogEntry.action, func.count(AuditLogEntry.id))
-            .where(
+        by_action = dict(
+            self.db.query(AuditLogEntry.action, func.count(AuditLogEntry.id))
+            .filter(
                 AuditLogEntry.tenant_id == tenant_id,
                 AuditLogEntry.timestamp >= date_from,
             )
             .group_by(AuditLogEntry.action)
+            .all()
         )
-        by_action: dict[str, int] = dict(result.all())
 
         # By entity type
-        result = await self.db.execute(
-            select(AuditLogEntry.entity_type, func.count(AuditLogEntry.id))
-            .where(
+        by_entity = dict(
+            self.db.query(AuditLogEntry.entity_type, func.count(AuditLogEntry.id))
+            .filter(
                 AuditLogEntry.tenant_id == tenant_id,
                 AuditLogEntry.timestamp >= date_from,
             )
             .group_by(AuditLogEntry.entity_type)
+            .all()
         )
-        by_entity: dict[str, int] = dict(result.all())
 
         # Most active users
-        result = await self.db.execute(
-            select(AuditLogEntry.user_email, func.count(AuditLogEntry.id))
-            .where(
+        top_users = (
+            self.db.query(AuditLogEntry.user_email, func.count(AuditLogEntry.id))
+            .filter(
                 AuditLogEntry.tenant_id == tenant_id,
                 AuditLogEntry.timestamp >= date_from,
                 AuditLogEntry.user_email != None,
@@ -577,8 +541,8 @@ class AuditLogService:
             .group_by(AuditLogEntry.user_email)
             .order_by(desc(func.count(AuditLogEntry.id)))
             .limit(10)
+            .all()
         )
-        top_users: list[Any] = list(result.all())
 
         return {
             "total_entries": total,

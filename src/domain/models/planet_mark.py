@@ -136,9 +136,7 @@ class EmissionSource(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Source identification
@@ -196,9 +194,7 @@ class Scope3CategoryData(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # GHG Protocol Category
@@ -239,9 +235,7 @@ class ImprovementAction(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Action identification
@@ -297,9 +291,7 @@ class DataQualityAssessment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Assessment scope
@@ -342,9 +334,7 @@ class CarbonEvidence(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Document details
@@ -393,9 +383,7 @@ class FleetEmissionRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Vehicle identification
@@ -434,9 +422,7 @@ class UtilityMeterReading(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Meter identification
@@ -476,9 +462,7 @@ class SupplierEmissionData(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"),
-        nullable=False,
+        Integer, ForeignKey("carbon_reporting_year.id", ondelete="CASCADE"), nullable=False
     )
 
     # Supplier identification

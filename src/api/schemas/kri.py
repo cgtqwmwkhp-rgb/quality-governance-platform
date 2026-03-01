@@ -75,9 +75,6 @@ class KRIListResponse(BaseModel):
 
     items: List[KRIResponse]
     total: int
-    page: int
-    page_size: int
-    pages: int
 
 
 class KRIMeasurementResponse(BaseModel):
@@ -101,9 +98,6 @@ class KRIMeasurementListResponse(BaseModel):
 
     items: List[KRIMeasurementResponse]
     total: int
-    page: int
-    page_size: int
-    pages: int
 
 
 class KRIAlertResponse(BaseModel):
@@ -133,33 +127,6 @@ class KRIAlertListResponse(BaseModel):
 
     items: List[KRIAlertResponse]
     total: int
-
-
-class KRICalculateAllResponse(BaseModel):
-    """Response for bulk KRI calculation."""
-
-    message: str
-    calculated: int
-    results: List[Dict[str, Any]]
-
-
-class KRICalculateResponse(BaseModel):
-    """Response for single KRI calculation."""
-
-    kri_id: Optional[int] = None
-    value: Optional[float] = None
-    status: Optional[str] = None
-    message: Optional[str] = None
-
-    class Config:
-        extra = "allow"
-
-
-class KRIAlertActionResponse(BaseModel):
-    """Response for alert acknowledge/resolve actions."""
-
-    message: str
-    alert_id: int
 
 
 class KRIDashboardResponse(BaseModel):

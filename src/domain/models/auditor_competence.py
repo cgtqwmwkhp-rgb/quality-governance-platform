@@ -8,7 +8,7 @@ Provides tracking for:
 """
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
@@ -48,10 +48,7 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
     )
 
     # Professional details
@@ -117,9 +114,7 @@ class AuditorCertification(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Certification details
@@ -141,8 +136,7 @@ class AuditorCertification(Base, TimestampMixin):
 
     # Status
     status: Mapped[CertificationStatus] = mapped_column(
-        SQLEnum(CertificationStatus, native_enum=False),
-        default=CertificationStatus.ACTIVE,
+        SQLEnum(CertificationStatus, native_enum=False), default=CertificationStatus.ACTIVE
     )
 
     # CPD/CPE requirements
@@ -167,7 +161,7 @@ class AuditorCertification(Base, TimestampMixin):
         """Check if certification is currently valid."""
         if self.status != CertificationStatus.ACTIVE:
             return False
-        if self.expiry_date and self.expiry_date < datetime.now(timezone.utc):
+        if self.expiry_date and self.expiry_date < datetime.utcnow():
             return False
         return True
 
@@ -176,7 +170,7 @@ class AuditorCertification(Base, TimestampMixin):
         """Get days until expiry."""
         if not self.expiry_date:
             return None
-        delta = self.expiry_date - datetime.now(timezone.utc)
+        delta = self.expiry_date - datetime.utcnow()
         return delta.days
 
 
@@ -188,9 +182,7 @@ class AuditorTraining(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Training details
@@ -280,14 +272,10 @@ class AuditorCompetency(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
     )
     competency_area_id: Mapped[int] = mapped_column(
-        ForeignKey("competency_areas.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("competency_areas.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Current proficiency level (typically 1-5)

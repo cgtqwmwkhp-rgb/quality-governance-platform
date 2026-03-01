@@ -91,10 +91,7 @@ class TestEvidenceManagement:
 
     @pytest.mark.asyncio
     async def test_add_evidence_to_control(
-        self,
-        admin_client: UATApiClient,
-        uat_control_ids: Dict[str, str],
-        uat_user_ids: Dict[str, str],
+        self, admin_client: UATApiClient, uat_control_ids: Dict[str, str], uat_user_ids: Dict[str, str]
     ):
         """Can add evidence to a control."""
         control_id = uat_control_ids["iso_policies"]

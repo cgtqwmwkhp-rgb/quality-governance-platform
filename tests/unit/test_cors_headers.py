@@ -113,12 +113,12 @@ class TestCORSOnSuccessResponses:
     """Test CORS headers on successful (2xx) responses."""
 
     def test_get_uvdb_sections_has_cors(self, client):
-        """GET /uvdb/sections should include CORS headers (auth required)."""
+        """GET /uvdb/sections should include CORS headers."""
         response = client.get(
             "/api/v1/uvdb/sections",
             headers={"Origin": PROD_ORIGIN},
         )
-        assert response.status_code in (200, 401)
+        assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
     def test_get_planetmark_dashboard_has_cors(self, client):
@@ -127,9 +127,8 @@ class TestCORSOnSuccessResponses:
             "/api/v1/planet-mark/dashboard",
             headers={"Origin": PROD_ORIGIN},
         )
-        # May be 200, 401, or 500 depending on auth/config
-        if response.status_code < 500:
-            assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
+        # May be 200 or 401 depending on auth, but should have CORS
+        assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
     def test_post_telemetry_event_has_cors(self, client):
         """POST /telemetry/events should include CORS headers."""
@@ -140,14 +139,10 @@ class TestCORSOnSuccessResponses:
                 "name": "exp001_form_opened",
                 "timestamp": "2026-01-28T12:00:00Z",
                 "sessionId": "test_session",
-                "dimensions": {
-                    "formType": "incident",
-                    "flagEnabled": True,
-                    "hasDraft": False,
-                },
+                "dimensions": {"formType": "incident", "flagEnabled": True, "hasDraft": False},
             },
         )
-        # May be 200 or 401 depending on auth, but should have CORS
+        assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
     def test_post_telemetry_batch_has_cors(self, client):
@@ -161,16 +156,12 @@ class TestCORSOnSuccessResponses:
                         "name": "exp001_form_opened",
                         "timestamp": "2026-01-28T12:00:00Z",
                         "sessionId": "test_session",
-                        "dimensions": {
-                            "formType": "incident",
-                            "flagEnabled": True,
-                            "hasDraft": False,
-                        },
+                        "dimensions": {"formType": "incident", "flagEnabled": True, "hasDraft": False},
                     }
                 ]
             },
         )
-        # May be 200 or 401 depending on auth, but should have CORS
+        assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
 
@@ -193,12 +184,11 @@ class TestCORSOnErrorResponses:
             headers={"Origin": PROD_ORIGIN, "Content-Type": "application/json"},
             json={"invalid": "payload"},  # Missing required fields
         )
-        # May be 401 (auth) or 422 (validation), but should have CORS
-        assert response.status_code in (401, 422)
+        assert response.status_code == 422
         assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
     def test_invalid_event_name_has_cors(self, client):
-        """Invalid telemetry event name should include CORS headers."""
+        """Invalid telemetry event name (422) should include CORS headers."""
         response = client.post(
             "/api/v1/telemetry/events",
             headers={"Origin": PROD_ORIGIN, "Content-Type": "application/json"},
@@ -209,8 +199,7 @@ class TestCORSOnErrorResponses:
                 "dimensions": {},
             },
         )
-        # May be 401 (auth) or 422 (validation), but should have CORS
-        assert response.status_code in (401, 422)
+        assert response.status_code == 422
         assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
 

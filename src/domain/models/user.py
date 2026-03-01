@@ -1,6 +1,5 @@
 """User, Role, and Permission models."""
 
-import json
 from typing import List, Optional
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, Text
@@ -58,14 +57,6 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     last_login: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     azure_oid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
 
-    # MFA / TOTP
-    totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    password_history: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list of last 5 hashes
-
-    # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Relationships
     roles: Mapped[List["Role"]] = relationship(
         "Role",
@@ -83,15 +74,8 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         if self.is_superuser:
             return True
         for role in self.roles:
-            if not role.permissions:
-                continue
-            try:
-                perms = json.loads(role.permissions)
-                if isinstance(perms, list) and permission in perms:
-                    return True
-            except (json.JSONDecodeError, TypeError):
-                if permission in role.permissions:
-                    return True
+            if role.permissions and permission in role.permissions:
+                return True
         return False
 
     def __repr__(self) -> str:

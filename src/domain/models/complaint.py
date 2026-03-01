@@ -6,17 +6,10 @@ from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import (
-    AuditTrailMixin,
-    OptimisticLockMixin,
-    ReferenceNumberMixin,
-    SoftDeleteMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -57,7 +50,7 @@ class ComplaintStatus(str, enum.Enum):
     ESCALATED = "escalated"
 
 
-class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, OptimisticLockMixin, SoftDeleteMixin):
+class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Complaint model for external complaint management."""
 
     __tablename__ = "complaints"
@@ -98,9 +91,6 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Opt
     related_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     related_product_service: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Assignment
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -133,11 +123,6 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Opt
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-    # Full-text search (populated by DB trigger)
-    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
-
-    __table_args__ = (Index("ix_complaints_search_vector", "search_vector", postgresql_using="gin"),)
 
     # Relationships
     actions: Mapped[List["ComplaintAction"]] = relationship(

@@ -161,32 +161,45 @@ class TestMonitoring:
     """Unit tests for monitoring infrastructure."""
 
     def test_monitoring_import(self):
-        """Monitoring module can be imported."""
-        from src.infrastructure.monitoring.azure_monitor import get_tracer, logger, setup_telemetry, track_metric
+        """Monitoring can be imported."""
+        from src.infrastructure.monitoring.azure_monitor import MonitoringConfig, StructuredLogger, logger
 
+        assert StructuredLogger is not None
+        assert MonitoringConfig is not None
         assert logger is not None
-        assert setup_telemetry is not None
-        assert track_metric is not None
-        assert get_tracer is not None
 
-    def test_setup_telemetry_without_app(self):
-        """setup_telemetry works without a FastAPI app."""
-        from src.infrastructure.monitoring.azure_monitor import setup_telemetry
+    def test_monitoring_config(self):
+        """Monitoring config has expected values."""
+        from src.infrastructure.monitoring.azure_monitor import MonitoringConfig
 
-        setup_telemetry(app=None, service_name="test-service")
+        assert MonitoringConfig.SERVICE_NAME == "quality-governance-platform"
+        assert MonitoringConfig.ENVIRONMENT in ["development", "staging", "production", None, ""]
 
-    def test_track_metric_before_init(self):
-        """track_metric does not raise before telemetry is initialized."""
-        from src.infrastructure.monitoring.azure_monitor import track_metric
+    def test_structured_logger_creation(self):
+        """Structured logger can be created."""
+        from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 
-        track_metric("test.counter", 1.0)
+        logger = StructuredLogger("test_logger")
+        assert logger is not None
+        assert logger.name == "test_logger"
 
-    def test_get_tracer(self):
-        """get_tracer returns a tracer instance."""
-        from src.infrastructure.monitoring.azure_monitor import get_tracer
+    def test_structured_logger_methods(self):
+        """Structured logger has all log methods."""
+        from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 
-        tracer = get_tracer()
-        assert tracer is not None
+        logger = StructuredLogger("test_logger")
+
+        # These should not raise
+        logger.info("Test info message")
+        logger.warning("Test warning message")
+        logger.debug("Test debug message")
+
+    def test_application_insights_client(self):
+        """Application Insights client can be created."""
+        from src.infrastructure.monitoring.azure_monitor import ApplicationInsightsClient
+
+        client = ApplicationInsightsClient()
+        assert client is not None
 
 
 # ============================================================================

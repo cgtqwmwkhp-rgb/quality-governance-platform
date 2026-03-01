@@ -1,13 +1,9 @@
 """Pydantic schemas for Risk Register API."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from src.api.schemas.validators import sanitize_field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Risk Control Schemas ==============
 
@@ -19,8 +15,7 @@ class RiskControlBase(BaseModel):
     description: Optional[str] = None
     control_type: str = Field(default="preventive", pattern="^(preventive|detective|corrective|directive)$")
     implementation_status: str = Field(
-        default="planned",
-        pattern="^(planned|in_progress|implemented|not_implemented|not_applicable)$",
+        default="planned", pattern="^(planned|in_progress|implemented|not_implemented|not_applicable)$"
     )
     effectiveness: Optional[str] = Field(None, pattern="^(effective|partially_effective|ineffective|not_tested)$")
     owner_id: Optional[int] = None
@@ -33,11 +28,6 @@ class RiskControlBase(BaseModel):
     last_tested_date: Optional[datetime] = None
     next_test_date: Optional[datetime] = None
     test_frequency_months: Optional[int] = None
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class RiskControlCreate(RiskControlBase):
@@ -61,11 +51,6 @@ class RiskControlUpdate(BaseModel):
     next_test_date: Optional[datetime] = None
     test_frequency_months: Optional[int] = None
     is_active: Optional[bool] = None
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class RiskControlResponse(RiskControlBase):
@@ -107,11 +92,6 @@ class RiskAssessmentBase(BaseModel):
 
     # Assessor
     assessed_by_id: Optional[int] = None
-
-    @field_validator("assessment_notes", "control_effectiveness_notes", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class RiskAssessmentCreate(RiskAssessmentBase):
@@ -188,21 +168,6 @@ class RiskBase(BaseModel):
     treatment_plan: Optional[str] = None
     treatment_due_date: Optional[datetime] = None
 
-    @field_validator(
-        "title",
-        "description",
-        "subcategory",
-        "risk_source",
-        "risk_event",
-        "risk_consequence",
-        "department",
-        "treatment_plan",
-        mode="before",
-    )
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class RiskCreate(RiskBase):
     """Schema for creating a Risk."""
@@ -237,21 +202,6 @@ class RiskUpdate(BaseModel):
     status: Optional[str] = None
     is_active: Optional[bool] = None
 
-    @field_validator(
-        "title",
-        "description",
-        "subcategory",
-        "risk_source",
-        "risk_event",
-        "risk_consequence",
-        "department",
-        "treatment_plan",
-        mode="before",
-    )
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class RiskResponse(RiskBase):
     """Schema for Risk response."""
@@ -282,7 +232,6 @@ class RiskDetailResponse(RiskResponse):
     assessments: List[RiskAssessmentResponse] = []
     control_count: int = 0
     open_action_count: int = 0
-    links: Optional[dict] = None
 
 
 class RiskListResponse(BaseModel):
@@ -293,7 +242,6 @@ class RiskListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
-    links: Optional[dict] = None
 
 
 # ============== Risk Matrix Schemas ==============
@@ -304,15 +252,18 @@ class RiskMatrixCell(BaseModel):
 
     likelihood: int
     impact: int
-    count: int
+    score: int
     level: str
+    color: str
+    risk_count: int = 0
 
 
 class RiskMatrixResponse(BaseModel):
     """Schema for risk matrix response."""
 
-    cells: List[RiskMatrixCell] = []
-    levels: List[str] = []
+    matrix: List[List[RiskMatrixCell]]
+    total_risks: int
+    risks_by_level: dict
 
 
 # ============== Risk Statistics Schemas ==============
@@ -328,27 +279,3 @@ class RiskStatistics(BaseModel):
     risks_requiring_review: int
     overdue_treatments: int
     average_risk_score: float
-
-
-# ============================================================================
-# Risk Scoring Response Models
-# ============================================================================
-
-
-class RiskScoreResult(BaseModel):
-    """Response model for risk score calculation."""
-
-    likelihood: int
-    impact: int
-    score: int
-    level: str
-    color: str
-
-
-class RiskStatisticsResponse(BaseModel):
-    """Response model for risk statistics."""
-
-    total_risks: int
-    by_level: dict
-    by_status: dict
-    avg_score: float

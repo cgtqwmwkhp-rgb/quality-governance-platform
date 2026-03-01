@@ -11,19 +11,18 @@ Features:
 
 import hashlib
 import json
+import os
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import and_, desc, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.core.config import settings
+from sqlalchemy import and_, desc, func
+from sqlalchemy.orm import Session
 
 # AI Integration
 try:
-    import anthropic  # type: ignore[import-not-found]  # TYPE-IGNORE: MYPY-OVERRIDE
+    import anthropic
 
     CLAUDE_AVAILABLE = True
 except ImportError:
@@ -70,25 +69,8 @@ class TextAnalyzer:
     }
 
     SEVERITY_INDICATORS = {
-        "high": [
-            "fatality",
-            "fatal",
-            "death",
-            "amputation",
-            "hospital",
-            "critical",
-            "severe",
-            "major",
-        ],
-        "medium": [
-            "injury",
-            "medical",
-            "treatment",
-            "doctor",
-            "broken",
-            "fracture",
-            "laceration",
-        ],
+        "high": ["fatality", "fatal", "death", "amputation", "hospital", "critical", "severe", "major"],
+        "medium": ["injury", "medical", "treatment", "doctor", "broken", "fracture", "laceration"],
         "low": ["first aid", "minor", "near miss", "close call", "slight", "bruise"],
     }
 
@@ -164,33 +146,30 @@ class TextAnalyzer:
 class AnomalyDetector:
     """Detect anomalies in incident patterns"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def detect_frequency_anomalies(
+    def detect_frequency_anomalies(
         self, entity: str, entity_type: str = "department", lookback_days: int = 90
     ) -> dict[str, Any]:
         """Detect if incident frequency is abnormal for an entity"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
 
         # Get incidents for this entity
         if entity_type == "department":
-            result = await self.db.execute(
-                select(Incident).where(and_(Incident.department == entity, Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA columns  # TYPE-IGNORE: MYPY-OVERRIDE
+            recent_incidents = (
+                self.db.query(Incident)
+                .filter(and_(Incident.department == entity, Incident.reported_date >= cutoff))
+                .all()
             )
-            recent_incidents = result.scalars().all()
         elif entity_type == "location":
-            result = await self.db.execute(
-                select(Incident).where(
-                    and_(
-                        Incident.location.ilike(f"%{entity}%"),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-                        Incident.reported_date >= cutoff,  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-                    )
-                )
+            recent_incidents = (
+                self.db.query(Incident)
+                .filter(and_(Incident.location.ilike(f"%{entity}%"), Incident.reported_date >= cutoff))
+                .all()
             )
-            recent_incidents = result.scalars().all()
         else:
             recent_incidents = []
 
@@ -210,7 +189,7 @@ class AnomalyDetector:
         std_dev = variance**0.5 if variance > 0 else 0
 
         # Get current week count
-        current_week = datetime.now(timezone.utc).strftime("%Y-W%W")
+        current_week = datetime.utcnow().strftime("%Y-W%W")
         current_count = weeks.get(current_week, 0)
 
         # Anomaly if > 2 standard deviations above mean
@@ -225,7 +204,7 @@ class AnomalyDetector:
             "average": round(mean, 2),
             "threshold": round(threshold, 2),
             "std_dev": round(std_dev, 2),
-            "severity": ("high" if current_count > mean * 2 else "medium" if is_anomaly else "low"),
+            "severity": "high" if current_count > mean * 2 else "medium" if is_anomaly else "low",
             "message": (
                 f"Incident frequency for {entity} is {current_count}, which is significantly above the average of {mean:.1f}"
                 if is_anomaly
@@ -233,21 +212,20 @@ class AnomalyDetector:
             ),
         }
 
-    async def detect_pattern_anomalies(self, lookback_days: int = 30) -> list[dict[str, Any]]:
+    def detect_pattern_anomalies(self, lookback_days: int = 30) -> list[dict[str, Any]]:
         """Detect unusual patterns across all incidents"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-        recent = result.scalars().all()
+        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        recent = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
 
         anomalies = []
 
         # Check for clustering by category
         category_counts: Counter = Counter()
         for inc in recent:
-            if inc.category:  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
-                category_counts[inc.category] += 1  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            if inc.category:
+                category_counts[inc.category] += 1
 
         if category_counts:
             total = sum(category_counts.values())
@@ -293,16 +271,15 @@ class AnomalyDetector:
 class IncidentPredictor:
     """ML-based incident prediction"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def predict_risk_factors(self, lookback_days: int = 365) -> list[dict[str, Any]]:
+    def predict_risk_factors(self, lookback_days: int = 365) -> list[dict[str, Any]]:
         """Identify conditions that predict higher incident likelihood"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-        incidents = result.scalars().all()
+        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        incidents = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
 
         if not incidents:
             return []
@@ -378,7 +355,7 @@ class IncidentPredictor:
 
         return risk_factors
 
-    async def get_similar_incidents(self, description: str, limit: int = 5) -> list[dict[str, Any]]:
+    def get_similar_incidents(self, description: str, limit: int = 5) -> list[dict[str, Any]]:
         """Find similar past incidents using keyword matching"""
         from src.domain.models.incident import Incident
 
@@ -387,10 +364,13 @@ class IncidentPredictor:
             return []
 
         # Simple keyword-based similarity
-        result = await self.db.execute(
-            select(Incident).where(Incident.description.isnot(None)).order_by(desc(Incident.reported_date)).limit(1000)  # type: ignore[attr-defined]  # SA columns  # TYPE-IGNORE: MYPY-OVERRIDE
+        all_incidents = (
+            self.db.query(Incident)
+            .filter(Incident.description.isnot(None))
+            .order_by(desc(Incident.reported_date))
+            .limit(1000)
+            .all()
         )
-        all_incidents = result.scalars().all()
 
         scored = []
         for inc in all_incidents:
@@ -409,10 +389,10 @@ class IncidentPredictor:
                 "title": inc.title,
                 "description": inc.description[:200] if inc.description else "",
                 "date": inc.incident_date.isoformat() if inc.incident_date else None,
-                "category": inc.category,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                "category": inc.category,
                 "severity": inc.severity,
                 "root_cause": inc.root_cause,
-                "corrective_actions": inc.corrective_actions,  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                "corrective_actions": inc.corrective_actions,
                 "similarity_score": score,
             }
             for inc, score in scored[:limit]
@@ -422,10 +402,10 @@ class IncidentPredictor:
 class RecommendationEngine:
     """AI-powered recommendation engine"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
         self.claude_client = None
-        if CLAUDE_AVAILABLE and settings.anthropic_api_key:
+        if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
             self.claude_client = anthropic.Anthropic()
 
     def get_corrective_action_recommendations(
@@ -458,7 +438,6 @@ For each recommendation, provide:
 
 Format as JSON array with objects containing: title, description, priority, timeframe, responsible_role"""
 
-        assert self.claude_client is not None
         message = self.claude_client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=1024,
@@ -588,18 +567,19 @@ Format as JSON array with objects containing: title, description, priority, time
 class RootCauseAnalyzer:
     """AI-powered root cause analysis"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def cluster_incidents(self, lookback_days: int = 180) -> list[dict[str, Any]]:
+    def cluster_incidents(self, lookback_days: int = 180) -> list[dict[str, Any]]:
         """Cluster similar incidents to identify systemic issues"""
         from src.domain.models.incident import Incident
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(
-            select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))  # type: ignore[attr-defined]  # SA columns  # TYPE-IGNORE: MYPY-OVERRIDE
+        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        incidents = (
+            self.db.query(Incident)
+            .filter(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
+            .all()
         )
-        incidents = result.scalars().all()
 
         # Group by extracted keywords
         clusters: dict[str, list] = defaultdict(list)
@@ -610,16 +590,16 @@ class RootCauseAnalyzer:
                     {
                         "id": inc.id,
                         "title": inc.title,
-                        "date": (inc.incident_date.isoformat() if inc.incident_date else None),
+                        "date": inc.incident_date.isoformat() if inc.incident_date else None,
                         "department": inc.department,
                     }
                 )
 
         # Return clusters with multiple incidents
-        result_list = []
+        result = []
         for category, cluster_incidents in clusters.items():
             if len(cluster_incidents) >= 3:  # At least 3 similar incidents
-                result_list.append(
+                result.append(
                     {
                         "category": category,
                         "incident_count": len(cluster_incidents),
@@ -636,8 +616,8 @@ class RootCauseAnalyzer:
                     }
                 )
 
-        result_list.sort(key=lambda x: x["incident_count"], reverse=True)  # type: ignore[arg-type, return-value]  # TYPE-IGNORE: MYPY-OVERRIDE
-        return result_list
+        result.sort(key=lambda x: x["incident_count"], reverse=True)
+        return result
 
     def analyze_5_whys(self, incident_id: int, answers: list[str]) -> dict[str, Any]:
         """Guide 5 Whys analysis"""
@@ -651,7 +631,7 @@ class RootCauseAnalyzer:
         }
 
         for i, answer in enumerate(answers):
-            analysis["whys"].append(  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+            analysis["whys"].append(
                 {
                     "level": i + 1,
                     "question": f"Why did this happen? (Level {i + 1})",

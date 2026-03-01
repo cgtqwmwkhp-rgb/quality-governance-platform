@@ -23,7 +23,7 @@ from src.domain.models.kri import (
     RiskScoreHistory,
     ThresholdStatus,
 )
-from src.domain.services.risk_scoring import KRIService, RiskScoringService
+from src.services.risk_scoring import KRIService, RiskScoringService
 
 
 class TestRiskScoringService:
@@ -153,8 +153,8 @@ class TestKRIAlert:
 
         assert alert.severity == ThresholdStatus.RED
         assert alert.trigger_value == 20
-        assert not alert.is_acknowledged
-        assert not alert.is_resolved
+        assert alert.is_acknowledged is False
+        assert alert.is_resolved is False
 
 
 class TestRiskScoreHistory:

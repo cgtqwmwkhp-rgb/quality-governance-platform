@@ -1,16 +1,13 @@
 """Risk Register API routes."""
 
 from datetime import datetime, timezone
-from typing import Annotated, Any, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.links import build_collection_links, build_resource_links
-from src.api.schemas.pagination import DataListResponse
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
@@ -26,26 +23,58 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
-from src.domain.exceptions import NotFoundError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
-from src.domain.models.user import User
-from src.domain.services.reference_number import ReferenceNumberService
-from src.domain.services.risk_scoring import calculate_risk_level
-from src.domain.services.risk_statistics_service import RiskStatisticsService
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
+
+
+# ============== Risk Matrix Configuration ==============
+
+RISK_MATRIX = {
+    1: {
+        1: ("very_low", "#22c55e"),
+        2: ("low", "#84cc16"),
+        3: ("low", "#84cc16"),
+        4: ("medium", "#eab308"),
+        5: ("medium", "#eab308"),
+    },
+    2: {
+        1: ("low", "#84cc16"),
+        2: ("low", "#84cc16"),
+        3: ("medium", "#eab308"),
+        4: ("medium", "#eab308"),
+        5: ("high", "#f97316"),
+    },
+    3: {
+        1: ("low", "#84cc16"),
+        2: ("medium", "#eab308"),
+        3: ("medium", "#eab308"),
+        4: ("high", "#f97316"),
+        5: ("high", "#f97316"),
+    },
+    4: {
+        1: ("medium", "#eab308"),
+        2: ("medium", "#eab308"),
+        3: ("high", "#f97316"),
+        4: ("high", "#f97316"),
+        5: ("critical", "#ef4444"),
+    },
+    5: {
+        1: ("medium", "#eab308"),
+        2: ("high", "#f97316"),
+        3: ("high", "#f97316"),
+        4: ("critical", "#ef4444"),
+        5: ("critical", "#ef4444"),
+    },
+}
+
+
+def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
+    """Calculate risk score and level from likelihood and impact."""
+    score = likelihood * impact
+    level, color = RISK_MATRIX.get(likelihood, {}).get(impact, ("medium", "#eab308"))
+    return score, level, color
 
 
 # ============== Risk Endpoints ==============
@@ -55,19 +84,16 @@ router = APIRouter()
 async def list_risks(
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     category: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
     risk_level: Optional[str] = None,
     owner_id: Optional[int] = None,
-) -> Any:
+) -> RiskListResponse:
     """List all risks with pagination and filtering."""
-    query = (
-        select(Risk)
-        .options(selectinload(Risk.owner))
-        .where(Risk.is_active == True, Risk.tenant_id == current_user.tenant_id)
-    )
+    query = select(Risk).where(Risk.is_active == True)
 
     if search:
         search_filter = f"%{search}%"
@@ -81,29 +107,33 @@ async def list_risks(
     if owner_id:
         query = query.where(Risk.owner_id == owner_id)
 
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(Risk.risk_score.desc(), Risk.created_at.desc())
 
-    paginated = await paginate(db, query, params)
-    return {
-        "items": paginated.items,
-        "total": paginated.total,
-        "page": paginated.page,
-        "page_size": paginated.page_size,
-        "pages": paginated.pages,
-        "links": build_collection_links("risks", paginated.page, paginated.page_size, paginated.pages),
-    }
+    result = await db.execute(query)
+    risks = result.scalars().all()
+
+    return RiskListResponse(
+        items=[RiskResponse.model_validate(r) for r in risks],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
+    )
 
 
 @router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("risk:create"))],
+    current_user: CurrentUser,
 ) -> RiskResponse:
     """Create a new risk."""
-    _span = tracer.start_span("create_risk") if tracer else None
-    if _span:
-        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
     # Calculate risk score and level
     score, level, _ = calculate_risk_level(risk_data.likelihood, risk_data.impact)
 
@@ -117,7 +147,6 @@ async def create_risk(
         risk_level=level,
         status=RiskStatus.IDENTIFIED,
         created_by_id=current_user.id,
-        tenant_id=current_user.tenant_id,
     )
 
     # Handle JSON array fields
@@ -138,10 +167,6 @@ async def create_risk(
     db.add(risk)
     await db.commit()
     await db.refresh(risk)
-    await invalidate_tenant_cache(current_user.tenant_id, "risks")
-    track_metric("risks.created")
-    if _span:
-        _span.end()
 
     return RiskResponse.model_validate(risk)
 
@@ -152,8 +177,65 @@ async def get_risk_statistics(
     current_user: CurrentUser,
 ) -> RiskStatistics:
     """Get risk register statistics."""
-    data = await RiskStatisticsService.get_risk_statistics(db, int(current_user.tenant_id or 0))
-    return RiskStatistics(**data)
+    # Total and active risks
+    total_result = await db.execute(select(func.count()).select_from(Risk))
+    total_risks = total_result.scalar() or 0
+
+    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active == True))
+    active_risks = active_result.scalar() or 0
+
+    # Risks by category
+    category_result = await db.execute(
+        select(Risk.category, func.count()).where(Risk.is_active == True).group_by(Risk.category)
+    )
+    risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
+
+    # Risks by level
+    level_result = await db.execute(
+        select(Risk.risk_level, func.count()).where(Risk.is_active == True).group_by(Risk.risk_level)
+    )
+    risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
+
+    # Risks requiring review (next_review_date in past)
+    review_result = await db.execute(
+        select(func.count())
+        .select_from(Risk)
+        .where(
+            and_(
+                Risk.is_active == True,
+                Risk.next_review_date <= datetime.now(timezone.utc),
+            )
+        )
+    )
+    risks_requiring_review = review_result.scalar() or 0
+
+    # Overdue treatments
+    overdue_result = await db.execute(
+        select(func.count())
+        .select_from(Risk)
+        .where(
+            and_(
+                Risk.is_active == True,
+                Risk.treatment_due_date <= datetime.now(timezone.utc),
+                Risk.status != RiskStatus.CLOSED,
+            )
+        )
+    )
+    overdue_treatments = overdue_result.scalar() or 0
+
+    # Average risk score
+    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True))
+    average_risk_score = float(avg_result.scalar() or 0)
+
+    return RiskStatistics(
+        total_risks=total_risks,
+        active_risks=active_risks,
+        risks_by_category=risks_by_category,
+        risks_by_level=risks_by_level,
+        risks_requiring_review=risks_requiring_review,
+        overdue_treatments=overdue_treatments,
+        average_risk_score=round(average_risk_score, 2),
+    )
 
 
 @router.get("/matrix", response_model=RiskMatrixResponse)
@@ -162,8 +244,45 @@ async def get_risk_matrix(
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
     """Get the risk matrix with risk counts per cell."""
-    data = await RiskStatisticsService.get_risk_matrix(db, int(current_user.tenant_id or 0))
-    return RiskMatrixResponse(**data)
+    # Get risk counts by likelihood and impact
+    result = await db.execute(
+        select(Risk.likelihood, Risk.impact, func.count())
+        .where(Risk.is_active == True)
+        .group_by(Risk.likelihood, Risk.impact)
+    )
+    risk_counts = {(row[0], row[1]): row[2] for row in result.all()}
+
+    # Build matrix
+    matrix = []
+    risks_by_level = {"very_low": 0, "low": 0, "medium": 0, "high": 0, "critical": 0}
+    total_risks = 0
+
+    for likelihood in range(5, 0, -1):  # 5 to 1 (top to bottom)
+        row = []
+        for impact in range(1, 6):  # 1 to 5 (left to right)
+            score, level, color = calculate_risk_level(likelihood, impact)
+            count = risk_counts.get((likelihood, impact), 0)
+
+            row.append(
+                RiskMatrixCell(
+                    likelihood=likelihood,
+                    impact=impact,
+                    score=score,
+                    level=level,
+                    color=color,
+                    risk_count=count,
+                )
+            )
+
+            risks_by_level[level] += count
+            total_risks += count
+        matrix.append(row)
+
+    return RiskMatrixResponse(
+        matrix=matrix,
+        total_risks=total_risks,
+        risks_by_level=risks_by_level,
+    )
 
 
 @router.get("/{risk_id}", response_model=RiskDetailResponse)
@@ -179,17 +298,21 @@ async def get_risk(
             selectinload(Risk.controls),
             selectinload(Risk.assessments),
         )
-        .where(Risk.id == risk_id, Risk.tenant_id == current_user.tenant_id)
+        .where(Risk.id == risk_id)
     )
     risk = result.scalar_one_or_none()
 
     if not risk:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found",
+        )
 
     response = RiskDetailResponse.model_validate(risk)
     response.control_count = len(risk.controls)
+
+    # Count open actions (simplified - would need action linkage)
     response.open_action_count = 0
-    response.links = build_resource_links("", "risks", risk_id)
 
     return response
 
@@ -199,24 +322,25 @@ async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("risk:update"))],
+    current_user: CurrentUser,
 ) -> RiskResponse:
     """Update a risk."""
-    risk = await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
+    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    risk = result.scalar_one_or_none()
+
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found",
+        )
 
     update_data = risk_data.model_dump(exclude_unset=True)
 
-    _json_fields = {"clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"}
-    if "clause_ids" in update_data:
-        risk.clause_ids_json = update_data["clause_ids"]
-    if "control_ids" in update_data:
-        risk.control_ids_json = update_data["control_ids"]
-    if "linked_audit_ids" in update_data:
-        risk.linked_audit_ids_json = update_data["linked_audit_ids"]
-    if "linked_incident_ids" in update_data:
-        risk.linked_incident_ids_json = update_data["linked_incident_ids"]
-    if "linked_policy_ids" in update_data:
-        risk.linked_policy_ids_json = update_data["linked_policy_ids"]
+    # Handle JSON array fields
+    json_fields = ["clause_ids", "control_ids", "linked_audit_ids", "linked_incident_ids", "linked_policy_ids"]
+    for field in json_fields:
+        if field in update_data:
+            setattr(risk, f"{field}_json", update_data.pop(field))
 
     # Recalculate risk score if likelihood or impact changed
     likelihood = update_data.get("likelihood", risk.likelihood)
@@ -226,11 +350,11 @@ async def update_risk(
         risk.risk_score = score
         risk.risk_level = level
 
-    apply_updates(risk, risk_data, exclude=_json_fields)
+    for field, value in update_data.items():
+        setattr(risk, field, value)
 
     await db.commit()
     await db.refresh(risk)
-    await invalidate_tenant_cache(current_user.tenant_id, "risks")
 
     return RiskResponse.model_validate(risk)
 
@@ -242,12 +366,18 @@ async def delete_risk(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk (superuser only)."""
-    risk = await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
+    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    risk = result.scalar_one_or_none()
+
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found",
+        )
 
     risk.is_active = False
     risk.status = RiskStatus.CLOSED
     await db.commit()
-    await invalidate_tenant_cache(current_user.tenant_id, "risks")
 
 
 # ============== Risk Control Endpoints ==============
@@ -258,10 +388,18 @@ async def create_control(
     risk_id: int,
     control_data: RiskControlCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("risk:create"))],
+    current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Create a new control for a risk."""
-    await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
+    # Verify risk exists
+    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    risk = result.scalar_one_or_none()
+
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found",
+        )
 
     control_dict = control_data.model_dump(exclude={"clause_ids", "control_ids"})
 
@@ -283,15 +421,13 @@ async def create_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=DataListResponse)
+@router.get("/{risk_id}/controls", response_model=list[RiskControlResponse])
 async def list_controls(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-):
+) -> list[RiskControlResponse]:
     """List all controls for a risk."""
-    await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
-
     result = await db.execute(
         select(OperationalRiskControl)
         .where(
@@ -304,7 +440,7 @@ async def list_controls(
     )
     controls = result.scalars().all()
 
-    return {"data": [RiskControlResponse.model_validate(c) for c in controls]}
+    return [RiskControlResponse.model_validate(c) for c in controls]
 
 
 @router.patch("/controls/{control_id}", response_model=RiskControlResponse)
@@ -312,23 +448,28 @@ async def update_control(
     control_id: int,
     control_data: RiskControlUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("risk:update"))],
+    current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Update a risk control."""
-    control = await get_or_404(
-        db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id
-    )
-    await get_or_404(db, Risk, control.risk_id, "Risk not found", tenant_id=current_user.tenant_id)
+    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
+    control = result.scalar_one_or_none()
+
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Control not found",
+        )
 
     update_data = control_data.model_dump(exclude_unset=True)
 
-    # Handle JSON array fields (schema → model field remapping)
+    # Handle JSON array fields
     if "clause_ids" in update_data:
-        control.clause_ids_json = update_data["clause_ids"]
+        control.clause_ids_json = update_data.pop("clause_ids")
     if "control_ids" in update_data:
-        control.control_ids_json = update_data["control_ids"]
+        control.control_ids_json = update_data.pop("control_ids")
 
-    apply_updates(control, control_data, exclude={"clause_ids", "control_ids"})
+    for field, value in update_data.items():
+        setattr(control, field, value)
 
     await db.commit()
     await db.refresh(control)
@@ -340,13 +481,17 @@ async def update_control(
 async def delete_control(
     control_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
 ) -> None:
     """Soft delete a risk control."""
-    control = await get_or_404(
-        db, OperationalRiskControl, control_id, "Control not found", tenant_id=current_user.tenant_id
-    )
-    await get_or_404(db, Risk, control.risk_id, "Risk not found", tenant_id=current_user.tenant_id)
+    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
+    control = result.scalar_one_or_none()
+
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Control not found",
+        )
 
     control.is_active = False
     await db.commit()
@@ -360,10 +505,18 @@ async def create_assessment(
     risk_id: int,
     assessment_data: RiskAssessmentCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("risk:create"))],
+    current_user: CurrentUser,
 ) -> RiskAssessmentResponse:
     """Create a new assessment for a risk."""
-    risk = await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
+    # Verify risk exists
+    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    risk = result.scalar_one_or_none()
+
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found",
+        )
 
     # Calculate scores and levels
     inherent_score, inherent_level, _ = calculate_risk_level(
@@ -406,18 +559,16 @@ async def create_assessment(
     return RiskAssessmentResponse.model_validate(assessment)
 
 
-@router.get("/{risk_id}/assessments", response_model=DataListResponse)
+@router.get("/{risk_id}/assessments", response_model=list[RiskAssessmentResponse])
 async def list_assessments(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-):
+) -> list[RiskAssessmentResponse]:
     """List all assessments for a risk (history)."""
-    await get_or_404(db, Risk, risk_id, "Risk not found", tenant_id=current_user.tenant_id)
-
     result = await db.execute(
         select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
     )
     assessments = result.scalars().all()
 
-    return {"data": [RiskAssessmentResponse.model_validate(a) for a in assessments]}
+    return [RiskAssessmentResponse.model_validate(a) for a in assessments]

@@ -1,37 +1,17 @@
-"""Incident API routes.
+"""Incident API routes."""
 
-Thin controller layer — all business logic lives in IncidentService.
-"""
-
-import logging
-from typing import Annotated, Optional
+from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func as sa_func
+from sqlalchemy import select
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
-from src.api.schemas.investigation import InvestigationRunListResponse
-from src.api.schemas.links import build_collection_links, build_resource_links
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident
-from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.incident_service import IncidentService
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -44,7 +24,7 @@ router = APIRouter()
 async def create_incident(
     incident_data: IncidentCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("incident:create"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
@@ -52,27 +32,68 @@ async def create_incident(
 
     Requires authentication.
     """
-    _span = tracer.start_span("create_incident") if tracer else None
-    if _span:
-        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
+    # Generate or use provided reference number
+    if incident_data.reference_number:
+        # Guard: Only authorized users can set explicit reference numbers
+        if not current_user.has_permission("incident:set_reference_number"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission 'incident:set_reference_number' required to set explicit reference number",
+            )
 
-    service = IncidentService(db)
-    try:
-        incident = await service.create_incident(
-            incident_data=incident_data,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            has_set_ref_permission=current_user.has_permission("incident:set_reference_number"),
-            request_id=request_id,
-        )
-    except PermissionError:
-        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
-    except ValueError:
-        raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
+        reference_number = incident_data.reference_number
+        # Check for duplicate reference number
+        existing = await db.execute(select(Incident).where(Incident.reference_number == reference_number))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Incident with reference number {reference_number} already exists",
+            )
+    else:
+        # Generate reference number (format: INC-YYYY-NNNN)
+        year = datetime.now(timezone.utc).year
 
-    track_metric("incidents.created")
-    if _span:
-        _span.end()
+        # Get the count of incidents created this year
+        count_result = await db.execute(select(sa_func.count()).select_from(Incident))
+        count = count_result.scalar_one()
+        reference_number = f"INC-{year}-{count + 1:04d}"
+
+    # Create new incident
+    incident = Incident(
+        title=incident_data.title,
+        description=incident_data.description,
+        incident_type=incident_data.incident_type,
+        severity=incident_data.severity,
+        status=incident_data.status,
+        incident_date=incident_data.incident_date,
+        reported_date=datetime.now(timezone.utc),
+        location=incident_data.location,
+        department=incident_data.department,
+        reference_number=reference_number,
+        reporter_id=current_user.id,
+        reporter_email=incident_data.reporter_email,
+        reporter_name=incident_data.reporter_name,
+        created_by_id=current_user.id,
+        updated_by_id=current_user.id,
+    )
+
+    db.add(incident)
+    await db.flush()  # Get ID before recording event
+
+    await record_audit_event(
+        db=db,
+        event_type="incident.created",
+        entity_type="incident",
+        entity_id=str(incident.id),
+        action="create",
+        description=f"Incident {incident.reference_number} created",
+        payload=incident_data.model_dump(mode="json"),
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(incident)
     return incident
 
 
@@ -81,24 +102,31 @@ async def get_incident(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
-):
+) -> Incident:
     """
     Get an incident by ID.
 
     Requires authentication.
     """
-    incident = await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
-    response = IncidentResponse.model_validate(incident)
-    response.links = build_resource_links("", "incidents", incident_id)
-    return response
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found",
+        )
+
+    return incident
 
 
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
     request_id: str = Depends(get_request_id),
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ) -> IncidentListResponse:
     """
@@ -111,8 +139,8 @@ async def list_incidents(
     Requires authentication. Users can only filter by their own email
     unless they have admin permissions.
     """
-    service = IncidentService(db)
-
+    # SECURITY FIX: If filtering by email, enforce that users can only access their own data
+    # unless they have admin/view-all permissions
     if reporter_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
@@ -120,14 +148,21 @@ async def list_incidents(
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not await service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
-            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
+        if not has_view_all and not is_superuser:
+            # Non-admin users can only filter by their own email
+            if user_email and reporter_email.lower() != user_email.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own incidents",
+                )
 
+        # AUDIT: Log email filter usage for security monitoring
+        # Note: We log the filter type but NOT the raw email (privacy compliance)
         await record_audit_event(
             db=db,
             event_type="incident.list_filtered",
             entity_type="incident",
-            entity_id="*",
+            entity_id="*",  # Wildcard - listing operation
             action="list",
             description="Incident list accessed with email filter",
             payload={
@@ -140,28 +175,44 @@ async def list_incidents(
             request_id=request_id,
         )
 
-    try:
-        paginated = await service.list_incidents(
-            tenant_id=current_user.tenant_id,
-            params=params,
-            reporter_email=reporter_email,
-        )
-        return {
-            "items": paginated.items,
-            "total": paginated.total,
-            "page": paginated.page,
-            "page_size": paginated.page_size,
-            "pages": paginated.pages,
-            "links": build_collection_links("incidents", paginated.page, paginated.page_size, paginated.pages),
-        }
-    except SQLAlchemyError as e:
-        error_str = str(e).lower()
-        logger.exception(
-            "Error listing incidents [request_id=%s]: %s",
-            request_id,
-            type(e).__name__,
-        )
+    import logging
+    import math
 
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Build base query
+        query = select(Incident)
+        count_query = select(sa_func.count()).select_from(Incident)
+
+        # Filter by reporter_email if provided
+        if reporter_email:
+            query = query.where(Incident.reporter_email == reporter_email)
+            count_query = count_query.where(Incident.reporter_email == reporter_email)
+
+        # Count total
+        count_result = await db.execute(count_query)
+        total = count_result.scalar_one()
+
+        # Get paginated results with deterministic ordering
+        offset = (page - 1) * page_size
+        result = await db.execute(
+            query.order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
+        )
+        incidents = result.scalars().all()
+
+        return IncidentListResponse(
+            items=[IncidentResponse.model_validate(i) for i in incidents],
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=math.ceil(total / page_size) if total > 0 else 1,
+        )
+    except Exception as e:
+        error_str = str(e).lower()
+        logger.error(f"Error listing incidents: {e}", exc_info=True)
+
+        # Check for various database column errors
         column_errors = [
             "reporter_email",
             "column",
@@ -173,28 +224,29 @@ async def list_incidents(
             "programmingerror",
         ]
 
-        if any(err in error_str for err in column_errors):
-            logger.warning(
-                "Database column missing - migration may be pending [request_id=%s]",
-                request_id,
-            )
+        is_column_error = any(err in error_str for err in column_errors)
+
+        if is_column_error:
+            logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=ErrorCode.INTERNAL_ERROR,
+                detail="Database migration pending. Please wait for migrations to complete.",
             )
 
+        # Re-raise with details for debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ErrorCode.INTERNAL_ERROR,
+            detail=f"Error listing incidents: {type(e).__name__}: {str(e)[:200]}",
         )
 
 
-@router.get("/{incident_id}/investigations", response_model=InvestigationRunListResponse)
+@router.get("/{incident_id}/investigations", response_model=dict)
 async def list_incident_investigations(
     incident_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
 ):
     """
     List investigations for a specific incident (paginated).
@@ -203,12 +255,37 @@ async def list_incident_investigations(
     Returns investigations assigned to this incident with pagination.
     Deterministic ordering: created_at DESC, id ASC.
     """
-    from sqlalchemy import select
+    from math import ceil
 
+    from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    await get_or_404(db, Incident, incident_id, tenant_id=current_user.tenant_id)
+    # Verify incident exists
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
 
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found",
+        )
+
+    # Get total count
+    count_query = (
+        select(sa_func.count())
+        .select_from(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
+            InvestigationRun.assigned_entity_id == incident_id,
+        )
+    )
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Calculate total pages
+    total_pages = ceil(total / page_size) if total > 0 else 1
+
+    # Get paginated results
     query = (
         select(InvestigationRun)
         .where(
@@ -216,9 +293,19 @@ async def list_incident_investigations(
             InvestigationRun.assigned_entity_id == incident_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
+    result = await db.execute(query)
+    investigations = result.scalars().all()
 
-    return await paginate(db, query, params)
+    return {
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 @router.patch("/{incident_id}", response_model=IncidentResponse)
@@ -226,7 +313,7 @@ async def update_incident(
     incident_id: int,
     incident_data: IncidentUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("incident:update"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
@@ -234,17 +321,37 @@ async def update_incident(
 
     Requires authentication.
     """
-    service = IncidentService(db)
-    try:
-        incident = await service.update_incident(
-            incident_id,
-            incident_data,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    # Update fields
+    update_dict = incident_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(incident, key, value)
+
+    incident.updated_by_id = current_user.id
+    incident.updated_at = datetime.now(timezone.utc)
+
+    await record_audit_event(
+        db=db,
+        event_type="incident.updated",
+        entity_type="incident",
+        entity_id=str(incident.id),
+        action="update",
+        description=f"Incident {incident.reference_number} updated",
+        payload=update_dict,
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(incident)
     return incident
 
 
@@ -252,7 +359,7 @@ async def update_incident(
 async def delete_incident(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ) -> None:
     """
@@ -260,13 +367,27 @@ async def delete_incident(
 
     Requires authentication.
     """
-    service = IncidentService(db)
-    try:
-        await service.delete_incident(
-            incident_id,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    # Record audit event
+    await record_audit_event(
+        db=db,
+        event_type="incident.deleted",
+        entity_type="incident",
+        entity_id=str(incident.id),
+        action="delete",
+        description=f"Incident {incident.reference_number} deleted",
+        payload={"incident_id": incident_id, "reference_number": incident.reference_number},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.delete(incident)
+    await db.commit()

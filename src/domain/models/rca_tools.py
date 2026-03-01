@@ -53,9 +53,7 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
 
     # Link to investigation or entity
     investigation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=True, index=True
     )
     entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # incident, near_miss, complaint
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
@@ -133,9 +131,7 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
 
     # Link to investigation or entity
     investigation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=True, index=True
     )
     entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
@@ -238,9 +234,7 @@ class BarrierAnalysis(Base, TimestampMixin, AuditTrailMixin):
 
     # Link to investigation or entity
     investigation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"), nullable=True, index=True
     )
     entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)

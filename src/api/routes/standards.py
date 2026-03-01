@@ -1,12 +1,12 @@
-"""Standards Library API routes — thin controller layer."""
+"""Standards Library API routes."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.pagination import DataListResponse
 from src.api.schemas.standard import (
     ClauseCreate,
     ClauseResponse,
@@ -22,8 +22,7 @@ from src.api.schemas.standard import (
     StandardResponse,
     StandardUpdate,
 )
-from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.services.standard_service import StandardService
+from src.domain.models.standard import Clause, Control, Standard
 
 router = APIRouter()
 
@@ -41,14 +40,35 @@ async def list_standards(
     is_active: Optional[bool] = True,
 ) -> StandardListResponse:
     """List all standards with pagination."""
-    service = StandardService(db)
-    paginated = await service.list_standards(page=page, page_size=page_size, search=search, is_active=is_active)
+    query = select(Standard)
+
+    if search:
+        search_filter = f"%{search}%"
+        query = query.where(
+            (Standard.code.ilike(search_filter))
+            | (Standard.name.ilike(search_filter))
+            | (Standard.full_name.ilike(search_filter))
+        )
+    if is_active is not None:
+        query = query.where(Standard.is_active == is_active)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query)
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(Standard.code)
+
+    result = await db.execute(query)
+    standards = result.scalars().all()
+
     return StandardListResponse(
-        items=[StandardResponse.model_validate(s) for s in paginated.items],
-        total=paginated.total,
-        page=paginated.page,
-        page_size=paginated.page_size,
-        pages=paginated.pages,
+        items=[StandardResponse.model_validate(s) for s in standards],
+        total=total or 0,
+        page=page,
+        page_size=page_size,
+        pages=(total or 0 + page_size - 1) // page_size,
     )
 
 
@@ -59,11 +79,19 @@ async def create_standard(
     current_user: CurrentSuperuser,
 ) -> StandardResponse:
     """Create a new standard (superuser only)."""
-    service = StandardService(db)
-    try:
-        standard = await service.create_standard(standard_data)
-    except ValueError:
-        raise ValidationError(ErrorCode.DUPLICATE_ENTITY)
+    # Check if code already exists
+    result = await db.execute(select(Standard).where(Standard.code == standard_data.code))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Standard code already exists",
+        )
+
+    standard = Standard(**standard_data.model_dump())
+    db.add(standard)
+    await db.commit()
+    await db.refresh(standard)
+
     return StandardResponse.model_validate(standard)
 
 
@@ -74,11 +102,19 @@ async def get_standard(
     current_user: CurrentUser,
 ) -> StandardDetailResponse:
     """Get a specific standard with its clauses."""
-    service = StandardService(db)
-    try:
-        standard = await service.get_standard(standard_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(
+        select(Standard)
+        .options(selectinload(Standard.clauses).selectinload(Clause.controls))
+        .where(Standard.id == standard_id)
+    )
+    standard = result.scalar_one_or_none()
+
+    if not standard:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
     return StandardDetailResponse.model_validate(standard)
 
 
@@ -90,11 +126,22 @@ async def update_standard(
     current_user: CurrentSuperuser,
 ) -> StandardResponse:
     """Update a standard (superuser only)."""
-    service = StandardService(db)
-    try:
-        standard = await service.update_standard(standard_id, standard_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    standard = result.scalar_one_or_none()
+
+    if not standard:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    update_data = standard_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(standard, field, value)
+
+    await db.commit()
+    await db.refresh(standard)
+
     return StandardResponse.model_validate(standard)
 
 
@@ -104,54 +151,162 @@ async def get_compliance_score(
     db: DbSession,
     current_user: CurrentUser,
 ) -> ComplianceScoreResponse:
-    """Get compliance score for a standard."""
-    service = StandardService(db)
-    try:
-        score = await service.get_compliance_score(standard_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    return ComplianceScoreResponse(**score)
+    """
+    Get compliance score for a standard.
+
+    Calculates compliance based on control implementation status:
+    - implemented: 100% weight
+    - partial: 50% weight
+    - planned/not_implemented/NULL: 0% weight
+
+    Returns setup_required=true if no applicable controls exist.
+    """
+    # Verify standard exists
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    standard = result.scalar_one_or_none()
+
+    if not standard:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    # Get all applicable, active controls for this standard
+    control_query = (
+        select(Control)
+        .join(Clause, Control.clause_id == Clause.id)
+        .where(Clause.standard_id == standard_id)
+        .where(Control.is_active == True)
+        .where(Control.is_applicable == True)
+    )
+    control_result = await db.execute(control_query)
+    controls: list[Control] = list(control_result.scalars().all())
+
+    total_controls = len(controls)
+
+    if total_controls == 0:
+        return ComplianceScoreResponse(
+            standard_id=standard_id,
+            standard_code=standard.code,
+            total_controls=0,
+            implemented_count=0,
+            partial_count=0,
+            not_implemented_count=0,
+            compliance_percentage=0,
+            setup_required=True,
+        )
+
+    # Count by status
+    implemented_count = sum(1 for c in controls if c.implementation_status == "implemented")
+    partial_count = sum(1 for c in controls if c.implementation_status == "partial")
+    not_implemented_count = total_controls - implemented_count - partial_count
+
+    # Calculate percentage: implemented=100%, partial=50%, others=0%
+    compliance_percentage = round((implemented_count + 0.5 * partial_count) / total_controls * 100)
+
+    return ComplianceScoreResponse(
+        standard_id=standard_id,
+        standard_code=standard.code,
+        total_controls=total_controls,
+        implemented_count=implemented_count,
+        partial_count=partial_count,
+        not_implemented_count=not_implemented_count,
+        compliance_percentage=compliance_percentage,
+        setup_required=False,
+    )
 
 
-@router.get("/{standard_id}/controls", response_model=DataListResponse)
+@router.get("/{standard_id}/controls", response_model=list[ControlListItem])
 async def list_standard_controls(
     standard_id: int,
     db: DbSession,
     current_user: CurrentUser,
-):
-    """List all controls for a standard (flat view)."""
-    service = StandardService(db)
-    try:
-        rows = await service.list_standard_controls(standard_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    return {"data": [ControlListItem(**row) for row in rows]}
+) -> list[ControlListItem]:
+    """
+    List all controls for a standard (flat view).
+
+    Returns controls with clause reference, ordered deterministically by:
+    clause.sort_order, clause.clause_number, control.control_number, control.id
+    """
+    # Verify standard exists
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    # Get all controls with clause info, deterministically ordered
+    query = (
+        select(Control, Clause.clause_number, Clause.sort_order)
+        .join(Clause, Control.clause_id == Clause.id)
+        .where(Clause.standard_id == standard_id)
+        .where(Control.is_active == True)
+        .order_by(
+            Clause.sort_order,
+            Clause.clause_number,
+            Control.control_number,
+            Control.id,  # Tie-breaker for determinism
+        )
+    )
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        ControlListItem(
+            id=control.id,
+            clause_id=control.clause_id,
+            clause_number=clause_number,
+            control_number=control.control_number,
+            title=control.title,
+            implementation_status=control.implementation_status,
+            is_applicable=control.is_applicable,
+            is_active=control.is_active,
+        )
+        for control, clause_number, _ in rows
+    ]
 
 
 # ============== Clause Endpoints ==============
 
 
-@router.get("/{standard_id}/clauses", response_model=DataListResponse)
+@router.get("/{standard_id}/clauses", response_model=list[ClauseResponse])
 async def list_clauses(
     standard_id: int,
     db: DbSession,
     current_user: CurrentUser,
     parent_clause_id: Optional[int] = None,
-):
+) -> list[ClauseResponse]:
     """List clauses for a standard."""
-    service = StandardService(db)
-    try:
-        clauses = await service.list_clauses(standard_id, parent_clause_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    return {"data": [ClauseResponse.model_validate(c) for c in clauses]}
+    # Verify standard exists
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    query = (
+        select(Clause)
+        .options(selectinload(Clause.controls))
+        .where(Clause.standard_id == standard_id)
+        .where(Clause.is_active == True)
+    )
+
+    if parent_clause_id is not None:
+        query = query.where(Clause.parent_clause_id == parent_clause_id)
+    else:
+        query = query.where(Clause.parent_clause_id.is_(None))
+
+    query = query.order_by(Clause.sort_order, Clause.clause_number)
+
+    result = await db.execute(query)
+    clauses = result.scalars().all()
+
+    return [ClauseResponse.model_validate(c) for c in clauses]
 
 
-@router.post(
-    "/{standard_id}/clauses",
-    response_model=ClauseResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{standard_id}/clauses", response_model=ClauseResponse, status_code=status.HTTP_201_CREATED)
 async def create_clause(
     standard_id: int,
     clause_data: ClauseCreate,
@@ -159,11 +314,25 @@ async def create_clause(
     current_user: CurrentSuperuser,
 ) -> ClauseResponse:
     """Create a new clause for a standard (superuser only)."""
-    service = StandardService(db)
-    try:
-        clause = await service.create_clause(standard_id, clause_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    # Verify standard exists
+    result = await db.execute(select(Standard).where(Standard.id == standard_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Standard not found",
+        )
+
+    clause = Clause(
+        standard_id=standard_id,
+        **clause_data.model_dump(exclude={"standard_id"}),
+    )
+    db.add(clause)
+    await db.commit()
+
+    # Reload with relationships
+    result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause.id))
+    clause = result.scalar_one()  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-002
+
     return ClauseResponse.model_validate(clause)
 
 
@@ -174,11 +343,15 @@ async def get_clause(
     current_user: CurrentUser,
 ) -> ClauseResponse:
     """Get a specific clause."""
-    service = StandardService(db)
-    try:
-        clause = await service.get_clause(clause_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause_id))
+    clause = result.scalar_one_or_none()
+
+    if not clause:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clause not found",
+        )
+
     return ClauseResponse.model_validate(clause)
 
 
@@ -190,22 +363,29 @@ async def update_clause(
     current_user: CurrentSuperuser,
 ) -> ClauseResponse:
     """Update a clause (superuser only)."""
-    service = StandardService(db)
-    try:
-        clause = await service.update_clause(clause_id, clause_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(Clause).where(Clause.id == clause_id))
+    clause = result.scalar_one_or_none()
+
+    if not clause:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clause not found",
+        )
+
+    update_data = clause_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(clause, field, value)
+
+    await db.commit()
+    await db.refresh(clause)
+
     return ClauseResponse.model_validate(clause)
 
 
 # ============== Control Endpoints ==============
 
 
-@router.post(
-    "/clauses/{clause_id}/controls",
-    response_model=ControlResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/clauses/{clause_id}/controls", response_model=ControlResponse, status_code=status.HTTP_201_CREATED)
 async def create_control(
     clause_id: int,
     control_data: ControlCreate,
@@ -213,11 +393,22 @@ async def create_control(
     current_user: CurrentSuperuser,
 ) -> ControlResponse:
     """Create a new control for a clause (superuser only)."""
-    service = StandardService(db)
-    try:
-        control = await service.create_control(clause_id, control_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    # Verify clause exists
+    result = await db.execute(select(Clause).where(Clause.id == clause_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clause not found",
+        )
+
+    control = Control(
+        clause_id=clause_id,
+        **control_data.model_dump(exclude={"clause_id"}),
+    )
+    db.add(control)
+    await db.commit()
+    await db.refresh(control)
+
     return ControlResponse.model_validate(control)
 
 
@@ -228,11 +419,15 @@ async def get_control(
     current_user: CurrentUser,
 ) -> ControlResponse:
     """Get a specific control."""
-    service = StandardService(db)
-    try:
-        control = await service.get_control(control_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(Control).where(Control.id == control_id))
+    control = result.scalar_one_or_none()
+
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Control not found",
+        )
+
     return ControlResponse.model_validate(control)
 
 
@@ -244,9 +439,20 @@ async def update_control(
     current_user: CurrentSuperuser,
 ) -> ControlResponse:
     """Update a control (superuser only)."""
-    service = StandardService(db)
-    try:
-        control = await service.update_control(control_id, control_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(Control).where(Control.id == control_id))
+    control = result.scalar_one_or_none()
+
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Control not found",
+        )
+
+    update_data = control_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(control, field, value)
+
+    await db.commit()
+    await db.refresh(control)
+
     return ControlResponse.model_validate(control)

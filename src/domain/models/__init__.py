@@ -18,23 +18,7 @@ from src.domain.models.analytics import (
 )
 from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
-
-# CAPA (Corrective and Preventive Action)
-from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
-
-# Compliance Automation
-from src.domain.models.compliance_automation import (
-    Certificate,
-    ComplianceScore,
-    GapAnalysis,
-    RegulatoryUpdate,
-    RIDDORSubmission,
-    ScheduledAudit,
-)
-
-# Compliance Evidence Links
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -146,7 +130,6 @@ from src.domain.models.risk_register import (
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
-from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -157,17 +140,6 @@ from src.domain.models.uvdb_achilles import (
     UVDBKPIRecord,
     UVDBQuestion,
     UVDBSection,
-)
-
-# Workflow Persistence Models
-from src.domain.models.workflow import ApprovalRequest as WorkflowApprovalRequest
-from src.domain.models.workflow import (
-    EscalationLog,
-    EscalationRule,
-    UserDelegation,
-    WorkflowInstance,
-    WorkflowStep,
-    WorkflowTemplate,
 )
 
 __all__ = [
@@ -310,30 +282,4 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
-    # Compliance Evidence Links
-    "ComplianceEvidenceLink",
-    "EvidenceLinkMethod",
-    # Compliance Automation
-    "RegulatoryUpdate",
-    "GapAnalysis",
-    "Certificate",
-    "ScheduledAudit",
-    "ComplianceScore",
-    "RIDDORSubmission",
-    # Workflow Persistence Models
-    "WorkflowTemplate",
-    "WorkflowInstance",
-    "WorkflowStep",
-    "WorkflowApprovalRequest",
-    "EscalationRule",
-    "EscalationLog",
-    "UserDelegation",
-    # Token Blacklist (JWT Revocation)
-    "TokenBlacklist",
-    # CAPA (Corrective and Preventive Action)
-    "CAPAAction",
-    "CAPAStatus",
-    "CAPAType",
-    "CAPAPriority",
-    "CAPASource",
 ]

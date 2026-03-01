@@ -57,7 +57,7 @@ class TestAuditsAPI:
                 category="Safety",
                 audit_type="inspection",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("TPL"),
+                reference_number=generate_test_reference("TPL", i),
             )
             for i in range(1, 4)
         ]
@@ -90,7 +90,7 @@ class TestAuditsAPI:
             category="Quality",
             audit_type="audit",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("TPL"),
+            reference_number=generate_test_reference("TPL", 1),
         )
         test_session.add(template)
         await test_session.commit()
@@ -120,7 +120,7 @@ class TestAuditsAPI:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("TPL"),
+            reference_number=generate_test_reference("TPL", 1),
             is_published=True,  # Must be published to create runs
         )
         test_session.add(template)
@@ -160,7 +160,7 @@ class TestAuditsAPI:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("TPL"),
+            reference_number=generate_test_reference("TPL", 1),
             is_published=True,
         )
         test_session.add(template)
@@ -172,7 +172,7 @@ class TestAuditsAPI:
             title="Equipment Audit",
             status=AuditStatus.SCHEDULED,
             assigned_to_id=test_user.id,
-            reference_number=generate_test_reference("AUD"),
+            reference_number=generate_test_reference("AUD", 1),
         )
         test_session.add(audit_run)
         await test_session.commit()
@@ -201,7 +201,7 @@ class TestAuditsAPI:
             category="Testing",
             audit_type="inspection",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("TPL"),
+            reference_number=generate_test_reference("TPL", 1),
         )
         test_session.add(template)
         await test_session.commit()
@@ -213,7 +213,7 @@ class TestAuditsAPI:
                 title=f"Audit Run {i}",
                 status=AuditStatus.DRAFT,
                 assigned_to_id=test_user.id,
-                reference_number=generate_test_reference("AUD"),
+                reference_number=generate_test_reference("AUD", i),
             )
             for i in range(1, 4)
         ]
@@ -246,7 +246,7 @@ class TestAuditsAPI:
             category="Quality",
             audit_type="audit",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("TPL"),
+            reference_number=generate_test_reference("TPL", 1),
         )
         test_session.add(template)
         await test_session.commit()
@@ -277,21 +277,21 @@ class TestAuditsAPI:
                 category="Safety",
                 audit_type="inspection",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("TPL"),
+                reference_number=generate_test_reference("TPL", 1),
             ),
             AuditTemplate(
                 name="Safety 2",
                 category="Safety",
                 audit_type="inspection",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("TPL"),
+                reference_number=generate_test_reference("TPL", 2),
             ),
             AuditTemplate(
                 name="Quality 1",
                 category="Quality",
                 audit_type="audit",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("TPL"),
+                reference_number=generate_test_reference("TPL", 3),
             ),
         ]
         for tmpl in templates:

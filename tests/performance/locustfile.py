@@ -1,199 +1,375 @@
-"""Performance load testing suite for Quality Governance Platform."""
+"""
+Performance Testing Suite using Locust
+
+Run with:
+    locust -f tests/performance/locustfile.py --host=http://localhost:8000
+
+For headless mode:
+    locust -f tests/performance/locustfile.py --host=http://localhost:8000 \
+           --headless -u 100 -r 10 --run-time 5m
+"""
 
 import json
-import os
 import random
+import string
+from datetime import datetime, timedelta
 
-from locust import HttpUser, between, tag, task
+from locust import HttpUser, between, task
 
 
-class QualityPlatformUser(HttpUser):
-    """Simulates a typical platform user performing common operations."""
+def random_string(length: int = 10) -> str:
+    """Generate random string for test data."""
+    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
-    wait_time = between(1, 3)
-    host = os.getenv("TARGET_HOST", "http://localhost:8000")
+
+class QGPUser(HttpUser):
+    """Simulated user for load testing the Quality Governance Platform."""
+
+    wait_time = between(1, 3)  # Wait 1-3 seconds between tasks
+    token: str = None
 
     def on_start(self):
-        """Authenticate and get JWT token."""
+        """Login and get auth token at start of user session."""
         response = self.client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={
-                "email": os.getenv("TEST_USER_EMAIL", "test@example.com"),
-                "password": os.getenv("TEST_USER_PASSWORD", "testpassword"),
+                "username": "testuser@plantexpand.com",
+                "password": "testpassword123",
             },
         )
         if response.status_code == 200:
-            data = response.json()
-            self.token = data.get("access_token", "")
-            self.headers = {"Authorization": f"Bearer {self.token}"}
+            self.token = response.json().get("access_token")
         else:
-            self.token = ""
-            self.headers = {}
+            # Use a dummy token for unauthenticated testing
+            self.token = None
 
-    @tag("health")
-    @task(1)
-    def health_check(self):
-        """Health endpoint - should be fastest."""
-        self.client.get("/healthz")
+    @property
+    def auth_headers(self) -> dict:
+        """Get authorization headers."""
+        if self.token:
+            return {"Authorization": f"Bearer {self.token}"}
+        return {}
 
-    @tag("health")
-    @task(1)
-    def readiness_check(self):
-        """Readiness with verbose checks."""
-        self.client.get("/readyz?verbose=true")
+    # ========================================================================
+    # Dashboard & Health
+    # ========================================================================
 
-    @tag("read", "incidents")
     @task(10)
-    def list_incidents(self):
-        """List incidents - most common read operation."""
-        self.client.get(
-            "/api/v1/incidents?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/incidents [LIST]",
-        )
+    def health_check(self):
+        """Check API health endpoint."""
+        self.client.get("/health")
 
-    @tag("read", "risks")
+    @task(5)
+    def get_dashboard(self):
+        """Load main dashboard data."""
+        with self.client.get(
+            "/api/incidents?page=1&per_page=10",
+            headers=self.auth_headers,
+            catch_response=True,
+        ) as response:
+            if response.status_code == 401:
+                response.success()  # Expected for unauthorized
+
+    # ========================================================================
+    # Incidents Module
+    # ========================================================================
+
     @task(8)
-    def list_risks(self):
-        """List risks with filtering."""
+    def list_incidents(self):
+        """List incidents with pagination."""
+        page = random.randint(1, 5)
         self.client.get(
-            "/api/v1/risks?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/risks [LIST]",
+            f"/api/incidents?page={page}&per_page=20",
+            headers=self.auth_headers,
+            name="/api/incidents?page=[n]",
         )
 
-    @tag("read", "audits")
-    @task(6)
+    @task(3)
+    def create_incident(self):
+        """Create a new incident."""
+        incident_data = {
+            "title": f"Load Test Incident {random_string(8)}",
+            "description": f"This is a test incident created during load testing at {datetime.now().isoformat()}",
+            "severity": random.choice(["low", "medium", "high", "critical"]),
+            "incident_type": random.choice(["safety", "environmental", "quality", "security"]),
+            "location": f"Test Location {random.randint(1, 100)}",
+        }
+        self.client.post(
+            "/api/incidents",
+            json=incident_data,
+            headers=self.auth_headers,
+        )
+
+    @task(2)
+    def get_incident_detail(self):
+        """Get incident details."""
+        incident_id = random.randint(1, 100)
+        with self.client.get(
+            f"/api/incidents/{incident_id}",
+            headers=self.auth_headers,
+            name="/api/incidents/[id]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 404:
+                response.success()  # Expected for non-existent
+
+    # ========================================================================
+    # Audits Module
+    # ========================================================================
+
+    @task(5)
     def list_audits(self):
+        """List audits."""
+        self.client.get(
+            "/api/audits/runs?page=1&per_page=20",
+            headers=self.auth_headers,
+        )
+
+    @task(3)
+    def list_audit_templates(self):
         """List audit templates."""
         self.client.get(
-            "/api/v1/audits?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/audits [LIST]",
+            "/api/audit-templates?page=1&per_page=20",
+            headers=self.auth_headers,
         )
 
-    @tag("read", "dashboard")
-    @task(5)
-    def executive_dashboard(self):
-        """Executive dashboard - complex aggregation query."""
-        self.client.get(
-            "/api/v1/executive-dashboard/summary",
-            headers=self.headers,
-            name="/api/v1/executive-dashboard [SUMMARY]",
-        )
-
-    @tag("read", "compliance")
-    @task(4)
-    def compliance_status(self):
-        """Compliance automation status."""
-        self.client.get(
-            "/api/v1/compliance?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/compliance [LIST]",
-        )
-
-    @tag("read", "documents")
-    @task(4)
-    def list_documents(self):
-        """Document control listing."""
-        self.client.get(
-            "/api/v1/documents?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/documents [LIST]",
-        )
-
-    @tag("read", "capa")
-    @task(3)
-    def list_capa(self):
-        """CAPA actions listing."""
-        self.client.get(
-            "/api/v1/capa?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/capa [LIST]",
-        )
-
-    @tag("read", "search")
     @task(2)
-    def global_search(self):
-        """Global search - expensive query."""
-        terms = ["safety", "quality", "audit", "risk", "compliance"]
+    def get_audit_findings(self):
+        """Get audit findings."""
         self.client.get(
-            f"/api/v1/search?q={random.choice(terms)}",
-            headers=self.headers,
-            name="/api/v1/search [QUERY]",
+            "/api/audits/findings?page=1&per_page=50",
+            headers=self.auth_headers,
         )
 
-    @tag("write", "incidents")
+    # ========================================================================
+    # Risks Module
+    # ========================================================================
+
+    @task(4)
+    def list_risks(self):
+        """List risks."""
+        self.client.get(
+            "/api/risks?page=1&per_page=20",
+            headers=self.auth_headers,
+        )
+
     @task(2)
-    def create_incident(self):
-        """Create an incident - write operation."""
+    def get_risk_heatmap(self):
+        """Get risk heat map data."""
+        self.client.get(
+            "/api/risk-register/heat-map",
+            headers=self.auth_headers,
+        )
+
+    # ========================================================================
+    # Compliance Module
+    # ========================================================================
+
+    @task(4)
+    def list_standards(self):
+        """List compliance standards."""
+        self.client.get(
+            "/api/standards",
+            headers=self.auth_headers,
+        )
+
+    @task(2)
+    def get_compliance_evidence(self):
+        """Get compliance evidence."""
+        self.client.get(
+            "/api/compliance/evidence?page=1&per_page=50",
+            headers=self.auth_headers,
+        )
+
+    # ========================================================================
+    # Employee Portal
+    # ========================================================================
+
+    @task(6)
+    def portal_stats(self):
+        """Get portal statistics."""
+        self.client.get("/api/portal/stats")
+
+    @task(4)
+    def submit_quick_report(self):
+        """Submit a quick report via portal."""
+        report_data = {
+            "report_type": random.choice(["incident", "complaint"]),
+            "title": f"Test Report {random_string(8)}",
+            "description": "This is a test report submitted during load testing.",
+            "severity": random.choice(["low", "medium", "high"]),
+            "is_anonymous": random.choice([True, False]),
+        }
         self.client.post(
-            "/api/v1/incidents",
-            headers=self.headers,
-            json={
-                "title": f"Load test incident {random.randint(1, 10000)}",
-                "description": "Created during performance testing",
-                "severity": random.choice(["low", "medium", "high"]),
-                "category": "test",
-            },
-            name="/api/v1/incidents [CREATE]",
+            "/api/portal/report",
+            json=report_data,
+            name="/api/portal/report",
         )
 
-    @tag("read", "audit_trail")
-    @task(2)
-    def audit_trail(self):
-        """Audit trail listing."""
+    @task(3)
+    def track_report(self):
+        """Track a report status."""
+        ref = f"INC-{datetime.now().year}-{random.randint(1, 9999):04d}"
+        tracking_code = random_string(12)
+        with self.client.get(
+            f"/api/portal/track/{ref}?tracking_code={tracking_code}",
+            name="/api/portal/track/[ref]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 404:
+                response.success()  # Expected for non-existent
+
+    # ========================================================================
+    # Search & Analytics
+    # ========================================================================
+
+    @task(3)
+    def global_search(self):
+        """Perform global search."""
+        query = random.choice(["safety", "incident", "audit", "risk", "compliance"])
         self.client.get(
-            "/api/v1/audit-trail?page=1&page_size=20",
-            headers=self.headers,
-            name="/api/v1/audit-trail [LIST]",
+            f"/api/search?q={query}",
+            headers=self.auth_headers,
+            name="/api/search?q=[query]",
+        )
+
+    @task(2)
+    def get_analytics(self):
+        """Get analytics data."""
+        self.client.get(
+            "/api/analytics/summary",
+            headers=self.auth_headers,
         )
 
 
 class AdminUser(HttpUser):
-    """Simulates an admin user performing management operations."""
+    """Simulated admin user for testing admin-specific operations."""
 
     wait_time = between(2, 5)
-    weight = 1  # 10% of users
-    host = os.getenv("TARGET_HOST", "http://localhost:8000")
+    weight = 1  # Less common than regular users
+    token: str = None
 
     def on_start(self):
+        """Login as admin."""
         response = self.client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={
-                "email": os.getenv("ADMIN_EMAIL", "admin@example.com"),
-                "password": os.getenv("ADMIN_PASSWORD", "adminpassword"),
+                "username": "admin@plantexpand.com",
+                "password": "adminpassword123",
             },
         )
         if response.status_code == 200:
-            data = response.json()
-            self.headers = {"Authorization": f"Bearer {data.get('access_token', '')}"}
-        else:
-            self.headers = {}
+            self.token = response.json().get("access_token")
 
-    @tag("admin", "read")
+    @property
+    def auth_headers(self) -> dict:
+        if self.token:
+            return {"Authorization": f"Bearer {self.token}"}
+        return {}
+
     @task(3)
-    def admin_dashboard(self):
+    def list_users(self):
+        """List all users."""
         self.client.get(
-            "/api/v1/executive-dashboard/summary",
-            headers=self.headers,
-            name="/api/v1/executive-dashboard [ADMIN]",
+            "/api/users?page=1&per_page=50",
+            headers=self.auth_headers,
         )
 
-    @tag("admin", "read")
     @task(2)
-    def telemetry_metrics(self):
+    def get_audit_trail(self):
+        """Get audit trail logs."""
         self.client.get(
-            "/api/v1/telemetry/metrics",
-            headers=self.headers,
-            name="/api/v1/telemetry/metrics [ADMIN]",
+            "/api/audit-trail?page=1&per_page=100",
+            headers=self.auth_headers,
         )
 
-    @tag("admin", "read")
-    @task(1)
-    def capa_stats(self):
+    @task(2)
+    def get_workflow_stats(self):
+        """Get workflow statistics."""
         self.client.get(
-            "/api/v1/capa/stats",
-            headers=self.headers,
-            name="/api/v1/capa/stats [ADMIN]",
+            "/api/workflows/stats",
+            headers=self.auth_headers,
         )
+
+    @task(1)
+    def generate_report(self):
+        """Generate analytics report."""
+        self.client.post(
+            "/api/analytics/reports/generate",
+            json={
+                "report_type": "incident_summary",
+                "date_from": (datetime.now() - timedelta(days=30)).isoformat(),
+                "date_to": datetime.now().isoformat(),
+            },
+            headers=self.auth_headers,
+        )
+
+
+class PortalUser(HttpUser):
+    """Simulated employee portal user (mobile/field worker)."""
+
+    wait_time = between(3, 8)  # Slower, mobile users
+    weight = 3  # More common than regular users
+
+    @task(10)
+    def view_portal_home(self):
+        """View portal home page."""
+        self.client.get("/portal")
+
+    @task(8)
+    def submit_incident(self):
+        """Submit an incident report."""
+        data = {
+            "report_type": "incident",
+            "title": f"Field Incident {random_string(6)}",
+            "description": "Incident reported from mobile device during load test.",
+            "severity": random.choice(["low", "medium", "high"]),
+            "location": f"Site {random.randint(1, 50)}",
+            "is_anonymous": False,
+            "reporter_name": f"Test User {random.randint(1, 100)}",
+        }
+        self.client.post("/api/portal/report", json=data)
+
+    @task(5)
+    def track_my_reports(self):
+        """Track submitted reports."""
+        self.client.get("/api/portal/my-reports")
+
+    @task(3)
+    def sos_emergency(self):
+        """Trigger SOS (simulated)."""
+        self.client.get("/portal/sos")
+
+    @task(2)
+    def view_help(self):
+        """View help page."""
+        self.client.get("/portal/help")
+
+
+# ============================================================================
+# Performance Test Configuration
+# ============================================================================
+
+"""
+Recommended test scenarios:
+
+1. Smoke Test (Quick validation):
+   locust -f locustfile.py --headless -u 5 -r 1 --run-time 1m
+
+2. Load Test (Normal load):
+   locust -f locustfile.py --headless -u 50 -r 5 --run-time 10m
+
+3. Stress Test (Find breaking point):
+   locust -f locustfile.py --headless -u 200 -r 20 --run-time 15m
+
+4. Spike Test (Sudden traffic spike):
+   locust -f locustfile.py --headless -u 500 -r 100 --run-time 5m
+
+5. Endurance Test (Long-running):
+   locust -f locustfile.py --headless -u 100 -r 10 --run-time 2h
+
+Expected thresholds for production:
+- 95th percentile response time < 500ms
+- Error rate < 1%
+- Throughput > 100 requests/second
+"""

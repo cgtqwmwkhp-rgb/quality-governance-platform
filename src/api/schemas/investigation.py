@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from src.api.schemas.validators import sanitize_field
 from src.domain.models.investigation import AssignedEntityType, InvestigationStatus
 
 # Investigation Template Schemas
@@ -20,11 +19,6 @@ class InvestigationTemplateBase(BaseModel):
     is_active: bool = Field(default=True, description="Whether template is active")
     structure: Dict[str, Any] = Field(..., description="Template structure (sections and fields)")
     applicable_entity_types: List[str] = Field(..., description="Entity types this template applies to")
-
-    @field_validator("name", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("applicable_entity_types")
     @classmethod
@@ -52,11 +46,6 @@ class InvestigationTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     structure: Optional[Dict[str, Any]] = None
     applicable_entity_types: Optional[List[str]] = None
-
-    @field_validator("name", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("applicable_entity_types")
     @classmethod
@@ -91,7 +80,7 @@ class InvestigationTemplateListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
 
 
 # Investigation Run Schemas
@@ -107,11 +96,6 @@ class InvestigationRunBase(BaseModel):
     description: Optional[str] = Field(None, description="Investigation description")
     status: str = Field(default="draft", description="Investigation status")
     data: Dict[str, Any] = Field(default_factory=dict, description="Investigation data (responses)")
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("assigned_entity_type")
     @classmethod
@@ -147,11 +131,6 @@ class InvestigationRunUpdate(BaseModel):
     data: Optional[Dict[str, Any]] = None
     assigned_to_user_id: Optional[int] = None
     reviewer_user_id: Optional[int] = None
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("status")
     @classmethod
@@ -192,7 +171,7 @@ class InvestigationRunListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
 
 
 # === Stage 2.1: From-Record Schemas ===
@@ -207,11 +186,6 @@ class CreateFromRecordRequest(BaseModel):
     source_id: int = Field(..., gt=0, description="Source record ID")
     title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
     template_id: int = Field(default=1, description="Template ID (default: v2.1)")
-
-    @field_validator("title", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("source_type")
     @classmethod
@@ -242,135 +216,5 @@ class SourceRecordsResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
     source_type: str
-
-
-# === Stage 1: Timeline, Comments, Packs, Closure Validation Schemas ===
-
-
-class TimelineEventResponse(BaseModel):
-    """Single timeline event (revision event)."""
-
-    id: int
-    created_at: datetime
-    event_type: str = Field(..., description="Event type: CREATED, DATA_UPDATED, STATUS_CHANGED, etc.")
-    field_path: Optional[str] = Field(None, description="Field path that changed (for DATA_UPDATED)")
-    old_value: Optional[Dict[str, Any]] = Field(None, description="Previous value")
-    new_value: Optional[Dict[str, Any]] = Field(None, description="New value")
-    actor_id: int = Field(..., description="User ID who performed the action")
-    version: int = Field(..., description="Investigation version at time of event")
-    event_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional context")
-
-    class Config:
-        from_attributes = True
-
-
-class TimelineListResponse(BaseModel):
-    """Paginated list of timeline events."""
-
-    items: List[TimelineEventResponse]
-    total: int
-    page: int
-    page_size: int
-    investigation_id: int
-
-
-class CommentCreateRequest(BaseModel):
-    """Request schema for adding a comment to an investigation.
-
-    Accepts 'body' field to match frontend API contract.
-    """
-
-    body: str = Field(..., min_length=1, max_length=10000, description="Comment content")
-    section_id: Optional[str] = Field(None, description="Section to attach comment to")
-    field_id: Optional[str] = Field(None, description="Field to attach comment to")
-    parent_comment_id: Optional[int] = Field(None, description="Parent comment ID for threading")
-
-    @field_validator("body", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
-
-class CommentResponse(BaseModel):
-    """Single comment on an investigation."""
-
-    id: int
-    created_at: datetime
-    content: str = Field(..., description="Comment content")
-    author_id: int = Field(..., description="Author user ID")
-    section_id: Optional[str] = Field(None, description="Section this comment is attached to")
-    field_id: Optional[str] = Field(None, description="Field this comment is attached to")
-    parent_comment_id: Optional[int] = Field(None, description="Parent comment ID for threading")
-
-    class Config:
-        from_attributes = True
-
-
-class CommentListResponse(BaseModel):
-    """Paginated list of comments."""
-
-    items: List[CommentResponse]
-    total: int
-    page: int
-    page_size: int
-    investigation_id: int
-
-
-class CustomerPackSummaryResponse(BaseModel):
-    """Summary of a customer pack (without full content for listing)."""
-
-    id: int
-    created_at: datetime
-    pack_uuid: str = Field(..., description="Unique pack identifier")
-    audience: str = Field(..., description="Pack audience: internal_customer or external_customer")
-    checksum_sha256: str = Field(..., description="Content checksum for integrity")
-    generated_by_id: int = Field(..., description="User who generated the pack")
-    expires_at: Optional[datetime] = Field(None, description="Pack expiry date if set")
-
-    class Config:
-        from_attributes = True
-
-
-class PackListResponse(BaseModel):
-    """Paginated list of customer packs."""
-
-    items: List[CustomerPackSummaryResponse]
-    total: int
-    page: int
-    page_size: int
-    investigation_id: int
-
-
-class CustomerPackGeneratedResponse(BaseModel):
-    """Response schema for a generated customer pack."""
-
-    pack_id: int
-    pack_uuid: str
-    audience: str
-    investigation_id: int
-    investigation_reference: Optional[str] = None
-    generated_at: Optional[str] = None
-    content: Optional[Dict[str, Any]] = None
-    redaction_log: Optional[List[Any]] = None
-    included_assets: Optional[List[Any]] = None
-    checksum: Optional[str] = None
-
-
-class AutosaveRequest(BaseModel):
-    """Request schema for autosaving investigation data with optimistic locking."""
-
-    data: Dict[str, Any] = Field(..., description="Investigation data to save")
-    version: int = Field(..., gt=0, description="Expected version for optimistic locking")
-
-
-class ClosureValidationResponse(BaseModel):
-    """Result of closure validation check."""
-
-    status: str = Field(..., description="OK or BLOCKED")
-    reason_codes: List[str] = Field(default_factory=list, description="List of blocking reason codes")
-    missing_fields: List[str] = Field(default_factory=list, description="List of missing required fields")
-    checked_at_utc: datetime = Field(..., description="Timestamp of validation check")
-    investigation_id: int
-    investigation_level: Optional[str] = Field(None, description="Investigation level (LOW/MEDIUM/HIGH)")

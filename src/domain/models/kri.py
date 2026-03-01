@@ -52,7 +52,6 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # KRI identification
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
@@ -135,9 +134,7 @@ class KRIMeasurement(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     kri_id: Mapped[int] = mapped_column(
-        ForeignKey("key_risk_indicators.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("key_risk_indicators.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Measurement
@@ -169,11 +166,8 @@ class KRIAlert(Base, TimestampMixin):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     kri_id: Mapped[int] = mapped_column(
-        ForeignKey("key_risk_indicators.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("key_risk_indicators.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Alert details

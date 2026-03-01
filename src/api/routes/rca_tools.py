@@ -6,33 +6,12 @@ Provides endpoints for 5-Whys, Fishbone diagrams, and CAPA management.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.rca_tools import (
-    AddFishboneCauseResponse,
-    AddWhyIterationResponse,
-    CompleteFishboneResponse,
-    CompleteFiveWhysResponse,
-    CreateCAPAResponse,
-    CreateFishboneResponse,
-    CreateFiveWhysResponse,
-    EntityFiveWhysListResponse,
-    FishboneDetailResponse,
-    FiveWhysDetailResponse,
-    InvestigationCAPAListResponse,
-    OverdueCAPAListResponse,
-    SetFishboneRootCauseResponse,
-    SetFiveWhysRootCauseResponse,
-    UpdateCAPAStatusResponse,
-    VerifyCAPAResponse,
-)
-from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.api.deps import get_current_user, get_db
+from src.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 
 router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 
@@ -111,11 +90,11 @@ class VerifyCAPARequest(BaseModel):
 # =============================================================================
 
 
-@router.post("/five-whys", response_model=CreateFiveWhysResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/five-whys", status_code=status.HTTP_201_CREATED)
 async def create_five_whys_analysis(
     request: CreateFiveWhysRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create a new 5-Whys analysis."""
     service = FiveWhysService(db)
@@ -125,9 +104,6 @@ async def create_five_whys_analysis(
         entity_id=request.entity_id,
         investigation_id=request.investigation_id,
     )
-    await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
-    track_metric("rca.mutation", 1)
-    track_metric("rca.analysis_started", 1)
     return {
         "id": analysis.id,
         "problem_statement": analysis.problem_statement,
@@ -136,18 +112,18 @@ async def create_five_whys_analysis(
     }
 
 
-@router.get("/five-whys/{analysis_id}", response_model=FiveWhysDetailResponse)
+@router.get("/five-whys/{analysis_id}")
 async def get_five_whys_analysis(
     analysis_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get a 5-Whys analysis by ID."""
     service = FiveWhysService(db)
     analysis = await service.get_analysis(analysis_id)
 
     if not analysis:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Analysis not found")
 
     return {
         "id": analysis.id,
@@ -163,12 +139,12 @@ async def get_five_whys_analysis(
     }
 
 
-@router.post("/five-whys/{analysis_id}/add-why", response_model=AddWhyIterationResponse)
+@router.post("/five-whys/{analysis_id}/add-why")
 async def add_why_iteration(
     analysis_id: int,
     request: AddWhyRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Add a why iteration to an existing analysis."""
     service = FiveWhysService(db)
@@ -181,7 +157,7 @@ async def add_why_iteration(
             evidence=request.evidence,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": analysis.id,
@@ -190,12 +166,12 @@ async def add_why_iteration(
     }
 
 
-@router.post("/five-whys/{analysis_id}/set-root-cause", response_model=SetFiveWhysRootCauseResponse)
+@router.post("/five-whys/{analysis_id}/set-root-cause")
 async def set_five_whys_root_cause(
     analysis_id: int,
     request: SetRootCauseRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Set the root cause for an analysis."""
     service = FiveWhysService(db)
@@ -207,7 +183,7 @@ async def set_five_whys_root_cause(
             contributing_factors=request.contributing_factors,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": analysis.id,
@@ -216,12 +192,12 @@ async def set_five_whys_root_cause(
     }
 
 
-@router.post("/five-whys/{analysis_id}/complete", response_model=CompleteFiveWhysResponse)
+@router.post("/five-whys/{analysis_id}/complete")
 async def complete_five_whys_analysis(
     analysis_id: int,
     request: CompleteAnalysisRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Mark a 5-Whys analysis as complete."""
     service = FiveWhysService(db)
@@ -229,11 +205,11 @@ async def complete_five_whys_analysis(
     try:
         analysis = await service.complete_analysis(
             analysis_id=analysis_id,
-            user_id=current_user.id,
+            user_id=current_user.get("id"),
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": analysis.id,
@@ -242,12 +218,12 @@ async def complete_five_whys_analysis(
     }
 
 
-@router.get("/five-whys/entity/{entity_type}/{entity_id}", response_model=EntityFiveWhysListResponse)
+@router.get("/five-whys/entity/{entity_type}/{entity_id}")
 async def get_five_whys_for_entity(
     entity_type: str,
     entity_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get all 5-Whys analyses for an entity."""
     service = FiveWhysService(db)
@@ -273,11 +249,11 @@ async def get_five_whys_for_entity(
 # =============================================================================
 
 
-@router.post("/fishbone", response_model=CreateFishboneResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/fishbone", status_code=status.HTTP_201_CREATED)
 async def create_fishbone_diagram(
     request: CreateFishboneRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create a new Fishbone diagram."""
     service = FishboneService(db)
@@ -287,8 +263,6 @@ async def create_fishbone_diagram(
         entity_id=request.entity_id,
         investigation_id=request.investigation_id,
     )
-    await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
-    track_metric("rca.mutation", 1)
     return {
         "id": diagram.id,
         "effect_statement": diagram.effect_statement,
@@ -297,18 +271,18 @@ async def create_fishbone_diagram(
     }
 
 
-@router.get("/fishbone/{diagram_id}", response_model=FishboneDetailResponse)
+@router.get("/fishbone/{diagram_id}")
 async def get_fishbone_diagram(
     diagram_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get a Fishbone diagram by ID."""
     service = FishboneService(db)
     diagram = await service.get_diagram(diagram_id)
 
     if not diagram:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Diagram not found")
 
     return {
         "id": diagram.id,
@@ -323,12 +297,12 @@ async def get_fishbone_diagram(
     }
 
 
-@router.post("/fishbone/{diagram_id}/add-cause", response_model=AddFishboneCauseResponse)
+@router.post("/fishbone/{diagram_id}/add-cause")
 async def add_fishbone_cause(
     diagram_id: int,
     request: AddCauseRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Add a cause to a Fishbone diagram."""
     service = FishboneService(db)
@@ -341,7 +315,7 @@ async def add_fishbone_cause(
             sub_causes=request.sub_causes,
         )
     except ValueError as e:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {
         "id": diagram.id,
@@ -350,12 +324,12 @@ async def add_fishbone_cause(
     }
 
 
-@router.post("/fishbone/{diagram_id}/set-root-cause", response_model=SetFishboneRootCauseResponse)
+@router.post("/fishbone/{diagram_id}/set-root-cause")
 async def set_fishbone_root_cause(
     diagram_id: int,
     request: SetFishboneRootCauseRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Set the root cause for a Fishbone diagram."""
     service = FishboneService(db)
@@ -368,7 +342,7 @@ async def set_fishbone_root_cause(
             primary_causes=request.primary_causes,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": diagram.id,
@@ -377,12 +351,12 @@ async def set_fishbone_root_cause(
     }
 
 
-@router.post("/fishbone/{diagram_id}/complete", response_model=CompleteFishboneResponse)
+@router.post("/fishbone/{diagram_id}/complete")
 async def complete_fishbone_diagram(
     diagram_id: int,
     request: CompleteAnalysisRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Mark a Fishbone diagram as complete."""
     service = FishboneService(db)
@@ -390,11 +364,11 @@ async def complete_fishbone_diagram(
     try:
         diagram = await service.complete_diagram(
             diagram_id=diagram_id,
-            user_id=current_user.id,
+            user_id=current_user.get("id"),
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": diagram.id,
@@ -408,11 +382,11 @@ async def complete_fishbone_diagram(
 # =============================================================================
 
 
-@router.post("/capa", response_model=CreateCAPAResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/capa", status_code=status.HTTP_201_CREATED)
 async def create_capa(
     request: CreateCAPARequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create a new CAPA item."""
     service = CAPAService(db)
@@ -428,8 +402,6 @@ async def create_capa(
         due_date=request.due_date,
         priority=request.priority,
     )
-    await invalidate_tenant_cache(current_user.tenant_id, "rca_tools")
-    track_metric("rca.mutation", 1)
     return {
         "id": capa.id,
         "action_type": capa.action_type,
@@ -439,12 +411,12 @@ async def create_capa(
     }
 
 
-@router.patch("/capa/{capa_id}/status", response_model=UpdateCAPAStatusResponse)
+@router.patch("/capa/{capa_id}/status")
 async def update_capa_status(
     capa_id: int,
     request: UpdateCAPAStatusRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Update CAPA status."""
     service = CAPAService(db)
@@ -456,7 +428,7 @@ async def update_capa_status(
             notes=request.notes,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": capa.id,
@@ -465,12 +437,12 @@ async def update_capa_status(
     }
 
 
-@router.post("/capa/{capa_id}/verify", response_model=VerifyCAPAResponse)
+@router.post("/capa/{capa_id}/verify")
 async def verify_capa(
     capa_id: int,
     request: VerifyCAPARequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Verify a CAPA has been completed effectively."""
     service = CAPAService(db)
@@ -478,12 +450,12 @@ async def verify_capa(
     try:
         capa = await service.verify_capa(
             capa_id=capa_id,
-            user_id=current_user.id,
+            user_id=current_user.get("id"),
             verification_notes=request.verification_notes,
             is_effective=request.is_effective,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": capa.id,
@@ -493,11 +465,11 @@ async def verify_capa(
     }
 
 
-@router.get("/capa/investigation/{investigation_id}", response_model=InvestigationCAPAListResponse)
+@router.get("/capa/investigation/{investigation_id}")
 async def get_capas_for_investigation(
     investigation_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get all CAPAs for an investigation."""
     service = CAPAService(db)
@@ -519,10 +491,10 @@ async def get_capas_for_investigation(
     }
 
 
-@router.get("/capa/overdue", response_model=OverdueCAPAListResponse)
+@router.get("/capa/overdue")
 async def get_overdue_capas(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get all overdue CAPA items."""
     service = CAPAService(db)

@@ -175,9 +175,6 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     linked_policy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("policies.id"), nullable=True)
     linked_standard_id: Mapped[Optional[int]] = mapped_column(ForeignKey("standards.id"), nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 

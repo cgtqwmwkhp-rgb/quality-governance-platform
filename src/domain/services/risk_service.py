@@ -9,13 +9,12 @@ Provides:
 - Bow-tie analysis support
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import and_, desc, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, desc, func
+from sqlalchemy.orm import Session
 
-from src.domain.exceptions import NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -25,7 +24,6 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
-from src.infrastructure.monitoring.azure_monitor import track_business_event
 
 
 class RiskScoringEngine:
@@ -118,15 +116,17 @@ class RiskScoringEngine:
 class RiskService:
     """Main Risk Management Service"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
         self.scoring = RiskScoringEngine()
 
-    async def create_risk(self, data: dict, created_by: Optional[int] = None) -> EnterpriseRisk:
+    def create_risk(self, data: dict, created_by: Optional[int] = None) -> EnterpriseRisk:
         """Create a new risk with automatic scoring"""
-        count = await self.db.scalar(select(func.count()).select_from(EnterpriseRisk)) or 0
+        # Generate reference
+        count = self.db.query(EnterpriseRisk).count()
         reference = f"RISK-{(count + 1):04d}"
 
+        # Calculate scores
         inherent_score = RiskScoringEngine.calculate_score(
             data.get("inherent_likelihood", 3), data.get("inherent_impact", 3)
         )
@@ -134,11 +134,10 @@ class RiskService:
             data.get("residual_likelihood", 2), data.get("residual_impact", 2)
         )
 
+        # Get appetite threshold for category
         appetite = (
-            await self.db.execute(
-                select(RiskAppetiteStatement).where(RiskAppetiteStatement.category == data.get("category"))
-            )
-        ).scalar_one_or_none()
+            self.db.query(RiskAppetiteStatement).filter(RiskAppetiteStatement.category == data.get("category")).first()
+        )
         appetite_threshold = appetite.max_residual_score if appetite else 12
 
         risk = EnterpriseRisk(
@@ -163,32 +162,30 @@ class RiskService:
             treatment_plan=data.get("treatment_plan"),
             risk_owner_id=data.get("risk_owner_id"),
             risk_owner_name=data.get("risk_owner_name"),
-            tenant_id=data.get("tenant_id"),
             status="identified",
             review_frequency_days=data.get("review_frequency_days", 90),
             created_by=created_by,
         )
 
-        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
+        # Set next review date
+        risk.next_review_date = datetime.utcnow() + timedelta(days=risk.review_frequency_days)
 
         self.db.add(risk)
-        await self.db.commit()
-        await self.db.refresh(risk)
+        self.db.commit()
+        self.db.refresh(risk)
 
-        await self._record_assessment(risk)
-
-        track_business_event("risk_assessed", {"category": risk.category})
+        # Create initial assessment history
+        self._record_assessment(risk)
 
         return risk
 
-    async def update_risk_assessment(
-        self, risk_id: int, data: dict, assessed_by: Optional[int] = None
-    ) -> EnterpriseRisk:
+    def update_risk_assessment(self, risk_id: int, data: dict, assessed_by: Optional[int] = None) -> EnterpriseRisk:
         """Update risk assessment scores"""
-        risk = (await self.db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
+        risk = self.db.query(EnterpriseRisk).filter(EnterpriseRisk.id == risk_id).first()
         if not risk:
             raise ValueError(f"Risk {risk_id} not found")
 
+        # Update scores
         if "inherent_likelihood" in data:
             risk.inherent_likelihood = data["inherent_likelihood"]
         if "inherent_impact" in data:
@@ -198,29 +195,30 @@ class RiskService:
         if "residual_impact" in data:
             risk.residual_impact = data["residual_impact"]
 
+        # Recalculate scores
         risk.inherent_score = RiskScoringEngine.calculate_score(risk.inherent_likelihood, risk.inherent_impact)
         risk.residual_score = RiskScoringEngine.calculate_score(risk.residual_likelihood, risk.residual_impact)
 
+        # Check appetite
         risk.is_within_appetite = risk.residual_score <= risk.appetite_threshold
 
-        risk.last_review_date = datetime.now(timezone.utc)
-        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
+        # Update review dates
+        risk.last_review_date = datetime.utcnow()
+        risk.next_review_date = datetime.utcnow() + timedelta(days=risk.review_frequency_days)
 
         if "review_notes" in data:
             risk.review_notes = data["review_notes"]
 
-        await self.db.commit()
-        await self.db.refresh(risk)
+        self.db.commit()
+        self.db.refresh(risk)
 
-        await self._record_assessment(risk, assessed_by, data.get("assessment_notes"))
+        # Record assessment history
+        self._record_assessment(risk, assessed_by, data.get("assessment_notes"))
 
         return risk
 
-    async def _record_assessment(
-        self,
-        risk: EnterpriseRisk,
-        assessed_by: Optional[int] = None,
-        notes: Optional[str] = None,
+    def _record_assessment(
+        self, risk: EnterpriseRisk, assessed_by: Optional[int] = None, notes: Optional[str] = None
     ) -> None:
         """Record assessment in history"""
         history = RiskAssessmentHistory(
@@ -237,22 +235,20 @@ class RiskService:
             assessment_notes=notes,
         )
         self.db.add(history)
-        await self.db.commit()
+        self.db.commit()
 
-    async def get_heat_map_data(
-        self, category: Optional[str] = None, department: Optional[str] = None
-    ) -> dict[str, Any]:
+    def get_heat_map_data(self, category: Optional[str] = None, department: Optional[str] = None) -> dict[str, Any]:
         """Generate heat map data for visualization"""
-        conditions = [EnterpriseRisk.status != "closed"]
+        query = self.db.query(EnterpriseRisk).filter(EnterpriseRisk.status != "closed")
 
         if category:
-            conditions.append(EnterpriseRisk.category == category)
+            query = query.filter(EnterpriseRisk.category == category)
         if department:
-            conditions.append(EnterpriseRisk.department == department)
+            query = query.filter(EnterpriseRisk.department == department)
 
-        result = await self.db.execute(select(EnterpriseRisk).where(and_(*conditions)))
-        risks = result.scalars().all()
+        risks = query.all()
 
+        # Build matrix with risk counts
         matrix = []
         for likelihood in range(5, 0, -1):
             row = []
@@ -273,6 +269,7 @@ class RiskService:
                 )
             matrix.append(row)
 
+        # Summary stats
         total_risks = len(risks)
         critical_risks = len([r for r in risks if r.residual_score > 16])
         high_risks = len([r for r in risks if 12 < r.residual_score <= 16])
@@ -292,19 +289,18 @@ class RiskService:
             "impact_labels": RiskScoringEngine.IMPACT_LABELS,
         }
 
-    async def get_risk_trends(self, risk_id: Optional[int] = None, days: int = 365) -> list[dict[str, Any]]:
+    def get_risk_trends(self, risk_id: Optional[int] = None, days: int = 365) -> list[dict[str, Any]]:
         """Get risk score trends over time"""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.utcnow() - timedelta(days=days)
 
-        conditions = [RiskAssessmentHistory.assessment_date >= cutoff]
+        query = self.db.query(RiskAssessmentHistory).filter(RiskAssessmentHistory.assessment_date >= cutoff)
+
         if risk_id:
-            conditions.append(RiskAssessmentHistory.risk_id == risk_id)
+            query = query.filter(RiskAssessmentHistory.risk_id == risk_id)
 
-        result = await self.db.execute(
-            select(RiskAssessmentHistory).where(and_(*conditions)).order_by(RiskAssessmentHistory.assessment_date)
-        )
-        history = result.scalars().all()
+        history = query.order_by(RiskAssessmentHistory.assessment_date).all()
 
+        # Group by month
         monthly_data: dict[str, dict] = {}
         for h in history:
             month_key = h.assessment_date.strftime("%Y-%m")
@@ -319,6 +315,7 @@ class RiskService:
             monthly_data[month_key]["residual_scores"].append(h.residual_score)
             monthly_data[month_key]["count"] += 1
 
+        # Calculate averages
         trends = []
         for month, data in sorted(monthly_data.items()):
             trends.append(
@@ -332,13 +329,14 @@ class RiskService:
 
         return trends
 
-    async def forecast_risk_trends(self, months_ahead: int = 6) -> list[dict[str, Any]]:
+    def forecast_risk_trends(self, months_ahead: int = 6) -> list[dict[str, Any]]:
         """Simple linear forecast of risk trends"""
-        historical = await self.get_risk_trends(days=365)
+        historical = self.get_risk_trends(days=365)
 
         if len(historical) < 3:
             return []
 
+        # Simple linear regression on residual scores
         x = list(range(len(historical)))
         y = [h["avg_residual"] for h in historical]
 
@@ -351,6 +349,7 @@ class RiskService:
         slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x**2) if (n * sum_x2 - sum_x**2) != 0 else 0
         intercept = (sum_y - slope * sum_x) / n
 
+        # Generate forecast
         forecast = []
         last_month = datetime.strptime(historical[-1]["month"], "%Y-%m")
 
@@ -375,25 +374,26 @@ class RiskService:
 class KRIService:
     """Key Risk Indicator Monitoring Service"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def update_kri_value(self, kri_id: int, new_value: float) -> EnterpriseKeyRiskIndicator:
+    def update_kri_value(self, kri_id: int, new_value: float) -> EnterpriseKeyRiskIndicator:
         """Update KRI with new value and check thresholds"""
-        kri = (
-            await self.db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
-        ).scalar_one_or_none()
+        kri = self.db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.id == kri_id).first()
         if not kri:
             raise ValueError(f"KRI {kri_id} not found")
 
+        # Store historical value
         if kri.historical_values is None:
             kri.historical_values = []
 
-        kri.historical_values.append({"value": new_value, "date": datetime.now(timezone.utc).isoformat()})
+        kri.historical_values.append({"value": new_value, "date": datetime.utcnow().isoformat()})
 
+        # Update current value
         kri.current_value = new_value
-        kri.last_updated = datetime.now(timezone.utc)
+        kri.last_updated = datetime.utcnow()
 
+        # Determine status
         if kri.threshold_direction == "above":
             if new_value >= kri.red_threshold:
                 kri.current_status = "red"
@@ -409,17 +409,14 @@ class KRIService:
             else:
                 kri.current_status = "green"
 
-        await self.db.commit()
-        await self.db.refresh(kri)
+        self.db.commit()
+        self.db.refresh(kri)
 
         return kri
 
-    async def get_kri_dashboard(self) -> dict[str, Any]:
+    def get_kri_dashboard(self) -> dict[str, Any]:
         """Get KRI dashboard summary"""
-        result = await self.db.execute(
-            select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.is_active == True)  # noqa: E712
-        )
-        kris = result.scalars().all()
+        kris = self.db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.is_active == True).all()
 
         return {
             "total_kris": len(kris),
@@ -436,8 +433,8 @@ class KRIService:
                     "green_threshold": k.green_threshold,
                     "amber_threshold": k.amber_threshold,
                     "red_threshold": k.red_threshold,
-                    "last_updated": (k.last_updated.isoformat() if k.last_updated else None),
-                    "trend": (self._calculate_trend(k.historical_values) if k.historical_values else "stable"),
+                    "last_updated": k.last_updated.isoformat() if k.last_updated else None,
+                    "trend": self._calculate_trend(k.historical_values) if k.historical_values else "stable",
                 }
                 for k in kris
             ],
@@ -457,61 +454,41 @@ class KRIService:
             return "decreasing"
         return "stable"
 
-    async def create_kri(self, risk_id: int, tenant_id: int, data: dict[str, Any]) -> EnterpriseKeyRiskIndicator:
-        """Create a Key Risk Indicator after verifying the parent risk exists."""
-        risk = (
-            await self.db.execute(
-                select(EnterpriseRisk).where(
-                    EnterpriseRisk.id == risk_id,
-                    EnterpriseRisk.tenant_id == tenant_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if not risk:
-            raise NotFoundError(f"Risk {risk_id} not found")
-
-        kri = EnterpriseKeyRiskIndicator(**data)
-        self.db.add(kri)
-        await self.db.commit()
-        await self.db.refresh(kri)
-        return kri
-
 
 class BowTieService:
     """Bow-Tie Analysis Service"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def get_bow_tie(self, risk_id: int) -> dict[str, Any]:
+    def get_bow_tie(self, risk_id: int) -> dict[str, Any]:
         """Get bow-tie diagram data for a risk"""
-        risk = (await self.db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one_or_none()
+        risk = self.db.query(EnterpriseRisk).filter(EnterpriseRisk.id == risk_id).first()
         if not risk:
             raise ValueError(f"Risk {risk_id} not found")
 
-        bt_result = await self.db.execute(
-            select(BowTieElement)
-            .where(BowTieElement.risk_id == risk_id)
+        elements = (
+            self.db.query(BowTieElement)
+            .filter(BowTieElement.risk_id == risk_id)
             .order_by(BowTieElement.position, BowTieElement.order_index)
+            .all()
         )
-        elements = bt_result.scalars().all()
 
+        # Group elements
         causes = [e for e in elements if e.element_type == "cause"]
         consequences = [e for e in elements if e.element_type == "consequence"]
         prevention_barriers = [e for e in elements if e.element_type == "prevention"]
         mitigation_barriers = [e for e in elements if e.element_type == "mitigation"]
         escalation_factors = [e for e in elements if e.is_escalation_factor]
 
-        mapping_result = await self.db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
-        control_mappings = mapping_result.scalars().all()
+        # Get linked controls
+        control_mappings = self.db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
         control_ids = [m.control_id for m in control_mappings]
-        if control_ids:
-            ctrl_result = await self.db.execute(
-                select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids))
-            )
-            controls = ctrl_result.scalars().all()
-        else:
-            controls = []
+        controls = (
+            self.db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id.in_(control_ids)).all()
+            if control_ids
+            else []
+        )
 
         return {
             "risk": {
@@ -560,7 +537,7 @@ class BowTieService:
             ],
         }
 
-    async def add_bow_tie_element(
+    def add_bow_tie_element(
         self,
         risk_id: int,
         element_type: str,
@@ -569,17 +546,16 @@ class BowTieService:
         **kwargs: Any,
     ) -> BowTieElement:
         """Add element to bow-tie diagram"""
+        # Determine position based on type
         position = "left" if element_type in ("cause", "prevention") else "right"
 
-        max_order = await self.db.scalar(
-            select(func.max(BowTieElement.order_index)).where(
-                and_(
-                    BowTieElement.risk_id == risk_id,
-                    BowTieElement.element_type == element_type,
-                )
-            )
+        # Get next order index
+        max_order = (
+            self.db.query(func.max(BowTieElement.order_index))
+            .filter(and_(BowTieElement.risk_id == risk_id, BowTieElement.element_type == element_type))
+            .scalar()
+            or 0
         )
-        max_order = max_order or 0
 
         element = BowTieElement(
             risk_id=risk_id,
@@ -595,23 +571,7 @@ class BowTieService:
         )
 
         self.db.add(element)
-        await self.db.commit()
-        await self.db.refresh(element)
+        self.db.commit()
+        self.db.refresh(element)
 
         return element
-
-    async def delete_element(self, risk_id: int, element_id: int, tenant_id: int) -> None:
-        """Delete a bow-tie element by ID, scoped to risk and tenant."""
-        result = await self.db.execute(
-            select(BowTieElement).where(
-                BowTieElement.id == element_id,
-                BowTieElement.risk_id == risk_id,
-                BowTieElement.tenant_id == tenant_id,
-            )
-        )
-        element = result.scalar_one_or_none()
-        if not element:
-            raise NotFoundError(f"Bow-tie element {element_id} not found")
-
-        await self.db.delete(element)
-        await self.db.commit()

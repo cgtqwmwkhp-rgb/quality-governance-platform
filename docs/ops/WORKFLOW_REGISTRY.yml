@@ -20,6 +20,7 @@ p0_workflows:
         action: "Navigate to portal home"
         route: /portal
         exit_criteria: "Portal home page loads with navigation tiles"
+        selector: "[data-testid='portal-home']"
         
       - stepId: 2
         action: "Click Report button"
@@ -29,15 +30,26 @@ p0_workflows:
       - stepId: 3
         action: "Select Incident type"
         selector: "[data-testid='report-incident-card']"
-        fallback_selector: "a[href='/portal/report/incident']"
         exit_criteria: "Incident form loads with required fields"
         
       - stepId: 4
-        action: "Verify form loaded"
-        selector: "button:has-text('Continue'), button:has-text('Submit')"
-        exit_criteria: "Dynamic form rendered with navigation controls"
+        action: "Fill required fields"
+        form_fields:
+          - selector: "[data-testid='incident-title']"
+            value: "Test Incident - E2E"
+          - selector: "[data-testid='incident-description']"
+            value: "E2E test incident description"
+          - selector: "[data-testid='incident-severity']"
+            value: "low"
+        exit_criteria: "All required fields populated, submit enabled"
         
-    success_terminal_state: "Incident form loaded with contract selection and navigation controls"
+      - stepId: 5
+        action: "Submit form"
+        selector: "[data-testid='submit-report-btn']"
+        exit_criteria: "Success message with reference number"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed, confirmation message visible"
     recovery_path: "Error banner with retry option"
     expected_apis:
       - POST /api/v1/employee-portal/reports
@@ -58,15 +70,17 @@ p0_workflows:
       - stepId: 2
         action: "Select Near-Miss type"
         selector: "[data-testid='report-near-miss-card']"
-        fallback_selector: "a[href='/portal/report/near-miss']"
         exit_criteria: "Near-miss form loads"
         
       - stepId: 3
-        action: "Verify form loaded"
-        selector: "button:has-text('Continue'), button:has-text('Submit')"
-        exit_criteria: "Dynamic form rendered with navigation controls"
+        action: "Fill and submit form"
+        form_fields:
+          - selector: "[data-testid='near-miss-description']"
+            value: "E2E test near-miss"
+        exit_criteria: "Form submitted successfully"
+        expected_api: POST /api/v1/employee-portal/reports
         
-    success_terminal_state: "Near-miss form loaded with navigation controls"
+    success_terminal_state: "Reference number displayed"
     recovery_path: "Error banner with retry option"
     expected_apis:
       - POST /api/v1/employee-portal/reports
@@ -85,11 +99,21 @@ p0_workflows:
         exit_criteria: "RTA form loads with vehicle section"
         
       - stepId: 2
-        action: "Verify RTA form loaded"
-        selector: "button[type='submit'], button:has-text('Submit'), button:has-text('Continue')"
-        exit_criteria: "RTA form rendered with submit/continue controls"
+        action: "Fill vehicle details"
+        form_fields:
+          - selector: "[data-testid='vehicle-registration']"
+            value: "AB12CDE"
+          - selector: "[data-testid='incident-location']"
+            value: "Test Location"
+        exit_criteria: "Vehicle details populated"
         
-    success_terminal_state: "RTA form loaded with vehicle section visible"
+      - stepId: 3
+        action: "Submit form"
+        selector: "[data-testid='submit-rta-btn']"
+        exit_criteria: "Success confirmation"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed"
     recovery_path: "Error banner with retry option"
     expected_apis:
       - POST /api/v1/employee-portal/reports

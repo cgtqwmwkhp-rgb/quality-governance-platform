@@ -262,24 +262,6 @@ admin_routes:
     expected_degraded_state: null
     description: "Advanced analytics"
 
-  - pageId: analytics-dashboards
-    route: /analytics/dashboards
-    auth: jwt_admin
-    criticality: P2
-    component: DashboardBuilder
-    expected_empty_state: "Dashboard builder canvas"
-    expected_degraded_state: null
-    description: "Custom dashboard builder"
-
-  - pageId: analytics-reports
-    route: /analytics/reports
-    auth: jwt_admin
-    criticality: P2
-    component: ReportGenerator
-    expected_empty_state: "Report template selection"
-    expected_degraded_state: null
-    description: "Report generator"
-
   - pageId: search
     route: /search
     auth: jwt_admin
@@ -455,7 +437,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 50
+  total_routes: 48
   p0_routes: 12
   p1_routes: 22
-  p2_routes: 16
+  p2_routes: 14

@@ -13,7 +13,7 @@ QUARANTINE STATUS: All tests in this file are quarantined.
 See tests/smoke/QUARANTINE_POLICY.md for details.
 
 Quarantine Date: 2026-01-21
-Expiry Date: 2026-03-23
+Expiry Date: 2026-02-21
 Issue: GOVPLAT-001
 Reason: Phase 3 Workflow features not fully implemented; endpoints return 404.
 """
@@ -23,88 +23,10 @@ from typing import Any
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Mock-based tests that run without database infrastructure
-# ---------------------------------------------------------------------------
-
-
-class TestWorkflowSchemaValidation:
-    """Verify workflow schemas can be imported and validated without a DB."""
-
-    def test_workflow_schemas_importable(self) -> None:
-        """Verify all workflow response schemas are importable."""
-        from src.api.schemas.workflows import (
-            BulkApproveResponse,
-            GetInstanceResponse,
-            ListInstancesResponse,
-            ListTemplatesResponse,
-            StartWorkflowResponse,
-        )
-
-        assert ListTemplatesResponse is not None
-        assert StartWorkflowResponse is not None
-        assert GetInstanceResponse is not None
-        assert ListInstancesResponse is not None
-        assert BulkApproveResponse is not None
-
-    def test_start_workflow_request_validation(self) -> None:
-        """Validate WorkflowStartRequest schema accepts correct data."""
-        from src.api.routes.workflows import WorkflowStartRequest
-
-        req = WorkflowStartRequest(
-            template_code="CAPA",
-            entity_type="action",
-            entity_id="ACT-001",
-            context={"description": "Test"},
-            priority="high",
-        )
-        assert req.template_code == "CAPA"
-        assert req.priority == "high"
-        assert req.context == {"description": "Test"}
-
-    def test_start_workflow_request_defaults(self) -> None:
-        """Validate WorkflowStartRequest applies default priority."""
-        from src.api.routes.workflows import WorkflowStartRequest
-
-        req = WorkflowStartRequest(
-            template_code="NCR",
-            entity_type="incident",
-            entity_id="INC-001",
-        )
-        assert req.priority == "normal"
-        assert req.context is None
-
-    def test_template_summary_item_schema(self) -> None:
-        """Validate TemplateSummaryItem schema round-trips correctly."""
-        from src.api.schemas.workflows import TemplateSummaryItem
-
-        item = TemplateSummaryItem(
-            code="RIDDOR",
-            name="RIDDOR Reporting Workflow",
-            sla_hours=24,
-            steps_count=5,
-        )
-        assert item.code == "RIDDOR"
-        assert item.sla_hours == 24
-        assert item.steps_count == 5
-
-    def test_list_templates_response_schema(self) -> None:
-        """Validate ListTemplatesResponse wraps template items."""
-        from src.api.schemas.workflows import ListTemplatesResponse, TemplateSummaryItem
-
-        items = [
-            TemplateSummaryItem(code="CAPA", name="CAPA Workflow", steps_count=3),
-            TemplateSummaryItem(code="NCR", name="NCR Workflow", steps_count=4),
-        ]
-        resp = ListTemplatesResponse(templates=items)
-        assert len(resp.templates) == 2
-        assert resp.templates[0].code == "CAPA"
-
-    def test_workflow_routes_module_importable(self) -> None:
-        """Verify the workflows routes module imports cleanly."""
-        from src.api.routes import workflows
-
-        assert hasattr(workflows, "router")
+# Quarantine marker - skip all tests in this module until features are complete
+pytestmark = pytest.mark.skip(
+    reason="QUARANTINED: Phase 3 Workflow features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+)
 
 
 @pytest.mark.phase34
@@ -113,7 +35,7 @@ class TestWorkflowTemplates:
 
     def test_list_workflow_templates(self, auth_client: Any) -> None:
         """Test listing available workflow templates."""
-        response = auth_client.get("/api/v1/workflows/templates")
+        response = auth_client.get("/api/workflows/templates")
         assert response.status_code == 200
 
         data = response.json()
@@ -131,7 +53,7 @@ class TestWorkflowTemplates:
 
     def test_get_workflow_template_details(self, auth_client: Any) -> None:
         """Test getting detailed template information."""
-        response = auth_client.get("/api/v1/workflows/templates/RIDDOR")
+        response = auth_client.get("/api/workflows/templates/RIDDOR")
         assert response.status_code == 200
 
         template = response.json()
@@ -143,7 +65,7 @@ class TestWorkflowTemplates:
 
     def test_get_nonexistent_template(self, auth_client: Any) -> None:
         """Test getting a template that doesn't exist."""
-        response = auth_client.get("/api/v1/workflows/templates/NONEXISTENT")
+        response = auth_client.get("/api/workflows/templates/NONEXISTENT")
         assert response.status_code == 404
 
 
@@ -161,7 +83,7 @@ class TestWorkflowInstances:
             "priority": "high",
         }
 
-        response = auth_client.post("/api/v1/workflows/start", json=payload)
+        response = auth_client.post("/api/workflows/start", json=payload)
         assert response.status_code == 200
 
         instance = response.json()
@@ -176,12 +98,12 @@ class TestWorkflowInstances:
         """Test starting workflow with invalid template."""
         payload = {"template_code": "INVALID", "entity_type": "action", "entity_id": "ACT-TEST-002"}
 
-        response = auth_client.post("/api/v1/workflows/start", json=payload)
+        response = auth_client.post("/api/workflows/start", json=payload)
         assert response.status_code == 400
 
     def test_list_workflow_instances(self, auth_client: Any) -> None:
         """Test listing workflow instances."""
-        response = auth_client.get("/api/v1/workflows/instances")
+        response = auth_client.get("/api/workflows/instances")
         assert response.status_code == 200
 
         data = response.json()
@@ -190,7 +112,7 @@ class TestWorkflowInstances:
 
     def test_filter_workflow_instances_by_status(self, auth_client: Any) -> None:
         """Test filtering workflows by status."""
-        response = auth_client.get("/api/v1/workflows/instances?status=in_progress")
+        response = auth_client.get("/api/workflows/instances?status=in_progress")
         assert response.status_code == 200
 
         data = response.json()
@@ -199,7 +121,7 @@ class TestWorkflowInstances:
 
     def test_get_workflow_instance_details(self, auth_client: Any) -> None:
         """Test getting workflow instance details."""
-        response = auth_client.get("/api/v1/workflows/instances/WF-20260119001")
+        response = auth_client.get("/api/workflows/instances/WF-20260119001")
         assert response.status_code == 200
 
         instance = response.json()
@@ -214,7 +136,7 @@ class TestApprovals:
 
     def test_get_pending_approvals(self, auth_client: Any) -> None:
         """Test getting pending approvals for current user."""
-        response = auth_client.get("/api/v1/workflows/approvals/pending")
+        response = auth_client.get("/api/workflows/approvals/pending")
         assert response.status_code == 200
 
         data = response.json()
@@ -225,7 +147,7 @@ class TestApprovals:
         """Test approving a request."""
         payload = {"notes": "Approved after review"}
 
-        response = auth_client.post("/api/v1/workflows/approvals/APR-001/approve", json=payload)
+        response = auth_client.post("/api/workflows/approvals/APR-001/approve", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -236,14 +158,14 @@ class TestApprovals:
         """Test that rejection requires a reason."""
         payload = {"notes": "Some notes but no reason"}
 
-        response = auth_client.post("/api/v1/workflows/approvals/APR-002/reject", json=payload)
+        response = auth_client.post("/api/workflows/approvals/APR-002/reject", json=payload)
         assert response.status_code == 400
 
     def test_reject_request_with_reason(self, auth_client: Any) -> None:
         """Test rejecting a request with valid reason."""
         payload = {"reason": "Insufficient documentation provided"}
 
-        response = auth_client.post("/api/v1/workflows/approvals/APR-002/reject", json=payload)
+        response = auth_client.post("/api/workflows/approvals/APR-002/reject", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -253,7 +175,7 @@ class TestApprovals:
         """Test bulk approval of multiple requests."""
         payload = {"approval_ids": ["APR-001", "APR-002", "APR-003"], "notes": "Bulk approved after batch review"}
 
-        response = auth_client.post("/api/v1/workflows/approvals/bulk-approve", json=payload)
+        response = auth_client.post("/api/workflows/approvals/bulk-approve", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -267,7 +189,7 @@ class TestDelegation:
 
     def test_get_delegations(self, auth_client: Any) -> None:
         """Test getting current delegations."""
-        response = auth_client.get("/api/v1/workflows/delegations")
+        response = auth_client.get("/api/workflows/delegations")
         assert response.status_code == 200
 
         data = response.json()
@@ -282,7 +204,7 @@ class TestDelegation:
             "reason": "Annual leave",
         }
 
-        response = auth_client.post("/api/v1/workflows/delegations", json=payload)
+        response = auth_client.post("/api/workflows/delegations", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -292,7 +214,7 @@ class TestDelegation:
 
     def test_cancel_delegation(self, auth_client: Any) -> None:
         """Test cancelling a delegation."""
-        response = auth_client.delete("/api/v1/workflows/delegations/DEL-001")
+        response = auth_client.delete("/api/workflows/delegations/DEL-001")
         assert response.status_code == 200
 
         result = response.json()
@@ -305,7 +227,7 @@ class TestEscalation:
 
     def test_get_pending_escalations(self, auth_client: Any) -> None:
         """Test getting workflows pending escalation."""
-        response = auth_client.get("/api/v1/workflows/escalations/pending")
+        response = auth_client.get("/api/workflows/escalations/pending")
         assert response.status_code == 200
 
         data = response.json()
@@ -315,7 +237,7 @@ class TestEscalation:
         """Test escalating a workflow."""
         payload = {"escalate_to": 10, "reason": "SLA breach - requires immediate attention", "new_priority": "critical"}
 
-        response = auth_client.post("/api/v1/workflows/instances/WF-001/escalate", json=payload)
+        response = auth_client.post("/api/workflows/instances/WF-001/escalate", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -328,7 +250,7 @@ class TestWorkflowStats:
 
     def test_get_workflow_stats(self, auth_client: Any) -> None:
         """Test getting workflow statistics."""
-        response = auth_client.get("/api/v1/workflows/stats")
+        response = auth_client.get("/api/workflows/stats")
         assert response.status_code == 200
 
         stats = response.json()

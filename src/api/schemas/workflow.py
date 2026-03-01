@@ -35,21 +35,14 @@ class WorkflowRuleBase(BaseModel):
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
     rule_type: str = Field(
-        ...,
-        description="Type: conditional_trigger, escalation, auto_assignment, sla_monitor, notification",
+        ..., description="Type: conditional_trigger, escalation, auto_assignment, sla_monitor, notification"
     )
-    entity_type: str = Field(
-        ...,
-        description="Entity: incident, near_miss, complaint, rta, audit, risk, etc.",
-    )
+    entity_type: str = Field(..., description="Entity: incident, near_miss, complaint, rta, audit, risk, etc.")
     trigger_event: str = Field(..., description="Event: created, updated, status_changed, sla_breach, etc.")
     conditions: Optional[Dict[str, Any]] = Field(None, description="Condition JSON for rule evaluation")
     delay_hours: Optional[float] = Field(None, description="Hours to wait before executing (for escalation)")
     delay_from_field: Optional[str] = Field(None, description="Field to calculate delay from")
-    action_type: str = Field(
-        ...,
-        description="Action: send_email, assign_to_user, change_status, escalate, etc.",
-    )
+    action_type: str = Field(..., description="Action: send_email, assign_to_user, change_status, escalate, etc.")
     action_config: Dict[str, Any] = Field(..., description="Configuration for the action")
     priority: int = Field(100, description="Rule priority (lower = higher priority)")
     stop_processing: bool = Field(False, description="Stop processing rules after this one")
@@ -129,9 +122,6 @@ class RuleExecutionListResponse(BaseModel):
 
     items: List[RuleExecutionResponse]
     total: int
-    page: int
-    page_size: int
-    pages: int
 
 
 # SLA Configuration Schemas
@@ -196,9 +186,6 @@ class SLAConfigurationListResponse(BaseModel):
 
     items: List[SLAConfigurationResponse]
     total: int
-    page: int
-    page_size: int
-    pages: int
 
 
 # SLA Tracking Schemas
@@ -294,9 +281,6 @@ class EscalationLevelListResponse(BaseModel):
 
     items: List[EscalationLevelResponse]
     total: int
-    page: int
-    page_size: int
-    pages: int
 
 
 # Condition Builder Helper Schema
@@ -314,55 +298,3 @@ class ConditionGroupSchema(BaseModel):
     and_conditions: Optional[List["ConditionSchema"]] = Field(None, alias="and")
     or_conditions: Optional[List["ConditionSchema"]] = Field(None, alias="or")
     not_condition: Optional["ConditionSchema"] = Field(None, alias="not")
-
-
-class SLACheckResponse(BaseModel):
-    """Response for manual SLA/escalation check trigger."""
-
-    message: str
-    escalations_processed: int
-    sla_events: int
-    escalation_details: List[Any] = []
-    sla_details: List[Any] = []
-
-
-# ============================================================================
-# Workflow Engine Response Models
-# ============================================================================
-
-
-class WorkflowStepResponse(BaseModel):
-    """Response model for workflow step."""
-
-    id: int
-    name: str
-    step_type: str
-    order: int
-    config: Dict[str, Any]
-    status: str
-
-
-class WorkflowInstanceResponse(BaseModel):
-    """Response model for workflow instance."""
-
-    id: int
-    workflow_id: int
-    entity_type: str
-    entity_id: int
-    current_step: int
-    status: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    steps: List[WorkflowStepResponse] = []
-
-
-class WorkflowDefinitionResponse(BaseModel):
-    """Response model for workflow definition."""
-
-    id: int
-    name: str
-    description: Optional[str] = None
-    entity_type: str
-    steps: List[Dict[str, Any]] = []
-    is_active: bool
-    created_at: datetime

@@ -12,32 +12,10 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.uvdb import (
-    AddKPIResponse,
-    CreateAuditResponse,
-    CreateAuditResponseResponse,
-    GetAuditKPIsResponse,
-    GetAuditResponse,
-    GetAuditResponsesResponse,
-    GetDashboardResponse,
-    GetISOCrossMappingResponse,
-    GetSectionQuestionsResponse,
-    ListAuditsResponse,
-    ListSectionsResponse,
-    ProtocolResponse,
-    UpdateAuditResponse,
-)
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
-from src.domain.exceptions import NotFoundError
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -46,8 +24,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
-from src.domain.services.uvdb_service import UVDBService
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -460,8 +437,8 @@ class KPICreate(BaseModel):
 # ============ Protocol Structure Endpoints ============
 
 
-@router.get("/protocol", response_model=ProtocolResponse)
-async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
+@router.get("/protocol", response_model=dict)
+async def get_protocol_structure() -> dict[str, Any]:
     """Get the complete UVDB B2 Audit Protocol structure"""
     return {
         "protocol_name": "UVDB Verify B2 Audit Protocol",
@@ -485,10 +462,9 @@ async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
     }
 
 
-@router.get("/sections", response_model=ListSectionsResponse)
+@router.get("/sections", response_model=dict)
 async def list_sections(
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List all UVDB B2 sections"""
     # Return from static data or database
@@ -510,11 +486,10 @@ async def list_sections(
     }
 
 
-@router.get("/sections/{section_number}/questions", response_model=GetSectionQuestionsResponse)
+@router.get("/sections/{section_number}/questions", response_model=dict)
 async def get_section_questions(
     section_number: str,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get questions for a specific UVDB section"""
     section_data = None
@@ -524,7 +499,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Section not found")
 
     return {
         "section_number": section_data["number"],
@@ -538,31 +513,28 @@ async def get_section_questions(
 # ============ Audit Management ============
 
 
-@router.get("/audits", response_model=ListAuditsResponse)
+@router.get("/audits", response_model=dict)
 async def list_audits(
-    current_user: CurrentUser,
-    db: DbSession,
-    params: PaginationParams = Depends(),
     status: Optional[str] = Query(None),
     company_name: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List UVDB audits"""
-    stmt = (
-        select(UVDBAudit)
-        .options(selectinload(UVDBAudit.responses))  # type: ignore[attr-defined]  # SA relationship  # TYPE-IGNORE: MYPY-OVERRIDE
-        .where(UVDBAudit.tenant_id == current_user.tenant_id)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-    )
+    query = db.query(UVDBAudit)
 
     if status:
-        stmt = stmt.where(UVDBAudit.status == status)  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+        query = query.filter(UVDBAudit.status == status)
     if company_name:
-        stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
+        query = query.filter(UVDBAudit.company_name.ilike(f"%{company_name}%"))
 
-    stmt = stmt.order_by(UVDBAudit.audit_date.desc())  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-    result = await paginate(db, stmt, params)
+    total = query.count()
+    audits = query.order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit).all()
 
     return {
-        "items": [
+        "total": total,
+        "audits": [
             {
                 "id": a.id,
                 "audit_reference": a.audit_reference,
@@ -573,35 +545,29 @@ async def list_audits(
                 "percentage_score": a.percentage_score,
                 "lead_auditor": a.lead_auditor,
             }
-            for a in result.items
+            for a in audits
         ],
-        "total": result.total,
-        "page": result.page,
-        "page_size": result.page_size,
-        "pages": result.pages,
     }
 
 
-@router.post("/audits", response_model=CreateAuditResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/audits", response_model=dict, status_code=201)
 async def create_audit(
     audit_data: AuditCreate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Create a new UVDB audit"""
-    count = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
-    audit_reference = UVDBService.generate_audit_reference(count)
+    count = db.query(UVDBAudit).count()
+    audit_reference = f"UVDB-{datetime.utcnow().year}-{(count + 1):04d}"
 
-    audit = UVDBAudit(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
+    audit = UVDBAudit(
         audit_reference=audit_reference,
         status="scheduled",
         **audit_data.model_dump(),
     )
     db.add(audit)
-    await db.flush()
-    await db.refresh(audit)
+    db.commit()
+    db.refresh(audit)
 
-    track_metric("uvdb.audit_created")
     return {
         "id": audit.id,
         "audit_reference": audit_reference,
@@ -609,14 +575,15 @@ async def create_audit(
     }
 
 
-@router.get("/audits/{audit_id}", response_model=GetAuditResponse)
+@router.get("/audits/{audit_id}", response_model=dict)
 async def get_audit(
     audit_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get audit details"""
-    audit = await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
 
     return {
         "id": audit.id,
@@ -649,18 +616,23 @@ async def get_audit(
     }
 
 
-@router.put("/audits/{audit_id}", response_model=UpdateAuditResponse)
+@router.put("/audits/{audit_id}", response_model=dict)
 async def update_audit(
     audit_id: int,
     audit_data: AuditUpdate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Update audit"""
-    audit = await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
 
-    apply_updates(audit, audit_data)
-    await db.flush()
+    update_data = audit_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(audit, key, value)
+
+    audit.updated_at = datetime.utcnow()
+    db.commit()
 
     return {"message": "Audit updated", "id": audit.id}
 
@@ -668,40 +640,39 @@ async def update_audit(
 # ============ Audit Responses ============
 
 
-@router.post(
-    "/audits/{audit_id}/responses", response_model=CreateAuditResponseResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/audits/{audit_id}/responses", response_model=dict, status_code=201)
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Record an audit response"""
-    await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
 
-    response = UVDBAuditResponse(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
+    response = UVDBAuditResponse(
         audit_id=audit_id,
         **response_data.model_dump(),
     )
     db.add(response)
-    await db.flush()
-    await db.refresh(response)
+    db.commit()
+    db.refresh(response)
 
     return {"id": response.id, "message": "Response recorded"}
 
 
-@router.get("/audits/{audit_id}/responses", response_model=GetAuditResponsesResponse)
+@router.get("/audits/{audit_id}/responses", response_model=dict)
 async def get_audit_responses(
     audit_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get all responses for an audit"""
-    await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
 
-    result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
-    responses = result.scalars().all()
+    responses = db.query(UVDBAuditResponse).filter(UVDBAuditResponse.audit_id == audit_id).all()
 
     return {
         "audit_id": audit_id,
@@ -723,45 +694,42 @@ async def get_audit_responses(
 # ============ KPI Management ============
 
 
-@router.post("/audits/{audit_id}/kpis", response_model=AddKPIResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/audits/{audit_id}/kpis", response_model=dict, status_code=201)
 async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
-    await get_or_404(db, UVDBAudit, audit_id, tenant_id=current_user.tenant_id)
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
 
-    ltifr = UVDBService.calculate_ltifr(
-        kpi_data.lost_time_incidents_1_7_days,
-        kpi_data.riddor_reportable,
-        kpi_data.total_man_hours,
-    )
+    # Calculate rates if man hours provided
+    ltifr = None
+    if kpi_data.total_man_hours and kpi_data.total_man_hours > 0:
+        lost_time = kpi_data.lost_time_incidents_1_7_days + kpi_data.riddor_reportable
+        ltifr = (lost_time / kpi_data.total_man_hours) * 1000000
 
-    kpi = UVDBKPIRecord(  # type: ignore[misc]  # SA model kwargs  # TYPE-IGNORE: MYPY-OVERRIDE
+    kpi = UVDBKPIRecord(
         audit_id=audit_id,
         ltifr=ltifr,
         **kpi_data.model_dump(),
     )
     db.add(kpi)
-    await db.flush()
-    await db.refresh(kpi)
+    db.commit()
+    db.refresh(kpi)
 
     return {"id": kpi.id, "message": "KPI record added", "ltifr": ltifr}
 
 
-@router.get("/audits/{audit_id}/kpis", response_model=GetAuditKPIsResponse)
+@router.get("/audits/{audit_id}/kpis", response_model=dict)
 async def get_audit_kpis(
     audit_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
-    result = await db.execute(
-        select(UVDBKPIRecord).where(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc())
-    )
-    kpis = result.scalars().all()
+    kpis = db.query(UVDBKPIRecord).filter(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc()).all()
 
     return {
         "audit_id": audit_id,
@@ -789,8 +757,8 @@ async def get_audit_kpis(
 # ============ ISO Cross-Mapping ============
 
 
-@router.get("/iso-mapping", response_model=GetISOCrossMappingResponse)
-async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
+@router.get("/iso-mapping", response_model=dict)
+async def get_iso_cross_mapping() -> dict[str, Any]:
     """Get cross-mapping between UVDB sections and ISO standards"""
     mappings = []
 
@@ -827,39 +795,23 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
 # ============ Dashboard ============
 
 
-@router.get("/dashboard", response_model=GetDashboardResponse)
+@router.get("/dashboard", response_model=dict)
 async def get_uvdb_dashboard(
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
-    total_audits = await db.scalar(select(func.count()).select_from(UVDBAudit)) or 0
-    active_audits = (
-        await db.scalar(
-            select(func.count()).select_from(
-                select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-            )
-        )
-        or 0
-    )
-    completed_audits = (
-        await db.scalar(
-            select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-        )
-        or 0
+    total_audits = db.query(UVDBAudit).count()
+    active_audits = db.query(UVDBAudit).filter(UVDBAudit.status.in_(["scheduled", "in_progress"])).count()
+    completed_audits = db.query(UVDBAudit).filter(UVDBAudit.status == "completed").count()
+
+    # Average score
+    completed = (
+        db.query(UVDBAudit).filter(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)).all()
     )
 
-    result = await db.execute(
-        select(UVDBAudit).where(
-            UVDBAudit.status == "completed",  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-            UVDBAudit.percentage_score.isnot(None),  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-        )
-    )
-    completed = result.scalars().all()
-
-    avg_score: float = 0
+    avg_score = 0
     if completed:
-        avg_score = sum(float(a.percentage_score) for a in completed if a.percentage_score is not None) / len(completed)
+        avg_score = sum(a.percentage_score for a in completed) / len(completed)
 
     return {
         "summary": {

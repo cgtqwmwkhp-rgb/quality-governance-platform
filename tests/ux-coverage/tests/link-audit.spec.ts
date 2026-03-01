@@ -88,20 +88,11 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
     return false;
   }
   
-  if (authType === 'portal_sso') {
+  if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
-      await page.evaluate(() => {
-        const demoUser = {
-          id: 'ux-test-001',
-          email: 'ux-test@plantexpand.com',
-          name: 'UX Test User',
-          firstName: 'UX',
-          lastName: 'Test',
-          isDemoUser: true,
-        };
-        localStorage.setItem('portal_user', JSON.stringify(demoUser));
-        localStorage.setItem('portal_session_time', Date.now().toString());
-      });
+      await page.evaluate((token) => {
+        localStorage.setItem('portal_token', token);
+      }, process.env.PORTAL_TEST_TOKEN);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -133,22 +124,16 @@ function isInternalLink(href: string, baseUrl: string): boolean {
   return false;
 }
 
-// Load ALL routes from registry (including P2) for link validation
+// Known valid routes from registry
 const validRoutePatterns = new Set<string>();
 function loadValidRoutes(): void {
-  const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
-  const content = fs.readFileSync(registryPath, 'utf-8');
-  const registry = yaml.load(content) as any;
-  
-  const allPages: PageEntry[] = [
-    ...(registry.public_routes || []),
-    ...(registry.portal_routes || []),
-    ...(registry.admin_routes || []),
-  ];
-  
-  allPages.forEach(p => {
+  const pages = loadPages();
+  pages.forEach(p => {
+    // Add exact routes
     validRoutePatterns.add(p.route);
+    // Add pattern for parameterized routes
     if (p.route.includes(':')) {
+      // Convert /incidents/:id to regex-like pattern
       const pattern = p.route.replace(/:[^/]+/g, '[^/]+');
       validRoutePatterns.add(pattern);
     }

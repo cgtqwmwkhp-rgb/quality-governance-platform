@@ -81,10 +81,7 @@ class TestRiskControlLinkage:
 
     @pytest.mark.asyncio
     async def test_link_risk_to_control(
-        self,
-        admin_client: UATApiClient,
-        uat_risk_ids: Dict[str, str],
-        uat_control_ids: Dict[str, str],
+        self, admin_client: UATApiClient, uat_risk_ids: Dict[str, str], uat_control_ids: Dict[str, str]
     ):
         """Can link a risk to a control."""
         risk_id = uat_risk_ids["open_security"]

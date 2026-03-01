@@ -97,9 +97,7 @@ class Notification(Base):
     # Notification content
     type: Mapped[NotificationType] = mapped_column(SQLEnum(NotificationType), nullable=False, index=True)
     priority: Mapped[NotificationPriority] = mapped_column(
-        SQLEnum(NotificationPriority),
-        nullable=False,
-        default=NotificationPriority.MEDIUM,
+        SQLEnum(NotificationPriority), nullable=False, default=NotificationPriority.MEDIUM
     )
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)

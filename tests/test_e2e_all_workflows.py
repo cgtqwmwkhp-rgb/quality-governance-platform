@@ -92,12 +92,7 @@ class TestIncidentWorkflow:
     @pytest.mark.asyncio
     async def test_incident_status_workflow(self, auth_headers):
         """Test incident status transitions."""
-        valid_statuses = [
-            "REPORTED",
-            "UNDER_INVESTIGATION",
-            "PENDING_ACTIONS",
-            "CLOSED",
-        ]
+        valid_statuses = ["REPORTED", "UNDER_INVESTIGATION", "PENDING_ACTIONS", "CLOSED"]
         # Just validate the status values are expected
         assert len(valid_statuses) >= 4
 
@@ -283,13 +278,7 @@ class TestNearMissWorkflow:
     @pytest.mark.asyncio
     async def test_near_miss_status_workflow(self, auth_headers):
         """Test near miss status transitions."""
-        valid_statuses = [
-            "REPORTED",
-            "UNDER_REVIEW",
-            "ACTION_REQUIRED",
-            "IN_PROGRESS",
-            "CLOSED",
-        ]
+        valid_statuses = ["REPORTED", "UNDER_REVIEW", "ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"]
         assert len(valid_statuses) == 5
 
     @pytest.mark.asyncio

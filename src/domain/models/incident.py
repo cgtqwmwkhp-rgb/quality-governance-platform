@@ -1,28 +1,16 @@
 """Incident models for incident reporting and investigation."""
 
-from __future__ import annotations
-
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import (
-    AuditTrailMixin,
-    OptimisticLockMixin,
-    ReferenceNumberMixin,
-    SoftDeleteMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
-
-if TYPE_CHECKING:
-    from src.domain.models.user import User
 
 
 class IncidentType(str, enum.Enum):
@@ -70,7 +58,7 @@ class ActionStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, OptimisticLockMixin, SoftDeleteMixin):
+class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Incident model for workplace incidents, near misses, and hazards."""
 
     __tablename__ = "incidents"
@@ -95,9 +83,6 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Opti
     reported_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Who was involved
     reporter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -154,17 +139,7 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Opti
     precursor_events: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of precursor indicators
     control_failures: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of failed controls
 
-    # Full-text search (populated by DB trigger)
-    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
-
-    __table_args__ = (Index("ix_incidents_search_vector", "search_vector", postgresql_using="gin"),)
-
     # Relationships
-    reporter: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[reporter_id],
-        lazy="noload",
-    )
     actions: Mapped[List["IncidentAction"]] = relationship(
         "IncidentAction",
         back_populates="incident",

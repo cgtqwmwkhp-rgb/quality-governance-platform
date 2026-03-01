@@ -214,7 +214,7 @@ class EvidenceAssetListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
 
 
 class EvidenceAssetUploadResponse(BaseModel):
@@ -242,20 +242,3 @@ class BulkEvidenceAssetResponse(BaseModel):
     failed: List[Dict[str, Any]]  # List of failed items with error details
     total_created: int
     total_failed: int
-
-
-class SignedUrlResponse(BaseModel):
-    """Response containing a signed download URL for an evidence asset."""
-
-    asset_id: int
-    signed_url: str
-    expires_in_seconds: int
-    content_type: Optional[str] = None
-    filename: Optional[str] = None
-
-
-class FileDownloadMeta(BaseModel):
-    """Metadata schema for the direct file download endpoint (actual response is binary)."""
-
-    status: str = "binary_download"
-    message: str = "File content returned as binary response"

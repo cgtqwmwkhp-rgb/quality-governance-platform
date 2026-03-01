@@ -1,43 +1,122 @@
 """Evidence Asset API routes.
 
-Thin controller layer — all business logic lives in EvidenceService.
+Provides endpoints for evidence asset management including:
+- File upload with metadata
+- Listing assets by source module/ID
+- Linking assets to investigations
+- Soft delete with audit trail
 """
 
 import hashlib
+import math
+import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.evidence_asset import (
+    EvidenceAssetCreate,
     EvidenceAssetListResponse,
     EvidenceAssetResponse,
     EvidenceAssetUpdate,
     EvidenceAssetUploadResponse,
-    FileDownloadMeta,
-    SignedUrlResponse,
 )
-from src.api.utils.pagination import PaginationParams
 from src.core.config import settings
-from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
-from src.domain.models.user import User
-from src.domain.services.evidence_service import EvidenceService
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.domain.models.evidence_asset import (
+    EvidenceAsset,
+    EvidenceAssetType,
+    EvidenceRetentionPolicy,
+    EvidenceSourceModule,
+    EvidenceVisibility,
+)
 
 router = APIRouter()
 
+# Allowed content types for upload (security: content-type allowlist)
+ALLOWED_CONTENT_TYPES = {
+    # Images
+    "image/jpeg": "photo",
+    "image/png": "photo",
+    "image/gif": "photo",
+    "image/webp": "photo",
+    "image/heic": "photo",
+    "image/heif": "photo",
+    # Videos
+    "video/mp4": "video",
+    "video/webm": "video",
+    "video/quicktime": "video",
+    # Documents
+    "application/pdf": "pdf",
+    "application/msword": "document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
+    "application/vnd.ms-excel": "document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
+    # Audio
+    "audio/mpeg": "audio",
+    "audio/wav": "audio",
+    "audio/ogg": "audio",
+}
 
-@router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=status.HTTP_201_CREATED)
+# Maximum file size: 50MB
+MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+
+
+async def validate_source_exists(
+    source_module: str,
+    source_id: int,
+    db: AsyncSession,
+) -> bool:
+    """Validate that the source record exists.
+
+    Returns True if exists, raises HTTPException if not.
+    """
+    # Map source module to model
+    source_models = {
+        EvidenceSourceModule.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
+        EvidenceSourceModule.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
+        EvidenceSourceModule.COMPLAINT.value: "src.domain.models.complaint:Complaint",
+        EvidenceSourceModule.INCIDENT.value: "src.domain.models.incident:Incident",
+        EvidenceSourceModule.INVESTIGATION.value: "src.domain.models.investigation:InvestigationRun",
+        EvidenceSourceModule.AUDIT.value: "src.domain.models.audit:AuditRun",
+        EvidenceSourceModule.ACTION.value: None,  # Actions are polymorphic, skip validation
+    }
+
+    model_path = source_models.get(source_module)
+    if model_path is None:
+        # Skip validation for polymorphic types
+        return True
+
+    # Import the model dynamically
+    module_path, class_name = model_path.split(":")
+    module = __import__(module_path, fromlist=[class_name])
+    model_class = getattr(module, class_name)
+
+    # Check if entity exists
+    query = select(model_class).where(model_class.id == source_id)
+    result = await db.execute(query)
+    entity = result.scalar_one_or_none()
+
+    if not entity:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "SOURCE_NOT_FOUND",
+                "message": f"Source {source_module} with ID {source_id} not found",
+                "details": {"source_module": source_module, "source_id": source_id},
+            },
+        )
+
+    return True
+
+
+@router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=201)
 async def upload_evidence_asset(
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("evidence:create"))],
+    current_user: CurrentUser,
     file: UploadFile = File(..., description="File to upload"),
     source_module: str = Form(..., description="Source module (near_miss, road_traffic_collision, etc.)"),
     source_id: int = Form(..., description="ID of the source record"),
@@ -53,43 +132,152 @@ async def upload_evidence_asset(
     contains_pii: bool = Form(False, description="Whether asset contains PII"),
     redaction_required: bool = Form(False, description="Whether redaction is required"),
 ):
-    """Upload an evidence asset file with metadata."""
-    _span = tracer.start_span("upload_evidence_asset") if tracer else None
+    """Upload an evidence asset file with metadata.
 
-    file_content = await file.read()
-    content_type = file.content_type or "application/octet-stream"
+    Validates:
+    - Content type is allowed
+    - File size is within limits
+    - Source record exists
+    - User has permission to attach evidence
 
-    service = EvidenceService(db)
+    Stores file in blob storage and creates EvidenceAsset record.
+    """
+    # Validate source module
     try:
-        evidence_asset = await service.upload(
-            file_content=file_content,
-            filename=file.filename,
-            content_type=content_type,
-            source_module=source_module,
-            source_id=source_id,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            asset_type=asset_type,
-            title=title,
-            description=description,
-            captured_at=captured_at,
-            captured_by_role=captured_by_role,
-            latitude=latitude,
-            longitude=longitude,
-            location_description=location_description,
-            visibility=visibility,
-            contains_pii=contains_pii,
-            redaction_required=redaction_required,
+        source_module_enum = EvidenceSourceModule(source_module)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_SOURCE_MODULE",
+                "message": f"Invalid source module: {source_module}",
+                "details": {"valid_modules": [e.value for e in EvidenceSourceModule]},
+            },
         )
-    except ValueError as e:
-        raise ValidationError(str(e))
-    except LookupError as e:
-        raise NotFoundError(str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    if _span:
-        _span.end()
+    # Validate source exists
+    await validate_source_exists(source_module, source_id, db)
+
+    # Validate content type
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_CONTENT_TYPE",
+                "message": f"Content type {content_type} is not allowed",
+                "details": {"allowed_types": list(ALLOWED_CONTENT_TYPES.keys())},
+            },
+        )
+
+    # Auto-detect asset type from content type if not provided
+    detected_asset_type = ALLOWED_CONTENT_TYPES.get(content_type, "other")
+    final_asset_type = asset_type or detected_asset_type
+
+    # Validate asset type
+    try:
+        asset_type_enum = EvidenceAssetType(final_asset_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_ASSET_TYPE",
+                "message": f"Invalid asset type: {final_asset_type}",
+                "details": {"valid_types": [e.value for e in EvidenceAssetType]},
+            },
+        )
+
+    # Read file content
+    file_content = await file.read()
+    file_size = len(file_content)
+
+    # Validate file size
+    if file_size > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "FILE_TOO_LARGE",
+                "message": f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes",
+                "details": {"file_size": file_size, "max_size": MAX_FILE_SIZE_BYTES},
+            },
+        )
+
+    # Calculate checksum
+    checksum = hashlib.sha256(file_content).hexdigest()
+
+    # Generate storage key
+    # Format: {source_module}/{source_id}/{uuid}_{original_filename}
+    file_uuid = str(uuid.uuid4())
+    safe_filename = (file.filename or "unnamed").replace("/", "_").replace("\\", "_")
+    storage_key = f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
+
+    # Upload to blob storage
+    from src.infrastructure.storage import StorageError, storage_service
+
+    try:
+        await storage_service().upload(
+            storage_key=storage_key,
+            content=file_content,
+            content_type=content_type,
+            metadata={
+                "source_module": source_module,
+                "source_id": str(source_id),
+                "uploaded_by": str(current_user.id),
+            },
+        )
+    except StorageError as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "STORAGE_UPLOAD_FAILED",
+                "message": f"Failed to upload file to storage: {e}",
+            },
+        )
+
+    # Parse captured_at if provided
+    parsed_captured_at = None
+    if captured_at:
+        try:
+            parsed_captured_at = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+        except ValueError:
+            pass  # Ignore invalid datetime
+
+    # Validate visibility
+    try:
+        visibility_enum = EvidenceVisibility(visibility)
+    except ValueError:
+        visibility_enum = EvidenceVisibility.INTERNAL_CUSTOMER
+
+    # Create EvidenceAsset record
+    evidence_asset = EvidenceAsset(
+        storage_key=storage_key,
+        original_filename=file.filename,
+        content_type=content_type,
+        file_size_bytes=file_size,
+        checksum_sha256=checksum,
+        asset_type=asset_type_enum,
+        source_module=source_module_enum,
+        source_id=source_id,
+        title=title,
+        description=description,
+        captured_at=parsed_captured_at,
+        captured_by_role=captured_by_role,
+        latitude=latitude,
+        longitude=longitude,
+        location_description=location_description,
+        render_hint="thumbnail" if final_asset_type == "photo" else "link",
+        visibility=visibility_enum,
+        contains_pii=contains_pii,
+        redaction_required=redaction_required,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=current_user.id,
+        updated_by_id=current_user.id,
+    )
+
+    db.add(evidence_asset)
+    await db.commit()
+    await db.refresh(evidence_asset)
+
     return EvidenceAssetUploadResponse(
         id=evidence_asset.id,
         storage_key=evidence_asset.storage_key,
@@ -104,27 +292,85 @@ async def upload_evidence_asset(
 async def list_evidence_assets(
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     source_module: Optional[str] = Query(None, description="Filter by source module"),
     source_id: Optional[int] = Query(None, description="Filter by source ID"),
     asset_type: Optional[str] = Query(None, description="Filter by asset type"),
     linked_investigation_id: Optional[int] = Query(None, description="Filter by linked investigation"),
     include_deleted: bool = Query(False, description="Include soft-deleted assets"),
 ):
-    """List evidence assets with filtering and pagination."""
-    service = EvidenceService(db)
-    try:
-        return await service.list_assets(
-            tenant_id=current_user.tenant_id,
-            params=params,
-            source_module=source_module,
-            source_id=source_id,
-            asset_type=asset_type,
-            linked_investigation_id=linked_investigation_id,
-            include_deleted=include_deleted,
-        )
-    except ValueError as e:
-        raise ValidationError(str(e))
+    """List evidence assets with filtering and pagination.
+
+    Returns assets in deterministic order (created_at DESC, id ASC).
+    Excludes soft-deleted assets by default.
+    """
+    # Build query
+    query = select(EvidenceAsset)
+
+    # Exclude deleted by default
+    if not include_deleted:
+        query = query.where(EvidenceAsset.deleted_at.is_(None))
+
+    # Apply filters
+    if source_module:
+        try:
+            source_module_enum = EvidenceSourceModule(source_module)
+            query = query.where(EvidenceAsset.source_module == source_module_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "INVALID_SOURCE_MODULE",
+                    "message": f"Invalid source module: {source_module}",
+                    "details": {"valid_modules": [e.value for e in EvidenceSourceModule]},
+                },
+            )
+
+    if source_id is not None:
+        query = query.where(EvidenceAsset.source_id == source_id)
+
+    if asset_type:
+        try:
+            asset_type_enum = EvidenceAssetType(asset_type)
+            query = query.where(EvidenceAsset.asset_type == asset_type_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "INVALID_ASSET_TYPE",
+                    "message": f"Invalid asset type: {asset_type}",
+                    "details": {"valid_types": [e.value for e in EvidenceAssetType]},
+                },
+            )
+
+    if linked_investigation_id is not None:
+        query = query.where(EvidenceAsset.linked_investigation_id == linked_investigation_id)
+
+    # Deterministic ordering
+    query = query.order_by(EvidenceAsset.created_at.desc(), EvidenceAsset.id.asc())
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query)
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    # Execute query
+    result = await db.execute(query)
+    assets = result.scalars().all()
+
+    total_pages = math.ceil(total / page_size) if total and total > 0 else 1
+
+    return EvidenceAssetListResponse(
+        items=[EvidenceAssetResponse.model_validate(asset) for asset in assets],
+        total=total or 0,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/{asset_id}", response_model=EvidenceAssetResponse)
@@ -134,11 +380,24 @@ async def get_evidence_asset(
     current_user: CurrentUser,
 ):
     """Get a specific evidence asset by ID."""
-    service = EvidenceService(db)
-    try:
-        return await service.get_asset(asset_id)
-    except LookupError:
-        raise NotFoundError("Evidence asset not found")
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ASSET_NOT_FOUND",
+                "message": f"Evidence asset with ID {asset_id} not found",
+                "details": {"asset_id": asset_id},
+            },
+        )
+
+    return asset
 
 
 @router.patch("/{asset_id}", response_model=EvidenceAssetResponse)
@@ -146,33 +405,79 @@ async def update_evidence_asset(
     asset_id: int,
     asset_data: EvidenceAssetUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
+    current_user: CurrentUser,
 ):
     """Update evidence asset metadata."""
-    service = EvidenceService(db)
-    try:
-        return await service.update_asset(
-            asset_id,
-            asset_data,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ASSET_NOT_FOUND",
+                "message": f"Evidence asset with ID {asset_id} not found",
+                "details": {"asset_id": asset_id},
+            },
         )
-    except LookupError:
-        raise NotFoundError("Evidence asset not found")
+
+    # Update fields
+    update_data = asset_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if field == "visibility" and value is not None:
+            setattr(asset, field, EvidenceVisibility(value))
+        elif field == "retention_policy" and value is not None:
+            setattr(asset, field, EvidenceRetentionPolicy(value))
+        else:
+            setattr(asset, field, value)
+
+    asset.updated_by_id = current_user.id
+
+    await db.commit()
+    await db.refresh(asset)
+
+    return asset
 
 
-@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{asset_id}", status_code=204)
 async def delete_evidence_asset(
     asset_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
 ):
-    """Soft delete an evidence asset."""
-    service = EvidenceService(db)
-    try:
-        await service.delete_asset(asset_id, user_id=current_user.id, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Evidence asset not found")
+    """Soft delete an evidence asset.
+
+    Sets deleted_at and deleted_by_id for audit trail.
+    Does not physically delete the file from blob storage.
+    """
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ASSET_NOT_FOUND",
+                "message": f"Evidence asset with ID {asset_id} not found",
+                "details": {"asset_id": asset_id},
+            },
+        )
+
+    # Soft delete
+    asset.deleted_at = datetime.now(timezone.utc)
+    asset.deleted_by_id = current_user.id
+    asset.updated_by_id = current_user.id
+
+    await db.commit()
+
     return None
 
 
@@ -181,37 +486,104 @@ async def link_asset_to_investigation(
     asset_id: int,
     investigation_id: int,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
+    current_user: CurrentUser,
 ):
-    """Link an evidence asset to an investigation."""
-    service = EvidenceService(db)
-    try:
-        return await service.link_to_investigation(
-            asset_id,
-            investigation_id,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
+    """Link an evidence asset to an investigation.
+
+    Used when creating an investigation from a source record to
+    carry forward existing evidence assets.
+    """
+    # Get asset
+    asset_query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(asset_query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ASSET_NOT_FOUND",
+                "message": f"Evidence asset with ID {asset_id} not found",
+            },
         )
-    except LookupError as e:
-        raise NotFoundError(str(e))
+
+    # Validate investigation exists
+    from src.domain.models.investigation import InvestigationRun
+
+    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    inv_result = await db.execute(inv_query)
+    investigation = inv_result.scalar_one_or_none()
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "INVESTIGATION_NOT_FOUND",
+                "message": f"Investigation with ID {investigation_id} not found",
+            },
+        )
+
+    # Link asset to investigation
+    asset.linked_investigation_id = investigation_id
+    asset.updated_by_id = current_user.id
+
+    await db.commit()
+    await db.refresh(asset)
+
+    return asset
 
 
-@router.get("/{asset_id}/signed-url", response_model=SignedUrlResponse)
+@router.get("/{asset_id}/signed-url")
 async def get_signed_download_url(
     asset_id: int,
     db: DbSession,
     current_user: CurrentUser,
     expires_in: int = Query(3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"),
 ):
-    """Get a signed URL for downloading an evidence asset."""
-    service = EvidenceService(db)
-    try:
-        return await service.get_signed_url(asset_id, expires_in=expires_in)
-    except LookupError:
-        raise NotFoundError("Evidence asset not found")
+    """Get a signed URL for downloading an evidence asset.
+
+    Returns a time-limited signed URL for secure download.
+    """
+    # Get asset
+    query = select(EvidenceAsset).where(
+        EvidenceAsset.id == asset_id,
+        EvidenceAsset.deleted_at.is_(None),
+    )
+    result = await db.execute(query)
+    asset = result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ASSET_NOT_FOUND",
+                "message": f"Evidence asset with ID {asset_id} not found",
+            },
+        )
+
+    # Generate signed URL
+    from src.infrastructure.storage import storage_service
+
+    content_disposition = f'attachment; filename="{asset.original_filename or "download"}"'
+    signed_url = storage_service().get_signed_url(
+        storage_key=asset.storage_key,
+        expires_in_seconds=expires_in,
+        content_disposition=content_disposition,
+    )
+
+    return {
+        "asset_id": asset_id,
+        "signed_url": signed_url,
+        "expires_in_seconds": expires_in,
+        "content_type": asset.content_type,
+        "filename": asset.original_filename,
+    }
 
 
-@router.get("/download", response_model=FileDownloadMeta)
+@router.get("/download")
 async def download_file_direct(
     key: str = Query(..., description="Storage key"),
     expires: int = Query(..., description="Expiry timestamp"),
@@ -220,7 +592,7 @@ async def download_file_direct(
 ):
     """Direct download endpoint for local development signed URLs.
 
-    Validates signature and serves file content. Only available with local storage.
+    Validates signature and serves file content.
     """
     import hmac as hmac_lib
 
@@ -228,14 +600,23 @@ async def download_file_direct(
 
     from src.infrastructure.storage import LocalFileStorageService, StorageError, storage_service
 
+    # Only allow this endpoint for local storage
     svc = storage_service()
     if not isinstance(svc, LocalFileStorageService):
-        raise ValidationError("Direct download not available in production")
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "NOT_AVAILABLE", "message": "Direct download not available in production"},
+        )
 
+    # Validate expiry
     now_ts = int(datetime.now(timezone.utc).timestamp())
     if expires < now_ts:
-        raise AuthorizationError("Download URL has expired")
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "URL_EXPIRED", "message": "Download URL has expired"},
+        )
 
+    # Validate signature
     message = f"{key}:{expires}"
     expected_sig = hmac_lib.new(
         settings.secret_key.encode(),
@@ -244,13 +625,21 @@ async def download_file_direct(
     ).hexdigest()[:16]
 
     if not hmac_lib.compare_digest(sig, expected_sig):
-        raise AuthorizationError("Invalid download signature")
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "INVALID_SIGNATURE", "message": "Invalid download signature"},
+        )
 
+    # Download and serve
     try:
         content = await svc.download(key)
     except StorageError as e:
-        raise NotFoundError(str(e))
+        raise HTTPException(
+            status_code=404,
+            detail={"error_code": "FILE_NOT_FOUND", "message": str(e)},
+        )
 
+    # Determine content type from file extension
     import mimetypes
 
     content_type = mimetypes.guess_type(key)[0] or "application/octet-stream"

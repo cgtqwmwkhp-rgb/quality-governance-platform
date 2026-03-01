@@ -19,11 +19,6 @@ services:
     volumes:
       - ./src:/app/src:ro
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
 
   db:
     image: postgres:16-alpine
@@ -41,71 +36,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  celery-worker:
-    build: .
-    command: celery -A src.infrastructure.tasks.celery_app worker --loglevel=info --queues=default,email,notifications,reports,cleanup
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - DATABASE_URL=${DATABASE_URL}
-    depends_on:
-      - redis
-      - db
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-
-  celery-beat:
-    build: .
-    command: celery -A src.infrastructure.tasks.celery_app beat --loglevel=info
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    depends_on:
-      - redis
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-
-  flower:
-    build: .
-    command: celery -A src.infrastructure.tasks.celery_app flower --port=5555
-    ports:
-      - "5555:5555"
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    depends_on:
-      - redis
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
 
   # Optional: pgAdmin for database management
   pgadmin:
@@ -118,11 +48,6 @@ services:
     depends_on:
       - db
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
     profiles:
       - tools
 

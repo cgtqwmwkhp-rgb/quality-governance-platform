@@ -148,9 +148,7 @@ class ControlledDocumentVersion(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Version info
@@ -364,9 +362,7 @@ class DocumentAccessLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(
-        ForeignKey("controlled_documents.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
     version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
 

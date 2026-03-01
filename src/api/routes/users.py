@@ -1,14 +1,12 @@
-"""User management API routes.
-
-Thin controller layer — all business logic lives in UserService.
-"""
+"""User management API routes."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import (
     RoleCreate,
     RoleResponse,
@@ -18,17 +16,8 @@ from src.api.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-from src.api.utils.pagination import PaginationParams
-from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.services.user_service import UserService
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.core.security import get_password_hash
+from src.domain.models.user import Role, User
 
 router = APIRouter()
 
@@ -43,8 +32,23 @@ async def search_users(
     q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
-    service = UserService(db)
-    users = await service.search_users(q, current_user.tenant_id)
+    search_filter = f"%{q}%"
+    query = (
+        select(User)
+        .options(selectinload(User.roles))
+        .where(
+            (User.email.ilike(search_filter))
+            | (User.first_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter))
+        )
+        .where(User.is_active == True)  # noqa: E712
+        .order_by(User.email)
+        .limit(20)
+    )
+
+    result = await db.execute(query)
+    users = result.scalars().all()
+
     return [UserResponse.model_validate(u) for u in users]
 
 
@@ -52,19 +56,46 @@ async def search_users(
 async def list_users(
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     department: Optional[str] = None,
     is_active: Optional[bool] = None,
 ) -> UserListResponse:
     """List all users with pagination and filtering."""
-    service = UserService(db)
-    return await service.list_users(
-        tenant_id=current_user.tenant_id,
-        params=params,
-        search=search,
-        department=department,
-        is_active=is_active,
+    # Build query
+    query = select(User).options(selectinload(User.roles))
+
+    # Apply filters
+    if search:
+        search_filter = f"%{search}%"
+        query = query.where(
+            (User.email.ilike(search_filter))
+            | (User.first_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter))
+        )
+    if department:
+        query = query.where(User.department == department)
+    if is_active is not None:
+        query = query.where(User.is_active == is_active)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query)
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(User.last_name, User.first_name)
+
+    result = await db.execute(query)
+    users = result.scalars().all()
+
+    return UserListResponse(
+        items=[UserResponse.model_validate(u) for u in users],
+        total=total or 0,
+        page=page,
+        page_size=page_size,
+        pages=(total or 0 + page_size - 1) // page_size,
     )
 
 
@@ -75,27 +106,35 @@ async def create_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Create a new user (superuser only)."""
-    _span = tracer.start_span("create_user") if tracer else None
-    if _span:
-        _span.set_attribute("tenant_id", str(current_user.tenant_id or 0))
-
-    service = UserService(db)
-    try:
-        user = await service.create_user(
-            email=user_data.email,
-            password=user_data.password,
-            first_name=user_data.first_name,
-            last_name=user_data.last_name,
-            job_title=user_data.job_title,
-            department=user_data.department,
-            phone=user_data.phone,
-            tenant_id=current_user.tenant_id,
-            role_ids=user_data.role_ids,
+    # Check if email already exists
+    result = await db.execute(select(User).where(User.email == user_data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
         )
-    except ValueError:
-        raise ValidationError(ErrorCode.DUPLICATE_ENTITY)
 
-    track_metric("user.mutation", 1)
+    # Create user
+    user = User(
+        email=user_data.email,
+        hashed_password=get_password_hash(user_data.password),
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        job_title=user_data.job_title,
+        department=user_data.department,
+        phone=user_data.phone,
+    )
+
+    # Assign roles if provided
+    if user_data.role_ids:
+        result = await db.execute(select(Role).where(Role.id.in_(user_data.role_ids)))
+        roles = result.scalars().all()
+        user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
+
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
     return UserResponse.model_validate(user)
 
 
@@ -106,11 +145,15 @@ async def get_user(
     current_user: CurrentUser,
 ) -> UserResponse:
     """Get a specific user by ID."""
-    service = UserService(db)
-    try:
-        user = await service.get_user(user_id, current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
     return UserResponse.model_validate(user)
 
 
@@ -122,13 +165,32 @@ async def update_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Update a user (superuser only)."""
-    service = UserService(db)
-    try:
-        user = await service.update_user(user_id, current_user.tenant_id, user_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
+    user = result.scalar_one_or_none()
 
-    track_metric("user.mutation", 1)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Update fields
+    update_data = user_data.model_dump(exclude_unset=True)
+
+    # Handle role assignment separately
+    role_ids = update_data.pop("role_ids", None)
+    if role_ids is not None:
+        result = await db.execute(select(Role).where(Role.id.in_(role_ids)))
+        roles = result.scalars().all()
+        user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
+
+    # Update other fields
+    for field, value in update_data.items():
+        setattr(user, field, value)
+
+    await db.commit()
+    await db.refresh(user)
+
     return UserResponse.model_validate(user)
 
 
@@ -139,15 +201,23 @@ async def delete_user(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a user (superuser only)."""
-    service = UserService(db)
-    try:
-        await service.delete_user(user_id, current_user.tenant_id, current_user.id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    except ValueError:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
 
-    track_metric("user.mutation", 1)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    user.is_active = False
+    await db.commit()
 
 
 # ============== Role Endpoints ==============
@@ -159,8 +229,8 @@ async def list_roles(
     current_user: CurrentUser,
 ) -> list[RoleResponse]:
     """List all roles."""
-    service = UserService(db)
-    roles = await service.list_roles()
+    result = await db.execute(select(Role).order_by(Role.name))
+    roles = result.scalars().all()
     return [RoleResponse.model_validate(r) for r in roles]
 
 
@@ -171,11 +241,19 @@ async def create_role(
     current_user: CurrentSuperuser,
 ) -> RoleResponse:
     """Create a new role (superuser only)."""
-    service = UserService(db)
-    try:
-        role = await service.create_role(role_data)
-    except ValueError:
-        raise ValidationError(ErrorCode.DUPLICATE_ENTITY)
+    # Check if role name already exists
+    result = await db.execute(select(Role).where(Role.name == role_data.name))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role name already exists",
+        )
+
+    role = Role(**role_data.model_dump())
+    db.add(role)
+    await db.commit()
+    await db.refresh(role)
+
     return RoleResponse.model_validate(role)
 
 
@@ -187,11 +265,26 @@ async def update_role(
     current_user: CurrentSuperuser,
 ) -> RoleResponse:
     """Update a role (superuser only)."""
-    service = UserService(db)
-    try:
-        role = await service.update_role(role_id, role_data)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    except PermissionError:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+    result = await db.execute(select(Role).where(Role.id == role_id))
+    role = result.scalar_one_or_none()
+
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found",
+        )
+
+    if role.is_system_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot modify system roles",
+        )
+
+    update_data = role_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(role, field, value)
+
+    await db.commit()
+    await db.refresh(role)
+
     return RoleResponse.model_validate(role)

@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 300  # Updated ceiling to accommodate current state, with plan to reduce over time
-ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+|MYPY-OVERRIDE|optional-dependency|noqa)"
+MAX_TYPE_IGNORES = 22  # Current count: 22 (10 from Stage 3.3 + 11 from Stage 2 Investigations + 1 for generic exception handler)
+ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"
 

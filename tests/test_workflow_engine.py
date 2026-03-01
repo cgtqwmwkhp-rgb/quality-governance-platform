@@ -24,7 +24,7 @@ from src.domain.models.workflow_rules import (
     TriggerEvent,
     WorkflowRule,
 )
-from src.domain.services.workflow_engine import ActionExecutor, ConditionEvaluator, RuleEvaluator, SLAService
+from src.services.workflow_engine import ActionExecutor, ConditionEvaluator, SLAService, WorkflowEngine
 
 
 class TestConditionEvaluator:
@@ -61,11 +61,7 @@ class TestConditionEvaluator:
 
     def test_in_operator(self):
         """Test in comparison for lists."""
-        conditions = {
-            "field": "priority",
-            "operator": "in",
-            "value": ["critical", "high"],
-        }
+        conditions = {"field": "priority", "operator": "in", "value": ["critical", "high"]}
 
         assert ConditionEvaluator.evaluate(conditions, {"priority": "critical"}) is True
         assert ConditionEvaluator.evaluate(conditions, {"priority": "high"}) is True
@@ -141,11 +137,7 @@ class TestConditionEvaluator:
                 {"field": "status", "operator": "equals", "value": "open"},
                 {
                     "or": [
-                        {
-                            "field": "priority",
-                            "operator": "equals",
-                            "value": "critical",
-                        },
+                        {"field": "priority", "operator": "equals", "value": "critical"},
                         {"field": "days_open", "operator": "greater_than", "value": 7},
                     ]
                 },
@@ -162,20 +154,13 @@ class TestConditionEvaluator:
 
         # Closed should fail
         assert (
-            ConditionEvaluator.evaluate(
-                conditions,
-                {"status": "closed", "priority": "critical", "days_open": 10},
-            )
+            ConditionEvaluator.evaluate(conditions, {"status": "closed", "priority": "critical", "days_open": 10})
             is False
         )
 
     def test_nested_field_access(self):
         """Test dot notation for nested fields."""
-        conditions = {
-            "field": "reporter.department",
-            "operator": "equals",
-            "value": "Safety",
-        }
+        conditions = {"field": "reporter.department", "operator": "equals", "value": "Safety"}
 
         assert ConditionEvaluator.evaluate(conditions, {"reporter": {"department": "Safety", "name": "John"}}) is True
         assert ConditionEvaluator.evaluate(conditions, {"reporter": {"department": "IT"}}) is False

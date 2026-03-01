@@ -5,32 +5,13 @@ Interactive conversational AI assistant for QHSE management.
 """
 
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.copilot import (
-    ActionDetailResponse,
-    AddKnowledgeResponse,
-    CloseSessionResponse,
-    ExecuteActionResponse,
-    SearchKnowledgeResponse,
-    SubmitFeedbackResponse,
-)
-from src.api.schemas.error_codes import ErrorCode
-from src.domain.exceptions import NotFoundError
-from src.domain.models.user import User
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -106,21 +87,18 @@ class SuggestedAction(BaseModel):
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(
     data: SessionCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
+    db: Session = Depends(get_db),
 ):
     """Create a new copilot conversation session."""
-    _span = tracer.start_span("create_copilot_session") if tracer else None
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id or 0 or 0
-    user_id = current_user.id
+    # TODO: Get from auth
+    tenant_id = 1
+    user_id = 1
 
-    track_metric("copilot.session_created")
-    track_metric("copilot.sessions_created", 1)
-    session = await service.create_session(
+    session = service.create_session(
         tenant_id=tenant_id,
         user_id=user_id,
         context_type=data.context_type,
@@ -129,68 +107,66 @@ async def create_session(
         current_page=data.current_page,
     )
 
-    if _span:
-        _span.end()
     return session
 
 
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
-async def get_active_session(db: DbSession, current_user: CurrentUser):
+async def get_active_session(db: Session = Depends(get_db)):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    user_id = current_user.id
+    # TODO: Get from auth
+    user_id = 1
 
-    session = await service.get_active_session(user_id)
+    session = service.get_active_session(user_id)
     return session
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: int, db: DbSession, current_user: CurrentUser):
+async def get_session(session_id: int, db: Session = Depends(get_db)):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    session = await service.get_session(session_id)
+    session = service.get_session(session_id)
 
     if not session:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Session not found")
 
     return session
 
 
-@router.delete("/sessions/{session_id}", response_model=CloseSessionResponse)
-async def close_session(session_id: int, db: DbSession, current_user: CurrentSuperuser):
+@router.delete("/sessions/{session_id}")
+async def close_session(session_id: int, db: Session = Depends(get_db)):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    await service.close_session(session_id)
+    service.close_session(session_id)
 
-    return CloseSessionResponse(status="closed")
+    return {"status": "closed"}
 
 
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
-    db: DbSession,
-    current_user: CurrentUser,
     limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
 
-    user_id = current_user.id
+    # TODO: Get from auth
+    user_id = 1
 
-    stmt = (
-        select(CopilotSession)
-        .where(CopilotSession.user_id == user_id)
+    sessions = (
+        db.query(CopilotSession)
+        .filter(CopilotSession.user_id == user_id)
         .order_by(CopilotSession.updated_at.desc())
         .limit(limit)
+        .all()
     )
-    result = await db.execute(stmt)
-    sessions = result.scalars().all()
 
     return sessions
 
@@ -204,15 +180,15 @@ async def list_sessions(
 async def send_message(
     session_id: int,
     data: MessageCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
+    db: Session = Depends(get_db),
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    user_id = current_user.id
+    # TODO: Get from auth
+    user_id = 1
 
     try:
         message = await service.send_message(
@@ -222,42 +198,41 @@ async def send_message(
         )
         return message
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 async def get_messages(
     session_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    messages = await service.get_session_messages(session_id, limit=limit)
+    messages = service.get_session_messages(session_id, limit=limit)
 
     return messages
 
 
-@router.post("/messages/{message_id}/feedback", response_model=SubmitFeedbackResponse)
+@router.post("/messages/{message_id}/feedback")
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("copilot:update"))],
+    db: Session = Depends(get_db),
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id or 0 or 0
-    user_id = current_user.id
+    # TODO: Get from auth
+    tenant_id = 1
+    user_id = 1
 
     try:
-        feedback = await service.submit_feedback(
+        feedback = service.submit_feedback(
             message_id=message_id,
             user_id=user_id,
             tenant_id=tenant_id,
@@ -265,9 +240,9 @@ async def submit_feedback(
             feedback_type=data.feedback_type,
             feedback_text=data.feedback_text,
         )
-        return SubmitFeedbackResponse(status="submitted", feedback_id=feedback.id)
+        return {"status": "submitted", "feedback_id": feedback.id}
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ============================================================================
@@ -275,8 +250,8 @@ async def submit_feedback(
 # ============================================================================
 
 
-@router.get("/actions", response_model=list[ActionDetailResponse])
-async def list_actions(current_user: CurrentUser, category: Optional[str] = None):
+@router.get("/actions", response_model=list[dict])
+async def list_actions(category: Optional[str] = None):
     """List available copilot actions."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
@@ -288,29 +263,30 @@ async def list_actions(current_user: CurrentUser, category: Optional[str] = None
     return actions
 
 
-@router.post("/actions/execute", response_model=ExecuteActionResponse)
+@router.post("/actions/execute")
 async def execute_action(
     data: ActionExecute,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
+    db: Session = Depends(get_db),
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
 
-    return ExecuteActionResponse(
-        status="executed",
-        action=data.action_name,
-        parameters=data.parameters,
-        result={"success": True},
-    )
+    # Execute the action
+    # This would actually perform the action
+
+    return {
+        "status": "executed",
+        "action": data.action_name,
+        "parameters": data.parameters,
+        "result": {"success": True},
+    }
 
 
 @router.get("/actions/suggest", response_model=list[SuggestedAction])
 async def suggest_actions(
-    current_user: CurrentUser,
     page: Optional[str] = None,
     context_type: Optional[str] = None,
     context_id: Optional[str] = None,
@@ -388,22 +364,22 @@ async def suggest_actions(
 # ============================================================================
 
 
-@router.get("/knowledge/search", response_model=list[SearchKnowledgeResponse])
+@router.get("/knowledge/search")
 async def search_knowledge(
-    db: DbSession,
-    current_user: CurrentUser,
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id or 0
+    # TODO: Get from auth
+    tenant_id = 1
 
-    results = await service.search_knowledge(
+    results = service.search_knowledge(
         query=query,
         tenant_id=tenant_id,
         category=category,
@@ -411,34 +387,34 @@ async def search_knowledge(
     )
 
     return [
-        SearchKnowledgeResponse(
-            id=r.id,
-            title=r.title,
-            content=r.content[:500],
-            category=r.category,
-            tags=r.tags,
-        )
+        {
+            "id": r.id,
+            "title": r.title,
+            "content": r.content[:500],
+            "category": r.category,
+            "tags": r.tags,
+        }
         for r in results
     ]
 
 
-@router.post("/knowledge", response_model=AddKnowledgeResponse)
+@router.post("/knowledge")
 async def add_knowledge(
     title: str,
     content: str,
     category: str,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("copilot:create"))],
     tags: Optional[list[str]] = None,
+    db: Session = Depends(get_db),
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    tenant_id = current_user.tenant_id or 0
+    # TODO: Get from auth
+    tenant_id = 1
 
-    knowledge = await service.add_knowledge(
+    knowledge = service.add_knowledge(
         title=title,
         content=content,
         category=category,
@@ -446,7 +422,7 @@ async def add_knowledge(
         tags=tags,
     )
 
-    return AddKnowledgeResponse(id=knowledge.id, title=knowledge.title)
+    return {"id": knowledge.id, "title": knowledge.title}
 
 
 # ============================================================================
@@ -476,36 +452,10 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optional[str] = Query(None)):
+async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat."""
     from src.domain.services.copilot_service import CopilotService
-    from src.infrastructure.database import get_db
-
-    if not token:
-        await websocket.close(code=4001, reason="Authentication required")
-        return
-    try:
-        from src.core.security import decode_token, is_token_revoked
-
-        payload = decode_token(token)
-        if not payload:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-
-        jti = payload.get("jti")
-        if not jti:
-            await websocket.close(code=4001, reason="Invalid token: missing jti")
-            return
-
-        async for db in get_db():
-            if await is_token_revoked(jti, db):
-                await websocket.close(code=4001, reason="Token has been revoked")
-                return
-
-        ws_user_id = int(payload.get("sub", 0))
-    except (WebSocketDisconnect, ConnectionError):
-        await websocket.close(code=4001, reason="Token validation failed")
-        return
+    from src.infrastructure.database import SessionLocal
 
     await manager.connect(websocket, session_id)
 
@@ -513,52 +463,54 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, token: Optio
         while True:
             data = await websocket.receive_json()
 
-            async for db in get_db():
-                try:
-                    service = CopilotService(db)
+            db = SessionLocal()
+            try:
+                service = CopilotService(db)
 
-                    if data.get("type") == "message":
-                        message = await service.send_message(
-                            session_id=session_id,
-                            content=data["content"],
-                            user_id=ws_user_id,
-                        )
+                # Handle different message types
+                if data.get("type") == "message":
+                    message = await service.send_message(
+                        session_id=session_id,
+                        content=data["content"],
+                        user_id=data.get("user_id", 1),
+                    )
 
-                        await manager.send_message(
-                            {
-                                "type": "response",
-                                "message": {
-                                    "id": message.id,
-                                    "role": message.role,
-                                    "content": message.content,
-                                    "content_type": message.content_type,
-                                    "action_type": message.action_type,
-                                    "action_data": message.action_data,
-                                    "created_at": message.created_at.isoformat(),
-                                },
+                    await manager.send_message(
+                        {
+                            "type": "response",
+                            "message": {
+                                "id": message.id,
+                                "role": message.role,
+                                "content": message.content,
+                                "content_type": message.content_type,
+                                "action_type": message.action_type,
+                                "action_data": message.action_data,
+                                "created_at": message.created_at.isoformat(),
                             },
-                            session_id,
-                        )
+                        },
+                        session_id,
+                    )
 
-                    elif data.get("type") == "typing":
-                        pass
+                elif data.get("type") == "typing":
+                    # User is typing indicator
+                    pass
 
-                    elif data.get("type") == "feedback":
-                        await service.submit_feedback(
-                            message_id=data["message_id"],
-                            user_id=ws_user_id,
-                            tenant_id=int(payload.get("tenant_id", 0)),
-                            rating=data["rating"],
-                            feedback_type=data.get("feedback_type", "other"),
-                        )
+                elif data.get("type") == "feedback":
+                    service.submit_feedback(
+                        message_id=data["message_id"],
+                        user_id=data.get("user_id", 1),
+                        tenant_id=1,
+                        rating=data["rating"],
+                        feedback_type=data.get("feedback_type", "other"),
+                    )
 
-                        await manager.send_message(
-                            {"type": "feedback_received"},
-                            session_id,
-                        )
+                    await manager.send_message(
+                        {"type": "feedback_received"},
+                        session_id,
+                    )
 
-                finally:
-                    break
+            finally:
+                db.close()
 
     except WebSocketDisconnect:
         manager.disconnect(session_id)

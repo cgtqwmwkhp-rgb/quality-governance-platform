@@ -19,7 +19,7 @@ class TestInvestigationMappingContract:
     async def test_near_miss_severity_maps_to_level(self):
         """Test Near Miss severity maps to correct investigation level."""
         from src.domain.models.investigation import InvestigationLevel
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         # LOW severity → LOW level
         assert InvestigationService.NEAR_MISS_SEVERITY_MAP["low"] == InvestigationLevel.LOW
@@ -33,7 +33,7 @@ class TestInvestigationMappingContract:
     async def test_rta_severity_maps_to_level(self):
         """Test RTA severity maps to correct investigation level."""
         from src.domain.models.investigation import InvestigationLevel
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         # near_miss → LOW
         assert InvestigationService.RTA_SEVERITY_MAP["near_miss"] == InvestigationLevel.LOW
@@ -49,7 +49,7 @@ class TestInvestigationMappingContract:
     async def test_complaint_priority_maps_to_level(self):
         """Test Complaint priority maps to correct investigation level."""
         from src.domain.models.investigation import InvestigationLevel
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         assert InvestigationService.COMPLAINT_PRIORITY_MAP["LOW"] == InvestigationLevel.LOW
         assert InvestigationService.COMPLAINT_PRIORITY_MAP["MEDIUM"] == InvestigationLevel.MEDIUM
@@ -58,7 +58,7 @@ class TestInvestigationMappingContract:
 
     async def test_mapping_reason_codes_defined(self):
         """Test all required mapping reason codes are defined."""
-        from src.domain.services.investigation_service import MappingReasonCode
+        from src.services.investigation_service import MappingReasonCode
 
         expected_codes = [
             "SUCCESS",
@@ -81,7 +81,7 @@ class TestCustomerPackRedactionRules:
     async def test_external_pack_redacts_identity_fields(self):
         """Test EXTERNAL_CUSTOMER packs redact identity fields by default."""
         from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         # Create a mock investigation
         class MockInvestigation:
@@ -129,7 +129,7 @@ class TestCustomerPackRedactionRules:
     async def test_internal_pack_preserves_identity_fields(self):
         """Test INTERNAL_CUSTOMER packs preserve identity fields."""
         from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         class MockInvestigation:
             reference_number = "INV-2026-0002"
@@ -168,7 +168,7 @@ class TestCustomerPackRedactionRules:
         # Comments are stored in investigation_comments table, not in investigation.data
         # The pack generation only uses investigation.data, so comments are automatically excluded
         from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         class MockInvestigation:
             reference_number = "INV-2026-0003"
@@ -179,10 +179,7 @@ class TestCustomerPackRedactionRules:
 
         investigation = MockInvestigation()
 
-        for audience in [
-            CustomerPackAudience.INTERNAL_CUSTOMER,
-            CustomerPackAudience.EXTERNAL_CUSTOMER,
-        ]:
+        for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
             content, _, _ = InvestigationService.generate_customer_pack(
                 investigation=investigation,
                 audience=audience,
@@ -203,7 +200,7 @@ class TestEvidenceAssetVisibilityMatrix:
         """Test INTERNAL_ONLY assets are excluded from all customer packs."""
         from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
         from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         class MockAsset:
             id = 1
@@ -224,10 +221,7 @@ class TestEvidenceAssetVisibilityMatrix:
         assets = [MockAsset()]
 
         # Test both audiences
-        for audience in [
-            CustomerPackAudience.INTERNAL_CUSTOMER,
-            CustomerPackAudience.EXTERNAL_CUSTOMER,
-        ]:
+        for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
             _, _, included_assets = InvestigationService.generate_customer_pack(
                 investigation=investigation,
                 audience=audience,
@@ -243,7 +237,7 @@ class TestEvidenceAssetVisibilityMatrix:
         """Test INTERNAL_CUSTOMER assets only in internal packs."""
         from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
         from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         class MockAsset:
             id = 2
@@ -286,7 +280,7 @@ class TestEvidenceAssetVisibilityMatrix:
         """Test EXTERNAL_ALLOWED assets in both packs."""
         from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
         from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
-        from src.domain.services.investigation_service import InvestigationService
+        from src.services.investigation_service import InvestigationService
 
         class MockAsset:
             id = 3
@@ -306,10 +300,7 @@ class TestEvidenceAssetVisibilityMatrix:
         investigation = MockInvestigation()
         assets = [MockAsset()]
 
-        for audience in [
-            CustomerPackAudience.INTERNAL_CUSTOMER,
-            CustomerPackAudience.EXTERNAL_CUSTOMER,
-        ]:
+        for audience in [CustomerPackAudience.INTERNAL_CUSTOMER, CustomerPackAudience.EXTERNAL_CUSTOMER]:
             _, _, included_assets = InvestigationService.generate_customer_pack(
                 investigation=investigation,
                 audience=audience,

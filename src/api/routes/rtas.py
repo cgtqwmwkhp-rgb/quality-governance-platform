@@ -1,15 +1,13 @@
-"""Road Traffic Collision API routes — thin controller layer."""
+"""Road Traffic Collision API routes."""
 
-import logging
-from typing import Annotated, Optional
+from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.investigation import InvestigationRunListResponse, InvestigationRunResponse
 from src.api.schemas.rta import (
     RTAActionCreate,
     RTAActionListResponse,
@@ -20,20 +18,8 @@ from src.api.schemas.rta import (
     RTAResponse,
     RTAUpdate,
 )
-from src.api.utils.pagination import PaginationParams
-from src.domain.exceptions import AuthorizationError, NotFoundError
-from src.domain.models.user import User
+from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.rta_service import RTAService
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Road Traffic Collisions"])
 
@@ -42,49 +28,86 @@ router = APIRouter(tags=["Road Traffic Collisions"])
 async def create_rta(
     rta_in: RTACreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("rta:create"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ):
     """Create a new Road Traffic Collision (RTA)."""
-    _span = tracer.start_span("create_rta") if tracer else None
-    service = RTAService(db)
-    rta = await service.create_rta(
-        rta_data=rta_in,
+    # Generate reference number (format: RTA-YYYY-NNNN)
+    year = datetime.now(timezone.utc).year
+
+    # Count existing RTAs for this year to generate sequence
+    query = select(func.count()).select_from(RoadTrafficCollision)
+    result = await db.execute(query)
+    count = result.scalar() or 0
+    ref_number = f"RTA-{year}-{count + 1:04d}"
+
+    rta = RoadTrafficCollision(
+        **rta_in.model_dump(),
+        reference_number=ref_number,
+        created_by_id=current_user.id,
+        updated_by_id=current_user.id,
+    )
+    db.add(rta)
+    await db.flush()
+
+    await record_audit_event(
+        db=db,
+        event_type="rta.created",
+        entity_type="rta",
+        entity_id=str(rta.id),
+        action="create",
+        description=f"RTA {rta.reference_number} created",
         user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
         request_id=request_id,
     )
-    if _span:
-        _span.end()
+
+    await db.commit()
+    await db.refresh(rta)
     return rta
 
 
 @router.get("/", response_model=RTAListResponse)
 async def list_rtas(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
     request_id: str = Depends(get_request_id),
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     severity: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
 ):
-    """List RTAs with deterministic ordering and pagination."""
-    service = RTAService(db)
+    """List RTAs with deterministic ordering and pagination.
 
+    Requires authentication. Users can only filter by their own email
+    unless they have admin permissions.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # SECURITY FIX: If filtering by email, enforce that users can only access their own data
+    # unless they have admin/view-all permissions
     if reporter_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = current_user.has_permission("rta:view_all") if hasattr(current_user, "has_permission") else False
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not service.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
-            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
+        if not has_view_all and not is_superuser:
+            # Non-admin users can only filter by their own email
+            if user_email and reporter_email.lower() != user_email.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own RTAs",
+                )
 
+        # AUDIT: Log email filter usage for security monitoring
+        # Note: We log the filter type but NOT the raw email (privacy compliance)
         await record_audit_event(
             db=db,
             event_type="rta.list_filtered",
             entity_type="rta",
-            entity_id="*",
+            entity_id="*",  # Wildcard - listing operation
             action="list",
             description="RTA list accessed with email filter",
             payload={
@@ -98,47 +121,55 @@ async def list_rtas(
         )
 
     try:
-        paginated = await service.list_rtas(
-            tenant_id=current_user.tenant_id,
-            params=params,
-            severity=severity,
-            status_filter=status_filter,
-            reporter_email=reporter_email,
-        )
+        query = select(RoadTrafficCollision)
+
+        # Apply filters
+        if severity:
+            query = query.where(RoadTrafficCollision.severity == severity)
+        if status_filter:
+            query = query.where(RoadTrafficCollision.status == status_filter)
+        if reporter_email:
+            query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
+
+        # Deterministic ordering: created_at DESC, id ASC
+        query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())
+
+        # Total count
+        count_query = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_query)
+        total = count_result.scalar() or 0
+
+        # Calculate total pages
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+        # Pagination
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        items = result.scalars().all()
+
         return {
-            "items": paginated.items,
-            "total": paginated.total,
-            "page": paginated.page,
-            "page_size": paginated.page_size,
-            "pages": paginated.pages,
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
         }
-    except SQLAlchemyError as e:
+    except Exception as e:
         error_str = str(e).lower()
-        logger.exception(
-            "Error listing RTAs [request_id=%s]: %s",
-            request_id,
-            type(e).__name__,
-        )
-        column_errors = [
-            "reporter_email",
-            "column",
-            "does not exist",
-            "unknown column",
-            "programmingerror",
-            "relation",
-        ]
-        if any(err in error_str for err in column_errors):
-            logger.warning(
-                "Database column missing - migration may be pending [request_id=%s]",
-                request_id,
-            )
+        logger.error(f"Error listing RTAs: {e}", exc_info=True)
+
+        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        is_column_error = any(err in error_str for err in column_errors)
+
+        if is_column_error:
+            logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=ErrorCode.INTERNAL_ERROR,
+                detail="Database migration pending. Please wait for migrations to complete.",
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ErrorCode.INTERNAL_ERROR,
+            detail=f"Error listing RTAs: {type(e).__name__}: {str(e)[:200]}",
         )
 
 
@@ -149,11 +180,13 @@ async def get_rta(
     current_user: CurrentUser,
 ):
     """Get an RTA by ID."""
-    service = RTAService(db)
-    try:
-        return await service.get_rta(rta_id, current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
+        )
+    return rta
 
 
 @router.patch("/{rta_id}", response_model=RTAResponse)
@@ -161,41 +194,68 @@ async def update_rta(
     rta_id: int,
     rta_in: RTAUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("rta:update"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
-    service = RTAService(db)
-    try:
-        return await service.update_rta(
-            rta_id,
-            rta_in,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    update_data = rta_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(rta, field, value)
+
+    rta.updated_by_id = current_user.id
+
+    await record_audit_event(
+        db=db,
+        event_type="rta.updated",
+        entity_type="rta",
+        entity_id=str(rta.id),
+        action="update",
+        description=f"RTA {rta.reference_number} updated",
+        payload=update_data,
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(rta)
+    return rta
 
 
 @router.delete("/{rta_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_rta(
     rta_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    service = RTAService(db)
-    try:
-        await service.delete_rta(
-            rta_id,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    await record_audit_event(
+        db=db,
+        event_type="rta.deleted",
+        entity_type="rta",
+        entity_id=str(rta.id),
+        action="delete",
+        description=f"RTA {rta.reference_number} deleted",
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.delete(rta)
+    await db.commit()
 
 
 # RTA Actions endpoints
@@ -206,21 +266,49 @@ async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("rta:create"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ):
     """Create a new action for an RTA."""
-    service = RTAService(db)
-    try:
-        return await service.create_rta_action(
-            rta_id,
-            action_in,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    # Verify RTA exists
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    # Generate reference number (format: RTAACT-YYYY-NNNN)
+    year = datetime.now(timezone.utc).year
+    query = select(func.count()).select_from(RTAAction)
+    result = await db.execute(query)
+    count = result.scalar() or 0
+    ref_number = f"RTAACT-{year}-{count + 1:04d}"
+
+    action = RTAAction(
+        **action_in.model_dump(),
+        rta_id=rta_id,
+        reference_number=ref_number,
+        created_by_id=current_user.id,
+        updated_by_id=current_user.id,
+    )
+    db.add(action)
+    await db.flush()
+
+    await record_audit_event(
+        db=db,
+        event_type="rta_action.created",
+        entity_type="rta_action",
+        entity_id=str(action.id),
+        action="create",
+        description=f"RTA Action {action.reference_number} created for RTA {rta.reference_number}",
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(action)
+    return action
 
 
 @router.get("/{rta_id}/actions", response_model=RTAActionListResponse)
@@ -228,20 +316,42 @@ async def list_rta_actions(
     rta_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
 ):
     """List actions for an RTA with deterministic ordering and pagination."""
-    service = RTAService(db)
-    try:
-        paginated = await service.list_rta_actions(rta_id, current_user.tenant_id, params)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    # Verify RTA exists
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
+        )
+
+    query = select(RTAAction).where(RTAAction.rta_id == rta_id)
+
+    # Deterministic ordering: created_at DESC, id ASC
+    query = query.order_by(RTAAction.created_at.desc(), RTAAction.id.asc())
+
+    # Total count
+    count_query = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+
+    # Calculate total pages
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    # Pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    items = result.scalars().all()
+
     return {
-        "items": paginated.items,
-        "total": paginated.total,
-        "page": paginated.page,
-        "page_size": paginated.page_size,
-        "pages": paginated.pages,
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
     }
 
 
@@ -251,22 +361,47 @@ async def update_rta_action(
     action_id: int,
     action_in: RTAActionUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("rta:update"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ):
     """Update an RTA action."""
-    service = RTAService(db)
-    try:
-        return await service.update_rta_action(
-            rta_id,
-            action_id,
-            action_in,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    # Verify RTA exists
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    # Get action
+    action = await db.get(RTAAction, action_id)
+    if not action or action.rta_id != rta_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Action with id {action_id} not found for RTA {rta_id}",
+        )
+
+    update_data = action_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(action, field, value)
+
+    action.updated_by_id = current_user.id
+
+    await record_audit_event(
+        db=db,
+        event_type="rta_action.updated",
+        entity_type="rta_action",
+        entity_id=str(action.id),
+        action="update",
+        description=f"RTA Action {action.reference_number} updated",
+        payload=update_data,
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(action)
+    return action
 
 
 @router.delete("/{rta_id}/actions/{action_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -274,40 +409,102 @@ async def delete_rta_action(
     rta_id: int,
     action_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA action."""
-    service = RTAService(db)
-    try:
-        await service.delete_rta_action(
-            rta_id,
-            action_id,
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            request_id=request_id,
+    # Verify RTA exists
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
         )
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+
+    # Get action
+    action = await db.get(RTAAction, action_id)
+    if not action or action.rta_id != rta_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Action with id {action_id} not found for RTA {rta_id}",
+        )
+
+    await record_audit_event(
+        db=db,
+        event_type="rta_action.deleted",
+        entity_type="rta_action",
+        entity_id=str(action.id),
+        action="delete",
+        description=f"RTA Action {action.reference_number} deleted",
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.delete(action)
+    await db.commit()
 
 
-@router.get("/{rta_id}/investigations", response_model=InvestigationRunListResponse)
+@router.get("/{rta_id}/investigations", response_model=dict)
 async def list_rta_investigations(
     rta_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
 ):
-    """List investigations for a specific RTA (paginated)."""
-    service = RTAService(db)
-    try:
-        paginated = await service.list_rta_investigations(rta_id, current_user.tenant_id, params)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    """
+    List investigations for a specific RTA (paginated).
+
+    Requires authentication.
+    Returns investigations assigned to this RTA with pagination.
+    Deterministic ordering: created_at DESC, id ASC.
+    """
+    from math import ceil
+
+    from src.api.schemas.investigation import InvestigationRunResponse
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun
+
+    # Verify RTA exists
+    rta = await db.get(RoadTrafficCollision, rta_id)
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with ID {rta_id} not found",
+        )
+
+    # Get total count
+    count_query = (
+        select(func.count())
+        .select_from(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            InvestigationRun.assigned_entity_id == rta_id,
+        )
+    )
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Calculate total pages
+    total_pages = ceil(total / page_size) if total > 0 else 1
+
+    # Get paginated results
+    query = (
+        select(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            InvestigationRun.assigned_entity_id == rta_id,
+        )
+        .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await db.execute(query)
+    investigations = result.scalars().all()
+
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in paginated.items],
-        "total": paginated.total,
-        "page": paginated.page,
-        "page_size": paginated.page_size,
-        "pages": paginated.pages,
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
     }

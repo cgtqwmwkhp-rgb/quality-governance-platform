@@ -511,34 +511,18 @@ class TestFormFieldTypesE2E:
                 "label": "Select",
                 "options": [{"value": "a", "label": "A"}],
             },
-            {
-                "name": "multi_select_field",
-                "field_type": "multi_select",
-                "label": "Multi Select",
-            },
+            {"name": "multi_select_field", "field_type": "multi_select", "label": "Multi Select"},
             {"name": "radio_field", "field_type": "radio", "label": "Radio"},
             {"name": "checkbox_field", "field_type": "checkbox", "label": "Checkbox"},
             {"name": "toggle_field", "field_type": "toggle", "label": "Toggle"},
             {"name": "file_field", "field_type": "file", "label": "File Upload"},
             {"name": "image_field", "field_type": "image", "label": "Image Upload"},
-            {
-                "name": "signature_field",
-                "field_type": "signature",
-                "label": "Signature",
-            },
+            {"name": "signature_field", "field_type": "signature", "label": "Signature"},
             {"name": "location_field", "field_type": "location", "label": "Location"},
             {"name": "body_map_field", "field_type": "body_map", "label": "Body Map"},
             {"name": "rating_field", "field_type": "rating", "label": "Rating"},
-            {
-                "name": "heading_field",
-                "field_type": "heading",
-                "label": "Section Heading",
-            },
-            {
-                "name": "paragraph_field",
-                "field_type": "paragraph",
-                "label": "Info text",
-            },
+            {"name": "heading_field", "field_type": "heading", "label": "Section Heading"},
+            {"name": "paragraph_field", "field_type": "paragraph", "label": "Info text"},
             {"name": "divider_field", "field_type": "divider", "label": "---"},
         ]
 

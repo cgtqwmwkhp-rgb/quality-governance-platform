@@ -48,8 +48,7 @@ class PolicyAcknowledgmentRequirement(Base, TimestampMixin):
 
     # Requirement details
     acknowledgment_type: Mapped[AcknowledgmentType] = mapped_column(
-        SQLEnum(AcknowledgmentType, native_enum=False),
-        default=AcknowledgmentType.READ_ONLY,
+        SQLEnum(AcknowledgmentType, native_enum=False), default=AcknowledgmentType.READ_ONLY
     )
 
     # Who needs to acknowledge
@@ -77,9 +76,7 @@ class PolicyAcknowledgmentRequirement(Base, TimestampMixin):
 
     # Relationships
     acknowledgments: Mapped[List["PolicyAcknowledgment"]] = relationship(
-        "PolicyAcknowledgment",
-        back_populates="requirement",
-        cascade="all, delete-orphan",
+        "PolicyAcknowledgment", back_populates="requirement", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -96,9 +93,7 @@ class PolicyAcknowledgment(Base, TimestampMixin):
 
     # Links
     requirement_id: Mapped[int] = mapped_column(
-        ForeignKey("policy_acknowledgment_requirements.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("policy_acknowledgment_requirements.id", ondelete="CASCADE"), nullable=False, index=True
     )
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -108,8 +103,7 @@ class PolicyAcknowledgment(Base, TimestampMixin):
 
     # Status
     status: Mapped[AcknowledgmentStatus] = mapped_column(
-        SQLEnum(AcknowledgmentStatus, native_enum=False),
-        default=AcknowledgmentStatus.PENDING,
+        SQLEnum(AcknowledgmentStatus, native_enum=False), default=AcknowledgmentStatus.PENDING
     )
 
     # Timing

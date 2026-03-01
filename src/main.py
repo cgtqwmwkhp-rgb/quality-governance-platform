@@ -1,61 +1,29 @@
 """Main FastAPI application entry point."""
 
-import asyncio
 import logging
-import secrets
-import time
+import os as _os
+import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
-from src.api.middleware import register_exception_handlers
-from src.api.middleware.idempotency import IdempotencyMiddleware
-from src.api.middleware.json_depth import JsonDepthMiddleware
+from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
-from src.infrastructure.monitoring.azure_monitor import setup_telemetry
-
-
-class APIVersionMiddleware(BaseHTTPMiddleware):
-    """Enforce API versioning and advertise current version."""
-
-    CURRENT_VERSION = "1.0"
-    SUPPORTED_VERSIONS = {"v1", "1.0"}
-
-    async def dispatch(self, request: Request, call_next):
-        accept_version = request.headers.get("Accept-Version")
-        if accept_version and accept_version not in self.SUPPORTED_VERSIONS:
-            return JSONResponse(
-                status_code=406,
-                content={
-                    "detail": f"API version '{accept_version}' is not supported. "
-                    f"Current version: {self.CURRENT_VERSION}. "
-                    "Use Accept-Version: v1 or omit the header.",
-                    "supported_versions": sorted(self.SUPPORTED_VERSIONS),
-                    "deprecated": True,
-                },
-                headers={"X-API-Version": self.CURRENT_VERSION},
-            )
-
-        response = await call_next(request)
-        response.headers["X-API-Version"] = self.CURRENT_VERSION
-        return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
     async def dispatch(self, request: Request, call_next):
-        nonce = secrets.token_urlsafe(16)
-        request.state.csp_nonce = nonce
-
         response: Response = await call_next(request)
 
         # Security headers
@@ -65,20 +33,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        response.headers["Content-Security-Policy"] = (
-            f"default-src 'self'; "
-            f"script-src 'self' 'nonce-{nonce}'; "
-            f"style-src 'self' 'nonce-{nonce}'; "
-            f"img-src 'self' data: https:; "
-            f"font-src 'self'; "
-            f"connect-src 'self' https://*.azurestaticapps.net; "
-            f"frame-ancestors 'none'; "
-            f"report-uri /api/v1/telemetry/csp-report; "
-            f"report-to csp-endpoint"
-        )
-        response.headers["Report-To"] = (
-            '{"group":"csp-endpoint","max_age":86400,' '"endpoints":[{"url":"/api/v1/telemetry/csp-report"}]}'
-        )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
@@ -119,32 +73,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.is_development:
         await init_db()
 
-    from src.infrastructure.cache.redis_cache import warmup_cache
-
-    await warmup_cache()
-
-    # Seed compliance automation default data if tables are empty
-    try:
-        from src.domain.services.compliance_automation_service import compliance_automation_service
-        from src.infrastructure.database import async_session_maker
-
-        async with async_session_maker() as session:
-            await compliance_automation_service.seed_default_data(session)
-            await session.commit()
-    except Exception as e:
-        logger.warning(f"Compliance automation seed skipped: {e}")
-
-    # Seed IMS module data (standards, ISO 27001 controls, UVDB, Planet Mark)
-    try:
-        from src.domain.services.ims_seed_service import seed_all_ims_modules
-        from src.infrastructure.database import async_session_maker as _ims_sm
-
-        async with _ims_sm() as ims_session:
-            await seed_all_ims_modules(ims_session)
-            await ims_session.commit()
-    except Exception as e:
-        logger.warning(f"IMS module seed skipped: {e}")
-
     # Pre-warm OpenAPI schema generation for fast first request
     # This avoids cold-start latency when /openapi.json is first accessed
     # FastAPI caches the schema internally after first generation
@@ -163,55 +91,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             extra={"error": str(e)},
         )
 
-    # Track in-flight requests for graceful shutdown
-    app.state.inflight = 0
-    app.state.shutting_down = False
-
     yield
-
-    # --- Graceful shutdown ---
-    logger.info("Shutdown signal received – draining in-flight requests")
-    app.state.shutting_down = True
-
-    # Wait up to 30s for in-flight requests to complete
-    shutdown_deadline = 30.0
-    poll_interval = 0.25
-    waited = 0.0
-    while getattr(app.state, "inflight", 0) > 0 and waited < shutdown_deadline:
-        await asyncio.sleep(poll_interval)
-        waited += poll_interval
-    if waited >= shutdown_deadline:
-        logger.warning(
-            "Shutdown timeout reached with %d in-flight requests still pending",
-            getattr(app.state, "inflight", 0),
-        )
-
-    # Close database connections
+    # Shutdown
     await close_db()
-
-    # Close Redis connections
-    try:
-        from src.infrastructure.cache.redis_cache import close_redis
-
-        await close_redis()
-    except Exception:
-        logger.debug("Redis close skipped (not available or already closed)")
-
-    # Cancel background tasks
-    for task in asyncio.all_tasks():
-        if task is not asyncio.current_task() and not task.done():
-            task.cancel()
-
-    logger.info("Graceful shutdown complete")
 
 
 def configure_logging():
-    """Configure structured JSON logging with correlation context."""
-    from src.infrastructure.logging import configure_structured_logging
+    """Configure structured JSON logging."""
+    logger = logging.getLogger()
+    logger.setLevel(settings.log_level)
 
-    log_dir = getattr(settings, "log_dir", None)
-    configure_structured_logging(level=settings.log_level, log_dir=log_dir)
-    logging.getLogger(__name__).info("Logging configured successfully", extra={"app_name": settings.app_name})
+    if logger.handlers:
+        logger.handlers = []
+
+    json_handler = logging.StreamHandler(sys.stdout)
+    formatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(levelname)s %(name)s %(module)s %(funcName)s %(lineno)d %(message)s"
+    )
+    json_handler.setFormatter(formatter)
+    logger.addHandler(json_handler)
+
+    uvicorn_logger = logging.getLogger("uvicorn")
+    uvicorn_logger.handlers = []
+    uvicorn_logger.addHandler(json_handler)
+    uvicorn_logger.setLevel(settings.log_level)
+
+    uvicorn_access_logger = logging.getLogger("uvicorn.access")
+    uvicorn_access_logger.handlers = []
+    uvicorn_access_logger.addHandler(json_handler)
+    uvicorn_access_logger.setLevel(settings.log_level)
+
+    logger.info("Logging configured successfully", extra={"app_name": settings.app_name})
 
 
 def create_application() -> FastAPI:
@@ -224,7 +134,7 @@ def create_application() -> FastAPI:
         docs_url="/docs",  # Always enable API docs
         redoc_url="/redoc",
         openapi_url="/openapi.json",
-        redirect_slashes=False,
+        redirect_slashes=False,  # Disabled to prevent HTTP redirects behind HTTPS proxy
         lifespan=lifespan,
         openapi_tags=[
             {"name": "Authentication", "description": "Authentication, authorization, and session management"},
@@ -255,27 +165,6 @@ def create_application() -> FastAPI:
         ],
     )
 
-    # Sentry error tracking (conditional on DSN being configured)
-    if settings.sentry_dsn:
-        import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn,
-            environment=settings.app_env,
-            traces_sample_rate=0.1,
-            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
-        )
-
-    # Initialize OpenTelemetry instrumentation
-    setup_telemetry(app)
-
-    # SLO metrics middleware (outermost to capture full latency)
-    from src.api.routes.slo import SLOMetricsMiddleware
-
-    app.add_middleware(SLOMetricsMiddleware)
-
     # Add Request State Middleware (must be first for request_id propagation)
     app.add_middleware(RequestStateMiddleware)
 
@@ -283,32 +172,11 @@ def create_application() -> FastAPI:
     # Must be early in stack to block writes before they reach handlers
     app.add_middleware(UATSafetyMiddleware)
 
-    # Add JSON Depth Limiting Middleware (reject deeply nested payloads)
-    app.add_middleware(JsonDepthMiddleware)
-
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Add API Version Middleware (tracks version header for future migration)
-    app.add_middleware(APIVersionMiddleware)
-
-    # Add Tenant Context Middleware (sets app.current_tenant_id for RLS)
-    # Must be after auth sets request.state.user / request.state.tenant_id
-    from src.infrastructure.middleware.tenant_context import TenantContextMiddleware
-
-    app.add_middleware(TenantContextMiddleware)
-
-    # Add Audit Logging Middleware (logs all mutating requests)
-    # Must be before rate limit middleware to capture rate-limited requests too
-    from src.api.middleware.audit_middleware import AuditLoggingMiddleware
-
-    app.add_middleware(AuditLoggingMiddleware)
-
     # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
     app.add_middleware(RateLimitMiddleware)
-
-    # Add Idempotency Middleware (handles Idempotency-Key header for POST requests)
-    app.add_middleware(IdempotencyMiddleware)
 
     # Configure CORS - explicit allowlist + regex for staging/preview
     # Production origins are explicit in cors_origins for security
@@ -323,16 +191,13 @@ def create_application() -> FastAPI:
             "Authorization",
             "Content-Type",
             "X-Request-Id",
-            "X-API-Version",
             "X-UAT-Write-Enable",
             "X-UAT-Issue-Id",
             "X-UAT-Owner",
             "X-UAT-Expiry",
-            "Idempotency-Key",
         ],
         expose_headers=[
             "X-Request-Id",
-            "X-API-Version",
             "X-RateLimit-Limit",
             "X-RateLimit-Remaining",
             "X-RateLimit-Reset",
@@ -341,8 +206,10 @@ def create_application() -> FastAPI:
         max_age=86400,  # Cache preflight for 24 hours
     )
 
-    # Register all exception handlers (DomainError, HTTPException, validation, generic)
-    register_exception_handlers(app)
+    # Register exception handlers (all include CORS fallback headers)
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
+    app.add_exception_handler(Exception, generic_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 Catch-all for 500s with CORS
 
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")
@@ -354,17 +221,16 @@ app = create_application()
 
 
 @app.get("/", tags=["Root"])
-async def root(request: Request):
+async def root():
     """Root endpoint: Provides basic API information and links."""
     from fastapi.responses import HTMLResponse
 
-    nonce = getattr(request.state, "csp_nonce", "")
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>{settings.app_name}</title>
-        <style nonce="{nonce}">
+        <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
                 max-width: 800px;
@@ -424,13 +290,6 @@ async def root(request: Request):
                 font-size: 12px;
                 font-weight: 600;
             }}
-            .footer {{
-                margin-top: 40px;
-                padding-top: 20px;
-                border-top: 1px solid #eee;
-                color: #7f8c8d;
-                font-size: 14px;
-            }}
         </style>
     </head>
     <body>
@@ -470,7 +329,7 @@ async def root(request: Request):
                 </div>
             </div>
 
-            <div class="footer">
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 14px;">
                 <strong>Modules:</strong> Standards Library, Audits & Inspections, Risk Management, Incidents, Root Cause Analysis, Complaints, Policy Library
             </div>
         </div>
@@ -495,9 +354,8 @@ async def health_check(request: Request) -> dict:
     }
 
 
-_BUILD_SHA = settings.build_sha
-_BUILD_TIME = settings.build_time
-_STARTUP_TIME = time.time()
+_BUILD_SHA = _os.environ.get("BUILD_SHA", "dev")
+_BUILD_TIME = _os.environ.get("BUILD_TIME", "local")
 
 
 @app.get("/api/v1/meta/version", tags=["Meta"])
@@ -525,184 +383,42 @@ async def liveness_check(request: Request) -> dict:
     }
 
 
-async def _check_database() -> str:
+@app.get("/readyz", tags=["Health"])
+async def readiness_check(request: Request):
+    """Readiness probe: Check if application is ready to accept traffic.
+
+    Checks database connectivity. Returns 200 OK if ready, 503 if not ready.
+    Used by load balancers to determine if traffic should be routed to this instance.
+
+    Per ADR-0003: Readiness Probe Database Check
+    """
+    from fastapi.responses import JSONResponse
     from sqlalchemy import text
 
     from src.infrastructure.database import async_session_maker
 
+    request_id = getattr(request.state, "request_id", "N/A")
+    logger = logging.getLogger(__name__)
+
     try:
+        # Ping database with a simple query
         async with async_session_maker() as session:
             await session.execute(text("SELECT 1"))
-        return "healthy"
-    except Exception:
-        return "unhealthy"
 
-
-async def _check_redis() -> str:
-    try:
-        import redis.asyncio as aioredis
-
-        r = aioredis.from_url(settings.redis_url)
-        await r.ping()
-        await r.aclose()
-        return "healthy"
-    except Exception:
-        return "unavailable"
-
-
-def _check_celery() -> str:
-    celery_url = settings.celery_broker_url or settings.redis_url
-    if not celery_url:
-        return "not_configured"
-    try:
-        from src.infrastructure.tasks.celery_app import celery_app
-
-        inspect = celery_app.control.inspect(timeout=2.0)
-        active = inspect.active()
-        return "ok" if active else "no_workers"
-    except Exception as e:
-        return f"error: {str(e)[:100]}"
-
-
-def _check_azure_storage() -> str:
-    storage_conn = settings.azure_storage_connection_string or None
-    if not storage_conn:
-        return "not_configured"
-    try:
-        from azure.storage.blob import BlobServiceClient
-
-        blob_client = BlobServiceClient.from_connection_string(storage_conn)
-        blob_client.get_account_information()
-        return "ok"
-    except ImportError:
-        return "sdk_not_installed"
-    except Exception as e:
-        return f"error: {str(e)[:100]}"
-
-
-def _collect_circuit_breaker_health() -> list[dict]:
-    result: list[dict] = []
-    modules = [
-        ("src.domain.services.email_service", "_email_circuit"),
-        ("src.domain.services.sms_service", "_sms_circuit"),
-        ("src.domain.services.document_ai_service", "_ai_circuit"),
-        ("src.domain.services.ai_models", "_ai_models_circuit"),
-    ]
-    for mod_path, attr_name in modules:
-        try:
-            import importlib
-
-            mod = importlib.import_module(mod_path)
-            circuit = getattr(mod, attr_name)
-            result.append(circuit.get_health())
-        except Exception:
-            pass
-    return result
-
-
-def _check_disk_space() -> dict[str, object]:
-    """Return disk free space info; warn if < 1 GB free."""
-    import shutil
-
-    try:
-        usage = shutil.disk_usage("/")
-        free_gb = usage.free / (1024**3)
+        logger.info("Readiness check passed", extra={"request_id": request_id})
         return {
-            "status": "ok" if free_gb >= 1.0 else "warning",
-            "free_gb": round(free_gb, 2),
-            "total_gb": round(usage.total / (1024**3), 2),
-            "used_pct": round(usage.used / usage.total * 100, 1),
+            "status": "ready",
+            "database": "connected",
+            "request_id": request_id,
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)[:120]}
-
-
-def _check_memory() -> dict[str, object]:
-    """Return process memory info; warn if system memory usage > 90%."""
-    import os
-
-    try:
-        import psutil
-
-        vm = psutil.virtual_memory()
-        process = psutil.Process(os.getpid())
-        rss_mb = process.memory_info().rss / (1024**2)
-        return {
-            "status": "ok" if vm.percent <= 90 else "warning",
-            "system_used_pct": round(vm.percent, 1),
-            "process_rss_mb": round(rss_mb, 1),
-            "system_available_mb": round(vm.available / (1024**2), 1),
-        }
-    except ImportError:
-        import resource
-
-        rusage = resource.getrusage(resource.RUSAGE_SELF)
-        return {
-            "status": "ok",
-            "process_maxrss_mb": round(rusage.ru_maxrss / 1024, 1),
-            "detail": "psutil not installed; limited memory info",
-        }
-    except Exception as e:
-        return {"status": "error", "detail": str(e)[:120]}
-
-
-def _get_uptime() -> dict[str, object]:
-    elapsed = time.time() - _STARTUP_TIME
-    days, rem = divmod(int(elapsed), 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, seconds = divmod(rem, 60)
-    return {
-        "seconds": round(elapsed, 1),
-        "human": f"{days}d {hours}h {minutes}m {seconds}s",
-    }
-
-
-@app.get("/readyz", tags=["Health"])
-async def readiness_check(request: Request, verbose: bool = False):
-    """Readiness probe: Check if application is ready to accept traffic.
-
-    Checks database and Redis connectivity. Returns 200 OK if ready, 503 if not ready.
-    Use ?verbose=true to include individual check results.
-
-    Per ADR-0003: Readiness Probe Database Check
-    """
-    checks: dict[str, str] = {
-        "database": await _check_database(),
-        "redis": await _check_redis(),
-        "celery": _check_celery(),
-        "azure_storage": _check_azure_storage(),
-    }
-
-    disk = _check_disk_space()
-    memory = _check_memory()
-    uptime = _get_uptime()
-
-    ignored = ("unavailable", "not_configured", "sdk_not_installed")
-    non_critical = {"redis", "celery"}
-    all_healthy = all(v in ("healthy", "ok") for k, v in checks.items() if v not in ignored and k not in non_critical)
-
-    warnings: list[str] = []
-    if disk.get("status") == "warning":
-        warnings.append(f"Low disk space: {disk.get('free_gb')} GB free")
-    if memory.get("status") == "warning":
-        warnings.append(f"High memory usage: {memory.get('system_used_pct')}%")
-
-    request_id = getattr(request.state, "request_id", "N/A")
-    response: dict[str, object] = {
-        "status": "healthy" if all_healthy else "unhealthy",
-        "version": settings.app_version,
-        "uptime": uptime,
-        "flower_url": "http://flower:5555",
-        "request_id": request_id,
-    }
-    if warnings:
-        response["warnings"] = warnings
-
-    if verbose:
-        response["checks"] = checks
-        response["disk"] = disk
-        response["memory"] = memory
-        response["circuit_breakers"] = _collect_circuit_breaker_health()
-
-    status_code = 200 if all_healthy else 503
-    return JSONResponse(content=response, status_code=status_code)
+        logger.error(f"Readiness check failed: {e}", extra={"request_id": request_id, "error": str(e)})
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "database": "disconnected",
+                "error": str(e),
+                "request_id": request_id,
+            },
+        )

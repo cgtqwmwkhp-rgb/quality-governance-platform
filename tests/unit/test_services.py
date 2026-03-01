@@ -268,13 +268,7 @@ class TestAuditService:
         severities = ["critical", "major", "minor", "observation", "opportunity"]
 
         for severity in severities:
-            assert severity in [
-                "critical",
-                "major",
-                "minor",
-                "observation",
-                "opportunity",
-            ]
+            assert severity in ["critical", "major", "minor", "observation", "opportunity"]
 
     def test_audit_score_calculation(self):
         """Audit score calculation is correct."""
@@ -549,7 +543,7 @@ class TestWorkflowService:
 
     def test_workflow_service_import(self):
         """Workflow service can be imported."""
-        from src.domain.services.workflow_engine import WorkflowService
+        from src.domain.services.workflow_service import WorkflowService
 
         assert WorkflowService is not None
 

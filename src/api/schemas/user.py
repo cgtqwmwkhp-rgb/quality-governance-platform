@@ -3,9 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-
-from src.api.schemas.validators import sanitize_field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class RoleBase(BaseModel):
@@ -14,11 +12,6 @@ class RoleBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
     permissions: Optional[str] = None
-
-    @field_validator("name", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class RoleCreate(RoleBase):
@@ -33,11 +26,6 @@ class RoleUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = None
     permissions: Optional[str] = None
-
-    @field_validator("name", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class RoleResponse(RoleBase):
@@ -61,11 +49,6 @@ class UserBase(BaseModel):
     department: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
 
-    @field_validator("first_name", "last_name", "job_title", "department", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class UserCreate(UserBase):
     """Schema for creating a User."""
@@ -85,11 +68,6 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
     role_ids: Optional[List[int]] = None
-
-    @field_validator("first_name", "last_name", "job_title", "department", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class UserResponse(UserBase):

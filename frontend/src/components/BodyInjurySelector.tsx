@@ -1,6 +1,6 @@
-import { useState } from "react";
-import {
-  RotateCcw,
+import { useState } from 'react';
+import { 
+  RotateCcw, 
   X,
   Droplets,
   Circle,
@@ -11,418 +11,76 @@ import {
   Target,
   HelpCircle,
   type LucideIcon,
-} from "lucide-react";
-import { cn } from "../helpers/utils";
-import { Card } from "./ui/Card";
-import { Button } from "./ui/Button";
+} from 'lucide-react';
+import { cn } from '../helpers/utils';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
 
 // Injury types with colors and proper icons
-const INJURY_TYPES: {
-  id: string;
-  label: string;
-  color: string;
-  bgLight: string;
-  Icon: LucideIcon;
-}[] = [
-  {
-    id: "cut",
-    label: "Cut / Laceration",
-    color: "#dc2626",
-    bgLight: "bg-red-100 dark:bg-red-900/30",
-    Icon: Droplets,
-  },
-  {
-    id: "bruise",
-    label: "Bruise / Contusion",
-    color: "#7c3aed",
-    bgLight: "bg-purple-100 dark:bg-purple-900/30",
-    Icon: Circle,
-  },
-  {
-    id: "burn",
-    label: "Burn",
-    color: "#ea580c",
-    bgLight: "bg-orange-100 dark:bg-orange-900/30",
-    Icon: Flame,
-  },
-  {
-    id: "fracture",
-    label: "Fracture / Break",
-    color: "#ca8a04",
-    bgLight: "bg-yellow-100 dark:bg-yellow-900/30",
-    Icon: Bone,
-  },
-  {
-    id: "sprain",
-    label: "Sprain / Strain",
-    color: "#16a34a",
-    bgLight: "bg-green-100 dark:bg-green-900/30",
-    Icon: Activity,
-  },
-  {
-    id: "crush",
-    label: "Crush Injury",
-    color: "#db2777",
-    bgLight: "bg-pink-100 dark:bg-pink-900/30",
-    Icon: AlertTriangle,
-  },
-  {
-    id: "puncture",
-    label: "Puncture Wound",
-    color: "#0891b2",
-    bgLight: "bg-cyan-100 dark:bg-cyan-900/30",
-    Icon: Target,
-  },
-  {
-    id: "other",
-    label: "Other",
-    color: "#6b7280",
-    bgLight: "bg-gray-100 dark:bg-gray-800",
-    Icon: HelpCircle,
-  },
+const INJURY_TYPES: { id: string; label: string; color: string; bgLight: string; Icon: LucideIcon }[] = [
+  { id: 'cut', label: 'Cut / Laceration', color: '#dc2626', bgLight: 'bg-red-100 dark:bg-red-900/30', Icon: Droplets },
+  { id: 'bruise', label: 'Bruise / Contusion', color: '#7c3aed', bgLight: 'bg-purple-100 dark:bg-purple-900/30', Icon: Circle },
+  { id: 'burn', label: 'Burn', color: '#ea580c', bgLight: 'bg-orange-100 dark:bg-orange-900/30', Icon: Flame },
+  { id: 'fracture', label: 'Fracture / Break', color: '#ca8a04', bgLight: 'bg-yellow-100 dark:bg-yellow-900/30', Icon: Bone },
+  { id: 'sprain', label: 'Sprain / Strain', color: '#16a34a', bgLight: 'bg-green-100 dark:bg-green-900/30', Icon: Activity },
+  { id: 'crush', label: 'Crush Injury', color: '#db2777', bgLight: 'bg-pink-100 dark:bg-pink-900/30', Icon: AlertTriangle },
+  { id: 'puncture', label: 'Puncture Wound', color: '#0891b2', bgLight: 'bg-cyan-100 dark:bg-cyan-900/30', Icon: Target },
+  { id: 'other', label: 'Other', color: '#6b7280', bgLight: 'bg-gray-100 dark:bg-gray-800', Icon: HelpCircle },
 ];
 
 // Body regions for front and back
 const BODY_REGIONS = {
   front: [
-    {
-      id: "head-front",
-      label: "Head (Front)",
-      path: "M150,20 C180,20 200,45 200,75 C200,105 180,125 150,125 C120,125 100,105 100,75 C100,45 120,20 150,20 Z",
-      cx: 150,
-      cy: 70,
-    },
-    {
-      id: "face",
-      label: "Face",
-      path: "M130,50 L170,50 L175,90 L125,90 Z",
-      cx: 150,
-      cy: 70,
-    },
-    {
-      id: "neck-front",
-      label: "Neck (Front)",
-      path: "M135,125 L165,125 L165,150 L135,150 Z",
-      cx: 150,
-      cy: 137,
-    },
-    {
-      id: "chest",
-      label: "Chest",
-      path: "M100,150 L200,150 L210,250 L90,250 Z",
-      cx: 150,
-      cy: 200,
-    },
-    {
-      id: "abdomen",
-      label: "Abdomen",
-      path: "M90,250 L210,250 L200,320 L100,320 Z",
-      cx: 150,
-      cy: 285,
-    },
-    {
-      id: "groin",
-      label: "Groin / Hip",
-      path: "M100,320 L200,320 L190,360 L110,360 Z",
-      cx: 150,
-      cy: 340,
-    },
-    {
-      id: "left-shoulder",
-      label: "Left Shoulder",
-      path: "M60,150 L100,150 L100,180 L60,170 Z",
-      cx: 80,
-      cy: 165,
-    },
-    {
-      id: "right-shoulder",
-      label: "Right Shoulder",
-      path: "M200,150 L240,150 L240,170 L200,180 Z",
-      cx: 220,
-      cy: 165,
-    },
-    {
-      id: "left-upper-arm",
-      label: "Left Upper Arm",
-      path: "M45,170 L75,180 L75,250 L45,250 Z",
-      cx: 60,
-      cy: 210,
-    },
-    {
-      id: "right-upper-arm",
-      label: "Right Upper Arm",
-      path: "M225,180 L255,170 L255,250 L225,250 Z",
-      cx: 240,
-      cy: 210,
-    },
-    {
-      id: "left-elbow",
-      label: "Left Elbow",
-      path: "M40,250 L75,250 L75,280 L40,280 Z",
-      cx: 57,
-      cy: 265,
-    },
-    {
-      id: "right-elbow",
-      label: "Right Elbow",
-      path: "M225,250 L260,250 L260,280 L225,280 Z",
-      cx: 242,
-      cy: 265,
-    },
-    {
-      id: "left-forearm",
-      label: "Left Forearm",
-      path: "M35,280 L70,280 L65,360 L30,360 Z",
-      cx: 50,
-      cy: 320,
-    },
-    {
-      id: "right-forearm",
-      label: "Right Forearm",
-      path: "M230,280 L265,280 L270,360 L235,360 Z",
-      cx: 250,
-      cy: 320,
-    },
-    {
-      id: "left-hand",
-      label: "Left Hand",
-      path: "M20,360 L65,360 L60,410 L15,410 Z",
-      cx: 40,
-      cy: 385,
-    },
-    {
-      id: "right-hand",
-      label: "Right Hand",
-      path: "M235,360 L280,360 L285,410 L240,410 Z",
-      cx: 260,
-      cy: 385,
-    },
-    {
-      id: "left-thigh",
-      label: "Left Thigh",
-      path: "M110,360 L150,360 L145,470 L105,470 Z",
-      cx: 127,
-      cy: 415,
-    },
-    {
-      id: "right-thigh",
-      label: "Right Thigh",
-      path: "M150,360 L190,360 L195,470 L155,470 Z",
-      cx: 172,
-      cy: 415,
-    },
-    {
-      id: "left-knee",
-      label: "Left Knee",
-      path: "M105,470 L145,470 L145,510 L105,510 Z",
-      cx: 125,
-      cy: 490,
-    },
-    {
-      id: "right-knee",
-      label: "Right Knee",
-      path: "M155,470 L195,470 L195,510 L155,510 Z",
-      cx: 175,
-      cy: 490,
-    },
-    {
-      id: "left-shin",
-      label: "Left Shin",
-      path: "M105,510 L140,510 L135,620 L100,620 Z",
-      cx: 120,
-      cy: 565,
-    },
-    {
-      id: "right-shin",
-      label: "Right Shin",
-      path: "M160,510 L195,510 L200,620 L165,620 Z",
-      cx: 180,
-      cy: 565,
-    },
-    {
-      id: "left-foot",
-      label: "Left Foot",
-      path: "M90,620 L140,620 L145,670 L85,670 Z",
-      cx: 115,
-      cy: 645,
-    },
-    {
-      id: "right-foot",
-      label: "Right Foot",
-      path: "M160,620 L210,620 L215,670 L155,670 Z",
-      cx: 185,
-      cy: 645,
-    },
+    { id: 'head-front', label: 'Head (Front)', path: 'M150,20 C180,20 200,45 200,75 C200,105 180,125 150,125 C120,125 100,105 100,75 C100,45 120,20 150,20 Z', cx: 150, cy: 70 },
+    { id: 'face', label: 'Face', path: 'M130,50 L170,50 L175,90 L125,90 Z', cx: 150, cy: 70 },
+    { id: 'neck-front', label: 'Neck (Front)', path: 'M135,125 L165,125 L165,150 L135,150 Z', cx: 150, cy: 137 },
+    { id: 'chest', label: 'Chest', path: 'M100,150 L200,150 L210,250 L90,250 Z', cx: 150, cy: 200 },
+    { id: 'abdomen', label: 'Abdomen', path: 'M90,250 L210,250 L200,320 L100,320 Z', cx: 150, cy: 285 },
+    { id: 'groin', label: 'Groin / Hip', path: 'M100,320 L200,320 L190,360 L110,360 Z', cx: 150, cy: 340 },
+    { id: 'left-shoulder', label: 'Left Shoulder', path: 'M60,150 L100,150 L100,180 L60,170 Z', cx: 80, cy: 165 },
+    { id: 'right-shoulder', label: 'Right Shoulder', path: 'M200,150 L240,150 L240,170 L200,180 Z', cx: 220, cy: 165 },
+    { id: 'left-upper-arm', label: 'Left Upper Arm', path: 'M45,170 L75,180 L75,250 L45,250 Z', cx: 60, cy: 210 },
+    { id: 'right-upper-arm', label: 'Right Upper Arm', path: 'M225,180 L255,170 L255,250 L225,250 Z', cx: 240, cy: 210 },
+    { id: 'left-elbow', label: 'Left Elbow', path: 'M40,250 L75,250 L75,280 L40,280 Z', cx: 57, cy: 265 },
+    { id: 'right-elbow', label: 'Right Elbow', path: 'M225,250 L260,250 L260,280 L225,280 Z', cx: 242, cy: 265 },
+    { id: 'left-forearm', label: 'Left Forearm', path: 'M35,280 L70,280 L65,360 L30,360 Z', cx: 50, cy: 320 },
+    { id: 'right-forearm', label: 'Right Forearm', path: 'M230,280 L265,280 L270,360 L235,360 Z', cx: 250, cy: 320 },
+    { id: 'left-hand', label: 'Left Hand', path: 'M20,360 L65,360 L60,410 L15,410 Z', cx: 40, cy: 385 },
+    { id: 'right-hand', label: 'Right Hand', path: 'M235,360 L280,360 L285,410 L240,410 Z', cx: 260, cy: 385 },
+    { id: 'left-thigh', label: 'Left Thigh', path: 'M110,360 L150,360 L145,470 L105,470 Z', cx: 127, cy: 415 },
+    { id: 'right-thigh', label: 'Right Thigh', path: 'M150,360 L190,360 L195,470 L155,470 Z', cx: 172, cy: 415 },
+    { id: 'left-knee', label: 'Left Knee', path: 'M105,470 L145,470 L145,510 L105,510 Z', cx: 125, cy: 490 },
+    { id: 'right-knee', label: 'Right Knee', path: 'M155,470 L195,470 L195,510 L155,510 Z', cx: 175, cy: 490 },
+    { id: 'left-shin', label: 'Left Shin', path: 'M105,510 L140,510 L135,620 L100,620 Z', cx: 120, cy: 565 },
+    { id: 'right-shin', label: 'Right Shin', path: 'M160,510 L195,510 L200,620 L165,620 Z', cx: 180, cy: 565 },
+    { id: 'left-foot', label: 'Left Foot', path: 'M90,620 L140,620 L145,670 L85,670 Z', cx: 115, cy: 645 },
+    { id: 'right-foot', label: 'Right Foot', path: 'M160,620 L210,620 L215,670 L155,670 Z', cx: 185, cy: 645 },
   ],
   back: [
-    {
-      id: "head-back",
-      label: "Head (Back)",
-      path: "M150,20 C180,20 200,45 200,75 C200,105 180,125 150,125 C120,125 100,105 100,75 C100,45 120,20 150,20 Z",
-      cx: 150,
-      cy: 70,
-    },
-    {
-      id: "neck-back",
-      label: "Neck (Back)",
-      path: "M135,125 L165,125 L165,150 L135,150 Z",
-      cx: 150,
-      cy: 137,
-    },
-    {
-      id: "upper-back",
-      label: "Upper Back",
-      path: "M100,150 L200,150 L210,220 L90,220 Z",
-      cx: 150,
-      cy: 185,
-    },
-    {
-      id: "mid-back",
-      label: "Mid Back (Spine)",
-      path: "M120,220 L180,220 L180,280 L120,280 Z",
-      cx: 150,
-      cy: 250,
-    },
-    {
-      id: "lower-back",
-      label: "Lower Back",
-      path: "M100,280 L200,280 L200,340 L100,340 Z",
-      cx: 150,
-      cy: 310,
-    },
-    {
-      id: "buttocks",
-      label: "Buttocks",
-      path: "M100,340 L200,340 L190,380 L110,380 Z",
-      cx: 150,
-      cy: 360,
-    },
-    {
-      id: "left-shoulder-back",
-      label: "Left Shoulder (Back)",
-      path: "M60,150 L100,150 L100,180 L60,170 Z",
-      cx: 80,
-      cy: 165,
-    },
-    {
-      id: "right-shoulder-back",
-      label: "Right Shoulder (Back)",
-      path: "M200,150 L240,150 L240,170 L200,180 Z",
-      cx: 220,
-      cy: 165,
-    },
-    {
-      id: "left-tricep",
-      label: "Left Tricep",
-      path: "M45,170 L75,180 L75,250 L45,250 Z",
-      cx: 60,
-      cy: 210,
-    },
-    {
-      id: "right-tricep",
-      label: "Right Tricep",
-      path: "M225,180 L255,170 L255,250 L225,250 Z",
-      cx: 240,
-      cy: 210,
-    },
-    {
-      id: "left-elbow-back",
-      label: "Left Elbow (Back)",
-      path: "M40,250 L75,250 L75,280 L40,280 Z",
-      cx: 57,
-      cy: 265,
-    },
-    {
-      id: "right-elbow-back",
-      label: "Right Elbow (Back)",
-      path: "M225,250 L260,250 L260,280 L225,280 Z",
-      cx: 242,
-      cy: 265,
-    },
-    {
-      id: "left-forearm-back",
-      label: "Left Forearm (Back)",
-      path: "M35,280 L70,280 L65,360 L30,360 Z",
-      cx: 50,
-      cy: 320,
-    },
-    {
-      id: "right-forearm-back",
-      label: "Right Forearm (Back)",
-      path: "M230,280 L265,280 L270,360 L235,360 Z",
-      cx: 250,
-      cy: 320,
-    },
-    {
-      id: "left-hand-back",
-      label: "Left Hand (Back)",
-      path: "M20,360 L65,360 L60,410 L15,410 Z",
-      cx: 40,
-      cy: 385,
-    },
-    {
-      id: "right-hand-back",
-      label: "Right Hand (Back)",
-      path: "M235,360 L280,360 L285,410 L240,410 Z",
-      cx: 260,
-      cy: 385,
-    },
-    {
-      id: "left-hamstring",
-      label: "Left Hamstring",
-      path: "M110,380 L150,380 L145,470 L105,470 Z",
-      cx: 127,
-      cy: 425,
-    },
-    {
-      id: "right-hamstring",
-      label: "Right Hamstring",
-      path: "M150,380 L190,380 L195,470 L155,470 Z",
-      cx: 172,
-      cy: 425,
-    },
-    {
-      id: "left-knee-back",
-      label: "Left Knee (Back)",
-      path: "M105,470 L145,470 L145,510 L105,510 Z",
-      cx: 125,
-      cy: 490,
-    },
-    {
-      id: "right-knee-back",
-      label: "Right Knee (Back)",
-      path: "M155,470 L195,470 L195,510 L155,510 Z",
-      cx: 175,
-      cy: 490,
-    },
-    {
-      id: "left-calf",
-      label: "Left Calf",
-      path: "M105,510 L140,510 L135,620 L100,620 Z",
-      cx: 120,
-      cy: 565,
-    },
-    {
-      id: "right-calf",
-      label: "Right Calf",
-      path: "M160,510 L195,510 L200,620 L165,620 Z",
-      cx: 180,
-      cy: 565,
-    },
-    {
-      id: "left-heel",
-      label: "Left Heel",
-      path: "M90,620 L140,620 L145,670 L85,670 Z",
-      cx: 115,
-      cy: 645,
-    },
-    {
-      id: "right-heel",
-      label: "Right Heel",
-      path: "M160,620 L210,620 L215,670 L155,670 Z",
-      cx: 185,
-      cy: 645,
-    },
+    { id: 'head-back', label: 'Head (Back)', path: 'M150,20 C180,20 200,45 200,75 C200,105 180,125 150,125 C120,125 100,105 100,75 C100,45 120,20 150,20 Z', cx: 150, cy: 70 },
+    { id: 'neck-back', label: 'Neck (Back)', path: 'M135,125 L165,125 L165,150 L135,150 Z', cx: 150, cy: 137 },
+    { id: 'upper-back', label: 'Upper Back', path: 'M100,150 L200,150 L210,220 L90,220 Z', cx: 150, cy: 185 },
+    { id: 'mid-back', label: 'Mid Back (Spine)', path: 'M120,220 L180,220 L180,280 L120,280 Z', cx: 150, cy: 250 },
+    { id: 'lower-back', label: 'Lower Back', path: 'M100,280 L200,280 L200,340 L100,340 Z', cx: 150, cy: 310 },
+    { id: 'buttocks', label: 'Buttocks', path: 'M100,340 L200,340 L190,380 L110,380 Z', cx: 150, cy: 360 },
+    { id: 'left-shoulder-back', label: 'Left Shoulder (Back)', path: 'M60,150 L100,150 L100,180 L60,170 Z', cx: 80, cy: 165 },
+    { id: 'right-shoulder-back', label: 'Right Shoulder (Back)', path: 'M200,150 L240,150 L240,170 L200,180 Z', cx: 220, cy: 165 },
+    { id: 'left-tricep', label: 'Left Tricep', path: 'M45,170 L75,180 L75,250 L45,250 Z', cx: 60, cy: 210 },
+    { id: 'right-tricep', label: 'Right Tricep', path: 'M225,180 L255,170 L255,250 L225,250 Z', cx: 240, cy: 210 },
+    { id: 'left-elbow-back', label: 'Left Elbow (Back)', path: 'M40,250 L75,250 L75,280 L40,280 Z', cx: 57, cy: 265 },
+    { id: 'right-elbow-back', label: 'Right Elbow (Back)', path: 'M225,250 L260,250 L260,280 L225,280 Z', cx: 242, cy: 265 },
+    { id: 'left-forearm-back', label: 'Left Forearm (Back)', path: 'M35,280 L70,280 L65,360 L30,360 Z', cx: 50, cy: 320 },
+    { id: 'right-forearm-back', label: 'Right Forearm (Back)', path: 'M230,280 L265,280 L270,360 L235,360 Z', cx: 250, cy: 320 },
+    { id: 'left-hand-back', label: 'Left Hand (Back)', path: 'M20,360 L65,360 L60,410 L15,410 Z', cx: 40, cy: 385 },
+    { id: 'right-hand-back', label: 'Right Hand (Back)', path: 'M235,360 L280,360 L285,410 L240,410 Z', cx: 260, cy: 385 },
+    { id: 'left-hamstring', label: 'Left Hamstring', path: 'M110,380 L150,380 L145,470 L105,470 Z', cx: 127, cy: 425 },
+    { id: 'right-hamstring', label: 'Right Hamstring', path: 'M150,380 L190,380 L195,470 L155,470 Z', cx: 172, cy: 425 },
+    { id: 'left-knee-back', label: 'Left Knee (Back)', path: 'M105,470 L145,470 L145,510 L105,510 Z', cx: 125, cy: 490 },
+    { id: 'right-knee-back', label: 'Right Knee (Back)', path: 'M155,470 L195,470 L195,510 L155,510 Z', cx: 175, cy: 490 },
+    { id: 'left-calf', label: 'Left Calf', path: 'M105,510 L140,510 L135,620 L100,620 Z', cx: 120, cy: 565 },
+    { id: 'right-calf', label: 'Right Calf', path: 'M160,510 L195,510 L200,620 L165,620 Z', cx: 180, cy: 565 },
+    { id: 'left-heel', label: 'Left Heel', path: 'M90,620 L140,620 L145,670 L85,670 Z', cx: 115, cy: 645 },
+    { id: 'right-heel', label: 'Right Heel', path: 'M160,620 L210,620 L215,670 L155,670 Z', cx: 185, cy: 645 },
   ],
 };
 
@@ -431,7 +89,7 @@ export interface InjurySelection {
   regionLabel: string;
   injuryType: string;
   injuryLabel: string;
-  view: "front" | "back";
+  view: 'front' | 'back';
 }
 
 interface BodyInjurySelectorProps {
@@ -439,16 +97,13 @@ interface BodyInjurySelectorProps {
   onChange: (injuries: InjurySelection[]) => void;
 }
 
-export default function BodyInjurySelector({
-  injuries,
-  onChange,
-}: BodyInjurySelectorProps) {
-  const [view, setView] = useState<"front" | "back">("front");
+export default function BodyInjurySelector({ injuries, onChange }: BodyInjurySelectorProps) {
+  const [view, setView] = useState<'front' | 'back'>('front');
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [showInjuryTypes, setShowInjuryTypes] = useState(false);
 
   const currentRegions = BODY_REGIONS[view];
-
+  
   const handleRegionClick = (regionId: string) => {
     setSelectedRegion(regionId);
     setShowInjuryTypes(true);
@@ -456,10 +111,10 @@ export default function BodyInjurySelector({
 
   const handleInjuryTypeSelect = (injuryTypeId: string) => {
     if (!selectedRegion) return;
-
-    const region = currentRegions.find((r) => r.id === selectedRegion);
-    const injuryType = INJURY_TYPES.find((t) => t.id === injuryTypeId);
-
+    
+    const region = currentRegions.find(r => r.id === selectedRegion);
+    const injuryType = INJURY_TYPES.find(t => t.id === injuryTypeId);
+    
     if (!region || !injuryType) return;
 
     const newInjury: InjurySelection = {
@@ -471,31 +126,28 @@ export default function BodyInjurySelector({
     };
 
     // Remove existing injury for this region if any
-    const filtered = injuries.filter((i) => i.regionId !== selectedRegion);
+    const filtered = injuries.filter(i => i.regionId !== selectedRegion);
     onChange([...filtered, newInjury]);
-
+    
     setShowInjuryTypes(false);
     setSelectedRegion(null);
   };
 
   const removeInjury = (regionId: string) => {
-    onChange(injuries.filter((i) => i.regionId !== regionId));
+    onChange(injuries.filter(i => i.regionId !== regionId));
   };
 
   const getRegionColor = (regionId: string) => {
-    const injury = injuries.find((i) => i.regionId === regionId);
+    const injury = injuries.find(i => i.regionId === regionId);
     if (injury) {
-      const type = INJURY_TYPES.find((t) => t.id === injury.injuryType);
-      return type?.color || "#dc2626";
+      const type = INJURY_TYPES.find(t => t.id === injury.injuryType);
+      return type?.color || '#dc2626';
     }
-    return "transparent";
+    return 'transparent';
   };
 
   const isRegionSelected = (regionId: string) => {
-    return (
-      injuries.some((i) => i.regionId === regionId) ||
-      selectedRegion === regionId
-    );
+    return injuries.some(i => i.regionId === regionId) || selectedRegion === regionId;
   };
 
   return (
@@ -504,24 +156,24 @@ export default function BodyInjurySelector({
       <div className="flex items-center justify-center gap-1 bg-muted rounded-xl p-1">
         <button
           type="button"
-          onClick={() => setView("front")}
+          onClick={() => setView('front')}
           className={cn(
             "flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm",
-            view === "front"
+            view === 'front'
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
           Front View
         </button>
         <button
           type="button"
-          onClick={() => setView("back")}
+          onClick={() => setView('back')}
           className={cn(
             "flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm",
-            view === "back"
+            view === 'back'
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
           Back View
@@ -531,83 +183,38 @@ export default function BodyInjurySelector({
       {/* Body Diagram */}
       <Card className="p-4 relative">
         <div className="flex justify-center">
-          <svg
-            viewBox="0 0 300 700"
+          <svg 
+            viewBox="0 0 300 700" 
             className="w-full max-w-[200px] h-auto"
-            style={{ maxHeight: "400px" }}
+            style={{ maxHeight: '400px' }}
           >
             {/* Body outline - improved contrast */}
             <defs>
-              <linearGradient
-                id="bodyGradientLight"
-                x1="0%"
-                y1="0%"
-                x2="0%"
-                y2="100%"
-              >
-                <stop
-                  offset="0%"
-                  stopColor="hsl(var(--primary))"
-                  stopOpacity="0.15"
-                />
-                <stop
-                  offset="100%"
-                  stopColor="hsl(var(--primary))"
-                  stopOpacity="0.05"
-                />
+              <linearGradient id="bodyGradientLight" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.15" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.05" />
               </linearGradient>
             </defs>
 
             {/* Human silhouette base - better contrast */}
-            <ellipse
-              cx="150"
-              cy="72"
-              rx="50"
-              ry="55"
-              fill="url(#bodyGradientLight)"
-              stroke="hsl(var(--border-strong))"
-              strokeWidth="2"
-            />
-            <rect
-              x="135"
-              y="125"
-              width="30"
-              height="25"
-              rx="5"
-              fill="url(#bodyGradientLight)"
-              stroke="hsl(var(--border-strong))"
-              strokeWidth="2"
-            />
-            <path
-              d="M60,150 L100,150 L100,150 L210,250 L200,340 L190,380 L110,380 L100,340 L90,250 L100,150 L60,170 L40,280 L40,385 L20,410 L65,410 L75,280 L75,180 L100,150 L200,150 L225,180 L225,280 L235,410 L280,410 L260,280 L240,170 L200,150 L210,250 L200,340 L190,380 L150,380 L150,360 L145,470 L145,510 L135,620 L145,670 L85,670 L100,620 L105,510 L105,470 L110,380 L150,380 L155,470 L155,510 L165,620 L155,670 L215,670 L200,620 L195,510 L195,470 L190,380 Z"
-              fill="url(#bodyGradientLight)"
-              stroke="hsl(var(--border-strong))"
-              strokeWidth="1.5"
-            />
+            <ellipse cx="150" cy="72" rx="50" ry="55" fill="url(#bodyGradientLight)" stroke="hsl(var(--border-strong))" strokeWidth="2" />
+            <rect x="135" y="125" width="30" height="25" rx="5" fill="url(#bodyGradientLight)" stroke="hsl(var(--border-strong))" strokeWidth="2" />
+            <path d="M60,150 L100,150 L100,150 L210,250 L200,340 L190,380 L110,380 L100,340 L90,250 L100,150 L60,170 L40,280 L40,385 L20,410 L65,410 L75,280 L75,180 L100,150 L200,150 L225,180 L225,280 L235,410 L280,410 L260,280 L240,170 L200,150 L210,250 L200,340 L190,380 L150,380 L150,360 L145,470 L145,510 L135,620 L145,670 L85,670 L100,620 L105,510 L105,470 L110,380 L150,380 L155,470 L155,510 L165,620 L155,670 L215,670 L200,620 L195,510 L195,470 L190,380 Z" 
+              fill="url(#bodyGradientLight)" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
 
             {/* Interactive regions */}
             {currentRegions.map((region) => {
-              const injury = injuries.find((i) => i.regionId === region.id);
-              const injuryType = injury
-                ? INJURY_TYPES.find((t) => t.id === injury.injuryType)
-                : null;
+              const injury = injuries.find(i => i.regionId === region.id);
+              const injuryType = injury ? INJURY_TYPES.find(t => t.id === injury.injuryType) : null;
               const hasInjury = isRegionSelected(region.id);
-
+              
               return (
-                <g
-                  key={region.id}
-                  onClick={() => handleRegionClick(region.id)}
-                  style={{ cursor: "pointer" }}
-                >
+                <g key={region.id} onClick={() => handleRegionClick(region.id)} style={{ cursor: 'pointer' }}>
                   <path
                     d={region.path}
                     fill={getRegionColor(region.id)}
                     fillOpacity={hasInjury ? 0.5 : 0.05}
-                    stroke={
-                      hasInjury
-                        ? injuryType?.color || "hsl(var(--primary))"
-                        : "hsl(var(--border))"
-                    }
+                    stroke={hasInjury ? (injuryType?.color || 'hsl(var(--primary))') : 'hsl(var(--border))'}
                     strokeWidth={hasInjury ? 2.5 : 1.5}
                     className="transition-all duration-200 hover:fill-opacity-30 hover:stroke-2"
                   />
@@ -620,10 +227,7 @@ export default function BodyInjurySelector({
                       className="pointer-events-none"
                     >
                       <div className="w-full h-full flex items-center justify-center">
-                        <injuryType.Icon
-                          className="w-4 h-4"
-                          style={{ color: injuryType.color }}
-                        />
+                        <injuryType.Icon className="w-4 h-4" style={{ color: injuryType.color }} />
                       </div>
                     </foreignObject>
                   )}
@@ -636,7 +240,7 @@ export default function BodyInjurySelector({
         {/* View indicator */}
         <div className="absolute bottom-3 left-3 flex items-center gap-1 text-xs text-muted-foreground">
           <RotateCcw className="w-3 h-3" />
-          {view === "front" ? "Front" : "Back"}
+          {view === 'front' ? 'Front' : 'Back'}
         </div>
 
         {/* Tap instruction */}
@@ -651,11 +255,9 @@ export default function BodyInjurySelector({
           <Card className="w-full max-w-lg p-6 rounded-t-3xl animate-slide-up">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-bold text-foreground">
-                  Select Injury Type
-                </h3>
+                <h3 className="text-lg font-bold text-foreground">Select Injury Type</h3>
                 <p className="text-sm text-muted-foreground">
-                  {currentRegions.find((r) => r.id === selectedRegion)?.label}
+                  {currentRegions.find(r => r.id === selectedRegion)?.label}
                 </p>
               </div>
               <button
@@ -680,26 +282,18 @@ export default function BodyInjurySelector({
                     "flex items-center gap-3 p-3 bg-surface hover:bg-muted border border-border rounded-xl transition-all text-left group",
                   )}
                 >
-                  <div
-                    className={cn(
-                      "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                      type.bgLight,
-                    )}
+                  <div 
+                    className={cn("w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0", type.bgLight)}
                   >
-                    <type.Icon
-                      className="w-5 h-5"
-                      style={{ color: type.color }}
-                    />
+                    <type.Icon className="w-5 h-5" style={{ color: type.color }} />
                   </div>
-                  <span className="text-sm text-foreground font-medium">
-                    {type.label}
-                  </span>
+                  <span className="text-sm text-foreground font-medium">{type.label}</span>
                 </button>
               ))}
             </div>
 
             {/* Remove injury option if already exists */}
-            {injuries.some((i) => i.regionId === selectedRegion) && (
+            {injuries.some(i => i.regionId === selectedRegion) && (
               <Button
                 variant="outline"
                 onClick={() => {
@@ -719,42 +313,25 @@ export default function BodyInjurySelector({
       {/* Selected Injuries Summary */}
       {injuries.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-foreground">
-            Injuries Selected ({injuries.length})
-          </h4>
+          <h4 className="text-sm font-medium text-foreground">Injuries Selected ({injuries.length})</h4>
           <div className="space-y-2">
             {injuries.map((injury) => {
-              const type = INJURY_TYPES.find((t) => t.id === injury.injuryType);
+              const type = INJURY_TYPES.find(t => t.id === injury.injuryType);
               return (
                 <Card
                   key={injury.regionId}
                   className="flex items-center justify-between p-3"
-                  style={{
-                    borderLeftColor: type?.color,
-                    borderLeftWidth: "3px",
-                  }}
+                  style={{ borderLeftColor: type?.color, borderLeftWidth: '3px' }}
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",
-                        type?.bgLight,
-                      )}
+                    <div 
+                      className={cn("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0", type?.bgLight)}
                     >
-                      {type && (
-                        <type.Icon
-                          className="w-4 h-4"
-                          style={{ color: type.color }}
-                        />
-                      )}
+                      {type && <type.Icon className="w-4 h-4" style={{ color: type.color }} />}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {injury.regionLabel}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {injury.injuryLabel}
-                      </p>
+                      <p className="text-sm font-medium text-foreground">{injury.regionLabel}</p>
+                      <p className="text-xs text-muted-foreground">{injury.injuryLabel}</p>
                     </div>
                   </div>
                   <button

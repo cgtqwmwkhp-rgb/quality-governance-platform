@@ -3,9 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from src.api.schemas.validators import sanitize_field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Question Types & Options ==============
 
@@ -25,10 +23,7 @@ class ConditionalLogicRule(BaseModel):
     """Schema for conditional logic rules."""
 
     source_question_id: int
-    operator: str = Field(
-        ...,
-        pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$",
-    )
+    operator: str = Field(..., pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$")
     value: Optional[Any] = None
     action: str = Field(..., pattern="^(show|hide|require|skip)$")
 
@@ -61,11 +56,6 @@ class AuditQuestionBase(BaseModel):
     # Question configuration
     is_required: bool = True
     allow_na: bool = False
-
-    @field_validator("question_text", "description", "help_text", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     # Scoring
     max_score: Optional[float] = None
@@ -111,10 +101,7 @@ class AuditQuestionUpdate(BaseModel):
     """Schema for updating an Audit Question."""
 
     question_text: Optional[str] = Field(None, min_length=1, max_length=1000)
-    question_type: Optional[str] = Field(
-        None,
-        pattern="^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score)$",
-    )
+    question_type: Optional[str] = None
     description: Optional[str] = None
     help_text: Optional[str] = None
     is_required: Optional[bool] = None
@@ -124,23 +111,12 @@ class AuditQuestionUpdate(BaseModel):
     options: Optional[List[QuestionOptionBase]] = None
     min_value: Optional[float] = None
     max_value: Optional[float] = None
-    decimal_places: Optional[int] = None
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
     evidence_requirements: Optional[EvidenceRequirement] = None
     conditional_logic: Optional[List[ConditionalLogicRule]] = None
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
-    risk_category: Optional[str] = None
-    risk_weight: Optional[float] = None
-    section_id: Optional[int] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
-
-    @field_validator("question_text", "description", "help_text", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class AuditQuestionResponse(AuditQuestionBase):
@@ -169,11 +145,6 @@ class AuditSectionBase(BaseModel):
     is_repeatable: bool = False
     max_repeats: Optional[int] = None
 
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class AuditSectionCreate(AuditSectionBase):
     """Schema for creating an Audit Section."""
@@ -191,11 +162,6 @@ class AuditSectionUpdate(BaseModel):
     is_repeatable: Optional[bool] = None
     max_repeats: Optional[int] = None
     is_active: Optional[bool] = None
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class AuditSectionResponse(AuditSectionBase):
@@ -224,11 +190,6 @@ class AuditTemplateBase(BaseModel):
     # Template configuration
     audit_type: str = Field(default="inspection", pattern="^(inspection|audit|assessment|checklist|survey)$")
     frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$")
-
-    @field_validator("name", "description", "category", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     # Scoring configuration
     scoring_method: str = Field(default="percentage", pattern="^(percentage|points|weighted|pass_fail)$")
@@ -272,11 +233,6 @@ class AuditTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_published: Optional[bool] = None
 
-    @field_validator("name", "description", "category", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class AuditTemplateResponse(AuditTemplateBase):
     """Schema for Audit Template response."""
@@ -288,8 +244,6 @@ class AuditTemplateResponse(AuditTemplateBase):
     version: int
     is_active: bool
     is_published: bool
-    archived_at: Optional[datetime] = None
-    archived_by_id: Optional[int] = None
     created_by_id: Optional[int]
     created_at: datetime
     updated_at: datetime
@@ -301,7 +255,6 @@ class AuditTemplateDetailResponse(AuditTemplateResponse):
     sections: List[AuditSectionResponse] = []
     question_count: int = 0
     section_count: int = 0
-    links: Optional[dict] = None
 
 
 class AuditTemplateListResponse(BaseModel):
@@ -312,7 +265,6 @@ class AuditTemplateListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
-    links: Optional[dict] = None
 
 
 # ============== Audit Run Schemas ==============
@@ -332,11 +284,6 @@ class AuditRunBase(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
-    @field_validator("title", "location", "location_details", "notes", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class AuditRunCreate(AuditRunBase):
     """Schema for creating an Audit Run."""
@@ -355,15 +302,7 @@ class AuditRunUpdate(BaseModel):
     due_date: Optional[datetime] = None
     assigned_to_id: Optional[int] = None
     notes: Optional[str] = None
-    status: Optional[str] = Field(
-        None,
-        pattern="^(draft|scheduled|in_progress|pending_review|cancelled)$",
-    )
-
-    @field_validator("title", "location", "location_details", "notes", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
+    status: Optional[str] = None
 
 
 class AuditRunResponse(AuditRunBase):
@@ -395,7 +334,6 @@ class AuditRunDetailResponse(AuditRunResponse):
     responses: List["AuditResponseResponse"] = []
     findings: List["AuditFindingResponse"] = []
     completion_percentage: float = 0.0
-    links: Optional[dict] = None
 
 
 class AuditRunListResponse(BaseModel):
@@ -406,7 +344,6 @@ class AuditRunListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
-    links: Optional[dict] = None
 
 
 # ============== Audit Response Schemas ==============
@@ -425,17 +362,11 @@ class AuditResponseBase(BaseModel):
     score: Optional[float] = None
     notes: Optional[str] = None
 
-    @field_validator("response_value", "response_text", "notes", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class AuditResponseCreate(AuditResponseBase):
     """Schema for creating an Audit Response."""
 
     question_id: int
-    max_score: Optional[float] = None
 
 
 class AuditResponseUpdate(BaseModel):
@@ -449,13 +380,7 @@ class AuditResponseUpdate(BaseModel):
     response_json: Optional[Dict[str, Any]] = None
     is_na: Optional[bool] = None
     score: Optional[float] = None
-    max_score: Optional[float] = None
     notes: Optional[str] = None
-
-    @field_validator("response_value", "response_text", "notes", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class AuditResponseResponse(AuditResponseBase):
@@ -466,7 +391,6 @@ class AuditResponseResponse(AuditResponseBase):
     id: int
     run_id: int
     question_id: int
-    max_score: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -480,10 +404,7 @@ class AuditFindingBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: str = Field(..., min_length=1)
     severity: str = Field(default="medium", pattern="^(critical|high|medium|low|observation)$")
-    finding_type: str = Field(
-        default="nonconformity",
-        pattern="^(nonconformity|observation|opportunity|positive)$",
-    )
+    finding_type: str = Field(default="nonconformity", pattern="^(nonconformity|observation|opportunity|positive)$")
 
     # Standard mapping
     clause_ids: Optional[List[int]] = None
@@ -495,11 +416,6 @@ class AuditFindingBase(BaseModel):
     # Corrective action
     corrective_action_required: bool = True
     corrective_action_due_date: Optional[datetime] = None
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class AuditFindingCreate(AuditFindingBase):
@@ -513,22 +429,14 @@ class AuditFindingUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
-    severity: Optional[str] = Field(None, pattern="^(critical|high|medium|low|observation)$")
-    finding_type: Optional[str] = Field(None, pattern="^(nonconformity|observation|opportunity|positive)$")
+    severity: Optional[str] = None
+    finding_type: Optional[str] = None
     clause_ids: Optional[List[int]] = None
     control_ids: Optional[List[int]] = None
     risk_ids: Optional[List[int]] = None
     corrective_action_required: Optional[bool] = None
     corrective_action_due_date: Optional[datetime] = None
-    status: Optional[str] = Field(
-        None,
-        pattern="^(open|in_progress|pending_verification|closed|deferred)$",
-    )
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
+    status: Optional[str] = None
 
 
 class AuditFindingResponse(BaseModel):
@@ -568,18 +476,6 @@ class AuditFindingListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
-    links: Optional[dict] = None
-
-
-class PurgeExpiredTemplatesResponse(BaseModel):
-    purged_count: int
-    purged_templates: List[str]
-
-
-class ArchiveTemplateResponse(BaseModel):
-    message: str
-    archived_at: str
-    expires_at: str
 
 
 # Forward references for nested models

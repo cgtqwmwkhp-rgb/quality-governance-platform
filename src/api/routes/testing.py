@@ -5,6 +5,7 @@ They are disabled in production for security.
 """
 
 import logging
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -13,10 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.core.config import settings
 from src.core.security import get_password_hash
-from src.domain.exceptions import AuthenticationError, AuthorizationError
 from src.domain.models.user import Role, User
 
 logger = logging.getLogger(__name__)
@@ -48,16 +47,10 @@ class TestUserResponse(BaseModel):
     created: bool
 
 
-class TestingHealthResponse(BaseModel):
-    """Response for testing endpoint availability check."""
-
-    available: bool
-    environment: str
-
-
 def is_staging_env() -> bool:
     """Check if running in staging environment."""
-    return settings.app_env.lower() == "staging"
+    app_env = os.environ.get("APP_ENV", settings.app_env).lower()
+    return app_env == "staging"
 
 
 # ETL Role Permission Matrix (ADR-0001/ADR-0002 compliant)
@@ -144,20 +137,26 @@ async def ensure_test_user(
     # Security check 1: Only staging
     if not is_staging_env():
         logger.warning("Attempt to access testing endpoint in non-staging environment")
-        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only available in staging environment",
+        )
 
     # Security check 2: Require CI secret
-    ci_secret = settings.ci_test_secret
+    ci_secret = os.environ.get("CI_TEST_SECRET", "")
     if not ci_secret:
         logger.warning("CI_TEST_SECRET not configured in staging")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=ErrorCode.INTERNAL_ERROR,
+            detail="Testing endpoints not configured",
         )
 
     if not x_ci_secret or x_ci_secret != ci_secret:
         logger.warning("Invalid or missing X-CI-Secret header")
-        raise AuthenticationError(ErrorCode.PERMISSION_DENIED)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid CI secret",
+        )
 
     # Check if user exists - EAGER LOAD roles to avoid MissingGreenlet
     result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))
@@ -219,10 +218,10 @@ async def ensure_test_user(
     )
 
 
-@router.get("/health", response_model=TestingHealthResponse)
-async def testing_health() -> TestingHealthResponse:
+@router.get("/health")
+async def testing_health() -> dict:
     """Check if testing endpoints are available."""
-    return TestingHealthResponse(
-        available=is_staging_env(),
-        environment=settings.app_env,
-    )
+    return {
+        "available": is_staging_env(),
+        "environment": os.environ.get("APP_ENV", settings.app_env),
+    }

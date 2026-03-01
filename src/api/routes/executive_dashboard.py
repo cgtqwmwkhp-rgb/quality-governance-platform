@@ -6,29 +6,21 @@ real-time metrics, and organizational health scoring.
 
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.executive_dashboard import (
-    AlertsResponse,
-    ComplianceDashboardResponse,
-    DashboardSummaryResponse,
-    ExecutiveDashboardResponse,
-    HealthScore,
-    IncidentDashboardResponse,
-    RiskDashboardResponse,
-)
-from src.domain.services.executive_dashboard import ExecutiveDashboardService
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.api.deps import get_current_user, get_db
+from src.api.schemas.executive_dashboard import DashboardSummaryResponse, ExecutiveDashboardResponse
+from src.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
 
 
 @router.get("", response_model=ExecutiveDashboardResponse)
 async def get_executive_dashboard(
-    db: DbSession,
-    current_user: CurrentUser,
     period_days: int = Query(30, ge=7, le=365, description="Period in days for metrics"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get complete executive dashboard with all KPIs.
 
@@ -41,7 +33,6 @@ async def get_executive_dashboard(
     - Trend data for charts
     - Active alerts requiring attention
     """
-    track_metric("executive_dashboard.loaded")
     service = ExecutiveDashboardService(db)
     dashboard = await service.get_full_dashboard(period_days)
     return dashboard
@@ -49,8 +40,8 @@ async def get_executive_dashboard(
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get simplified dashboard summary for quick overview.
 
@@ -75,17 +66,17 @@ async def get_dashboard_summary(
     )
 
 
-@router.get("/incidents", response_model=IncidentDashboardResponse)
+@router.get("/incidents")
 async def get_incident_dashboard(
-    db: DbSession,
-    current_user: CurrentUser,
     period_days: int = Query(30, ge=7, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get incident-specific dashboard data."""
     service = ExecutiveDashboardService(db)
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
+    cutoff = datetime.utcnow() - timedelta(days=period_days)
 
     summary = await service._get_incident_summary(cutoff)
     trends = await service._get_trends(period_days)
@@ -97,10 +88,10 @@ async def get_incident_dashboard(
     }
 
 
-@router.get("/risks", response_model=RiskDashboardResponse)
+@router.get("/risks")
 async def get_risk_dashboard(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get risk-specific dashboard data."""
     service = ExecutiveDashboardService(db)
@@ -114,10 +105,10 @@ async def get_risk_dashboard(
     }
 
 
-@router.get("/compliance", response_model=ComplianceDashboardResponse)
+@router.get("/compliance")
 async def get_compliance_dashboard(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get compliance-specific dashboard data."""
     service = ExecutiveDashboardService(db)
@@ -131,10 +122,10 @@ async def get_compliance_dashboard(
     }
 
 
-@router.get("/alerts", response_model=AlertsResponse)
+@router.get("/alerts")
 async def get_active_alerts(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get all active alerts requiring attention."""
     service = ExecutiveDashboardService(db)
@@ -146,10 +137,10 @@ async def get_active_alerts(
     }
 
 
-@router.get("/health-score", response_model=HealthScore)
+@router.get("/health-score")
 async def get_health_score(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get current organizational health score."""
     service = ExecutiveDashboardService(db)

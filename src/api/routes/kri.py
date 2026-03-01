@@ -4,21 +4,17 @@ Provides CRUD operations for KRIs, measurements, alerts,
 and risk score tracking.
 """
 
-from datetime import datetime, timezone
-from typing import Annotated, Optional
+from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import and_, select
-from sqlalchemy.orm import selectinload
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.error_codes import ErrorCode
+from src.api.deps import get_current_user, get_db
 from src.api.schemas.kri import (
-    KRIAlertActionResponse,
     KRIAlertListResponse,
     KRIAlertResponse,
-    KRICalculateAllResponse,
-    KRICalculateResponse,
     KRICreate,
     KRIDashboardResponse,
     KRIListResponse,
@@ -31,24 +27,9 @@ from src.api.schemas.kri import (
     SIFAssessmentCreate,
     SIFAssessmentResponse,
 )
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
-from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
-from src.domain.models.user import User
-from src.domain.services.kri_calculation_service import KRICalculationService
-from src.domain.services.risk_scoring import KRIService, RiskScoringService
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.services.risk_scoring import KRIService, RiskScoringService
 
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 
@@ -60,87 +41,74 @@ router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 
 @router.get("", response_model=KRIListResponse)
 async def list_kris(
-    db: DbSession,
-    current_user: CurrentUser,
-    params: PaginationParams = Depends(),
     category: Optional[str] = Query(None, description="Filter by category"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    kri_status: Optional[str] = Query(None, alias="status", description="Filter by current status"),
+    status: Optional[str] = Query(None, description="Filter by current status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """List all KRIs with optional filtering."""
-    query = (
-        select(KeyRiskIndicator)
-        .options(
-            selectinload(KeyRiskIndicator.measurements),
-            selectinload(KeyRiskIndicator.alerts),
-        )
-        .where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
-    )
+    query = select(KeyRiskIndicator)
 
     filters = []
     if category:
         filters.append(KeyRiskIndicator.category == category)
     if is_active is not None:
         filters.append(KeyRiskIndicator.is_active == is_active)
-    if kri_status:
-        filters.append(KeyRiskIndicator.current_status == kri_status)
+    if status:
+        filters.append(KeyRiskIndicator.current_status == status)
 
     if filters:
         query = query.where(and_(*filters))
 
     query = query.order_by(KeyRiskIndicator.category, KeyRiskIndicator.code)
 
-    return await paginate(db, query, params)
+    result = await db.execute(query)
+    kris = result.scalars().all()
+
+    return KRIListResponse(
+        items=[KRIResponse.from_orm(k) for k in kris],
+        total=len(kris),
+    )
 
 
 @router.post("", response_model=KRIResponse, status_code=status.HTTP_201_CREATED)
 async def create_kri(
     kri_data: KRICreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:create"))],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create a new KRI."""
-    _span = tracer.start_span("create_kri") if tracer else None
-    existing = await db.execute(
-        select(KeyRiskIndicator).where(
-            KeyRiskIndicator.tenant_id == current_user.tenant_id,
-            KeyRiskIndicator.code == kri_data.code,
-        )
-    )
+    # Check for duplicate code
+    existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
     if existing.scalar_one_or_none():
-        raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
+        raise HTTPException(status_code=400, detail="KRI code already exists")
 
     kri = KeyRiskIndicator(
-        **kri_data.model_dump(),
-        tenant_id=current_user.tenant_id,
-        created_by=getattr(current_user, "email", ""),
+        **kri_data.dict(),
+        created_by=current_user.get("email"),
     )
     db.add(kri)
     await db.commit()
     await db.refresh(kri)
-    await invalidate_tenant_cache(current_user.tenant_id, "kri")
-    track_metric("kri.mutation", 1)
-    track_metric("kri.created", 1)
 
-    if _span:
-        _span.end()
     return KRIResponse.from_orm(kri)
 
 
 @router.get("/dashboard", response_model=KRIDashboardResponse)
 async def get_kri_dashboard(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get KRI dashboard summary."""
     kri_service = KRIService(db)
     return await kri_service.get_kri_dashboard()
 
 
-@router.post("/calculate-all", response_model=KRICalculateAllResponse)
+@router.post("/calculate-all")
 async def calculate_all_kris(
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:update"))],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Trigger calculation for all auto-calculate KRIs."""
     kri_service = KRIService(db)
@@ -156,13 +124,16 @@ async def calculate_all_kris(
 @router.get("/{kri_id}", response_model=KRIResponse)
 async def get_kri(
     kri_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get a specific KRI."""
-    kri = await get_or_404(
-        db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    kri = result.scalar_one_or_none()
+
+    if not kri:
+        raise HTTPException(status_code=404, detail="KRI not found")
+
     return KRIResponse.from_orm(kri)
 
 
@@ -170,20 +141,24 @@ async def get_kri(
 async def update_kri(
     kri_id: int,
     kri_data: KRIUpdate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:update"))],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Update a KRI."""
-    kri = await get_or_404(
-        db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
-    apply_updates(kri, kri_data, set_updated_at=False)
-    kri.updated_by = getattr(current_user, "email", "")
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    kri = result.scalar_one_or_none()
+
+    if not kri:
+        raise HTTPException(status_code=404, detail="KRI not found")
+
+    update_data = kri_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(kri, field, value)
+
+    kri.updated_by = current_user.get("email")
 
     await db.commit()
     await db.refresh(kri)
-    await invalidate_tenant_cache(current_user.tenant_id, "kri")
-    track_metric("kri.mutation", 1)
 
     return KRIResponse.from_orm(kri)
 
@@ -191,32 +166,32 @@ async def update_kri(
 @router.delete("/{kri_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_kri(
     kri_id: int,
-    db: DbSession,
-    current_user: CurrentSuperuser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Delete a KRI (superuser only)."""
-    kri = await get_or_404(
-        db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
+    """Delete a KRI."""
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    kri = result.scalar_one_or_none()
+
+    if not kri:
+        raise HTTPException(status_code=404, detail="KRI not found")
+
     await db.delete(kri)
     await db.commit()
-    await invalidate_tenant_cache(current_user.tenant_id, "kri")
-    track_metric("kri.mutation", 1)
 
 
-@router.post("/{kri_id}/calculate", response_model=KRICalculateResponse)
+@router.post("/{kri_id}/calculate")
 async def calculate_kri(
     kri_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:update"))],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Trigger calculation for a specific KRI."""
-    await get_or_404(db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id)
     kri_service = KRIService(db)
     result = await kri_service.calculate_kri(kri_id)
 
     if not result:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(status_code=400, detail="Could not calculate KRI")
 
     return result
 
@@ -229,18 +204,23 @@ async def calculate_kri(
 @router.get("/{kri_id}/measurements", response_model=KRIMeasurementListResponse)
 async def get_kri_measurements(
     kri_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get measurement history for a KRI."""
-    await get_or_404(db, KeyRiskIndicator, kri_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id)
-
-    query = (
-        select(KRIMeasurement).where(KRIMeasurement.kri_id == kri_id).order_by(KRIMeasurement.measurement_date.desc())
+    result = await db.execute(
+        select(KRIMeasurement)
+        .where(KRIMeasurement.kri_id == kri_id)
+        .order_by(KRIMeasurement.measurement_date.desc())
+        .limit(limit)
     )
+    measurements = result.scalars().all()
 
-    return await paginate(db, query, params)
+    return KRIMeasurementListResponse(
+        items=[KRIMeasurementResponse.from_orm(m) for m in measurements],
+        total=len(measurements),
+    )
 
 
 # =============================================================================
@@ -250,15 +230,14 @@ async def get_kri_measurements(
 
 @router.get("/alerts/pending", response_model=KRIAlertListResponse)
 async def get_pending_alerts(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get pending (unacknowledged) KRI alerts."""
     result = await db.execute(
         select(KRIAlert)
         .where(
             and_(
-                KRIAlert.tenant_id == current_user.tenant_id,
                 KRIAlert.is_acknowledged == False,
                 KRIAlert.is_resolved == False,
             )
@@ -273,21 +252,23 @@ async def get_pending_alerts(
     )
 
 
-@router.post("/alerts/{alert_id}/acknowledge", response_model=KRIAlertActionResponse)
+@router.post("/alerts/{alert_id}/acknowledge")
 async def acknowledge_alert(
     alert_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:update"))],
     notes: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Acknowledge a KRI alert."""
-    alert = await get_or_404(
-        db, KRIAlert, alert_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
+    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
+    alert = result.scalar_one_or_none()
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
 
     alert.is_acknowledged = True
-    alert.acknowledged_at = datetime.now(timezone.utc)
-    alert.acknowledged_by_id = current_user.id
+    alert.acknowledged_at = datetime.utcnow()
+    alert.acknowledged_by_id = current_user.get("id")
     alert.acknowledgment_notes = notes
 
     await db.commit()
@@ -295,21 +276,23 @@ async def acknowledge_alert(
     return {"message": "Alert acknowledged", "alert_id": alert_id}
 
 
-@router.post("/alerts/{alert_id}/resolve", response_model=KRIAlertActionResponse)
+@router.post("/alerts/{alert_id}/resolve")
 async def resolve_alert(
     alert_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:update"))],
     notes: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Resolve a KRI alert."""
-    alert = await get_or_404(
-        db, KRIAlert, alert_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
+    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
+    alert = result.scalar_one_or_none()
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
 
     alert.is_resolved = True
-    alert.resolved_at = datetime.now(timezone.utc)
-    alert.resolved_by_id = current_user.id
+    alert.resolved_at = datetime.utcnow()
+    alert.resolved_by_id = current_user.get("id")
     alert.resolution_notes = notes
 
     await db.commit()
@@ -325,9 +308,9 @@ async def resolve_alert(
 @router.get("/risks/{risk_id}/trend", response_model=RiskTrendResponse)
 async def get_risk_trend(
     risk_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
     days: int = Query(90, ge=7, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get risk score trend over time."""
     scoring_service = RiskScoringService(db)
@@ -348,16 +331,28 @@ async def get_risk_trend(
 async def assess_incident_sif(
     incident_id: int,
     assessment: SIFAssessmentCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("kri:create"))],
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Assess an incident for SIF/pSIF classification."""
-    incident = await get_or_404(
-        db, Incident, incident_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
 
-    KRICalculationService.apply_sif_assessment(incident, assessment, int(current_user.id))
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
 
+    # Update SIF fields
+    incident.is_sif = assessment.is_sif
+    incident.is_psif = assessment.is_psif
+    incident.sif_classification = assessment.sif_classification
+    incident.sif_assessment_date = datetime.utcnow()
+    incident.sif_assessed_by_id = current_user.get("id")
+    incident.sif_rationale = assessment.sif_rationale
+    incident.life_altering_potential = assessment.life_altering_potential
+    incident.precursor_events = assessment.precursor_events
+    incident.control_failures = assessment.control_failures
+
+    # If SIF or pSIF, trigger risk score update
     if assessment.is_sif or assessment.is_psif:
         scoring_service = RiskScoringService(db)
         await scoring_service.recalculate_risk_score_for_incident(incident_id, trigger_type="sif_assessment")
@@ -367,41 +362,43 @@ async def assess_incident_sif(
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
-        is_sif=getattr(incident, "is_sif", None),
-        is_psif=getattr(incident, "is_psif", None),
-        sif_classification=getattr(incident, "sif_classification", None),
-        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
-        sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
-        sif_rationale=getattr(incident, "sif_rationale", None),
-        life_altering_potential=getattr(incident, "life_altering_potential", None),
-        precursor_events=getattr(incident, "precursor_events", None),
-        control_failures=getattr(incident, "control_failures", None),
+        is_sif=incident.is_sif,
+        is_psif=incident.is_psif,
+        sif_classification=incident.sif_classification,
+        sif_assessment_date=incident.sif_assessment_date,
+        sif_assessed_by_id=incident.sif_assessed_by_id,
+        sif_rationale=incident.sif_rationale,
+        life_altering_potential=incident.life_altering_potential,
+        precursor_events=incident.precursor_events,
+        control_failures=incident.control_failures,
     )
 
 
 @router.get("/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse)
 async def get_incident_sif_assessment(
     incident_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get SIF assessment for an incident."""
-    incident = await get_or_404(
-        db, Incident, incident_id, detail=ErrorCode.ENTITY_NOT_FOUND, tenant_id=current_user.tenant_id
-    )
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
 
-    if not getattr(incident, "sif_classification", None):
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    if not incident.sif_classification:
+        raise HTTPException(status_code=404, detail="No SIF assessment found for this incident")
 
     return SIFAssessmentResponse(
         incident_id=incident.id,
-        is_sif=getattr(incident, "is_sif", False) or False,
-        is_psif=getattr(incident, "is_psif", False) or False,
-        sif_classification=getattr(incident, "sif_classification", None),
-        sif_assessment_date=getattr(incident, "sif_assessment_date", None),
-        sif_assessed_by_id=getattr(incident, "sif_assessed_by_id", None),
-        sif_rationale=getattr(incident, "sif_rationale", None),
-        life_altering_potential=getattr(incident, "life_altering_potential", False) or False,
-        precursor_events=getattr(incident, "precursor_events", None),
-        control_failures=getattr(incident, "control_failures", None),
+        is_sif=incident.is_sif or False,
+        is_psif=incident.is_psif or False,
+        sif_classification=incident.sif_classification,
+        sif_assessment_date=incident.sif_assessment_date,
+        sif_assessed_by_id=incident.sif_assessed_by_id,
+        sif_rationale=incident.sif_rationale,
+        life_altering_potential=incident.life_altering_potential or False,
+        precursor_events=incident.precursor_events,
+        control_failures=incident.control_failures,
     )

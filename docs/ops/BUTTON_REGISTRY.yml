@@ -156,18 +156,18 @@ admin_actions:
     criticality: P0
     expected_outcome: navigation
     expected_route: /incidents/:id
-    disabled_reason: "No incidents in empty state"
+    disabled_reason: null
     description: "View incident details"
 
   # RTA List Actions  
   - pageId: rtas-list
     actionId: create-new-rta
     selector: "[data-testid='create-rta-btn']"
-    fallback_selector: "button:has-text('Report RTA'), button:has-text('New RTA'), button:has-text('Create')"
+    fallback_selector: "button:has-text('New RTA'), button:has-text('Create')"
     criticality: P0
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
-    disabled_reason: "Page may be in loading or error state"
+    disabled_reason: null
     description: "Open create RTA form"
 
   # Audit Actions

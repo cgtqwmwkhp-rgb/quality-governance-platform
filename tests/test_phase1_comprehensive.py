@@ -26,7 +26,7 @@ class TestWorkflowEngine:
 
     def test_condition_evaluator_equals(self):
         """Test equals condition evaluation."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
         condition = {"field": "status", "operator": "equals", "value": "open"}
         assert ConditionEvaluator.evaluate(condition, {"status": "open"}) is True
@@ -34,7 +34,7 @@ class TestWorkflowEngine:
 
     def test_condition_evaluator_and_logic(self):
         """Test AND condition logic."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
         condition = {
             "and": [
@@ -48,7 +48,7 @@ class TestWorkflowEngine:
 
     def test_condition_evaluator_or_logic(self):
         """Test OR condition logic."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
         condition = {
             "or": [
@@ -63,26 +63,18 @@ class TestWorkflowEngine:
 
     def test_condition_evaluator_in_operator(self):
         """Test IN operator for list membership."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
-        condition = {
-            "field": "priority",
-            "operator": "in",
-            "value": ["critical", "high", "medium"],
-        }
+        condition = {"field": "priority", "operator": "in", "value": ["critical", "high", "medium"]}
 
         assert ConditionEvaluator.evaluate(condition, {"priority": "critical"}) is True
         assert ConditionEvaluator.evaluate(condition, {"priority": "low"}) is False
 
     def test_condition_evaluator_nested_fields(self):
         """Test dot notation for nested field access."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
-        condition = {
-            "field": "user.department",
-            "operator": "equals",
-            "value": "Safety",
-        }
+        condition = {"field": "user.department", "operator": "equals", "value": "Safety"}
 
         data = {"user": {"department": "Safety", "name": "John"}}
         assert ConditionEvaluator.evaluate(condition, data) is True
@@ -93,7 +85,7 @@ class TestWorkflowEngine:
     def test_sla_business_hours_calculation(self):
         """Test SLA due time calculation with business hours."""
         from src.domain.models.workflow_rules import EntityType, SLAConfiguration
-        from src.domain.services.workflow_engine import SLAService
+        from src.services.workflow_engine import SLAService
 
         config = SLAConfiguration(
             id=1,
@@ -126,7 +118,7 @@ class TestRiskScoring:
 
     def test_risk_level_calculation(self):
         """Test risk level determination from score."""
-        from src.domain.services.risk_scoring import RiskScoringService
+        from src.services.risk_scoring import RiskScoringService
 
         service = RiskScoringService(AsyncMock())
 
@@ -140,7 +132,7 @@ class TestRiskScoring:
     def test_severity_impact_mapping(self):
         """Test incident severity to likelihood adjustment."""
         from src.domain.models.incident import IncidentSeverity
-        from src.domain.services.risk_scoring import RiskScoringService
+        from src.services.risk_scoring import RiskScoringService
 
         assert RiskScoringService.SEVERITY_IMPACT[IncidentSeverity.CRITICAL] == 2
         assert RiskScoringService.SEVERITY_IMPACT[IncidentSeverity.HIGH] == 1
@@ -148,7 +140,7 @@ class TestRiskScoring:
 
     def test_near_miss_velocity_thresholds(self):
         """Test near-miss velocity threshold values."""
-        from src.domain.services.risk_scoring import RiskScoringService
+        from src.services.risk_scoring import RiskScoringService
 
         assert RiskScoringService.NEAR_MISS_VELOCITY_HIGH == 10
         assert RiskScoringService.NEAR_MISS_VELOCITY_MEDIUM == 5
@@ -363,7 +355,7 @@ class TestIntegration:
     def test_incident_triggers_risk_update_flow(self):
         """Test that critical incident affects risk scoring."""
         from src.domain.models.incident import IncidentSeverity
-        from src.domain.services.risk_scoring import RiskScoringService
+        from src.services.risk_scoring import RiskScoringService
 
         # Simulate risk with likelihood=3, impact=4
         old_likelihood = 3
@@ -434,21 +426,21 @@ class TestEdgeCases:
 
     def test_empty_conditions_returns_true(self):
         """Empty conditions should match everything."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
         assert ConditionEvaluator.evaluate(None, {"any": "data"}) is True
         assert ConditionEvaluator.evaluate({}, {"any": "data"}) is True
 
     def test_invalid_operator_returns_false(self):
         """Invalid operator should return False."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
         condition = {"field": "status", "operator": "unknown_op", "value": "test"}
         assert ConditionEvaluator.evaluate(condition, {"status": "test"}) is False
 
     def test_missing_field_returns_false(self):
         """Missing field should return False for equals."""
-        from src.domain.services.workflow_engine import ConditionEvaluator
+        from src.services.workflow_engine import ConditionEvaluator
 
         condition = {"field": "nonexistent", "operator": "equals", "value": "test"}
         assert ConditionEvaluator.evaluate(condition, {"other_field": "value"}) is False

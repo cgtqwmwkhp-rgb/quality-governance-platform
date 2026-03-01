@@ -17,7 +17,7 @@ Only users in UAT_ADMIN_USERS list can use override headers.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from fastapi import Request, Response
@@ -39,10 +39,6 @@ ALWAYS_ALLOWED_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/token",
     "/api/v1/auth/refresh",
-    "/api/v1/telemetry/web-vitals",
-    "/api/v1/telemetry/performance",
-    "/api/v1/telemetry/csp-report",
-    "/api/v1/telemetry/errors",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -54,9 +50,7 @@ class UATWriteBlockedResponse:
     """Standard response for blocked UAT writes."""
 
     @staticmethod
-    def create(
-        detail: str = "UAT on production is read-only by default",
-    ) -> JSONResponse:
+    def create(detail: str = "UAT on production is read-only by default") -> JSONResponse:
         return JSONResponse(
             status_code=409,
             content={
@@ -118,8 +112,12 @@ def _validate_override_headers(request: Request) -> tuple[bool, Optional[str]]:
 
 def _get_user_id_from_request(request: Request) -> Optional[str]:
     """Extract user ID from request (non-PII identifier)."""
+    # Try to get from state (set by auth middleware)
     if hasattr(request.state, "user_id"):
         return str(request.state.user_id)
+    # Try to get from headers
+    if "X-User-ID" in request.headers:
+        return request.headers["X-User-ID"]
     return None
 
 
@@ -145,7 +143,7 @@ def _log_uat_write_attempt(
         "method": request.method,
         "path": request.url.path,
         "user_id": user_id or "anonymous",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.utcnow().isoformat(),
     }
     if issue_id:
         log_data["issue_id"] = issue_id

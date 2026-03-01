@@ -1,27 +1,16 @@
 """Policy Library API routes."""
 
 from datetime import datetime, timezone
-from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.links import build_collection_links, build_resource_links
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
-from src.domain.exceptions import AuthorizationError, ConflictError
 from src.domain.models.policy import Policy
-from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 
@@ -35,7 +24,7 @@ router = APIRouter()
 async def create_policy(
     policy_data: PolicyCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("policy:create"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ) -> Policy:
     """
@@ -47,13 +36,19 @@ async def create_policy(
     if policy_data.reference_number:
         # Guard: Only authorized users can set explicit reference numbers
         if not current_user.has_permission("policy:set_reference_number"):
-            raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission 'policy:set_reference_number' required to set explicit reference number",
+            )
 
         reference_number = policy_data.reference_number
         # Check for duplicate reference number
         existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
         if existing.scalar_one_or_none():
-            raise ConflictError(ErrorCode.DUPLICATE_ENTITY)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Policy with reference number {reference_number} already exists",
+            )
     else:
         # Generate reference number (format: POL-YYYY-NNNN)
         year = datetime.now(timezone.utc).year
@@ -70,14 +65,11 @@ async def create_policy(
         reference_number=reference_number,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
-        tenant_id=current_user.tenant_id,
     )
 
     db.add(policy)
     await db.commit()
     await db.refresh(policy)
-    await invalidate_tenant_cache(current_user.tenant_id, "policies")
-    track_metric("policies.accessed", 1, {"tenant_id": str(current_user.tenant_id)})
 
     # Record audit event
     await record_audit_event(
@@ -103,16 +95,22 @@ async def get_policy(
     policy_id: int,
     db: DbSession,
     current_user: CurrentUser,
-):
+) -> Policy:
     """
     Get a specific policy by ID.
 
     Requires authentication.
     """
-    policy = await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
-    response = PolicyResponse.model_validate(policy)
-    response.links = build_resource_links("", "policies", policy_id)
-    return response
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Policy with id {policy_id} not found",
+        )
+
+    return policy
 
 
 @router.get(
@@ -123,8 +121,9 @@ async def get_policy(
 async def list_policies(
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
-) -> Any:
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+) -> PolicyListResponse:
     """
     List all policies with deterministic ordering.
 
@@ -134,22 +133,29 @@ async def list_policies(
 
     Requires authentication.
     """
-    query = (
-        select(Policy)
-        .options(selectinload(Policy.versions))
-        .where(Policy.tenant_id == current_user.tenant_id)
-        .order_by(Policy.reference_number.desc(), Policy.id.asc())
-    )
+    # Count total
+    count_result = await db.execute(select(sa_func.count()).select_from(Policy))
+    total = count_result.scalar_one()
 
-    paginated = await paginate(db, query, params)
-    return {
-        "items": paginated.items,
-        "total": paginated.total,
-        "page": paginated.page,
-        "page_size": paginated.page_size,
-        "pages": paginated.pages,
-        "links": build_collection_links("policies", paginated.page, paginated.page_size, paginated.pages),
-    }
+    # Get paginated results with deterministic ordering
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        select(Policy)
+        .order_by(Policy.reference_number.desc(), Policy.id.asc())  # Deterministic ordering
+        .limit(page_size)
+        .offset(offset)
+    )
+    policies = result.scalars().all()
+
+    import math
+
+    return PolicyListResponse(
+        items=[PolicyResponse.model_validate(p) for p in policies],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total > 0 else 1,
+    )
 
 
 @router.put(
@@ -161,7 +167,7 @@ async def update_policy(
     policy_id: int,
     policy_data: PolicyUpdate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("policy:update"))],
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ) -> Policy:
     """
@@ -169,15 +175,25 @@ async def update_policy(
 
     Requires authentication.
     """
-    policy = await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
+    # Get existing policy
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    policy = result.scalar_one_or_none()
 
-    update_data = apply_updates(policy, policy_data, set_updated_at=False)
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Policy with id {policy_id} not found",
+        )
+
+    # Update fields
+    update_data = policy_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(policy, field, value)
 
     policy.updated_by_id = current_user.id
 
     await db.commit()
     await db.refresh(policy)
-    await invalidate_tenant_cache(current_user.tenant_id, "policies")
 
     # Record audit event
     await record_audit_event(
@@ -202,7 +218,7 @@ async def update_policy(
 async def delete_policy(
     policy_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
 ) -> None:
     """
@@ -210,7 +226,15 @@ async def delete_policy(
 
     Requires authentication.
     """
-    policy = await get_or_404(db, Policy, policy_id, tenant_id=current_user.tenant_id)
+    # Get existing policy
+    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    policy = result.scalar_one_or_none()
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Policy with id {policy_id} not found",
+        )
 
     # Record audit event
     await record_audit_event(
@@ -225,4 +249,3 @@ async def delete_policy(
     )
     await db.delete(policy)
     await db.commit()
-    await invalidate_tenant_cache(current_user.tenant_id, "policies")

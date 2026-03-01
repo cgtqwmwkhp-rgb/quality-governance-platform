@@ -34,7 +34,7 @@ class TestFiveWhysAnalysis:
         assert analysis.problem_statement == "Equipment failure during production"
         assert analysis.entity_type == "incident"
         assert analysis.whys == []
-        assert not analysis.completed
+        assert analysis.completed is False
 
     def test_add_why_iteration(self):
         """Test adding why iterations."""
@@ -74,18 +74,8 @@ class TestFiveWhysAnalysis:
         analysis = FiveWhysAnalysis(
             problem_statement="System crash",
             whys=[
-                {
-                    "level": 1,
-                    "why": "Why crash?",
-                    "answer": "Memory full",
-                    "evidence": None,
-                },
-                {
-                    "level": 2,
-                    "why": "Why memory full?",
-                    "answer": "Memory leak",
-                    "evidence": None,
-                },
+                {"level": 1, "why": "Why crash?", "answer": "Memory full", "evidence": None},
+                {"level": 2, "why": "Why memory full?", "answer": "Memory leak", "evidence": None},
             ],
             primary_root_cause="Memory leak in module X",
         )
@@ -122,9 +112,7 @@ class TestFishboneDiagram:
         )
 
         diagram.add_cause(
-            FishboneCategory.MANPOWER,
-            "Inadequate training",
-            ["No refresher courses", "Outdated materials"],
+            FishboneCategory.MANPOWER, "Inadequate training", ["No refresher courses", "Outdated materials"]
         )
 
         assert len(diagram.causes["manpower"]) == 1
@@ -373,7 +361,7 @@ class TestAuditorTraining:
         )
 
         assert training.training_name == "ISO 14001 Internal Auditor"
-        assert not training.completed
+        assert training.completed is False
 
     def test_training_completion(self):
         """Test training completion."""

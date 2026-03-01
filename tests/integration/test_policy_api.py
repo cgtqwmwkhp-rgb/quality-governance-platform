@@ -274,14 +274,11 @@ async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers:
 
 
 @pytest.mark.asyncio
-async def test_delete_policy_not_found(client: AsyncClient, superuser_auth_headers: dict):
-    """Test deleting a non-existent policy returns 404.
-
-    Delete requires superuser; using admin auth would yield 403 before 404.
-    """
+async def test_delete_policy_not_found(client: AsyncClient, auth_headers: dict):
+    """Test deleting a non-existent policy returns 404."""
     response = await client.delete(
         "/api/v1/policies/99999",
-        headers=superuser_auth_headers,
+        headers=auth_headers,
     )
 
     assert response.status_code == 404

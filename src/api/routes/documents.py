@@ -10,20 +10,13 @@ Enterprise document management with:
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.pagination import DataListResponse
-from src.api.utils.entity import get_or_404
-from src.api.utils.pagination import PaginationParams, paginate
-from src.domain.exceptions import FileValidationError
+from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -34,16 +27,7 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
-from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
-from src.infrastructure.storage import StorageError, storage_service
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -125,14 +109,6 @@ class SearchResponse(BaseModel):
     latency_ms: int
 
 
-class DocumentStatsResponse(BaseModel):
-    total_documents: int
-    indexed_documents: int
-    total_chunks: int
-    by_status: dict
-    by_type: dict
-
-
 class AnnotationCreate(BaseModel):
     """Create annotation request."""
 
@@ -172,7 +148,7 @@ class AnnotationResponse(BaseModel):
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:create"))],
+    current_user: CurrentUser,
     file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(None),
@@ -182,21 +158,25 @@ async def upload_document(
     sensitivity: str = Form("internal"),
 ):
     """Upload and process a new document."""
-    _span = tracer.start_span("upload_document") if tracer else None
-    if _span:
-        _span.set_attribute("tenant_id", str(getattr(current_user, "tenant_id", 0) or 0))
 
+    # Validate file type
     file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
     try:
         file_type = FileType(file_ext)
     except ValueError:
-        raise FileValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}",
+        )
 
+    # Read file content
     content = await file.read()
     file_size = len(content)
 
+    # Generate unique file path (for Azure Blob Storage)
     file_path = f"documents/{datetime.utcnow().strftime('%Y/%m')}/{uuid.uuid4()}/{file.filename}"
 
+    # Create document record
     doc = Document(
         title=title,
         description=description,
@@ -223,42 +203,30 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
 
-    try:
-        store = storage_service()
-        await store.upload(
-            storage_key=file_path,
-            content=content,
-            content_type=file.content_type or "application/octet-stream",
-            metadata={"document_id": str(doc.id), "title": title},
-        )
-    except StorageError as e:
-        doc.status = DocumentStatus.FAILED
-        doc.indexing_error = f"Storage upload failed: {e}"
-        await db.commit()
-        return DocumentUploadResponse(
-            id=doc.id,
-            reference_number=doc.reference_number,
-            title=doc.title,
-            status=doc.status.value,
-            message=f"Document record created but file upload failed: {e}",
-        )
+    # TODO: Upload to Azure Blob Storage
+    # await azure_blob_service.upload(file_path, content)
 
+    # Trigger AI processing (async background job)
+    # For now, do inline processing
     try:
         ai_service = DocumentAIService()
 
+        # Extract text content based on file type
         text_content = ""
         if file_type in [FileType.TXT, FileType.MD]:
             text_content = content.decode("utf-8", errors="ignore")
-        elif file_type == FileType.CSV:
-            text_content = content.decode("utf-8", errors="ignore")
         elif file_type == FileType.PDF:
-            text_content = ""
+            # TODO: Use pdf-parse or similar
+            text_content = f"[PDF content extraction not implemented for {file.filename}]"
         elif file_type in [FileType.DOCX, FileType.DOC]:
-            text_content = ""
-        elif file_type in [FileType.XLSX, FileType.XLS]:
-            text_content = ""
+            # TODO: Use python-docx
+            text_content = f"[Word content extraction not implemented for {file.filename}]"
+        elif file_type in [FileType.XLSX, FileType.XLS, FileType.CSV]:
+            # TODO: Use openpyxl/pandas
+            text_content = f"[Spreadsheet content extraction not implemented for {file.filename}]"
 
         if text_content and not text_content.startswith("["):
+            # Analyze with AI
             filename = file.filename or "document"
             analysis = await ai_service.analyze_document(text_content, filename, file_ext)
 
@@ -273,9 +241,11 @@ async def upload_document(
             doc.has_images = analysis.has_images
             doc.word_count = len(text_content.split())
 
+            # Generate chunks
             chunks = await ai_service.generate_chunks(text_content)
             doc.chunk_count = len(chunks)
 
+            # Save chunks
             for chunk in chunks:
                 db_chunk = DocumentChunk(
                     document_id=doc.id,
@@ -288,6 +258,7 @@ async def upload_document(
                 )
                 db.add(db_chunk)
 
+            # Generate embeddings and index
             embedding_service = EmbeddingService()
             vector_service = VectorSearchService()
 
@@ -305,13 +276,11 @@ async def upload_document(
 
         await db.commit()
 
-    except (SQLAlchemyError, ValueError) as e:
+    except Exception as e:
         doc.status = DocumentStatus.FAILED
         doc.indexing_error = str(e)
         await db.commit()
 
-    if _span:
-        _span.end()
     return DocumentUploadResponse(
         id=doc.id,
         reference_number=doc.reference_number,
@@ -330,28 +299,20 @@ async def upload_document(
 async def list_documents(
     db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     document_type: Optional[str] = None,
     category: Optional[str] = None,
     department: Optional[str] = None,
-    doc_status: Optional[str] = Query(None, alias="status"),
+    status: Optional[str] = None,
     is_indexed: Optional[bool] = None,
 ):
     """List documents with filtering and pagination."""
 
-    query = (
-        select(Document)
-        .options(
-            selectinload(Document.annotations),
-            selectinload(Document.versions),
-        )
-        .where(
-            Document.is_active == True,
-            Document.tenant_id == current_user.tenant_id,
-        )
-    )
+    query = select(Document).where(Document.is_active == True)
 
+    # Apply filters
     if search:
         search_filter = f"%{search}%"
         query = query.where(
@@ -369,23 +330,31 @@ async def list_documents(
         query = query.where(Document.category == category)
     if department:
         query = query.where(Document.department == department)
-    if doc_status:
-        query = query.where(Document.status == doc_status)
+    if status:
+        query = query.where(Document.status == status)
     if is_indexed is not None:
         if is_indexed:
             query = query.where(Document.indexed_at.isnot(None))
         else:
             query = query.where(Document.indexed_at.is_(None))
 
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+
+    # Apply pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(Document.created_at.desc())
-    paginated = await paginate(db, query, params)
+
+    result = await db.execute(query)
+    documents = result.scalars().all()
 
     return DocumentListResponse(
-        items=[DocumentResponse.model_validate(d) for d in paginated.items],
-        total=paginated.total,
-        page=paginated.page,
-        page_size=paginated.page_size,
-        pages=paginated.pages,
+        items=[DocumentResponse.model_validate(d) for d in documents],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size,
     )
 
 
@@ -396,8 +365,14 @@ async def get_document(
     current_user: CurrentUser,
 ):
     """Get document details."""
-    document = await get_or_404(db, Document, document_id, tenant_id=current_user.tenant_id)
 
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    document = result.scalar_one_or_none()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Increment view count
     document.view_count += 1
     document.last_accessed_at = datetime.utcnow()
     await db.commit()
@@ -426,10 +401,12 @@ async def semantic_search(
 
     vector_service = VectorSearchService()
 
+    # Build filter
     filter_dict = None
     if document_type:
         filter_dict = {"document_type": document_type}
 
+    # Search vectors
     matches = await vector_service.search(q, top_k=top_k, filter_dict=filter_dict)
 
     results = []
@@ -440,12 +417,8 @@ async def semantic_search(
         if doc_id and doc_id not in doc_ids:
             doc_ids.add(doc_id)
 
-            doc_result = await db.execute(
-                select(Document).where(
-                    Document.id == doc_id,
-                    Document.tenant_id == current_user.tenant_id,
-                )
-            )
+            # Get document info
+            doc_result = await db.execute(select(Document).where(Document.id == doc_id))
             doc = doc_result.scalar_one_or_none()
 
             if doc:
@@ -463,6 +436,7 @@ async def semantic_search(
 
     latency_ms = int((time.time() - start_time) * 1000)
 
+    # Log search
     log = DocumentSearchLog(
         query=q,
         query_type="semantic",
@@ -487,7 +461,7 @@ async def semantic_search(
 # =============================================================================
 
 
-@router.get("/{document_id}/annotations", response_model=DataListResponse)
+@router.get("/{document_id}/annotations", response_model=list[AnnotationResponse])
 async def list_annotations(
     document_id: int,
     db: DbSession,
@@ -497,6 +471,7 @@ async def list_annotations(
 
     query = select(DocumentAnnotation).where(DocumentAnnotation.document_id == document_id)
 
+    # Show user's own annotations + shared annotations
     query = query.where(
         or_(
             DocumentAnnotation.user_id == current_user.id,
@@ -507,7 +482,7 @@ async def list_annotations(
     result = await db.execute(query.order_by(DocumentAnnotation.created_at.desc()))
     annotations = result.scalars().all()
 
-    return {"data": [AnnotationResponse.model_validate(a) for a in annotations]}
+    return [AnnotationResponse.model_validate(a) for a in annotations]
 
 
 @router.post(
@@ -519,10 +494,14 @@ async def create_annotation(
     document_id: int,
     annotation_data: AnnotationCreate,
     db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:create"))],
+    current_user: CurrentUser,
 ):
     """Create an annotation on a document."""
-    await get_or_404(db, Document, document_id, tenant_id=current_user.tenant_id)
+
+    # Verify document exists
+    doc_result = await db.execute(select(Document).where(Document.id == document_id))
+    if not doc_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Document not found")
 
     annotation = DocumentAnnotation(
         document_id=document_id,
@@ -548,33 +527,32 @@ async def create_annotation(
 # =============================================================================
 
 
-@router.get("/stats/overview", response_model=DocumentStatsResponse)
+@router.get("/stats/overview")
 async def get_document_stats(
     db: DbSession,
     current_user: CurrentUser,
 ):
     """Get document library statistics."""
 
-    tenant_filter = Document.tenant_id == current_user.tenant_id
-
-    total_result = await db.execute(select(func.count(Document.id)).where(tenant_filter))
+    # Total documents
+    total_result = await db.execute(select(func.count(Document.id)))
     total = total_result.scalar() or 0
 
-    status_result = await db.execute(
-        select(Document.status, func.count(Document.id)).where(tenant_filter).group_by(Document.status)
-    )
+    # By status
+    status_result = await db.execute(select(Document.status, func.count(Document.id)).group_by(Document.status))
     by_status = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in status_result.all()}
 
+    # By type
     type_result = await db.execute(
-        select(Document.document_type, func.count(Document.id)).where(tenant_filter).group_by(Document.document_type)
+        select(Document.document_type, func.count(Document.id)).group_by(Document.document_type)
     )
     by_type = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in type_result.all()}
 
-    indexed_result = await db.execute(
-        select(func.count(Document.id)).where(Document.indexed_at.isnot(None), tenant_filter)
-    )
+    # Indexed count
+    indexed_result = await db.execute(select(func.count(Document.id)).where(Document.indexed_at.isnot(None)))
     indexed = indexed_result.scalar() or 0
 
+    # Total chunks
     chunk_result = await db.execute(select(func.count(DocumentChunk.id)))
     total_chunks = chunk_result.scalar() or 0
 

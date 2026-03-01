@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from 'react-router-dom';
 import {
   FileText,
   Search,
@@ -8,11 +8,11 @@ import {
   Smartphone,
   LogOut,
   User,
-} from "lucide-react";
-import { usePortalAuth } from "../contexts/PortalAuthContext";
-import { Card } from "../components/ui/Card";
-import { ThemeToggle } from "../components/ui/ThemeToggle";
-import { cn } from "../helpers/utils";
+} from 'lucide-react';
+import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { Card } from '../components/ui/Card';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { cn } from '../helpers/utils';
 
 export default function Portal() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function Portal() {
 
   const handleLogout = () => {
     logout();
-    navigate("/portal/login");
+    navigate('/portal/login');
   };
 
   return (
@@ -52,10 +52,7 @@ export default function Portal() {
         </div>
       </header>
 
-      <main
-        className="max-w-lg mx-auto px-4 sm:px-6 py-8"
-        data-testid="portal-home"
-      >
+      <main className="max-w-lg mx-auto px-4 sm:px-6 py-8">
         {/* User Welcome Card */}
         <Card className="p-4 mb-6">
           <div className="flex items-center gap-3">
@@ -63,9 +60,7 @@ export default function Portal() {
               <User className="w-6 h-6 text-primary" />
             </div>
             <div className="flex-1">
-              <p className="text-foreground font-semibold">
-                {user?.name || "Employee"}
-              </p>
+              <p className="text-foreground font-semibold">{user?.name || 'Employee'}</p>
               <p className="text-muted-foreground text-sm">{user?.email}</p>
               {user?.isDemoUser && (
                 <span className="inline-block mt-1 px-2 py-0.5 bg-warning/10 text-warning text-xs font-medium rounded-full border border-warning/20">
@@ -78,9 +73,7 @@ export default function Portal() {
 
         {/* Welcome Message */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-semibold text-foreground mb-2">
-            What would you like to do?
-          </h2>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">What would you like to do?</h2>
           <p className="text-muted-foreground">Select an option below</p>
         </div>
 
@@ -88,11 +81,10 @@ export default function Portal() {
         <div className="space-y-3">
           {/* Primary Action: Submit Report */}
           <button
-            data-testid="portal-report-btn"
-            onClick={() => navigate("/portal/report")}
+            onClick={() => navigate('/portal/report')}
             className={cn(
               "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",
-              "bg-primary/5 hover:bg-primary/10 border-2 border-primary/20 hover:border-primary/40",
+              "bg-primary/5 hover:bg-primary/10 border-2 border-primary/20 hover:border-primary/40"
             )}
           >
             <div className="w-14 h-14 rounded-xl gradient-brand flex items-center justify-center shadow-glow">
@@ -102,9 +94,7 @@ export default function Portal() {
               <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
                 Submit a Report
               </h3>
-              <p className="text-sm text-muted-foreground">
-                Incident, Near Miss, Complaint, or RTA
-              </p>
+              <p className="text-sm text-muted-foreground">Incident, Near Miss, Complaint, or RTA</p>
             </div>
             <ChevronRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" />
           </button>
@@ -113,8 +103,7 @@ export default function Portal() {
           <Card
             hoverable
             className="p-4 cursor-pointer group"
-            onClick={() => navigate("/portal/track")}
-            data-testid="portal-track-btn"
+            onClick={() => navigate('/portal/track')}
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-info/10 rounded-xl flex items-center justify-center">
@@ -124,9 +113,7 @@ export default function Portal() {
                 <h3 className="font-semibold text-foreground group-hover:text-info transition-colors">
                   Track My Report
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  Check status with reference number
-                </p>
+                <p className="text-sm text-muted-foreground">Check status with reference number</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
@@ -136,7 +123,7 @@ export default function Portal() {
           <Card
             hoverable
             className="p-4 cursor-pointer group"
-            onClick={() => navigate("/portal/help")}
+            onClick={() => navigate('/portal/help')}
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-muted rounded-xl flex items-center justify-center">
@@ -146,9 +133,7 @@ export default function Portal() {
                 <h3 className="font-semibold text-foreground group-hover:text-foreground/80 transition-colors">
                   Help & Support
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  FAQs and contact information
-                </p>
+                <p className="text-sm text-muted-foreground">FAQs and contact information</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
@@ -165,7 +150,7 @@ export default function Portal() {
       {/* Admin Login Link */}
       <footer className="fixed bottom-0 left-0 right-0 p-4 text-center bg-card/80 backdrop-blur-sm border-t border-border">
         <button
-          onClick={() => navigate("/login")}
+          onClick={() => navigate('/login')}
           className="text-muted-foreground hover:text-primary text-sm transition-colors"
         >
           Admin Login →

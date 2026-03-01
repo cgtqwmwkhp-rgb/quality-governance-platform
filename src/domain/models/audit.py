@@ -63,12 +63,6 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # Archive / soft-delete: two-stage (archive → purge after 30 days)
-    archived_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None, index=True
-    )
-    archived_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-
     # Scoring configuration
     scoring_method: Mapped[str] = mapped_column(String(50), default="percentage")
     passing_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -85,15 +79,8 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     # Standard mapping (JSON array of standard IDs)
     standard_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-
-    @property
-    def is_archived(self) -> bool:
-        return self.archived_at is not None
 
     # Relationships
     sections: Mapped[List["AuditSection"]] = relationship(
@@ -112,10 +99,6 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
         "AuditRun",
         back_populates="template",
     )
-
-    @property
-    def standard_ids(self) -> list | None:
-        return self.standard_ids_json
 
     def __repr__(self) -> str:
         return f"<AuditTemplate(id={self.id}, name='{self.name}', v{self.version})>"
@@ -211,26 +194,6 @@ class AuditQuestion(Base, TimestampMixin):
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="questions")
     section: Mapped[Optional["AuditSection"]] = relationship("AuditSection", back_populates="questions")
 
-    @property
-    def options(self) -> list | None:
-        return self.options_json
-
-    @property
-    def evidence_requirements(self) -> dict | None:
-        return self.evidence_requirements_json
-
-    @property
-    def conditional_logic(self) -> list | None:
-        return self.conditional_logic_json
-
-    @property
-    def clause_ids(self) -> list | None:
-        return self.clause_ids_json
-
-    @property
-    def control_ids(self) -> list | None:
-        return self.control_ids_json
-
     def __repr__(self) -> str:
         return f"<AuditQuestion(id={self.id}, type='{self.question_type}')>"
 
@@ -260,9 +223,6 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Assignment
     assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -352,26 +312,11 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     corrective_action_required: Mapped[bool] = mapped_column(Boolean, default=True)
     corrective_action_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
-
-    @property
-    def clause_ids(self) -> list | None:
-        return self.clause_ids_json
-
-    @property
-    def control_ids(self) -> list | None:
-        return self.control_ids_json
-
-    @property
-    def risk_ids(self) -> list | None:
-        return self.risk_ids_json
 
     def __repr__(self) -> str:
         return f"<AuditFinding(id={self.id}, ref='{self.reference_number}', severity='{self.severity}')>"

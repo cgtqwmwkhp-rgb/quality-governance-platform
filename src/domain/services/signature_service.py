@@ -10,11 +10,11 @@ Provides DocuSign-level e-signature capabilities with:
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
 
 from src.domain.models.digital_signature import (
     Signature,
@@ -30,20 +30,21 @@ class SignatureService:
     Digital signature management service.
     """
 
+    # Legal statement for electronic signatures
     LEGAL_STATEMENT = (
         "By signing this document electronically, I agree that my electronic signature "
         "is the legal equivalent of my manual signature. I consent to the use of electronic "
         "signatures, and I understand that I am legally bound by this agreement."
     )
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
     # =========================================================================
     # Signature Requests
     # =========================================================================
 
-    async def create_request(
+    def create_request(
         self,
         tenant_id: int,
         title: str,
@@ -62,8 +63,10 @@ class SignatureService:
         metadata: Optional[dict] = None,
     ) -> SignatureRequest:
         """Create a new signature request."""
+        # Generate reference number
         reference = f"SIG-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
 
+        # Calculate document hash if content provided
         document_hash = None
         if document_content:
             document_hash = hashlib.sha256(document_content).hexdigest()
@@ -82,14 +85,15 @@ class SignatureService:
             workflow_type=workflow_type,
             require_all=require_all,
             initiated_by_id=initiated_by_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days),
+            expires_at=datetime.utcnow() + timedelta(days=expires_in_days),
             reminder_frequency=reminder_frequency,
             request_metadata=metadata or {},
         )
 
         self.db.add(request)
-        await self.db.flush()
+        self.db.flush()
 
+        # Add signers
         if signers:
             for i, signer_data in enumerate(signers):
                 signer = SignatureRequestSigner(
@@ -104,7 +108,8 @@ class SignatureService:
                 )
                 self.db.add(signer)
 
-        await self._log_action(
+        # Log creation
+        self._log_action(
             tenant_id=tenant_id,
             request_id=request.id,
             action="created",
@@ -112,24 +117,22 @@ class SignatureService:
             actor_id=initiated_by_id,
         )
 
-        await self.db.commit()
-        await self.db.refresh(request)
+        self.db.commit()
+        self.db.refresh(request)
 
         return request
 
-    async def get_request(self, request_id: int) -> Optional[SignatureRequest]:
+    def get_request(self, request_id: int) -> Optional[SignatureRequest]:
         """Get a signature request by ID."""
-        result = await self.db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
-        return result.scalar_one_or_none()
+        return self.db.query(SignatureRequest).filter(SignatureRequest.id == request_id).first()
 
-    async def get_request_by_reference(self, reference: str) -> Optional[SignatureRequest]:
+    def get_request_by_reference(self, reference: str) -> Optional[SignatureRequest]:
         """Get a signature request by reference number."""
-        result = await self.db.execute(select(SignatureRequest).where(SignatureRequest.reference_number == reference))
-        return result.scalar_one_or_none()
+        return self.db.query(SignatureRequest).filter(SignatureRequest.reference_number == reference).first()
 
-    async def send_request(self, request_id: int) -> SignatureRequest:
+    def send_request(self, request_id: int) -> SignatureRequest:
         """Send a signature request to signers."""
-        request = await self.get_request(request_id)
+        request = self.get_request(request_id)
         if not request:
             raise ValueError(f"Request {request_id} not found")
 
@@ -138,26 +141,29 @@ class SignatureService:
 
         request.status = "pending"
 
-        await self._log_action(
+        # In production, send emails to signers
+        # For now, just update status
+
+        self._log_action(
             tenant_id=request.tenant_id,
             request_id=request.id,
             action="sent",
             actor_type="system",
         )
 
-        await self.db.commit()
-        await self.db.refresh(request)
+        self.db.commit()
+        self.db.refresh(request)
 
         return request
 
-    async def void_request(
+    def void_request(
         self,
         request_id: int,
         voided_by_id: int,
         reason: Optional[str] = None,
     ) -> SignatureRequest:
         """Void a signature request."""
-        request = await self.get_request(request_id)
+        request = self.get_request(request_id)
         if not request:
             raise ValueError(f"Request {request_id} not found")
 
@@ -166,7 +172,7 @@ class SignatureService:
 
         request.status = "voided"
 
-        await self._log_action(
+        self._log_action(
             tenant_id=request.tenant_id,
             request_id=request.id,
             action="voided",
@@ -175,8 +181,8 @@ class SignatureService:
             details={"reason": reason},
         )
 
-        await self.db.commit()
-        await self.db.refresh(request)
+        self.db.commit()
+        self.db.refresh(request)
 
         return request
 
@@ -184,29 +190,29 @@ class SignatureService:
     # Signing
     # =========================================================================
 
-    async def get_signer_by_token(self, token: str) -> Optional[SignatureRequestSigner]:
+    def get_signer_by_token(self, token: str) -> Optional[SignatureRequestSigner]:
         """Get a signer by their access token."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(
+        return (
+            self.db.query(SignatureRequestSigner)
+            .filter(
                 SignatureRequestSigner.access_token == token,
-                SignatureRequestSigner.token_expires_at > datetime.now(timezone.utc),
+                SignatureRequestSigner.token_expires_at > datetime.utcnow(),
             )
+            .first()
         )
-        return result.scalar_one_or_none()
 
-    async def record_view(
+    def record_view(
         self,
         signer_id: int,
         ip_address: str,
         user_agent: str,
     ) -> SignatureRequestSigner:
         """Record that a signer viewed the document."""
-        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
-        signer = result.scalar_one_or_none()
+        signer = self.db.query(SignatureRequestSigner).get(signer_id)
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
         if not signer.first_viewed_at:
             signer.first_viewed_at = now
@@ -218,7 +224,7 @@ class SignatureService:
         signer.ip_address = ip_address
         signer.user_agent = user_agent
 
-        await self._log_action(
+        self._log_action(
             tenant_id=signer.request.tenant_id,
             request_id=signer.request_id,
             action="viewed",
@@ -229,12 +235,12 @@ class SignatureService:
             user_agent=user_agent,
         )
 
-        await self.db.commit()
-        await self.db.refresh(signer)
+        self.db.commit()
+        self.db.refresh(signer)
 
         return signer
 
-    async def sign(
+    def sign(
         self,
         signer_id: int,
         signature_type: str,
@@ -245,13 +251,13 @@ class SignatureService:
         geo_location: Optional[str] = None,
     ) -> Signature:
         """Apply a signature."""
-        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
-        signer = result.scalar_one_or_none()
+        signer = self.db.query(SignatureRequestSigner).get(signer_id)
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
 
         request = signer.request
 
+        # Validate
         if signer.status == "signed":
             raise ValueError("Already signed")
         if signer.status == "declined":
@@ -259,23 +265,24 @@ class SignatureService:
         if request.status not in ["pending", "in_progress"]:
             raise ValueError(f"Request is {request.status}")
 
+        # Check sequential order
         if request.workflow_type == "sequential":
-            result = await self.db.execute(
-                select(func.count())
-                .select_from(SignatureRequestSigner)
-                .where(
+            pending_before = (
+                self.db.query(SignatureRequestSigner)
+                .filter(
                     SignatureRequestSigner.request_id == request.id,
                     SignatureRequestSigner.order < signer.order,
                     SignatureRequestSigner.status != "signed",
                     SignatureRequestSigner.signer_role != "cc",
                 )
+                .count()
             )
-            pending_before = result.scalar_one()
-            if pending_before > 0:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
+            if pending_before > 0:
                 raise ValueError("Waiting for previous signers")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
+        # Update signer
         signer.status = "signed"
         signer.signed_at = now
         signer.signature_type = signature_type
@@ -285,8 +292,9 @@ class SignatureService:
         signer.geo_location = geo_location
         signer.auth_method = auth_method
 
+        # Create signature record
         signature_hash = hashlib.sha256(
-            f"{signature_data}{request.document_hash or ''}{now.isoformat()}".encode()
+            f"{signature_data}{request.document_hash}{now.isoformat()}".encode()
         ).hexdigest()
 
         signature = Signature(
@@ -312,7 +320,8 @@ class SignatureService:
         )
         self.db.add(signature)
 
-        await self._log_action(
+        # Log
+        self._log_action(
             tenant_id=request.tenant_id,
             request_id=request.id,
             action="signed",
@@ -324,16 +333,18 @@ class SignatureService:
             details={"signature_type": signature_type},
         )
 
+        # Update request status
         request.status = "in_progress"
 
-        await self._check_completion(request)
+        # Check if all signers have signed
+        self._check_completion(request)
 
-        await self.db.commit()
-        await self.db.refresh(signature)
+        self.db.commit()
+        self.db.refresh(signature)
 
         return signature
 
-    async def decline(
+    def decline(
         self,
         signer_id: int,
         reason: str,
@@ -341,8 +352,7 @@ class SignatureService:
         user_agent: str,
     ) -> SignatureRequestSigner:
         """Decline to sign."""
-        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
-        signer = result.scalar_one_or_none()
+        signer = self.db.query(SignatureRequestSigner).get(signer_id)
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
 
@@ -351,7 +361,7 @@ class SignatureService:
         if signer.status in ["signed", "declined"]:
             raise ValueError(f"Already {signer.status}")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
         signer.status = "declined"
         signer.declined_at = now
@@ -359,10 +369,11 @@ class SignatureService:
         signer.ip_address = ip_address
         signer.user_agent = user_agent
 
+        # Update request status
         if request.require_all:
             request.status = "declined"
 
-        await self._log_action(
+        self._log_action(
             tenant_id=request.tenant_id,
             request_id=request.id,
             action="declined",
@@ -374,20 +385,21 @@ class SignatureService:
             details={"reason": reason},
         )
 
-        await self.db.commit()
-        await self.db.refresh(signer)
+        self.db.commit()
+        self.db.refresh(signer)
 
         return signer
 
-    async def _check_completion(self, request: SignatureRequest) -> bool:
+    def _check_completion(self, request: SignatureRequest) -> bool:
         """Check if all required signatures are complete."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(
+        required_signers = (
+            self.db.query(SignatureRequestSigner)
+            .filter(
                 SignatureRequestSigner.request_id == request.id,
                 SignatureRequestSigner.signer_role.in_(["signer", "approver"]),
             )
+            .all()
         )
-        required_signers = list(result.scalars().all())
 
         signed_count = sum(1 for s in required_signers if s.status == "signed")
 
@@ -398,9 +410,9 @@ class SignatureService:
 
         if complete:
             request.status = "completed"
-            request.completed_at = datetime.now(timezone.utc)
+            request.completed_at = datetime.utcnow()
 
-            await self._log_action(
+            self._log_action(
                 tenant_id=request.tenant_id,
                 request_id=request.id,
                 action="completed",
@@ -415,7 +427,7 @@ class SignatureService:
     # Templates
     # =========================================================================
 
-    async def create_template(
+    def create_template(
         self,
         tenant_id: int,
         name: str,
@@ -445,12 +457,12 @@ class SignatureService:
         )
 
         self.db.add(template)
-        await self.db.commit()
-        await self.db.refresh(template)
+        self.db.commit()
+        self.db.refresh(template)
 
         return template
 
-    async def create_from_template(
+    def create_from_template(
         self,
         template_id: int,
         initiated_by_id: int,
@@ -460,12 +472,11 @@ class SignatureService:
         metadata: Optional[dict] = None,
     ) -> SignatureRequest:
         """Create a signature request from a template."""
-        result = await self.db.execute(select(SignatureTemplate).where(SignatureTemplate.id == template_id))
-        template = result.scalar_one_or_none()
+        template = self.db.query(SignatureTemplate).get(template_id)
         if not template:
             raise ValueError(f"Template {template_id} not found")
 
-        return await self.create_request(
+        return self.create_request(
             tenant_id=template.tenant_id,
             title=title or f"{template.name} - {datetime.now().strftime('%Y-%m-%d')}",
             initiated_by_id=initiated_by_id,
@@ -483,20 +494,20 @@ class SignatureService:
     # Queries
     # =========================================================================
 
-    async def get_pending_requests(
+    def get_pending_requests(
         self,
         tenant_id: int,
         user_id: Optional[int] = None,
         email: Optional[str] = None,
     ) -> list[SignatureRequest]:
         """Get pending signature requests for a user."""
-        stmt = select(SignatureRequest).where(
+        query = self.db.query(SignatureRequest).filter(
             SignatureRequest.tenant_id == tenant_id,
             SignatureRequest.status.in_(["pending", "in_progress"]),
         )
 
         if user_id or email:
-            stmt = stmt.join(SignatureRequestSigner).where(
+            query = query.join(SignatureRequestSigner).filter(
                 or_(
                     SignatureRequestSigner.user_id == user_id,
                     SignatureRequestSigner.email == email,
@@ -504,71 +515,75 @@ class SignatureService:
                 SignatureRequestSigner.status.in_(["pending", "viewed"]),
             )
 
-        stmt = stmt.order_by(SignatureRequest.created_at.desc())
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        return query.order_by(SignatureRequest.created_at.desc()).all()
 
-    async def get_completed_requests(
+    def get_completed_requests(
         self,
         tenant_id: int,
         limit: int = 50,
     ) -> list[SignatureRequest]:
         """Get completed signature requests."""
-        result = await self.db.execute(
-            select(SignatureRequest)
-            .where(
+        return (
+            self.db.query(SignatureRequest)
+            .filter(
                 SignatureRequest.tenant_id == tenant_id,
                 SignatureRequest.status == "completed",
             )
             .order_by(SignatureRequest.completed_at.desc())
             .limit(limit)
+            .all()
         )
-        return list(result.scalars().all())
 
-    async def get_audit_log(self, request_id: int) -> list[SignatureAuditLog]:
+    def get_audit_log(self, request_id: int) -> list[SignatureAuditLog]:
         """Get audit log for a signature request."""
-        result = await self.db.execute(
-            select(SignatureAuditLog)
-            .where(SignatureAuditLog.request_id == request_id)
+        return (
+            self.db.query(SignatureAuditLog)
+            .filter(SignatureAuditLog.request_id == request_id)
             .order_by(SignatureAuditLog.created_at)
+            .all()
         )
-        return list(result.scalars().all())
 
     # =========================================================================
     # Reminders
     # =========================================================================
 
-    async def send_reminders(self, tenant_id: int) -> int:
+    def send_reminders(self, tenant_id: int) -> int:
         """Send reminders for pending signatures. Returns count sent."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         reminder_count = 0
 
-        result = await self.db.execute(
-            select(SignatureRequest).where(
+        # Get requests needing reminders
+        requests = (
+            self.db.query(SignatureRequest)
+            .filter(
                 SignatureRequest.tenant_id == tenant_id,
                 SignatureRequest.status.in_(["pending", "in_progress"]),
                 SignatureRequest.expires_at > now,
                 SignatureRequest.reminder_frequency > 0,
             )
+            .all()
         )
-        requests = list(result.scalars().all())
 
         for request in requests:
+            # Check if reminder is due
             if request.last_reminder_at:
                 days_since = (now - request.last_reminder_at).days
-                if days_since < request.reminder_frequency:  # type: ignore[operator]  # TYPE-IGNORE: MYPY-OVERRIDE
+                if days_since < request.reminder_frequency:
                     continue
             else:
+                # First reminder after 1 day
                 days_since_created = (now - request.created_at).days
                 if days_since_created < 1:
                     continue
 
+            # Get pending signers
             pending_signers = [s for s in request.signers if s.status in ["pending", "viewed"]]
 
             if pending_signers:
+                # In production, send actual emails
                 request.last_reminder_at = now
 
-                await self._log_action(
+                self._log_action(
                     tenant_id=tenant_id,
                     request_id=request.id,
                     action="reminded",
@@ -578,40 +593,41 @@ class SignatureService:
 
                 reminder_count += len(pending_signers)
 
-        await self.db.commit()
+        self.db.commit()
         return reminder_count
 
-    async def expire_old_requests(self, tenant_id: int) -> int:
+    def expire_old_requests(self, tenant_id: int) -> int:
         """Expire requests past their deadline. Returns count expired."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
-        result = await self.db.execute(
-            select(SignatureRequest).where(
+        expired = (
+            self.db.query(SignatureRequest)
+            .filter(
                 SignatureRequest.tenant_id == tenant_id,
                 SignatureRequest.status.in_(["pending", "in_progress"]),
                 SignatureRequest.expires_at < now,
             )
+            .all()
         )
-        expired = list(result.scalars().all())
 
         for request in expired:
             request.status = "expired"
 
-            await self._log_action(
+            self._log_action(
                 tenant_id=tenant_id,
                 request_id=request.id,
                 action="expired",
                 actor_type="system",
             )
 
-        await self.db.commit()
+        self.db.commit()
         return len(expired)
 
     # =========================================================================
     # Helpers
     # =========================================================================
 
-    async def _log_action(
+    def _log_action(
         self,
         tenant_id: int,
         request_id: int,
