@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from src.api.dependencies import CurrentUser
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -27,7 +28,6 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
-from src.api.dependencies import CurrentUser
 from src.infrastructure.database import get_db
 
 router = APIRouter()
