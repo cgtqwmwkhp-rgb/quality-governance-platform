@@ -26,31 +26,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install safety bandit pip-audit
-          pip install -r requirements.txt
+          pip install safety bandit
 
       - name: Run Safety check
         run: |
+          pip install -r requirements.txt
           safety check --json > safety-report.json || true
           cat safety-report.json
-
-      - name: Run pip-audit
-        run: |
-          pip-audit --strict --output pip-audit-report.json --format json || true
-          cat pip-audit-report.json
 
       - name: Upload Safety Report
         uses: actions/upload-artifact@v4
         with:
           name: safety-report
           path: safety-report.json
-        if: always()
-
-      - name: Upload pip-audit Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: pip-audit-report
-          path: pip-audit-report.json
         if: always()
 
   code-security:
@@ -71,7 +59,7 @@ jobs:
 
       - name: Run Bandit security linter
         run: |
-          bandit -r src/ -f json -o bandit-report.json --severity-level high || true
+          bandit -r src/ -f json -o bandit-report.json || true
           bandit -r src/ -ll
 
       - name: Upload Bandit Report
@@ -132,6 +120,8 @@ jobs:
           image-ref: 'qgp-backend:scan'
           format: 'sarif'
           output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3

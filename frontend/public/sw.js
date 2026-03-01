@@ -5,8 +5,8 @@
  * Old cached bundles may contain HTTP URLs - the SW rewrites them to HTTPS.
  */
 
-// Cache version - CI injects git SHA + timestamp
-const CACHE_VERSION = 'qgp-v3.7.0-20260124-token-expiry-fix';
+// Cache version - CI replaces __SW_VERSION__ with git SHA + timestamp at build time
+const CACHE_VERSION = '__SW_VERSION__';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -157,7 +157,11 @@ self.addEventListener('fetch', (event) => {
 async function networkFirstApi(request) {
   try {
     const response = await fetch(request);
-    // DO NOT cache API responses - always return fresh data
+    if (response.status === 401 || response.status === 403) {
+      // Auth failures: notify all clients to handle re-auth
+      const allClients = await self.clients.matchAll();
+      allClients.forEach(client => client.postMessage({ type: 'AUTH_REQUIRED', status: response.status }));
+    }
     return response;
   } catch (error) {
     console.log('[SW] API fetch failed - network unavailable');
@@ -275,9 +279,31 @@ async function syncPendingReports() {
     
     for (const report of reports) {
       try {
-        const response = await fetch('/api/portal/report', {
+        // Retrieve auth token from IndexedDB for authenticated sync
+        let authHeaders = { 'Content-Type': 'application/json' };
+        try {
+          const tokenDb = await new Promise((res, rej) => {
+            const r = indexedDB.open('QGP_Auth', 1);
+            r.onerror = () => rej(r.error);
+            r.onsuccess = () => res(r.result);
+            r.onupgradeneeded = (e) => e.target.result.createObjectStore('tokens', { keyPath: 'key' });
+          });
+          const tx = tokenDb.transaction('tokens', 'readonly');
+          const tokenResult = await new Promise((res) => {
+            const req = tx.objectStore('tokens').get('access_token');
+            req.onsuccess = () => res(req.result);
+            req.onerror = () => res(null);
+          });
+          if (tokenResult?.value) {
+            authHeaders['Authorization'] = `Bearer ${tokenResult.value}`;
+          }
+        } catch {
+          // No token available - submit without auth
+        }
+
+        const response = await fetch('/api/v1/portal/report', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(report.data),
         });
         

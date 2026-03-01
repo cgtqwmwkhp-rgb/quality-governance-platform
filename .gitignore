@@ -89,6 +89,13 @@ tmp/
 temp/
 *.tmp
 
+# Business data / documents (root-level only)
+/*.csv
+/*.xlsx
+/*.pdf
+/*.docx
+/*.zip
+
 # Node modules
 node_modules/
 

@@ -1,8 +1,5 @@
-import path from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import compression from 'vite-plugin-compression'
-import { visualizer } from 'rollup-plugin-visualizer'
 import { execSync } from 'child_process'
 
 // Get git commit SHA for build versioning
@@ -15,39 +12,38 @@ function getGitCommitSha(): string {
 }
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-    },
-  },
-  plugins: [
-    react(),
-    compression({ algorithm: 'gzip', threshold: 1024 }),
-    ...(process.env.ANALYZE ? [visualizer({ open: true, filename: 'dist/stats.html' })] : []),
-  ],
+  plugins: [react()],
   define: {
-    // Inject build version for cache busting and debugging
     __BUILD_VERSION__: JSON.stringify(getGitCommitSha()),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   build: {
-    chunkSizeWarningLimit: 500,
+    target: 'es2020',
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tooltip'],
-          'vendor-state': ['zustand', 'axios'],
-        }
-      }
-    }
+          'vendor-ui': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-select',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-tooltip',
+          ],
+          'vendor-state': ['axios'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-icons': ['lucide-react'],
+        },
+      },
+    },
   },
   server: {
     proxy: {
       '/api': {
         target: 'https://qgp-staging-plantexpand.azurewebsites.net',
         changeOrigin: true,
-      }
-    }
-  }
+      },
+    },
+  },
 })

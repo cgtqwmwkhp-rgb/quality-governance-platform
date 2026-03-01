@@ -1,43 +1,34 @@
-"""Document Control API routes.
+"""
+Advanced Document Control API Routes
 
-Thin controller layer — all business logic lives in DocumentControlService.
+Provides endpoints for:
+- Document CRUD with version control
+- Approval workflows
+- Distribution management
+- Obsolete document handling
+- Access tracking
 """
 
-from typing import Annotated, Any, Optional
+from datetime import datetime, timedelta
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.api.schemas.document_control import (
-    AcknowledgmentResponse,
-    ApprovalActionResponse,
-    ControlledDocumentResponse,
-    DistributeResponse,
-    DocumentAccessLogResponse,
-    DocumentApprovalWorkflowResponse,
-    DocumentCreateResponse,
-    DocumentListResponse,
-    DocumentSummaryResponse,
-    DocumentUpdateResponse,
-    ObsoleteResponse,
-    SubmitApprovalResponse,
-    VersionCreateResponse,
-    VersionDiffResponse,
-    WorkflowCreateResponse,
+from src.domain.models.document_control import (
+    ControlledDocument,
+    ControlledDocumentVersion,
+    DocumentAccessLog,
+    DocumentApprovalAction,
+    DocumentApprovalInstance,
+    DocumentApprovalWorkflow,
+    DocumentDistribution,
+    DocumentTrainingLink,
+    ObsoleteDocumentRecord,
 )
-from src.api.utils.pagination import PaginationParams
-from src.domain.exceptions import NotFoundError
-from src.domain.models.user import User
-from src.domain.services.document_control_service import DocumentControlService
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.api.dependencies import CurrentUser
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -121,242 +112,649 @@ class ObsoleteRequest(BaseModel):
 # ============ Document CRUD Endpoints ============
 
 
-@router.get("/", response_model=DocumentListResponse)
+@router.get("/", response_model=dict)
 async def list_documents(
-    db: DbSession,
     current_user: CurrentUser,
-    params: PaginationParams = Depends(),
     document_type: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """List controlled documents with filtering."""
-    service = DocumentControlService(db)
-    return await service.list_documents(
-        tenant_id=current_user.tenant_id,
-        params=params,
-        document_type=document_type,
-        category=category,
-        department=department,
-        status_filter=status,
-        search=search,
-    )
+    """List controlled documents with filtering"""
+    query = db.query(ControlledDocument).filter(ControlledDocument.is_current == True)
+
+    if document_type:
+        query = query.filter(ControlledDocument.document_type == document_type)
+    if category:
+        query = query.filter(ControlledDocument.category == category)
+    if department:
+        query = query.filter(ControlledDocument.department == department)
+    if status:
+        query = query.filter(ControlledDocument.status == status)
+    if search:
+        query = query.filter(
+            ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%")
+        )
+
+    total = query.count()
+    documents = query.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit).all()
+
+    return {
+        "total": total,
+        "documents": [
+            {
+                "id": d.id,
+                "document_number": d.document_number,
+                "title": d.title,
+                "document_type": d.document_type,
+                "category": d.category,
+                "current_version": d.current_version,
+                "status": d.status,
+                "department": d.department,
+                "owner_name": d.owner_name,
+                "effective_date": d.effective_date.isoformat() if d.effective_date else None,
+                "next_review_date": d.next_review_date.isoformat() if d.next_review_date else None,
+                "is_overdue": (d.next_review_date < datetime.utcnow() if d.next_review_date else False),
+            }
+            for d in documents
+        ],
+    }
 
 
-@router.post("/", response_model=DocumentCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=dict, status_code=201)
 async def create_document(
     document_data: DocumentCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:create"))],
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Create a new controlled document."""
-    _span = tracer.start_span("create_document") if tracer else None
-    service = DocumentControlService(db)
-    result = await service.create_document(document_data, tenant_id=current_user.tenant_id)
-    if _span:
-        _span.end()
+    """Create a new controlled document"""
+    # Generate document number
+    count = db.query(ControlledDocument).count()
+    type_prefix = document_data.document_type[:3].upper()
+    document_number = f"{type_prefix}-{(count + 1):05d}"
+
+    document = ControlledDocument(
+        document_number=document_number,
+        current_version="0.1",
+        major_version=0,
+        minor_version=1,
+        status="draft",
+        **document_data.model_dump(),
+    )
+
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    # Create initial version record
+    version = ControlledDocumentVersion(
+        document_id=document.id,
+        version_number="0.1",
+        major_version=0,
+        minor_version=1,
+        change_summary="Initial document creation",
+        change_type="new",
+        status="draft",
+        created_by_name=document_data.author_name,
+    )
+    db.add(version)
+    db.commit()
+
+    return {
+        "id": document.id,
+        "document_number": document_number,
+        "message": "Document created successfully",
+    }
+
+
+@router.get("/{document_id}", response_model=dict)
+async def get_document(
+    document_id: int,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Get detailed document information"""
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Get version history
+    versions = (
+        db.query(ControlledDocumentVersion)
+        .filter(ControlledDocumentVersion.document_id == document_id)
+        .order_by(ControlledDocumentVersion.created_at.desc())
+        .all()
+    )
+
+    # Get distributions
+    distributions = db.query(DocumentDistribution).filter(DocumentDistribution.document_id == document_id).all()
+
+    # Log access
+    log = DocumentAccessLog(
+        document_id=document_id,
+        user_name=current_user.full_name,
+        action="view",
+    )
+    db.add(log)
+    document.view_count += 1
+    db.commit()
+
+    return {
+        "id": document.id,
+        "document_number": document.document_number,
+        "title": document.title,
+        "description": document.description,
+        "document_type": document.document_type,
+        "category": document.category,
+        "subcategory": document.subcategory,
+        "current_version": document.current_version,
+        "status": document.status,
+        "department": document.department,
+        "author_name": document.author_name,
+        "owner_name": document.owner_name,
+        "approver_name": document.approver_name,
+        "approved_date": document.approved_date.isoformat() if document.approved_date else None,
+        "effective_date": document.effective_date.isoformat() if document.effective_date else None,
+        "expiry_date": document.expiry_date.isoformat() if document.expiry_date else None,
+        "review_frequency_months": document.review_frequency_months,
+        "next_review_date": document.next_review_date.isoformat() if document.next_review_date else None,
+        "last_review_date": document.last_review_date.isoformat() if document.last_review_date else None,
+        "file_name": document.file_name,
+        "file_path": document.file_path,
+        "file_size": document.file_size,
+        "file_type": document.file_type,
+        "relevant_standards": document.relevant_standards,
+        "relevant_clauses": document.relevant_clauses,
+        "access_level": document.access_level,
+        "is_confidential": document.is_confidential,
+        "training_required": document.training_required,
+        "view_count": document.view_count,
+        "download_count": document.download_count,
+        "versions": [
+            {
+                "id": v.id,
+                "version_number": v.version_number,
+                "change_summary": v.change_summary,
+                "change_type": v.change_type,
+                "status": v.status,
+                "created_by_name": v.created_by_name,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+                "approved_by_name": v.approved_by_name,
+                "approved_date": v.approved_date.isoformat() if v.approved_date else None,
+            }
+            for v in versions
+        ],
+        "distributions": [
+            {
+                "id": d.id,
+                "recipient_name": d.recipient_name,
+                "recipient_type": d.recipient_type,
+                "distribution_type": d.distribution_type,
+                "copy_number": d.copy_number,
+                "acknowledged": d.acknowledged,
+                "acknowledged_date": d.acknowledged_date.isoformat() if d.acknowledged_date else None,
+            }
+            for d in distributions
+        ],
+    }
+
+
+@router.put("/{document_id}", response_model=dict)
+async def update_document(
+    document_id: int,
+    document_data: DocumentUpdate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Update document metadata"""
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    update_data = document_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(document, key, value)
+
+    document.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(document)
+
+    return {"message": "Document updated successfully", "id": document.id}
+
+
+# ============ Version Control Endpoints ============
+
+
+@router.post("/{document_id}/versions", response_model=dict, status_code=201)
+async def create_new_version(
+    document_id: int,
+    version_data: VersionCreate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Create a new version of the document"""
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Calculate new version number
+    if version_data.is_major_version:
+        new_major = document.major_version + 1
+        new_minor = 0
+    else:
+        new_major = document.major_version
+        new_minor = document.minor_version + 1
+
+    new_version_number = f"{new_major}.{new_minor}"
+
+    # Update document
+    document.current_version = new_version_number
+    document.major_version = new_major
+    document.minor_version = new_minor
+    document.status = "under_revision"
+    document.updated_at = datetime.utcnow()
+
+    # Create version record
+    version = ControlledDocumentVersion(
+        document_id=document_id,
+        version_number=new_version_number,
+        major_version=new_major,
+        minor_version=new_minor,
+        change_summary=version_data.change_summary,
+        change_reason=version_data.change_reason,
+        change_type=version_data.change_type,
+        status="draft",
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+
+    return {
+        "id": version.id,
+        "version_number": new_version_number,
+        "message": f"Version {new_version_number} created",
+    }
+
+
+@router.get("/{document_id}/versions/{version_id}/diff", response_model=dict)
+async def get_version_diff(
+    document_id: int,
+    version_id: int,
+    current_user: CurrentUser,
+    compare_to: Optional[int] = Query(None, description="Version ID to compare with"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Get diff between versions"""
+    version = (
+        db.query(ControlledDocumentVersion)
+        .filter(ControlledDocumentVersion.id == version_id, ControlledDocumentVersion.document_id == document_id)
+        .first()
+    )
+
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    result = {
+        "version": {
+            "id": version.id,
+            "version_number": version.version_number,
+            "change_summary": version.change_summary,
+            "sections_changed": version.sections_changed,
+        },
+        "diff": version.diff_from_previous,
+    }
+
+    if compare_to:
+        compare_version = (
+            db.query(ControlledDocumentVersion)
+            .filter(ControlledDocumentVersion.id == compare_to, ControlledDocumentVersion.document_id == document_id)
+            .first()
+        )
+        if compare_version:
+            result["compare_to"] = {
+                "id": compare_version.id,
+                "version_number": compare_version.version_number,
+            }
+
     return result
 
 
 # ============ Approval Workflow Endpoints ============
 
 
-@router.get("/workflows", response_model=list[DocumentApprovalWorkflowResponse])
+@router.get("/workflows", response_model=list)
 async def list_workflows(
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    """List approval workflows."""
-    service = DocumentControlService(db)
-    return await service.list_workflows(tenant_id=current_user.tenant_id)
+    """List approval workflows"""
+    workflows = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.is_active == True).all()
+
+    return [
+        {
+            "id": w.id,
+            "name": w.name,
+            "description": w.description,
+            "applicable_document_types": w.applicable_document_types,
+            "workflow_steps": w.workflow_steps,
+            "allow_parallel_approval": w.allow_parallel_approval,
+        }
+        for w in workflows
+    ]
 
 
-@router.post("/workflows", response_model=WorkflowCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/workflows", response_model=dict, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:create"))],
-) -> dict[str, Any]:
-    """Create approval workflow."""
-    service = DocumentControlService(db)
-    return await service.create_workflow(workflow_data, tenant_id=current_user.tenant_id)
-
-
-# ============ Summary Statistics ============
-
-
-@router.get("/summary", response_model=DocumentSummaryResponse)
-async def get_document_summary(
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Get document control summary statistics."""
-    service = DocumentControlService(db)
-    return await service.get_summary(tenant_id=current_user.tenant_id)
+    """Create approval workflow"""
+    workflow = DocumentApprovalWorkflow(**workflow_data.model_dump())
+    db.add(workflow)
+    db.commit()
+    db.refresh(workflow)
+
+    return {"id": workflow.id, "message": "Workflow created successfully"}
 
 
-# ============ Document Detail (after literal path routes) ============
-
-
-@router.get("/{document_id}", response_model=ControlledDocumentResponse)
-async def get_document(
-    document_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-) -> dict[str, Any]:
-    """Get detailed document information."""
-    service = DocumentControlService(db)
-    try:
-        return await service.get_document(document_id, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Document not found")
-
-
-@router.put("/{document_id}", response_model=DocumentUpdateResponse)
-async def update_document(
-    document_id: int,
-    document_data: DocumentUpdate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
-) -> dict[str, Any]:
-    """Update document metadata."""
-    service = DocumentControlService(db)
-    try:
-        return await service.update_document(document_id, document_data, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Document not found")
-
-
-# ============ Version Control Endpoints ============
-
-
-@router.post("/{document_id}/versions", response_model=VersionCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_new_version(
-    document_id: int,
-    version_data: VersionCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:create"))],
-) -> dict[str, Any]:
-    """Create a new version of the document."""
-    service = DocumentControlService(db)
-    try:
-        return await service.create_version(document_id, version_data, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Document not found")
-
-
-@router.get("/{document_id}/versions/{version_id}/diff", response_model=VersionDiffResponse)
-async def get_version_diff(
-    document_id: int,
-    version_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-    compare_to: Optional[int] = Query(None, description="Version ID to compare with"),
-) -> dict[str, Any]:
-    """Get diff between versions."""
-    service = DocumentControlService(db)
-    try:
-        return await service.get_version_diff(document_id, version_id, compare_to=compare_to)
-    except LookupError:
-        raise NotFoundError("Version not found")
-
-
-# ============ Approval Submission & Actions ============
-
-
-@router.post("/{document_id}/submit-for-approval", response_model=SubmitApprovalResponse)
+@router.post("/{document_id}/submit-for-approval", response_model=dict)
 async def submit_for_approval(
     document_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    current_user: CurrentUser,
     workflow_id: int = Query(...),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Submit document for approval."""
-    service = DocumentControlService(db)
-    try:
-        return await service.submit_for_approval(document_id, workflow_id, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Document or workflow not found")
+    """Submit document for approval"""
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == workflow_id).first()
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # Create approval instance
+    instance = DocumentApprovalInstance(
+        document_id=document_id,
+        workflow_id=workflow_id,
+        current_step=1,
+        status="pending",
+    )
+
+    # Set due date based on workflow
+    if workflow.auto_escalate_after_days:
+        instance.due_date = datetime.utcnow() + timedelta(days=workflow.auto_escalate_after_days)
+
+    document.status = "pending_approval"
+
+    db.add(instance)
+    db.commit()
+    db.refresh(instance)
+
+    return {
+        "instance_id": instance.id,
+        "message": "Document submitted for approval",
+        "current_step": 1,
+        "due_date": instance.due_date.isoformat() if instance.due_date else None,
+    }
 
 
-@router.post("/approvals/{instance_id}/action", response_model=ApprovalActionResponse)
+@router.post("/approvals/{instance_id}/action", response_model=dict)
 async def take_approval_action(
     instance_id: int,
     action_request: ApprovalActionRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Take action on an approval request."""
-    service = DocumentControlService(db)
-    try:
-        return await service.take_approval_action(instance_id, action_request, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Approval instance not found")
+    """Take action on an approval request"""
+    instance = db.query(DocumentApprovalInstance).filter(DocumentApprovalInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Approval instance not found")
+
+    # Record the action
+    action = DocumentApprovalAction(
+        instance_id=instance_id,
+        workflow_step=instance.current_step,
+        approver_id=current_user.id,
+        approver_name=current_user.full_name,
+        action=action_request.action,
+        comments=action_request.comments,
+        conditions=action_request.conditions,
+        delegated_to=action_request.delegated_to,
+    )
+    db.add(action)
+
+    # Get workflow to determine next steps
+    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == instance.workflow_id).first()
+
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == instance.document_id).first()
+
+    if action_request.action == "approved":
+        # Check if this was the last step
+        if instance.current_step >= len(workflow.workflow_steps):
+            instance.status = "approved"
+            instance.completed_date = datetime.utcnow()
+            instance.final_decision = "approved"
+            if document:
+                document.status = "approved"
+                document.approved_date = datetime.utcnow()
+                document.effective_date = datetime.utcnow()
+                document.next_review_date = datetime.utcnow() + timedelta(days=document.review_frequency_months * 30)
+        else:
+            instance.current_step += 1
+
+    elif action_request.action == "rejected":
+        instance.status = "rejected"
+        instance.completed_date = datetime.utcnow()
+        instance.final_decision = "rejected"
+        instance.final_comments = action_request.comments
+        if document:
+            document.status = "draft"
+
+    elif action_request.action == "returned":
+        if document:
+            document.status = "draft"
+
+    db.commit()
+
+    return {
+        "message": f"Action '{action_request.action}' recorded",
+        "instance_status": instance.status,
+        "current_step": instance.current_step,
+    }
 
 
 # ============ Distribution Endpoints ============
 
 
-@router.post("/{document_id}/distribute", response_model=DistributeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/distribute", response_model=dict, status_code=201)
 async def distribute_document(
     document_id: int,
     distribution: DistributionCreate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:create"))],
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Distribute document to recipients."""
-    service = DocumentControlService(db)
-    try:
-        return await service.distribute_document(document_id, distribution, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Document not found")
+    """Distribute document to recipients"""
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    dist = DocumentDistribution(
+        document_id=document_id,
+        notified_date=datetime.utcnow(),
+        **distribution.model_dump(),
+    )
+    db.add(dist)
+    db.commit()
+    db.refresh(dist)
+
+    # TODO: Send notification email
+
+    return {
+        "id": dist.id,
+        "message": f"Document distributed to {distribution.recipient_name}",
+        "copy_number": dist.copy_number,
+    }
 
 
-@router.post("/{document_id}/distributions/{distribution_id}/acknowledge", response_model=AcknowledgmentResponse)
+@router.post("/{document_id}/distributions/{distribution_id}/acknowledge", response_model=dict)
 async def acknowledge_distribution(
     document_id: int,
     distribution_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Acknowledge receipt of document."""
-    service = DocumentControlService(db)
-    try:
-        return await service.acknowledge_distribution(document_id, distribution_id)
-    except LookupError:
-        raise NotFoundError("Distribution not found")
+    """Acknowledge receipt of document"""
+    dist = (
+        db.query(DocumentDistribution)
+        .filter(DocumentDistribution.id == distribution_id, DocumentDistribution.document_id == document_id)
+        .first()
+    )
+
+    if not dist:
+        raise HTTPException(status_code=404, detail="Distribution not found")
+
+    dist.acknowledged = True
+    dist.acknowledged_date = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Acknowledgment recorded"}
 
 
 # ============ Obsolete Document Handling ============
 
 
-@router.post("/{document_id}/obsolete", response_model=ObsoleteResponse)
+@router.post("/{document_id}/obsolete", response_model=dict)
 async def mark_document_obsolete(
     document_id: int,
     obsolete_data: ObsoleteRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Mark document as obsolete."""
-    service = DocumentControlService(db)
-    try:
-        return await service.mark_obsolete(document_id, obsolete_data, tenant_id=current_user.tenant_id)
-    except LookupError:
-        raise NotFoundError("Document not found")
+    """Mark document as obsolete"""
+    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Update document
+    document.status = "obsolete"
+    document.is_current = False
+    document.obsolete_date = datetime.utcnow()
+    document.obsolete_reason = obsolete_data.obsolete_reason
+    document.superseded_by = obsolete_data.superseded_by_id
+
+    # Create obsolete record
+    record = ObsoleteDocumentRecord(
+        document_id=document_id,
+        obsolete_date=datetime.utcnow(),
+        obsolete_reason=obsolete_data.obsolete_reason,
+        superseded_by_id=obsolete_data.superseded_by_id,
+        retention_required=True,
+        retention_end_date=datetime.utcnow() + timedelta(days=document.retention_period_years * 365),
+    )
+    db.add(record)
+    db.commit()
+
+    return {
+        "message": "Document marked as obsolete",
+        "retention_end_date": record.retention_end_date.isoformat() if record.retention_end_date else None,
+    }
 
 
 # ============ Access Logs ============
 
 
-@router.get("/{document_id}/access-log", response_model=list[DocumentAccessLogResponse])
+@router.get("/{document_id}/access-log", response_model=list)
 async def get_access_log(
     document_id: int,
-    db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    """Get document access log."""
-    service = DocumentControlService(db)
-    return await service.get_access_log(document_id, limit=limit)
+    """Get document access log"""
+    logs = (
+        db.query(DocumentAccessLog)
+        .filter(DocumentAccessLog.document_id == document_id)
+        .order_by(DocumentAccessLog.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": log.id,
+            "user_name": log.user_name,
+            "action": log.action,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "ip_address": log.ip_address,
+        }
+        for log in logs
+    ]
+
+
+# ============ Summary Statistics ============
+
+
+@router.get("/summary", response_model=dict)
+async def get_document_summary(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Get document control summary statistics"""
+    total = db.query(ControlledDocument).filter(ControlledDocument.is_current == True).count()
+    active = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "active", ControlledDocument.is_current == True)
+        .count()
+    )
+    draft = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "draft", ControlledDocument.is_current == True)
+        .count()
+    )
+    pending_approval = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "pending_approval", ControlledDocument.is_current == True)
+        .count()
+    )
+    overdue_review = (
+        db.query(ControlledDocument)
+        .filter(
+            ControlledDocument.next_review_date < datetime.utcnow(),
+            ControlledDocument.status == "active",
+            ControlledDocument.is_current == True,
+        )
+        .count()
+    )
+    obsolete = db.query(ControlledDocument).filter(ControlledDocument.status == "obsolete").count()
+
+    # Pending acknowledgments
+    pending_ack = (
+        db.query(DocumentDistribution)
+        .filter(DocumentDistribution.acknowledged == False, DocumentDistribution.acknowledgment_required == True)
+        .count()
+    )
+
+    # By type
+    by_type = (
+        db.query(ControlledDocument.document_type, db.func.count(ControlledDocument.id))
+        .filter(ControlledDocument.is_current == True)
+        .group_by(ControlledDocument.document_type)
+        .all()
+    )
+
+    return {
+        "total_documents": total,
+        "active": active,
+        "draft": draft,
+        "pending_approval": pending_approval,
+        "overdue_review": overdue_review,
+        "obsolete": obsolete,
+        "pending_acknowledgments": pending_ack,
+        "by_type": {dtype: count for dtype, count in by_type},
+    }

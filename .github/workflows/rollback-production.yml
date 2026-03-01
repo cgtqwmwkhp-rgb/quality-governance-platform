@@ -1,0 +1,92 @@
+name: Emergency Rollback - Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: 'Docker image SHA to roll back to (from ACR)'
+        required: true
+      reason:
+        description: 'Reason for rollback'
+        required: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
+  AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
+  AZURE_RESOURCE_GROUP: rg-qgp-staging
+  IMAGE_NAME: quality-governance-platform
+
+jobs:
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Log rollback details
+        run: |
+          echo "## Emergency Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image SHA:** ${{ github.event.inputs.image_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reason:** ${{ github.event.inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Verify target image exists
+        run: |
+          IMAGE="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_sha }}"
+          echo "Verifying image: ${IMAGE}"
+          az acr repository show-tags --name ${{ env.ACR_NAME }} --repository ${{ env.IMAGE_NAME }} --query "[?contains(@, '${{ github.event.inputs.image_sha }}')]" -o tsv
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Image not found in ACR"
+            exit 1
+          fi
+          echo "Image verified."
+
+      - name: Deploy previous image
+        run: |
+          IMAGE="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_sha }}"
+          az webapp config container set \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --container-image-name "${IMAGE}"
+
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Health check
+        run: |
+          PROD_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PROD_URL}/healthz" || echo "000")
+            echo "Attempt ${ATTEMPT}/${MAX_ATTEMPTS}: HTTP ${STATUS}"
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "ERROR: Health check failed after ${MAX_ATTEMPTS} attempts"
+          exit 1
+
+      - name: Rollback summary
+        if: always()
+        run: |
+          echo "## Rollback Result" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Completed at:** $(date -u)" >> $GITHUB_STEP_SUMMARY

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from 'react';
 import {
   Plus,
   Search,
@@ -11,14 +11,12 @@ import {
   Mail,
   Phone,
   Loader2,
-} from "lucide-react";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Textarea } from "../../components/ui/Textarea";
-import { cn } from "../../helpers/utils";
-import { useToast, ToastContainer } from "../../components/ui/Toast";
-import { contractsApi } from "../../api/client";
+} from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Textarea } from '../../components/ui/Textarea';
+import { cn } from '../../helpers/utils';
 
 interface Contract {
   id: number;
@@ -34,42 +32,38 @@ interface Contract {
   display_order: number;
 }
 
+// Mock data
+const INITIAL_CONTRACTS: Contract[] = [
+  { id: 1, name: 'UKPN', code: 'ukpn', client_name: 'UK Power Networks', is_active: true, display_order: 1 },
+  { id: 2, name: 'Openreach', code: 'openreach', client_name: 'BT Group', is_active: true, display_order: 2 },
+  { id: 3, name: 'Thames Water', code: 'thames-water', client_name: 'Thames Water Utilities', is_active: true, display_order: 3 },
+  { id: 4, name: 'Plantexpand Ltd', code: 'plantexpand', client_name: 'Internal', is_active: true, display_order: 4 },
+  { id: 5, name: 'Cadent', code: 'cadent', client_name: 'Cadent Gas', is_active: true, display_order: 5 },
+  { id: 6, name: 'SGN', code: 'sgn', client_name: 'Southern Gas Networks', is_active: true, display_order: 6 },
+  { id: 7, name: 'Southern Water', code: 'southern-water', client_name: 'Southern Water Services', is_active: true, display_order: 7 },
+  { id: 8, name: 'Zenith', code: 'zenith', client_name: 'Zenith Vehicle Solutions', is_active: true, display_order: 8 },
+  { id: 9, name: 'Novuna', code: 'novuna', client_name: 'Scottish Power', is_active: true, display_order: 9 },
+  { id: 10, name: 'Enterprise', code: 'enterprise', client_name: 'Enterprise Fleet Management', is_active: true, display_order: 10 },
+];
+
 export default function ContractsManagement() {
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [contracts, setContracts] = useState<Contract[]>(INITIAL_CONTRACTS);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [, setLoading] = useState(true);
-
-  const loadContracts = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await contractsApi.list(false);
-      setContracts(data.items || []);
-    } catch {
-      console.error("Failed to load contracts");
-      showToast("Failed to load contracts", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadContracts();
-  }, [loadContracts]);
 
   const [formData, setFormData] = useState<Partial<Contract>>({
-    name: "",
-    code: "",
-    description: "",
-    client_name: "",
-    client_contact: "",
-    client_email: "",
+    name: '',
+    code: '',
+    description: '',
+    client_name: '',
+    client_contact: '',
+    client_email: '',
     is_active: true,
   });
+  const [error, setError] = useState<string | null>(null);
 
   const filteredContracts = contracts
     .filter((c) => {
@@ -92,12 +86,12 @@ export default function ContractsManagement() {
     setIsAdding(true);
     setEditingContract(null);
     setFormData({
-      name: "",
-      code: "",
-      description: "",
-      client_name: "",
-      client_contact: "",
-      client_email: "",
+      name: '',
+      code: '',
+      description: '',
+      client_name: '',
+      client_contact: '',
+      client_email: '',
       is_active: true,
     });
   };
@@ -110,55 +104,50 @@ export default function ContractsManagement() {
 
   const handleSave = async () => {
     setIsSaving(true);
+    setError(null);
     try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       if (isAdding) {
-        const created = await contractsApi.create({
-          name: formData.name || "",
-          code: formData.code || "",
+        const newContract: Contract = {
+          id: Date.now(),
+          name: formData.name || '',
+          code: formData.code || '',
           description: formData.description,
           client_name: formData.client_name,
+          client_contact: formData.client_contact,
+          client_email: formData.client_email,
           is_active: formData.is_active ?? true,
-        } as Record<string, unknown>);
-        setContracts((prev) => [...prev, created]);
+          display_order: contracts.length + 1,
+        };
+        setContracts((prev) => [...prev, newContract]);
       } else if (editingContract) {
-        const updated = await contractsApi.update(editingContract.id, formData);
         setContracts((prev) =>
-          prev.map((c) => (c.id === editingContract.id ? updated : c)),
+          prev.map((c) =>
+            c.id === editingContract.id ? { ...c, ...formData } : c
+          )
         );
       }
+
       handleCancel();
     } catch {
-      console.error("Failed to save");
-      showToast("Failed to save contract", "error");
+      console.error('Failed to save');
+      setError('Failed to save contract. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this contract?")) {
-      try {
-        await contractsApi.delete(id);
-        setContracts((prev) => prev.filter((c) => c.id !== id));
-      } catch {
-        console.error("Failed to delete");
-        showToast("Failed to delete contract", "error");
-      }
+  const handleDelete = (id: number) => {
+    if (confirm('Are you sure you want to delete this contract?')) {
+      setContracts((prev) => prev.filter((c) => c.id !== id));
     }
   };
 
-  const toggleActive = async (id: number) => {
-    const contract = contracts.find((c) => c.id === id);
-    if (!contract) return;
-    try {
-      await contractsApi.update(id, { is_active: !contract.is_active });
-      setContracts((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c)),
-      );
-    } catch {
-      console.error("Failed to toggle");
-      showToast("Failed to update contract status", "error");
-    }
+  const toggleActive = (id: number) => {
+    setContracts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c))
+    );
   };
 
   return (
@@ -203,6 +192,17 @@ export default function ContractsManagement() {
         </div>
       </header>
 
+      {error && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-4">
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
+            <p className="text-sm text-destructive">{error}</p>
+            <button onClick={() => { setError(null); handleSave(); }} className="text-sm font-medium text-destructive hover:underline">
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Contracts List */}
@@ -226,19 +226,16 @@ export default function ContractsManagement() {
                 <Card
                   key={contract.id}
                   className={cn(
-                    "p-4 flex items-center gap-4 group",
-                    !contract.is_active && "opacity-60",
-                    editingContract?.id === contract.id &&
-                      "ring-2 ring-primary",
+                    'p-4 flex items-center gap-4 group',
+                    !contract.is_active && 'opacity-60',
+                    editingContract?.id === contract.id && 'ring-2 ring-primary'
                   )}
                 >
                   <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-foreground">
-                        {contract.name}
-                      </h3>
+                      <h3 className="font-semibold text-foreground">{contract.name}</h3>
                       <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                         {contract.code}
                       </span>
@@ -249,9 +246,7 @@ export default function ContractsManagement() {
                       )}
                     </div>
                     {contract.client_name && (
-                      <p className="text-sm text-muted-foreground">
-                        {contract.client_name}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{contract.client_name}</p>
                     )}
                   </div>
 
@@ -266,7 +261,7 @@ export default function ContractsManagement() {
                     <button
                       onClick={() => toggleActive(contract.id)}
                       className="p-2 hover:bg-muted rounded-lg transition-colors"
-                      title={contract.is_active ? "Deactivate" : "Activate"}
+                      title={contract.is_active ? 'Deactivate' : 'Activate'}
                     >
                       {contract.is_active ? (
                         <X className="w-4 h-4 text-muted-foreground" />
@@ -291,26 +286,19 @@ export default function ContractsManagement() {
           <div>
             <Card className="p-6 sticky top-6">
               <h3 className="font-semibold text-foreground mb-4">
-                {isAdding
-                  ? "Add Contract"
-                  : editingContract
-                    ? "Edit Contract"
-                    : "Contract Details"}
+                {isAdding ? 'Add Contract' : editingContract ? 'Edit Contract' : 'Contract Details'}
               </h3>
 
-              {isAdding || editingContract ? (
+              {(isAdding || editingContract) ? (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Name *
                     </label>
                     <Input
-                      value={formData.name || ""}
+                      value={formData.name || ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          name: e.target.value,
-                        }))
+                        setFormData((prev) => ({ ...prev, name: e.target.value }))
                       }
                       placeholder="e.g. UKPN"
                     />
@@ -321,13 +309,11 @@ export default function ContractsManagement() {
                       Code *
                     </label>
                     <Input
-                      value={formData.code || ""}
+                      value={formData.code || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          code: e.target.value
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, ""),
+                          code: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
                         }))
                       }
                       placeholder="e.g. ukpn"
@@ -342,12 +328,9 @@ export default function ContractsManagement() {
                       Client Name
                     </label>
                     <Input
-                      value={formData.client_name || ""}
+                      value={formData.client_name || ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          client_name: e.target.value,
-                        }))
+                        setFormData((prev) => ({ ...prev, client_name: e.target.value }))
                       }
                       placeholder="e.g. UK Power Networks"
                     />
@@ -358,12 +341,9 @@ export default function ContractsManagement() {
                       Description
                     </label>
                     <Textarea
-                      value={formData.description || ""}
+                      value={formData.description || ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          description: e.target.value,
-                        }))
+                        setFormData((prev) => ({ ...prev, description: e.target.value }))
                       }
                       placeholder="Optional description..."
                       rows={2}
@@ -378,12 +358,9 @@ export default function ContractsManagement() {
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         type="email"
-                        value={formData.client_email || ""}
+                        value={formData.client_email || ''}
                         onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            client_email: e.target.value,
-                          }))
+                          setFormData((prev) => ({ ...prev, client_email: e.target.value }))
                         }
                         placeholder="contact@example.com"
                         className="pl-10"
@@ -399,12 +376,9 @@ export default function ContractsManagement() {
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         type="tel"
-                        value={formData.client_contact || ""}
+                        value={formData.client_contact || ''}
                         onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            client_contact: e.target.value,
-                          }))
+                          setFormData((prev) => ({ ...prev, client_contact: e.target.value }))
                         }
                         placeholder="+44 1234 567890"
                         className="pl-10"
@@ -418,28 +392,17 @@ export default function ContractsManagement() {
                       type="checkbox"
                       checked={formData.is_active ?? true}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          is_active: e.target.checked,
-                        }))
+                        setFormData((prev) => ({ ...prev, is_active: e.target.checked }))
                       }
                       className="rounded border-border"
                     />
                   </label>
 
                   <div className="flex gap-3 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={handleCancel}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancel} className="flex-1">
                       Cancel
                     </Button>
-                    <Button
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      className="flex-1"
-                    >
+                    <Button onClick={handleSave} disabled={isSaving} className="flex-1">
                       {isSaving ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : (
@@ -460,7 +423,6 @@ export default function ContractsManagement() {
           </div>
         </div>
       </main>
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
