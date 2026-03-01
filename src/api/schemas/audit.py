@@ -463,7 +463,7 @@ class AuditFindingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    reference_number: str
+    reference_number: Optional[str] = None
     run_id: int
     question_id: Optional[int] = None
     title: str
