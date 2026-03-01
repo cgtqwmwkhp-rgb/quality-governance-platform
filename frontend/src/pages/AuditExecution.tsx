@@ -142,7 +142,7 @@ const MOCK_AUDIT = {
       id: 'sec-2',
       title: 'Interior Checks',
       description: 'Safety equipment and interior condition',
-      color: 'from-purple-500 to-pink-500',
+      color: 'from-blue-500 to-indigo-500',
       isComplete: false,
       questions: [
         {
@@ -280,17 +280,17 @@ const ResponseButton = ({
   icon?: React.ElementType;
 }) => {
   const variantStyles = {
-    success: 'border-green-500 bg-green-500/20 text-green-400',
-    danger: 'border-red-500 bg-red-500/20 text-red-400',
-    warning: 'border-amber-500 bg-amber-500/20 text-amber-400',
-    neutral: 'border-slate-500 bg-slate-500/20 text-slate-400',
+    success: 'border-success bg-success/20 text-success',
+    danger: 'border-destructive bg-destructive/20 text-destructive',
+    warning: 'border-warning bg-warning/20 text-warning',
+    neutral: 'border-muted-foreground bg-muted-foreground/20 text-muted-foreground',
   };
 
   const hoverStyles = {
-    success: 'hover:bg-green-500/30 hover:border-green-400',
-    danger: 'hover:bg-red-500/30 hover:border-red-400',
-    warning: 'hover:bg-amber-500/30 hover:border-amber-400',
-    neutral: 'hover:bg-slate-500/30 hover:border-slate-400',
+    success: 'hover:bg-success/30 hover:border-success',
+    danger: 'hover:bg-destructive/30 hover:border-destructive',
+    warning: 'hover:bg-warning/30 hover:border-warning',
+    neutral: 'hover:bg-muted-foreground/30 hover:border-muted-foreground',
   };
 
   return (
@@ -298,7 +298,7 @@ const ResponseButton = ({
       type="button"
       onClick={onClick}
       className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200
-        ${selected ? variantStyles[variant] : `border-slate-700 bg-slate-800 text-slate-400 ${hoverStyles[variant]}`}`}
+        ${selected ? variantStyles[variant] : `border-border bg-secondary text-muted-foreground ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className="w-5 h-5" />}
       {children}
@@ -325,8 +325,8 @@ const ScaleInput = ({
           onClick={() => onChange(num)}
           className={`w-12 h-12 rounded-xl font-bold text-lg transition-all duration-200 ${
             value === num
-              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25'
+              : 'bg-secondary text-muted-foreground hover:bg-muted hover:text-foreground border border-border'
           }`}
         >
           {num}
@@ -373,7 +373,7 @@ const PhotoCapture = ({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full py-4 border-2 border-dashed border-slate-700 rounded-xl text-slate-400 hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
+        className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
       >
         <Camera className="w-5 h-5" />
         Take Photo / Upload
@@ -392,7 +392,7 @@ const PhotoCapture = ({
                 type="button"
                 onClick={() => onRemove(idx)}
                 aria-label="Remove photo"
-                className="absolute top-1 right-1 p-1 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 p-1 bg-destructive rounded-full text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -447,7 +447,8 @@ const SignaturePad = ({
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
     ctx.lineTo(clientX - rect.left, clientY - rect.top);
-    ctx.strokeStyle = '#a855f7';
+    const primaryHsl = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+    ctx.strokeStyle = `hsl(${primaryHsl})`;
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.stroke();
@@ -485,18 +486,18 @@ const SignaturePad = ({
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="w-full h-40 bg-slate-800 border border-slate-700 rounded-xl cursor-crosshair touch-none"
+          className="w-full h-40 bg-secondary border border-border rounded-xl cursor-crosshair touch-none"
         />
         {!signature && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-slate-500">Sign here</p>
+            <p className="text-muted-foreground">Sign here</p>
           </div>
         )}
       </div>
       <button
         type="button"
         onClick={clearCanvas}
-        className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
+        className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
       >
         <RotateCcw className="w-4 h-4" /> Clear Signature
       </button>
@@ -715,7 +716,7 @@ export default function AuditExecution() {
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter your response..."
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
         );
 
@@ -726,7 +727,7 @@ export default function AuditExecution() {
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter detailed response..."
             rows={4}
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+            className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
           />
         );
 
@@ -737,7 +738,7 @@ export default function AuditExecution() {
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter number..."
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
         );
 
@@ -760,43 +761,43 @@ export default function AuditExecution() {
     const passed = score >= 80;
 
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center animate-fade-in">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-lg w-full bg-card border border-border rounded-3xl p-8 text-center animate-fade-in">
           {/* Score Display */}
           <div className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-6 ${
-            passed ? 'bg-gradient-to-br from-green-500 to-emerald-500' : 'bg-gradient-to-br from-red-500 to-rose-500'
+            passed ? 'bg-success' : 'bg-destructive'
           }`}>
-            <span className="text-4xl font-bold text-white">{score}%</span>
+            <span className={`text-4xl font-bold ${passed ? 'text-success-foreground' : 'text-destructive-foreground'}`}>{score}%</span>
           </div>
 
-          <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-green-400' : 'text-red-400'}`}>
+          <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-success' : 'text-destructive'}`}>
             {passed ? 'AUDIT PASSED' : 'AUDIT FAILED'}
           </h2>
-          <p className="text-slate-400 mb-8">
+          <p className="text-muted-foreground mb-8">
             {audit.templateName} - {audit.asset}
           </p>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">{answeredQuestions}</p>
-              <p className="text-xs text-slate-400">Questions Answered</p>
+            <div className="bg-secondary rounded-xl p-4">
+              <p className="text-2xl font-bold text-foreground">{answeredQuestions}</p>
+              <p className="text-xs text-muted-foreground">Questions Answered</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">{formatTime(elapsedTime)}</p>
-              <p className="text-xs text-slate-400">Duration</p>
+            <div className="bg-secondary rounded-xl p-4">
+              <p className="text-2xl font-bold text-foreground">{formatTime(elapsedTime)}</p>
+              <p className="text-xs text-muted-foreground">Duration</p>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-2xl font-bold text-white">
+            <div className="bg-secondary rounded-xl p-4">
+              <p className="text-2xl font-bold text-foreground">
                 {Object.values(responses).filter(r => r.photos && r.photos.length > 0).length}
               </p>
-              <p className="text-xs text-slate-400">Photos</p>
+              <p className="text-xs text-muted-foreground">Photos</p>
             </div>
           </div>
 
           {/* Findings Summary */}
           <div className="text-left mb-8">
-            <h3 className="text-lg font-semibold text-white mb-3">Findings</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-3">Findings</h3>
             <div className="space-y-2">
               {Object.values(responses)
                 .filter(r => r.response === 'fail' || r.response === 'no')
@@ -805,14 +806,14 @@ export default function AuditExecution() {
                     .flatMap(s => s.questions)
                     .find(q => q.id === r.questionId);
                   return (
-                    <div key={idx} className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <XCircle className="w-5 h-5 text-red-400 mt-0.5" />
-                      <p className="text-sm text-red-300">{question?.text}</p>
+                    <div key={idx} className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                      <XCircle className="w-5 h-5 text-destructive mt-0.5" />
+                      <p className="text-sm text-destructive">{question?.text}</p>
                     </div>
                   );
                 })}
               {Object.values(responses).filter(r => r.response === 'fail' || r.response === 'no').length === 0 && (
-                <p className="text-sm text-slate-400">No failed items</p>
+                <p className="text-sm text-muted-foreground">No failed items</p>
               )}
             </div>
           </div>
@@ -821,13 +822,13 @@ export default function AuditExecution() {
           <div className="flex gap-3">
             <button
               onClick={() => navigate('/audits')}
-              className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors"
+              className="flex-1 py-3 bg-secondary text-foreground rounded-xl hover:bg-muted transition-colors"
             >
               Back to Audits
             </button>
             <button
               onClick={() => {/* Submit audit */}}
-              className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
+              className="flex-1 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity"
             >
               Submit Audit
             </button>
@@ -838,30 +839,30 @@ export default function AuditExecution() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800">
+      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/audits')}
                 aria-label="Go back"
-                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                className="p-2 hover:bg-secondary rounded-lg transition-colors"
               >
-                <ArrowLeft className="w-5 h-5 text-slate-400" />
+                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
               </button>
               <div>
-                <h1 className="text-lg font-bold text-white">{audit.templateName}</h1>
-                <p className="text-xs text-slate-400">{audit.asset} • {audit.location}</p>
+                <h1 className="text-lg font-bold text-foreground">{audit.templateName}</h1>
+                <p className="text-xs text-muted-foreground">{audit.asset} • {audit.location}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               {/* Timer */}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-lg">
-                <Timer className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-mono text-white">{formatTime(elapsedTime)}</span>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-lg">
+                <Timer className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-mono text-foreground">{formatTime(elapsedTime)}</span>
               </div>
 
               {/* Pause/Play */}
@@ -869,14 +870,14 @@ export default function AuditExecution() {
                 onClick={() => setIsPaused(!isPaused)}
                 aria-label={isPaused ? 'Resume' : 'Pause'}
                 className={`p-2 rounded-lg transition-colors ${
-                  isPaused ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400 hover:text-white'
+                  isPaused ? 'bg-warning/20 text-warning' : 'bg-secondary text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
               </button>
 
               {/* Save Draft */}
-              <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
+              <button className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted">
                 <Save className="w-4 h-4" />
                 Save
               </button>
@@ -885,13 +886,13 @@ export default function AuditExecution() {
 
           {/* Progress Bar */}
           <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
               <span>Progress: {answeredQuestions}/{totalQuestions} questions</span>
               <span>{Math.round(progressPercentage)}%</span>
             </div>
-            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+                className="h-full bg-primary transition-all duration-300"
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>
@@ -900,7 +901,7 @@ export default function AuditExecution() {
       </header>
 
       {/* Section Navigation */}
-      <div className="bg-slate-900/50 border-b border-slate-800 overflow-x-auto">
+      <div className="bg-card/50 border-b border-border overflow-x-auto">
         <div className="flex px-4 py-2 gap-2">
           {audit.sections.map((section, idx) => {
             const sectionAnswered = section.questions.filter(q => responses[q.id]).length;
@@ -916,16 +917,16 @@ export default function AuditExecution() {
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
                   isCurrent
-                    ? `bg-gradient-to-r ${section.color} text-white`
+                    ? `bg-gradient-to-r ${section.color} text-foreground`
                     : isComplete
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    ? 'bg-success/20 text-success border border-success/30'
+                    : 'bg-secondary text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {isComplete ? (
                   <CheckCheck className="w-4 h-4" />
                 ) : (
-                  <span className="w-5 h-5 rounded-full bg-slate-700 text-xs flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-input text-xs flex items-center justify-center">
                     {idx + 1}
                   </span>
                 )}
@@ -941,29 +942,29 @@ export default function AuditExecution() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-4 pb-32">
           {/* Question Card */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
+          <div className="bg-card/50 border border-border rounded-3xl overflow-hidden">
             {/* Question Header */}
             <div className={`bg-gradient-to-r ${currentSection.color} p-0.5`}>
-              <div className="bg-slate-900 p-4">
+              <div className="bg-card p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">
+                    <span className="text-sm text-muted-foreground">
                       {currentSection.title} • Question {currentQuestionIndex + 1} of {currentSection.questions.length}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     {currentQuestion.riskLevel && (
                       <span className={`px-2 py-1 text-xs rounded ${
-                        currentQuestion.riskLevel === 'critical' ? 'bg-red-500/20 text-red-400' :
-                        currentQuestion.riskLevel === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                        currentQuestion.riskLevel === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-green-500/20 text-green-400'
+                        currentQuestion.riskLevel === 'critical' ? 'bg-destructive/20 text-destructive' :
+                        currentQuestion.riskLevel === 'high' ? 'bg-warning/20 text-warning' :
+                        currentQuestion.riskLevel === 'medium' ? 'bg-warning/20 text-warning' :
+                        'bg-success/20 text-success'
                       }`}>
                         {currentQuestion.riskLevel} risk
                       </span>
                     )}
                     {currentQuestion.required && (
-                      <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
+                      <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded">
                         Required
                       </span>
                     )}
@@ -976,11 +977,11 @@ export default function AuditExecution() {
             <div className="p-6 space-y-6">
               {/* Question Text */}
               <div>
-                <h2 className="text-xl font-semibold text-white mb-2">
+                <h2 className="text-xl font-semibold text-foreground mb-2">
                   {currentQuestion.text}
                 </h2>
                 {currentQuestion.description && (
-                  <p className="text-sm text-slate-400">{currentQuestion.description}</p>
+                  <p className="text-sm text-muted-foreground">{currentQuestion.description}</p>
                 )}
               </div>
 
@@ -989,15 +990,15 @@ export default function AuditExecution() {
                 <div>
                   <button
                     onClick={() => setShowGuidance(!showGuidance)}
-                    className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300"
+                    className="flex items-center gap-2 text-sm text-primary hover:text-primary"
                   >
                     <Info className="w-4 h-4" />
                     Auditor Guidance
                     {showGuidance ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
                   {showGuidance && (
-                    <div className="mt-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                      <p className="text-sm text-purple-300">{currentQuestion.guidance}</p>
+                    <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                      <p className="text-sm text-primary">{currentQuestion.guidance}</p>
                     </div>
                   )}
                 </div>
@@ -1010,10 +1011,10 @@ export default function AuditExecution() {
 
               {/* Evidence Required */}
               {currentQuestion.evidenceRequired && (
-                <div className="pt-4 border-t border-slate-800">
+                <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-2 mb-3">
-                    <Camera className="w-4 h-4 text-cyan-400" />
-                    <span className="text-sm font-medium text-white">Photo Evidence Required</span>
+                    <Camera className="w-4 h-4 text-info" />
+                    <span className="text-sm font-medium text-foreground">Photo Evidence Required</span>
                   </div>
                   <PhotoCapture
                     photos={currentResponse?.photos || []}
@@ -1032,17 +1033,17 @@ export default function AuditExecution() {
               )}
 
               {/* Notes */}
-              <div className="pt-4 border-t border-slate-800">
+              <div className="pt-4 border-t border-border">
                 <div className="flex items-center gap-2 mb-3">
-                  <MessageSquare className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-medium text-white">Additional Notes</span>
+                  <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">Additional Notes</span>
                 </div>
                 <textarea
                   value={currentResponse?.notes || ''}
                   onChange={(e) => updateResponse({ notes: e.target.value })}
                   placeholder="Add any additional observations..."
                   rows={2}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none text-sm"
+                  className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none text-sm"
                 />
               </div>
 
@@ -1051,8 +1052,8 @@ export default function AuditExecution() {
                 onClick={() => updateResponse({ flagged: !currentResponse?.flagged })}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                   currentResponse?.flagged
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    ? 'bg-destructive/20 text-destructive border border-destructive/30'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Flag className={`w-4 h-4 ${currentResponse?.flagged ? 'fill-current' : ''}`} />
@@ -1064,12 +1065,12 @@ export default function AuditExecution() {
       </main>
 
       {/* Navigation Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-slate-900/80 backdrop-blur-xl border-t border-slate-800 p-4">
+      <footer className="fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border p-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <button
             onClick={goPrev}
             disabled={currentSectionIndex === 0 && currentQuestionIndex === 0}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-secondary text-foreground rounded-xl hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             Previous
@@ -1083,10 +1084,10 @@ export default function AuditExecution() {
                 onClick={() => setCurrentQuestionIndex(idx)}
                 className={`w-3 h-3 rounded-full transition-all ${
                   idx === currentQuestionIndex
-                    ? 'bg-purple-500 w-6'
+                    ? 'bg-primary w-6'
                     : responses[currentSection.questions[idx].id]
-                    ? 'bg-green-500'
-                    : 'bg-slate-700 hover:bg-slate-600'
+                    ? 'bg-success'
+                    : 'bg-input hover:bg-muted'
                 }`}
               />
             ))}
@@ -1094,7 +1095,7 @@ export default function AuditExecution() {
 
           <button
             onClick={goNext}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity"
           >
             {currentSectionIndex === audit.sections.length - 1 && 
              currentQuestionIndex === currentSection.questions.length - 1

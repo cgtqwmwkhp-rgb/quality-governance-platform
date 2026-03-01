@@ -150,7 +150,7 @@ const CATEGORIES = [
   { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
   { id: 'safety', label: 'Health & Safety', icon: HardHat, color: 'orange' },
   { id: 'environment', label: 'Environmental', icon: Leaf, color: 'green' },
-  { id: 'security', label: 'Security', icon: Shield, color: 'purple' },
+  { id: 'security', label: 'Security', icon: Shield, color: 'teal' },
   { id: 'compliance', label: 'Regulatory Compliance', icon: FileText, color: 'red' },
   { id: 'operational', label: 'Operational', icon: Zap, color: 'yellow' },
   { id: 'custom', label: 'Custom', icon: Layers, color: 'gray' },
@@ -167,7 +167,7 @@ const ISO_STANDARDS = [
 
 const SECTION_COLORS = [
   'from-blue-500 to-cyan-500',
-  'from-purple-500 to-pink-500',
+  'from-lime-500 to-teal-500',
   'from-emerald-500 to-green-500',
   'from-orange-500 to-amber-500',
   'from-red-500 to-rose-500',
@@ -220,15 +220,15 @@ const QuestionTypeSelector = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white hover:bg-slate-600 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 bg-input border border-input rounded-lg text-sm text-foreground hover:bg-muted transition-colors"
       >
-        {selected && <selected.icon className="w-4 h-4 text-purple-400" />}
+        {selected && <selected.icon className="w-4 h-4 text-primary" />}
         <span>{selected?.label}</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute z-20 mt-1 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-20 mt-1 w-64 bg-secondary border border-border rounded-xl shadow-xl overflow-hidden">
           <div className="max-h-80 overflow-y-auto p-2 space-y-1">
             {QUESTION_TYPES.map((type) => (
               <button
@@ -240,14 +240,14 @@ const QuestionTypeSelector = ({
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
                   selectedType === type.type
-                    ? 'bg-purple-500/20 text-purple-300'
-                    : 'hover:bg-slate-700 text-white'
+                    ? 'bg-primary/20 text-primary'
+                    : 'hover:bg-muted text-foreground'
                 }`}
               >
-                <type.icon className="w-4 h-4 text-purple-400" />
+                <type.icon className="w-4 h-4 text-primary" />
                 <div>
                   <p className="text-sm font-medium">{type.label}</p>
-                  <p className="text-xs text-slate-400">{type.description}</p>
+                  <p className="text-xs text-muted-foreground">{type.description}</p>
                 </div>
               </button>
             ))}
@@ -295,11 +295,11 @@ const QuestionEditor = ({
   const needsOptions = ['multi_choice', 'checklist'].includes(question.type);
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 group">
+    <div className="bg-secondary/50 border border-border rounded-xl p-4 group">
       {/* Header */}
       <div className="flex items-start gap-3 mb-4">
-        <div className="p-1.5 bg-slate-700 rounded cursor-grab hover:bg-slate-600">
-          <GripVertical className="w-4 h-4 text-slate-400" />
+        <div className="p-1.5 bg-input rounded cursor-grab hover:bg-muted">
+          <GripVertical className="w-4 h-4 text-muted-foreground" />
         </div>
         
         <div className="flex-1 space-y-3">
@@ -309,7 +309,7 @@ const QuestionEditor = ({
             value={question.text}
             onChange={(e) => onUpdate(question.id, { text: e.target.value })}
             placeholder="Enter question text..."
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 text-sm"
+            className="w-full px-3 py-2 bg-input border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring text-sm"
           />
 
           {/* Description */}
@@ -318,7 +318,7 @@ const QuestionEditor = ({
             value={question.description || ''}
             onChange={(e) => onUpdate(question.id, { description: e.target.value })}
             placeholder="Optional description or guidance..."
-            className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-purple-500 text-xs"
+            className="w-full px-3 py-2 bg-muted/50 border border-input/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring text-xs"
           />
 
           {/* Type and Settings Row */}
@@ -328,40 +328,40 @@ const QuestionEditor = ({
               onSelect={(type) => onUpdate(question.id, { type })}
             />
 
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input
                 type="checkbox"
                 checked={question.required}
                 onChange={(e) => onUpdate(question.id, { required: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500"
+                className="w-4 h-4 rounded border-input bg-input text-primary focus:ring-ring"
               />
               Required
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input
                 type="checkbox"
                 checked={question.evidenceRequired}
                 onChange={(e) => onUpdate(question.id, { evidenceRequired: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500"
+                className="w-4 h-4 rounded border-input bg-input text-primary focus:ring-ring"
               />
               <Camera className="w-4 h-4" />
               Evidence
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input
                 type="checkbox"
                 checked={question.failureTriggersAction}
                 onChange={(e) => onUpdate(question.id, { failureTriggersAction: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-red-500 focus:ring-red-500"
+                className="w-4 h-4 rounded border-input bg-input text-destructive focus:ring-destructive"
               />
-              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <AlertTriangle className="w-4 h-4 text-destructive" />
               Auto-Action
             </label>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Weight:</span>
+              <span className="text-xs text-muted-foreground">Weight:</span>
               <input
                 type="number"
                 value={question.weight}
@@ -369,36 +369,36 @@ const QuestionEditor = ({
                 min="0"
                 max="10"
                 step="0.5"
-                className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white text-center"
+                className="w-16 px-2 py-1 bg-input border border-input rounded text-sm text-foreground text-center"
               />
             </div>
           </div>
 
           {/* Options for multi-choice/checklist */}
           {needsOptions && (
-            <div className="space-y-2 mt-3 pl-4 border-l-2 border-purple-500/30">
-              <p className="text-xs text-slate-400 font-medium">Options:</p>
+            <div className="space-y-2 mt-3 pl-4 border-l-2 border-primary/30">
+              <p className="text-xs text-muted-foreground font-medium">Options:</p>
               {(question.options || []).map((option, idx) => (
                 <div key={option.id} className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 w-4">{idx + 1}.</span>
+                  <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
                   <input
                     type="text"
                     value={option.label}
                     onChange={(e) => handleOptionUpdate(option.id, { label: e.target.value, value: e.target.value })}
                     placeholder="Option label..."
-                    className="flex-1 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white"
+                    className="flex-1 px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
                   />
                   <input
                     type="number"
                     value={option.score || 0}
                     onChange={(e) => handleOptionUpdate(option.id, { score: parseInt(e.target.value) || 0 })}
                     placeholder="Score"
-                    className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white text-center"
+                    className="w-16 px-2 py-1 bg-input border border-input rounded text-sm text-foreground text-center"
                   />
                   <button
                     type="button"
                     onClick={() => handleOptionDelete(option.id)}
-                    className="p-1 text-slate-400 hover:text-red-400"
+                    className="p-1 text-muted-foreground hover:text-destructive"
                   >
                     <XCircle className="w-4 h-4" />
                   </button>
@@ -407,7 +407,7 @@ const QuestionEditor = ({
               <button
                 type="button"
                 onClick={handleOptionAdd}
-                className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300"
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary"
               >
                 <Plus className="w-3 h-3" /> Add Option
               </button>
@@ -418,7 +418,7 @@ const QuestionEditor = ({
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <Settings className="w-3 h-3" />
             Advanced Settings
@@ -426,23 +426,23 @@ const QuestionEditor = ({
           </button>
 
           {showAdvanced && (
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-700/30 rounded-lg">
+            <div className="grid grid-cols-2 gap-3 p-3 bg-muted rounded-lg">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">ISO Clause</label>
+                <label className="block text-xs text-muted-foreground mb-1">ISO Clause</label>
                 <input
                   type="text"
                   value={question.isoClause || ''}
                   onChange={(e) => onUpdate(question.id, { isoClause: e.target.value })}
                   placeholder="e.g., 7.1.2"
-                  className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white"
+                  className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Risk Level</label>
+                <label className="block text-xs text-muted-foreground mb-1">Risk Level</label>
                 <select
                   value={question.riskLevel || ''}
                   onChange={(e) => onUpdate(question.id, { riskLevel: e.target.value as Question['riskLevel'] })}
-                  className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white"
+                  className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
                 >
                   <option value="">None</option>
                   <option value="low">Low</option>
@@ -452,13 +452,13 @@ const QuestionEditor = ({
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-slate-400 mb-1">Auditor Guidance</label>
+                <label className="block text-xs text-muted-foreground mb-1">Auditor Guidance</label>
                 <textarea
                   value={question.guidance || ''}
                   onChange={(e) => onUpdate(question.id, { guidance: e.target.value })}
                   placeholder="Tips for auditors on how to assess this item..."
                   rows={2}
-                  className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm text-white resize-none"
+                  className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground resize-none"
                 />
               </div>
             </div>
@@ -470,7 +470,7 @@ const QuestionEditor = ({
           <button
             type="button"
             onClick={() => onDuplicate(question.id)}
-            className="p-1.5 text-slate-400 hover:text-purple-400 rounded"
+            className="p-1.5 text-muted-foreground hover:text-primary rounded"
             title="Duplicate"
           >
             <Copy className="w-4 h-4" />
@@ -478,7 +478,7 @@ const QuestionEditor = ({
           <button
             type="button"
             onClick={() => onDelete(question.id)}
-            className="p-1.5 text-slate-400 hover:text-red-400 rounded"
+            className="p-1.5 text-muted-foreground hover:text-destructive rounded"
             title="Delete"
           >
             <Trash2 className="w-4 h-4" />
@@ -508,15 +508,15 @@ const SectionEditor = ({
   onDuplicateQuestion: (questionId: string) => void;
 }) => {
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+    <div className="bg-card/50 border border-border rounded-2xl overflow-hidden">
       {/* Section Header */}
       <div 
-        className={`bg-gradient-to-r ${section.color || 'from-purple-500 to-pink-500'} p-0.5`}
+        className={`bg-gradient-to-r ${section.color || 'from-blue-500 to-cyan-500'} p-0.5`}
       >
-        <div className="bg-slate-900 p-4">
+        <div className="bg-card p-4">
           <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-slate-800 rounded cursor-grab hover:bg-slate-700">
-              <GripVertical className="w-5 h-5 text-slate-400" />
+            <div className="p-1.5 bg-secondary rounded cursor-grab hover:bg-muted">
+              <GripVertical className="w-5 h-5 text-muted-foreground" />
             </div>
             
             <button
@@ -525,9 +525,9 @@ const SectionEditor = ({
               className="p-1"
             >
               {section.isExpanded ? (
-                <ChevronDown className="w-5 h-5 text-white" />
+                <ChevronDown className="w-5 h-5 text-foreground" />
               ) : (
-                <ChevronRight className="w-5 h-5 text-white" />
+                <ChevronRight className="w-5 h-5 text-foreground" />
               )}
             </button>
 
@@ -537,23 +537,23 @@ const SectionEditor = ({
                 value={section.title}
                 onChange={(e) => onUpdate({ title: e.target.value })}
                 placeholder="Section title..."
-                className="w-full bg-transparent text-lg font-semibold text-white placeholder-slate-400 focus:outline-none"
+                className="w-full bg-transparent text-lg font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
               <input
                 type="text"
                 value={section.description || ''}
                 onChange={(e) => onUpdate({ description: e.target.value })}
                 placeholder="Section description..."
-                className="w-full bg-transparent text-sm text-slate-400 placeholder-slate-500 focus:outline-none mt-1"
+                className="w-full bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground focus:outline-none mt-1"
               />
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-slate-800 rounded-lg text-xs text-slate-300">
+              <span className="px-2 py-1 bg-secondary rounded-lg text-xs text-foreground">
                 {section.questions.length} questions
               </span>
               <div className="flex items-center gap-1">
-                <span className="text-xs text-slate-400">Weight:</span>
+                <span className="text-xs text-muted-foreground">Weight:</span>
                 <input
                   type="number"
                   value={section.weight}
@@ -561,13 +561,13 @@ const SectionEditor = ({
                   min="0"
                   max="10"
                   step="0.5"
-                  className="w-14 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-sm text-white text-center"
+                  className="w-14 px-2 py-1 bg-secondary border border-border rounded text-sm text-foreground text-center"
                 />
               </div>
               <button
                 type="button"
                 onClick={onDelete}
-                className="p-1.5 text-slate-400 hover:text-red-400 rounded"
+                className="p-1.5 text-muted-foreground hover:text-destructive rounded"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -581,12 +581,12 @@ const SectionEditor = ({
         <div className="p-4 space-y-3">
           {section.questions.length === 0 ? (
             <div className="text-center py-8">
-              <ListChecks className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-              <p className="text-slate-400 mb-4">No questions in this section</p>
+              <ListChecks className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground mb-4">No questions in this section</p>
               <button
                 type="button"
                 onClick={onAddQuestion}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add First Question
@@ -606,7 +606,7 @@ const SectionEditor = ({
               <button
                 type="button"
                 onClick={onAddQuestion}
-                className="w-full py-3 border-2 border-dashed border-slate-700 rounded-xl text-slate-400 hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add Question
@@ -767,17 +767,17 @@ export default function AuditTemplateBuilder() {
   const evidenceQuestions = allQuestions.filter(q => q.evidenceRequired).length;
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800">
+      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/audit-templates')}
-                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                className="p-2 hover:bg-secondary rounded-lg transition-colors"
               >
-                <ArrowLeft className="w-5 h-5 text-slate-400" />
+                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
               </button>
               <div>
                 <input
@@ -785,34 +785,34 @@ export default function AuditTemplateBuilder() {
                   value={template.name}
                   onChange={(e) => setTemplate(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Untitled Template"
-                  className="bg-transparent text-xl font-bold text-white placeholder-slate-500 focus:outline-none"
+                  className="bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`px-2 py-0.5 text-xs rounded ${
-                    template.status === 'published' ? 'bg-green-500/20 text-green-400' :
-                    template.status === 'archived' ? 'bg-gray-500/20 text-gray-400' :
-                    'bg-amber-500/20 text-amber-400'
+                    template.status === 'published' ? 'bg-success/20 text-success' :
+                    template.status === 'archived' ? 'bg-muted text-muted-foreground' :
+                    'bg-warning/20 text-warning'
                   }`}>
                     {template.status}
                   </span>
-                  <span className="text-xs text-slate-500">v{template.version}</span>
-                  <span className="text-xs text-slate-500">•</span>
-                  <span className="text-xs text-slate-500">{totalQuestions} questions</span>
+                  <span className="text-xs text-muted-foreground">v{template.version}</span>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">{totalQuestions} questions</span>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               {/* Tabs */}
-              <div className="flex bg-slate-800 rounded-lg p-1">
+              <div className="flex bg-secondary rounded-lg p-1">
                 {(['builder', 'settings', 'preview'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       activeTab === tab
-                        ? 'bg-purple-500 text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -822,7 +822,7 @@ export default function AuditTemplateBuilder() {
 
               <button
                 onClick={() => setShowAIAssist(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg text-purple-300 hover:bg-purple-500/30 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 bg-accent border border-primary/30 rounded-lg text-primary hover:bg-primary/30 transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
                 AI Assist
@@ -832,16 +832,16 @@ export default function AuditTemplateBuilder() {
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-opacity disabled:opacity-50"
                 >
                   {isSaving ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
                   Save
                 </button>
-                {saveError && <p className="text-sm text-red-400 mt-2">{saveError}</p>}
+                {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
               </div>
             </div>
           </div>
@@ -855,53 +855,53 @@ export default function AuditTemplateBuilder() {
             {/* Left Sidebar - Stats & Quick Actions */}
             <div className="lg:col-span-1 space-y-4">
               {/* Stats Card */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">Template Stats</h3>
+              <div className="bg-card/50 border border-border rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Template Stats</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Sections</span>
-                    <span className="text-sm font-medium text-white">{template.sections.length}</span>
+                    <span className="text-sm text-muted-foreground">Sections</span>
+                    <span className="text-sm font-medium text-foreground">{template.sections.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Questions</span>
-                    <span className="text-sm font-medium text-white">{totalQuestions}</span>
+                    <span className="text-sm text-muted-foreground">Questions</span>
+                    <span className="text-sm font-medium text-foreground">{totalQuestions}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Required</span>
-                    <span className="text-sm font-medium text-white">{requiredQuestions}</span>
+                    <span className="text-sm text-muted-foreground">Required</span>
+                    <span className="text-sm font-medium text-foreground">{requiredQuestions}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">With Evidence</span>
-                    <span className="text-sm font-medium text-white">{evidenceQuestions}</span>
+                    <span className="text-sm text-muted-foreground">With Evidence</span>
+                    <span className="text-sm font-medium text-foreground">{evidenceQuestions}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Total Weight</span>
-                    <span className="text-sm font-medium text-white">{totalWeight}</span>
+                    <span className="text-sm text-muted-foreground">Total Weight</span>
+                    <span className="text-sm font-medium text-foreground">{totalWeight}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Pass Threshold</span>
-                    <span className="text-sm font-medium text-green-400">{template.passThreshold}%</span>
+                    <span className="text-sm text-muted-foreground">Pass Threshold</span>
+                    <span className="text-sm font-medium text-success">{template.passThreshold}%</span>
                   </div>
                 </div>
               </div>
 
               {/* Quick Actions */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
+              <div className="bg-card/50 border border-border rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Quick Actions</h3>
                 <div className="space-y-2">
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
+                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <Upload className="w-4 h-4" />
                     Import from Excel
                   </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
+                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <Download className="w-4 h-4" />
                     Export Template
                   </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
+                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <Copy className="w-4 h-4" />
                     Duplicate Template
                   </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors">
+                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <History className="w-4 h-4" />
                     Version History
                   </button>
@@ -909,8 +909,8 @@ export default function AuditTemplateBuilder() {
               </div>
 
               {/* ISO Standards */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-white mb-4">ISO Standards</h3>
+              <div className="bg-card/50 border border-border rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">ISO Standards</h3>
                 <div className="space-y-2">
                   {ISO_STANDARDS.map((standard) => (
                     <label
@@ -933,11 +933,11 @@ export default function AuditTemplateBuilder() {
                             }));
                           }
                         }}
-                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500"
+                        className="w-4 h-4 rounded border-input bg-input text-primary focus:ring-ring"
                       />
                       <div>
-                        <p className="text-sm text-white">{standard.label}</p>
-                        <p className="text-xs text-slate-500">{standard.description}</p>
+                        <p className="text-sm text-foreground">{standard.label}</p>
+                        <p className="text-xs text-muted-foreground">{standard.description}</p>
                       </div>
                     </label>
                   ))}
@@ -948,8 +948,8 @@ export default function AuditTemplateBuilder() {
             {/* Main Builder Area */}
             <div className="lg:col-span-3 space-y-4">
               {/* Description */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+              <div className="bg-card/50 border border-border rounded-2xl p-4">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Template Description
                 </label>
                 <textarea
@@ -957,7 +957,7 @@ export default function AuditTemplateBuilder() {
                   onChange={(e) => setTemplate(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe the purpose and scope of this audit template..."
                   rows={2}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
                 />
               </div>
 
@@ -980,7 +980,7 @@ export default function AuditTemplateBuilder() {
                 <button
                   type="button"
                   onClick={handleAddSection}
-                  className="w-full py-4 border-2 border-dashed border-slate-700 rounded-2xl text-slate-400 hover:border-purple-500 hover:text-purple-400 transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-4 border-2 border-dashed border-border rounded-2xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
                   Add Section
@@ -992,13 +992,13 @@ export default function AuditTemplateBuilder() {
 
         {activeTab === 'settings' && (
           <div className="max-w-2xl mx-auto space-y-6">
-            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-6">Template Settings</h2>
+            <div className="bg-card/50 border border-border rounded-2xl p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-6">Template Settings</h2>
               
               <div className="space-y-6">
                 {/* Category */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+                  <label className="block text-sm font-medium text-foreground mb-2">Category</label>
                   <div className="grid grid-cols-2 gap-2">
                     {CATEGORIES.map((cat) => (
                       <button
@@ -1007,14 +1007,14 @@ export default function AuditTemplateBuilder() {
                         onClick={() => setTemplate(prev => ({ ...prev, category: cat.id }))}
                         className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
                           template.category === cat.id
-                            ? 'border-purple-500 bg-purple-500/10'
-                            : 'border-slate-700 hover:border-slate-600'
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-input'
                         }`}
                       >
                         <cat.icon className={`w-5 h-5 ${
-                          template.category === cat.id ? 'text-purple-400' : 'text-slate-400'
+                          template.category === cat.id ? 'text-primary' : 'text-muted-foreground'
                         }`} />
-                        <span className="text-sm text-white">{cat.label}</span>
+                        <span className="text-sm text-foreground">{cat.label}</span>
                       </button>
                     ))}
                   </div>
@@ -1022,7 +1022,7 @@ export default function AuditTemplateBuilder() {
 
                 {/* Scoring Method */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Scoring Method</label>
+                  <label className="block text-sm font-medium text-foreground mb-2">Scoring Method</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { id: 'weighted', label: 'Weighted', description: 'Questions have different weights' },
@@ -1036,12 +1036,12 @@ export default function AuditTemplateBuilder() {
                         onClick={() => setTemplate(prev => ({ ...prev, scoringMethod: method.id as ScoringMethod }))}
                         className={`p-3 rounded-xl border-2 text-left transition-all ${
                           template.scoringMethod === method.id
-                            ? 'border-purple-500 bg-purple-500/10'
-                            : 'border-slate-700 hover:border-slate-600'
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-input'
                         }`}
                       >
-                        <p className="text-sm font-medium text-white">{method.label}</p>
-                        <p className="text-xs text-slate-400 mt-1">{method.description}</p>
+                        <p className="text-sm font-medium text-foreground">{method.label}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{method.description}</p>
                       </button>
                     ))}
                   </div>
@@ -1049,7 +1049,7 @@ export default function AuditTemplateBuilder() {
 
                 {/* Pass Threshold */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Pass Threshold: {template.passThreshold}%
                   </label>
                   <input
@@ -1058,9 +1058,9 @@ export default function AuditTemplateBuilder() {
                     max="100"
                     value={template.passThreshold}
                     onChange={(e) => setTemplate(prev => ({ ...prev, passThreshold: parseInt(e.target.value) }))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                   />
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
                     <span>0%</span>
                     <span>100%</span>
                   </div>
@@ -1068,7 +1068,7 @@ export default function AuditTemplateBuilder() {
 
                 {/* Estimated Duration */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Estimated Duration (minutes)
                   </label>
                   <input
@@ -1076,44 +1076,44 @@ export default function AuditTemplateBuilder() {
                     value={template.estimatedDuration}
                     onChange={(e) => setTemplate(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
                     min="0"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:border-ring"
                   />
                 </div>
 
                 {/* Version */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Version</label>
+                  <label className="block text-sm font-medium text-foreground mb-2">Version</label>
                   <input
                     type="text"
                     value={template.version}
                     onChange={(e) => setTemplate(prev => ({ ...prev, version: e.target.value }))}
                     placeholder="1.0.0"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:border-ring"
                   />
                 </div>
 
                 {/* Lock Toggle */}
-                <div className="flex items-center justify-between p-4 bg-slate-800 rounded-xl">
+                <div className="flex items-center justify-between p-4 bg-secondary rounded-xl">
                   <div className="flex items-center gap-3">
                     {template.isLocked ? (
-                      <Lock className="w-5 h-5 text-amber-400" />
+                      <Lock className="w-5 h-5 text-warning" />
                     ) : (
-                      <Unlock className="w-5 h-5 text-slate-400" />
+                      <Unlock className="w-5 h-5 text-muted-foreground" />
                     )}
                     <div>
-                      <p className="text-sm font-medium text-white">Lock Template</p>
-                      <p className="text-xs text-slate-400">Prevent edits after publishing</p>
+                      <p className="text-sm font-medium text-foreground">Lock Template</p>
+                      <p className="text-xs text-muted-foreground">Prevent edits after publishing</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setTemplate(prev => ({ ...prev, isLocked: !prev.isLocked }))}
                     className={`relative w-12 h-6 rounded-full transition-colors ${
-                      template.isLocked ? 'bg-amber-500' : 'bg-slate-600'
+                      template.isLocked ? 'bg-warning' : 'bg-muted'
                     }`}
                   >
                     <span
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      className={`absolute top-1 w-4 h-4 bg-card rounded-full transition-transform ${
                         template.isLocked ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
@@ -1126,18 +1126,18 @@ export default function AuditTemplateBuilder() {
 
         {activeTab === 'preview' && (
           <div className="max-w-2xl mx-auto">
-            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+            <div className="bg-card/50 border border-border rounded-2xl p-6">
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">{template.name || 'Untitled Template'}</h2>
-                <p className="text-slate-400">{template.description}</p>
+                <h2 className="text-2xl font-bold text-foreground mb-2">{template.name || 'Untitled Template'}</h2>
+                <p className="text-muted-foreground">{template.description}</p>
                 <div className="flex items-center justify-center gap-4 mt-4">
-                  <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-sm">
+                  <span className="px-3 py-1 bg-primary/20 text-primary rounded-lg text-sm">
                     {totalQuestions} Questions
                   </span>
-                  <span className="px-3 py-1 bg-slate-700 text-slate-300 rounded-lg text-sm">
+                  <span className="px-3 py-1 bg-input text-foreground rounded-lg text-sm">
                     ~{template.estimatedDuration} min
                   </span>
-                  <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-lg text-sm">
+                  <span className="px-3 py-1 bg-success/20 text-success rounded-lg text-sm">
                     Pass: {template.passThreshold}%
                   </span>
                 </div>
@@ -1146,39 +1146,39 @@ export default function AuditTemplateBuilder() {
               {template.sections.map((section, sectionIndex) => (
                 <div key={section.id} className="mb-6">
                   <div className={`bg-gradient-to-r ${section.color} p-0.5 rounded-xl`}>
-                    <div className="bg-slate-900 p-4 rounded-xl">
-                      <h3 className="text-lg font-semibold text-white">
+                    <div className="bg-card p-4 rounded-xl">
+                      <h3 className="text-lg font-semibold text-foreground">
                         {sectionIndex + 1}. {section.title}
                       </h3>
                       {section.description && (
-                        <p className="text-sm text-slate-400 mt-1">{section.description}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
                       )}
                     </div>
                   </div>
                   <div className="mt-3 space-y-3 pl-4">
                     {section.questions.map((question, qIndex) => (
-                      <div key={question.id} className="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
-                        <span className="text-sm text-slate-500">{sectionIndex + 1}.{qIndex + 1}</span>
+                      <div key={question.id} className="flex items-start gap-3 p-3 bg-secondary/50 rounded-lg">
+                        <span className="text-sm text-muted-foreground">{sectionIndex + 1}.{qIndex + 1}</span>
                         <div className="flex-1">
-                          <p className="text-sm text-white">
+                          <p className="text-sm text-foreground">
                             {question.text || 'Untitled question'}
-                            {question.required && <span className="text-red-400 ml-1">*</span>}
+                            {question.required && <span className="text-destructive ml-1">*</span>}
                           </p>
                           <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-slate-500 bg-slate-700 px-2 py-0.5 rounded">
+                            <span className="text-xs text-muted-foreground bg-input px-2 py-0.5 rounded">
                               {QUESTION_TYPES.find(t => t.type === question.type)?.label}
                             </span>
                             {question.evidenceRequired && (
-                              <span className="text-xs text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded flex items-center gap-1">
+                              <span className="text-xs text-info bg-info/10 px-2 py-0.5 rounded flex items-center gap-1">
                                 <Camera className="w-3 h-3" /> Evidence
                               </span>
                             )}
                             {question.riskLevel && (
                               <span className={`text-xs px-2 py-0.5 rounded ${
-                                question.riskLevel === 'critical' ? 'text-red-400 bg-red-500/10' :
-                                question.riskLevel === 'high' ? 'text-orange-400 bg-orange-500/10' :
-                                question.riskLevel === 'medium' ? 'text-amber-400 bg-amber-500/10' :
-                                'text-green-400 bg-green-500/10'
+                                question.riskLevel === 'critical' ? 'text-destructive bg-destructive/10' :
+                                question.riskLevel === 'high' ? 'text-warning bg-warning/10' :
+                                question.riskLevel === 'medium' ? 'text-warning bg-warning/10' :
+                                'text-success bg-success/10'
                               }`}>
                                 {question.riskLevel} risk
                               </span>

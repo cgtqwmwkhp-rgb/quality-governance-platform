@@ -317,21 +317,21 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative w-full max-w-2xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-2xl max-h-[90vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+        <div className="flex items-center justify-between p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-              <Wand2 className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+              <Wand2 className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">AI Template Generator</h2>
-              <p className="text-sm text-slate-400">Generate audit questions from standards or descriptions</p>
+              <h2 className="text-lg font-semibold text-foreground">AI Template Generator</h2>
+              <p className="text-sm text-muted-foreground">Generate audit questions from standards or descriptions</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -343,7 +343,7 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
             <>
               {/* Preset Templates */}
               <div>
-                <h3 className="text-sm font-medium text-white mb-3">Quick Start Templates</h3>
+                <h3 className="text-sm font-medium text-foreground mb-3">Quick Start Templates</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {PRESET_PROMPTS.map((preset) => (
                     <button
@@ -353,14 +353,14 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                         handleGenerate(preset.prompt);
                       }}
                       disabled={isGenerating}
-                      className="flex items-start gap-3 p-3 bg-slate-800 border border-slate-700 rounded-xl text-left hover:border-purple-500/50 hover:bg-slate-800/80 transition-colors disabled:opacity-50"
+                      className="flex items-start gap-3 p-3 bg-secondary border border-border rounded-xl text-left hover:border-primary/50 hover:bg-secondary/80 transition-colors disabled:opacity-50"
                     >
-                      <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <preset.icon className="w-5 h-5 text-purple-400" />
+                      <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <preset.icon className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{preset.label}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{preset.description}</p>
+                        <p className="text-sm font-medium text-foreground">{preset.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{preset.description}</p>
                       </div>
                     </button>
                   ))}
@@ -369,18 +369,18 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
 
               {/* Custom Prompt */}
               <div>
-                <h3 className="text-sm font-medium text-white mb-3">Or Describe Your Audit</h3>
+                <h3 className="text-sm font-medium text-foreground mb-3">Or Describe Your Audit</h3>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="e.g., 'Create a food safety inspection checklist for a commercial kitchen covering hygiene, temperature controls, pest management, and staff training'"
                   rows={4}
                   disabled={isGenerating}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
                 />
                 
                 {error && (
-                  <div className="flex items-center gap-2 mt-2 text-red-400 text-sm">
+                  <div className="flex items-center gap-2 mt-2 text-destructive text-sm">
                     <AlertTriangle className="w-4 h-4" />
                     {error}
                   </div>
@@ -389,7 +389,7 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                 <button
                   onClick={() => handleGenerate()}
                   disabled={isGenerating || !prompt.trim()}
-                  className="w-full mt-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full mt-4 py-3 bg-primary text-primary-foreground font-medium rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isGenerating ? (
                     <>
@@ -412,15 +412,15 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span className="text-white font-medium">Generated {generatedSections.length} sections</span>
+                  <CheckCircle2 className="w-5 h-5 text-success" />
+                  <span className="text-foreground font-medium">Generated {generatedSections.length} sections</span>
                 </div>
                 <button
                   onClick={() => {
                     setGeneratedSections(null);
                     setPrompt('');
                   }}
-                  className="text-sm text-purple-400 hover:text-purple-300"
+                  className="text-sm text-primary hover:text-primary"
                 >
                   Generate New
                 </button>
@@ -432,8 +432,8 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                     key={section.id}
                     className={`border rounded-xl overflow-hidden transition-colors ${
                       selectedSections.has(section.id)
-                        ? 'border-purple-500/50 bg-purple-500/5'
-                        : 'border-slate-700 bg-slate-800/50'
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border bg-secondary/50'
                     }`}
                   >
                     <button
@@ -442,29 +442,29 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                     >
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                         selectedSections.has(section.id)
-                          ? 'bg-purple-500 border-purple-500'
-                          : 'border-slate-600'
+                          ? 'bg-primary border-primary'
+                          : 'border-input'
                       }`}>
                         {selectedSections.has(section.id) && (
-                          <CheckCircle2 className="w-3 h-3 text-white" />
+                          <CheckCircle2 className="w-3 h-3 text-primary-foreground" />
                         )}
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium text-white">{section.title}</p>
-                        <p className="text-sm text-slate-400">{section.questions.length} questions</p>
+                        <p className="font-medium text-foreground">{section.title}</p>
+                        <p className="text-sm text-muted-foreground">{section.questions.length} questions</p>
                       </div>
                     </button>
                     
                     {selectedSections.has(section.id) && (
-                      <div className="px-4 pb-4 space-y-2 border-t border-slate-700/50 pt-3">
+                      <div className="px-4 pb-4 space-y-2 border-t border-border/50 pt-3">
                         {section.questions.slice(0, 3).map((q) => (
                           <div key={q.id} className="flex items-start gap-2 text-sm">
-                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5" />
-                            <span className="text-slate-300">{q.text}</span>
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
+                            <span className="text-foreground">{q.text}</span>
                           </div>
                         ))}
                         {section.questions.length > 3 && (
-                          <p className="text-xs text-slate-500 pl-3.5">
+                          <p className="text-xs text-muted-foreground pl-3.5">
                             +{section.questions.length - 3} more questions
                           </p>
                         )}
@@ -479,21 +479,21 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
 
         {/* Footer */}
         {generatedSections && (
-          <div className="border-t border-slate-800 p-4 flex items-center justify-between bg-slate-900">
-            <div className="text-sm text-slate-400">
+          <div className="border-t border-border p-4 flex items-center justify-between bg-card">
+            <div className="text-sm text-muted-foreground">
               {selectedSections.size} sections, {totalQuestions} questions selected
             </div>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700"
+                className="px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted"
               >
                 Cancel
               </button>
               <button
                 onClick={handleApply}
                 disabled={selectedSections.size === 0}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add to Template
