@@ -14,7 +14,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r requirements.txt
 
 # Production stage
@@ -27,6 +27,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     curl \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade system setuptools to resolve vendored CVEs
+RUN pip install --no-cache-dir --upgrade setuptools
 
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
