@@ -83,17 +83,11 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Archive support
-    archived_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    archived_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
     sections: Mapped[List["AuditSection"]] = relationship(
@@ -242,9 +236,7 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Scoring
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -334,9 +326,7 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
