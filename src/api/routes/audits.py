@@ -143,49 +143,55 @@ async def list_templates(
     is_published: Optional[bool] = None,
 ) -> Any:
     """List all audit templates with pagination and filtering."""
+    import traceback as _tb
+
     started = time.perf_counter()
-    query = select(AuditTemplate).where(
-        AuditTemplate.is_active == True,
-        or_(
-            AuditTemplate.tenant_id == current_user.tenant_id,
-            AuditTemplate.tenant_id.is_(None),
-        ),
-    )
-
-    if search:
-        search_filter = f"%{search}%"
-        query = query.where(
-            (AuditTemplate.name.ilike(search_filter)) | (AuditTemplate.description.ilike(search_filter))
+    try:
+        query = select(AuditTemplate).where(
+            AuditTemplate.is_active == True,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
         )
-    if category:
-        query = query.where(AuditTemplate.category == category)
-    if audit_type:
-        query = query.where(AuditTemplate.audit_type == audit_type)
-    if is_published is not None:
-        query = query.where(AuditTemplate.is_published == is_published)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
+        if search:
+            search_filter = f"%{search}%"
+            query = query.where(
+                (AuditTemplate.name.ilike(search_filter)) | (AuditTemplate.description.ilike(search_filter))
+            )
+        if category:
+            query = query.where(AuditTemplate.category == category)
+        if audit_type:
+            query = query.where(AuditTemplate.audit_type == audit_type)
+        if is_published is not None:
+            query = query.where(AuditTemplate.is_published == is_published)
 
-    # Apply pagination
-    page = params.page
-    page_size = params.page_size
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    query = query.order_by(AuditTemplate.name)
+        count_query = select(func.count()).select_from(query.subquery())
+        total = await db.scalar(count_query) or 0
 
-    result = await db.execute(query)
-    templates = result.scalars().all()
+        page = params.page
+        page_size = params.page_size
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        query = query.order_by(AuditTemplate.name)
 
-    response = AuditTemplateListResponse(
-        items=[_decode_template_response_entities(AuditTemplateResponse.model_validate(t)) for t in templates],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
-    _record_audit_endpoint_event("GET /api/v1/audits/templates", 200, (time.perf_counter() - started) * 1000)
-    return response
+        result = await db.execute(query)
+        templates = result.scalars().all()
+
+        response = AuditTemplateListResponse(
+            items=[_decode_template_response_entities(AuditTemplateResponse.model_validate(t)) for t in templates],
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=(total + page_size - 1) // page_size if total > 0 else 0,
+        )
+        _record_audit_endpoint_event("GET /api/v1/audits/templates", 200, (time.perf_counter() - started) * 1000)
+        return response
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(exc).__name__}: {exc}\n{''.join(_tb.format_tb(exc.__traceback__)[-3:])}",
+        ) from exc
 
 
 @router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
