@@ -48,6 +48,14 @@ def _column_exists(conn, table_name: str, column_name: str) -> bool:
     return result.scalar() is not None
 
 
+def _has_duplicates(conn, table: str, columns: list[str]) -> bool:
+    col_str = ", ".join(f'"{c}"' for c in columns)
+    result = conn.execute(
+        text(f"SELECT 1 FROM \"{table}\" GROUP BY {col_str} HAVING COUNT(*) > 1 LIMIT 1")
+    )
+    return result.scalar() is not None
+
+
 def _safe_create_index(conn, idx_name: str, table: str, columns: list[str], unique: bool = False):
     if not _table_exists(conn, table):
         return
@@ -55,6 +63,10 @@ def _safe_create_index(conn, idx_name: str, table: str, columns: list[str], uniq
         if not _column_exists(conn, table, col):
             return
     if _index_exists(conn, idx_name):
+        return
+    if unique and _has_duplicates(conn, table, columns):
+        col_str = ", ".join(f'"{c}"' for c in columns)
+        conn.execute(text(f'CREATE INDEX "{idx_name}" ON "{table}" ({col_str})'))
         return
     unique_str = "UNIQUE " if unique else ""
     col_str = ", ".join(f'"{c}"' for c in columns)
