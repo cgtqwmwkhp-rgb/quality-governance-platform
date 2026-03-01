@@ -267,6 +267,19 @@ class AuditTemplateListResponse(BaseModel):
     pages: int
 
 
+class ArchiveTemplateResponse(AuditTemplateResponse):
+    """Schema for archived audit template response."""
+
+    archived_at: Optional[datetime] = None
+
+
+class PurgeExpiredTemplatesResponse(BaseModel):
+    """Schema for purge expired templates response."""
+
+    purged_count: int
+    message: str
+
+
 # ============== Audit Run Schemas ==============
 
 
