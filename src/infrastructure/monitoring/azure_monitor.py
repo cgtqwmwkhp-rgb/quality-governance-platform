@@ -1,18 +1,26 @@
 """OpenTelemetry instrumentation and Azure Monitor integration."""
 
+from __future__ import annotations
+
 import json
 import logging
 from typing import Any
 
-from opentelemetry import metrics, trace
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.metrics import Counter, Histogram, UpDownCounter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
+try:
+    from opentelemetry import metrics, trace
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: F401
+    from opentelemetry.metrics import Counter, Histogram, UpDownCounter  # noqa: F401
+    from opentelemetry.sdk.metrics import MeterProvider  # noqa: F401
+    from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader  # noqa: F401
+    from opentelemetry.sdk.resources import Resource  # noqa: F401
+    from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor  # noqa: F401
+    from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased  # noqa: F401
+    _HAS_OTEL = True
+except ImportError:
+    _HAS_OTEL = False
+    metrics = None  # type: ignore[assignment]
+    trace = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
