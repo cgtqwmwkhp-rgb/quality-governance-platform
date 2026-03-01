@@ -1,7 +1,7 @@
 """Add performance indexes to audit tables.
 
 Revision ID: 20260227_audit_idx
-Revises: 20260202_fix_status
+Revises: 20260222_soft_delete
 Create Date: 2026-02-27 10:00:00.000000
 
 Adds indexes on columns used in WHERE, ORDER BY, and JOIN clauses
@@ -12,7 +12,7 @@ audit_findings, and audit_templates tables.
 from alembic import op
 
 revision = "20260227_audit_idx"
-down_revision = "20260202_fix_status"
+down_revision = "20260222_soft_delete"
 branch_labels = None
 depends_on = None
 
