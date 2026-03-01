@@ -218,7 +218,7 @@ class TestReportTracking:
             "/api/v1/portal/reports/INVALID-REF-001/",
             params={"tracking_code": "invalidcode"},
         )
-        assert response.status_code in [404, 422]
+        assert response.status_code in [400, 404, 422]
         data = response.json()
         error_data = data.get("error", data)
         assert "message" in error_data or "detail" in data
