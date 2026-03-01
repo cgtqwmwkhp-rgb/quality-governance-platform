@@ -149,15 +149,16 @@ async def create_risk(
         created_by_id=current_user.id,
     )
 
-    # Handle JSON array fields
+    # Handle JSON array fields (clause/control/audit/incident columns were
+    # renamed to _legacy by 20260220 normalization migration).
     if risk_data.clause_ids:
-        risk.clause_ids_json = risk_data.clause_ids
+        risk.clause_ids_json_legacy = risk_data.clause_ids
     if risk_data.control_ids:
-        risk.control_ids_json = risk_data.control_ids
+        risk.control_ids_json_legacy = risk_data.control_ids
     if risk_data.linked_audit_ids:
-        risk.linked_audit_ids_json = risk_data.linked_audit_ids
+        risk.linked_audit_ids_json_legacy = risk_data.linked_audit_ids
     if risk_data.linked_incident_ids:
-        risk.linked_incident_ids_json = risk_data.linked_incident_ids
+        risk.linked_incident_ids_json_legacy = risk_data.linked_incident_ids
     if risk_data.linked_policy_ids:
         risk.linked_policy_ids_json = risk_data.linked_policy_ids
 

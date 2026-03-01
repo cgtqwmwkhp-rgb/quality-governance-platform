@@ -312,7 +312,10 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus, native_enum=False), default=FindingStatus.OPEN)
 
     # Standard mapping (JSON arrays)
-    clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # clause_ids_json was renamed to clause_ids_json_legacy by the
+    # 20260220_normalize_json_to_junction_tables migration; control_ids_json
+    # and risk_ids_json were NOT renamed.
+    clause_ids_json_legacy: Mapped[Optional[list]] = mapped_column("clause_ids_json_legacy", JSON, nullable=True)
     control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Risk linkage (JSON array)

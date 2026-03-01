@@ -58,13 +58,18 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     review_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Standard mapping (JSON arrays)
-    clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Standard mapping (JSON arrays) — renamed to _legacy by
+    # 20260220_normalize_json_to_junction_tables migration.
+    clause_ids_json_legacy: Mapped[Optional[list]] = mapped_column("clause_ids_json_legacy", JSON, nullable=True)
+    control_ids_json_legacy: Mapped[Optional[list]] = mapped_column("control_ids_json_legacy", JSON, nullable=True)
 
-    # Linkages (JSON arrays)
-    linked_audit_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_incident_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Linkages (JSON arrays) — renamed to _legacy by same migration.
+    linked_audit_ids_json_legacy: Mapped[Optional[list]] = mapped_column(
+        "linked_audit_ids_json_legacy", JSON, nullable=True
+    )
+    linked_incident_ids_json_legacy: Mapped[Optional[list]] = mapped_column(
+        "linked_incident_ids_json_legacy", JSON, nullable=True
+    )
     linked_policy_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Treatment

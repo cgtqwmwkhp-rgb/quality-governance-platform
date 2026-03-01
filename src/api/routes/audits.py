@@ -915,7 +915,7 @@ async def update_response(
 # ============== Finding Endpoints ==============
 
 
-@router.get("/findings", response_model=None)
+@router.get("/findings", response_model=AuditFindingListResponse)
 async def list_findings(
     db: DbSession,
     current_user: CurrentUser,
@@ -925,89 +925,23 @@ async def list_findings(
     run_id: Optional[int] = None,
 ) -> Any:
     """List all audit findings with pagination and filtering."""
-    import logging
-    import traceback
-
-    from fastapi.responses import JSONResponse
-
-    logger = logging.getLogger("findings_diag")
-
-    # Phase 1: query
-    try:
-        service = AuditService(db)
-        result = await service.list_findings(
-            current_user.tenant_id,
-            page=params.page,
-            page_size=params.page_size,
-            status_filter=status_filter,
-            severity=severity,
-            run_id=run_id,
-        )
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("DIAG list_findings QUERY error: %s\n%s", exc, tb)
-        return JSONResponse(
-            status_code=500,
-            content={"diag": "query_error", "error": str(exc), "traceback": tb},
-        )
-
-    # Phase 2: serialize each item individually to find which one fails
-    serialized_items = []
-    for idx, item in enumerate(result.items):
-        try:
-            item_dict = AuditFindingResponse.model_validate(item, from_attributes=True)
-            serialized_items.append(item_dict.model_dump(mode="json"))
-        except Exception as exc:
-            tb = traceback.format_exc()
-            raw_attrs = {}
-            for attr in [
-                "id",
-                "reference_number",
-                "run_id",
-                "question_id",
-                "title",
-                "description",
-                "severity",
-                "finding_type",
-                "status",
-                "clause_ids_json",
-                "control_ids_json",
-                "risk_ids_json",
-                "corrective_action_required",
-                "corrective_action_due_date",
-                "created_by_id",
-                "created_at",
-                "updated_at",
-                "tenant_id",
-            ]:
-                raw_attrs[attr] = repr(getattr(item, attr, "<<MISSING>>"))
-            logger.error(
-                "DIAG list_findings SERIALIZE error at idx=%d: %s\n%s\nraw=%s",
-                idx,
-                exc,
-                tb,
-                raw_attrs,
-            )
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "diag": "serialize_error",
-                    "index": idx,
-                    "error": str(exc),
-                    "traceback": tb,
-                    "raw_attrs": raw_attrs,
-                },
-            )
-
-    return JSONResponse(
-        content={
-            "items": serialized_items,
-            "total": result.total,
-            "page": result.page,
-            "page_size": result.page_size,
-            "pages": result.pages,
-        },
+    service = AuditService(db)
+    result = await service.list_findings(
+        current_user.tenant_id,
+        page=params.page,
+        page_size=params.page_size,
+        status_filter=status_filter,
+        severity=severity,
+        run_id=run_id,
     )
+    return {
+        "items": result.items,
+        "total": result.total,
+        "page": result.page,
+        "page_size": result.page_size,
+        "pages": result.pages,
+        "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
+    }
 
 
 @router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)
@@ -1057,7 +991,7 @@ async def create_finding(
 
     # Store list fields as JSON
     if clause_ids:
-        finding.clause_ids_json = clause_ids
+        finding.clause_ids_json_legacy = clause_ids
     if control_ids:
         finding.control_ids_json = control_ids
     if risk_ids:

@@ -73,7 +73,7 @@ _QUESTION_JSON_REMAPS: dict[str, str] = {
 }
 
 _FINDING_JSON_REMAPS: dict[str, str] = {
-    "clause_ids": "clause_ids_json",
+    "clause_ids": "clause_ids_json_legacy",
     "control_ids": "control_ids_json",
     "risk_ids": "risk_ids_json",
 }
