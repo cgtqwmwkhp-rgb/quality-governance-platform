@@ -13,6 +13,9 @@ function getGitCommitSha(): string {
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'],
+  },
   define: {
     __BUILD_VERSION__: JSON.stringify(getGitCommitSha()),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
