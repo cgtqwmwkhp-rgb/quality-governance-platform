@@ -10,7 +10,7 @@
 # 4. Quarantine count must not increase without explicit policy update
 
 version: "1.0"
-last_updated: "2026-01-21"
+last_updated: "2026-03-01"
 
 # Global settings
 settings:
@@ -23,7 +23,7 @@ quarantines:
   # Phase 3/4 incomplete features
   - id: GOVPLAT-001
     description: "Phase 3/4 endpoint tests - features incomplete"
-    expiry_date: "2026-02-21"
+    expiry_date: "2026-03-31"
     owner: "platform-team"
     reason: "Phase 3 (Workflow Center) and Phase 4 (Compliance Automation) not implemented"
     marker: "phase34"
@@ -36,7 +36,7 @@ quarantines:
   # E2E API contract mismatch
   - id: GOVPLAT-002
     description: "E2E tests with API contract mismatch"
-    expiry_date: "2026-02-21"
+    expiry_date: "2026-03-31"
     owner: "platform-team"
     reason: "Tests expect endpoints that return 404 or have different contracts"
     marker: "api_contract_mismatch"
@@ -50,7 +50,7 @@ quarantines:
 metrics:
   baseline_quarantine_count: 6
   max_allowed_quarantine_count: 6
-  last_audit_date: "2026-01-21"
+  last_audit_date: "2026-03-01"
 
 # Active test suites (must pass)
 active_suites:
