@@ -266,3 +266,87 @@ class AnalyticsSummaryResponse(BaseModel):
 
     kpis: list[KPIResponse] = []
     trends: list[TrendDataPoint] = []
+
+
+# ============================================================================
+# WDP (Workforce Development Platform) Analytics Schemas
+# ============================================================================
+
+
+class WDPEngineersSummary(BaseModel):
+    """Engineer counts in WDP summary."""
+
+    total: int
+
+
+
+
+class WDPAssessmentsSummary(BaseModel):
+    """Assessment counts in WDP summary."""
+
+    total: int
+    completed: int
+
+
+class WDPInductionsSummary(BaseModel):
+    """Induction counts in WDP summary."""
+
+    total: int
+    completed: int
+
+
+class WDPAnalyticsSummaryResponse(BaseModel):
+    """Response for WDP dashboard summary KPIs."""
+
+    engineers: WDPEngineersSummary
+    competencies: dict[str, int]  # state -> count
+    assessments: WDPAssessmentsSummary
+    inductions: WDPInductionsSummary
+
+
+class WDPAssetTypeSummary(BaseModel):
+    """Asset type in engineer matrix."""
+
+    id: int
+    name: str
+    category: str
+
+
+class WDPEngineerMatrixRow(BaseModel):
+    """Single engineer row in competency matrix."""
+
+    engineer_id: int
+    user_id: int
+    employee_number: Optional[str] = None
+    competencies: dict[int, str]  # asset_type_id -> state
+
+
+class WDPEngineerMatrixResponse(BaseModel):
+    """Response for engineer competency matrix."""
+
+    asset_types: list[WDPAssetTypeSummary]
+    engineers: list[WDPEngineerMatrixRow]
+
+
+class WDPAssessmentTrendMonth(BaseModel):
+    """Monthly assessment trend data."""
+
+    month: Optional[str] = None
+    total: int
+    passed: int
+    failed: int
+
+
+class WDPInductionTrendMonth(BaseModel):
+    """Monthly induction trend data."""
+
+    month: Optional[str] = None
+    total: int
+    completed: int
+
+
+class WDPTrendsResponse(BaseModel):
+    """Response for competency and training trends over time."""
+
+    assessments_by_month: list[WDPAssessmentTrendMonth]
+    inductions_by_month: list[WDPInductionTrendMonth] = []

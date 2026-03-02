@@ -7,6 +7,7 @@ import {
   Car,
   MessageSquare,
   ClipboardCheck,
+  GraduationCap,
   FlaskConical,
   BookOpen,
   ListTodo,
@@ -33,8 +34,10 @@ import {
   FileSignature,
   Bot,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { notificationsApi } from '../api/client'
 import AICopilot from './copilot/AICopilot'
+import OfflineIndicator from './OfflineIndicator'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
 import { cn } from "../helpers/utils"
@@ -51,6 +54,16 @@ const navSections = [
       { path: '/incidents', icon: AlertTriangle, label: 'Incidents' },
       { path: '/rtas', icon: Car, label: 'RTAs' },
       { path: '/complaints', icon: MessageSquare, label: 'Complaints' },
+    ]
+  },
+  {
+    title: 'Workforce',
+    items: [
+      { path: '/workforce/assessments', icon: ClipboardCheck, label: 'Assessments' },
+      { path: '/workforce/training', icon: GraduationCap, label: 'Training' },
+      { path: '/workforce/engineers', icon: Users, label: 'Engineers' },
+      { path: '/workforce/calendar', icon: Calendar, label: 'Calendar' },
+      { path: '/workforce/dashboard', icon: BarChart3, label: 'Competency' },
     ]
   },
   {
@@ -112,9 +125,21 @@ const navSections = [
 
 export default function Layout({ onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [unreadNotifications] = useState(3)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
   const navigate = useNavigate()
+
+  const fetchUnreadCount = useCallback(() => {
+    notificationsApi.getUnreadCount()
+      .then((res) => setUnreadNotifications(res.data?.unread_count ?? 0))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchUnreadCount()
+    const handle = setInterval(fetchUnreadCount, 60_000)
+    return () => clearInterval(handle)
+  }, [fetchUnreadCount])
 
   // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
   useEffect(() => {
@@ -300,11 +325,14 @@ export default function Layout({ onLogout }: LayoutProps) {
       )}
       
       {/* AI Copilot */}
-      <AICopilot 
-        isOpen={copilotOpen} 
+      <AICopilot
+        isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
         currentPage={window.location.pathname}
       />
+
+      {/* Offline status indicator */}
+      <OfflineIndicator />
     </div>
   )
 }

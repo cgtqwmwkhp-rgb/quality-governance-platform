@@ -16,7 +16,34 @@ from src.domain.models.analytics import (
     ROIInvestment,
     SavedReport,
 )
-from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
+from src.domain.models.assessment import (
+    AssessmentOutcome,
+    AssessmentResponse,
+    AssessmentRun,
+    AssessmentStatus,
+    CompetencyVerdict,
+)
+from src.domain.models.asset import (
+    Asset,
+    AssetCategory,
+    AssetStatus,
+    AssetType,
+    TemplateAssetType,
+)
+from src.domain.models.audit import (
+    AuditFinding,
+    AuditQuestion,
+    AuditResponse,
+    AuditRun,
+    AuditSection,
+    AuditStatus,
+    AuditTemplate,
+    FindingSeverity,
+    FindingStatus,
+    QuestionCriticality,
+    TemplateLifecycleStatus,
+    TemplateVersion,
+)
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
 
@@ -27,6 +54,14 @@ from src.domain.models.digital_signature import (
     SignatureRequest,
     SignatureRequestSigner,
     SignatureTemplate,
+)
+from src.domain.models.engineer import (
+    CompetencyLifecycleState,
+    CompetencyRecord,
+    CompetencyRequirement,
+    Engineer,
+    OnboardingChecklist,
+    OnboardingStatus,
 )
 from src.domain.models.document import (
     Document,
@@ -75,6 +110,19 @@ from src.domain.models.ims_unification import (
     UnifiedAuditPlan,
 )
 from src.domain.models.incident import Incident, IncidentAction
+from src.domain.models.loler import (
+    LOLERDefect,
+    LOLERDefectCategory,
+    LOLERExamination,
+    LOLERExaminationType,
+)
+from src.domain.models.induction import (
+    InductionResponse,
+    InductionRun,
+    InductionStage,
+    InductionStatus,
+    UnderstandingVerdict,
+)
 
 # Investigations (Stage 2)
 from src.domain.models.investigation import (
@@ -157,10 +205,23 @@ __all__ = [
     "Clause",
     "Control",
     # Audit models
+    "Asset",
+    "AssetCategory",
+    "AssetStatus",
+    "AssetType",
+    "TemplateAssetType",
     "AuditTemplate",
     "AuditQuestion",
     "AuditRun",
+    "AuditSection",
+    "AuditResponse",
+    "AuditStatus",
     "AuditFinding",
+    "FindingStatus",
+    "FindingSeverity",
+    "TemplateVersion",
+    "TemplateLifecycleStatus",
+    "QuestionCriticality",
     # Risk models
     "Risk",
     "OperationalRiskControl",
@@ -282,4 +343,25 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
+    # Workforce Development (Assessment & Induction)
+    "Engineer",
+    "CompetencyRecord",
+    "CompetencyRequirement",
+    "CompetencyLifecycleState",
+    "OnboardingChecklist",
+    "OnboardingStatus",
+    "LOLERExamination",
+    "LOLERDefect",
+    "LOLERDefectCategory",
+    "LOLERExaminationType",
+    "AssessmentRun",
+    "AssessmentResponse",
+    "AssessmentStatus",
+    "CompetencyVerdict",
+    "AssessmentOutcome",
+    "InductionRun",
+    "InductionResponse",
+    "InductionStatus",
+    "InductionStage",
+    "UnderstandingVerdict",
 ]

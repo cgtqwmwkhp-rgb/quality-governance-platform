@@ -6,8 +6,9 @@ import sys
 import time
 from typing import Any, AsyncGenerator
 
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
@@ -45,6 +46,15 @@ elif "postgresql" in settings.database_url:
     )
 
 engine = create_async_engine(settings.database_url, **engine_kwargs)
+
+# Sync engine for Celery tasks
+_sync_url = str(settings.database_url)
+if "+asyncpg" in _sync_url:
+    _sync_url = _sync_url.replace("+asyncpg", "")
+elif "+aiosqlite" in _sync_url:
+    _sync_url = _sync_url.replace("+aiosqlite", "")
+sync_engine = create_engine(_sync_url, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=sync_engine, expire_on_commit=False)
 
 # Create async session factory
 async_session_maker = async_sessionmaker(

@@ -60,9 +60,14 @@ TEMPLATE_UPDATE_ALLOWED_FIELDS = {
     "require_signature",
     "require_approval",
     "auto_create_findings",
+    "subcategory",
+    "tags",
+    "estimated_duration",
+    "pass_threshold",
+    "template_status",
 }
 
-_TEMPLATE_EXCLUDED_UPDATE_FIELDS = frozenset({"standard_ids", "is_active", "is_published", "standard_ids_json"})
+_TEMPLATE_EXCLUDED_UPDATE_FIELDS = frozenset({"standard_ids", "is_active", "is_published", "standard_ids_json", "external_id"})
 
 _QUESTION_JSON_REMAPS: dict[str, str] = {
     "options": "options_json",
@@ -70,6 +75,12 @@ _QUESTION_JSON_REMAPS: dict[str, str] = {
     "conditional_logic": "conditional_logic_json",
     "clause_ids": "clause_ids_json",
     "control_ids": "control_ids_json",
+    "assessor_guidance": "assessor_guidance_json",
+    "training_materials": "training_materials_json",
+}
+
+_TEMPLATE_JSON_REMAPS: dict[str, str] = {
+    "tags": "tags_json",
 }
 
 _FINDING_JSON_REMAPS: dict[str, str] = {
@@ -101,6 +112,14 @@ _QUESTION_CLONE_FIELDS = (
     "risk_category",
     "risk_weight",
     "sort_order",
+    "guidance",
+    "criticality",
+    "regulatory_reference",
+    "guidance_notes",
+    "sign_off_required",
+    "assessor_guidance_json",
+    "training_materials_json",
+    "failure_triggers_action",
 )
 
 _SECTION_CLONE_FIELDS = (
@@ -126,6 +145,10 @@ _TEMPLATE_CLONE_FIELDS = (
     "require_approval",
     "auto_create_findings",
     "standard_ids_json",
+    "subcategory",
+    "tags_json",
+    "estimated_duration",
+    "pass_threshold",
 )
 
 # ---------------------------------------------------------------------------
@@ -457,6 +480,11 @@ class AuditService:
         if template.is_published:
             template.version += 1
             template.is_published = False
+
+        # Remap JSON shorthand names to actual column names
+        for short, col in _TEMPLATE_JSON_REMAPS.items():
+            if short in update_data:
+                update_data[col] = update_data.pop(short)
 
         # Determine trackable changes (only fields in the allow-list)
         trackable = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}

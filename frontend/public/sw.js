@@ -120,13 +120,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   // CRITICAL: Check if this is an API request that needs HTTPS enforcement
-  const isApiRequest = url.hostname.includes('azurewebsites.net') && 
+  const isApiRequest = url.hostname.includes('azurewebsites.net') &&
                        url.pathname.startsWith('/api/');
-  
+
   if (isApiRequest) {
     // Always enforce HTTPS for API requests
     const secureRequest = createSecureRequest(request);
-    event.respondWith(networkFirstApi(secureRequest));
+    // Workforce API GET routes: network-first with cache fallback for offline support
+    if (request.method === 'GET' && isWorkforceApiRoute(url.pathname)) {
+      event.respondWith(networkFirstApiWithCache(secureRequest));
+    } else {
+      event.respondWith(networkFirstApi(secureRequest));
+    }
     return;
   }
 
@@ -171,6 +176,42 @@ async function networkFirstApi(request) {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+}
+
+/**
+ * Network-first with cache fallback for workforce API GET routes.
+ * Used for assessments, inductions, engineers, assets - enables offline read access.
+ */
+async function networkFirstApiWithCache(request) {
+  try {
+    const response = await fetch(request);
+    if (response.status === 401 || response.status === 403) {
+      const allClients = await self.clients.matchAll();
+      allClients.forEach(client => client.postMessage({ type: 'AUTH_REQUIRED', status: response.status }));
+    }
+    if (response.ok) {
+      const cache = await caches.open(API_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    console.log('[SW] Workforce API fetch failed - trying cache');
+    const cached = await caches.match(request);
+    if (cached) {
+      return cached;
+    }
+    return new Response(JSON.stringify({ error: 'Offline', message: 'Network unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+function isWorkforceApiRoute(pathname) {
+  return pathname.startsWith('/api/v1/assessments') ||
+         pathname.startsWith('/api/v1/inductions') ||
+         pathname.startsWith('/api/v1/engineers') ||
+         pathname.startsWith('/api/v1/assets');
 }
 
 async function cacheFirst(request) {

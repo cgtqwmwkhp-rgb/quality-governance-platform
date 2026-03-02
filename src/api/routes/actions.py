@@ -1,18 +1,21 @@
 """Unified Actions API routes for incidents, RTAs, complaints, and investigations."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, Union, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, literal, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.models.assessment import AssessmentRun
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
+from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
@@ -38,8 +41,15 @@ class ActionBase(BaseModel):
 class ActionCreate(ActionBase):
     """Schema for creating an action."""
 
-    source_type: str = Field(..., description="Type of source entity: incident, rta, or complaint")
-    source_id: int = Field(..., description="ID of the source entity")
+    source_type: str = Field(
+        ...,
+        description="Type of source entity: incident, rta, complaint, investigation, assessment, or induction",
+    )
+    source_id: Optional[int] = Field(None, description="ID of the source entity (for incident, rta, complaint, investigation)")
+    source_reference: Optional[str] = Field(
+        None,
+        description="UUID reference for assessment_run_id or induction_run_id (for assessment, induction)",
+    )
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
 
 
@@ -73,6 +83,7 @@ class ActionResponse(BaseModel):
     completion_notes: Optional[str] = None
     source_type: str
     source_id: int
+    source_reference: Optional[str] = None
     owner_id: Optional[int] = None
     owner_email: Optional[str] = None
     assigned_to_email: Optional[str] = None
@@ -110,9 +121,33 @@ def _action_to_response(
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=source_type,
         source_id=source_id,
+        source_reference=None,
         owner_id=action.owner_id,
         owner_email=None,
         created_at=action.created_at.isoformat() if action.created_at else "",
+    )
+
+
+def _capa_to_response(capa: CAPAAction, source_type: str) -> ActionResponse:
+    """Convert a CAPA action (from assessment/induction) to unified action response."""
+    capa_status = capa.status.value if hasattr(capa.status, "value") else str(capa.status)
+    return ActionResponse(
+        id=capa.id,
+        reference_number=capa.reference_number,
+        title=capa.title,
+        description=capa.description or "",
+        action_type=capa.capa_type.value if hasattr(capa.capa_type, "value") else "corrective",
+        priority=capa.priority.value if hasattr(capa.priority, "value") else str(capa.priority),
+        status=capa_status,
+        due_date=capa.due_date.isoformat() if capa.due_date else None,
+        completed_at=capa.completed_at.isoformat() if capa.completed_at else None,
+        completion_notes=capa.verification_result,
+        source_type=source_type,
+        source_id=capa.source_id or 0,
+        source_reference=capa.source_reference,
+        owner_id=capa.assigned_to_id,
+        owner_email=None,
+        created_at=capa.created_at.isoformat() if capa.created_at else "",
     )
 
 
@@ -128,6 +163,9 @@ async def list_actions(
     status_filter: Optional[str] = Query(None, alias="status"),
     source_type: Optional[str] = Query(None),
     source_id: Optional[int] = Query(None),
+    source_reference: Optional[str] = Query(
+        None, description="UUID ref for assessment_run_id or induction_run_id"
+    ),
 ) -> ActionListResponse:
     """List all actions across incidents, RTAs, and complaints with pagination."""
     actions_list: list[ActionResponse] = []
@@ -181,6 +219,48 @@ async def list_actions(
         for inv_action in investigation_result.scalars().all():
             actions_list.append(_action_to_response(inv_action, "investigation", inv_action.investigation_id))
 
+    # CAPAs from job assessments (assessment source)
+    if not source_type or source_type == "assessment":
+        capa_assess_query = select(CAPAAction).where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+        if status_filter:
+            capa_status_map = {"completed": CAPAStatus.CLOSED, "pending_verification": CAPAStatus.VERIFICATION}
+            capa_status = capa_status_map.get(status_filter)
+            if capa_status is not None:
+                capa_assess_query = capa_assess_query.where(CAPAAction.status == capa_status)
+            else:
+                try:
+                    capa_status = CAPAStatus(status_filter)
+                    capa_assess_query = capa_assess_query.where(CAPAAction.status == capa_status)
+                except ValueError:
+                    pass
+        if source_type == "assessment" and source_reference:
+            capa_assess_query = capa_assess_query.where(CAPAAction.source_reference == source_reference)
+
+        capa_assess_result = await db.execute(capa_assess_query)
+        for capa_action in capa_assess_result.scalars().all():
+            actions_list.append(_capa_to_response(capa_action, "assessment"))
+
+    # CAPAs from inductions (induction source)
+    if not source_type or source_type == "induction":
+        capa_ind_query = select(CAPAAction).where(CAPAAction.source_type == CAPASource.INDUCTION)
+        if status_filter:
+            capa_status_map = {"completed": CAPAStatus.CLOSED, "pending_verification": CAPAStatus.VERIFICATION}
+            capa_status = capa_status_map.get(status_filter)
+            if capa_status is not None:
+                capa_ind_query = capa_ind_query.where(CAPAAction.status == capa_status)
+            else:
+                try:
+                    capa_status = CAPAStatus(status_filter)
+                    capa_ind_query = capa_ind_query.where(CAPAAction.status == capa_status)
+                except ValueError:
+                    pass
+        if source_type == "induction" and source_reference:
+            capa_ind_query = capa_ind_query.where(CAPAAction.source_reference == source_reference)
+
+        capa_ind_result = await db.execute(capa_ind_query)
+        for capa_action in capa_ind_result.scalars().all():
+            actions_list.append(_capa_to_response(capa_action, "induction"))
+
     # Sort by created_at descending
     actions_list.sort(key=lambda x: x.created_at, reverse=True)
 
@@ -205,19 +285,50 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     db: DbSession,
     current_user: CurrentUser,
 ) -> ActionResponse:
-    """Create a new action for an incident, RTA, complaint, or investigation."""
+    """Create a new action for an incident, RTA, complaint, investigation, assessment, or induction."""
     src_type = action_data.source_type.lower()
-    src_id = action_data.source_id
+
+    # Assessment and induction use source_reference (UUID); others use source_id
+    if src_type in ("assessment", "induction"):
+        src_id = 0
+        source_ref = action_data.source_reference
+        if not source_ref:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"For source_type '{src_type}', source_reference (assessment/induction run ID) is required",
+            )
+    else:
+        src_id = action_data.source_id or 0
+        source_ref = None
+        if src_id == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"For source_type '{src_type}', source_id is required",
+            )
 
     # Diagnostic logging for 500 error investigation
     logger.info(
         f"create_action called: source_type={src_type}, source_id={src_id}, "
-        f"title={action_data.title[:50] if action_data.title else 'None'}, "
+        f"source_reference={source_ref}, title={action_data.title[:50] if action_data.title else 'None'}, "
         f"user_id={current_user.id}"
     )
 
     # Validate that the source entity exists
-    if src_type == "incident":
+    if src_type == "assessment":
+        result = await db.execute(select(AssessmentRun).where(AssessmentRun.id == source_ref))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Assessment run with id {source_ref} not found",
+            )
+    elif src_type == "induction":
+        result = await db.execute(select(InductionRun).where(InductionRun.id == source_ref))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Induction run with id {source_ref} not found",
+            )
+    elif src_type == "incident":
         result = await db.execute(select(Incident).where(Incident.id == src_id))
         if not result.scalar_one_or_none():
             raise HTTPException(
@@ -252,7 +363,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', "
+            "'investigation', 'assessment', or 'induction'",
         )
 
     # Find owner by email if provided
@@ -281,6 +393,10 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         count_result = await db.execute(select(func.count()).select_from(InvestigationAction))
         count = count_result.scalar() or 0
         ref_number = f"INVACT-{year}-{count + 1:04d}"
+    elif src_type in ("assessment", "induction"):
+        from src.domain.services.reference_number import ReferenceNumberService
+
+        ref_number = await ReferenceNumberService.generate(db, "capa", CAPAAction)
     else:
         ref_number = f"ACT-{year}-0001"
 
@@ -299,10 +415,48 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 except ValueError:
                     continue
 
-    # Declare action variable that will hold one of the four action types
-    action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]
+    # Declare action variable
+    action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction, CAPAAction]
 
-    if src_type == "incident":
+    if src_type == "assessment":
+        action = CAPAAction(
+            reference_number=ref_number,
+            title=action_data.title,
+            description=action_data.description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.JOB_ASSESSMENT,
+            source_id=None,
+            source_reference=source_ref,
+            priority=CAPAPriority.MEDIUM if action_data.priority == "medium" else (
+                CAPAPriority.HIGH if action_data.priority == "high" else (
+                    CAPAPriority.CRITICAL if action_data.priority == "critical" else CAPAPriority.LOW
+                )
+            ),
+            assigned_to_id=owner_id,
+            created_by_id=current_user.id,
+            due_date=parsed_due_date,
+        )
+    elif src_type == "induction":
+        action = CAPAAction(
+            reference_number=ref_number,
+            title=action_data.title,
+            description=action_data.description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.INDUCTION,
+            source_id=None,
+            source_reference=source_ref,
+            priority=CAPAPriority.MEDIUM if action_data.priority == "medium" else (
+                CAPAPriority.HIGH if action_data.priority == "high" else (
+                    CAPAPriority.CRITICAL if action_data.priority == "critical" else CAPAPriority.LOW
+                )
+            ),
+            assigned_to_id=owner_id,
+            created_by_id=current_user.id,
+            due_date=parsed_due_date,
+        )
+    elif src_type == "incident":
         action = IncidentAction(
             incident_id=src_id,
             title=action_data.title,
@@ -393,6 +547,9 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             detail=f"Unexpected error creating action: {type(e).__name__}: {str(e)[:200]}",
         )
 
+    if isinstance(action, CAPAAction):
+        return _capa_to_response(action, src_type)
+
     return ActionResponse(
         id=action.id,
         reference_number=action.reference_number,
@@ -405,6 +562,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         source_type=src_type,
         source_id=src_id,
+        source_reference=None,
         owner_id=action.owner_id,
         owner_email=action_data.assigned_to_email,
         created_at=action.created_at.isoformat() if action.created_at else "",
@@ -416,12 +574,32 @@ async def get_action(
     action_id: int,
     db: DbSession,
     current_user: CurrentUser,
-    source_type: str = Query(..., description="Type of source: incident, rta, complaint, or investigation"),
+    source_type: str = Query(
+        ..., description="Type of source: incident, rta, complaint, investigation, assessment, or induction"
+    ),
 ) -> ActionResponse:
     """Get a specific action by ID."""
     src_type = source_type.lower()
 
-    if src_type == "incident":
+    if src_type == "assessment":
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == action_id, CAPAAction.source_type == CAPASource.JOB_ASSESSMENT
+            )
+        )
+        capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if capa_action:
+            return _capa_to_response(capa_action, "assessment")
+    elif src_type == "induction":
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == action_id, CAPAAction.source_type == CAPASource.INDUCTION
+            )
+        )
+        capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if capa_action:
+            return _capa_to_response(capa_action, "induction")
+    elif src_type == "incident":
         result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
         if incident_action:
@@ -454,7 +632,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     action_data: ActionUpdate,
     db: DbSession,
     current_user: CurrentUser,
-    source_type: str = Query(..., description="Type of source: incident, rta, complaint, or investigation"),
+    source_type: str = Query(
+        ..., description="Type of source: incident, rta, complaint, investigation, assessment, or induction"
+    ),
 ) -> ActionResponse:
     """Update an existing action by ID.
 
@@ -464,14 +644,18 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     src_type = source_type.lower()
 
     # Bounded error class: validate source_type
-    if src_type not in ("incident", "rta", "complaint", "investigation"):
+    if src_type not in ("incident", "rta", "complaint", "investigation", "assessment", "induction"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', "
+            "'investigation', 'assessment', or 'induction'",
         )
 
     # Bounded error class: validate status if provided
-    valid_statuses = {"open", "in_progress", "pending_verification", "completed", "cancelled"}
+    valid_statuses = {
+        "open", "in_progress", "pending_verification", "completed", "cancelled",
+        "verification", "closed", "overdue",  # CAPA statuses
+    }
     if action_data.status and action_data.status.lower() not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -487,10 +671,28 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         )
 
     # Find the action by type
-    action: Optional[Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]] = None
+    action: Optional[Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction, CAPAAction]] = None
     source_id: int = 0
 
-    if src_type == "incident":
+    if src_type == "assessment":
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == action_id, CAPAAction.source_type == CAPASource.JOB_ASSESSMENT
+            )
+        )
+        action = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.source_id or 0
+    elif src_type == "induction":
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == action_id, CAPAAction.source_type == CAPASource.INDUCTION
+            )
+        )
+        action = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.source_id or 0
+    elif src_type == "incident":
         result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
         action = cast(Optional[IncidentAction], result.scalar_one_or_none())
         if action:
@@ -522,23 +724,61 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         action.title = action_data.title
     if action_data.description is not None:
         action.description = action_data.description
-    if action_data.action_type is not None:
-        action.action_type = action_data.action_type
-    if action_data.priority is not None:
-        action.priority = action_data.priority.lower()
-    if action_data.status is not None:
-        # Convert string to appropriate status enum based on source type
-        status_value = action_data.status.lower()
-        if src_type == "investigation":
-            action.status = InvestigationActionStatus(status_value)
-        else:
-            action.status = ActionStatus(status_value)
-        # Set completed_at if status changed to completed
-        if status_value == "completed" and not action.completed_at:
-            action.completed_at = datetime.utcnow()
-        # Clear completed_at if status changed away from completed
-        elif status_value != "completed":
-            action.completed_at = None
+
+    if isinstance(action, CAPAAction):
+        if action_data.action_type is not None:
+            action.capa_type = CAPAType(action_data.action_type)
+        if action_data.priority is not None:
+            action.priority = CAPAPriority(action_data.priority.lower())
+        if action_data.status is not None:
+            status_value = action_data.status.lower()
+            status_map = {
+                "completed": CAPAStatus.CLOSED,
+                "closed": CAPAStatus.CLOSED,
+                "pending_verification": CAPAStatus.VERIFICATION,
+                "verification": CAPAStatus.VERIFICATION,
+            }
+            capa_status = status_map.get(status_value)
+            if capa_status is None:
+                try:
+                    capa_status = CAPAStatus(status_value)
+                except ValueError:
+                    pass
+            if capa_status is not None:
+                action.status = capa_status
+                if status_value == "completed" and not action.completed_at:
+                    action.completed_at = datetime.now(timezone.utc)
+                elif status_value != "completed":
+                    action.completed_at = None
+        if action_data.assigned_to_email is not None:
+            result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+            user = result.scalar_one_or_none()
+            if user:
+                action.assigned_to_id = user.id
+        if action_data.completion_notes is not None:
+            action.verification_result = action_data.completion_notes
+    else:
+        if action_data.action_type is not None:
+            action.action_type = action_data.action_type
+        if action_data.priority is not None:
+            action.priority = action_data.priority.lower()
+        if action_data.status is not None:
+            status_value = action_data.status.lower()
+            if src_type == "investigation":
+                action.status = InvestigationActionStatus(status_value)
+            else:
+                action.status = ActionStatus(status_value)
+            if status_value == "completed" and not action.completed_at:
+                action.completed_at = datetime.now(timezone.utc)
+            elif status_value != "completed":
+                action.completed_at = None
+        if action_data.assigned_to_email is not None:
+            result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+            user = result.scalar_one_or_none()
+            if user:
+                action.owner_id = user.id
+        if action_data.completion_notes is not None:
+            action.completion_notes = action_data.completion_notes
 
     if action_data.due_date is not None:
         try:
@@ -551,16 +791,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 except ValueError:
                     continue
 
-    if action_data.assigned_to_email is not None:
-        result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
-        user = result.scalar_one_or_none()
-        if user:
-            action.owner_id = user.id
-
-    if action_data.completion_notes is not None:
-        action.completion_notes = action_data.completion_notes
-
     await db.commit()
     await db.refresh(action)
 
+    if isinstance(action, CAPAAction):
+        return _capa_to_response(action, src_type)
     return _action_to_response(action, src_type, source_id)

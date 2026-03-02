@@ -48,6 +48,8 @@ class EvidenceSourceModule(str, enum.Enum):
     INVESTIGATION = "investigation"
     AUDIT = "audit"
     ACTION = "action"
+    ASSESSMENT = "assessment"
+    INDUCTION = "induction"
 
 
 class EvidenceVisibility(str, enum.Enum):
@@ -105,7 +107,7 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
         nullable=False,
         index=True,
     )
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # Optional secondary linkage (e.g., evidence from NearMiss also linked to Investigation)
     linked_investigation_id: Mapped[Optional[int]] = mapped_column(

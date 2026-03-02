@@ -417,10 +417,10 @@ export default function AuditTemplateLibrary() {
               <div
                 className={`w-10 h-10 rounded-lg ${stat.iconBg} flex items-center justify-center mb-3`}
               >
-                <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
-              </div>
-              <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
+              <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+            </div>
+            <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+            <p className="text-sm text-muted-foreground">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
@@ -596,7 +596,7 @@ export default function AuditTemplateLibrary() {
                         {template.is_published ? "published" : "draft"}
                       </Badge>
                     </div>
-                    <div className="relative">
+                      <div className="relative">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -610,8 +610,8 @@ export default function AuditTemplateLibrary() {
                         }}
                         aria-label="Template actions"
                         aria-expanded={activeMenu === String(template.id)}
-                      >
-                        <MoreVertical className="w-4 h-4" />
+                        >
+                          <MoreVertical className="w-4 h-4" />
                       </Button>
                       {activeMenu === String(template.id) && (
                         <Card className="absolute right-0 mt-1 w-44 z-10">
@@ -655,7 +655,7 @@ export default function AuditTemplateLibrary() {
                             </button>
                           </CardContent>
                         </Card>
-                      )}
+                        )}
                     </div>
                   </div>
 
@@ -682,7 +682,7 @@ export default function AuditTemplateLibrary() {
                       </span>
                     </div>
                     <Badge variant="secondary">{template.scoring_method}</Badge>
-                  </div>
+                    </div>
                 </CardContent>
               </Card>
             );
@@ -695,8 +695,8 @@ export default function AuditTemplateLibrary() {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full" role="table">
-              <thead>
-                <tr className="border-b border-border">
+            <thead>
+              <tr className="border-b border-border">
                   <th
                     scope="col"
                     className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
@@ -733,14 +733,14 @@ export default function AuditTemplateLibrary() {
                   >
                     <span className="sr-only">Actions</span>
                   </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
                 {sortedTemplates.map((template) => {
                   const CategoryIcon = getCategoryIcon(template.category || "");
-                  return (
-                    <tr
-                      key={template.id}
+                return (
+                  <tr
+                    key={template.id}
                       onClick={() =>
                         navigate(`/audit-templates/${template.id}/edit`)
                       }
@@ -760,16 +760,16 @@ export default function AuditTemplateLibrary() {
                         <p className="text-xs text-muted-foreground truncate max-w-md">
                           {template.description}
                         </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <CategoryIcon className="w-4 h-4 text-muted-foreground" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <CategoryIcon className="w-4 h-4 text-muted-foreground" />
                           <span className="text-sm text-foreground capitalize">
                             {template.category || "-"}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                         <Badge
                           variant={
                             template.is_published ? "success" : "warning"
@@ -777,19 +777,19 @@ export default function AuditTemplateLibrary() {
                         >
                           {template.is_published ? "published" : "draft"}
                         </Badge>
-                      </td>
+                    </td>
                       <td className="px-6 py-4 text-sm text-foreground">
                         v{template.version}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
                         {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
-                      </td>
+                    </td>
                       <td className="px-6 py-4 relative">
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
                             setActiveMenu(
                               activeMenu === String(template.id)
                                 ? null
@@ -798,8 +798,8 @@ export default function AuditTemplateLibrary() {
                           }}
                           aria-label="Actions"
                           aria-expanded={activeMenu === String(template.id)}
-                        >
-                          <MoreVertical className="w-4 h-4" />
+                      >
+                        <MoreVertical className="w-4 h-4" />
                         </Button>
                         {activeMenu === String(template.id) && (
                           <Card className="absolute right-0 mt-1 w-44 z-10">
@@ -815,7 +815,7 @@ export default function AuditTemplateLibrary() {
                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
                               >
                                 <Edit className="w-4 h-4" /> Edit
-                              </button>
+                      </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -844,13 +844,13 @@ export default function AuditTemplateLibrary() {
                             </CardContent>
                           </Card>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         </Card>
       )}
 
@@ -872,7 +872,7 @@ export default function AuditTemplateLibrary() {
             {(searchInput || selectedCategory !== "all") && (
               <Button
                 variant="outline"
-                onClick={() => {
+            onClick={() => {
                   setSearchInput("");
                   setSelectedCategory("all");
                 }}

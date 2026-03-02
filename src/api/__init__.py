@@ -5,12 +5,16 @@ from fastapi import APIRouter
 from src.api.routes import (
     actions,
     ai_intelligence,
+    ai_templates,
+    assessments,
+    assets,
     analytics,
     audit_templates,
     audit_trail,
     auditor_competence,
     audits,
     auth,
+    capa,
     complaints,
     compliance,
     compliance_automation,
@@ -21,7 +25,10 @@ from src.api.routes import (
     evidence_assets,
     executive_dashboard,
     form_config,
+    engineers,
+    governance,
     incidents,
+    inductions,
     investigation_templates,
     investigations,
     iso27001,
@@ -43,7 +50,9 @@ from src.api.routes import (
     testing,
     users,
     uvdb,
+    wdp_analytics,
     workflow,
+    xml_import,
     workflows,
 )
 
@@ -55,6 +64,7 @@ router.include_router(users.router, prefix="/users", tags=["Users"])
 router.include_router(standards.router, prefix="/standards", tags=["Standards Library"])
 router.include_router(audits.router, prefix="/audits", tags=["Audits & Inspections"])
 router.include_router(audit_templates.router, prefix="/audit-templates", tags=["Audit Template Builder"])
+router.include_router(xml_import.router, prefix="/xml-import", tags=["XML Template Import"])
 router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])
@@ -105,6 +115,18 @@ router.include_router(policy_acknowledgment.router, tags=["Policy Acknowledgment
 router.include_router(executive_dashboard.router, tags=["Executive Dashboard"])
 # RCA Tools (5-Whys, Fishbone, CAPA)
 router.include_router(rca_tools.router, tags=["RCA Tools"])
+# CAPA (Corrective and Preventive Actions)
+router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
+# Asset Registry (Workforce Development Platform)
+router.include_router(assets.router, prefix="/assets", tags=["Asset Registry"])
+router.include_router(ai_templates.router, prefix="/ai-templates", tags=["AI Template Intelligence"])
+# Assessments, Inductions, Engineers (Workforce Development Platform)
+router.include_router(assessments.router, prefix="/assessments", tags=["Assessments"])
+router.include_router(inductions.router, prefix="/inductions", tags=["Inductions"])
+router.include_router(engineers.router, prefix="/engineers", tags=["Engineers"])
+router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Workforce Analytics"])
+# Governance Framework (Workforce Development Platform)
+router.include_router(governance.router, prefix="/governance", tags=["Governance Framework"])
 # Auditor Competence Management
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
 # CI Testing Endpoints (Staging Only)

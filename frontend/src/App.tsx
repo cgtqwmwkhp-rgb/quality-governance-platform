@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { startAutoSync } from './lib/syncService'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
@@ -54,6 +55,16 @@ const AIIntelligence = lazy(() => import('./pages/AIIntelligence'))
 const UVDBAudits = lazy(() => import('./pages/UVDBAudits'))
 const PlanetMark = lazy(() => import('./pages/PlanetMark'))
 const DigitalSignatures = lazy(() => import('./pages/DigitalSignatures'))
+const WorkforceAssessmentCreate = lazy(() => import('./pages/workforce/AssessmentCreate'))
+const WorkforceInductionCreate = lazy(() => import('./pages/workforce/InductionCreate'))
+const WorkforceAssessments = lazy(() => import('./pages/workforce/Assessments'))
+const WorkforceAssessmentExecution = lazy(() => import('./pages/workforce/AssessmentExecution'))
+const WorkforceTraining = lazy(() => import('./pages/workforce/Training'))
+const WorkforceTrainingExecution = lazy(() => import('./pages/workforce/TrainingExecution'))
+const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
+const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
+const WorkforceCalendar = lazy(() => import('./pages/workforce/Calendar'))
+const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const FormsList = lazy(() => import('./pages/admin/FormsList'))
 const FormBuilder = lazy(() => import('./pages/admin/FormBuilder'))
@@ -79,6 +90,12 @@ function App() {
     setIsAuthenticated(!!token)
     setIsLoading(false)
   }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      return startAutoSync(30000)
+    }
+  }, [isAuthenticated])
 
   const handleLogin = (token: string) => {
     localStorage.setItem('access_token', token)
@@ -205,6 +222,16 @@ function App() {
               <Route path="uvdb" element={<UVDBAudits />} />
               <Route path="planet-mark" element={<PlanetMark />} />
               <Route path="signatures" element={<DigitalSignatures />} />
+              <Route path="workforce/assessments" element={<WorkforceAssessments />} />
+              <Route path="workforce/assessments/new" element={<WorkforceAssessmentCreate />} />
+              <Route path="workforce/assessments/:id/execute" element={<WorkforceAssessmentExecution />} />
+              <Route path="workforce/training" element={<WorkforceTraining />} />
+              <Route path="workforce/training/new" element={<WorkforceInductionCreate />} />
+              <Route path="workforce/training/:id/execute" element={<WorkforceTrainingExecution />} />
+              <Route path="workforce/engineers" element={<WorkforceEngineers />} />
+              <Route path="workforce/engineers/:id" element={<WorkforceEngineerProfile />} />
+              <Route path="workforce/calendar" element={<WorkforceCalendar />} />
+              <Route path="workforce/dashboard" element={<WorkforceCompetencyDashboard />} />
               <Route path="admin" element={<AdminDashboard />} />
               <Route path="admin/forms" element={<FormsList />} />
               <Route path="admin/forms/new" element={<FormBuilder />} />
