@@ -28,10 +28,17 @@ from src.domain.models.induction import (
     UnderstandingVerdict,
 )
 from src.api.utils.tenant import apply_tenant_filter
-from src.domain.models.engineer import CompetencyRecord, CompetencyLifecycleState, Engineer
+from src.domain.models.engineer import (
+    CompetencyRecord,
+    CompetencyLifecycleState,
+    Engineer,
+)
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
-from src.domain.services.governance_service import GovernanceService, NotificationService
+from src.domain.services.governance_service import (
+    GovernanceService,
+    NotificationService,
+)
 
 router = APIRouter()
 
@@ -82,7 +89,9 @@ async def list_induction_runs(
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.scalar(count_q)) or 0
     offset = (page - 1) * page_size
-    items_result = await db.execute(query.offset(offset).limit(page_size).order_by(InductionRun.created_at.desc()))
+    items_result = await db.execute(
+        query.offset(offset).limit(page_size).order_by(InductionRun.created_at.desc())
+    )
     items = items_result.scalars().all()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -95,18 +104,24 @@ async def list_induction_runs(
     )
 
 
-@router.post("/", response_model=InductionRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=InductionRunResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_induction_run(
     data: InductionRunCreate,
     db: DbSession,
     user: CurrentUser,
 ):
     """Create an induction run. Reference number is auto-generated as IND-YYYY-NNNN."""
-    supervisor_check = await GovernanceService.validate_supervisor(db, user.id, data.engineer_id)
+    supervisor_check = await GovernanceService.validate_supervisor(
+        db, user.id, data.engineer_id
+    )
     if not supervisor_check["valid"]:
         raise HTTPException(status_code=400, detail=supervisor_check["reason"])
 
-    template_check = await GovernanceService.check_template_approval(db, data.template_id)
+    template_check = await GovernanceService.check_template_approval(
+        db, data.template_id
+    )
     if not template_check["approved"]:
         raise HTTPException(status_code=400, detail=template_check["reason"])
 
@@ -139,7 +154,11 @@ async def get_induction_run(
     user: CurrentUser,
 ):
     """Get an induction run by ID."""
-    query = select(InductionRun).options(selectinload(InductionRun.responses)).where(InductionRun.id == run_id)
+    query = (
+        select(InductionRun)
+        .options(selectinload(InductionRun.responses))
+        .where(InductionRun.id == run_id)
+    )
     query = apply_tenant_filter(query, InductionRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -189,7 +208,9 @@ async def start_induction(
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
     if run.status != InductionStatus.DRAFT:
-        raise HTTPException(status_code=400, detail="Induction can only be started from draft status")
+        raise HTTPException(
+            status_code=400, detail="Induction can only be started from draft status"
+        )
     run.status = InductionStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
     await db.commit()
@@ -216,7 +237,10 @@ async def complete_induction(
         raise HTTPException(status_code=404, detail="Induction run not found")
 
     if run.status not in (InductionStatus.DRAFT, InductionStatus.IN_PROGRESS):
-        raise HTTPException(status_code=400, detail=f"Induction cannot be completed from status '{run.status.value}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Induction cannot be completed from status '{run.status.value}'",
+        )
 
     score_result = CompetencyScoringService.score_induction(run.responses)
     run.status = InductionStatus.COMPLETED
@@ -233,15 +257,22 @@ async def complete_induction(
 
     if run.asset_type_id and engineer:
         from datetime import timedelta
+
         all_competent = score_result.not_yet_competent_count == 0
-        expiry = datetime.now(timezone.utc) + timedelta(days=365) if all_competent else None
+        expiry = (
+            datetime.now(timezone.utc) + timedelta(days=365) if all_competent else None
+        )
         competency = CompetencyRecord(
             engineer_id=run.engineer_id,
             asset_type_id=run.asset_type_id,
             template_id=run.template_id,
             source_type="induction",
             source_run_id=run.id,
-            state=CompetencyLifecycleState.ACTIVE if all_competent else CompetencyLifecycleState.FAILED,
+            state=(
+                CompetencyLifecycleState.ACTIVE
+                if all_competent
+                else CompetencyLifecycleState.FAILED
+            ),
             outcome="pass" if all_competent else "not_yet_competent",
             assessed_at=datetime.now(timezone.utc),
             assessed_by_id=run.supervisor_id,
@@ -254,11 +285,13 @@ async def complete_induction(
         not_competent_items = []
         for q_id in score_result.items_needing_capa:
             resp = next((r for r in run.responses if r.question_id == q_id), None)
-            not_competent_items.append({
-                "question_id": q_id,
-                "question_text": "Skill item",
-                "supervisor_notes": resp.supervisor_notes if resp else "",
-            })
+            not_competent_items.append(
+                {
+                    "question_id": q_id,
+                    "question_text": "Skill item",
+                    "supervisor_notes": resp.supervisor_notes if resp else "",
+                }
+            )
         await CAPAAutoService.create_from_induction(
             db=db,
             induction_run_id=run.id,
@@ -285,7 +318,11 @@ async def complete_induction(
     return InductionRunResponse.model_validate(run)
 
 
-@router.post("/{run_id}/responses", response_model=InductionResponseResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{run_id}/responses",
+    response_model=InductionResponseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_induction_response(
     run_id: str,
     data: InductionResponseCreate,
@@ -300,10 +337,18 @@ async def create_induction_response(
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
 
-    if run.status == InductionStatus.COMPLETED or run.status == InductionStatus.CANCELLED:
-        raise HTTPException(status_code=400, detail="Cannot add responses to a completed or cancelled induction")
+    if (
+        run.status == InductionStatus.COMPLETED
+        or run.status == InductionStatus.CANCELLED
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot add responses to a completed or cancelled induction",
+        )
 
-    understanding_val = UnderstandingVerdict(data.understanding) if data.understanding else None
+    understanding_val = (
+        UnderstandingVerdict(data.understanding) if data.understanding else None
+    )
     response = InductionResponse(
         run_id=run_id,
         question_id=data.question_id,

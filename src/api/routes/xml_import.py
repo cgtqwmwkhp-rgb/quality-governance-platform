@@ -5,6 +5,7 @@ Endpoints for importing Android XML layout files as audit templates.
 
 import logging
 import os
+import tempfile
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, status, UploadFile
@@ -25,7 +26,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ALLOWED_IMPORT_DIR = os.environ.get("XML_IMPORT_DIR", "/tmp/xml-imports")
+ALLOWED_IMPORT_DIR = os.environ.get(
+    "XML_IMPORT_DIR", os.path.join(tempfile.gettempdir(), "xml-imports")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +39,10 @@ ALLOWED_IMPORT_DIR = os.environ.get("XML_IMPORT_DIR", "/tmp/xml-imports")
 class BatchImportRequest(BaseModel):
     """Request body for batch import from server directory."""
 
-    directory_path: str = Field(..., description="Absolute or relative path to directory containing XML layout files")
+    directory_path: str = Field(
+        ...,
+        description="Absolute or relative path to directory containing XML layout files",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +72,9 @@ async def parse_xml_file(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
+)
 async def import_xml_file(
     file: UploadFile = File(...),
     db: DbSession = None,

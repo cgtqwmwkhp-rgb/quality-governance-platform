@@ -54,7 +54,9 @@ async def list_engineers(
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.scalar(count_q)) or 0
     offset = (page - 1) * page_size
-    items_result = await db.execute(query.offset(offset).limit(page_size).order_by(Engineer.id))
+    items_result = await db.execute(
+        query.offset(offset).limit(page_size).order_by(Engineer.id)
+    )
     items = items_result.scalars().all()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -138,7 +140,9 @@ async def update_engineer(
     return EngineerResponse.model_validate(engineer)
 
 
-@router.get("/{engineer_id}/competencies", response_model=List[CompetencyRecordResponse])
+@router.get(
+    "/{engineer_id}/competencies", response_model=List[CompetencyRecordResponse]
+)
 async def list_engineer_competencies(
     engineer_id: int,
     db: DbSession,
@@ -159,10 +163,7 @@ async def get_skills_matrix(
     user: CurrentUser,
 ):
     """Get skills matrix: engineer competency across asset types."""
-    query = (
-        select(CompetencyRecord)
-        .where(CompetencyRecord.engineer_id == engineer_id)
-    )
+    query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
     query = apply_tenant_filter(query, CompetencyRecord, user.tenant_id)
     result = await db.execute(query)
     records = result.scalars().all()
@@ -170,7 +171,9 @@ async def get_skills_matrix(
         return SkillsMatrixResponse(engineer_id=engineer_id, matrix=[])
 
     asset_type_ids = list({r.asset_type_id for r in records})
-    at_result = await db.execute(select(AssetType).where(AssetType.id.in_(asset_type_ids)))
+    at_result = await db.execute(
+        select(AssetType).where(AssetType.id.in_(asset_type_ids))
+    )
     asset_types = {at.id: at for at in at_result.scalars().all()}
 
     matrix = []

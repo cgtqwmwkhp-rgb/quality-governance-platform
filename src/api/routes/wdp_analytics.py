@@ -25,7 +25,11 @@ def _tenant_filter(model, tenant_id):
 async def get_wdp_summary(db: DbSession, user: CurrentUser):
     """Get summary KPIs for the workforce development dashboard."""
     from src.domain.models.assessment import AssessmentRun, AssessmentStatus
-    from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
+    from src.domain.models.engineer import (
+        CompetencyLifecycleState,
+        CompetencyRecord,
+        Engineer,
+    )
     from src.domain.models.induction import InductionRun, InductionStatus
 
     tenant_filter_eng = _tenant_filter(Engineer, user.tenant_id)
@@ -34,20 +38,26 @@ async def get_wdp_summary(db: DbSession, user: CurrentUser):
     tenant_filter_ind = _tenant_filter(InductionRun, user.tenant_id)
 
     # Engineer counts
-    eng_count = await db.scalar(
-        select(func.count(Engineer.id))
-        .where(Engineer.is_active == True)
-        .where(tenant_filter_eng)
-    ) or 0
+    eng_count = (
+        await db.scalar(
+            select(func.count(Engineer.id))
+            .where(Engineer.is_active == True)
+            .where(tenant_filter_eng)
+        )
+        or 0
+    )
 
     # Competency counts by state
     comp_counts = {}
     for state in CompetencyLifecycleState:
-        count = await db.scalar(
-            select(func.count(CompetencyRecord.id))
-            .where(CompetencyRecord.state == state)
-            .where(tenant_filter_comp)
-        ) or 0
+        count = (
+            await db.scalar(
+                select(func.count(CompetencyRecord.id))
+                .where(CompetencyRecord.state == state)
+                .where(tenant_filter_comp)
+            )
+            or 0
+        )
         comp_counts[state.value] = count
 
     # Assessment counts by status
@@ -68,9 +78,7 @@ async def get_wdp_summary(db: DbSession, user: CurrentUser):
 
     # Induction counts
     induction_total = (
-        await db.scalar(
-            select(func.count(InductionRun.id)).where(tenant_filter_ind)
-        )
+        await db.scalar(select(func.count(InductionRun.id)).where(tenant_filter_ind))
         or 0
     )
     induction_completed = (
@@ -101,33 +109,47 @@ async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
     tenant_filter_comp = _tenant_filter(CompetencyRecord, user.tenant_id)
 
     engineers = (
-        await db.execute(
-            select(Engineer)
-            .where(Engineer.is_active == True)
-            .where(tenant_filter_eng)
+        (
+            await db.execute(
+                select(Engineer)
+                .where(Engineer.is_active == True)
+                .where(tenant_filter_eng)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     asset_types = (
-        await db.execute(
-            select(AssetType)
-            .where(AssetType.is_active == True)
-            .where(tenant_filter_at)
+        (
+            await db.execute(
+                select(AssetType)
+                .where(AssetType.is_active == True)
+                .where(tenant_filter_at)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     matrix = []
     for eng in engineers:
         records = (
-            await db.execute(
-                select(CompetencyRecord)
-                .where(CompetencyRecord.engineer_id == eng.id)
-                .where(tenant_filter_comp)
+            (
+                await db.execute(
+                    select(CompetencyRecord)
+                    .where(CompetencyRecord.engineer_id == eng.id)
+                    .where(tenant_filter_comp)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         record_map = {
-            r.asset_type_id: r.state.value if hasattr(r.state, "value") else str(r.state)
+            r.asset_type_id: (
+                r.state.value if hasattr(r.state, "value") else str(r.state)
+            )
             for r in records
         }
 
@@ -146,7 +168,11 @@ async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
             {
                 "id": at.id,
                 "name": at.name,
-                "category": at.category.value if hasattr(at.category, "value") else str(at.category),
+                "category": (
+                    at.category.value
+                    if hasattr(at.category, "value")
+                    else str(at.category)
+                ),
             }
             for at in asset_types
         ],
@@ -169,8 +195,12 @@ async def get_competency_trends(db: DbSession, user: CurrentUser):
             select(
                 month_col.label("month"),
                 func.count(AssessmentRun.id).label("total"),
-                func.count(case((AssessmentRun.outcome == AssessmentOutcome.PASS, 1))).label("passed"),
-                func.count(case((AssessmentRun.outcome == AssessmentOutcome.FAIL, 1))).label("failed"),
+                func.count(
+                    case((AssessmentRun.outcome == AssessmentOutcome.PASS, 1))
+                ).label("passed"),
+                func.count(
+                    case((AssessmentRun.outcome == AssessmentOutcome.FAIL, 1))
+                ).label("failed"),
             )
             .where(tenant_filter_assess)
             .group_by(month_col)
@@ -186,7 +216,9 @@ async def get_competency_trends(db: DbSession, user: CurrentUser):
             select(
                 ind_month_col.label("month"),
                 func.count(InductionRun.id).label("total"),
-                func.count(case((InductionRun.status == InductionStatus.COMPLETED, 1))).label("completed"),
+                func.count(
+                    case((InductionRun.status == InductionStatus.COMPLETED, 1))
+                ).label("completed"),
             )
             .where(tenant_filter_ind)
             .group_by(ind_month_col)

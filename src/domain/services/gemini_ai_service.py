@@ -35,10 +35,13 @@ class GeminiAIService:
         if self._client is None:
             try:
                 import google.generativeai as genai
+
                 genai.configure(api_key=self.api_key)
                 self._client = genai.GenerativeModel(GEMINI_MODEL)
             except ImportError:
-                logger.warning("google-generativeai not installed; AI features disabled")
+                logger.warning(
+                    "google-generativeai not installed; AI features disabled"
+                )
                 return None
             except Exception as e:
                 logger.error("Failed to initialise Gemini client: %s", e)
@@ -287,9 +290,7 @@ Only return valid JSON."""
                 "estimated_observation_time_minutes": 5,
             }
 
-    async def gap_analysis(
-        self, existing_templates: list, asset_type: str
-    ) -> dict:
+    async def gap_analysis(self, existing_templates: list, asset_type: str) -> dict:
         """Analyse gaps between existing templates and industry standards for an asset type.
 
         Identifies missing inspection areas, regulatory gaps, and improvement opportunities.

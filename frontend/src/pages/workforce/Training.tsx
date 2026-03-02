@@ -181,7 +181,7 @@ export default function Training() {
                         <td className="py-3 px-4 text-sm text-muted-foreground">{i.stage ?? '—'}</td>
                         <td className="py-3 px-4">
                           <Badge variant={STATUS_VARIANTS[i.status] || 'secondary'}>
-                            {i.status?.replaceAll('_', ' ') ?? '—'}
+                            {i.status?.replace(/_/g, ' ') ?? '—'}
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">

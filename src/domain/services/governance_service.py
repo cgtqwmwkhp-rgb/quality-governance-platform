@@ -51,7 +51,10 @@ class GovernanceService:
         result = await db.execute(stmt)
         engineer = result.scalar_one_or_none()
         if engineer is None:
-            return {"valid": False, "reason": "Engineer not found or not in tenant scope"}
+            return {
+                "valid": False,
+                "reason": "Engineer not found or not in tenant scope",
+            }
         if engineer.user_id == supervisor_id:
             return {"valid": False, "reason": "Supervisors cannot assess themselves"}
 
@@ -65,12 +68,21 @@ class GovernanceService:
         if not supervisor or not supervisor.is_active:
             return {"valid": False, "reason": "Supervisor not found or inactive"}
 
-        if tenant_id is not None and supervisor.tenant_id is not None and supervisor.tenant_id != tenant_id:
+        if (
+            tenant_id is not None
+            and supervisor.tenant_id is not None
+            and supervisor.tenant_id != tenant_id
+        ):
             return {"valid": False, "reason": "Supervisor not in tenant scope"}
 
-        role_names = {r.name.lower() for r in supervisor.roles} if supervisor.roles else set()
+        role_names = (
+            {r.name.lower() for r in supervisor.roles} if supervisor.roles else set()
+        )
         if "supervisor" not in role_names and "admin" not in role_names:
-            return {"valid": False, "reason": "Supervisor must have 'supervisor' or 'admin' role"}
+            return {
+                "valid": False,
+                "reason": "Supervisor must have 'supervisor' or 'admin' role",
+            }
 
         return {"valid": True, "reason": None}
 
@@ -103,7 +115,10 @@ class GovernanceService:
             status = status.value
 
         if status and status != "published":
-            return {"approved": False, "reason": f"Template status is '{status}', must be 'published'"}
+            return {
+                "approved": False,
+                "reason": f"Template status is '{status}', must be 'published'",
+            }
 
         return {"approved": True, "reason": None}
 
@@ -119,14 +134,21 @@ class GovernanceService:
         Returns gate status and any missing/expired competencies.
         If tenant_id provided, engineer and records must belong to tenant.
         """
-        from src.domain.models.engineer import CompetencyRecord, CompetencyLifecycleState
+        from src.domain.models.engineer import (
+            CompetencyRecord,
+            CompetencyLifecycleState,
+        )
         from src.domain.models.asset import AssetType
         from src.domain.models.engineer import Engineer
 
         # Verify engineer belongs to tenant
         if tenant_id is not None:
-            eng_stmt = select(Engineer.id).where(Engineer.id == engineer_id).where(
-                or_(Engineer.tenant_id == tenant_id, Engineer.tenant_id.is_(None))
+            eng_stmt = (
+                select(Engineer.id)
+                .where(Engineer.id == engineer_id)
+                .where(
+                    or_(Engineer.tenant_id == tenant_id, Engineer.tenant_id.is_(None))
+                )
             )
             if (await db.scalar(eng_stmt)) is None:
                 return {
@@ -134,8 +156,12 @@ class GovernanceService:
                     "reason": "Engineer not found or not in tenant scope",
                     "records": [],
                 }
-            at_stmt = select(AssetType.id).where(AssetType.id == asset_type_id).where(
-                or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None))
+            at_stmt = (
+                select(AssetType.id)
+                .where(AssetType.id == asset_type_id)
+                .where(
+                    or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None))
+                )
             )
             if (await db.scalar(at_stmt)) is None:
                 return {
@@ -197,17 +223,23 @@ class GovernanceService:
 
         Returns competency records that are due or expiring soon.
         """
-        from src.domain.models.engineer import CompetencyRecord, CompetencyLifecycleState
+        from src.domain.models.engineer import (
+            CompetencyRecord,
+            CompetencyLifecycleState,
+        )
 
         stmt = select(CompetencyRecord).where(
             CompetencyRecord.engineer_id == engineer_id,
-            CompetencyRecord.state.in_([
-                CompetencyLifecycleState.DUE,
-                CompetencyLifecycleState.EXPIRED,
-            ]),
+            CompetencyRecord.state.in_(
+                [
+                    CompetencyLifecycleState.DUE,
+                    CompetencyLifecycleState.EXPIRED,
+                ]
+            ),
         )
         if tenant_id is not None:
             from sqlalchemy import or_
+
             stmt = stmt.where(
                 or_(
                     CompetencyRecord.tenant_id == tenant_id,
@@ -220,17 +252,25 @@ class GovernanceService:
 
         suggestions = []
         for r in records:
-            priority = "high" if r.state == CompetencyLifecycleState.EXPIRED else "medium"
-            suggestions.append({
-                "competency_record_id": r.id,
-                "engineer_id": r.engineer_id,
-                "asset_type_id": r.asset_type_id,
-                "template_id": r.template_id,
-                "state": r.state.value,
-                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
-                "priority": priority,
-                "suggested_action": "Reassessment required" if r.state == CompetencyLifecycleState.EXPIRED else "Schedule reassessment",
-            })
+            priority = (
+                "high" if r.state == CompetencyLifecycleState.EXPIRED else "medium"
+            )
+            suggestions.append(
+                {
+                    "competency_record_id": r.id,
+                    "engineer_id": r.engineer_id,
+                    "asset_type_id": r.asset_type_id,
+                    "template_id": r.template_id,
+                    "state": r.state.value,
+                    "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                    "priority": priority,
+                    "suggested_action": (
+                        "Reassessment required"
+                        if r.state == CompetencyLifecycleState.EXPIRED
+                        else "Schedule reassessment"
+                    ),
+                }
+            )
 
         return sorted(suggestions, key=lambda x: x["priority"] == "high", reverse=True)
 
@@ -247,7 +287,11 @@ class NotificationService:
         outcome: str,
     ) -> None:
         """Create notifications when an assessment is completed."""
-        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
+        from src.domain.models.notification import (
+            Notification,
+            NotificationPriority,
+            NotificationType,
+        )
 
         messages = {
             "pass": "Your competency assessment has been marked as PASS.",
@@ -260,7 +304,9 @@ class NotificationService:
             type=NotificationType.AUDIT_COMPLETED,
             priority=NotificationPriority.MEDIUM,
             title="Assessment Complete",
-            message=messages.get(outcome, f"Assessment completed with outcome: {outcome}"),
+            message=messages.get(
+                outcome, f"Assessment completed with outcome: {outcome}"
+            ),
             entity_type="assessment",
             entity_id=assessment_run_id,
             extra_data={"notification_type": "assessment_complete", "outcome": outcome},
@@ -290,7 +336,11 @@ class NotificationService:
         not_yet_competent_count: int,
     ) -> None:
         """Create notifications when an induction is completed."""
-        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
+        from src.domain.models.notification import (
+            Notification,
+            NotificationPriority,
+            NotificationType,
+        )
 
         if not_yet_competent_count > 0:
             msg = f"Your induction has been completed with {not_yet_competent_count} item(s) marked as 'Not Yet Competent'. CAPA actions will be generated."
@@ -305,7 +355,10 @@ class NotificationService:
             message=msg,
             entity_type="induction",
             entity_id=induction_run_id,
-            extra_data={"notification_type": "induction_complete", "not_yet_competent_count": not_yet_competent_count},
+            extra_data={
+                "notification_type": "induction_complete",
+                "not_yet_competent_count": not_yet_competent_count,
+            },
         )
         db.add(notification)
 
@@ -319,7 +372,11 @@ class NotificationService:
         days_until_expiry: int,
     ) -> None:
         """Create notification for upcoming competency expiry."""
-        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
+        from src.domain.models.notification import (
+            Notification,
+            NotificationPriority,
+            NotificationType,
+        )
 
         notification = Notification(
             user_id=engineer_id,

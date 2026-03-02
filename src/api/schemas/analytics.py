@@ -279,8 +279,6 @@ class WDPEngineersSummary(BaseModel):
     total: int
 
 
-
-
 class WDPAssessmentsSummary(BaseModel):
     """Assessment counts in WDP summary."""
 

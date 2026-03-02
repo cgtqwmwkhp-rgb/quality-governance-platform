@@ -35,10 +35,12 @@ def check_competency_expiry(self) -> dict:
                 update(CompetencyRecord)
                 .where(
                     CompetencyRecord.expires_at < now,
-                    CompetencyRecord.state.in_([
-                        CompetencyLifecycleState.ACTIVE,
-                        CompetencyLifecycleState.DUE,
-                    ]),
+                    CompetencyRecord.state.in_(
+                        [
+                            CompetencyLifecycleState.ACTIVE,
+                            CompetencyLifecycleState.DUE,
+                        ]
+                    ),
                 )
                 .values(state=CompetencyLifecycleState.EXPIRED)
             )

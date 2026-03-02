@@ -25,7 +25,9 @@ async def validate_supervisor(
     db: DbSession,
     user: CurrentUser,
     supervisor_id: int = Query(..., description="User id of the supervisor"),
-    engineer_id: int = Query(..., description="Engineer id (engineers.id) being assessed"),
+    engineer_id: int = Query(
+        ..., description="Engineer id (engineers.id) being assessed"
+    ),
 ):
     """Validate that the supervisor is authorised to assess this engineer."""
     return await GovernanceService.validate_supervisor(
@@ -33,7 +35,9 @@ async def validate_supervisor(
     )
 
 
-@router.get("/check-template/{template_id}", response_model=GovernanceTemplateCheckResponse)
+@router.get(
+    "/check-template/{template_id}", response_model=GovernanceTemplateCheckResponse
+)
 async def check_template_approval(
     template_id: int,
     db: DbSession,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { workforceApi, type EngineerProfile as EngineerProfileType, type CompetencyRecord, type AssetType } from '../../api/client'
+import { workforceApi, type EngineerProfile as EngineerProfileType, type CompetencyRecord } from '../../api/client'
 
 const stateColors: Record<string, string> = {
   active: 'bg-success/10 text-success',
@@ -176,7 +176,7 @@ export default function EngineerProfile() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${stateColors[rec.state] || stateColors.not_assessed}`}>
-                        {rec.state.replaceAll('_', ' ')}
+                        {rec.state.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
@@ -220,7 +220,7 @@ export default function EngineerProfile() {
                   }`}
                 >
                   <p className="text-xs text-muted-foreground">{assetTypeMap[rec.asset_type_id] ?? `#${rec.asset_type_id}`}</p>
-                  <p className="text-xs font-medium mt-1 capitalize">{rec.state.replaceAll('_', ' ')}</p>
+                  <p className="text-xs font-medium mt-1 capitalize">{rec.state.replace(/_/g, ' ')}</p>
                 </div>
               ))}
             </div>

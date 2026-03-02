@@ -15,7 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.exceptions import NotFoundError
-from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType, TemplateAssetType
+from src.domain.models.asset import (
+    Asset,
+    AssetCategory,
+    AssetStatus,
+    AssetType,
+    TemplateAssetType,
+)
 from src.domain.models.audit import AuditTemplate
 
 
@@ -75,7 +81,11 @@ class AssetService:
         offset = (page - 1) * page_size
         count_q = select(func.count()).select_from(query.subquery())
         total: int = (await self.db.execute(count_q)).scalar_one()
-        items = (await self.db.execute(query.offset(offset).limit(page_size))).scalars().all()
+        items = (
+            (await self.db.execute(query.offset(offset).limit(page_size)))
+            .scalars()
+            .all()
+        )
         pages = (total + page_size - 1) // page_size if total > 0 else 0
         return PaginatedResult(
             items=list(items),
@@ -86,7 +96,9 @@ class AssetService:
         )
 
     @staticmethod
-    def _apply_dict(entity: object, data: dict[str, Any], *, exclude: set[str] | None = None) -> None:
+    def _apply_dict(
+        entity: object, data: dict[str, Any], *, exclude: set[str] | None = None
+    ) -> None:
         """Apply *data* values to a SQLAlchemy model instance."""
         exclude = exclude or set()
         for key, value in data.items():
@@ -203,10 +215,14 @@ class AssetService:
         status: str | None = None,
         site: str | None = None,
     ) -> PaginatedResult:
-        query = select(Asset).options(selectinload(Asset.asset_type)).where(
-            or_(
-                Asset.tenant_id == tenant_id,
-                Asset.tenant_id.is_(None),
+        query = (
+            select(Asset)
+            .options(selectinload(Asset.asset_type))
+            .where(
+                or_(
+                    Asset.tenant_id == tenant_id,
+                    Asset.tenant_id.is_(None),
+                )
             )
         )
         if search:

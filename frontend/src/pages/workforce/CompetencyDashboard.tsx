@@ -137,7 +137,7 @@ export default function CompetencyDashboard() {
                       <div key={state} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-medium text-foreground">
-                            {STATUS_LABELS[state] ?? state.replaceAll('_', ' ')}
+                            {STATUS_LABELS[state] ?? state.replace(/_/g, ' ')}
                           </span>
                           <span className="text-muted-foreground">{count} ({pct}%)</span>
                         </div>
@@ -264,7 +264,7 @@ export default function CompetencyDashboard() {
                         {a.title || a.reference_number}
                       </p>
                       <p className="text-xs text-muted-foreground capitalize">
-                        {a.status?.replaceAll('_', ' ')}
+                        {a.status?.replace(/_/g, ' ')}
                       </p>
                     </div>
                   </li>

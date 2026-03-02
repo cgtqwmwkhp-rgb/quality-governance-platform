@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { workforceApi, auditsApi, type AssessmentRun, type AssetType, type EngineerProfile } from '../../api/client'
+import { workforceApi, auditsApi, type AssessmentRun, type AssetType } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
@@ -33,7 +33,7 @@ export default function Assessments() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [engineerFilter, setEngineerFilter] = useState('')
+  const [engineerFilter, _setEngineerFilter] = useState('')
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
 
   // Search debounce (300ms)
@@ -195,7 +195,7 @@ export default function Assessments() {
                         <td className="py-3 px-4">
                           {a.outcome ? (
                             <Badge variant={OUTCOME_VARIANTS[a.outcome] || 'secondary'}>
-                              {a.outcome.replaceAll('_', ' ')}
+                              {a.outcome.replace(/_/g, ' ')}
                             </Badge>
                           ) : (
                             <span className="text-muted-foreground">—</span>

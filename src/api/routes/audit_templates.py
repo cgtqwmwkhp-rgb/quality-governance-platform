@@ -64,7 +64,9 @@ async def list_templates(
     )
 
 
-@router.post("/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
@@ -90,7 +92,7 @@ async def get_template(
     """Get a specific audit template with sections and questions."""
     service = AuditService(db)
     template = await service.get_template_detail(
-            template_id=template_id,
+        template_id=template_id,
         tenant_id=user.tenant_id,
     )
     resp = AuditTemplateDetailResponse.model_validate(template)
@@ -149,7 +151,11 @@ async def restore_template(
     return AuditTemplateResponse.model_validate(template)
 
 
-@router.post("/{template_id}/duplicate", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{template_id}/duplicate",
+    response_model=AuditTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def duplicate_template(
     template_id: int,
     db: DbSession,

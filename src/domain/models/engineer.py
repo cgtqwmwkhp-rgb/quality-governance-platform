@@ -39,17 +39,28 @@ class Engineer(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     external_id: Mapped[str] = mapped_column(
-        String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False, index=True
+        String(36),
+        default=lambda: str(uuid.uuid4()),
+        unique=True,
+        nullable=False,
+        index=True,
     )
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
 
-    employee_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    employee_number: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, index=True
+    )
     job_title: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     site: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Specialisations (JSON array of asset type IDs or names)
     specialisations_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -89,7 +100,9 @@ class CompetencyRecord(Base, TimestampMixin):
     )
 
     # Source run reference (UUID string pointing to assessment_runs.id or induction_runs.id)
-    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "assessment" or "induction"
+    source_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # "assessment" or "induction"
     source_run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # Outcome
@@ -98,11 +111,19 @@ class CompetencyRecord(Base, TimestampMixin):
         default=CompetencyLifecycleState.NOT_ASSESSED,
         index=True,
     )
-    outcome: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # pass/fail/conditional
+    outcome: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # pass/fail/conditional
 
-    assessed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    assessed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    assessed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    assessed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -110,7 +131,9 @@ class CompetencyRecord(Base, TimestampMixin):
         Integer, ForeignKey("tenants.id"), nullable=True, index=True
     )
 
-    engineer: Mapped["Engineer"] = relationship("Engineer", back_populates="competency_records")
+    engineer: Mapped["Engineer"] = relationship(
+        "Engineer", back_populates="competency_records"
+    )
 
     def __repr__(self) -> str:
         return f"<CompetencyRecord(id={self.id}, engineer={self.engineer_id}, state={self.state})>"
@@ -156,10 +179,16 @@ class OnboardingChecklist(Base, TimestampMixin):
     )
 
     status: Mapped[OnboardingStatus] = mapped_column(
-        SQLEnum(OnboardingStatus, native_enum=False), default=OnboardingStatus.PENDING, index=True
+        SQLEnum(OnboardingStatus, native_enum=False),
+        default=OnboardingStatus.PENDING,
+        index=True,
     )
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     completed_run_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     tenant_id: Mapped[Optional[int]] = mapped_column(

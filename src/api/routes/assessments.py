@@ -30,10 +30,17 @@ from src.domain.models.assessment import (
 )
 from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.audit import AuditTemplate
-from src.domain.models.engineer import CompetencyRecord, CompetencyLifecycleState, Engineer
+from src.domain.models.engineer import (
+    CompetencyRecord,
+    CompetencyLifecycleState,
+    Engineer,
+)
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
-from src.domain.services.governance_service import GovernanceService, NotificationService
+from src.domain.services.governance_service import (
+    GovernanceService,
+    NotificationService,
+)
 
 router = APIRouter()
 
@@ -84,7 +91,9 @@ async def list_assessment_runs(
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.scalar(count_q)) or 0
     offset = (page - 1) * page_size
-    items_result = await db.execute(query.offset(offset).limit(page_size).order_by(AssessmentRun.created_at.desc()))
+    items_result = await db.execute(
+        query.offset(offset).limit(page_size).order_by(AssessmentRun.created_at.desc())
+    )
     items = items_result.scalars().all()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -97,18 +106,24 @@ async def list_assessment_runs(
     )
 
 
-@router.post("/", response_model=AssessmentRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=AssessmentRunResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_assessment_run(
     data: AssessmentRunCreate,
     db: DbSession,
     user: CurrentUser,
 ):
     """Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN."""
-    supervisor_check = await GovernanceService.validate_supervisor(db, user.id, data.engineer_id)
+    supervisor_check = await GovernanceService.validate_supervisor(
+        db, user.id, data.engineer_id
+    )
     if not supervisor_check["valid"]:
         raise HTTPException(status_code=400, detail=supervisor_check["reason"])
 
-    template_check = await GovernanceService.check_template_approval(db, data.template_id)
+    template_check = await GovernanceService.check_template_approval(
+        db, data.template_id
+    )
     if not template_check["approved"]:
         raise HTTPException(status_code=400, detail=template_check["reason"])
 
@@ -140,7 +155,11 @@ async def get_assessment_run(
     user: CurrentUser,
 ):
     """Get an assessment run by ID."""
-    query = select(AssessmentRun).options(selectinload(AssessmentRun.responses)).where(AssessmentRun.id == run_id)
+    query = (
+        select(AssessmentRun)
+        .options(selectinload(AssessmentRun.responses))
+        .where(AssessmentRun.id == run_id)
+    )
     query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -188,7 +207,9 @@ async def start_assessment(
     if run is None:
         raise HTTPException(status_code=404, detail="Assessment run not found")
     if run.status != AssessmentStatus.DRAFT:
-        raise HTTPException(status_code=400, detail="Assessment can only be started from draft status")
+        raise HTTPException(
+            status_code=400, detail="Assessment can only be started from draft status"
+        )
     run.status = AssessmentStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
     await db.commit()
@@ -215,7 +236,10 @@ async def complete_assessment(
         raise HTTPException(status_code=404, detail="Assessment run not found")
 
     if run.status not in (AssessmentStatus.DRAFT, AssessmentStatus.IN_PROGRESS):
-        raise HTTPException(status_code=400, detail=f"Assessment cannot be completed from status '{run.status.value}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Assessment cannot be completed from status '{run.status.value}'",
+        )
 
     template_result = await db.execute(
         select(AuditTemplate)
@@ -226,7 +250,9 @@ async def complete_assessment(
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    score_result = CompetencyScoringService.score_assessment(run.responses, template.questions)
+    score_result = CompetencyScoringService.score_assessment(
+        run.responses, template.questions
+    )
     run.status = AssessmentStatus.COMPLETED
     run.completed_at = datetime.now(timezone.utc)
     run.outcome = AssessmentOutcome(score_result.outcome)
@@ -239,14 +265,23 @@ async def complete_assessment(
 
     if run.asset_type_id and engineer:
         from datetime import timedelta
-        expiry = datetime.now(timezone.utc) + timedelta(days=365) if score_result.outcome == "pass" else None
+
+        expiry = (
+            datetime.now(timezone.utc) + timedelta(days=365)
+            if score_result.outcome == "pass"
+            else None
+        )
         competency = CompetencyRecord(
             engineer_id=run.engineer_id,
             asset_type_id=run.asset_type_id,
             template_id=run.template_id,
             source_type="assessment",
             source_run_id=run.id,
-            state=CompetencyLifecycleState.ACTIVE if score_result.outcome == "pass" else CompetencyLifecycleState.FAILED,
+            state=(
+                CompetencyLifecycleState.ACTIVE
+                if score_result.outcome == "pass"
+                else CompetencyLifecycleState.FAILED
+            ),
             outcome=score_result.outcome,
             assessed_at=datetime.now(timezone.utc),
             assessed_by_id=run.supervisor_id,
@@ -258,17 +293,29 @@ async def complete_assessment(
     if score_result.outcome in ("fail", "conditional"):
         failed_questions = []
         for resp in run.responses:
-            verdict_val = resp.verdict.value if hasattr(resp.verdict, "value") else str(resp.verdict) if resp.verdict else None
+            verdict_val = (
+                resp.verdict.value
+                if hasattr(resp.verdict, "value")
+                else str(resp.verdict) if resp.verdict else None
+            )
             if verdict_val == "not_competent":
-                q = next((q for q in template.questions if q.id == resp.question_id), None)
+                q = next(
+                    (q for q in template.questions if q.id == resp.question_id), None
+                )
                 q_text = q.question_text if q else "Unknown"
-                q_crit = q.criticality.value if q and hasattr(q.criticality, "value") else "good_to_have"
-                failed_questions.append({
-                    "question_id": resp.question_id,
-                    "question_text": q_text,
-                    "criticality": q_crit,
-                    "feedback": resp.feedback or "",
-                })
+                q_crit = (
+                    q.criticality.value
+                    if q and hasattr(q.criticality, "value")
+                    else "good_to_have"
+                )
+                failed_questions.append(
+                    {
+                        "question_id": resp.question_id,
+                        "question_text": q_text,
+                        "criticality": q_crit,
+                        "feedback": resp.feedback or "",
+                    }
+                )
         if failed_questions:
             await CAPAAutoService.create_from_assessment(
                 db=db,
@@ -297,7 +344,11 @@ async def complete_assessment(
     return AssessmentRunResponse.model_validate(run)
 
 
-@router.post("/{run_id}/responses", response_model=AssessmentResponseResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{run_id}/responses",
+    response_model=AssessmentResponseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_assessment_response(
     run_id: str,
     data: AssessmentResponseCreate,
@@ -312,8 +363,14 @@ async def create_assessment_response(
     if run is None:
         raise HTTPException(status_code=404, detail="Assessment run not found")
 
-    if run.status == AssessmentStatus.COMPLETED or run.status == AssessmentStatus.CANCELLED:
-        raise HTTPException(status_code=400, detail="Cannot add responses to a completed or cancelled assessment")
+    if (
+        run.status == AssessmentStatus.COMPLETED
+        or run.status == AssessmentStatus.CANCELLED
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot add responses to a completed or cancelled assessment",
+        )
 
     verdict_val = CompetencyVerdict(data.verdict) if data.verdict else None
     response = AssessmentResponse(

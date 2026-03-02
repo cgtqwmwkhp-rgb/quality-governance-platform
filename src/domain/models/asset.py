@@ -54,7 +54,9 @@ class AssetType(Base, TimestampMixin, AuditTrailMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<AssetType(id={self.id}, category={self.category}, name='{self.name}')>"
+        return (
+            f"<AssetType(id={self.id}, category={self.category}, name='{self.name}')>"
+        )
 
 
 class Asset(Base, TimestampMixin, AuditTrailMixin):
@@ -64,7 +66,11 @@ class Asset(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     external_id: Mapped[str] = mapped_column(
-        String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False, index=True
+        String(36),
+        default=lambda: str(uuid.uuid4()),
+        unique=True,
+        nullable=False,
+        index=True,
     )
     asset_type_id: Mapped[int] = mapped_column(
         ForeignKey("asset_types.id"), nullable=False, index=True
@@ -88,10 +94,18 @@ class Asset(Base, TimestampMixin, AuditTrailMixin):
     )
 
     # Service dates
-    last_service_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_service_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_loler_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_loler_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_service_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_service_due: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_loler_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_loler_due: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Location
     site: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -110,14 +124,18 @@ class Asset(Base, TimestampMixin, AuditTrailMixin):
     asset_type: Mapped["AssetType"] = relationship("AssetType", back_populates="assets")
 
     def __repr__(self) -> str:
-        return f"<Asset(id={self.id}, number='{self.asset_number}', name='{self.name}')>"
+        return (
+            f"<Asset(id={self.id}, number='{self.asset_number}', name='{self.name}')>"
+        )
 
 
 class TemplateAssetType(Base, TimestampMixin):
     """Junction table: which templates apply to which asset types."""
 
     __tablename__ = "template_asset_types"
-    __table_args__ = (UniqueConstraint("template_id", "asset_type_id", name="uq_template_asset_type"),)
+    __table_args__ = (
+        UniqueConstraint("template_id", "asset_type_id", name="uq_template_asset_type"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(
@@ -130,7 +148,9 @@ class TemplateAssetType(Base, TimestampMixin):
         Integer, ForeignKey("tenants.id"), nullable=True, index=True
     )
 
-    asset_type: Mapped["AssetType"] = relationship("AssetType", back_populates="template_links")
+    asset_type: Mapped["AssetType"] = relationship(
+        "AssetType", back_populates="template_links"
+    )
 
     def __repr__(self) -> str:
         return f"<TemplateAssetType(template_id={self.template_id}, asset_type_id={self.asset_type_id})>"

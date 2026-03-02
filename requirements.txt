@@ -16,6 +16,7 @@ PyJWT[crypto]==2.10.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.22
+nh3>=0.2.14,<1.0.0
 
 # Email Processing
 aiosmtplib==3.0.1
@@ -27,6 +28,9 @@ azure-identity==1.17.0
 
 # AI - Google Gemini (Workforce Development Platform)
 google-generativeai>=0.8.0
+
+# XML Security
+defusedxml>=0.7.1,<1.0.0
 
 # Utilities
 python-dotenv>=1.0.0,<2.0.0

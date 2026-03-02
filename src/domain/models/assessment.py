@@ -46,20 +46,34 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
 
     __tablename__ = "assessment_runs"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    reference_number: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, index=True
+    )
 
     # Links to unified template library (integer FK)
-    template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id"), nullable=False, index=True)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_templates.id"), nullable=False, index=True
+    )
     template_version: Mapped[int] = mapped_column(Integer, default=1)
 
     # People — engineer_id references engineers.id; supervisor_id references users.id
-    engineer_id: Mapped[int] = mapped_column(ForeignKey("engineers.id"), nullable=False, index=True)
-    supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    engineer_id: Mapped[int] = mapped_column(
+        ForeignKey("engineers.id"), nullable=False, index=True
+    )
+    supervisor_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
 
     # Asset context
-    asset_type_id: Mapped[Optional[int]] = mapped_column(ForeignKey("asset_types.id"), nullable=True, index=True)
-    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    asset_type_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("asset_types.id"), nullable=True, index=True
+    )
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id"), nullable=True
+    )
 
     # Details
     title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
@@ -72,11 +86,19 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
 
     # Status and dates
     status: Mapped[AssessmentStatus] = mapped_column(
-        SQLEnum(AssessmentStatus, native_enum=False), default=AssessmentStatus.DRAFT, index=True
+        SQLEnum(AssessmentStatus, native_enum=False),
+        default=AssessmentStatus.DRAFT,
+        index=True,
     )
-    scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Outcome
     outcome: Mapped[Optional[AssessmentOutcome]] = mapped_column(
@@ -86,8 +108,12 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
 
     # Debrief
     debrief_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    debrief_signature: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # base64
-    debrief_signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    debrief_signature: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # base64
+    debrief_signed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Multi-tenancy
     tenant_id: Mapped[Optional[int]] = mapped_column(
@@ -110,11 +136,15 @@ class AssessmentResponse(Base, TimestampMixin):
 
     __tablename__ = "assessment_responses"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     run_id: Mapped[str] = mapped_column(
         ForeignKey("assessment_runs.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False, index=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_questions.id"), nullable=False, index=True
+    )
 
     # Verdict
     verdict: Mapped[Optional[CompetencyVerdict]] = mapped_column(
@@ -130,11 +160,17 @@ class AssessmentResponse(Base, TimestampMixin):
     voice_note_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Engineer sign-off on this specific feedback
-    engineer_signature: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # base64
-    engineer_signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    engineer_signature: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # base64
+    engineer_signed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
-    run: Mapped["AssessmentRun"] = relationship("AssessmentRun", back_populates="responses")
+    run: Mapped["AssessmentRun"] = relationship(
+        "AssessmentRun", back_populates="responses"
+    )
 
     def __repr__(self) -> str:
         return f"<AssessmentResponse(id={self.id}, verdict={self.verdict})>"

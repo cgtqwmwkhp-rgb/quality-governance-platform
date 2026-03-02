@@ -34,7 +34,10 @@ from src.domain.models.audit_log import AuditEvent
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_business_event, track_metric
+from src.infrastructure.monitoring.azure_monitor import (
+    track_business_event,
+    track_metric,
+)
 
 try:
     from opentelemetry import trace
@@ -67,7 +70,9 @@ TEMPLATE_UPDATE_ALLOWED_FIELDS = {
     "template_status",
 }
 
-_TEMPLATE_EXCLUDED_UPDATE_FIELDS = frozenset({"standard_ids", "is_active", "is_published", "standard_ids_json", "external_id"})
+_TEMPLATE_EXCLUDED_UPDATE_FIELDS = frozenset(
+    {"standard_ids", "is_active", "is_published", "standard_ids_json", "external_id"}
+)
 
 _QUESTION_JSON_REMAPS: dict[str, str] = {
     "options": "options_json",
@@ -214,7 +219,9 @@ async def record_audit_event(
         user_id=final_actor_user_id,
     )
 
-    track_business_event("audit_completed", {"event_type": event_type, "entity_type": entity_type})
+    track_business_event(
+        "audit_completed", {"event_type": event_type, "entity_type": entity_type}
+    )
 
     return event
 
@@ -261,7 +268,11 @@ class AuditService:
         offset = (page - 1) * page_size
         count_q = select(func.count()).select_from(query.subquery())
         total: int = (await self.db.execute(count_q)).scalar_one()
-        items = (await self.db.execute(query.offset(offset).limit(page_size))).scalars().all()
+        items = (
+            (await self.db.execute(query.offset(offset).limit(page_size)))
+            .scalars()
+            .all()
+        )
         pages = (total + page_size - 1) // page_size if total > 0 else 0
         return PaginatedResult(
             items=list(items),
@@ -288,7 +299,9 @@ class AuditService:
             entity.updated_at = datetime.now(timezone.utc)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
 
     @staticmethod
-    def _remap_json_fields(data: dict[str, Any], remaps: dict[str, str]) -> dict[str, Any]:
+    def _remap_json_fields(
+        data: dict[str, Any], remaps: dict[str, str]
+    ) -> dict[str, Any]:
         """Pop schema-level keys and re-insert under their model JSON column names."""
         result = dict(data)
         for schema_key, model_key in remaps.items():
@@ -336,7 +349,10 @@ class AuditService:
         )
         if search:
             pattern = f"%{search}%"
-            query = query.where((AuditTemplate.name.ilike(pattern)) | (AuditTemplate.description.ilike(pattern)))
+            query = query.where(
+                (AuditTemplate.name.ilike(pattern))
+                | (AuditTemplate.description.ilike(pattern))
+            )
         if category:
             query = query.where(AuditTemplate.category == category)
         if audit_type:
@@ -447,7 +463,9 @@ class AuditService:
         result = await self.db.execute(
             select(AuditTemplate)
             .options(
-                selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
+                selectinload(AuditTemplate.sections).selectinload(
+                    AuditSection.questions
+                ),
                 selectinload(AuditTemplate.questions),
             )
             .where(
@@ -487,11 +505,15 @@ class AuditService:
                 update_data[col] = update_data.pop(short)
 
         # Determine trackable changes (only fields in the allow-list)
-        trackable = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}
+        trackable = {
+            k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS
+        }
         if "standard_ids" in update_data:
             trackable["standard_ids_json"] = update_data["standard_ids"]
 
-        changed_fields = [f for f, v in trackable.items() if getattr(template, f, None) != v]
+        changed_fields = [
+            f for f, v in trackable.items() if getattr(template, f, None) != v
+        ]
 
         self._apply_dict(
             template,
@@ -513,7 +535,10 @@ class AuditService:
                 entity_type="audit_template",
                 entity_id=str(template.id),
                 action="update",
-                description=(f"Template '{template.name}' updated: " f"{', '.join(changed_fields)}"),
+                description=(
+                    f"Template '{template.name}' updated: "
+                    f"{', '.join(changed_fields)}"
+                ),
                 actor_user_id=actor_user_id,
                 payload={"changed_fields": changed_fields},
             )
@@ -556,7 +581,10 @@ class AuditService:
             entity_type="audit_template",
             entity_id=str(template.id),
             action="publish",
-            description=(f"Template '{template.name}' published " f"(v{template.version}, {question_count} questions)"),
+            description=(
+                f"Template '{template.name}' published "
+                f"(v{template.version}, {question_count} questions)"
+            ),
             actor_user_id=actor_user_id,
         )
         return template
@@ -571,7 +599,9 @@ class AuditService:
         result = await self.db.execute(
             select(AuditTemplate)
             .options(
-                selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
+                selectinload(AuditTemplate.sections).selectinload(
+                    AuditSection.questions
+                ),
                 selectinload(AuditTemplate.questions),
             )
             .where(
@@ -672,7 +702,9 @@ class AuditService:
             entity_type="audit_template",
             entity_id=str(template_id),
             action="archive",
-            description=(f"Template '{template.name}' archived " "(recoverable for 30 days)"),
+            description=(
+                f"Template '{template.name}' archived " "(recoverable for 30 days)"
+            ),
             actor_user_id=actor_user_id,
         )
         return template
@@ -769,7 +801,9 @@ class AuditService:
         await self.db.commit()
 
         refreshed = await self.db.execute(
-            select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
+            select(AuditSection)
+            .options(selectinload(AuditSection.questions))
+            .where(AuditSection.id == section.id)
         )
         return refreshed.scalar_one()
 
@@ -781,7 +815,9 @@ class AuditService:
         tenant_id: int,
     ) -> AuditSection:
         result = await self.db.execute(
-            select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section_id)
+            select(AuditSection)
+            .options(selectinload(AuditSection.questions))
+            .where(AuditSection.id == section_id)
         )
         section = result.scalar_one_or_none()
         if not section:
@@ -797,7 +833,9 @@ class AuditService:
         await self.db.commit()
 
         refreshed = await self.db.execute(
-            select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
+            select(AuditSection)
+            .options(selectinload(AuditSection.questions))
+            .where(AuditSection.id == section.id)
         )
         return refreshed.scalar_one()
 
@@ -1028,7 +1066,10 @@ class AuditService:
         if "status" in update_data:
             new_status = update_data["status"]
             if new_status == AuditStatus.COMPLETED.value:
-                raise ValidationError("Cannot set status to completed directly; " "use the complete endpoint")
+                raise ValidationError(
+                    "Cannot set status to completed directly; "
+                    "use the complete endpoint"
+                )
             try:
                 validated = AuditStatus(new_status)
             except ValueError:
@@ -1090,7 +1131,9 @@ class AuditService:
         run.max_score = score.max_score
         run.score_percentage = score.score_percentage
 
-        template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
+        template_result = await self.db.execute(
+            select(AuditTemplate).where(AuditTemplate.id == run.template_id)
+        )
         template = template_result.scalar_one_or_none()
         if template and template.passing_score is not None:
             run.passed = run.score_percentage >= template.passing_score
@@ -1121,7 +1164,9 @@ class AuditService:
         )
 
         if run.status not in (AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS):
-            raise ValidationError("Cannot add responses to a completed or cancelled run")
+            raise ValidationError(
+                "Cannot add responses to a completed or cancelled run"
+            )
 
         if run.status == AuditStatus.SCHEDULED:
             run.status = AuditStatus.IN_PROGRESS
@@ -1136,7 +1181,9 @@ class AuditService:
             )
         )
         if existing.scalar_one_or_none():
-            raise ValidationError("Response already exists for this question in this run")
+            raise ValidationError(
+                "Response already exists for this question in this run"
+            )
 
         response = AuditResponse(run_id=run_id, **data)
         self.db.add(response)
@@ -1152,7 +1199,9 @@ class AuditService:
         tenant_id: int,
     ) -> AuditResponse:
         result = await self.db.execute(
-            select(AuditResponse).options(selectinload(AuditResponse.run)).where(AuditResponse.id == response_id)
+            select(AuditResponse)
+            .options(selectinload(AuditResponse.run))
+            .where(AuditResponse.id == response_id)
         )
         response = result.scalar_one_or_none()
 
