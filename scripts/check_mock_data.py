@@ -180,7 +180,9 @@ def format_violations(violations: list[Violation]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Mock Data Eradication Gate - detect mock data in production code")
+    parser = argparse.ArgumentParser(
+        description="Mock Data Eradication Gate - detect mock data in production code"
+    )
     parser.add_argument(
         "--repo-root",
         type=Path,

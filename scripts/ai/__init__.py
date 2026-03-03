@@ -10,7 +10,14 @@ SECURITY NOTES:
 
 from .classifier import ClassificationResult, TextClassifier, UrgencyResult
 from .compliance import ComplianceChecker, ComplianceCheckResult, ComplianceViolation
-from .config import AIEngineConfig, ClassificationConfig, ComplianceConfig, RiskLevel, RiskScoringConfig, get_ai_config
+from .config import (
+    AIEngineConfig,
+    ClassificationConfig,
+    ComplianceConfig,
+    RiskLevel,
+    RiskScoringConfig,
+    get_ai_config,
+)
 from .engine import GovernanceAIEngine
 from .risk_scorer import RiskAssessment, RiskScorer
 

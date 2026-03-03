@@ -167,7 +167,9 @@ class ProductionVerifier:
     def check_auth_required_incidents_with_email(self) -> CheckResult:
         """Verify incidents with email filter requires authentication (CVE fix)."""
         try:
-            response, elapsed = self._make_request("GET", "/api/v1/incidents/?reporter_email=test@example.com")
+            response, elapsed = self._make_request(
+                "GET", "/api/v1/incidents/?reporter_email=test@example.com"
+            )
             request_id = response.headers.get("x-request-id")
 
             if response.status_code == 401:
@@ -196,7 +198,9 @@ class ProductionVerifier:
     def check_auth_required_complaints_with_email(self) -> CheckResult:
         """Verify complaints with email filter requires authentication."""
         try:
-            response, elapsed = self._make_request("GET", "/api/v1/complaints/?complainant_email=test@example.com")
+            response, elapsed = self._make_request(
+                "GET", "/api/v1/complaints/?complainant_email=test@example.com"
+            )
             request_id = response.headers.get("x-request-id")
 
             if response.status_code == 401:
@@ -225,7 +229,9 @@ class ProductionVerifier:
     def check_auth_required_rtas_with_email(self) -> CheckResult:
         """Verify RTAs with email filter requires authentication."""
         try:
-            response, elapsed = self._make_request("GET", "/api/v1/rtas/?reporter_email=test@example.com")
+            response, elapsed = self._make_request(
+                "GET", "/api/v1/rtas/?reporter_email=test@example.com"
+            )
             request_id = response.headers.get("x-request-id")
 
             if response.status_code == 401:
@@ -381,7 +387,9 @@ class ProductionVerifier:
             self.results.append(result)
 
             status = "✅ PASS" if result.passed else "❌ FAIL"
-            timing = f" ({result.response_time_ms:.0f}ms)" if result.response_time_ms else ""
+            timing = (
+                f" ({result.response_time_ms:.0f}ms)" if result.response_time_ms else ""
+            )
 
             print(f"{status} | {result.name}{timing}")
             print(f"       {result.message}")
@@ -410,7 +418,9 @@ class ProductionVerifier:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Post-deployment production verification")
+    parser = argparse.ArgumentParser(
+        description="Post-deployment production verification"
+    )
     parser.add_argument(
         "--url",
         default="https://app-qgp-prod.azurewebsites.net",

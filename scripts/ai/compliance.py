@@ -280,7 +280,9 @@ class ComplianceChecker:
                 violations.append(violation)
 
         # Compliant if no ERROR violations
-        is_compliant = not any(v.severity == ComplianceSeverity.ERROR for v in violations)
+        is_compliant = not any(
+            v.severity == ComplianceSeverity.ERROR for v in violations
+        )
 
         return ComplianceCheckResult(
             entity_id=str(entity.get("id", "unknown")),

@@ -19,7 +19,9 @@ REQUIRED_FILES = [
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate required acceptance-pack artifacts")
+    parser = argparse.ArgumentParser(
+        description="Validate required acceptance-pack artifacts"
+    )
     parser.add_argument("--repo-root", default=".", help="Repository root")
     args = parser.parse_args()
 

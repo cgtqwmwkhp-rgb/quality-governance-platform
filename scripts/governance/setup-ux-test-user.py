@@ -30,7 +30,9 @@ import sys
 from datetime import datetime
 
 # Configure logging - never log sensitive data
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +51,9 @@ def check_environment():
 
     if app_env != "staging":
         logger.error(f"❌ Refusing to run: APP_ENV={app_env}, expected 'staging'")
-        logger.error("This script only runs in staging to prevent accidental production changes.")
+        logger.error(
+            "This script only runs in staging to prevent accidental production changes."
+        )
         sys.exit(1)
 
     logger.info("✅ Environment check passed: staging")
@@ -90,7 +94,10 @@ def verify_user_via_api(base_url: str, email: str, password: str) -> bool:
         req = urllib.request.Request(
             login_url,
             data=data,
-            headers={"Content-Type": "application/json", "User-Agent": "ux-test-user-setup/1.0"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "ux-test-user-setup/1.0",
+            },
             method="POST",
         )
 
@@ -104,7 +111,11 @@ def verify_user_via_api(base_url: str, email: str, password: str) -> bool:
                     token = result["access_token"]
                     whoami_url = f"{base_url}/api/v1/auth/whoami"
                     whoami_req = urllib.request.Request(
-                        whoami_url, headers={"Authorization": f"Bearer {token}", "User-Agent": "ux-test-user-setup/1.0"}
+                        whoami_url,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "User-Agent": "ux-test-user-setup/1.0",
+                        },
                     )
 
                     with urllib.request.urlopen(whoami_req, timeout=10) as whoami_resp:
@@ -155,13 +166,17 @@ def create_user_instructions(email: str):
     logger.info("")
     logger.info("SQL (example - adapt for your ORM/admin interface):")
     logger.info("")
-    logger.info("  INSERT INTO users (email, hashed_password, is_active, first_name, last_name)")
+    logger.info(
+        "  INSERT INTO users (email, hashed_password, is_active, first_name, last_name)"
+    )
     logger.info("  VALUES ('<email>', '<bcrypt_hash>', true, 'UX', 'TestRunner');")
     logger.info("")
     logger.info("  -- Then assign roles:")
     logger.info("  INSERT INTO user_roles (user_id, role_id)")
     logger.info("  SELECT u.id, r.id FROM users u, roles r")
-    logger.info("  WHERE u.email = '<email>' AND r.name IN ('user', 'employee', 'admin', 'viewer');")
+    logger.info(
+        "  WHERE u.email = '<email>' AND r.name IN ('user', 'employee', 'admin', 'viewer');"
+    )
     logger.info("")
     logger.info("Or use the admin UI to create the user and assign roles.")
     logger.info("")
@@ -170,7 +185,9 @@ def create_user_instructions(email: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Setup UX Test User for Staging")
-    parser.add_argument("--verify-only", action="store_true", help="Only verify authentication")
+    parser.add_argument(
+        "--verify-only", action="store_true", help="Only verify authentication"
+    )
     parser.add_argument("--create", action="store_true", help="Create or update user")
     args = parser.parse_args()
 

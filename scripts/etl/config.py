@@ -69,8 +69,12 @@ INCIDENT_MAPPINGS = [
     FieldMapping("description", "description"),
     FieldMapping("incident_type", "incident_type", transformer="map_incident_type"),
     FieldMapping("severity", "severity", transformer="map_severity"),
-    FieldMapping("status", "status", transformer="map_status", default_value="reported"),
-    FieldMapping("incident_date", "incident_date", transformer="parse_date", required=True),
+    FieldMapping(
+        "status", "status", transformer="map_status", default_value="reported"
+    ),
+    FieldMapping(
+        "incident_date", "incident_date", transformer="parse_date", required=True
+    ),
     FieldMapping("location", "location"),
 ]
 
@@ -79,8 +83,12 @@ COMPLAINT_MAPPINGS = [
     FieldMapping("title", "title", required=True),
     FieldMapping("description", "description", required=True),
     FieldMapping("complainant_name", "complainant_name", required=True),
-    FieldMapping("received_date", "received_date", transformer="parse_date", required=True),
-    FieldMapping("status", "status", transformer="map_complaint_status", default_value="received"),
+    FieldMapping(
+        "received_date", "received_date", transformer="parse_date", required=True
+    ),
+    FieldMapping(
+        "status", "status", transformer="map_complaint_status", default_value="received"
+    ),
 ]
 
 RTA_MAPPINGS = [
@@ -89,7 +97,9 @@ RTA_MAPPINGS = [
     FieldMapping("problem_statement", "problem_statement", required=True),
     FieldMapping("root_cause", "root_cause"),
     FieldMapping("corrective_actions", "corrective_actions"),
-    FieldMapping("status", "status", transformer="map_rta_status", default_value="draft"),
+    FieldMapping(
+        "status", "status", transformer="map_rta_status", default_value="draft"
+    ),
 ]
 
 
@@ -128,8 +138,12 @@ class ETLConfig:
     validate_only: bool = False
 
     # Entity field mappings
-    incident_mappings: List[FieldMapping] = field(default_factory=lambda: INCIDENT_MAPPINGS)
-    complaint_mappings: List[FieldMapping] = field(default_factory=lambda: COMPLAINT_MAPPINGS)
+    incident_mappings: List[FieldMapping] = field(
+        default_factory=lambda: INCIDENT_MAPPINGS
+    )
+    complaint_mappings: List[FieldMapping] = field(
+        default_factory=lambda: COMPLAINT_MAPPINGS
+    )
     rta_mappings: List[FieldMapping] = field(default_factory=lambda: RTA_MAPPINGS)
 
     def get_mappings(self, entity_type: EntityType) -> List[FieldMapping]:

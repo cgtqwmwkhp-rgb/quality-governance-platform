@@ -185,11 +185,15 @@ def main():
         print(f"❌ {len(expired)} EXPIRED waiver(s):")
         for vuln, expiry in expired:
             days_expired = (now - expiry).days
-            print(f"  - {vuln['id']} ({vuln['package']}) - expired {days_expired} days ago")
+            print(
+                f"  - {vuln['id']} ({vuln['package']}) - expired {days_expired} days ago"
+            )
         print()
         print("Action required:")
         print("  1. Fix the vulnerability by upgrading dependencies, OR")
-        print("  2. Extend the waiver in docs/SECURITY_WAIVERS.md with updated justification")
+        print(
+            "  2. Extend the waiver in docs/SECURITY_WAIVERS.md with updated justification"
+        )
         print()
 
     if has_violations:

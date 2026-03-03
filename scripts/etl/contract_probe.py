@@ -360,7 +360,9 @@ class ContractProbe:
                 if status == 404:
                     # Check if body contains Azure ACA error message
                     # Look in both _raw field and stringified body
-                    body_str = body.get("_raw", "") if isinstance(body, dict) else str(body)
+                    body_str = (
+                        body.get("_raw", "") if isinstance(body, dict) else str(body)
+                    )
                     if "Container App" in body_str and (
                         "stopped" in body_str or "does not exist" in body_str
                     ):
@@ -401,7 +403,9 @@ class ContractProbe:
 
         # First, check without auth if auth is required
         if check.auth_required:
-            status, body, elapsed = self._make_request(url, check.method, include_auth=False)
+            status, body, elapsed = self._make_request(
+                url, check.method, include_auth=False
+            )
 
             result = EndpointProbeResult(
                 name=check.name,
@@ -670,7 +674,9 @@ def main() -> int:
     print("-" * 70)
     for ep in result.endpoints:
         status_icon = "✅" if ep.success else ("⚠️" if not ep.critical else "❌")
-        print(f"  {status_icon} {ep.name}: {ep.status_code} ({ep.response_time_ms:.1f}ms)")
+        print(
+            f"  {status_icon} {ep.name}: {ep.status_code} ({ep.response_time_ms:.1f}ms)"
+        )
         if ep.errors:
             for err in ep.errors:
                 print(f"      └─ {err}")

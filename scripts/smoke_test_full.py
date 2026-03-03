@@ -58,7 +58,14 @@ class SmokeTestRunner:
         prefix = {"info": "   ", "pass": " ✅ ", "fail": " ❌ ", "warn": " ⚠️ "}
         print(f"[{timestamp}]{prefix.get(level, '   ')} {message}")
 
-    async def test(self, name: str, url: str, expected_status: int = 200, method: str = "GET", **kwargs):
+    async def test(
+        self,
+        name: str,
+        url: str,
+        expected_status: int = 200,
+        method: str = "GET",
+        **kwargs,
+    ):
         """Run a single test."""
         try:
             if method == "GET":
@@ -73,11 +80,16 @@ class SmokeTestRunner:
             if response.status_code == expected_status:
                 self.passed += 1
                 self.log(f"{name}: {response.status_code}", "pass")
-                self.results.append({"name": name, "status": "pass", "code": response.status_code})
+                self.results.append(
+                    {"name": name, "status": "pass", "code": response.status_code}
+                )
                 return True
             else:
                 self.failed += 1
-                self.log(f"{name}: Expected {expected_status}, got {response.status_code}", "fail")
+                self.log(
+                    f"{name}: Expected {expected_status}, got {response.status_code}",
+                    "fail",
+                )
                 self.results.append(
                     {
                         "name": name,
@@ -151,19 +163,43 @@ class SmokeTestRunner:
         base = f"{self.urls['backend']}/api/v1"
 
         # Auth endpoints (expect 401/422 without valid credentials)
-        await self.test("Login (no creds)", f"{base}/auth/login", expected_status=422, method="POST", json={})
+        await self.test(
+            "Login (no creds)",
+            f"{base}/auth/login",
+            expected_status=422,
+            method="POST",
+            json={},
+        )
 
         # Protected endpoints (expect 401 without auth)
         await self.test("List Users (protected)", f"{base}/users", expected_status=401)
-        await self.test("List Templates (protected)", f"{base}/admin/config/templates", expected_status=401)
-        await self.test("List Settings (protected)", f"{base}/admin/config/settings", expected_status=401)
-        await self.test("List Contracts (protected)", f"{base}/admin/config/contracts", expected_status=401)
+        await self.test(
+            "List Templates (protected)",
+            f"{base}/admin/config/templates",
+            expected_status=401,
+        )
+        await self.test(
+            "List Settings (protected)",
+            f"{base}/admin/config/settings",
+            expected_status=401,
+        )
+        await self.test(
+            "List Contracts (protected)",
+            f"{base}/admin/config/contracts",
+            expected_status=401,
+        )
 
         # Core workflow endpoints (expect 401 without auth - validates routes exist)
-        await self.test("List Incidents (protected)", f"{base}/incidents/", expected_status=401)
-        await self.test("List Complaints (protected)", f"{base}/complaints/", expected_status=401)
+        await self.test(
+            "List Incidents (protected)", f"{base}/incidents/", expected_status=401
+        )
+        await self.test(
+            "List Complaints (protected)", f"{base}/complaints/", expected_status=401
+        )
         await self.test("List RTAs (protected)", f"{base}/rtas/", expected_status=401)
-        await self.test("List Near Misses (protected)", f"{base}/near-misses/", expected_status=401)
+        await self.test(
+            "List Near Misses (protected)", f"{base}/near-misses/", expected_status=401
+        )
 
     async def run_all_tests(self):
         """Run all smoke tests."""
@@ -185,7 +221,11 @@ class SmokeTestRunner:
         print(f"   Total Tests: {total}")
         print(f"   Passed:      {self.passed} ✅")
         print(f"   Failed:      {self.failed} ❌")
-        print(f"   Success Rate: {(self.passed/total)*100:.1f}%" if total > 0 else "   No tests run")
+        print(
+            f"   Success Rate: {(self.passed/total)*100:.1f}%"
+            if total > 0
+            else "   No tests run"
+        )
         print("=" * 60)
 
         # Write results to JSON
@@ -209,8 +249,12 @@ class SmokeTestRunner:
 
 async def main():
     parser = argparse.ArgumentParser(description="Run smoke tests against the platform")
-    parser.add_argument("--staging", action="store_true", help="Test staging environment")
-    parser.add_argument("--production", action="store_true", help="Test production environment")
+    parser.add_argument(
+        "--staging", action="store_true", help="Test staging environment"
+    )
+    parser.add_argument(
+        "--production", action="store_true", help="Test production environment"
+    )
     args = parser.parse_args()
 
     environment = "production" if args.production else "staging"

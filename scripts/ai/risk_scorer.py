@@ -190,7 +190,9 @@ class RiskScorer:
 
         return recommendations[:5]
 
-    def assess(self, entity: Dict[str, Any], entity_type: str = "incident") -> RiskAssessment:
+    def assess(
+        self, entity: Dict[str, Any], entity_type: str = "incident"
+    ) -> RiskAssessment:
         """Assess risk for an entity."""
         factors: List[RiskFactor] = []
 

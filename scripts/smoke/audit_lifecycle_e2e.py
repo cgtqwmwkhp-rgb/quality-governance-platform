@@ -85,12 +85,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
 
     token = login_resp.json().get("access_token")
     if not token:
-        results.append(StepResult("login", False, "Missing access_token in login response"))
+        results.append(
+            StepResult("login", False, "Missing access_token in login response")
+        )
         return results
     results.append(StepResult("login", True, "Authenticated"))
 
     # 1b) List findings (regression gate for findings 500)
-    findings_resp = _request("GET", f"{base_url}/api/v1/audits/findings?page=1&page_size=10", token=token)
+    findings_resp = _request(
+        "GET", f"{base_url}/api/v1/audits/findings?page=1&page_size=10", token=token
+    )
     if findings_resp.status_code != 200:
         results.append(
             StepResult(
@@ -102,12 +106,18 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         )
         return results
     results.append(
-        StepResult("list_findings", True, f"Findings listed ({findings_resp.json().get('total', '?')} total)")
+        StepResult(
+            "list_findings",
+            True,
+            f"Findings listed ({findings_resp.json().get('total', '?')} total)",
+        )
     )
 
     # 2) List published templates
     templates_resp = _request(
-        "GET", f"{base_url}/api/v1/audits/templates?is_published=true&page=1&page_size=50", token=token
+        "GET",
+        f"{base_url}/api/v1/audits/templates?is_published=true&page=1&page_size=50",
+        token=token,
     )
     if templates_resp.status_code != 200:
         results.append(
@@ -135,7 +145,10 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
             "list_published_templates",
             True,
             f"Selected template_id={template_id}",
-            {"template_name": templates[0].get("name"), "template_version": templates[0].get("version")},
+            {
+                "template_name": templates[0].get("name"),
+                "template_version": templates[0].get("version"),
+            },
         )
     )
 
@@ -146,7 +159,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "location": "E2E Validation Site",
         "scheduled_date": _now_iso(),
     }
-    run_resp = _request("POST", f"{base_url}/api/v1/audits/runs", token=token, payload=run_payload)
+    run_resp = _request(
+        "POST", f"{base_url}/api/v1/audits/runs", token=token, payload=run_payload
+    )
     if run_resp.status_code != 201:
         results.append(
             StepResult(
@@ -172,7 +187,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     )
 
     # 4) Fetch template detail and submit one response
-    template_resp = _request("GET", f"{base_url}/api/v1/audits/templates/{template_id}", token=token)
+    template_resp = _request(
+        "GET", f"{base_url}/api/v1/audits/templates/{template_id}", token=token
+    )
     if template_resp.status_code != 200:
         results.append(
             StepResult(
@@ -190,9 +207,13 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
             question_id = questions[0]["id"]
             break
     if not question_id:
-        results.append(StepResult("template_detail", False, "Template has no questions"))
+        results.append(
+            StepResult("template_detail", False, "Template has no questions")
+        )
         return results
-    results.append(StepResult("template_detail", True, f"Using question_id={question_id}"))
+    results.append(
+        StepResult("template_detail", True, f"Using question_id={question_id}")
+    )
 
     response_payload = {
         "question_id": question_id,
@@ -202,7 +223,10 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "notes": "E2E response",
     }
     response_resp = _request(
-        "POST", f"{base_url}/api/v1/audits/runs/{run_id}/responses", token=token, payload=response_payload
+        "POST",
+        f"{base_url}/api/v1/audits/runs/{run_id}/responses",
+        token=token,
+        payload=response_payload,
     )
     if response_resp.status_code != 201:
         results.append(
@@ -217,7 +241,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     results.append(StepResult("submit_response", True, "One response submitted"))
 
     # 5) Complete run
-    complete_resp = _request("POST", f"{base_url}/api/v1/audits/runs/{run_id}/complete", token=token)
+    complete_resp = _request(
+        "POST", f"{base_url}/api/v1/audits/runs/{run_id}/complete", token=token
+    )
     if complete_resp.status_code != 200:
         results.append(
             StepResult(
@@ -240,7 +266,10 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "question_id": question_id,
     }
     finding_resp = _request(
-        "POST", f"{base_url}/api/v1/audits/runs/{run_id}/findings", token=token, payload=finding_payload
+        "POST",
+        f"{base_url}/api/v1/audits/runs/{run_id}/findings",
+        token=token,
+        payload=finding_payload,
     )
     if finding_resp.status_code != 201:
         results.append(
@@ -254,7 +283,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         return results
     finding_data = finding_resp.json()
     finding_ref = finding_data.get("reference_number", "N/A")
-    results.append(StepResult("create_finding", True, f"Finding created ({finding_ref})"))
+    results.append(
+        StepResult("create_finding", True, f"Finding created ({finding_ref})")
+    )
 
     # 7) Create incident from finding context (bridge to unified actions module)
     incident_payload = {
@@ -267,7 +298,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "location": "E2E Validation Site",
         "department": "Governance",
     }
-    incident_resp = _request("POST", f"{base_url}/api/v1/incidents/", token=token, payload=incident_payload)
+    incident_resp = _request(
+        "POST", f"{base_url}/api/v1/incidents/", token=token, payload=incident_payload
+    )
     if incident_resp.status_code != 201:
         results.append(
             StepResult(
@@ -279,7 +312,13 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         )
         return results
     incident_id = incident_resp.json()["id"]
-    results.append(StepResult("create_incident_for_action_bridge", True, f"Incident created ({incident_id})"))
+    results.append(
+        StepResult(
+            "create_incident_for_action_bridge",
+            True,
+            f"Incident created ({incident_id})",
+        )
+    )
 
     # 8) Create + close action
     action_payload = {
@@ -289,7 +328,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "source_id": incident_id,
         "priority": "medium",
     }
-    action_resp = _request("POST", f"{base_url}/api/v1/actions/", token=token, payload=action_payload)
+    action_resp = _request(
+        "POST", f"{base_url}/api/v1/actions/", token=token, payload=action_payload
+    )
     if action_resp.status_code != 201:
         results.append(
             StepResult(
@@ -331,7 +372,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run audit lifecycle e2e smoke checks")
     parser.add_argument(
-        "--base-url", required=True, help="API base URL, e.g. https://qgp-staging-plantexpand.azurewebsites.net"
+        "--base-url",
+        required=True,
+        help="API base URL, e.g. https://qgp-staging-plantexpand.azurewebsites.net",
     )
     parser.add_argument("--email", required=True, help="E2E user email")
     parser.add_argument("--password", required=True, help="E2E user password")
