@@ -170,19 +170,69 @@ def _extract_description(root: ET.Element) -> str | None:
 
 
 def _category_from_filename(source_filename: str | None) -> str | None:
-    """Infer category from filename (e.g. service_vehicle_* -> 'Vehicle')."""
+    """Infer category from filename using ordered pattern matching.
+
+    Checks more-specific patterns first (e.g. ``thorough`` before ``gen_``)
+    so that ``service_thorough_telescopic_handler`` maps to LOLER rather
+    than Plant & Machinery.
+    """
     if not source_filename:
         return None
     stem = Path(source_filename).stem.lower()
-    if "vehicle" in stem or "lcv" in stem or "sprinter" in stem:
-        return "Vehicle"
-    if "thorough" in stem or "loler" in stem or "exam" in stem:
-        return "LOLER"
-    if "pat" in stem or "inspection" in stem:
-        return "Inspection"
-    if "generator" in stem or "gen_" in stem:
-        return "Plant & Equipment"
-    return "Equipment"
+
+    # --- LOLER & Thorough Exam (must precede generic ``gen_`` check) ---
+    if "thorough" in stem or "loler" in stem or "ibc_exam" in stem:
+        return "LOLER & Thorough Exam"
+
+    # --- Trailers & Attachments (before Vehicles so vehicle_mount matches here) ---
+    _trailer_kw = (
+        "trailer",
+        "cable_drum",
+        "cable_recovery",
+        "ukpn",
+        "hiab",
+        "tail_lift",
+        "tipper",
+        "van_mate",
+        "vehicle_mount",
+        "pto",
+    )
+    if any(kw in stem for kw in _trailer_kw):
+        return "Trailers & Attachments"
+
+    # --- Vehicles ---
+    _vehicle_kw = (
+        "vehicle",
+        "lcv",
+        "sprinter",
+        "pool_car",
+        "cadent_vehicle",
+        "iveco",
+        "ford",
+    )
+    if any(kw in stem for kw in _vehicle_kw):
+        return "Vehicles"
+
+    # --- Generators & Power ---
+    _gen_power_kw = ("generator", "110v", "diesel_fueled", "inverter")
+    if any(kw in stem for kw in _gen_power_kw):
+        return "Generators & Power"
+
+    # --- Plant & Machinery (gen_* patterns that aren't trailers/generators) ---
+    _plant_kw = (
+        "excavator",
+        "dumper",
+        "forklift",
+        "loading_shovel",
+        "gen_plant",
+        "telescopic",
+        "skid_steer",
+    )
+    if any(kw in stem for kw in _plant_kw):
+        return "Plant & Machinery"
+
+    # --- Everything else → Specialist Equipment ---
+    return "Specialist Equipment"
 
 
 def _has_any_questions(root: ET.Element) -> bool:

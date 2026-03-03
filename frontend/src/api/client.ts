@@ -622,6 +622,20 @@ export interface AuditTemplate {
   updated_at?: string
   archived_at?: string | null
   scoring_method?: string
+  question_count?: number
+  section_count?: number
+}
+
+export interface CategoryCount {
+  category: string
+  count: number
+}
+
+export interface BatchImportResult {
+  imported: number
+  skipped: number
+  errors: string[]
+  templates: AuditTemplate[]
 }
 
 export interface AuditTemplateCreate {
@@ -1147,6 +1161,12 @@ export const risksApi = {
 };
 
 export const auditsApi = {
+  // Category summary
+  listCategories: () =>
+    api.get<CategoryCount[]>('/api/v1/audit-templates/categories'),
+  // Batch import
+  batchImportTemplates: (directoryPath: string) =>
+    api.post<BatchImportResult>('/api/v1/xml-import/batch-import', { directory_path: directoryPath }),
   // Templates
   listTemplates: (page = 1, pageSize = 10, filters?: { is_published?: boolean; search?: string; category?: string; audit_type?: string }) => {
     const params = new URLSearchParams({

@@ -7,9 +7,10 @@ to the same AuditService that backs /api/v1/audits/templates.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Query, status
+from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.audit import (
@@ -26,11 +27,39 @@ from src.api.schemas.audit import (
     AuditTemplateResponse,
     AuditTemplateUpdate,
 )
+from src.domain.models.audit import AuditTemplate
 from src.domain.services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/categories")
+async def list_categories(
+    db: DbSession,
+    user: CurrentUser,
+) -> list[dict[str, Any]]:
+    """Return distinct categories with template counts for the current tenant."""
+    query = (
+        select(
+            AuditTemplate.category,
+            func.count(AuditTemplate.id).label("count"),
+        )
+        .where(
+            AuditTemplate.is_active == True,  # noqa: E712
+            AuditTemplate.archived_at.is_(None),
+            or_(
+                AuditTemplate.tenant_id == user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+            AuditTemplate.category.isnot(None),
+        )
+        .group_by(AuditTemplate.category)
+        .order_by(AuditTemplate.category)
+    )
+    rows = (await db.execute(query)).all()
+    return [{"category": row[0], "count": row[1]} for row in rows]
 
 
 @router.get("/", response_model=AuditTemplateListResponse)
@@ -55,8 +84,14 @@ async def list_templates(
         audit_type=audit_type,
         is_published=is_published,
     )
+    items = []
+    for t in result.items:
+        resp = AuditTemplateResponse.model_validate(t)
+        resp.section_count = len(t.sections)
+        resp.question_count = sum(len(s.questions) for s in t.sections)
+        items.append(resp)
     return AuditTemplateListResponse(
-        items=[AuditTemplateResponse.model_validate(t) for t in result.items],
+        items=items,
         total=result.total,
         page=result.page,
         page_size=result.page_size,

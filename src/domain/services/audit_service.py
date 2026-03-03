@@ -328,13 +328,17 @@ class AuditService:
         audit_type: str | None = None,
         is_published: bool | None = None,
     ) -> PaginatedResult:
-        query = select(AuditTemplate).where(
-            AuditTemplate.is_active == True,  # noqa: E712
-            AuditTemplate.archived_at.is_(None),
-            or_(
-                AuditTemplate.tenant_id == tenant_id,
-                AuditTemplate.tenant_id.is_(None),
-            ),
+        query = (
+            select(AuditTemplate)
+            .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
+            .where(
+                AuditTemplate.is_active == True,  # noqa: E712
+                AuditTemplate.archived_at.is_(None),
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
+            )
         )
         if search:
             pattern = f"%{search}%"

@@ -289,6 +289,8 @@ class AuditTemplateResponse(AuditTemplateBase):
     created_by_id: Optional[int]
     created_at: datetime
     updated_at: datetime
+    question_count: int = 0
+    section_count: int = 0
 
 
 class AuditTemplateDetailResponse(AuditTemplateResponse):
