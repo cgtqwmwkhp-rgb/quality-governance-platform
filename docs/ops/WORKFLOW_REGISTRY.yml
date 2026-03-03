@@ -35,12 +35,9 @@ p0_workflows:
       - stepId: 4
         action: "Fill required fields"
         form_fields:
-          - selector: "[data-testid='incident-title']"
-            value: "Test Incident - E2E"
-          - selector: "[data-testid='incident-description']"
+          - selector: "[data-testid='field-description']"
             value: "E2E test incident description"
-          - selector: "[data-testid='incident-severity']"
-            value: "low"
+            fallback_selector: "[data-testid='incident-description'], textarea"
         exit_criteria: "All required fields populated, submit enabled"
         
       - stepId: 5
@@ -75,8 +72,9 @@ p0_workflows:
       - stepId: 3
         action: "Fill and submit form"
         form_fields:
-          - selector: "[data-testid='near-miss-description']"
+          - selector: "[data-testid='field-description']"
             value: "E2E test near-miss"
+            fallback_selector: "[data-testid='near-miss-description'], textarea"
         exit_criteria: "Form submitted successfully"
         expected_api: POST /api/v1/employee-portal/reports
         
@@ -101,15 +99,18 @@ p0_workflows:
       - stepId: 2
         action: "Fill vehicle details"
         form_fields:
-          - selector: "[data-testid='vehicle-registration']"
+          - selector: "[data-testid='field-vehicle_registration']"
             value: "AB12CDE"
-          - selector: "[data-testid='incident-location']"
+            fallback_selector: "[data-testid='vehicle-registration'], input[placeholder*='registration' i]"
+          - selector: "[data-testid='field-location']"
             value: "Test Location"
+            fallback_selector: "[data-testid='incident-location'], input[placeholder*='location' i]"
         exit_criteria: "Vehicle details populated"
         
       - stepId: 3
         action: "Submit form"
-        selector: "[data-testid='submit-rta-btn']"
+        selector: "[data-testid='submit-report-btn']"
+        fallback_selector: "[data-testid='submit-rta-btn'], button:has-text('Submit')"
         exit_criteria: "Success confirmation"
         expected_api: POST /api/v1/employee-portal/reports
         

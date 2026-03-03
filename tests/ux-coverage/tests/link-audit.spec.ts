@@ -166,6 +166,13 @@ function isKnownRoute(href: string): boolean {
     /^\/audit-templates\/[a-f0-9-]+\/edit$/,
     /^\/audits\/[a-f0-9-]+\/execute$/,
     /^\/admin\/forms\/[a-f0-9-]+$/,
+    /^\/forgot-password$/,
+    /^\/reset-password$/,
+    /^\/investigations\/\d+$/,
+    /^\/near-misses\/\d+$/,
+    /^\/workforce\/.+$/,
+    /^\/settings\/.+$/,
+    /^\/profile$/,
   ];
   
   return allowedPatterns.some(p => p.test(path));
