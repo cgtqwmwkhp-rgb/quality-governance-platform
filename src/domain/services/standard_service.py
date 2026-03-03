@@ -62,7 +62,9 @@ class StandardService:
             ValueError: If a standard with the same code already exists.
         """
         data = standard_data.model_dump()
-        result = await self.db.execute(select(Standard).where(Standard.code == data.get("code")))
+        result = await self.db.execute(
+            select(Standard).where(Standard.code == data.get("code"))
+        )
         if result.scalar_one_or_none():
             raise ValueError("DUPLICATE_ENTITY")
 
@@ -88,7 +90,9 @@ class StandardService:
             raise LookupError(f"Standard with ID {standard_id} not found")
         return standard
 
-    async def update_standard(self, standard_id: int, standard_data: BaseModel) -> Standard:
+    async def update_standard(
+        self, standard_id: int, standard_data: BaseModel
+    ) -> Standard:
         """Update a standard.
 
         Raises:
@@ -127,10 +131,14 @@ class StandardService:
                 "setup_required": True,
             }
 
-        implemented_count = sum(1 for c in controls if c.implementation_status == "implemented")
+        implemented_count = sum(
+            1 for c in controls if c.implementation_status == "implemented"
+        )
         partial_count = sum(1 for c in controls if c.implementation_status == "partial")
         not_implemented_count = total_controls - implemented_count - partial_count
-        compliance_percentage = round((implemented_count + 0.5 * partial_count) / total_controls * 100)
+        compliance_percentage = round(
+            (implemented_count + 0.5 * partial_count) / total_controls * 100
+        )
 
         return {
             "standard_id": standard_id,
@@ -226,7 +234,9 @@ class StandardService:
         await self.db.commit()
 
         result = await self.db.execute(
-            select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause.id)
+            select(Clause)
+            .options(selectinload(Clause.controls))
+            .where(Clause.id == clause.id)
         )
         return result.scalar_one()
 
@@ -237,7 +247,9 @@ class StandardService:
             LookupError: If the clause is not found.
         """
         result = await self.db.execute(
-            select(Clause).options(selectinload(Clause.controls)).where(Clause.id == clause_id)
+            select(Clause)
+            .options(selectinload(Clause.controls))
+            .where(Clause.id == clause_id)
         )
         clause = result.scalar_one_or_none()
         if not clause:
@@ -303,7 +315,9 @@ class StandardService:
 
     async def _get_standard_or_raise(self, standard_id: int) -> Standard:
         """Fetch a standard by ID or raise LookupError."""
-        result = await self.db.execute(select(Standard).where(Standard.id == standard_id))
+        result = await self.db.execute(
+            select(Standard).where(Standard.id == standard_id)
+        )
         standard = result.scalar_one_or_none()
         if not standard:
             raise LookupError(f"Standard with ID {standard_id} not found")

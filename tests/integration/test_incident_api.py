@@ -6,7 +6,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
+from src.domain.models.incident import (
+    Incident,
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentType,
+)
 
 
 @pytest.mark.asyncio
@@ -31,7 +36,9 @@ async def test_create_incident(client: AsyncClient, auth_headers: dict, test_ses
 
 
 @pytest.mark.asyncio
-async def test_get_incident_by_id(client: AsyncClient, auth_headers: dict, test_session):
+async def test_get_incident_by_id(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test getting an incident by ID."""
     # Create incident directly in DB
     incident = Incident(
@@ -45,13 +52,17 @@ async def test_get_incident_by_id(client: AsyncClient, auth_headers: dict, test_
     await test_session.commit()
     await test_session.refresh(incident)
 
-    response = await client.get(f"/api/v1/incidents/{incident.id}", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/incidents/{incident.id}", headers=auth_headers
+    )
     assert response.status_code == 200
     assert response.json()["title"] == "Get Test Incident"
 
 
 @pytest.mark.asyncio
-async def test_list_incidents_deterministic_ordering(client: AsyncClient, auth_headers: dict, test_session):
+async def test_list_incidents_deterministic_ordering(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test that incidents are returned in deterministic order (reported_date DESC, id ASC)."""
     now = datetime.now(timezone.utc)
 
@@ -82,7 +93,9 @@ async def test_list_incidents_deterministic_ordering(client: AsyncClient, auth_h
 
 
 @pytest.mark.asyncio
-async def test_update_incident_status(client: AsyncClient, auth_headers: dict, test_session):
+async def test_update_incident_status(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test updating incident status via PATCH and checks audit log."""
     incident = Incident(
         title="Status Update Test",
@@ -97,13 +110,17 @@ async def test_update_incident_status(client: AsyncClient, auth_headers: dict, t
     await test_session.refresh(incident)
 
     update_data = {"status": IncidentStatus.CLOSED}
-    response = await client.patch(f"/api/v1/incidents/{incident.id}", json=update_data, headers=auth_headers)
+    response = await client.patch(
+        f"/api/v1/incidents/{incident.id}", json=update_data, headers=auth_headers
+    )
     assert response.status_code == 200
     assert response.json()["status"] == IncidentStatus.CLOSED
 
 
 @pytest.mark.asyncio
-async def test_list_incidents_pagination(client: AsyncClient, auth_headers: dict, test_session):
+async def test_list_incidents_pagination(
+    client: AsyncClient, auth_headers: dict, test_session
+):
     """Test pagination behavior."""
     now = datetime.now(timezone.utc)
     # Create 5 incidents
@@ -119,14 +136,18 @@ async def test_list_incidents_pagination(client: AsyncClient, auth_headers: dict
     await test_session.commit()
 
     # Get page 1, size 2
-    response = await client.get("/api/v1/incidents/?page=1&page_size=2", headers=auth_headers)
+    response = await client.get(
+        "/api/v1/incidents/?page=1&page_size=2", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert len(data["items"]) == 2
     assert data["total"] >= 5
 
     # Get page 2, size 2
-    response2 = await client.get("/api/v1/incidents/?page=2&page_size=2", headers=auth_headers)
+    response2 = await client.get(
+        "/api/v1/incidents/?page=2&page_size=2", headers=auth_headers
+    )
     assert response2.status_code == 200
     data2 = response2.json()
     assert len(data2["items"]) == 2
@@ -154,7 +175,9 @@ async def test_delete_incident(client: AsyncClient, auth_headers: dict, test_ses
     await test_session.refresh(incident)
     incident_id = incident.id
 
-    response = await client.delete(f"/api/v1/incidents/{incident_id}", headers=auth_headers)
+    response = await client.delete(
+        f"/api/v1/incidents/{incident_id}", headers=auth_headers
+    )
     assert response.status_code == 204
 
     # Check if incident is deleted from DB
@@ -162,5 +185,7 @@ async def test_delete_incident(client: AsyncClient, auth_headers: dict, test_ses
     assert deleted_incident is None
 
     # Test deleting non-existent incident
-    response = await client.delete(f"/api/v1/incidents/{incident_id}", headers=auth_headers)
+    response = await client.delete(
+        f"/api/v1/incidents/{incident_id}", headers=auth_headers
+    )
     assert response.status_code == 404

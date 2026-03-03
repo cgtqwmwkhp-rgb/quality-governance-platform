@@ -44,7 +44,12 @@ from src.domain.models.audit import (
     TemplateLifecycleStatus,
     TemplateVersion,
 )
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
+from src.domain.models.base import (
+    AuditTrailMixin,
+    ReferenceNumberMixin,
+    SoftDeleteMixin,
+    TimestampMixin,
+)
 from src.domain.models.complaint import Complaint, ComplaintAction
 
 # Digital Signatures (Tier 2)
@@ -95,7 +100,14 @@ from src.domain.models.evidence_asset import (
 )
 
 # Form Configuration (Admin Form Builder)
-from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
+from src.domain.models.form_config import (
+    Contract,
+    FormField,
+    FormStep,
+    FormTemplate,
+    LookupOption,
+    SystemSetting,
+)
 
 # IMS Unification (Tier 1)
 from src.domain.models.ims_unification import (

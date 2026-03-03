@@ -52,7 +52,11 @@ class UserService:
         is_active: Optional[bool] = None,
     ):
         """List users with pagination and filters."""
-        query = select(User).options(selectinload(User.roles)).where(User.tenant_id == tenant_id)
+        query = (
+            select(User)
+            .options(selectinload(User.roles))
+            .where(User.tenant_id == tenant_id)
+        )
 
         if search:
             search_filter = f"%{search}%"
@@ -88,7 +92,9 @@ class UserService:
         Raises:
             ValueError: If the email already exists within the tenant.
         """
-        result = await self.db.execute(select(User).where(User.email == email, User.tenant_id == tenant_id))
+        result = await self.db.execute(
+            select(User).where(User.email == email, User.tenant_id == tenant_id)
+        )
         if result.scalar_one_or_none():
             raise ValueError("A user with this email already exists")
 
@@ -122,7 +128,9 @@ class UserService:
             LookupError: If the user is not found.
         """
         result = await self.db.execute(
-            select(User).options(selectinload(User.roles)).where(User.id == user_id, User.tenant_id == tenant_id)
+            select(User)
+            .options(selectinload(User.roles))
+            .where(User.id == user_id, User.tenant_id == tenant_id)
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -141,7 +149,9 @@ class UserService:
             LookupError: If the user is not found.
         """
         result = await self.db.execute(
-            select(User).options(selectinload(User.roles)).where(User.id == user_id, User.tenant_id == tenant_id)
+            select(User)
+            .options(selectinload(User.roles))
+            .where(User.id == user_id, User.tenant_id == tenant_id)
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -162,7 +172,9 @@ class UserService:
 
         return user
 
-    async def delete_user(self, user_id: int, tenant_id: int | None, current_user_id: int) -> None:
+    async def delete_user(
+        self, user_id: int, tenant_id: int | None, current_user_id: int
+    ) -> None:
         """Soft-delete a user by deactivating them.
 
         Raises:

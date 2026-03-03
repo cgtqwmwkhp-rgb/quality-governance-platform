@@ -3,8 +3,18 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.api.routes.audits import create_run, create_template, get_template, publish_template, update_template
-from src.api.schemas.audit import AuditRunCreate, AuditTemplateCreate, AuditTemplateUpdate
+from src.api.routes.audits import (
+    create_run,
+    create_template,
+    get_template,
+    publish_template,
+    update_template,
+)
+from src.api.schemas.audit import (
+    AuditRunCreate,
+    AuditTemplateCreate,
+    AuditTemplateUpdate,
+)
 from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditTemplate
 from src.domain.models.user import User
 
@@ -13,7 +23,9 @@ from src.domain.models.user import User
 async def isolated_db_session():
     """Create an isolated async SQLite session with only required tables."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    session_factory = async_sessionmaker(
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
     async with engine.begin() as conn:
         await conn.run_sync(User.__table__.create)
@@ -59,7 +71,9 @@ async def test_published_template_update_increments_version_and_unpublishes(
         current_user=test_user,
     )
     # Required before publish
-    section = AuditSection(template_id=template.id, title="General", sort_order=0, weight=1.0)
+    section = AuditSection(
+        template_id=template.id, title="General", sort_order=0, weight=1.0
+    )
     isolated_db_session.add(section)
     await isolated_db_session.flush()
     isolated_db_session.add(
@@ -73,7 +87,9 @@ async def test_published_template_update_increments_version_and_unpublishes(
         )
     )
     await isolated_db_session.commit()
-    published = await publish_template(template.id, db=isolated_db_session, current_user=test_user)
+    published = await publish_template(
+        template.id, db=isolated_db_session, current_user=test_user
+    )
     assert published.is_published is True
     assert published.version == 1
 
@@ -104,7 +120,13 @@ async def test_run_captures_template_version_snapshot(
     )
 
     # Add one section/question so template can be published.
-    section = AuditSection(template_id=template.id, title="Section A", description="Checks", sort_order=0, weight=1.0)
+    section = AuditSection(
+        template_id=template.id,
+        title="Section A",
+        description="Checks",
+        sort_order=0,
+        weight=1.0,
+    )
     isolated_db_session.add(section)
     await isolated_db_session.flush()
     isolated_db_session.add(
@@ -119,7 +141,9 @@ async def test_run_captures_template_version_snapshot(
     )
     await isolated_db_session.commit()
 
-    published = await publish_template(template.id, db=isolated_db_session, current_user=test_user)
+    published = await publish_template(
+        template.id, db=isolated_db_session, current_user=test_user
+    )
     assert published.version == 1
 
     run = await create_run(
@@ -170,10 +194,15 @@ async def test_template_detail_decodes_html_entities_for_questions_and_options(
     )
     await isolated_db_session.commit()
 
-    detail = await get_template(template.id, db=isolated_db_session, current_user=test_user)
+    detail = await get_template(
+        template.id, db=isolated_db_session, current_user=test_user
+    )
 
     assert detail.name == "Welfare & Safety"
     assert detail.category == "Health & Safety"
     assert detail.sections[0].title == "Area & Access"
-    assert detail.sections[0].questions[0].question_text == "Are welfare areas clean & tidy?"
+    assert (
+        detail.sections[0].questions[0].question_text
+        == "Are welfare areas clean & tidy?"
+    )
     assert detail.sections[0].questions[0].options[0].label == "Yes & compliant"

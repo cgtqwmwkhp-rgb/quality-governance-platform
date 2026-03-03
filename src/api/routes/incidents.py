@@ -9,7 +9,12 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
+from src.api.schemas.incident import (
+    IncidentCreate,
+    IncidentListResponse,
+    IncidentResponse,
+    IncidentUpdate,
+)
 from src.domain.models.incident import Incident
 from src.domain.services.audit_service import record_audit_event
 
@@ -43,7 +48,9 @@ async def create_incident(
 
         reference_number = incident_data.reference_number
         # Check for duplicate reference number
-        existing = await db.execute(select(Incident).where(Incident.reference_number == reference_number))
+        existing = await db.execute(
+            select(Incident).where(Incident.reference_number == reference_number)
+        )
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -144,7 +151,9 @@ async def list_incidents(
     if reporter_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
-            current_user.has_permission("incident:view_all") if hasattr(current_user, "has_permission") else False
+            current_user.has_permission("incident:view_all")
+            if hasattr(current_user, "has_permission")
+            else False
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
@@ -167,7 +176,8 @@ async def list_incidents(
             description="Incident list accessed with email filter",
             payload={
                 "filter_type": "reporter_email",
-                "is_own_email": user_email and reporter_email.lower() == user_email.lower(),
+                "is_own_email": user_email
+                and reporter_email.lower() == user_email.lower(),
                 "has_view_all_permission": has_view_all,
                 "is_superuser": is_superuser,
             },
@@ -197,7 +207,9 @@ async def list_incidents(
         # Get paginated results with deterministic ordering
         offset = (page - 1) * page_size
         result = await db.execute(
-            query.order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
+            query.order_by(Incident.reported_date.desc(), Incident.id.asc())
+            .limit(page_size)
+            .offset(offset)
         )
         incidents = result.scalars().all()
 
@@ -275,7 +287,8 @@ async def list_incident_investigations(
         select(sa_func.count())
         .select_from(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
+            InvestigationRun.assigned_entity_type
+            == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
         )
     )
@@ -289,7 +302,8 @@ async def list_incident_investigations(
     query = (
         select(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
+            InvestigationRun.assigned_entity_type
+            == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -300,7 +314,9 @@ async def list_incident_investigations(
     investigations = result.scalars().all()
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        "items": [
+            InvestigationRunResponse.model_validate(inv) for inv in investigations
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -384,7 +400,10 @@ async def delete_incident(
         entity_id=str(incident.id),
         action="delete",
         description=f"Incident {incident.reference_number} deleted",
-        payload={"incident_id": incident_id, "reference_number": incident.reference_number},
+        payload={
+            "incident_id": incident_id,
+            "reference_number": incident.reference_number,
+        },
         user_id=current_user.id,
         request_id=request_id,
     )

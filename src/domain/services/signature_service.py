@@ -64,7 +64,9 @@ class SignatureService:
     ) -> SignatureRequest:
         """Create a new signature request."""
         # Generate reference number
-        reference = f"SIG-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
+        reference = (
+            f"SIG-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
+        )
 
         # Calculate document hash if content provided
         document_hash = None
@@ -124,11 +126,19 @@ class SignatureService:
 
     def get_request(self, request_id: int) -> Optional[SignatureRequest]:
         """Get a signature request by ID."""
-        return self.db.query(SignatureRequest).filter(SignatureRequest.id == request_id).first()
+        return (
+            self.db.query(SignatureRequest)
+            .filter(SignatureRequest.id == request_id)
+            .first()
+        )
 
     def get_request_by_reference(self, reference: str) -> Optional[SignatureRequest]:
         """Get a signature request by reference number."""
-        return self.db.query(SignatureRequest).filter(SignatureRequest.reference_number == reference).first()
+        return (
+            self.db.query(SignatureRequest)
+            .filter(SignatureRequest.reference_number == reference)
+            .first()
+        )
 
     def send_request(self, request_id: int) -> SignatureRequest:
         """Send a signature request to signers."""
@@ -577,7 +587,9 @@ class SignatureService:
                     continue
 
             # Get pending signers
-            pending_signers = [s for s in request.signers if s.status in ["pending", "viewed"]]
+            pending_signers = [
+                s for s in request.signers if s.status in ["pending", "viewed"]
+            ]
 
             if pending_signers:
                 # In production, send actual emails

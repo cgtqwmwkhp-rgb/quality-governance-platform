@@ -11,7 +11,9 @@ def _openapi() -> dict:
 
 def _schema_name_for_path(path: str, method: str, status_code: str = "200") -> str:
     operation = _openapi()["paths"][path][method]
-    return operation["responses"][status_code]["content"]["application/json"]["schema"]["$ref"].split("/")[-1]
+    return operation["responses"][status_code]["content"]["application/json"]["schema"][
+        "$ref"
+    ].split("/")[-1]
 
 
 def test_templates_endpoint_supports_is_published_filter():
@@ -32,7 +34,9 @@ def test_template_response_exposes_version_and_publish_state():
     """Frozen contract: template response must include version + publication flag."""
     schema_name = _schema_name_for_path("/api/v1/audits/templates", "get", "200")
     list_schema = _openapi()["components"]["schemas"][schema_name]
-    item_schema_name = list_schema["properties"]["items"]["items"]["$ref"].split("/")[-1]
+    item_schema_name = list_schema["properties"]["items"]["items"]["$ref"].split("/")[
+        -1
+    ]
     item_schema = _openapi()["components"]["schemas"][item_schema_name]
     assert "version" in item_schema["properties"]
     assert "is_published" in item_schema["properties"]

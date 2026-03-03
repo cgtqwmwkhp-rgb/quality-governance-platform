@@ -68,7 +68,9 @@ class NotificationPreference(Base):
     mentions = Column(Boolean, default=True)
 
     # Frequency
-    digest_frequency = Column(String(20), default="immediate")  # immediate, daily, weekly
+    digest_frequency = Column(
+        String(20), default="immediate"
+    )  # immediate, daily, weekly
     quiet_hours_start = Column(String(5), nullable=True)  # "22:00"
     quiet_hours_end = Column(String(5), nullable=True)  # "07:00"
 
@@ -133,12 +135,16 @@ class SendNotificationRequest(BaseModel):
     """Request to send a notification."""
 
     user_ids: Optional[list[int]] = None  # Specific users, or None for all
-    notification_type: str = Field(..., description="Type: incident, action, audit, compliance, mention")
+    notification_type: str = Field(
+        ..., description="Type: incident, action, audit, compliance, mention"
+    )
     title: str = Field(..., min_length=1, max_length=255)
     body: str = Field(..., min_length=1)
     url: Optional[str] = None
     data: Optional[dict] = None
-    channels: list[str] = Field(default=["push"], description="Channels: push, email, sms")
+    channels: list[str] = Field(
+        default=["push"], description="Channels: push, email, sms"
+    )
 
 
 # ============================================================================
@@ -153,7 +159,9 @@ class PushNotificationService:
         self.db = db
         self.vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
         self.vapid_public_key = os.getenv("VAPID_PUBLIC_KEY")
-        self.vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_EMAIL', 'admin@plantexpand.com')}"}
+        self.vapid_claims = {
+            "sub": f"mailto:{os.getenv('VAPID_EMAIL', 'admin@plantexpand.com')}"
+        }
 
     async def subscribe(
         self,
@@ -164,7 +172,9 @@ class PushNotificationService:
         """Register a new push subscription."""
         # Check if subscription already exists
         existing = (
-            self.db.query(PushSubscription).filter(PushSubscription.endpoint == subscription_data.endpoint).first()
+            self.db.query(PushSubscription)
+            .filter(PushSubscription.endpoint == subscription_data.endpoint)
+            .first()
         )
 
         if existing:
@@ -189,7 +199,11 @@ class PushNotificationService:
 
     async def unsubscribe(self, endpoint: str) -> bool:
         """Unsubscribe from push notifications."""
-        subscription = self.db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
+        subscription = (
+            self.db.query(PushSubscription)
+            .filter(PushSubscription.endpoint == endpoint)
+            .first()
+        )
 
         if subscription:
             subscription.is_active = False
@@ -210,7 +224,11 @@ class PushNotificationService:
         results = []
 
         # Check user preferences
-        prefs = self.db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
+        prefs = (
+            self.db.query(NotificationPreference)
+            .filter(NotificationPreference.user_id == user_id)
+            .first()
+        )
 
         if prefs and not prefs.push_enabled:
             return [{"status": "skipped", "reason": "Push notifications disabled"}]
@@ -299,7 +317,11 @@ class PushNotificationService:
 
         except ImportError:
             # pywebpush not installed - simulate success in dev
-            return {"success": True, "endpoint": subscription.endpoint, "simulated": True}
+            return {
+                "success": True,
+                "endpoint": subscription.endpoint,
+                "simulated": True,
+            }
 
         except Exception as e:
             error_msg = str(e)
@@ -390,7 +412,11 @@ async def get_notification_preferences(
     current_user: CurrentUser = Depends(),
 ) -> dict[str, Any]:
     """Get notification preferences for current user."""
-    prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
+    prefs = (
+        db.query(NotificationPreference)
+        .filter(NotificationPreference.user_id == current_user.id)
+        .first()
+    )
 
     if not prefs:
         # Return defaults
@@ -428,7 +454,11 @@ async def update_notification_preferences(
     current_user: CurrentUser = Depends(),
 ) -> dict[str, Any]:
     """Update notification preferences."""
-    prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
+    prefs = (
+        db.query(NotificationPreference)
+        .filter(NotificationPreference.user_id == current_user.id)
+        .first()
+    )
 
     if not prefs:
         prefs = NotificationPreference(user_id=current_user.id)

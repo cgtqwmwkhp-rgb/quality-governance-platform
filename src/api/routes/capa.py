@@ -6,7 +6,12 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field, field_validator
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
+from src.api.dependencies import (
+    CurrentSuperuser,
+    CurrentUser,
+    DbSession,
+    require_permission,
+)
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.validators import sanitize_field
@@ -127,7 +132,9 @@ async def create_capa_action(
 ):
     _span = tracer.start_span("create_capa") if tracer else None
     if _span:
-        _span.set_attribute("tenant_id", str(getattr(current_user, "tenant_id", 0) or 0))
+        _span.set_attribute(
+            "tenant_id", str(getattr(current_user, "tenant_id", 0) or 0)
+        )
 
     service = CAPAService(db)
     action = await service.create_capa_action(
@@ -172,7 +179,9 @@ async def update_capa_action(
 ):
     service = CAPAService(db)
     try:
-        return await service.update_capa_action(capa_id, data, tenant_id=current_user.tenant_id)
+        return await service.update_capa_action(
+            capa_id, data, tenant_id=current_user.tenant_id
+        )
     except LookupError:
         raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
 

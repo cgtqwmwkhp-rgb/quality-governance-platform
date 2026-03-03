@@ -4,12 +4,19 @@ import contextvars
 import re
 from typing import Optional
 
-trace_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("trace_id", default=None)
-span_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("span_id", default=None)
-trace_flags_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("trace_flags", default=None)
+trace_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "trace_id", default=None
+)
+span_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "span_id", default=None
+)
+trace_flags_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "trace_flags", default=None
+)
 
 _TRACEPARENT_RE = re.compile(
-    r"^(?P<version>[0-9a-f]{2})-(?P<trace_id>[0-9a-f]{32})" r"-(?P<span_id>[0-9a-f]{16})-(?P<flags>[0-9a-f]{2})$"
+    r"^(?P<version>[0-9a-f]{2})-(?P<trace_id>[0-9a-f]{32})"
+    r"-(?P<span_id>[0-9a-f]{16})-(?P<flags>[0-9a-f]{2})$"
 )
 
 

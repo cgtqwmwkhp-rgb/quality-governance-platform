@@ -17,7 +17,10 @@ from src.api.schemas.auth import (
     TokenResponse,
 )
 from src.api.schemas.user import UserResponse
-from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
+from src.core.azure_auth import (
+    extract_user_info_from_azure_token,
+    validate_azure_id_token,
+)
 from src.core.security import (
     create_access_token,
     create_password_reset_token,
@@ -249,7 +252,9 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
     If this returns 200, but /actions returns 401, check endpoint-specific auth.
     """
     # Get user roles
-    role_names = [role.name for role in current_user.roles] if current_user.roles else []
+    role_names = (
+        [role.name for role in current_user.roles] if current_user.roles else []
+    )
 
     return WhoAmIResponse(
         authenticated=True,
@@ -311,7 +316,9 @@ async def request_password_reset(
         # Use environment variable for frontend URL, fallback to common values
         import os
 
-        frontend_url = os.getenv("FRONTEND_URL", "https://app-qgp-prod.azurestaticapps.net")
+        frontend_url = os.getenv(
+            "FRONTEND_URL", "https://app-qgp-prod.azurestaticapps.net"
+        )
         reset_url = f"{frontend_url}/reset-password?token={reset_token}"
 
         # Send password reset email
@@ -329,7 +336,9 @@ async def request_password_reset(
             logger.error(f"Failed to send password reset email: {e}")
 
     # Always return success to prevent email enumeration
-    return {"message": "If an account with that email exists, a password reset link has been sent."}
+    return {
+        "message": "If an account with that email exists, a password reset link has been sent."
+    }
 
 
 @router.post("/password-reset/confirm")

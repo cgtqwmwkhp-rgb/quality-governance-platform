@@ -24,7 +24,9 @@ class ManagementStandard(str, Enum):
     ISO_9001 = "ISO 9001:2015"  # Quality Management System
     ISO_14001 = "ISO 14001:2015"  # Environmental Management System
     ISO_45001 = "ISO 45001:2018"  # OH&S Management System
-    ISO_27001 = "ISO 27001:2022"  # Information Security Management System (FULLY INTEGRATED)
+    ISO_27001 = (
+        "ISO 27001:2022"  # Information Security Management System (FULLY INTEGRATED)
+    )
     # Additional standards for future expansion
     ISO_22301 = "ISO 22301:2019"  # Business Continuity
     ISO_50001 = "ISO 50001:2018"  # Energy
@@ -86,8 +88,12 @@ class CrossStandardMapping(Base):
     mapped_clause: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Mapping details
-    mapping_type: Mapped[str] = mapped_column(String(50), default="equivalent")  # equivalent, partial, related
-    mapping_strength: Mapped[int] = mapped_column(Integer, default=100)  # 0-100 percentage
+    mapping_type: Mapped[str] = mapped_column(
+        String(50), default="equivalent"
+    )  # equivalent, partial, related
+    mapping_strength: Mapped[int] = mapped_column(
+        Integer, default=100
+    )  # 0-100 percentage
     mapping_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Annex SL common element
@@ -113,28 +119,42 @@ class IMSControl(Base):
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Standards satisfied
-    standards_addressed: Mapped[list] = mapped_column(JSON, nullable=False)  # List of standards
-    clauses_addressed: Mapped[list] = mapped_column(JSON, nullable=False)  # List of clause numbers
+    standards_addressed: Mapped[list] = mapped_column(
+        JSON, nullable=False
+    )  # List of standards
+    clauses_addressed: Mapped[list] = mapped_column(
+        JSON, nullable=False
+    )  # List of clause numbers
 
     # Implementation
-    implementation_status: Mapped[str] = mapped_column(String(50), default="implemented")
+    implementation_status: Mapped[str] = mapped_column(
+        String(50), default="implemented"
+    )
     implementation_evidence: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Effectiveness
     effectiveness_rating: Mapped[str] = mapped_column(String(50), default="effective")
-    last_effectiveness_review: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_effectiveness_review: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Ownership
-    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Documentation
-    procedure_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    procedure_reference: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
     document_links: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class IMSControlRequirementMapping(Base):
@@ -144,11 +164,17 @@ class IMSControlRequirementMapping(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    control_id: Mapped[int] = mapped_column(ForeignKey("ims_controls.id", ondelete="CASCADE"), nullable=False)
-    requirement_id: Mapped[int] = mapped_column(ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False)
+    control_id: Mapped[int] = mapped_column(
+        ForeignKey("ims_controls.id", ondelete="CASCADE"), nullable=False
+    )
+    requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Coverage
-    coverage_level: Mapped[str] = mapped_column(String(50), default="full")  # full, partial
+    coverage_level: Mapped[str] = mapped_column(
+        String(50), default="full"
+    )  # full, partial
     coverage_percentage: Mapped[int] = mapped_column(Integer, default=100)
     coverage_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -174,17 +200,23 @@ class UnifiedAuditPlan(Base):
     departments_in_scope: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Audit type
-    audit_type: Mapped[str] = mapped_column(String(50), nullable=False)  # internal, surveillance, certification
+    audit_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # internal, surveillance, certification
     audit_cycle: Mapped[str] = mapped_column(String(50), default="annual")
 
     # Schedule
     planned_start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     planned_end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    actual_start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    actual_start_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     actual_end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Team
-    lead_auditor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    lead_auditor_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     lead_auditor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     audit_team: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
@@ -205,7 +237,9 @@ class UnifiedAuditPlan(Base):
     recommendation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class ManagementReviewInput(Base):
@@ -216,7 +250,9 @@ class ManagementReviewInput(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Review identification
-    review_id: Mapped[int] = mapped_column(ForeignKey("management_reviews.id", ondelete="CASCADE"), nullable=False)
+    review_id: Mapped[int] = mapped_column(
+        ForeignKey("management_reviews.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Input category (aligned with ISO Annex SL)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -232,7 +268,9 @@ class ManagementReviewInput(Base):
     # Metrics/Data
     current_value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     previous_value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    trend: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # improving, stable, declining
+    trend: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # improving, stable, declining
     target_value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Analysis
@@ -240,13 +278,17 @@ class ManagementReviewInput(Base):
     risk_implications: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Supporting data
-    data_period_start: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    data_period_start: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     data_period_end: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     data_source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     attachments: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Owner
-    prepared_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    prepared_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -272,7 +314,9 @@ class ManagementReview(Base):
     meeting_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     meeting_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     attendees: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    chair_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    chair_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Status
     status: Mapped[str] = mapped_column(String(50), default="planned")
@@ -285,21 +329,29 @@ class ManagementReview(Base):
     # Overall assessment
     ims_effectiveness: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     policy_adequacy: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    objectives_achievement: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    objectives_achievement: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
     resource_adequacy: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Improvement
-    continual_improvement_opportunities: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    continual_improvement_opportunities: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
     changes_needed: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Minutes/Report
     minutes_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Next review
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class IMSProcessMap(Base):
@@ -312,7 +364,9 @@ class IMSProcessMap(Base):
     # Process identification
     process_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     process_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    process_type: Mapped[str] = mapped_column(String(50), nullable=False)  # core, support, management
+    process_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # core, support, management
 
     # Description
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -330,8 +384,12 @@ class IMSProcessMap(Base):
     relevant_clauses: Mapped[list] = mapped_column(JSON, nullable=False)
 
     # Ownership
-    process_owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    process_owner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    process_owner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    process_owner_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
 
     # Performance
     kpis: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -352,7 +410,9 @@ class IMSProcessMap(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class IMSObjective(Base):
@@ -368,7 +428,9 @@ class IMSObjective(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Classification
-    objective_type: Mapped[str] = mapped_column(String(50), nullable=False)  # quality, environmental, ohs, combined
+    objective_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # quality, environmental, ohs, combined
     standards_addressed: Mapped[list] = mapped_column(JSON, nullable=False)
     policy_alignment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -383,10 +445,14 @@ class IMSObjective(Base):
 
     # Progress
     progress_percentage: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(50), default="on_track")  # on_track, at_risk, behind, achieved
+    status: Mapped[str] = mapped_column(
+        String(50), default="on_track"
+    )  # on_track, at_risk, behind, achieved
 
     # Responsibility
-    responsible_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    responsible_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     responsible_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
@@ -398,10 +464,16 @@ class IMSObjective(Base):
     action_plan: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Review
-    last_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    next_review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

@@ -226,7 +226,9 @@ async def get_notification_preferences(current_user: CurrentUser):
 
 
 @router.put("/preferences")
-async def update_notification_preferences(preferences: NotificationPreferencesUpdate, current_user: CurrentUser):
+async def update_notification_preferences(
+    preferences: NotificationPreferencesUpdate, current_user: CurrentUser
+):
     """Update notification preferences for the current user."""
     # In production, update database
     return {"success": True, "preferences": preferences.dict(exclude_unset=True)}
@@ -278,7 +280,11 @@ async def search_users_for_mention(
 
     # Filter by query
     q_lower = q.lower()
-    filtered = [u for u in mock_users if q_lower in u.display_name.lower() or q_lower in u.email.lower()]
+    filtered = [
+        u
+        for u in mock_users
+        if q_lower in u.display_name.lower() or q_lower in u.email.lower()
+    ]
 
     return filtered[:limit]
 

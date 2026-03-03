@@ -10,7 +10,13 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.capa import (
+    CAPAAction,
+    CAPAPriority,
+    CAPASource,
+    CAPAStatus,
+    CAPAType,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
@@ -40,7 +46,11 @@ class CAPAAutoService:
         created = []
         for fq in failed_questions:
             criticality = fq.get("criticality", "good_to_have")
-            priority = CAPAPriority.CRITICAL if criticality == "essential" else CAPAPriority.HIGH
+            priority = (
+                CAPAPriority.CRITICAL
+                if criticality == "essential"
+                else CAPAPriority.HIGH
+            )
 
             due_days = 7 if criticality == "essential" else 30
             due_date = datetime.now(timezone.utc) + timedelta(days=due_days)
@@ -140,7 +150,11 @@ class CAPAAutoService:
         created = []
         for defect in defects:
             cat = defect.get("category", "cat_c")
-            priority_map = {"cat_a": CAPAPriority.CRITICAL, "cat_b": CAPAPriority.HIGH, "cat_c": CAPAPriority.MEDIUM}
+            priority_map = {
+                "cat_a": CAPAPriority.CRITICAL,
+                "cat_b": CAPAPriority.HIGH,
+                "cat_c": CAPAPriority.MEDIUM,
+            }
             due_map = {"cat_a": 0, "cat_b": 14, "cat_c": 30}
 
             ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
@@ -161,7 +175,8 @@ class CAPAAutoService:
                 source_reference=str(examination_id),
                 priority=priority_map.get(cat, CAPAPriority.MEDIUM),
                 created_by_id=created_by_id,
-                due_date=datetime.now(timezone.utc) + timedelta(days=due_map.get(cat, 30)),
+                due_date=datetime.now(timezone.utc)
+                + timedelta(days=due_map.get(cat, 30)),
                 tenant_id=tenant_id,
             )
             db.add(capa)

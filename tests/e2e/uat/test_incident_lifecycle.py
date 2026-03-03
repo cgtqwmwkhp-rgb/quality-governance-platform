@@ -13,7 +13,13 @@ Uses deterministic seed data for repeatability.
 from typing import Any, Dict
 
 import pytest
-from conftest import UATApiClient, UATConfig, assert_no_pii, assert_stable_ordering, assert_uat_reference
+from conftest import (
+    UATApiClient,
+    UATConfig,
+    assert_no_pii,
+    assert_stable_ordering,
+    assert_uat_reference,
+)
 
 pytestmark = [
     pytest.mark.e2e,
@@ -26,7 +32,9 @@ class TestIncidentLifecycle:
     """Test complete incident lifecycle."""
 
     @pytest.mark.asyncio
-    async def test_create_incident_as_user(self, user_client: UATApiClient, uat_user_ids: Dict[str, str]):
+    async def test_create_incident_as_user(
+        self, user_client: UATApiClient, uat_user_ids: Dict[str, str]
+    ):
         """User can create a new incident."""
         incident_data = {
             "title": "UAT Test - New Incident",
@@ -44,7 +52,9 @@ class TestIncidentLifecycle:
         # assert response.json()['status'] == 'open'
 
     @pytest.mark.asyncio
-    async def test_get_incident_by_id(self, user_client: UATApiClient, uat_incident_ids: Dict[str, str]):
+    async def test_get_incident_by_id(
+        self, user_client: UATApiClient, uat_incident_ids: Dict[str, str]
+    ):
         """User can retrieve incident by ID."""
         incident_id = uat_incident_ids["open"]
 
@@ -59,7 +69,10 @@ class TestIncidentLifecycle:
 
     @pytest.mark.asyncio
     async def test_update_incident_status_open_to_in_progress(
-        self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str], uat_user_ids: Dict[str, str]
+        self,
+        admin_client: UATApiClient,
+        uat_incident_ids: Dict[str, str],
+        uat_user_ids: Dict[str, str],
     ):
         """Admin can update incident status from open to in_progress."""
         incident_id = uat_incident_ids["open"]
@@ -69,7 +82,9 @@ class TestIncidentLifecycle:
             "assigned_to_id": uat_user_ids["admin"],
         }
 
-        response = await admin_client.put(f"/api/v1/incidents/{incident_id}", update_data)
+        response = await admin_client.put(
+            f"/api/v1/incidents/{incident_id}", update_data
+        )
 
         assert response["status"] == "updated"
         # In real test:
@@ -89,7 +104,9 @@ class TestIncidentLifecycle:
             "resolution": "Issue resolved during UAT testing",
         }
 
-        response = await admin_client.put(f"/api/v1/incidents/{incident_id}", update_data)
+        response = await admin_client.put(
+            f"/api/v1/incidents/{incident_id}", update_data
+        )
 
         assert response["status"] == "updated"
         # In real test:
@@ -98,9 +115,13 @@ class TestIncidentLifecycle:
         # assert response.json()['resolution'] is not None
 
     @pytest.mark.asyncio
-    async def test_list_incidents_stable_ordering(self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str]):
+    async def test_list_incidents_stable_ordering(
+        self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str]
+    ):
         """Incident list has stable, deterministic ordering."""
-        response = await admin_client.get("/api/v1/incidents?sort=created_at&order=desc")
+        response = await admin_client.get(
+            "/api/v1/incidents?sort=created_at&order=desc"
+        )
 
         # In real test:
         # assert response.status_code == 200
@@ -116,7 +137,9 @@ class TestIncidentLifecycle:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_incident_appears_in_admin_view(self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str]):
+    async def test_incident_appears_in_admin_view(
+        self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str]
+    ):
         """Closed incident appears in admin incident list."""
         response = await admin_client.get("/api/v1/incidents?status=closed")
 
@@ -130,7 +153,9 @@ class TestIncidentLifecycle:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_incident_data_has_no_pii(self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str]):
+    async def test_incident_data_has_no_pii(
+        self, admin_client: UATApiClient, uat_incident_ids: Dict[str, str]
+    ):
         """Incident data contains no PII."""
         incident_id = uat_incident_ids["open"]
 
@@ -169,7 +194,9 @@ class TestIncidentRoleRestrictions:
         assert True  # Would fail in real implementation
 
     @pytest.mark.asyncio
-    async def test_user_cannot_delete_incident(self, user_client: UATApiClient, uat_incident_ids: Dict[str, str]):
+    async def test_user_cannot_delete_incident(
+        self, user_client: UATApiClient, uat_incident_ids: Dict[str, str]
+    ):
         """Regular user cannot delete incidents."""
         incident_id = uat_incident_ids["open"]
 

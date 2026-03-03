@@ -52,23 +52,31 @@ class TestPortalRoutingMappingContract:
     def test_each_type_has_unique_table(self):
         """Verify each portal type maps to a unique database table."""
         tables = [v["table"] for v in self.CANONICAL_MAPPING.values()]
-        assert len(tables) == len(set(tables)), f"Duplicate table mappings detected: {tables}"
+        assert len(tables) == len(
+            set(tables)
+        ), f"Duplicate table mappings detected: {tables}"
 
     def test_each_type_has_unique_ref_prefix(self):
         """Verify each portal type has a unique reference number prefix."""
         prefixes = [v["ref_prefix"] for v in self.CANONICAL_MAPPING.values()]
-        assert len(prefixes) == len(set(prefixes)), f"Duplicate reference prefixes detected: {prefixes}"
+        assert len(prefixes) == len(
+            set(prefixes)
+        ), f"Duplicate reference prefixes detected: {prefixes}"
 
     def test_each_type_has_unique_source_form_id(self):
         """Verify each portal type has a unique source_form_id for audit."""
         form_ids = [v["source_form_id"] for v in self.CANONICAL_MAPPING.values()]
-        assert len(form_ids) == len(set(form_ids)), f"Duplicate source_form_ids detected: {form_ids}"
+        assert len(form_ids) == len(
+            set(form_ids)
+        ), f"Duplicate source_form_ids detected: {form_ids}"
 
     def test_ref_prefix_format(self):
         """Verify reference prefixes follow expected format."""
         for portal_type, mapping in self.CANONICAL_MAPPING.items():
             prefix = mapping["ref_prefix"]
-            assert prefix.endswith("-"), f"{portal_type}: ref_prefix should end with '-', got: {prefix}"
+            assert prefix.endswith(
+                "-"
+            ), f"{portal_type}: ref_prefix should end with '-', got: {prefix}"
             assert (
                 prefix.isupper() or prefix[:-1].isupper()
             ), f"{portal_type}: ref_prefix should be uppercase, got: {prefix}"
@@ -112,7 +120,9 @@ class TestPortalAPIRoutingContract:
     )
     def test_invalid_report_types_documented(self, invalid_type):
         """Document types that should be rejected."""
-        assert invalid_type not in self.VALID_REPORT_TYPES, f"'{invalid_type}' should not be in valid types"
+        assert (
+            invalid_type not in self.VALID_REPORT_TYPES
+        ), f"'{invalid_type}' should not be in valid types"
 
 
 class TestDashboardIsolationContract:
@@ -154,7 +164,9 @@ class TestDashboardIsolationContract:
         for endpoint, contract in self.DASHBOARD_API_CONTRACT.items():
             all_returns.extend(contract["returns_types"])
 
-        assert len(all_returns) == len(set(all_returns)), f"Overlapping types in dashboard contracts: {all_returns}"
+        assert len(all_returns) == len(
+            set(all_returns)
+        ), f"Overlapping types in dashboard contracts: {all_returns}"
 
     def test_each_type_excluded_from_other_dashboards(self):
         """Verify each type is explicitly excluded from non-owning dashboards."""
@@ -172,7 +184,9 @@ class TestDashboardIsolationContract:
             # Returns + excludes should cover all types
             all_types = {"incident", "rta", "near_miss", "complaint"}
             covered = returns | excludes
-            assert covered == all_types, f"{endpoint}: not all types covered by returns+excludes: {all_types - covered}"
+            assert (
+                covered == all_types
+            ), f"{endpoint}: not all types covered by returns+excludes: {all_types - covered}"
 
 
 class TestReferencePrefixAssignment:
@@ -200,7 +214,12 @@ class TestReferencePrefixAssignment:
 
         pattern = r"^[A-Z]{2,4}-\d{4}-\d{4}$"
 
-        example_refs = ["INC-2026-0001", "RTA-2026-0123", "NM-2026-9999", "COMP-2026-0042"]
+        example_refs = [
+            "INC-2026-0001",
+            "RTA-2026-0123",
+            "NM-2026-9999",
+            "COMP-2026-0042",
+        ]
 
         for ref in example_refs:
             assert re.match(pattern, ref), f"Reference format invalid: {ref}"

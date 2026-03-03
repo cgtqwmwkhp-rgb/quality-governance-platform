@@ -13,7 +13,11 @@ from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
-from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
+from src.api.exceptions import (
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
@@ -30,9 +34,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
@@ -121,7 +129,9 @@ def configure_logging():
     uvicorn_access_logger.addHandler(json_handler)
     uvicorn_access_logger.setLevel(settings.log_level)
 
-    logger.info("Logging configured successfully", extra={"app_name": settings.app_name})
+    logger.info(
+        "Logging configured successfully", extra={"app_name": settings.app_name}
+    )
 
 
 def create_application() -> FastAPI:
@@ -137,29 +147,83 @@ def create_application() -> FastAPI:
         redirect_slashes=False,  # Disabled to prevent HTTP redirects behind HTTPS proxy
         lifespan=lifespan,
         openapi_tags=[
-            {"name": "Authentication", "description": "Authentication, authorization, and session management"},
+            {
+                "name": "Authentication",
+                "description": "Authentication, authorization, and session management",
+            },
             {"name": "Users", "description": "User account management and profiles"},
-            {"name": "Incidents", "description": "Incident reporting, tracking, and resolution"},
-            {"name": "Risk Register", "description": "Risk assessment, controls, and mitigation"},
-            {"name": "Audits & Inspections", "description": "Audit templates, runs, findings, and scoring"},
+            {
+                "name": "Incidents",
+                "description": "Incident reporting, tracking, and resolution",
+            },
+            {
+                "name": "Risk Register",
+                "description": "Risk assessment, controls, and mitigation",
+            },
+            {
+                "name": "Audits & Inspections",
+                "description": "Audit templates, runs, findings, and scoring",
+            },
             {
                 "name": "ISO Compliance & Evidence",
                 "description": "ISO clause mapping, evidence links, and gap analysis",
             },
-            {"name": "Standards Library", "description": "ISO standards, clauses, and controls catalogue"},
-            {"name": "Document Library", "description": "Document upload, AI analysis, and semantic search"},
-            {"name": "Policy Library", "description": "Policy lifecycle management and acknowledgments"},
-            {"name": "Actions", "description": "Corrective and preventive action tracking"},
-            {"name": "CAPA", "description": "Corrective and Preventive Action management"},
-            {"name": "Complaints", "description": "Customer complaint handling and resolution"},
-            {"name": "Investigations", "description": "Root cause investigations and templates"},
-            {"name": "Near Misses", "description": "Near-miss event reporting and tracking"},
-            {"name": "Road Traffic Collisions", "description": "RTA incident management"},
-            {"name": "Notifications", "description": "In-app and push notification management"},
-            {"name": "Analytics & Reporting", "description": "Dashboards, KPIs, and trend analysis"},
-            {"name": "Workflow Automation", "description": "Automated workflows and approval chains"},
-            {"name": "AI Intelligence", "description": "AI-powered insights and recommendations"},
-            {"name": "AI Copilot", "description": "Interactive AI assistant for compliance guidance"},
+            {
+                "name": "Standards Library",
+                "description": "ISO standards, clauses, and controls catalogue",
+            },
+            {
+                "name": "Document Library",
+                "description": "Document upload, AI analysis, and semantic search",
+            },
+            {
+                "name": "Policy Library",
+                "description": "Policy lifecycle management and acknowledgments",
+            },
+            {
+                "name": "Actions",
+                "description": "Corrective and preventive action tracking",
+            },
+            {
+                "name": "CAPA",
+                "description": "Corrective and Preventive Action management",
+            },
+            {
+                "name": "Complaints",
+                "description": "Customer complaint handling and resolution",
+            },
+            {
+                "name": "Investigations",
+                "description": "Root cause investigations and templates",
+            },
+            {
+                "name": "Near Misses",
+                "description": "Near-miss event reporting and tracking",
+            },
+            {
+                "name": "Road Traffic Collisions",
+                "description": "RTA incident management",
+            },
+            {
+                "name": "Notifications",
+                "description": "In-app and push notification management",
+            },
+            {
+                "name": "Analytics & Reporting",
+                "description": "Dashboards, KPIs, and trend analysis",
+            },
+            {
+                "name": "Workflow Automation",
+                "description": "Automated workflows and approval chains",
+            },
+            {
+                "name": "AI Intelligence",
+                "description": "AI-powered insights and recommendations",
+            },
+            {
+                "name": "AI Copilot",
+                "description": "Interactive AI assistant for compliance guidance",
+            },
             {"name": "Health", "description": "Health, liveness, and readiness probes"},
             {"name": "Meta", "description": "Build version and deployment metadata"},
         ],
@@ -345,7 +409,9 @@ async def health_check(request: Request) -> dict:
     """Health check endpoint."""
     # Get request_id from request.state (reliable under AsyncClient)
     request_id = getattr(request.state, "request_id", "N/A")
-    logging.getLogger(__name__).info("Health check requested", extra={"request_id": request_id})
+    logging.getLogger(__name__).info(
+        "Health check requested", extra={"request_id": request_id}
+    )
     return {
         "status": "healthy",
         "app_name": settings.app_name,
@@ -412,7 +478,10 @@ async def readiness_check(request: Request):
             "request_id": request_id,
         }
     except Exception as e:
-        logger.error(f"Readiness check failed: {e}", extra={"request_id": request_id, "error": str(e)})
+        logger.error(
+            f"Readiness check failed: {e}",
+            extra={"request_id": request_id, "error": str(e)},
+        )
         return JSONResponse(
             status_code=503,
             content={

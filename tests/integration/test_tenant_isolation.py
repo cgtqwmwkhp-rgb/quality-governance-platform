@@ -15,7 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.core.security import get_password_hash
-from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
+from src.domain.models.incident import (
+    Incident,
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentType,
+)
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
 
@@ -128,7 +133,9 @@ async def test_user_cannot_see_other_tenant_data(
         "role": "admin",
         "is_superuser": False,
     }
-    token_a = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    token_a = jwt.encode(
+        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+    )
     headers_a = {"Authorization": f"Bearer {token_a}"}
 
     # Query incidents as user A - should only see tenant A's incidents
@@ -144,7 +151,9 @@ async def test_user_cannot_see_other_tenant_data(
     incident_ids = [inc["id"] for inc in data.get("items", [])]
     assert incident_a1.id in incident_ids, "Tenant A should see incident_a1"
     assert incident_a2.id in incident_ids, "Tenant A should see incident_a2"
-    assert incident_b1.id not in incident_ids, "Tenant A should NOT see tenant B's incidents"
+    assert (
+        incident_b1.id not in incident_ids
+    ), "Tenant A should NOT see tenant B's incidents"
 
 
 @pytest.mark.asyncio
@@ -225,7 +234,9 @@ async def test_cross_tenant_access_denied(
         "role": "admin",
         "is_superuser": False,
     }
-    token_a = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    token_a = jwt.encode(
+        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+    )
     headers_a = {"Authorization": f"Bearer {token_a}"}
 
     # Attempt to access tenant B's incident with tenant A's token

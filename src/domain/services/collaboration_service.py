@@ -195,7 +195,11 @@ class CollaborationService:
 
     def leave_session(self, session_id: str) -> Optional[CollaborativeSession]:
         """Leave a collaborative editing session."""
-        session = self.db.query(CollaborativeSession).filter(CollaborativeSession.session_id == session_id).first()
+        session = (
+            self.db.query(CollaborativeSession)
+            .filter(CollaborativeSession.session_id == session_id)
+            .first()
+        )
 
         if session:
             session.is_active = False
@@ -215,7 +219,11 @@ class CollaborationService:
         is_typing: bool = False,
     ) -> CollaborativeSession:
         """Update cursor/selection position for a session."""
-        session = self.db.query(CollaborativeSession).filter(CollaborativeSession.session_id == session_id).first()
+        session = (
+            self.db.query(CollaborativeSession)
+            .filter(CollaborativeSession.session_id == session_id)
+            .first()
+        )
 
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -248,7 +256,9 @@ class CollaborationService:
 
     def cleanup_stale_sessions(self) -> int:
         """Clean up stale sessions. Returns count of cleaned sessions."""
-        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS * 2)
+        timeout = datetime.utcnow() - timedelta(
+            seconds=self.SESSION_TIMEOUT_SECONDS * 2
+        )
 
         stale = (
             self.db.query(CollaborativeSession)
@@ -309,7 +319,9 @@ class CollaborationService:
         limit: int = 100,
     ) -> list[CollaborativeChange]:
         """Get changes for a document, optionally since a version."""
-        query = self.db.query(CollaborativeChange).filter(CollaborativeChange.document_id == document_id)
+        query = self.db.query(CollaborativeChange).filter(
+            CollaborativeChange.document_id == document_id
+        )
 
         if since_version is not None:
             query = query.filter(CollaborativeChange.version > since_version)

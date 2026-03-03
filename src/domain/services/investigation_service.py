@@ -22,7 +22,11 @@ from src.domain.exceptions import (
     StateTransitionError,
     ValidationError,
 )
-from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
+from src.domain.models.evidence_asset import (
+    EvidenceAsset,
+    EvidenceSourceModule,
+    EvidenceVisibility,
+)
 from src.domain.models.investigation import (
     AssignedEntityType,
     CustomerPackAudience,
@@ -133,7 +137,10 @@ def _resolve_entity_model(entity_type_value: str) -> Any:
         raise ValidationError(
             f"Invalid entity type: {entity_type_value}",
             code="INVALID_ENTITY_TYPE",
-            details={"entity_type": entity_type_value, "valid_types": list(ENTITY_MODEL_MAP.keys())},
+            details={
+                "entity_type": entity_type_value,
+                "valid_types": list(ENTITY_MODEL_MAP.keys()),
+            },
         )
     module_path, class_name = model_path.split(":")
     module = __import__(module_path, fromlist=[class_name])
@@ -155,7 +162,9 @@ async def _paginate_query(
     items = list(result.scalars().all())
 
     pages = (total + page_size - 1) // page_size if total > 0 else 0
-    return PaginatedResult(items=items, total=total, page=page, page_size=page_size, pages=pages)
+    return PaginatedResult(
+        items=items, total=total, page=page, page_size=page_size, pages=pages
+    )
 
 
 def _level_to_str(level: object) -> Optional[str]:
@@ -174,7 +183,9 @@ def _level_to_str(level: object) -> Optional[str]:
 
 class InvestigationStatusManager:
     @staticmethod
-    def apply_status_timestamps(investigation: InvestigationRun, new_status: str) -> None:
+    def apply_status_timestamps(
+        investigation: InvestigationRun, new_status: str
+    ) -> None:
         if new_status == "in_progress" and not investigation.started_at:
             investigation.started_at = datetime.now(timezone.utc)
         elif new_status == "completed" and not investigation.completed_at:
@@ -352,7 +363,9 @@ class InvestigationService:
             map_field("reference_number", "section_1_details", "reference_number")
             map_field("event_date", "section_1_details", "incident_date")
             map_field("location", "section_1_details", "location")
-            map_field("location_coordinates", "section_1_details", "location_coordinates")
+            map_field(
+                "location_coordinates", "section_1_details", "location_coordinates"
+            )
             map_field("description", "section_1_details", "description")
             map_field("persons_involved", "section_1_details", "persons_involved")
             map_field("witness_names", "section_1_details", "witnesses")
@@ -381,7 +394,9 @@ class InvestigationService:
             map_field("postcode", "addendum_rta", "postcode")
             map_field("weather_conditions", "addendum_rta", "weather_conditions")
             map_field("road_conditions", "addendum_rta", "road_conditions")
-            map_field("company_vehicle_registration", "addendum_rta", "company_vehicle_reg")
+            map_field(
+                "company_vehicle_registration", "addendum_rta", "company_vehicle_reg"
+            )
             map_field("driver_injured", "addendum_rta", "driver_injured")
             map_field("driver_injury_details", "addendum_rta", "driver_injury_details")
             map_field("police_attended", "addendum_rta", "police_attended")
@@ -394,8 +409,12 @@ class InvestigationService:
 
             severity = getattr(record, "severity", None)
             if severity:
-                severity_value = severity.value if hasattr(severity, "value") else str(severity)
-                level = cls.RTA_SEVERITY_MAP.get(severity_value, InvestigationLevel.MEDIUM)
+                severity_value = (
+                    severity.value if hasattr(severity, "value") else str(severity)
+                )
+                level = cls.RTA_SEVERITY_MAP.get(
+                    severity_value, InvestigationLevel.MEDIUM
+                )
 
         elif source_type == AssignedEntityType.COMPLAINT:
             map_field("reference_number", "section_1_details", "reference_number")
@@ -406,15 +425,25 @@ class InvestigationService:
 
             data["sections"]["addendum_complaint"] = {}
             map_field("complaint_type", "addendum_complaint", "complaint_type")
-            map_field("complainant_company", "addendum_complaint", "complainant_company")
+            map_field(
+                "complainant_company", "addendum_complaint", "complainant_company"
+            )
             map_field("related_reference", "addendum_complaint", "related_reference")
-            map_field("customer_satisfied", "addendum_complaint", "customer_satisfaction")
-            map_field("compensation_offered", "addendum_complaint", "compensation_offered")
+            map_field(
+                "customer_satisfied", "addendum_complaint", "customer_satisfaction"
+            )
+            map_field(
+                "compensation_offered", "addendum_complaint", "compensation_offered"
+            )
 
             priority = getattr(record, "priority", None)
             if priority:
-                priority_value = priority.value if hasattr(priority, "value") else str(priority)
-                level = cls.COMPLAINT_PRIORITY_MAP.get(priority_value, InvestigationLevel.MEDIUM)
+                priority_value = (
+                    priority.value if hasattr(priority, "value") else str(priority)
+                )
+                level = cls.COMPLAINT_PRIORITY_MAP.get(
+                    priority_value, InvestigationLevel.MEDIUM
+                )
 
         elif source_type == AssignedEntityType.REPORTING_INCIDENT:
             map_field("reference_number", "section_1_details", "reference_number")
@@ -424,7 +453,9 @@ class InvestigationService:
 
             severity = getattr(record, "severity", None)
             if severity:
-                severity_value = severity.value if hasattr(severity, "value") else str(severity)
+                severity_value = (
+                    severity.value if hasattr(severity, "value") else str(severity)
+                )
                 if severity_value in ["critical", "high"]:
                     level = InvestigationLevel.HIGH
                 elif severity_value == "medium":
@@ -526,7 +557,9 @@ class InvestigationService:
             "sections": {},
         }
 
-        source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
+        source_data: Dict[str, Any] = (
+            investigation.data if isinstance(investigation.data, dict) else {}
+        )
         for section_id, section_data in source_data.get("sections", {}).items():
             content["sections"][section_id] = {}  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
 
@@ -595,10 +628,14 @@ class InvestigationService:
                 {
                     "asset_id": asset.id,
                     "title": asset.title,
-                    "asset_type": (asset.asset_type.value if asset.asset_type else "other"),
+                    "asset_type": (
+                        asset.asset_type.value if asset.asset_type else "other"
+                    ),
                     "included": can_include,
                     "exclusion_reason": exclusion_reason,
-                    "visibility": (asset.visibility.value if asset.visibility else "unknown"),
+                    "visibility": (
+                        asset.visibility.value if asset.visibility else "unknown"
+                    ),
                     "contains_pii": asset.contains_pii,
                     "redaction_required": asset.redaction_required,
                 }
@@ -711,9 +748,13 @@ class InvestigationService:
 
         template = await get_or_create_default_template(db, template_id, user_id)
 
-        await cls.validate_assigned_entity(db, assigned_entity_type, assigned_entity_id, tenant_id)
+        await cls.validate_assigned_entity(
+            db, assigned_entity_type, assigned_entity_id, tenant_id
+        )
 
-        reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
+        reference_number = await ReferenceNumberService.generate(
+            db, "investigation", InvestigationRun
+        )
 
         investigation = InvestigationRun(
             template_id=template_id,
@@ -763,12 +804,17 @@ class InvestigationService:
         if entity_type is not None:
             try:
                 entity_type_enum = AssignedEntityType(entity_type)
-                query = query.where(InvestigationRun.assigned_entity_type == entity_type_enum)
+                query = query.where(
+                    InvestigationRun.assigned_entity_type == entity_type_enum
+                )
             except ValueError:
                 raise ValidationError(
                     f"Invalid entity type: {entity_type}",
                     code="INVALID_ENTITY_TYPE",
-                    details={"entity_type": entity_type, "valid_types": [e.value for e in AssignedEntityType]},
+                    details={
+                        "entity_type": entity_type,
+                        "valid_types": [e.value for e in AssignedEntityType],
+                    },
                 )
 
         if entity_id is not None:
@@ -782,10 +828,15 @@ class InvestigationService:
                 raise ValidationError(
                     f"Invalid status: {status_filter}",
                     code="INVALID_STATUS",
-                    details={"status": status_filter, "valid_statuses": [s.value for s in InvestigationStatus]},
+                    details={
+                        "status": status_filter,
+                        "valid_statuses": [s.value for s in InvestigationStatus],
+                    },
                 )
 
-        query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
+        query = query.order_by(
+            InvestigationRun.created_at.desc(), InvestigationRun.id.asc()
+        )
         return await _paginate_query(db, query, page, page_size)
 
     @classmethod
@@ -821,13 +872,17 @@ class InvestigationService:
             if hasattr(model_class, "title"):
                 search_conditions.append(model_class.title.ilike(search_term))
             if hasattr(model_class, "reference_number"):
-                search_conditions.append(model_class.reference_number.ilike(search_term))
+                search_conditions.append(
+                    model_class.reference_number.ilike(search_term)
+                )
             if hasattr(model_class, "description"):
                 search_conditions.append(model_class.description.ilike(search_term))
             if search_conditions:
                 base_query = base_query.where(or_(*search_conditions))
 
-        base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
+        base_query = base_query.order_by(
+            model_class.created_at.desc(), model_class.id.asc()
+        )
         paginated = await _paginate_query(db, base_query, page, page_size)
         records = list(paginated.items)
 
@@ -837,7 +892,9 @@ class InvestigationService:
             InvestigationRun.assigned_entity_id.in_(source_ids),
         )
         inv_result = await db.execute(inv_query)
-        existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}
+        existing_investigations = {
+            inv.assigned_entity_id: inv for inv in inv_result.scalars().all()
+        }
 
         items: List[SourceRecordItemResult] = []
         for record in records:
@@ -845,7 +902,11 @@ class InvestigationService:
             record_status = getattr(record, "status", "unknown")
             if hasattr(record_status, "value"):
                 record_status = record_status.value
-            created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
+            created_date = (
+                record.created_at.strftime("%Y-%m-%d")
+                if record.created_at
+                else "Unknown"
+            )
             display_label = f"{ref_num} — {record_status.upper()} — {created_date}"
             existing_inv = existing_investigations.get(record.id)
 
@@ -857,7 +918,9 @@ class InvestigationService:
                     status=record_status,
                     created_at=record.created_at,
                     investigation_id=int(existing_inv.id) if existing_inv else None,
-                    investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
+                    investigation_reference=(
+                        str(existing_inv.reference_number) if existing_inv else None
+                    ),
                 )
             )
 
@@ -889,7 +952,9 @@ class InvestigationService:
         new_status = updates.pop("status", None)
         if new_status is not None:
             investigation.status = InvestigationStatus(new_status)
-            InvestigationStatusManager.apply_status_timestamps(investigation, new_status)
+            InvestigationStatusManager.apply_status_timestamps(
+                investigation, new_status
+            )
 
         for key, value in updates.items():
             setattr(investigation, key, value)
@@ -924,7 +989,10 @@ class InvestigationService:
             raise ConflictError(
                 "Investigation was modified by another user",
                 code="VERSION_CONFLICT",
-                details={"expected_version": version, "current_version": investigation.version},
+                details={
+                    "expected_version": version,
+                    "current_version": investigation.version,
+                },
             )
 
         old_data = investigation.data
@@ -1026,7 +1094,10 @@ class InvestigationService:
         """
         investigation = await cls.get_investigation(db, investigation_id, tenant_id)
 
-        if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
+        if investigation.status not in (
+            InvestigationStatus.UNDER_REVIEW,
+            InvestigationStatus.IN_PROGRESS,
+        ):
             raise StateTransitionError(
                 f"Cannot approve investigation in status {investigation.status.value}",
             )
@@ -1121,9 +1192,13 @@ class InvestigationService:
             )
 
         source_snapshot = cls.create_source_snapshot(record, source_type_enum)
-        data, mapping_log, level = cls.map_source_to_investigation(record, source_type_enum)
+        data, mapping_log, level = cls.map_source_to_investigation(
+            record, source_type_enum
+        )
         template = await get_or_create_default_template(db, template_id, user_id)
-        reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
+        reference_number = await ReferenceNumberService.generate(
+            db, "investigation", InvestigationRun
+        )
 
         investigation = InvestigationRun(
             template_id=template.id,
@@ -1159,7 +1234,9 @@ class InvestigationService:
             },
         )
 
-        evidence_assets = await cls.get_source_evidence_assets(db, source_type_enum, source_id)
+        evidence_assets = await cls.get_source_evidence_assets(
+            db, source_type_enum, source_id
+        )
         for asset in evidence_assets:
             asset.linked_investigation_id = investigation.id
 
@@ -1406,10 +1483,18 @@ class InvestigationService:
                 if field_value is None:
                     reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
                     missing_fields.append(field_path)
-                elif field_type == "text" and isinstance(field_value, str) and not field_value.strip():
+                elif (
+                    field_type == "text"
+                    and isinstance(field_value, str)
+                    and not field_value.strip()
+                ):
                     reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
                     missing_fields.append(field_path)
-                elif field_type == "array" and isinstance(field_value, list) and len(field_value) == 0:
+                elif (
+                    field_type == "array"
+                    and isinstance(field_value, list)
+                    and len(field_value) == 0
+                ):
                     reason_codes.append(ClosureReasonCode.INVALID_ARRAY_EMPTY)
                     missing_fields.append(field_path)
 
@@ -1426,7 +1511,9 @@ class InvestigationService:
         )
 
     @staticmethod
-    def user_can_access_investigation(user: Any, investigation: InvestigationRun) -> bool:
+    def user_can_access_investigation(
+        user: Any, investigation: InvestigationRun
+    ) -> bool:
         """Check if user has access to an investigation.
 
         Access is granted if the user is a superuser, has global view
@@ -1461,7 +1548,9 @@ async def get_or_create_default_template(
     Investigation Report Template with standard RCA sections. For any
     other template_id, raises HTTP 404.
     """
-    result = await db.execute(select(InvestigationTemplate).where(InvestigationTemplate.id == template_id))
+    result = await db.execute(
+        select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
+    )
     template = result.scalar_one_or_none()
 
     if template:

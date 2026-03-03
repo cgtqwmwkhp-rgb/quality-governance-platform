@@ -42,7 +42,9 @@ class WebEnrichRequest(BaseModel):
 class ConvertToAssessmentRequest(BaseModel):
     """Request body containing template data to convert."""
 
-    template: dict = Field(..., description="Compliance template to convert to assessment")
+    template: dict = Field(
+        ..., description="Compliance template to convert to assessment"
+    )
 
 
 class AssessorGuidanceRequest(BaseModel):
@@ -71,7 +73,9 @@ class GapAnalysisRequest(BaseModel):
 async def from_document(
     db: DbSession,
     user: CurrentUser,
-    file: UploadFile = File(..., description="PDF or image document to convert to template"),
+    file: UploadFile = File(
+        ..., description="PDF or image document to convert to template"
+    ),
     asset_type: Optional[str] = None,
 ) -> dict:
     """Upload a document and generate a structured audit template via Gemini.

@@ -107,7 +107,9 @@ class TestGateEnforcement(TestCase):
 
     def setUp(self):
         """Create a temporary baseline file for each test."""
-        self.temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        self.temp_file = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        )
         self.baseline_data = {
             "baseline_pass_count": 100,
             "baseline_skip_count": 10,
@@ -131,28 +133,36 @@ class TestGateEnforcement(TestCase):
         """Gate MUST fail when current passed < min acceptable."""
         # Min acceptable = 100 * 90% = 90
         # Current passed = 80 < 90 -> MUST FAIL
-        result = validate_gate(current_passed=80, current_skipped=10, baseline_path=self.baseline_path)
+        result = validate_gate(
+            current_passed=80, current_skipped=10, baseline_path=self.baseline_path
+        )
         self.assertFalse(result)
 
     def test_gate_passes_at_threshold(self):
         """Gate MUST pass when current passed == min acceptable."""
         # Min acceptable = 100 * 90% = 90
         # Current passed = 90 == 90 -> MUST PASS
-        result = validate_gate(current_passed=90, current_skipped=10, baseline_path=self.baseline_path)
+        result = validate_gate(
+            current_passed=90, current_skipped=10, baseline_path=self.baseline_path
+        )
         self.assertTrue(result)
 
     def test_gate_passes_above_threshold(self):
         """Gate MUST pass when current passed > min acceptable."""
         # Min acceptable = 100 * 90% = 90
         # Current passed = 100 > 90 -> MUST PASS
-        result = validate_gate(current_passed=100, current_skipped=10, baseline_path=self.baseline_path)
+        result = validate_gate(
+            current_passed=100, current_skipped=10, baseline_path=self.baseline_path
+        )
         self.assertTrue(result)
 
     def test_gate_passes_above_baseline(self):
         """Gate MUST pass when current passed > baseline."""
         # Min acceptable = 100 * 90% = 90
         # Current passed = 120 > 100 (baseline) -> MUST PASS
-        result = validate_gate(current_passed=120, current_skipped=5, baseline_path=self.baseline_path)
+        result = validate_gate(
+            current_passed=120, current_skipped=5, baseline_path=self.baseline_path
+        )
         self.assertTrue(result)
 
 
@@ -245,7 +255,9 @@ class TestOverrideHandling(TestCase):
 
             # Without override: 80 < 90 -> FAIL
             # With override: 80 >= 50 -> PASS
-            result = validate_gate(current_passed=80, current_skipped=10, baseline_path=Path(f.name))
+            result = validate_gate(
+                current_passed=80, current_skipped=10, baseline_path=Path(f.name)
+            )
             self.assertTrue(result)
 
             os.unlink(f.name)
@@ -288,7 +300,11 @@ class TestMinAcceptableComputation(TestCase):
         )
 
         override = Override(
-            issue_id="GH-123", owner="test-owner", expiry="2026-12-31", reason="Test", temporary_min_pass=80
+            issue_id="GH-123",
+            owner="test-owner",
+            expiry="2026-12-31",
+            reason="Test",
+            temporary_min_pass=80,
         )
 
         result = compute_min_acceptable(baseline, override)
@@ -304,7 +320,9 @@ class TestNoHardcodedBypass(TestCase):
         thresholds = []
 
         for baseline_value in [50, 100, 150, 200]:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False
+            ) as f:
                 json.dump(
                     {
                         "baseline_pass_count": baseline_value,

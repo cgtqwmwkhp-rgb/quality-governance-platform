@@ -36,7 +36,9 @@ class TestMockGatePatterns:
         violations = scan_file(test_file, tmp_path)
 
         # Should detect setTimeout
-        settimeout_violations = [v for v in violations if v.pattern == "SETTIMEOUT_SIMULATION"]
+        settimeout_violations = [
+            v for v in violations if v.pattern == "SETTIMEOUT_SIMULATION"
+        ]
         assert len(settimeout_violations) == 1
 
     def test_detects_coming_soon(self, tmp_path: Path):
@@ -46,7 +48,9 @@ class TestMockGatePatterns:
 
         violations = scan_file(test_file, tmp_path)
 
-        coming_soon_violations = [v for v in violations if v.pattern == "COMING_SOON_PLACEHOLDER"]
+        coming_soon_violations = [
+            v for v in violations if v.pattern == "COMING_SOON_PLACEHOLDER"
+        ]
         assert len(coming_soon_violations) == 1
 
     def test_detects_mock_lowercase(self, tmp_path: Path):
@@ -62,7 +66,9 @@ class TestMockGatePatterns:
     def test_allows_static_config_annotation(self, tmp_path: Path):
         """Lines with STATIC_UI_CONFIG_OK should be allowed."""
         test_file = tmp_path / "test.tsx"
-        test_file.write_text("// STATIC_UI_CONFIG_OK\n" "const MOCK_CONFIG = { key: 'value' };")
+        test_file.write_text(
+            "// STATIC_UI_CONFIG_OK\n" "const MOCK_CONFIG = { key: 'value' };"
+        )
 
         violations = scan_file(test_file, tmp_path)
 
@@ -129,4 +135,6 @@ class TestMockGateViolationFormat:
 
         assert len(violations) == 1
         assert violations[0].remediation != ""
-        assert "API" in violations[0].remediation or "Replace" in violations[0].remediation
+        assert (
+            "API" in violations[0].remediation or "Replace" in violations[0].remediation
+        )

@@ -90,7 +90,11 @@ async def list_rtas(
     # unless they have admin/view-all permissions
     if reporter_email:
         user_email = getattr(current_user, "email", None)
-        has_view_all = current_user.has_permission("rta:view_all") if hasattr(current_user, "has_permission") else False
+        has_view_all = (
+            current_user.has_permission("rta:view_all")
+            if hasattr(current_user, "has_permission")
+            else False
+        )
         is_superuser = getattr(current_user, "is_superuser", False)
 
         if not has_view_all and not is_superuser:
@@ -112,7 +116,8 @@ async def list_rtas(
             description="RTA list accessed with email filter",
             payload={
                 "filter_type": "reporter_email",
-                "is_own_email": user_email and reporter_email.lower() == user_email.lower(),
+                "is_own_email": user_email
+                and reporter_email.lower() == user_email.lower(),
                 "has_view_all_permission": has_view_all,
                 "is_superuser": is_superuser,
             },
@@ -132,7 +137,9 @@ async def list_rtas(
             query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
 
         # Deterministic ordering: created_at DESC, id ASC
-        query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())
+        query = query.order_by(
+            RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc()
+        )
 
         # Total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -158,7 +165,14 @@ async def list_rtas(
         error_str = str(e).lower()
         logger.error(f"Error listing RTAs: {e}", exc_info=True)
 
-        column_errors = ["reporter_email", "column", "does not exist", "unknown column", "programmingerror", "relation"]
+        column_errors = [
+            "reporter_email",
+            "column",
+            "does not exist",
+            "unknown column",
+            "programmingerror",
+            "relation",
+        ]
         is_column_error = any(err in error_str for err in column_errors)
 
         if is_column_error:
@@ -261,7 +275,11 @@ async def delete_rta(
 # RTA Actions endpoints
 
 
-@router.post("/{rta_id}/actions", response_model=RTAActionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{rta_id}/actions",
+    response_model=RTAActionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,
@@ -477,7 +495,8 @@ async def list_rta_investigations(
         select(func.count())
         .select_from(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            InvestigationRun.assigned_entity_type
+            == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
             InvestigationRun.assigned_entity_id == rta_id,
         )
     )
@@ -491,7 +510,8 @@ async def list_rta_investigations(
     query = (
         select(InvestigationRun)
         .where(
-            InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+            InvestigationRun.assigned_entity_type
+            == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
             InvestigationRun.assigned_entity_id == rta_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -502,7 +522,9 @@ async def list_rta_investigations(
     investigations = result.scalars().all()
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        "items": [
+            InvestigationRunResponse.model_validate(inv) for inv in investigations
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,

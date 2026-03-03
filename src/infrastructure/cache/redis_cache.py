@@ -100,7 +100,9 @@ class InMemoryCache:
         async with self._lock:
             import fnmatch
 
-            keys_to_delete = [k for k in self._cache.keys() if fnmatch.fnmatch(k, pattern)]
+            keys_to_delete = [
+                k for k in self._cache.keys() if fnmatch.fnmatch(k, pattern)
+            ]
             for key in keys_to_delete:
                 del self._cache[key]
             self._stats["deletes"] += len(keys_to_delete)
@@ -258,7 +260,9 @@ class RedisCache:
                 "hits": info.get("keyspace_hits", 0),
                 "misses": info.get("keyspace_misses", 0),
                 "memory_used": memory.get("used_memory_human", "N/A"),
-                "connected_clients": (await redis.info("clients")).get("connected_clients", 0),
+                "connected_clients": (await redis.info("clients")).get(
+                    "connected_clients", 0
+                ),
             }
         except Exception as e:
             print(f"[Cache] Redis stats error: {e}")
@@ -286,7 +290,9 @@ def make_cache_key(*args, **kwargs) -> str:
     key_parts = [str(arg) for arg in args]
     key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
     key_string = ":".join(key_parts)
-    return hashlib.md5(key_string.encode(), usedforsecurity=False).hexdigest()  # nosec B324
+    return hashlib.md5(
+        key_string.encode(), usedforsecurity=False
+    ).hexdigest()  # nosec B324
 
 
 def cached(

@@ -8,7 +8,12 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
+from src.api.schemas.policy import (
+    PolicyCreate,
+    PolicyListResponse,
+    PolicyResponse,
+    PolicyUpdate,
+)
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
 
@@ -43,7 +48,9 @@ async def create_policy(
 
         reference_number = policy_data.reference_number
         # Check for duplicate reference number
-        existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
+        existing = await db.execute(
+            select(Policy).where(Policy.reference_number == reference_number)
+        )
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -141,7 +148,9 @@ async def list_policies(
     offset = (page - 1) * page_size
     result = await db.execute(
         select(Policy)
-        .order_by(Policy.reference_number.desc(), Policy.id.asc())  # Deterministic ordering
+        .order_by(
+            Policy.reference_number.desc(), Policy.id.asc()
+        )  # Deterministic ordering
         .limit(page_size)
         .offset(offset)
     )

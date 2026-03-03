@@ -94,7 +94,11 @@ SCOPE3_CATEGORIES = [
         "name": "Processing of sold products",
         "description": "Processing of intermediate products sold by downstream companies",
     },
-    {"number": 11, "name": "Use of sold products", "description": "End use of goods and services sold"},
+    {
+        "number": 11,
+        "name": "Use of sold products",
+        "description": "End use of goods and services sold",
+    },
     {
         "number": 12,
         "name": "End-of-life treatment of sold products",
@@ -111,13 +115,41 @@ SCOPE3_CATEGORIES = [
 
 # DEFRA 2024 Emission Factors (simplified)
 EMISSION_FACTORS = {
-    "diesel_litres": {"factor": 2.51229, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
-    "petrol_litres": {"factor": 2.16802, "unit": "kgCO2e/litre", "source": "DEFRA 2024"},
-    "natural_gas_kwh": {"factor": 0.18254, "unit": "kgCO2e/kWh", "source": "DEFRA 2024"},
-    "electricity_kwh_uk": {"factor": 0.20705, "unit": "kgCO2e/kWh", "source": "DEFRA 2024 (location)"},
-    "electricity_kwh_market": {"factor": 0.43360, "unit": "kgCO2e/kWh", "source": "DEFRA 2024 (market)"},
-    "waste_general_kg": {"factor": 0.44672, "unit": "kgCO2e/kg", "source": "DEFRA 2024"},
-    "waste_recycled_kg": {"factor": 0.02140, "unit": "kgCO2e/kg", "source": "DEFRA 2024"},
+    "diesel_litres": {
+        "factor": 2.51229,
+        "unit": "kgCO2e/litre",
+        "source": "DEFRA 2024",
+    },
+    "petrol_litres": {
+        "factor": 2.16802,
+        "unit": "kgCO2e/litre",
+        "source": "DEFRA 2024",
+    },
+    "natural_gas_kwh": {
+        "factor": 0.18254,
+        "unit": "kgCO2e/kWh",
+        "source": "DEFRA 2024",
+    },
+    "electricity_kwh_uk": {
+        "factor": 0.20705,
+        "unit": "kgCO2e/kWh",
+        "source": "DEFRA 2024 (location)",
+    },
+    "electricity_kwh_market": {
+        "factor": 0.43360,
+        "unit": "kgCO2e/kWh",
+        "source": "DEFRA 2024 (market)",
+    },
+    "waste_general_kg": {
+        "factor": 0.44672,
+        "unit": "kgCO2e/kg",
+        "source": "DEFRA 2024",
+    },
+    "waste_recycled_kg": {
+        "factor": 0.02140,
+        "unit": "kgCO2e/kg",
+        "source": "DEFRA 2024",
+    },
     "rail_km": {"factor": 0.03549, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
     "flight_short_km": {"factor": 0.24587, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
     "car_average_km": {"factor": 0.17081, "unit": "kgCO2e/km", "source": "DEFRA 2024"},
@@ -216,7 +248,11 @@ async def list_reporting_years(
 ) -> dict[str, Any]:
     """List all carbon reporting years with comparison"""
     try:
-        years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).all()
+        years = (
+            db.query(CarbonReportingYear)
+            .order_by(desc(CarbonReportingYear.year_number))
+            .all()
+        )
     except (ProgrammingError, OperationalError) as e:
         # Table doesn't exist or schema mismatch - log and return setup required
         logger.warning(
@@ -294,7 +330,11 @@ async def create_reporting_year(
         db.add(scope3)
     db.commit()
 
-    return {"id": year.id, "year_label": year.year_label, "message": "Reporting year created"}
+    return {
+        "id": year.id,
+        "year_label": year.year_label,
+        "message": "Reporting year created",
+    }
 
 
 @router.get("/years/{year_id}", response_model=dict)
@@ -303,12 +343,18 @@ async def get_reporting_year(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get detailed reporting year data"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
     # Get emission sources
-    sources = db.query(EmissionSource).filter(EmissionSource.reporting_year_id == year_id).all()
+    sources = (
+        db.query(EmissionSource)
+        .filter(EmissionSource.reporting_year_id == year_id)
+        .all()
+    )
 
     # Calculate scope breakdowns
     scope1_sources = [s for s in sources if s.scope == "scope_1"]
@@ -327,16 +373,24 @@ async def get_reporting_year(
         "emissions": {
             "scope_1": {
                 "total": year.scope_1_total,
-                "sources": [{"name": s.source_name, "co2e": s.co2e_tonnes} for s in scope1_sources],
+                "sources": [
+                    {"name": s.source_name, "co2e": s.co2e_tonnes}
+                    for s in scope1_sources
+                ],
             },
             "scope_2": {
                 "location_based": year.scope_2_location,
                 "market_based": year.scope_2_market,
-                "sources": [{"name": s.source_name, "co2e": s.co2e_tonnes} for s in scope2_sources],
+                "sources": [
+                    {"name": s.source_name, "co2e": s.co2e_tonnes}
+                    for s in scope2_sources
+                ],
             },
             "scope_3": {
                 "total": year.scope_3_total,
-                "categories_measured": len([s for s in scope3_sources if s.co2e_tonnes > 0]),
+                "categories_measured": len(
+                    [s for s in scope3_sources if s.co2e_tonnes > 0]
+                ),
             },
             "total_market_based": year.total_emissions,
             "per_fte": year.emissions_per_fte,
@@ -354,7 +408,9 @@ async def get_reporting_year(
         "certification": {
             "status": year.certification_status,
             "certificate_number": year.certificate_number,
-            "certification_date": year.certification_date.isoformat() if year.certification_date else None,
+            "certification_date": (
+                year.certification_date.isoformat() if year.certification_date else None
+            ),
             "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         },
     }
@@ -370,19 +426,25 @@ async def add_emission_source(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
     # Auto-calculate emissions using DEFRA factors
     ef_key = source_data.activity_type
-    emission_factor = EMISSION_FACTORS.get(ef_key, {"factor": 0, "unit": "", "source": ""})
+    emission_factor = EMISSION_FACTORS.get(
+        ef_key, {"factor": 0, "unit": "", "source": ""}
+    )
 
     co2e_kg = source_data.activity_value * emission_factor["factor"]
     co2e_tonnes = co2e_kg / 1000
 
     # Get data quality score
-    dq_score = DATA_QUALITY_CRITERIA.get(source_data.data_quality_level, {"score": 2})["score"]
+    dq_score = DATA_QUALITY_CRITERIA.get(source_data.data_quality_level, {"score": 2})[
+        "score"
+    ]
 
     source = EmissionSource(
         reporting_year_id=year_id,
@@ -437,7 +499,9 @@ async def list_emission_sources(
                 "activity_value": s.activity_value,
                 "activity_unit": s.activity_unit,
                 "co2e_tonnes": s.co2e_tonnes,
-                "percentage": round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0,
+                "percentage": (
+                    round((s.co2e_tonnes / total * 100), 1) if total > 0 else 0
+                ),
                 "data_quality": s.data_quality_level,
             }
             for s in sources
@@ -486,7 +550,9 @@ async def get_scope3_breakdown(
                 "is_relevant": c.is_relevant,
                 "is_measured": c.is_measured,
                 "total_co2e": c.total_co2e,
-                "percentage": round((c.total_co2e / total * 100), 1) if total > 0 else 0,
+                "percentage": (
+                    round((c.total_co2e / total * 100), 1) if total > 0 else 0
+                ),
                 "data_quality_score": c.data_quality_score,
                 "calculation_method": c.calculation_method,
                 "exclusion_reason": c.exclusion_reason,
@@ -506,7 +572,9 @@ async def list_improvement_actions(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List SMART improvement actions"""
-    query = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == year_id)
+    query = db.query(ImprovementAction).filter(
+        ImprovementAction.reporting_year_id == year_id
+    )
 
     if status:
         query = query.filter(ImprovementAction.status == status)
@@ -516,7 +584,13 @@ async def list_improvement_actions(
     # Summary
     completed = len([a for a in actions if a.status == "completed"])
     in_progress = len([a for a in actions if a.status == "in_progress"])
-    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()])
+    overdue = len(
+        [
+            a
+            for a in actions
+            if a.status != "completed" and a.time_bound < datetime.utcnow()
+        ]
+    )
 
     return {
         "year_id": year_id,
@@ -525,7 +599,9 @@ async def list_improvement_actions(
             "completed": completed,
             "in_progress": in_progress,
             "overdue": overdue,
-            "completion_rate": round((completed / len(actions) * 100), 1) if actions else 0,
+            "completion_rate": (
+                round((completed / len(actions) * 100), 1) if actions else 0
+            ),
         },
         "actions": [
             {
@@ -539,7 +615,8 @@ async def list_improvement_actions(
                 "progress_percent": a.progress_percent,
                 "target_scope": a.target_scope,
                 "expected_reduction_pct": a.expected_reduction_pct,
-                "is_overdue": a.status != "completed" and a.time_bound < datetime.utcnow(),
+                "is_overdue": a.status != "completed"
+                and a.time_bound < datetime.utcnow(),
             }
             for a in actions
         ],
@@ -553,11 +630,17 @@ async def create_improvement_action(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
-    count = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == year_id).count()
+    count = (
+        db.query(ImprovementAction)
+        .filter(ImprovementAction.reporting_year_id == year_id)
+        .count()
+    )
     action_id = f"ACT-{(count + 1):03d}"
 
     action = ImprovementAction(
@@ -570,7 +653,11 @@ async def create_improvement_action(
     db.commit()
     db.refresh(action)
 
-    return {"id": action.id, "action_id": action_id, "message": "Improvement action created"}
+    return {
+        "id": action.id,
+        "action_id": action_id,
+        "message": "Improvement action created",
+    }
 
 
 @router.put("/years/{year_id}/actions/{action_id}", response_model=dict)
@@ -583,7 +670,10 @@ async def update_action_status(
     """Update improvement action status"""
     action = (
         db.query(ImprovementAction)
-        .filter(ImprovementAction.id == action_id, ImprovementAction.reporting_year_id == year_id)
+        .filter(
+            ImprovementAction.id == action_id,
+            ImprovementAction.reporting_year_id == year_id,
+        )
         .first()
     )
 
@@ -608,22 +698,36 @@ async def get_data_quality_assessment(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get data quality assessment with recommendations"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
-    sources = db.query(EmissionSource).filter(EmissionSource.reporting_year_id == year_id).all()
+    sources = (
+        db.query(EmissionSource)
+        .filter(EmissionSource.reporting_year_id == year_id)
+        .all()
+    )
 
     # Calculate quality by scope
     def calc_scope_quality(scope_sources):
         if not scope_sources:
-            return {"score": 0, "actual_pct": 0, "recommendations": ["No data recorded"]}
+            return {
+                "score": 0,
+                "actual_pct": 0,
+                "recommendations": ["No data recorded"],
+            }
 
         total_emissions = sum(s.co2e_tonnes for s in scope_sources)
-        weighted_score = sum(s.data_quality_score * s.co2e_tonnes for s in scope_sources)
+        weighted_score = sum(
+            s.data_quality_score * s.co2e_tonnes for s in scope_sources
+        )
         avg_score = (weighted_score / total_emissions) if total_emissions > 0 else 0
 
-        actual_count = len([s for s in scope_sources if s.data_quality_level == "actual"])
+        actual_count = len(
+            [s for s in scope_sources if s.data_quality_level == "actual"]
+        )
         actual_pct = (actual_count / len(scope_sources) * 100) if scope_sources else 0
 
         # Generate recommendations
@@ -658,9 +762,18 @@ async def get_data_quality_assessment(
             "scope_3": scope3,
         },
         "priority_improvements": [
-            {"action": "Complete fuel-card audit for 100% fleet coverage", "impact": "Scope 1 +2 points"},
-            {"action": "Install smart electricity meters", "impact": "Scope 2 +3 points"},
-            {"action": "Engage top 10 suppliers for specific data", "impact": "Scope 3 +2 points"},
+            {
+                "action": "Complete fuel-card audit for 100% fleet coverage",
+                "impact": "Scope 1 +2 points",
+            },
+            {
+                "action": "Install smart electricity meters",
+                "impact": "Scope 2 +3 points",
+            },
+            {
+                "action": "Engage top 10 suppliers for specific data",
+                "impact": "Scope 3 +2 points",
+            },
         ],
         "target_scores": {
             "scope_1_2": "≥12/16 (Planet Mark requirement)",
@@ -679,12 +792,16 @@ async def add_fleet_record(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
     # Calculate emissions
-    ef = EMISSION_FACTORS.get(f"{fleet_data.fuel_type.lower()}_litres", EMISSION_FACTORS["diesel_litres"])
+    ef = EMISSION_FACTORS.get(
+        f"{fleet_data.fuel_type.lower()}_litres", EMISSION_FACTORS["diesel_litres"]
+    )
     co2e_kg = fleet_data.fuel_litres * ef["factor"]
 
     # Calculate efficiency if mileage provided
@@ -716,7 +833,11 @@ async def get_fleet_summary(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get fleet emissions summary with driver leaderboard"""
-    records = db.query(FleetEmissionRecord).filter(FleetEmissionRecord.reporting_year_id == year_id).all()
+    records = (
+        db.query(FleetEmissionRecord)
+        .filter(FleetEmissionRecord.reporting_year_id == year_id)
+        .all()
+    )
 
     if not records:
         return {"year_id": year_id, "message": "No fleet data", "total_co2e": 0}
@@ -741,12 +862,16 @@ async def get_fleet_summary(
     # Calculate efficiency
     for v in vehicles.values():
         if v["total_mileage"] > 0:
-            v["litres_per_100km"] = round((v["total_litres"] / v["total_mileage"]) * 100, 2)
+            v["litres_per_100km"] = round(
+                (v["total_litres"] / v["total_mileage"]) * 100, 2
+            )
         else:
             v["litres_per_100km"] = None
 
     # Sort by emissions (worst first)
-    sorted_vehicles = sorted(vehicles.values(), key=lambda x: x["total_co2e_kg"], reverse=True)
+    sorted_vehicles = sorted(
+        vehicles.values(), key=lambda x: x["total_co2e_kg"], reverse=True
+    )
 
     total_co2e = sum(v["total_co2e_kg"] for v in vehicles.values()) / 1000  # tonnes
 
@@ -770,7 +895,9 @@ async def add_utility_reading(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Add utility meter reading"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
@@ -794,12 +921,22 @@ async def get_certification_status(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get certification status and evidence checklist"""
-    year = db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    year = (
+        db.query(CarbonReportingYear).filter(CarbonReportingYear.id == year_id).first()
+    )
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
-    evidence = db.query(CarbonEvidence).filter(CarbonEvidence.reporting_year_id == year_id).all()
-    actions = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == year_id).all()
+    evidence = (
+        db.query(CarbonEvidence)
+        .filter(CarbonEvidence.reporting_year_id == year_id)
+        .all()
+    )
+    actions = (
+        db.query(ImprovementAction)
+        .filter(ImprovementAction.reporting_year_id == year_id)
+        .all()
+    )
 
     # Evidence checklist
     required_evidence = [
@@ -809,15 +946,30 @@ async def get_certification_status(
             "description": "Electricity bills (12 months)",
             "required": True,
         },
-        {"type": "utility_bill", "category": "scope_1", "description": "Gas bills (12 months)", "required": True},
+        {
+            "type": "utility_bill",
+            "category": "scope_1",
+            "description": "Gas bills (12 months)",
+            "required": True,
+        },
         {
             "type": "fuel_card_report",
             "category": "scope_1",
             "description": "Fleet fuel card statements",
             "required": True,
         },
-        {"type": "waste_manifest", "category": "scope_3", "description": "Waste transfer notes", "required": False},
-        {"type": "travel_expense", "category": "scope_3", "description": "Business travel records", "required": False},
+        {
+            "type": "waste_manifest",
+            "category": "scope_3",
+            "description": "Waste transfer notes",
+            "required": False,
+        },
+        {
+            "type": "travel_expense",
+            "category": "scope_3",
+            "description": "Business travel records",
+            "required": False,
+        },
         {
             "type": "improvement_action",
             "category": "certification",
@@ -832,7 +984,9 @@ async def get_certification_status(
         req["verified"] = any(e.is_verified for e in matching)
 
     # Calculate readiness
-    required_complete = sum(1 for r in required_evidence if r["required"] and r["uploaded"])
+    required_complete = sum(
+        1 for r in required_evidence if r["required"] and r["uploaded"]
+    )
     required_total = sum(1 for r in required_evidence if r["required"])
     readiness = (required_complete / required_total * 100) if required_total > 0 else 0
 
@@ -841,7 +995,9 @@ async def get_certification_status(
         "year_label": year.year_label,
         "status": year.certification_status,
         "certificate_number": year.certificate_number,
-        "certification_date": year.certification_date.isoformat() if year.certification_date else None,
+        "certification_date": (
+            year.certification_date.isoformat() if year.certification_date else None
+        ),
         "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         "readiness_percent": round(readiness, 0),
         "evidence_checklist": required_evidence,
@@ -871,7 +1027,12 @@ async def get_carbon_dashboard(
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
     try:
-        years = db.query(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3).all()
+        years = (
+            db.query(CarbonReportingYear)
+            .order_by(desc(CarbonReportingYear.year_number))
+            .limit(3)
+            .all()
+        )
     except (ProgrammingError, OperationalError) as e:
         # Table doesn't exist or schema mismatch - log and return setup required
         logger.warning(
@@ -909,7 +1070,11 @@ async def get_carbon_dashboard(
         )
 
     current_year = years[0]
-    baseline = db.query(CarbonReportingYear).filter(CarbonReportingYear.is_baseline_year == True).first()
+    baseline = (
+        db.query(CarbonReportingYear)
+        .filter(CarbonReportingYear.is_baseline_year == True)
+        .first()
+    )
 
     # Calculate year-on-year change
     yoy_change = None
@@ -917,13 +1082,22 @@ async def get_carbon_dashboard(
         prev_year = years[1]
         if prev_year.emissions_per_fte and current_year.emissions_per_fte:
             yoy_change = (
-                (current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte
+                (current_year.emissions_per_fte - prev_year.emissions_per_fte)
+                / prev_year.emissions_per_fte
             ) * 100
 
     # Action summary
-    actions = db.query(ImprovementAction).filter(ImprovementAction.reporting_year_id == current_year.id).all()
+    actions = (
+        db.query(ImprovementAction)
+        .filter(ImprovementAction.reporting_year_id == current_year.id)
+        .all()
+    )
 
-    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]
+    overdue_actions = [
+        a
+        for a in actions
+        if a.status != "completed" and a.time_bound < datetime.utcnow()
+    ]
 
     return {
         "current_year": {
@@ -936,18 +1110,29 @@ async def get_carbon_dashboard(
             "on_track": yoy_change is not None and yoy_change <= -5,
         },
         "emissions_breakdown": {
-            "scope_1": {"value": current_year.scope_1_total, "label": "Direct (Fleet, Gas)"},
-            "scope_2": {"value": current_year.scope_2_market, "label": "Indirect (Electricity)"},
+            "scope_1": {
+                "value": current_year.scope_1_total,
+                "label": "Direct (Fleet, Gas)",
+            },
+            "scope_2": {
+                "value": current_year.scope_2_market,
+                "label": "Indirect (Electricity)",
+            },
             "scope_3": {"value": current_year.scope_3_total, "label": "Value Chain"},
         },
         "data_quality": {
-            "scope_1_2": (current_year.scope_1_data_quality or 0) + (current_year.scope_2_data_quality or 0),
+            "scope_1_2": (current_year.scope_1_data_quality or 0)
+            + (current_year.scope_2_data_quality or 0),
             "scope_3": current_year.scope_3_data_quality or 0,
             "target": 12,
         },
         "certification": {
             "status": current_year.certification_status,
-            "expiry_date": current_year.expiry_date.isoformat() if current_year.expiry_date else None,
+            "expiry_date": (
+                current_year.expiry_date.isoformat()
+                if current_year.expiry_date
+                else None
+            ),
         },
         "actions": {
             "total": len(actions),
@@ -959,7 +1144,12 @@ async def get_carbon_dashboard(
             "target_per_fte": current_year.target_emissions_per_fte,
         },
         "historical_years": [
-            {"label": y.year_label, "total": y.total_emissions, "per_fte": y.emissions_per_fte} for y in years
+            {
+                "label": y.year_label,
+                "total": y.total_emissions,
+                "per_fte": y.emissions_per_fte,
+            }
+            for y in years
         ],
     }
 
@@ -1046,7 +1236,11 @@ async def get_iso14001_mapping() -> dict[str, Any]:
 
 def _recalculate_year_totals(db: Session, year: CarbonReportingYear) -> None:
     """Recalculate total emissions for a reporting year"""
-    sources = db.query(EmissionSource).filter(EmissionSource.reporting_year_id == year.id).all()
+    sources = (
+        db.query(EmissionSource)
+        .filter(EmissionSource.reporting_year_id == year.id)
+        .all()
+    )
 
     scope1 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_1")
     scope2 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_2")
@@ -1068,7 +1262,11 @@ def _recalculate_year_totals(db: Session, year: CarbonReportingYear) -> None:
     year.scope_1_data_quality = _calc_avg_quality(s1_sources)
     year.scope_2_data_quality = _calc_avg_quality(s2_sources)
     year.scope_3_data_quality = _calc_avg_quality(s3_sources)
-    year.overall_data_quality = (year.scope_1_data_quality + year.scope_2_data_quality + year.scope_3_data_quality) // 3
+    year.overall_data_quality = (
+        year.scope_1_data_quality
+        + year.scope_2_data_quality
+        + year.scope_3_data_quality
+    ) // 3
 
 
 def _calc_avg_quality(sources: list) -> int:

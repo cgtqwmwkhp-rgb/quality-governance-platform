@@ -61,11 +61,17 @@ class RTACreate(RTABase):
     """Schema for creating an RTA."""
 
     driver_id: Optional[int] = None
-    driver_email: Optional[str] = Field(None, max_length=255, description="Driver's email for portal tracking")
+    driver_email: Optional[str] = Field(
+        None, max_length=255, description="Driver's email for portal tracking"
+    )
     investigator_id: Optional[int] = None
     reporter_id: Optional[int] = None
-    reporter_email: Optional[str] = Field(None, max_length=255, description="Reporter's email for portal tracking")
-    reporter_name: Optional[str] = Field(None, max_length=255, description="Reporter's name")
+    reporter_email: Optional[str] = Field(
+        None, max_length=255, description="Reporter's email for portal tracking"
+    )
+    reporter_name: Optional[str] = Field(
+        None, max_length=255, description="Reporter's name"
+    )
 
 
 class RTAUpdate(BaseModel):

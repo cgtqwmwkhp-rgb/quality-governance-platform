@@ -15,7 +15,9 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 logger = logging.getLogger(__name__)
 
 _DEFAULT_METRICS_DIR = Path(__file__).parent.parent.parent / "artifacts"
-METRICS_DIR = Path(settings.metrics_dir) if settings.metrics_dir else _DEFAULT_METRICS_DIR
+METRICS_DIR = (
+    Path(settings.metrics_dir) if settings.metrics_dir else _DEFAULT_METRICS_DIR
+)
 
 
 class TelemetryService:
@@ -53,7 +55,9 @@ class TelemetryService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def aggregate_event(cls, event_name: str, timestamp: str, session_id: str, dimensions: dict) -> None:
+    def aggregate_event(
+        cls, event_name: str, timestamp: str, session_id: str, dimensions: dict
+    ) -> None:
         """Aggregate a single validated event into the metrics file."""
         metrics = cls._load_metrics_file()
 
@@ -84,7 +88,9 @@ class TelemetryService:
             abandonment_rate = form_abandoned / form_opened if form_opened > 0 else 0
 
             has_draft_true = metrics["dimensions"].get("hasDraft", {}).get("true", 0)
-            draft_recovery_usage = draft_recovered / has_draft_true if has_draft_true > 0 else 0
+            draft_recovery_usage = (
+                draft_recovered / has_draft_true if has_draft_true > 0 else 0
+            )
 
             metrics["metrics"] = {
                 "abandonmentRate": round(abandonment_rate, 4),
@@ -100,7 +106,9 @@ class TelemetryService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def ingest_event(cls, event_name: str, timestamp: str, session_id: str, dimensions: dict) -> str:
+    def ingest_event(
+        cls, event_name: str, timestamp: str, session_id: str, dimensions: dict
+    ) -> str:
         """Ingest a single telemetry event: log + aggregate.
 
         Returns:

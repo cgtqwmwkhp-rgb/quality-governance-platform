@@ -268,7 +268,13 @@ class TestAuditService:
         severities = ["critical", "major", "minor", "observation", "opportunity"]
 
         for severity in severities:
-            assert severity in ["critical", "major", "minor", "observation", "opportunity"]
+            assert severity in [
+                "critical",
+                "major",
+                "minor",
+                "observation",
+                "opportunity",
+            ]
 
     def test_audit_score_calculation(self):
         """Audit score calculation is correct."""
@@ -429,7 +435,9 @@ class TestComplianceAutomationService:
 
     def test_compliance_automation_import(self):
         """Compliance automation service can be imported."""
-        from src.domain.services.compliance_automation_service import ComplianceAutomationService
+        from src.domain.services.compliance_automation_service import (
+            ComplianceAutomationService,
+        )
 
         assert ComplianceAutomationService is not None
 

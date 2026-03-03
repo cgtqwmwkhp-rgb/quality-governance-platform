@@ -17,8 +17,12 @@ class InvestigationTemplateBase(BaseModel):
     description: Optional[str] = Field(None, description="Template description")
     version: str = Field(default="1.0", description="Template version")
     is_active: bool = Field(default=True, description="Whether template is active")
-    structure: Dict[str, Any] = Field(..., description="Template structure (sections and fields)")
-    applicable_entity_types: List[str] = Field(..., description="Entity types this template applies to")
+    structure: Dict[str, Any] = Field(
+        ..., description="Template structure (sections and fields)"
+    )
+    applicable_entity_types: List[str] = Field(
+        ..., description="Entity types this template applies to"
+    )
 
     @field_validator("applicable_entity_types")
     @classmethod
@@ -27,7 +31,9 @@ class InvestigationTemplateBase(BaseModel):
         valid_types = {e.value for e in AssignedEntityType}
         for entity_type in v:
             if entity_type not in valid_types:
-                raise ValueError(f"Invalid entity type: {entity_type}. Must be one of {valid_types}")
+                raise ValueError(
+                    f"Invalid entity type: {entity_type}. Must be one of {valid_types}"
+                )
         return v
 
 
@@ -56,7 +62,9 @@ class InvestigationTemplateUpdate(BaseModel):
         valid_types = {e.value for e in AssignedEntityType}
         for entity_type in v:
             if entity_type not in valid_types:
-                raise ValueError(f"Invalid entity type: {entity_type}. Must be one of {valid_types}")
+                raise ValueError(
+                    f"Invalid entity type: {entity_type}. Must be one of {valid_types}"
+                )
         return v
 
 
@@ -90,12 +98,18 @@ class InvestigationRunBase(BaseModel):
     """Base schema for investigation runs."""
 
     template_id: int = Field(..., description="Investigation template ID")
-    assigned_entity_type: str = Field(..., description="Entity type (RTA, incident, complaint)")
+    assigned_entity_type: str = Field(
+        ..., description="Entity type (RTA, incident, complaint)"
+    )
     assigned_entity_id: int = Field(..., description="Entity ID")
-    title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
+    title: str = Field(
+        ..., min_length=1, max_length=255, description="Investigation title"
+    )
     description: Optional[str] = Field(None, description="Investigation description")
     status: str = Field(default="draft", description="Investigation status")
-    data: Dict[str, Any] = Field(default_factory=dict, description="Investigation data (responses)")
+    data: Dict[str, Any] = Field(
+        default_factory=dict, description="Investigation data (responses)"
+    )
 
     @field_validator("assigned_entity_type")
     @classmethod
@@ -181,10 +195,13 @@ class CreateFromRecordRequest(BaseModel):
     """Request schema for creating investigation from source record."""
 
     source_type: str = Field(
-        ..., description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)"
+        ...,
+        description="Source record type (near_miss, road_traffic_collision, complaint, reporting_incident)",
     )
     source_id: int = Field(..., gt=0, description="Source record ID")
-    title: str = Field(..., min_length=1, max_length=255, description="Investigation title")
+    title: str = Field(
+        ..., min_length=1, max_length=255, description="Investigation title"
+    )
     template_id: int = Field(default=1, description="Template ID (default: v2.1)")
 
     @field_validator("source_type")
@@ -205,8 +222,12 @@ class SourceRecordItem(BaseModel):
     reference_number: str = Field(..., description="Record reference number")
     status: str = Field(..., description="Record status")
     created_at: datetime = Field(..., description="Record creation date")
-    investigation_id: Optional[int] = Field(None, description="Linked investigation ID if exists")
-    investigation_reference: Optional[str] = Field(None, description="Investigation reference if exists")
+    investigation_id: Optional[int] = Field(
+        None, description="Linked investigation ID if exists"
+    )
+    investigation_reference: Optional[str] = Field(
+        None, description="Investigation reference if exists"
+    )
 
 
 class SourceRecordsResponse(BaseModel):

@@ -141,7 +141,9 @@ class ActionExecutor:
             return {"success": False, "error": f"Unknown action type: {action_type}"}
 
         try:
-            result = await executor_method(action_config, entity_type, entity_id, entity_data)
+            result = await executor_method(
+                action_config, entity_type, entity_id, entity_data
+            )
             return {"success": True, **result}
         except Exception as e:
             logger.error(f"Error executing action {action_type}: {e}")
@@ -159,10 +161,14 @@ class ActionExecutor:
         # For now, log the intent
         template = config.get("template", "default")
         recipients = config.get("recipients", [])
-        subject = config.get("subject", f"Notification for {entity_type.value} #{entity_id}")
+        subject = config.get(
+            "subject", f"Notification for {entity_type.value} #{entity_id}"
+        )
 
         # TODO: Implement actual email sending via email service
-        logger.info(f"Would send email: template={template}, recipients={recipients}, subject={subject}")
+        logger.info(
+            f"Would send email: template={template}, recipients={recipients}, subject={subject}"
+        )
 
         return {
             "action": "send_email",
@@ -208,7 +214,11 @@ class ActionExecutor:
         if model:
             from sqlalchemy import update
 
-            await self.db.execute(update(model).where(model.id == entity_id).values(assigned_to_id=user_id))
+            await self.db.execute(
+                update(model)
+                .where(model.id == entity_id)
+                .values(assigned_to_id=user_id)
+            )
             await self.db.commit()
 
         return {
@@ -253,7 +263,9 @@ class ActionExecutor:
         if model:
             from sqlalchemy import update
 
-            await self.db.execute(update(model).where(model.id == entity_id).values(status=new_status))
+            await self.db.execute(
+                update(model).where(model.id == entity_id).values(status=new_status)
+            )
             await self.db.commit()
 
         return {
@@ -276,7 +288,9 @@ class ActionExecutor:
         if model:
             from sqlalchemy import update
 
-            await self.db.execute(update(model).where(model.id == entity_id).values(priority=new_priority))
+            await self.db.execute(
+                update(model).where(model.id == entity_id).values(priority=new_priority)
+            )
             await self.db.commit()
 
         return {
@@ -358,7 +372,9 @@ class ActionExecutor:
         risk_id = config.get("risk_id") or entity_data.get("risk_id")
         score_adjustment = config.get("score_adjustment", 0)
 
-        logger.info(f"Would update risk score: risk_id={risk_id}, adjustment={score_adjustment}")
+        logger.info(
+            f"Would update risk score: risk_id={risk_id}, adjustment={score_adjustment}"
+        )
 
         return {
             "action": "update_risk_score",
@@ -623,7 +639,9 @@ class WorkflowEngine:
         for tracking in trackings:
             # Get SLA config for warning threshold
             config_result = await self.db.execute(
-                select(SLAConfiguration).where(SLAConfiguration.id == tracking.sla_config_id)
+                select(SLAConfiguration).where(
+                    SLAConfiguration.id == tracking.sla_config_id
+                )
             )
             config = config_result.scalar_one_or_none()
 
@@ -631,17 +649,27 @@ class WorkflowEngine:
                 continue
 
             # Calculate warning time
-            total_duration = (tracking.resolution_due - tracking.started_at).total_seconds() / 3600
+            total_duration = (
+                tracking.resolution_due - tracking.started_at
+            ).total_seconds() / 3600
             elapsed = (now - tracking.started_at).total_seconds() / 3600
-            percent_elapsed = (elapsed / total_duration) * 100 if total_duration > 0 else 100
+            percent_elapsed = (
+                (elapsed / total_duration) * 100 if total_duration > 0 else 100
+            )
 
-            if percent_elapsed >= config.warning_threshold_percent and not tracking.warning_sent:
+            if (
+                percent_elapsed >= config.warning_threshold_percent
+                and not tracking.warning_sent
+            ):
                 # Send warning
                 await self.process_event(
                     tracking.entity_type,
                     tracking.entity_id,
                     TriggerEvent.SLA_WARNING,
-                    {"sla_tracking_id": tracking.id, "percent_elapsed": percent_elapsed},
+                    {
+                        "sla_tracking_id": tracking.id,
+                        "percent_elapsed": percent_elapsed,
+                    },
                 )
                 tracking.warning_sent = True
                 results.append(
@@ -692,7 +720,9 @@ class SLAService:
     ) -> Optional[SLATracking]:
         """Start SLA tracking for an entity."""
         # Find matching SLA configuration
-        config = await self._find_matching_config(entity_type, priority, category, department, contract)
+        config = await self._find_matching_config(
+            entity_type, priority, category, department, contract
+        )
 
         if not config:
             logger.info(f"No SLA config found for {entity_type.value}")
@@ -705,7 +735,9 @@ class SLAService:
         response_due = None
 
         if config.acknowledgment_hours:
-            acknowledgment_due = self._calculate_due_time(now, config.acknowledgment_hours, config)
+            acknowledgment_due = self._calculate_due_time(
+                now, config.acknowledgment_hours, config
+            )
 
         if config.response_hours:
             response_due = self._calculate_due_time(now, config.response_hours, config)
@@ -728,27 +760,39 @@ class SLAService:
 
         return tracking
 
-    async def mark_acknowledged(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
+    async def mark_acknowledged(
+        self, entity_type: EntityType, entity_id: int
+    ) -> Optional[SLATracking]:
         """Mark entity as acknowledged."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.acknowledged_at:
             tracking.acknowledged_at = datetime.utcnow()
             tracking.acknowledgment_met = (
-                tracking.acknowledged_at <= tracking.acknowledgment_due if tracking.acknowledgment_due else True
+                tracking.acknowledged_at <= tracking.acknowledgment_due
+                if tracking.acknowledgment_due
+                else True
             )
             await self.db.commit()
         return tracking
 
-    async def mark_responded(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
+    async def mark_responded(
+        self, entity_type: EntityType, entity_id: int
+    ) -> Optional[SLATracking]:
         """Mark entity as responded to."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.responded_at:
             tracking.responded_at = datetime.utcnow()
-            tracking.response_met = tracking.responded_at <= tracking.response_due if tracking.response_due else True
+            tracking.response_met = (
+                tracking.responded_at <= tracking.response_due
+                if tracking.response_due
+                else True
+            )
             await self.db.commit()
         return tracking
 
-    async def mark_resolved(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
+    async def mark_resolved(
+        self, entity_type: EntityType, entity_id: int
+    ) -> Optional[SLATracking]:
         """Mark entity as resolved."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.resolved_at:
@@ -757,7 +801,9 @@ class SLAService:
             await self.db.commit()
         return tracking
 
-    async def pause_tracking(self, entity_type: EntityType, entity_id: int, reason: str = "") -> Optional[SLATracking]:
+    async def pause_tracking(
+        self, entity_type: EntityType, entity_id: int, reason: str = ""
+    ) -> Optional[SLATracking]:
         """Pause SLA tracking (e.g., waiting for customer)."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.is_paused:
@@ -766,11 +812,15 @@ class SLAService:
             await self.db.commit()
         return tracking
 
-    async def resume_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
+    async def resume_tracking(
+        self, entity_type: EntityType, entity_id: int
+    ) -> Optional[SLATracking]:
         """Resume SLA tracking."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and tracking.is_paused:
-            paused_duration = (datetime.utcnow() - tracking.paused_at).total_seconds() / 3600
+            paused_duration = (
+                datetime.utcnow() - tracking.paused_at
+            ).total_seconds() / 3600
             tracking.total_paused_hours += paused_duration
             tracking.is_paused = False
             tracking.paused_at = None
@@ -786,7 +836,9 @@ class SLAService:
             await self.db.commit()
         return tracking
 
-    async def _get_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
+    async def _get_tracking(
+        self, entity_type: EntityType, entity_id: int
+    ) -> Optional[SLATracking]:
         """Get SLA tracking for an entity."""
         result = await self.db.execute(
             select(SLATracking)
@@ -859,16 +911,22 @@ class SLAService:
         while remaining_hours > 0:
             # Skip to business hours if outside
             if current.hour < config.business_start_hour:
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(
+                    hour=config.business_start_hour, minute=0, second=0
+                )
             elif current.hour >= config.business_end_hour:
                 current = current + timedelta(days=1)
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(
+                    hour=config.business_start_hour, minute=0, second=0
+                )
 
             # Skip weekends
             if config.exclude_weekends and current.weekday() >= 5:
                 days_until_monday = 7 - current.weekday()
                 current = current + timedelta(days=days_until_monday)
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(
+                    hour=config.business_start_hour, minute=0, second=0
+                )
                 continue
 
             # Calculate hours available today
@@ -879,6 +937,8 @@ class SLAService:
             else:
                 remaining_hours -= hours_today
                 current = current + timedelta(days=1)
-                current = current.replace(hour=config.business_start_hour, minute=0, second=0)
+                current = current.replace(
+                    hour=config.business_start_hour, minute=0, second=0
+                )
 
         return current

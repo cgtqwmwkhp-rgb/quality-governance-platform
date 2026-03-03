@@ -11,7 +11,9 @@ class Test403RBACErrorEnvelopes:
     """Test that 403 RBAC denials return canonical error envelopes across modules."""
 
     @pytest.mark.asyncio
-    async def test_policies_403_explicit_reference_number(self, client: AsyncClient, test_session, auth_headers):
+    async def test_policies_403_explicit_reference_number(
+        self, client: AsyncClient, test_session, auth_headers
+    ):
         """Verify that Policies returns canonical 403 for unauthorized reference_number."""
         # test_user does NOT have the permission (no roles assigned)
         response = await client.post(
@@ -46,7 +48,9 @@ class Test403RBACErrorEnvelopes:
         assert "permission" in msg or "reference_number" in msg or "denied" in msg
 
     @pytest.mark.asyncio
-    async def test_incidents_403_explicit_reference_number(self, client: AsyncClient, test_session, auth_headers):
+    async def test_incidents_403_explicit_reference_number(
+        self, client: AsyncClient, test_session, auth_headers
+    ):
         """Verify that Incidents returns canonical 403 for unauthorized reference_number."""
         response = await client.post(
             "/api/v1/incidents/",
@@ -75,7 +79,9 @@ class Test403RBACErrorEnvelopes:
             assert error["code"] in ("PERMISSION_DENIED", "ENTITY_NOT_FOUND")
 
     @pytest.mark.asyncio
-    async def test_complaints_404_not_found_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
+    async def test_complaints_404_not_found_canonical_envelope(
+        self, client: AsyncClient, test_session, auth_headers
+    ):
         """Verify that Complaints returns canonical 404 for non-existent resources."""
         response = await client.get("/api/v1/complaints/999999", headers=auth_headers)
         assert response.status_code == 404

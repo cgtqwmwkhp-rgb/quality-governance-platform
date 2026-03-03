@@ -34,7 +34,14 @@ from src.api.schemas.form_config import (
     SystemSettingResponse,
     SystemSettingUpdate,
 )
-from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
+from src.domain.models.form_config import (
+    Contract,
+    FormField,
+    FormStep,
+    FormTemplate,
+    LookupOption,
+    SystemSetting,
+)
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
@@ -65,7 +72,11 @@ async def list_form_templates(
     total = (await db.execute(count_query)).scalar_one()
 
     # Apply pagination
-    query = query.order_by(FormTemplate.name).offset((page - 1) * page_size).limit(page_size)
+    query = (
+        query.order_by(FormTemplate.name)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
     templates = result.scalars().all()
 
@@ -77,7 +88,11 @@ async def list_form_templates(
     )
 
 
-@router.post("/templates", response_model=FormTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates",
+    response_model=FormTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_form_template(
     data: FormTemplateCreate,
     db: DbSession,
@@ -86,7 +101,9 @@ async def create_form_template(
 ) -> FormTemplate:
     """Create a new form template."""
     # Check for duplicate slug
-    existing = await db.execute(select(FormTemplate).where(FormTemplate.slug == data.slug))
+    existing = await db.execute(
+        select(FormTemplate).where(FormTemplate.slug == data.slug)
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -176,7 +193,9 @@ async def get_form_template(
     current_user: CurrentUser,
 ) -> FormTemplate:
     """Get a form template by ID."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(FormTemplate.id == template_id)
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -220,7 +239,9 @@ async def update_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Update a form template."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(FormTemplate.id == template_id)
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -261,7 +282,9 @@ async def publish_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Publish a form template to make it available in the portal."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(FormTemplate.id == template_id)
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -298,7 +321,9 @@ async def delete_form_template(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a form template."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(FormTemplate.id == template_id)
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -324,7 +349,11 @@ async def delete_form_template(
 # ==================== Form Step Routes ====================
 
 
-@router.post("/templates/{template_id}/steps", response_model=FormStepResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates/{template_id}/steps",
+    response_model=FormStepResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_form_step(
     template_id: int,
     data: FormStepCreate,
@@ -333,7 +362,9 @@ async def create_form_step(
 ) -> FormStep:
     """Create a new step in a form template."""
     # Verify template exists
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(FormTemplate.id == template_id)
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -427,7 +458,11 @@ async def delete_form_step(
 # ==================== Form Field Routes ====================
 
 
-@router.post("/steps/{step_id}/fields", response_model=FormFieldResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/steps/{step_id}/fields",
+    response_model=FormFieldResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_form_field(
     step_id: int,
     data: FormFieldCreate,
@@ -543,7 +578,9 @@ async def list_contracts(
     )
 
 
-@router.post("/contracts", response_model=ContractResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/contracts", response_model=ContractResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_contract(
     data: ContractCreate,
     db: DbSession,
@@ -706,7 +743,11 @@ async def list_system_settings(
     )
 
 
-@router.post("/settings", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/settings",
+    response_model=SystemSettingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_system_setting(
     data: SystemSettingCreate,
     db: DbSession,
@@ -714,7 +755,9 @@ async def create_system_setting(
 ) -> SystemSetting:
     """Create a new system setting."""
     # Check for duplicate key
-    existing = await db.execute(select(SystemSetting).where(SystemSetting.key == data.key))
+    existing = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == data.key)
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -800,7 +843,11 @@ async def list_lookup_options(
     )
 
 
-@router.post("/lookup/{category}", response_model=LookupOptionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/lookup/{category}",
+    response_model=LookupOptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_lookup_option(
     category: str,
     data: LookupOptionCreate,
@@ -839,7 +886,9 @@ async def update_lookup_option(
 ) -> LookupOption:
     """Update a lookup option."""
     result = await db.execute(
-        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+        select(LookupOption)
+        .where(LookupOption.id == option_id)
+        .where(LookupOption.category == category)
     )
     option = result.scalar_one_or_none()
 
@@ -868,7 +917,9 @@ async def delete_lookup_option(
 ) -> None:
     """Delete a lookup option."""
     result = await db.execute(
-        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+        select(LookupOption)
+        .where(LookupOption.id == option_id)
+        .where(LookupOption.category == category)
     )
     option = result.scalar_one_or_none()
 

@@ -166,7 +166,9 @@ async def _log_audit_entry(
         if user_id and not tenant_id:
             try:
                 async with async_session_maker() as session:
-                    result = await session.execute(select(User.tenant_id).where(User.id == user_id))
+                    result = await session.execute(
+                        select(User.tenant_id).where(User.id == user_id)
+                    )
                     tenant_id = result.scalar_one_or_none()
             except Exception:
                 # If DB lookup fails, skip logging
@@ -200,7 +202,11 @@ async def _log_audit_entry(
 
             # Try to extract entity type and ID from path
             # Pattern: /api/v1/{entity_type}/{entity_id}
-            if len(path_parts) >= 4 and path_parts[0] == "api" and path_parts[1] == "v1":
+            if (
+                len(path_parts) >= 4
+                and path_parts[0] == "api"
+                and path_parts[1] == "v1"
+            ):
                 entity_type = path_parts[2]
                 if len(path_parts) >= 4:
                     # Try to parse as int, fallback to string
@@ -226,7 +232,9 @@ async def _log_audit_entry(
                 user_name = getattr(user, "full_name", None)
                 # Get first role if available
                 if hasattr(user, "roles") and user.roles:
-                    user_role = user.roles[0].name if hasattr(user.roles[0], "name") else None
+                    user_role = (
+                        user.roles[0].name if hasattr(user.roles[0], "name") else None
+                    )
 
             # Get request metadata
             request_id = getattr(request.state, "request_id", None)
@@ -253,7 +261,9 @@ async def _log_audit_entry(
                         "endpoint": request.url.path,
                         "method": method,
                         "status_code": response.status_code,
-                        "query_params": dict(request.query_params) if request.query_params else None,
+                        "query_params": (
+                            dict(request.query_params) if request.query_params else None
+                        ),
                     },
                     action_category="api_request",
                 )
@@ -277,7 +287,9 @@ async def _log_audit_entry(
                         "endpoint": request.url.path,
                         "method": method,
                         "status_code": response.status_code,
-                        "query_params": dict(request.query_params) if request.query_params else None,
+                        "query_params": (
+                            dict(request.query_params) if request.query_params else None
+                        ),
                     },
                     action_category="api_request",
                 )
@@ -300,7 +312,9 @@ async def _log_audit_entry(
                         "endpoint": request.url.path,
                         "method": method,
                         "status_code": response.status_code,
-                        "query_params": dict(request.query_params) if request.query_params else None,
+                        "query_params": (
+                            dict(request.query_params) if request.query_params else None
+                        ),
                     },
                     action_category="api_request",
                 )

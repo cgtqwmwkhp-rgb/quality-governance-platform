@@ -91,8 +91,12 @@ class WorkflowTemplate(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"<WorkflowTemplate(code={self.code}, name={self.name})>"
@@ -106,7 +110,9 @@ class WorkflowInstance(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Template reference
-    template_id: Mapped[int] = mapped_column(ForeignKey("workflow_templates.id"), nullable=False, index=True)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("workflow_templates.id"), nullable=False, index=True
+    )
 
     # Entity reference (what this workflow is for)
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
@@ -134,7 +140,9 @@ class WorkflowInstance(Base):
     # Timestamps
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def __repr__(self) -> str:
         return f"<WorkflowInstance(id={self.id}, status={self.status})>"
@@ -173,7 +181,9 @@ class WorkflowStep(Base):
     # Outcome
     outcome: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     outcome_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    outcome_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    outcome_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     outcome_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Timestamps
@@ -197,10 +207,14 @@ class ApprovalRequest(Base):
     )
 
     # Approver
-    approver_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    approver_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
 
     # Delegate (if delegated)
-    delegated_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    delegated_to: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     delegated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Status
@@ -215,7 +229,9 @@ class ApprovalRequest(Base):
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Reminder tracking
-    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     reminder_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Timestamps
@@ -233,7 +249,9 @@ class EscalationRule(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Template reference (can be global or template-specific)
-    template_id: Mapped[Optional[int]] = mapped_column(ForeignKey("workflow_templates.id"), nullable=True, index=True)
+    template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("workflow_templates.id"), nullable=True, index=True
+    )
 
     # Rule configuration
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -246,7 +264,9 @@ class EscalationRule(Base):
 
     # Escalation target
     escalate_to_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    escalate_to_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    escalate_to_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Actions
     actions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
@@ -256,7 +276,9 @@ class EscalationRule(Base):
 
     # Notification
     send_notification: Mapped[bool] = mapped_column(Boolean, default=True)
-    notification_template: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notification_template: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -276,13 +298,21 @@ class EscalationLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # References
-    instance_id: Mapped[int] = mapped_column(ForeignKey("workflow_instances.id"), nullable=False, index=True)
-    rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("escalation_rules.id"), nullable=True)
+    instance_id: Mapped[int] = mapped_column(
+        ForeignKey("workflow_instances.id"), nullable=False, index=True
+    )
+    rule_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("escalation_rules.id"), nullable=True
+    )
 
     # Escalation details
     trigger: Mapped[str] = mapped_column(String(50), nullable=False)
-    from_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    to_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    from_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    to_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     to_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Previous and new state
@@ -307,10 +337,14 @@ class UserDelegation(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # User who is delegating
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
 
     # Delegate
-    delegate_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    delegate_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
 
     # Time period
     start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -318,7 +352,9 @@ class UserDelegation(Base):
 
     # Scope
     delegate_all: Mapped[bool] = mapped_column(Boolean, default=True)
-    workflow_types: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # If not all
+    workflow_types: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # If not all
 
     # Reason
     reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

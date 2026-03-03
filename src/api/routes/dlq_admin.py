@@ -69,7 +69,9 @@ async def retry_dlq_entry(entry_id: int, current_user: CurrentSuperuser):
     from src.infrastructure.database import async_session_maker
 
     async with async_session_maker() as session:
-        result = await session.execute(select(FailedTask).where(FailedTask.id == entry_id))
+        result = await session.execute(
+            select(FailedTask).where(FailedTask.id == entry_id)
+        )
         entry = result.scalar_one_or_none()
         if not entry:
             raise NotFoundError("DLQ entry not found")
@@ -83,7 +85,9 @@ async def retry_dlq_entry(entry_id: int, current_user: CurrentSuperuser):
             celery_app.send_task(entry.task_name, args=_safe_eval(entry.args))
         except Exception as exc:
             logger.exception("Failed to re-dispatch DLQ task %s", entry.task_name)
-            raise HTTPException(status_code=500, detail=f"Retry dispatch failed: {exc}") from exc
+            raise HTTPException(
+                status_code=500, detail=f"Retry dispatch failed: {exc}"
+            ) from exc
 
         entry.retried = True
         entry.retried_at = datetime.now(timezone.utc)

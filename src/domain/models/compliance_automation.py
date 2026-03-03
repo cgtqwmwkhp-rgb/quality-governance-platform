@@ -84,7 +84,9 @@ class RegulatoryUpdate(Base):
 
     # Status
     is_reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
-    reviewed_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Actions
@@ -106,7 +108,9 @@ class GapAnalysis(Base):
     regulatory_update_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("regulatory_updates.id"), nullable=True, index=True
     )
-    standard_id: Mapped[Optional[int]] = mapped_column(ForeignKey("standards.id"), nullable=True, index=True)
+    standard_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("standards.id"), nullable=True, index=True
+    )
 
     # Analysis info
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -120,11 +124,15 @@ class GapAnalysis(Base):
 
     # Recommendations
     recommendations: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    estimated_effort_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    estimated_effort_hours: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
 
     # Status
     status: Mapped[str] = mapped_column(String(50), default="pending")
-    assigned_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -143,11 +151,15 @@ class Certificate(Base):
 
     # Certificate info
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    certificate_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    certificate_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True
+    )
     reference_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Associated entity
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)  # user, equipment, location
+    entity_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # user, equipment, location
     entity_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     entity_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -161,7 +173,9 @@ class Certificate(Base):
     # Reminders
     reminder_days: Mapped[int] = mapped_column(Integer, default=30)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
-    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Status
     status: Mapped[str] = mapped_column(String(50), default="valid")
@@ -175,7 +189,9 @@ class Certificate(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def __repr__(self) -> str:
         return f"<Certificate(name={self.name}, expiry={self.expiry_date})>"
@@ -194,16 +210,26 @@ class ScheduledAudit(Base):
     audit_type: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Template reference
-    template_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_templates.id"), nullable=True)
+    template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("audit_templates.id"), nullable=True
+    )
 
     # Schedule
-    frequency: Mapped[str] = mapped_column(String(50), nullable=False)  # weekly, monthly, quarterly, annual
+    frequency: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # weekly, monthly, quarterly, annual
     schedule_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    next_due_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
-    last_completed_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_due_date: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, index=True
+    )
+    last_completed_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Assignment
-    assigned_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Standard association
@@ -218,7 +244,9 @@ class ScheduledAudit(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"<ScheduledAudit(name={self.name}, next={self.next_due_date})>"
@@ -232,7 +260,9 @@ class ComplianceScore(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Scope
-    scope_type: Mapped[str] = mapped_column(String(50), nullable=False)  # organization, department, standard
+    scope_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # organization, department, standard
     scope_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     scope_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -267,7 +297,9 @@ class RIDDORSubmission(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Incident reference
-    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id"), nullable=False, index=True)
+    incident_id: Mapped[int] = mapped_column(
+        ForeignKey("incidents.id"), nullable=False, index=True
+    )
 
     # RIDDOR details
     riddor_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -277,7 +309,9 @@ class RIDDORSubmission(Base):
     submission_status: Mapped[str] = mapped_column(String(50), default="pending")
     submission_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    submitted_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    submitted_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
     # Response
     hse_response: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)

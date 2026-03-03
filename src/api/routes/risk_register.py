@@ -25,7 +25,12 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
-from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
+from src.domain.services.risk_service import (
+    BowTieService,
+    KRIService,
+    RiskScoringEngine,
+    RiskService,
+)
 from src.infrastructure.database import get_db
 
 router = APIRouter()
@@ -37,7 +42,9 @@ router = APIRouter()
 class RiskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=255)
     description: str = Field(..., min_length=10)
-    category: str = Field(..., description="EnterpriseRisk category (strategic, operational, etc.)")
+    category: str = Field(
+        ..., description="EnterpriseRisk category (strategic, operational, etc.)"
+    )
     subcategory: Optional[str] = None
     department: Optional[str] = None
     location: Optional[str] = None
@@ -82,7 +89,9 @@ class ControlCreate(BaseModel):
     name: str = Field(..., min_length=5, max_length=255)
     description: str = Field(..., min_length=10)
     control_type: str = Field(..., description="preventive, detective, corrective")
-    control_nature: str = Field(default="manual", description="manual, automated, hybrid")
+    control_nature: str = Field(
+        default="manual", description="manual, automated, hybrid"
+    )
     control_owner_id: Optional[int] = None
     control_owner_name: Optional[str] = None
     standard_clauses: Optional[list[str]] = None
@@ -108,7 +117,9 @@ class KRIValueUpdate(BaseModel):
 
 
 class BowTieElementCreate(BaseModel):
-    element_type: str = Field(..., description="cause, consequence, prevention, mitigation")
+    element_type: str = Field(
+        ..., description="cause, consequence, prevention, mitigation"
+    )
     title: str = Field(..., min_length=3, max_length=255)
     description: Optional[str] = None
     barrier_type: Optional[str] = None
@@ -146,7 +157,12 @@ async def list_risks(
         query = query.filter(EnterpriseRisk.is_within_appetite == False)
 
     total = query.count()
-    risks = query.order_by(EnterpriseRisk.residual_score.desc()).offset(skip).limit(limit).all()
+    risks = (
+        query.order_by(EnterpriseRisk.residual_score.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     return {
         "total": total,
@@ -165,7 +181,9 @@ async def list_risks(
                 "status": r.status,
                 "is_within_appetite": r.is_within_appetite,
                 "risk_owner_name": r.risk_owner_name,
-                "next_review_date": r.next_review_date.isoformat() if r.next_review_date else None,
+                "next_review_date": (
+                    r.next_review_date.isoformat() if r.next_review_date else None
+                ),
             }
             for r in risks
         ],
@@ -199,14 +217,24 @@ async def get_risk(
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
     # Get linked controls
-    control_mappings = db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
+    control_mappings = (
+        db.query(RiskControlMapping).filter(RiskControlMapping.risk_id == risk_id).all()
+    )
     control_ids = [m.control_id for m in control_mappings]
     controls = (
-        db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id.in_(control_ids)).all() if control_ids else []
+        db.query(EnterpriseRiskControl)
+        .filter(EnterpriseRiskControl.id.in_(control_ids))
+        .all()
+        if control_ids
+        else []
     )
 
     # Get KRIs
-    kris = db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.risk_id == risk_id).all()
+    kris = (
+        db.query(EnterpriseKeyRiskIndicator)
+        .filter(EnterpriseKeyRiskIndicator.risk_id == risk_id)
+        .all()
+    )
 
     # Get assessment history
     history = (
@@ -246,12 +274,18 @@ async def get_risk(
         "risk_owner_id": risk.risk_owner_id,
         "risk_owner_name": risk.risk_owner_name,
         "review_frequency_days": risk.review_frequency_days,
-        "last_review_date": risk.last_review_date.isoformat() if risk.last_review_date else None,
-        "next_review_date": risk.next_review_date.isoformat() if risk.next_review_date else None,
+        "last_review_date": (
+            risk.last_review_date.isoformat() if risk.last_review_date else None
+        ),
+        "next_review_date": (
+            risk.next_review_date.isoformat() if risk.next_review_date else None
+        ),
         "review_notes": risk.review_notes,
         "is_escalated": risk.is_escalated,
         "escalation_reason": risk.escalation_reason,
-        "identified_date": risk.identified_date.isoformat() if risk.identified_date else None,
+        "identified_date": (
+            risk.identified_date.isoformat() if risk.identified_date else None
+        ),
         "controls": [
             {
                 "id": c.id,
@@ -315,7 +349,9 @@ async def assess_risk(
     """Update risk assessment scores"""
     service = RiskService(db)
     try:
-        risk = service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
+        risk = service.update_risk_assessment(
+            risk_id, assessment.model_dump(exclude_unset=True)
+        )
         return {
             "message": "EnterpriseRisk assessment updated",
             "inherent_score": risk.inherent_score,
@@ -448,7 +484,11 @@ async def delete_bow_tie_element(
     db: Session = Depends(get_db),
 ) -> None:
     """Delete bow-tie element"""
-    element = db.query(BowTieElement).filter(BowTieElement.id == element_id, BowTieElement.risk_id == risk_id).first()
+    element = (
+        db.query(BowTieElement)
+        .filter(BowTieElement.id == element_id, BowTieElement.risk_id == risk_id)
+        .first()
+    )
 
     if not element:
         raise HTTPException(status_code=404, detail="Element not found")
@@ -476,7 +516,9 @@ async def create_kri(
 ) -> dict[str, Any]:
     """Create a Key EnterpriseRisk Indicator"""
     # Verify risk exists
-    risk = db.query(EnterpriseRisk).filter(EnterpriseRisk.id == kri_data.risk_id).first()
+    risk = (
+        db.query(EnterpriseRisk).filter(EnterpriseRisk.id == kri_data.risk_id).first()
+    )
     if not risk:
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
@@ -513,7 +555,11 @@ async def get_kri_history(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Get KRI historical values"""
-    kri = db.query(EnterpriseKeyRiskIndicator).filter(EnterpriseKeyRiskIndicator.id == kri_id).first()
+    kri = (
+        db.query(EnterpriseKeyRiskIndicator)
+        .filter(EnterpriseKeyRiskIndicator.id == kri_id)
+        .first()
+    )
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
 
@@ -528,7 +574,11 @@ async def list_controls(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List all risk controls"""
-    controls = db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.is_active == True).all()
+    controls = (
+        db.query(EnterpriseRiskControl)
+        .filter(EnterpriseRiskControl.is_active == True)
+        .all()
+    )
 
     return [
         {
@@ -577,7 +627,11 @@ async def link_control_to_risk(
     """Link a control to a risk"""
     # Verify both exist
     risk = db.query(EnterpriseRisk).filter(EnterpriseRisk.id == risk_id).first()
-    control = db.query(EnterpriseRiskControl).filter(EnterpriseRiskControl.id == control_id).first()
+    control = (
+        db.query(EnterpriseRiskControl)
+        .filter(EnterpriseRiskControl.id == control_id)
+        .first()
+    )
 
     if not risk:
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
@@ -595,7 +649,9 @@ async def link_control_to_risk(
     )
 
     if existing:
-        raise HTTPException(status_code=400, detail="Control already linked to this risk")
+        raise HTTPException(
+            status_code=400, detail="Control already linked to this risk"
+        )
 
     mapping = RiskControlMapping(
         risk_id=risk_id,
@@ -617,7 +673,11 @@ async def list_appetite_statements(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List risk appetite statements by category"""
-    statements = db.query(RiskAppetiteStatement).filter(RiskAppetiteStatement.is_active == True).all()
+    statements = (
+        db.query(RiskAppetiteStatement)
+        .filter(RiskAppetiteStatement.is_active == True)
+        .all()
+    )
 
     return [
         {
@@ -643,35 +703,55 @@ async def get_risk_summary(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get overall risk register summary"""
-    total_risks = db.query(EnterpriseRisk).filter(EnterpriseRisk.status != "closed").count()
+    total_risks = (
+        db.query(EnterpriseRisk).filter(EnterpriseRisk.status != "closed").count()
+    )
     critical_risks = (
-        db.query(EnterpriseRisk).filter(EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed").count()
+        db.query(EnterpriseRisk)
+        .filter(EnterpriseRisk.residual_score > 16, EnterpriseRisk.status != "closed")
+        .count()
     )
     high_risks = (
         db.query(EnterpriseRisk)
-        .filter(EnterpriseRisk.residual_score.between(12, 16), EnterpriseRisk.status != "closed")
+        .filter(
+            EnterpriseRisk.residual_score.between(12, 16),
+            EnterpriseRisk.status != "closed",
+        )
         .count()
     )
     medium_risks = (
         db.query(EnterpriseRisk)
-        .filter(EnterpriseRisk.residual_score.between(5, 11), EnterpriseRisk.status != "closed")
+        .filter(
+            EnterpriseRisk.residual_score.between(5, 11),
+            EnterpriseRisk.status != "closed",
+        )
         .count()
     )
     low_risks = (
-        db.query(EnterpriseRisk).filter(EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed").count()
+        db.query(EnterpriseRisk)
+        .filter(EnterpriseRisk.residual_score <= 4, EnterpriseRisk.status != "closed")
+        .count()
     )
     outside_appetite = (
         db.query(EnterpriseRisk)
-        .filter(EnterpriseRisk.is_within_appetite == False, EnterpriseRisk.status != "closed")
+        .filter(
+            EnterpriseRisk.is_within_appetite == False,
+            EnterpriseRisk.status != "closed",
+        )
         .count()
     )
     overdue_review = (
         db.query(EnterpriseRisk)
-        .filter(EnterpriseRisk.next_review_date < datetime.utcnow(), EnterpriseRisk.status != "closed")
+        .filter(
+            EnterpriseRisk.next_review_date < datetime.utcnow(),
+            EnterpriseRisk.status != "closed",
+        )
         .count()
     )
     escalated = (
-        db.query(EnterpriseRisk).filter(EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed").count()
+        db.query(EnterpriseRisk)
+        .filter(EnterpriseRisk.is_escalated == True, EnterpriseRisk.status != "closed")
+        .count()
     )
 
     # Category breakdown

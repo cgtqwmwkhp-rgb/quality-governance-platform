@@ -31,7 +31,9 @@ class IMSDashboardService:
         """Return compliance scores for every active standard."""
         from src.domain.models.standard import Clause, Control, Standard
 
-        result = await self._db.execute(select(Standard).where(Standard.is_active == True).order_by(Standard.code))
+        result = await self._db.execute(
+            select(Standard).where(Standard.is_active == True).order_by(Standard.code)
+        )
         standards = list(result.scalars().all())
 
         scores: list[dict[str, Any]] = []
@@ -47,7 +49,9 @@ class IMSDashboardService:
             controls = list(control_result.scalars().all())
 
             total = len(controls)
-            implemented = sum(1 for c in controls if c.implementation_status == "implemented")
+            implemented = sum(
+                1 for c in controls if c.implementation_status == "implemented"
+            )
             partial = sum(1 for c in controls if c.implementation_status == "partial")
             not_impl = total - implemented - partial
 
@@ -62,7 +66,9 @@ class IMSDashboardService:
                     "implemented_count": implemented,
                     "partial_count": partial,
                     "not_implemented_count": not_impl,
-                    "compliance_percentage": round(((implemented + partial * 0.5) / max(total, 1)) * 100, 1),
+                    "compliance_percentage": round(
+                        ((implemented + partial * 0.5) / max(total, 1)) * 100, 1
+                    ),
                     "setup_required": total == 0,
                 }
             )
@@ -83,7 +89,9 @@ class IMSDashboardService:
             SupplierSecurityAssessment,
         )
 
-        total_assets = await self._count(select(InformationAsset).where(InformationAsset.is_active == True))
+        total_assets = await self._count(
+            select(InformationAsset).where(InformationAsset.is_active == True)
+        )
         critical_assets = await self._count(
             select(InformationAsset).where(
                 InformationAsset.is_active == True,
@@ -92,13 +100,19 @@ class IMSDashboardService:
         )
 
         total_controls = await self._count(select(ISO27001Control))
-        applicable_controls = await self._count(select(ISO27001Control).where(ISO27001Control.is_applicable == True))
+        applicable_controls = await self._count(
+            select(ISO27001Control).where(ISO27001Control.is_applicable == True)
+        )
         implemented_controls = await self._count(
-            select(ISO27001Control).where(ISO27001Control.implementation_status == "implemented")
+            select(ISO27001Control).where(
+                ISO27001Control.implementation_status == "implemented"
+            )
         )
 
         open_risks = await self._count(
-            select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+            select(InformationSecurityRisk).where(
+                InformationSecurityRisk.status != "closed"
+            )
         )
         high_risks = await self._count(
             select(InformationSecurityRisk).where(
@@ -107,9 +121,13 @@ class IMSDashboardService:
             )
         )
 
-        open_incidents = await self._count(select(SecurityIncident).where(SecurityIncident.status == "open"))
+        open_incidents = await self._count(
+            select(SecurityIncident).where(SecurityIncident.status == "open")
+        )
         incidents_30d = await self._count(
-            select(SecurityIncident).where(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
+            select(SecurityIncident).where(
+                SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30)
+            )
         )
 
         high_risk_suppliers = await self._count(
@@ -128,22 +146,30 @@ class IMSDashboardService:
                 "total": total_controls,
                 "applicable": applicable_controls,
                 "implemented": implemented_controls,
-                "implementation_percentage": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+                "implementation_percentage": round(
+                    (implemented_controls / max(applicable_controls, 1)) * 100, 1
+                ),
             },
             "risks": {"open": open_risks, "high_critical": high_risks},
             "incidents": {"open": open_incidents, "last_30_days": incidents_30d},
             "suppliers": {"high_risk": high_risk_suppliers},
-            "compliance_score": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+            "compliance_score": round(
+                (implemented_controls / max(applicable_controls, 1)) * 100, 1
+            ),
             "domains": domains,
             "recent_incidents": recent_incidents,
         }
 
     async def _get_annex_a_domains(self, control_model: Any) -> list[dict[str, Any]]:
-        domain_names_result = await self._db.execute(select(control_model.domain).distinct())
+        domain_names_result = await self._db.execute(
+            select(control_model.domain).distinct()
+        )
         domains: list[dict[str, Any]] = []
         for (domain_name,) in domain_names_result:
             d_name = domain_name or "Unknown"
-            d_total = await self._count(select(control_model).where(control_model.domain == domain_name))
+            d_total = await self._count(
+                select(control_model).where(control_model.domain == domain_name)
+            )
             d_impl = await self._count(
                 select(control_model).where(
                     control_model.domain == domain_name,
@@ -163,7 +189,9 @@ class IMSDashboardService:
     async def _get_recent_incidents(self, incident_model: Any) -> list[dict[str, Any]]:
         result = await self._db.execute(
             select(incident_model)
-            .where(incident_model.detected_date >= datetime.utcnow() - timedelta(days=30))
+            .where(
+                incident_model.detected_date >= datetime.utcnow() - timedelta(days=30)
+            )
             .order_by(incident_model.detected_date.desc())
             .limit(10)
         )
@@ -188,7 +216,9 @@ class IMSDashboardService:
         from src.domain.models.uvdb_achilles import UVDBAudit
 
         total_audits = await self._count(select(UVDBAudit))
-        active_audits = await self._count(select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])))
+        active_audits = await self._count(
+            select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
+        )
 
         completed_result = await self._db.execute(
             select(UVDBAudit).where(
@@ -215,7 +245,11 @@ class IMSDashboardService:
             "completed_audits": len(completed),
             "average_score": round(avg_score, 1),
             "latest_score": latest_score,
-            "status": ("active" if active_audits > 0 else ("completed" if completed else "not_started")),
+            "status": (
+                "active"
+                if active_audits > 0
+                else ("completed" if completed else "not_started")
+            ),
         }
 
     # ------------------------------------------------------------------
@@ -227,7 +261,9 @@ class IMSDashboardService:
         from src.domain.models.planet_mark import CarbonReportingYear
 
         result = await self._db.execute(
-            select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(2)
+            select(CarbonReportingYear)
+            .order_by(desc(CarbonReportingYear.year_number))
+            .limit(2)
         )
         years = list(result.scalars().all())
 
@@ -241,14 +277,24 @@ class IMSDashboardService:
             }
 
         current = years[0]
-        total_emissions = (current.scope1_total or 0) + (current.scope2_total or 0) + (current.scope3_total or 0)
+        total_emissions = (
+            (current.scope1_total or 0)
+            + (current.scope2_total or 0)
+            + (current.scope3_total or 0)
+        )
 
         reduction = None
         if len(years) >= 2:
             prev = years[1]
-            prev_total = (prev.scope1_total or 0) + (prev.scope2_total or 0) + (prev.scope3_total or 0)
+            prev_total = (
+                (prev.scope1_total or 0)
+                + (prev.scope2_total or 0)
+                + (prev.scope3_total or 0)
+            )
             if prev_total > 0:
-                reduction = round(((prev_total - total_emissions) / prev_total) * 100, 1)
+                reduction = round(
+                    ((prev_total - total_emissions) / prev_total) * 100, 1
+                )
 
         return {
             "status": "active",
@@ -268,7 +314,10 @@ class IMSDashboardService:
     async def get_compliance_coverage(self) -> dict[str, Any]:
         """Return compliance evidence coverage statistics."""
         from src.domain.models.compliance_evidence import ComplianceEvidenceLink
-        from src.domain.services.iso_compliance_service import EvidenceLink, iso_compliance_service
+        from src.domain.services.iso_compliance_service import (
+            EvidenceLink,
+            iso_compliance_service,
+        )
 
         result = await self._db.execute(select(ComplianceEvidenceLink))
         links_raw = list(result.scalars().all())
@@ -314,7 +363,9 @@ class IMSDashboardService:
                 "reference_number": run.reference_number,
                 "title": run.title,
                 "status": run.status,
-                "scheduled_date": (run.scheduled_date.isoformat() if run.scheduled_date else None),
+                "scheduled_date": (
+                    run.scheduled_date.isoformat() if run.scheduled_date else None
+                ),
                 "due_date": run.due_date.isoformat() if run.due_date else None,
             }
             for run in result.scalars().all()
@@ -344,10 +395,13 @@ class IMSDashboardService:
             response["standards"] = []
             response["standards_error"] = "Unable to load standards data"
 
-        standards_with_data = [s for s in response.get("standards", []) if not s.get("setup_required")]
+        standards_with_data = [
+            s for s in response.get("standards", []) if not s.get("setup_required")
+        ]
         if standards_with_data:
             response["overall_compliance"] = round(
-                sum(s["compliance_percentage"] for s in standards_with_data) / len(standards_with_data),
+                sum(s["compliance_percentage"] for s in standards_with_data)
+                / len(standards_with_data),
                 1,
             )
         else:
@@ -381,7 +435,9 @@ class IMSDashboardService:
         try:
             response["planet_mark"] = await self.get_planet_mark_data()
         except (ProgrammingError, OperationalError):
-            logger.warning("IMS dashboard: Planet Mark tables not available", exc_info=True)
+            logger.warning(
+                "IMS dashboard: Planet Mark tables not available", exc_info=True
+            )
             response["planet_mark"] = None
             response["planet_mark_error"] = "Planet Mark module not configured"
         except SQLAlchemyError:
@@ -413,5 +469,7 @@ class IMSDashboardService:
 
     async def _count(self, sub_select: Any) -> int:
         """Execute ``SELECT count(*) FROM (<sub_select>)``."""
-        value = await self._db.scalar(select(func.count()).select_from(sub_select.subquery()))
+        value = await self._db.scalar(
+            select(func.count()).select_from(sub_select.subquery())
+        )
         return value or 0

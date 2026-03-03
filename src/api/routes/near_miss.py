@@ -9,7 +9,12 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
+from src.api.schemas.near_miss import (
+    NearMissCreate,
+    NearMissListResponse,
+    NearMissResponse,
+    NearMissUpdate,
+)
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 
@@ -178,7 +183,11 @@ async def update_near_miss(
         entity_id=str(near_miss.id),
         action="update",
         description=f"Near Miss {near_miss.reference_number} updated",
-        payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
+        payload={
+            "updates": update_data,
+            "old_status": old_status,
+            "new_status": near_miss.status,
+        },
         user_id=current_user.id,
         request_id=request_id,
     )
@@ -269,7 +278,9 @@ async def list_near_miss_investigations(
     investigations = (await db.execute(query)).scalars().all()
 
     return {
-        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
+        "items": [
+            InvestigationRunResponse.model_validate(inv) for inv in investigations
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,

@@ -46,10 +46,14 @@ class ComplaintService:
         external_ref = data.get("external_ref")
 
         if external_ref:
-            existing_result = await self.db.execute(select(Complaint).where(Complaint.external_ref == external_ref))
+            existing_result = await self.db.execute(
+                select(Complaint).where(Complaint.external_ref == external_ref)
+            )
             existing = existing_result.scalar_one_or_none()
             if existing:
-                raise ValueError(f"DUPLICATE_EXTERNAL_REF:{existing.id}:{existing.reference_number}")
+                raise ValueError(
+                    f"DUPLICATE_EXTERNAL_REF:{existing.id}:{existing.reference_number}"
+                )
 
         ref_num = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
 
@@ -78,7 +82,9 @@ class ComplaintService:
 
         return complaint
 
-    async def get_complaint(self, complaint_id: int, tenant_id: int | None) -> Complaint:
+    async def get_complaint(
+        self, complaint_id: int, tenant_id: int | None
+    ) -> Complaint:
         """Fetch a single complaint by ID.
 
         Raises:
@@ -104,7 +110,11 @@ class ComplaintService:
         complainant_email: Optional[str] = None,
     ):
         """List complaints with pagination and optional filters."""
-        query = select(Complaint).options(selectinload(Complaint.actions)).where(Complaint.tenant_id == tenant_id)
+        query = (
+            select(Complaint)
+            .options(selectinload(Complaint.actions))
+            .where(Complaint.tenant_id == tenant_id)
+        )
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -163,7 +173,10 @@ class ComplaintService:
         """Check whether a user may filter complaints by a given email."""
         if has_view_all or is_superuser:
             return True
-        if current_user_email and complainant_email.lower() == current_user_email.lower():
+        if (
+            current_user_email
+            and complainant_email.lower() == current_user_email.lower()
+        ):
             return True
         return False
 

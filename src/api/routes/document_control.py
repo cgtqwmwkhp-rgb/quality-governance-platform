@@ -39,7 +39,9 @@ router = APIRouter()
 class DocumentCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=500)
     description: Optional[str] = None
-    document_type: str = Field(..., description="policy, procedure, work_instruction, etc.")
+    document_type: str = Field(
+        ..., description="policy, procedure, work_instruction, etc."
+    )
     category: str = Field(...)
     subcategory: Optional[str] = None
     department: Optional[str] = None
@@ -137,11 +139,17 @@ async def list_documents(
         query = query.filter(ControlledDocument.status == status)
     if search:
         query = query.filter(
-            ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%")
+            ControlledDocument.title.ilike(f"%{search}%")
+            | ControlledDocument.document_number.ilike(f"%{search}%")
         )
 
     total = query.count()
-    documents = query.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit).all()
+    documents = (
+        query.order_by(ControlledDocument.updated_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     return {
         "total": total,
@@ -156,9 +164,17 @@ async def list_documents(
                 "status": d.status,
                 "department": d.department,
                 "owner_name": d.owner_name,
-                "effective_date": d.effective_date.isoformat() if d.effective_date else None,
-                "next_review_date": d.next_review_date.isoformat() if d.next_review_date else None,
-                "is_overdue": (d.next_review_date < datetime.utcnow() if d.next_review_date else False),
+                "effective_date": (
+                    d.effective_date.isoformat() if d.effective_date else None
+                ),
+                "next_review_date": (
+                    d.next_review_date.isoformat() if d.next_review_date else None
+                ),
+                "is_overdue": (
+                    d.next_review_date < datetime.utcnow()
+                    if d.next_review_date
+                    else False
+                ),
             }
             for d in documents
         ],
@@ -218,7 +234,11 @@ async def get_document(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get detailed document information"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == document_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -231,7 +251,11 @@ async def get_document(
     )
 
     # Get distributions
-    distributions = db.query(DocumentDistribution).filter(DocumentDistribution.document_id == document_id).all()
+    distributions = (
+        db.query(DocumentDistribution)
+        .filter(DocumentDistribution.document_id == document_id)
+        .all()
+    )
 
     # Log access
     log = DocumentAccessLog(
@@ -257,12 +281,22 @@ async def get_document(
         "author_name": document.author_name,
         "owner_name": document.owner_name,
         "approver_name": document.approver_name,
-        "approved_date": document.approved_date.isoformat() if document.approved_date else None,
-        "effective_date": document.effective_date.isoformat() if document.effective_date else None,
-        "expiry_date": document.expiry_date.isoformat() if document.expiry_date else None,
+        "approved_date": (
+            document.approved_date.isoformat() if document.approved_date else None
+        ),
+        "effective_date": (
+            document.effective_date.isoformat() if document.effective_date else None
+        ),
+        "expiry_date": (
+            document.expiry_date.isoformat() if document.expiry_date else None
+        ),
         "review_frequency_months": document.review_frequency_months,
-        "next_review_date": document.next_review_date.isoformat() if document.next_review_date else None,
-        "last_review_date": document.last_review_date.isoformat() if document.last_review_date else None,
+        "next_review_date": (
+            document.next_review_date.isoformat() if document.next_review_date else None
+        ),
+        "last_review_date": (
+            document.last_review_date.isoformat() if document.last_review_date else None
+        ),
         "file_name": document.file_name,
         "file_path": document.file_path,
         "file_size": document.file_size,
@@ -284,7 +318,9 @@ async def get_document(
                 "created_by_name": v.created_by_name,
                 "created_at": v.created_at.isoformat() if v.created_at else None,
                 "approved_by_name": v.approved_by_name,
-                "approved_date": v.approved_date.isoformat() if v.approved_date else None,
+                "approved_date": (
+                    v.approved_date.isoformat() if v.approved_date else None
+                ),
             }
             for v in versions
         ],
@@ -296,7 +332,9 @@ async def get_document(
                 "distribution_type": d.distribution_type,
                 "copy_number": d.copy_number,
                 "acknowledged": d.acknowledged,
-                "acknowledged_date": d.acknowledged_date.isoformat() if d.acknowledged_date else None,
+                "acknowledged_date": (
+                    d.acknowledged_date.isoformat() if d.acknowledged_date else None
+                ),
             }
             for d in distributions
         ],
@@ -311,7 +349,11 @@ async def update_document(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Update document metadata"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == document_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -337,7 +379,11 @@ async def create_new_version(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Create a new version of the document"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == document_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -391,7 +437,10 @@ async def get_version_diff(
     """Get diff between versions"""
     version = (
         db.query(ControlledDocumentVersion)
-        .filter(ControlledDocumentVersion.id == version_id, ControlledDocumentVersion.document_id == document_id)
+        .filter(
+            ControlledDocumentVersion.id == version_id,
+            ControlledDocumentVersion.document_id == document_id,
+        )
         .first()
     )
 
@@ -411,7 +460,10 @@ async def get_version_diff(
     if compare_to:
         compare_version = (
             db.query(ControlledDocumentVersion)
-            .filter(ControlledDocumentVersion.id == compare_to, ControlledDocumentVersion.document_id == document_id)
+            .filter(
+                ControlledDocumentVersion.id == compare_to,
+                ControlledDocumentVersion.document_id == document_id,
+            )
             .first()
         )
         if compare_version:
@@ -432,7 +484,11 @@ async def list_workflows(
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List approval workflows"""
-    workflows = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.is_active == True).all()
+    workflows = (
+        db.query(DocumentApprovalWorkflow)
+        .filter(DocumentApprovalWorkflow.is_active == True)
+        .all()
+    )
 
     return [
         {
@@ -470,11 +526,19 @@ async def submit_for_approval(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Submit document for approval"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == document_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == workflow_id).first()
+    workflow = (
+        db.query(DocumentApprovalWorkflow)
+        .filter(DocumentApprovalWorkflow.id == workflow_id)
+        .first()
+    )
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -488,7 +552,9 @@ async def submit_for_approval(
 
     # Set due date based on workflow
     if workflow.auto_escalate_after_days:
-        instance.due_date = datetime.utcnow() + timedelta(days=workflow.auto_escalate_after_days)
+        instance.due_date = datetime.utcnow() + timedelta(
+            days=workflow.auto_escalate_after_days
+        )
 
     document.status = "pending_approval"
 
@@ -512,7 +578,11 @@ async def take_approval_action(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    instance = db.query(DocumentApprovalInstance).filter(DocumentApprovalInstance.id == instance_id).first()
+    instance = (
+        db.query(DocumentApprovalInstance)
+        .filter(DocumentApprovalInstance.id == instance_id)
+        .first()
+    )
     if not instance:
         raise HTTPException(status_code=404, detail="Approval instance not found")
 
@@ -530,9 +600,17 @@ async def take_approval_action(
     db.add(action)
 
     # Get workflow to determine next steps
-    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == instance.workflow_id).first()
+    workflow = (
+        db.query(DocumentApprovalWorkflow)
+        .filter(DocumentApprovalWorkflow.id == instance.workflow_id)
+        .first()
+    )
 
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == instance.document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == instance.document_id)
+        .first()
+    )
 
     if action_request.action == "approved":
         # Check if this was the last step
@@ -544,7 +622,9 @@ async def take_approval_action(
                 document.status = "approved"
                 document.approved_date = datetime.utcnow()
                 document.effective_date = datetime.utcnow()
-                document.next_review_date = datetime.utcnow() + timedelta(days=document.review_frequency_months * 30)
+                document.next_review_date = datetime.utcnow() + timedelta(
+                    days=document.review_frequency_months * 30
+                )
         else:
             instance.current_step += 1
 
@@ -580,7 +660,11 @@ async def distribute_document(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == document_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -602,7 +686,9 @@ async def distribute_document(
     }
 
 
-@router.post("/{document_id}/distributions/{distribution_id}/acknowledge", response_model=dict)
+@router.post(
+    "/{document_id}/distributions/{distribution_id}/acknowledge", response_model=dict
+)
 async def acknowledge_distribution(
     document_id: int,
     distribution_id: int,
@@ -612,7 +698,10 @@ async def acknowledge_distribution(
     """Acknowledge receipt of document"""
     dist = (
         db.query(DocumentDistribution)
-        .filter(DocumentDistribution.id == distribution_id, DocumentDistribution.document_id == document_id)
+        .filter(
+            DocumentDistribution.id == distribution_id,
+            DocumentDistribution.document_id == document_id,
+        )
         .first()
     )
 
@@ -637,7 +726,11 @@ async def mark_document_obsolete(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    document = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.id == document_id)
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -655,14 +748,17 @@ async def mark_document_obsolete(
         obsolete_reason=obsolete_data.obsolete_reason,
         superseded_by_id=obsolete_data.superseded_by_id,
         retention_required=True,
-        retention_end_date=datetime.utcnow() + timedelta(days=document.retention_period_years * 365),
+        retention_end_date=datetime.utcnow()
+        + timedelta(days=document.retention_period_years * 365),
     )
     db.add(record)
     db.commit()
 
     return {
         "message": "Document marked as obsolete",
-        "retention_end_date": record.retention_end_date.isoformat() if record.retention_end_date else None,
+        "retention_end_date": (
+            record.retention_end_date.isoformat() if record.retention_end_date else None
+        ),
     }
 
 
@@ -706,20 +802,31 @@ async def get_document_summary(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get document control summary statistics"""
-    total = db.query(ControlledDocument).filter(ControlledDocument.is_current == True).count()
+    total = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.is_current == True)
+        .count()
+    )
     active = (
         db.query(ControlledDocument)
-        .filter(ControlledDocument.status == "active", ControlledDocument.is_current == True)
+        .filter(
+            ControlledDocument.status == "active", ControlledDocument.is_current == True
+        )
         .count()
     )
     draft = (
         db.query(ControlledDocument)
-        .filter(ControlledDocument.status == "draft", ControlledDocument.is_current == True)
+        .filter(
+            ControlledDocument.status == "draft", ControlledDocument.is_current == True
+        )
         .count()
     )
     pending_approval = (
         db.query(ControlledDocument)
-        .filter(ControlledDocument.status == "pending_approval", ControlledDocument.is_current == True)
+        .filter(
+            ControlledDocument.status == "pending_approval",
+            ControlledDocument.is_current == True,
+        )
         .count()
     )
     overdue_review = (
@@ -731,12 +838,19 @@ async def get_document_summary(
         )
         .count()
     )
-    obsolete = db.query(ControlledDocument).filter(ControlledDocument.status == "obsolete").count()
+    obsolete = (
+        db.query(ControlledDocument)
+        .filter(ControlledDocument.status == "obsolete")
+        .count()
+    )
 
     # Pending acknowledgments
     pending_ack = (
         db.query(DocumentDistribution)
-        .filter(DocumentDistribution.acknowledged == False, DocumentDistribution.acknowledgment_required == True)
+        .filter(
+            DocumentDistribution.acknowledged == False,
+            DocumentDistribution.acknowledgment_required == True,
+        )
         .count()
     )
 

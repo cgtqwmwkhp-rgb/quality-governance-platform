@@ -22,7 +22,11 @@ class TestRateLimiter:
 
     def test_rate_limiter_import(self):
         """Rate limiter can be imported."""
-        from src.infrastructure.middleware.rate_limiter import InMemoryRateLimiter, RateLimitConfig, get_rate_limiter
+        from src.infrastructure.middleware.rate_limiter import (
+            InMemoryRateLimiter,
+            RateLimitConfig,
+            get_rate_limiter,
+        )
 
         assert get_rate_limiter is not None
         assert InMemoryRateLimiter is not None
@@ -82,7 +86,12 @@ class TestRedisCache:
 
     def test_cache_import(self):
         """Cache can be imported."""
-        from src.infrastructure.cache.redis_cache import CacheType, InMemoryCache, cached, get_cache
+        from src.infrastructure.cache.redis_cache import (
+            CacheType,
+            InMemoryCache,
+            cached,
+            get_cache,
+        )
 
         assert get_cache is not None
         assert InMemoryCache is not None
@@ -162,7 +171,11 @@ class TestMonitoring:
 
     def test_monitoring_import(self):
         """Monitoring can be imported."""
-        from src.infrastructure.monitoring.azure_monitor import MonitoringConfig, StructuredLogger, logger
+        from src.infrastructure.monitoring.azure_monitor import (
+            MonitoringConfig,
+            StructuredLogger,
+            logger,
+        )
 
         assert StructuredLogger is not None
         assert MonitoringConfig is not None
@@ -173,7 +186,13 @@ class TestMonitoring:
         from src.infrastructure.monitoring.azure_monitor import MonitoringConfig
 
         assert MonitoringConfig.SERVICE_NAME == "quality-governance-platform"
-        assert MonitoringConfig.ENVIRONMENT in ["development", "staging", "production", None, ""]
+        assert MonitoringConfig.ENVIRONMENT in [
+            "development",
+            "staging",
+            "production",
+            None,
+            "",
+        ]
 
     def test_structured_logger_creation(self):
         """Structured logger can be created."""
@@ -196,7 +215,9 @@ class TestMonitoring:
 
     def test_application_insights_client(self):
         """Application Insights client can be created."""
-        from src.infrastructure.monitoring.azure_monitor import ApplicationInsightsClient
+        from src.infrastructure.monitoring.azure_monitor import (
+            ApplicationInsightsClient,
+        )
 
         client = ApplicationInsightsClient()
         assert client is not None

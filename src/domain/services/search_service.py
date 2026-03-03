@@ -20,7 +20,17 @@ _SHORT_QUERY_THRESHOLD = 3
 class SearchResultItem:
     """Lightweight container for a search result."""
 
-    __slots__ = ("id", "type", "title", "description", "module", "status", "date", "relevance", "highlights")
+    __slots__ = (
+        "id",
+        "type",
+        "title",
+        "description",
+        "module",
+        "status",
+        "date",
+        "relevance",
+        "highlights",
+    )
 
     def __init__(
         self,
@@ -93,7 +103,9 @@ class SearchService:
         if module:
             all_results = [r for r in all_results if r.module.lower() == module.lower()]
         if status_filter:
-            all_results = [r for r in all_results if r.status.lower() == status_filter.lower()]
+            all_results = [
+                r for r in all_results if r.status.lower() == status_filter.lower()
+            ]
 
         all_results.sort(key=lambda r: r.relevance, reverse=True)
         total = len(all_results)
@@ -184,7 +196,9 @@ class SearchService:
                         status=inc.status or "Open",
                         date=str(inc.incident_date or inc.created_at or ""),
                         relevance=relevance,
-                        highlights=[w for w in words if w in title_lower or w in desc_lower],
+                        highlights=[
+                            w for w in words if w in title_lower or w in desc_lower
+                        ],
                     )
                 )
         except (SQLAlchemyError, ValueError) as e:
@@ -196,14 +210,18 @@ class SearchService:
             )
         return results
 
-    async def _search_rtas(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
+    async def _search_rtas(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
         try:
             from src.domain.models.rta import RTA
 
             inline_vector = func.to_tsvector(
                 "english",
-                func.coalesce(cast(RTA.location, String), "") + " " + func.coalesce(cast(RTA.description, String), ""),
+                func.coalesce(cast(RTA.location, String), "")
+                + " "
+                + func.coalesce(cast(RTA.description, String), ""),
             )
             tsquery = self._ts_query(query)
             rank = func.ts_rank(inline_vector, tsquery)
@@ -213,7 +231,9 @@ class SearchService:
                     inline_vector.op("@@")(tsquery),
                     self._trgm_filter(cast(RTA.location, String), query),
                 )
-                score = func.greatest(rank, self._trgm_score(cast(RTA.location, String), query))
+                score = func.greatest(
+                    rank, self._trgm_score(cast(RTA.location, String), query)
+                )
             else:
                 filter_clause = inline_vector.op("@@")(tsquery)
                 score = rank
@@ -293,7 +313,9 @@ class SearchService:
                         status=cmp.status or "Open",
                         date=str(cmp.created_at or ""),
                         relevance=relevance,
-                        highlights=[w for w in words if w in title_lower or w in desc_lower],
+                        highlights=[
+                            w for w in words if w in title_lower or w in desc_lower
+                        ],
                     )
                 )
         except (SQLAlchemyError, ValueError) as e:
@@ -305,7 +327,9 @@ class SearchService:
             )
         return results
 
-    async def _search_risks(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
+    async def _search_risks(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
         try:
             from src.domain.models.risk import Risk
@@ -346,7 +370,9 @@ class SearchService:
                         status=risk.status or "Open",
                         date=str(risk.created_at or ""),
                         relevance=relevance,
-                        highlights=[w for w in words if w in title_lower or w in desc_lower],
+                        highlights=[
+                            w for w in words if w in title_lower or w in desc_lower
+                        ],
                     )
                 )
         except (SQLAlchemyError, ValueError) as e:

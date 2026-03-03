@@ -13,8 +13,12 @@ class PolicyBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=300, description="Policy title")
     description: Optional[str] = Field(None, description="Policy description")
-    document_type: DocumentType = Field(default=DocumentType.POLICY, description="Type of document")
-    status: DocumentStatus = Field(default=DocumentStatus.DRAFT, description="Document status")
+    document_type: DocumentType = Field(
+        default=DocumentType.POLICY, description="Type of document"
+    )
+    status: DocumentStatus = Field(
+        default=DocumentStatus.DRAFT, description="Document status"
+    )
 
 
 class PolicyCreate(PolicyBase):

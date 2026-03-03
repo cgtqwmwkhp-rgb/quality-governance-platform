@@ -56,7 +56,9 @@ class FiveWhysService:
         evidence: Optional[str] = None,
     ) -> FiveWhysAnalysis:
         """Add a why iteration to an existing analysis."""
-        result = await self.db.execute(select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id))
+        result = await self.db.execute(
+            select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id)
+        )
         analysis = result.scalar_one_or_none()
 
         if not analysis:
@@ -74,7 +76,9 @@ class FiveWhysService:
         contributing_factors: Optional[List[str]] = None,
     ) -> FiveWhysAnalysis:
         """Set the root cause for an analysis."""
-        result = await self.db.execute(select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id))
+        result = await self.db.execute(
+            select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id)
+        )
         analysis = result.scalar_one_or_none()
 
         if not analysis:
@@ -95,7 +99,9 @@ class FiveWhysService:
         proposed_actions: Optional[List[Dict]] = None,
     ) -> FiveWhysAnalysis:
         """Mark analysis as complete."""
-        result = await self.db.execute(select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id))
+        result = await self.db.execute(
+            select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id)
+        )
         analysis = result.scalar_one_or_none()
 
         if not analysis:
@@ -112,7 +118,9 @@ class FiveWhysService:
 
     async def get_analysis(self, analysis_id: int) -> Optional[FiveWhysAnalysis]:
         """Get an analysis by ID."""
-        result = await self.db.execute(select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id))
+        result = await self.db.execute(
+            select(FiveWhysAnalysis).where(FiveWhysAnalysis.id == analysis_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_analyses_for_entity(
@@ -168,7 +176,9 @@ class FishboneService:
         sub_causes: Optional[List[str]] = None,
     ) -> FishboneDiagram:
         """Add a cause to a category."""
-        result = await self.db.execute(select(FishboneDiagram).where(FishboneDiagram.id == diagram_id))
+        result = await self.db.execute(
+            select(FishboneDiagram).where(FishboneDiagram.id == diagram_id)
+        )
         diagram = result.scalar_one_or_none()
 
         if not diagram:
@@ -192,7 +202,9 @@ class FishboneService:
         primary_causes: Optional[List[str]] = None,
     ) -> FishboneDiagram:
         """Set the root cause determination."""
-        result = await self.db.execute(select(FishboneDiagram).where(FishboneDiagram.id == diagram_id))
+        result = await self.db.execute(
+            select(FishboneDiagram).where(FishboneDiagram.id == diagram_id)
+        )
         diagram = result.scalar_one_or_none()
 
         if not diagram:
@@ -213,7 +225,9 @@ class FishboneService:
         proposed_actions: Optional[List[Dict]] = None,
     ) -> FishboneDiagram:
         """Mark diagram as complete."""
-        result = await self.db.execute(select(FishboneDiagram).where(FishboneDiagram.id == diagram_id))
+        result = await self.db.execute(
+            select(FishboneDiagram).where(FishboneDiagram.id == diagram_id)
+        )
         diagram = result.scalar_one_or_none()
 
         if not diagram:
@@ -230,7 +244,9 @@ class FishboneService:
 
     async def get_diagram(self, diagram_id: int) -> Optional[FishboneDiagram]:
         """Get a diagram by ID."""
-        result = await self.db.execute(select(FishboneDiagram).where(FishboneDiagram.id == diagram_id))
+        result = await self.db.execute(
+            select(FishboneDiagram).where(FishboneDiagram.id == diagram_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_diagrams_for_entity(
@@ -343,7 +359,9 @@ class CAPAService:
     ) -> List[CAPAItem]:
         """Get all CAPAs for an investigation."""
         result = await self.db.execute(
-            select(CAPAItem).where(CAPAItem.investigation_id == investigation_id).order_by(CAPAItem.created_at.desc())
+            select(CAPAItem)
+            .where(CAPAItem.investigation_id == investigation_id)
+            .order_by(CAPAItem.created_at.desc())
         )
         return list(result.scalars().all())
 

@@ -104,7 +104,12 @@ class TestFullWorkflowSchemaValidation:
             "reporter_name": "John Doe",
             "reporter_email": "john.doe@example.com",
         }
-        assert payload["report_type"] in ("incident", "near_miss", "hazard", "complaint")
+        assert payload["report_type"] in (
+            "incident",
+            "near_miss",
+            "hazard",
+            "complaint",
+        )
         assert payload["severity"] in ("low", "medium", "high", "critical")
         assert isinstance(payload["is_anonymous"], bool)
 
@@ -118,7 +123,12 @@ class TestFullWorkflowSchemaValidation:
             "evidence": "Observed outdated document in use",
             "recommendations": "Refresh training on document control",
         }
-        required_keys = {"audit_run_id", "clause_reference", "finding_type", "description"}
+        required_keys = {
+            "audit_run_id",
+            "clause_reference",
+            "finding_type",
+            "description",
+        }
         assert required_keys.issubset(finding.keys())
 
     def test_rta_report_payload_structure(self) -> None:
@@ -306,7 +316,9 @@ class TestRiskManagementWorkflow:
         risks_data = risks_response.json()
         assert isinstance(risks_data, (list, dict))
         if isinstance(risks_data, dict):
-            assert "items" in risks_data or "results" in risks_data or "data" in risks_data
+            assert (
+                "items" in risks_data or "results" in risks_data or "data" in risks_data
+            )
 
         # Step 2: Get risk register heat map
         heatmap_response = client.get(

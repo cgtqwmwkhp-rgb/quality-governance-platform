@@ -13,7 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
+from src.core.azure_auth import (
+    extract_user_info_from_azure_token,
+    validate_azure_id_token,
+)
 from src.core.config import settings
 from src.core.security import (
     create_access_token,
@@ -151,7 +154,9 @@ class AuthService:
 
         exp_timestamp = payload.get("exp")
         expires_at = (
-            datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else datetime.now(timezone.utc)
+            datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
+            if exp_timestamp
+            else datetime.now(timezone.utc)
         )
 
         user_id_raw = payload.get("sub")
@@ -165,7 +170,9 @@ class AuthService:
             reason="logout",
         )
 
-    async def change_password(self, user: User, current_password: str, new_password: str) -> None:
+    async def change_password(
+        self, user: User, current_password: str, new_password: str
+    ) -> None:
         """Change a user's password.
 
         Raises:

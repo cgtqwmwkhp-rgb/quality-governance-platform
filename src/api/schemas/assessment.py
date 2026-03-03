@@ -28,7 +28,9 @@ class AssessmentRunUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = None
-    status: Optional[str] = Field(None, pattern="^(draft|in_progress|pending_debrief|completed|cancelled)$")
+    status: Optional[str] = Field(
+        None, pattern="^(draft|in_progress|pending_debrief|completed|cancelled)$"
+    )
 
 
 class AssessmentRunResponse(BaseModel):

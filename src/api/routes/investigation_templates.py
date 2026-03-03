@@ -195,7 +195,9 @@ async def delete_template(
     # Check if template has investigation runs
     from src.domain.models.investigation import InvestigationRun
 
-    count_query = select(func.count()).where(InvestigationRun.template_id == template_id)
+    count_query = select(func.count()).where(
+        InvestigationRun.template_id == template_id
+    )
     run_count = await db.scalar(count_query)
 
     if run_count and run_count > 0:

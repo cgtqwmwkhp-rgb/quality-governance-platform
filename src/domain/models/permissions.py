@@ -12,7 +12,18 @@ Provides enterprise-grade permissions with:
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base
@@ -30,24 +41,38 @@ class Permission(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # Permission identity
-    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Categorization
-    category: Mapped[str] = mapped_column(String(50), nullable=False)  # incidents, audits, risks, admin, etc.
-    action: Mapped[str] = mapped_column(String(50), nullable=False)  # create, read, update, delete, approve, export
+    category: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # incidents, audits, risks, admin, etc.
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # create, read, update, delete, approve, export
 
     # Resource this permission applies to
-    resource_type: Mapped[str] = mapped_column(String(100), nullable=False)  # incident, audit, risk, user, etc.
+    resource_type: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # incident, audit, risk, user, etc.
 
     # Field-level permissions (optional)
-    allowed_fields: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Fields user can access
-    restricted_fields: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Fields user cannot access
+    allowed_fields: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # Fields user can access
+    restricted_fields: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # Fields user cannot access
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_system: Mapped[bool] = mapped_column(Boolean, default=False)  # System permissions cannot be deleted
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # System permissions cannot be deleted
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -67,7 +92,9 @@ class Role(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # Multi-tenancy (null = global role)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True
+    )
 
     # Role identity
     code: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
@@ -75,23 +102,37 @@ class Role(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Hierarchy
-    parent_role_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=True)
-    hierarchy_level: Mapped[int] = mapped_column(Integer, default=0)  # 0 = lowest, higher = more privileged
+    parent_role_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("abac_roles.id"), nullable=True
+    )
+    hierarchy_level: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # 0 = lowest, higher = more privileged
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_system: Mapped[bool] = mapped_column(Boolean, default=False)  # System roles cannot be deleted
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False)  # Default role for new users
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # System roles cannot be deleted
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # Default role for new users
 
     # Metadata
-    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)  # Hex color for UI
+    color: Mapped[Optional[str]] = mapped_column(
+        String(7), nullable=True
+    )  # Hex color for UI
     icon: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Icon name
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
-    role_permissions = relationship("RolePermission", back_populates="role", cascade="all, delete-orphan")
+    role_permissions = relationship(
+        "RolePermission", back_populates="role", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Role {self.code}>"
@@ -106,11 +147,17 @@ class RolePermission(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=False)
-    permission_id: Mapped[int] = mapped_column(Integer, ForeignKey("permissions.id"), nullable=False)
+    role_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("abac_roles.id"), nullable=False
+    )
+    permission_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("permissions.id"), nullable=False
+    )
 
     # Override conditions (ABAC)
-    conditions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Additional conditions for this permission
+    conditions: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # Additional conditions for this permission
 
     # Relationships
     role = relationship("Role", back_populates="role_permissions")
@@ -127,12 +174,20 @@ class UserRole(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=False)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    role_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("abac_roles.id"), nullable=False
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False, index=True
+    )
 
     # Optional scope restrictions
-    scope: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # e.g., {"departments": ["HR", "IT"]}
+    scope: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # e.g., {"departments": ["HR", "IT"]}
 
     # Validity period
     valid_from: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -142,7 +197,9 @@ class UserRole(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Granted by
-    granted_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    granted_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -168,15 +225,21 @@ class ABACPolicy(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # Multi-tenancy (null = global policy)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True
+    )
 
     # Policy identity
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Target (what this policy applies to)
-    resource_type: Mapped[str] = mapped_column(String(100), nullable=False)  # incident, audit, risk, etc.
-    action: Mapped[str] = mapped_column(String(50), nullable=False)  # create, read, update, delete, *
+    resource_type: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # incident, audit, risk, etc.
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # create, read, update, delete, *
 
     # Effect
     effect: Mapped[str] = mapped_column(String(10), default="allow")  # allow, deny
@@ -208,12 +271,18 @@ class ABACPolicy(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Metadata
-    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def __repr__(self) -> str:
-        return f"<ABACPolicy {self.name} {self.effect} {self.resource_type}:{self.action}>"
+        return (
+            f"<ABACPolicy {self.name} {self.effect} {self.resource_type}:{self.action}>"
+        )
 
 
 class FieldLevelPermission(Base):
@@ -227,22 +296,34 @@ class FieldLevelPermission(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=True
+    )
 
     # Target
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
     field_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Access control
-    access_level: Mapped[str] = mapped_column(String(20), default="read")  # none, read, write, mask
+    access_level: Mapped[str] = mapped_column(
+        String(20), default="read"
+    )  # none, read, write, mask
 
     # Who has this access
-    role_codes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Roles that have this access
-    user_attributes: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # ABAC conditions
+    role_codes: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # Roles that have this access
+    user_attributes: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # ABAC conditions
 
     # Masking rules (for sensitive data)
-    mask_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # full, partial, hash, redact
-    mask_pattern: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g., "***-**-{last4}"
+    mask_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # full, partial, hash, redact
+    mask_pattern: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # e.g., "***-**-{last4}"
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -264,17 +345,23 @@ class PermissionAudit(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False
+    )
 
     # Request details
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     action: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Result
     decision: Mapped[str] = mapped_column(String(10), nullable=False)  # allow, deny
-    matched_policy_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("abac_policies.id"), nullable=True)
+    matched_policy_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("abac_policies.id"), nullable=True
+    )
 
     # Context
     subject_attributes: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -285,7 +372,9 @@ class PermissionAudit(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     request_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
 
     def __repr__(self) -> str:
         return f"<PermissionAudit {self.decision} {self.resource_type}:{self.action}>"

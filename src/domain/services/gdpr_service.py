@@ -36,10 +36,18 @@ class GDPRService:
                 "department": user.department,
                 "created_at": str(user.created_at) if user.created_at else None,
             },
-            "incidents": await self._collect_user_entities("Incident", "reporter_id", user_id, tenant_id),
-            "complaints": await self._collect_user_entities("Complaint", "owner_id", user_id, tenant_id),
-            "incident_actions": await self._collect_user_entities("IncidentAction", "owner_id", user_id, tenant_id),
-            "complaint_actions": await self._collect_user_entities("ComplaintAction", "owner_id", user_id, tenant_id),
+            "incidents": await self._collect_user_entities(
+                "Incident", "reporter_id", user_id, tenant_id
+            ),
+            "complaints": await self._collect_user_entities(
+                "Complaint", "owner_id", user_id, tenant_id
+            ),
+            "incident_actions": await self._collect_user_entities(
+                "IncidentAction", "owner_id", user_id, tenant_id
+            ),
+            "complaint_actions": await self._collect_user_entities(
+                "ComplaintAction", "owner_id", user_id, tenant_id
+            ),
             "audit_log": await self._collect_audit_entries(user_id, tenant_id),
         }
         return data
@@ -83,7 +91,11 @@ class GDPRService:
                 user_col = getattr(model_class, user_field, None)
                 if user_col is None:
                     return []
-                stmt = select(model_class).where(user_col == user_id, model_class.tenant_id == tenant_id).limit(1000)
+                stmt = (
+                    select(model_class)
+                    .where(user_col == user_id, model_class.tenant_id == tenant_id)
+                    .limit(1000)
+                )
             elif model_name == "Complaint":
                 from src.domain.models.complaint import Complaint
 
@@ -91,21 +103,38 @@ class GDPRService:
                 user_col = getattr(model_class, user_field, None)
                 if user_col is None:
                     return []
-                stmt = select(model_class).where(user_col == user_id, model_class.tenant_id == tenant_id).limit(1000)
+                stmt = (
+                    select(model_class)
+                    .where(user_col == user_id, model_class.tenant_id == tenant_id)
+                    .limit(1000)
+                )
             else:
                 # Generic fallback for other models
                 import importlib
 
-                model_module = importlib.import_module(f"src.domain.models.{model_name.lower()}")
+                model_module = importlib.import_module(
+                    f"src.domain.models.{model_name.lower()}"
+                )
                 model_class = getattr(model_module, model_name)
                 user_col = getattr(model_class, user_field, None)
                 if user_col is None:
                     return []
-                stmt = select(model_class).where(user_col == user_id, model_class.tenant_id == tenant_id).limit(1000)
+                stmt = (
+                    select(model_class)
+                    .where(user_col == user_id, model_class.tenant_id == tenant_id)
+                    .limit(1000)
+                )
 
             result = await self.db.execute(stmt)
             entities = result.scalars().all()
-            return [{"id": e.id, "type": model_name, "created_at": str(getattr(e, "created_at", ""))} for e in entities]
+            return [
+                {
+                    "id": e.id,
+                    "type": model_name,
+                    "created_at": str(getattr(e, "created_at", "")),
+                }
+                for e in entities
+            ]
         except Exception as ex:
             logger.warning("GDPR export: could not collect %s: %s", model_name, ex)
             return []
@@ -139,7 +168,9 @@ class GDPRService:
             logger.warning("GDPR export: audit entries unavailable: %s", ex)
             return []
 
-    async def request_erasure(self, user_id: int, tenant_id: int, reason: str = "") -> dict:
+    async def request_erasure(
+        self, user_id: int, tenant_id: int, reason: str = ""
+    ) -> dict:
         """Initiate data erasure request (Right to Erasure, GDPR Art. 17)."""
         from src.domain.models.user import User
 

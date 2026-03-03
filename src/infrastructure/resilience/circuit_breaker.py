@@ -114,9 +114,13 @@ class CircuitBreaker:
                 self._state = CircuitState.OPEN
                 if old_state != CircuitState.OPEN:
                     self._record_transition(old_state, CircuitState.OPEN)
-                logger.error(f"Circuit breaker '{self.name}' OPENED after {self._failure_count} failures")
+                logger.error(
+                    f"Circuit breaker '{self.name}' OPENED after {self._failure_count} failures"
+                )
 
-    def _record_transition(self, from_state: CircuitState, to_state: CircuitState) -> None:
+    def _record_transition(
+        self, from_state: CircuitState, to_state: CircuitState
+    ) -> None:
         self._transitions.append(
             {
                 "from": from_state.value,

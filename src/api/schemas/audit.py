@@ -23,7 +23,10 @@ class ConditionalLogicRule(BaseModel):
     """Schema for conditional logic rules."""
 
     source_question_id: int
-    operator: str = Field(..., pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$")
+    operator: str = Field(
+        ...,
+        pattern="^(equals|not_equals|contains|greater_than|less_than|is_empty|is_not_empty)$",
+    )
     value: Optional[Any] = None
     action: str = Field(..., pattern="^(show|hide|require|skip)$")
 
@@ -34,7 +37,9 @@ class EvidenceRequirement(BaseModel):
     required: bool = False
     min_attachments: int = 0
     max_attachments: int = 10
-    allowed_types: List[str] = Field(default_factory=lambda: ["image", "document", "video"])
+    allowed_types: List[str] = Field(
+        default_factory=lambda: ["image", "document", "video"]
+    )
     require_photo: bool = False
     require_signature: bool = False
 
@@ -64,7 +69,9 @@ class AuditQuestionBase(BaseModel):
     weight: float = 1.0
 
     # Options for MCQ/dropdown/radio
-    options: Optional[List[QuestionOptionBase]] = Field(None, validation_alias="options_json")
+    options: Optional[List[QuestionOptionBase]] = Field(
+        None, validation_alias="options_json"
+    )
 
     # Numeric constraints
     min_value: Optional[float] = None
@@ -76,10 +83,14 @@ class AuditQuestionBase(BaseModel):
     max_length: Optional[int] = None
 
     # Evidence requirements
-    evidence_requirements: Optional[EvidenceRequirement] = Field(None, validation_alias="evidence_requirements_json")
+    evidence_requirements: Optional[EvidenceRequirement] = Field(
+        None, validation_alias="evidence_requirements_json"
+    )
 
     # Conditional logic
-    conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
+    conditional_logic: Optional[List[ConditionalLogicRule]] = Field(
+        None, validation_alias="conditional_logic_json"
+    )
 
     # Standard mapping
     clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
@@ -95,8 +106,12 @@ class AuditQuestionBase(BaseModel):
     regulatory_reference: Optional[str] = Field(None, max_length=200)
     guidance_notes: Optional[str] = None
     sign_off_required: bool = False
-    assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
-    training_materials: Optional[List[Any]] = Field(None, validation_alias="training_materials_json")
+    assessor_guidance: Optional[Dict[str, Any]] = Field(
+        None, validation_alias="assessor_guidance_json"
+    )
+    training_materials: Optional[List[Any]] = Field(
+        None, validation_alias="training_materials_json"
+    )
     failure_triggers_action: bool = False
 
     # Display
@@ -122,11 +137,17 @@ class AuditQuestionUpdate(BaseModel):
     allow_na: Optional[bool] = None
     max_score: Optional[float] = None
     weight: Optional[float] = None
-    options: Optional[List[QuestionOptionBase]] = Field(None, validation_alias="options_json")
+    options: Optional[List[QuestionOptionBase]] = Field(
+        None, validation_alias="options_json"
+    )
     min_value: Optional[float] = None
     max_value: Optional[float] = None
-    evidence_requirements: Optional[EvidenceRequirement] = Field(None, validation_alias="evidence_requirements_json")
-    conditional_logic: Optional[List[ConditionalLogicRule]] = Field(None, validation_alias="conditional_logic_json")
+    evidence_requirements: Optional[EvidenceRequirement] = Field(
+        None, validation_alias="evidence_requirements_json"
+    )
+    conditional_logic: Optional[List[ConditionalLogicRule]] = Field(
+        None, validation_alias="conditional_logic_json"
+    )
     clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     sort_order: Optional[int] = None
@@ -136,8 +157,12 @@ class AuditQuestionUpdate(BaseModel):
     regulatory_reference: Optional[str] = None
     guidance_notes: Optional[str] = None
     sign_off_required: Optional[bool] = None
-    assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
-    training_materials: Optional[List[Any]] = Field(None, validation_alias="training_materials_json")
+    assessor_guidance: Optional[Dict[str, Any]] = Field(
+        None, validation_alias="assessor_guidance_json"
+    )
+    training_materials: Optional[List[Any]] = Field(
+        None, validation_alias="training_materials_json"
+    )
     failure_triggers_action: Optional[bool] = None
 
 
@@ -212,15 +237,23 @@ class AuditTemplateBase(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
 
     # Template configuration
-    audit_type: str = Field(default="inspection", pattern="^(inspection|audit|assessment|checklist|survey)$")
-    frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$")
+    audit_type: str = Field(
+        default="inspection", pattern="^(inspection|audit|assessment|checklist|survey)$"
+    )
+    frequency: Optional[str] = Field(
+        None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$"
+    )
 
     # Scoring configuration
-    scoring_method: str = Field(default="percentage", pattern="^(percentage|points|weighted|pass_fail)$")
+    scoring_method: str = Field(
+        default="percentage", pattern="^(percentage|points|weighted|pass_fail)$"
+    )
     passing_score: Optional[float] = None
 
     # Standard mapping
-    standard_ids: Optional[List[int]] = Field(None, validation_alias="standard_ids_json")
+    standard_ids: Optional[List[int]] = Field(
+        None, validation_alias="standard_ids_json"
+    )
 
     # Mobile configuration
     allow_offline: bool = False
@@ -234,7 +267,9 @@ class AuditTemplateBase(BaseModel):
     # Workforce Development fields
     subcategory: Optional[str] = Field(None, max_length=100)
     tags: Optional[List[str]] = Field(None, validation_alias="tags_json")
-    estimated_duration: Optional[int] = Field(None, ge=1, description="Duration in minutes")
+    estimated_duration: Optional[int] = Field(
+        None, ge=1, description="Duration in minutes"
+    )
     pass_threshold: Optional[float] = Field(None, ge=0, le=100)
 
 
@@ -256,7 +291,9 @@ class AuditTemplateUpdate(BaseModel):
     frequency: Optional[str] = None
     scoring_method: Optional[str] = None
     passing_score: Optional[float] = None
-    standard_ids: Optional[List[int]] = Field(None, validation_alias="standard_ids_json")
+    standard_ids: Optional[List[int]] = Field(
+        None, validation_alias="standard_ids_json"
+    )
     allow_offline: Optional[bool] = None
     require_gps: Optional[bool] = None
     require_signature: Optional[bool] = None
@@ -457,11 +494,18 @@ class AuditFindingBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=300)
     description: str = Field(..., min_length=1)
-    severity: str = Field(default="medium", pattern="^(critical|high|medium|low|observation)$")
-    finding_type: str = Field(default="nonconformity", pattern="^(nonconformity|observation|opportunity|positive)$")
+    severity: str = Field(
+        default="medium", pattern="^(critical|high|medium|low|observation)$"
+    )
+    finding_type: str = Field(
+        default="nonconformity",
+        pattern="^(nonconformity|observation|opportunity|positive)$",
+    )
 
     # Standard mapping
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[int]] = Field(
+        None, validation_alias="clause_ids_json_legacy"
+    )
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
 
     # Risk linkage
@@ -487,7 +531,9 @@ class AuditFindingUpdate(BaseModel):
     description: Optional[str] = None
     severity: Optional[str] = None
     finding_type: Optional[str] = None
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[int]] = Field(
+        None, validation_alias="clause_ids_json_legacy"
+    )
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     risk_ids: Optional[List[int]] = Field(None, validation_alias="risk_ids_json")
     corrective_action_required: Optional[bool] = None
@@ -514,7 +560,9 @@ class AuditFindingResponse(BaseModel):
     severity: str
     finding_type: str
     status: str
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    clause_ids: Optional[List[int]] = Field(
+        None, validation_alias="clause_ids_json_legacy"
+    )
     control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
     risk_ids: Optional[List[int]] = Field(None, validation_alias="risk_ids_json")
     corrective_action_required: bool = True

@@ -207,7 +207,9 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
 
 
 @router.put("/dashboards/{dashboard_id}")
-async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser):
+async def update_dashboard(
+    dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser
+):
     """Update dashboard configuration."""
     return {
         "id": dashboard_id,

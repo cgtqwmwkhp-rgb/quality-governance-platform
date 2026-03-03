@@ -16,7 +16,11 @@ from sqlalchemy.orm import selectinload
 
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
-from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
+from src.domain.models.investigation import (
+    InvestigationAction,
+    InvestigationActionStatus,
+    InvestigationRun,
+)
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -51,7 +55,9 @@ def action_to_dict(
         "owner_id": getattr(action, "owner_id", None),
         "owner_email": owner_email,
         "assigned_to_email": owner_email,
-        "created_at": action.created_at.isoformat() if getattr(action, "created_at", None) else "",
+        "created_at": (
+            action.created_at.isoformat() if getattr(action, "created_at", None) else ""
+        ),
     }
 
 
@@ -75,14 +81,28 @@ class ActionService:
         actions_list: list[dict[str, Any]] = []
 
         if not source_type or source_type == "incident":
-            actions_list.extend(await self._list_incident_actions(tenant_id, status_filter, source_type, source_id))
+            actions_list.extend(
+                await self._list_incident_actions(
+                    tenant_id, status_filter, source_type, source_id
+                )
+            )
         if not source_type or source_type == "rta":
-            actions_list.extend(await self._list_rta_actions(tenant_id, status_filter, source_type, source_id))
+            actions_list.extend(
+                await self._list_rta_actions(
+                    tenant_id, status_filter, source_type, source_id
+                )
+            )
         if not source_type or source_type == "complaint":
-            actions_list.extend(await self._list_complaint_actions(tenant_id, status_filter, source_type, source_id))
+            actions_list.extend(
+                await self._list_complaint_actions(
+                    tenant_id, status_filter, source_type, source_id
+                )
+            )
         if not source_type or source_type == "investigation":
             actions_list.extend(
-                await self._list_investigation_actions(tenant_id, status_filter, source_type, source_id)
+                await self._list_investigation_actions(
+                    tenant_id, status_filter, source_type, source_id
+                )
             )
 
         actions_list.sort(key=lambda x: x["created_at"], reverse=True)
@@ -178,18 +198,26 @@ class ActionService:
 
         if src_type == "incident":
             action = await self._get_model_or_raise(IncidentAction, action_id)
-            await self._validate_source_entity("incident", action.incident_id, tenant_id)
+            await self._validate_source_entity(
+                "incident", action.incident_id, tenant_id
+            )
             return action_to_dict(action, "incident", action.incident_id)
         elif src_type == "rta":
-            action = await self._get_model_or_raise(RTAAction, action_id, tenant_id=tenant_id)
+            action = await self._get_model_or_raise(
+                RTAAction, action_id, tenant_id=tenant_id
+            )
             return action_to_dict(action, "rta", action.rta_id)
         elif src_type == "complaint":
             action = await self._get_model_or_raise(ComplaintAction, action_id)
-            await self._validate_source_entity("complaint", action.complaint_id, tenant_id)
+            await self._validate_source_entity(
+                "complaint", action.complaint_id, tenant_id
+            )
             return action_to_dict(action, "complaint", action.complaint_id)
         else:  # investigation
             action = await self._get_model_or_raise(InvestigationAction, action_id)
-            await self._validate_source_entity("investigation", action.investigation_id, tenant_id)
+            await self._validate_source_entity(
+                "investigation", action.investigation_id, tenant_id
+            )
             return action_to_dict(action, "investigation", action.investigation_id)
 
     async def update_action(  # noqa: C901
@@ -225,7 +253,9 @@ class ActionService:
         if priority and priority.lower() not in VALID_PRIORITIES:
             raise ValueError(f"Invalid priority: {priority}")
 
-        action, source_id = await self._resolve_action_for_update(action_id, src_type, tenant_id)
+        action, source_id = await self._resolve_action_for_update(
+            action_id, src_type, tenant_id
+        )
 
         if title is not None:
             action.title = title
@@ -250,7 +280,9 @@ class ActionService:
             action.due_date = self._parse_due_date(due_date_str)
 
         if assigned_to_email is not None:
-            result = await self.db.execute(select(User).where(User.email == assigned_to_email))
+            result = await self.db.execute(
+                select(User).where(User.email == assigned_to_email)
+            )
             user = result.scalar_one_or_none()
             if user:
                 action.owner_id = user.id
@@ -265,7 +297,9 @@ class ActionService:
 
     # ---- Private helpers ----
 
-    async def _validate_source_entity(self, src_type: str, source_id: int, tenant_id: int | None) -> None:
+    async def _validate_source_entity(
+        self, src_type: str, source_id: int, tenant_id: int | None
+    ) -> None:
         """Validate the source entity exists. Raises LookupError if not."""
         model_map = {
             "incident": Incident,
@@ -338,11 +372,15 @@ class ActionService:
             "reference_number": ref_number,
         }
         if src_type == "incident":
-            return IncidentAction(incident_id=source_id, status=ActionStatus.OPEN, **common)
+            return IncidentAction(
+                incident_id=source_id, status=ActionStatus.OPEN, **common
+            )
         elif src_type == "rta":
             return RTAAction(rta_id=source_id, status=ActionStatus.OPEN, **common)
         elif src_type == "complaint":
-            return ComplaintAction(complaint_id=source_id, status=ActionStatus.OPEN, **common)
+            return ComplaintAction(
+                complaint_id=source_id, status=ActionStatus.OPEN, **common
+            )
         else:
             return InvestigationAction(
                 investigation_id=source_id,
@@ -350,25 +388,37 @@ class ActionService:
                 **common,
             )
 
-    async def _resolve_action_for_update(self, action_id: int, src_type: str, tenant_id: int | None) -> tuple[Any, int]:
+    async def _resolve_action_for_update(
+        self, action_id: int, src_type: str, tenant_id: int | None
+    ) -> tuple[Any, int]:
         """Fetch the action model and its source_id for update."""
         if src_type == "incident":
             action = await self._get_model_or_raise(IncidentAction, action_id)
-            await self._validate_source_entity("incident", action.incident_id, tenant_id)
+            await self._validate_source_entity(
+                "incident", action.incident_id, tenant_id
+            )
             return action, action.incident_id
         elif src_type == "rta":
-            action = await self._get_model_or_raise(RTAAction, action_id, tenant_id=tenant_id)
+            action = await self._get_model_or_raise(
+                RTAAction, action_id, tenant_id=tenant_id
+            )
             return action, action.rta_id
         elif src_type == "complaint":
             action = await self._get_model_or_raise(ComplaintAction, action_id)
-            await self._validate_source_entity("complaint", action.complaint_id, tenant_id)
+            await self._validate_source_entity(
+                "complaint", action.complaint_id, tenant_id
+            )
             return action, action.complaint_id
         else:
             action = await self._get_model_or_raise(InvestigationAction, action_id)
-            await self._validate_source_entity("investigation", action.investigation_id, tenant_id)
+            await self._validate_source_entity(
+                "investigation", action.investigation_id, tenant_id
+            )
             return action, action.investigation_id
 
-    async def _get_model_or_raise(self, model: type, entity_id: int, tenant_id: int | None = None) -> Any:
+    async def _get_model_or_raise(
+        self, model: type, entity_id: int, tenant_id: int | None = None
+    ) -> Any:
         stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined, var-annotated]  # TYPE-IGNORE: MYPY-OVERRIDE
         if tenant_id is not None and hasattr(model, "tenant_id"):
             stmt = stmt.where(model.tenant_id == tenant_id)
@@ -378,7 +428,9 @@ class ActionService:
             raise LookupError(f"{model.__name__} with ID {entity_id} not found")
         return entity
 
-    async def _list_incident_actions(self, tenant_id, status_filter, source_type, source_id) -> list[dict[str, Any]]:
+    async def _list_incident_actions(
+        self, tenant_id, status_filter, source_type, source_id
+    ) -> list[dict[str, Any]]:
         query = (
             select(IncidentAction)
             .join(Incident)
@@ -390,10 +442,18 @@ class ActionService:
         if source_type == "incident" and source_id:
             query = query.where(IncidentAction.incident_id == source_id)
         result = await self.db.execute(query)
-        return [action_to_dict(a, "incident", a.incident_id) for a in result.scalars().all()]
+        return [
+            action_to_dict(a, "incident", a.incident_id) for a in result.scalars().all()
+        ]
 
-    async def _list_rta_actions(self, tenant_id, status_filter, source_type, source_id) -> list[dict[str, Any]]:
-        query = select(RTAAction).where(RTAAction.tenant_id == tenant_id).options(selectinload(RTAAction.rta))
+    async def _list_rta_actions(
+        self, tenant_id, status_filter, source_type, source_id
+    ) -> list[dict[str, Any]]:
+        query = (
+            select(RTAAction)
+            .where(RTAAction.tenant_id == tenant_id)
+            .options(selectinload(RTAAction.rta))
+        )
         if status_filter:
             query = query.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
@@ -401,7 +461,9 @@ class ActionService:
         result = await self.db.execute(query)
         return [action_to_dict(a, "rta", a.rta_id) for a in result.scalars().all()]
 
-    async def _list_complaint_actions(self, tenant_id, status_filter, source_type, source_id) -> list[dict[str, Any]]:
+    async def _list_complaint_actions(
+        self, tenant_id, status_filter, source_type, source_id
+    ) -> list[dict[str, Any]]:
         query = (
             select(ComplaintAction)
             .join(Complaint)
@@ -413,7 +475,10 @@ class ActionService:
         if source_type == "complaint" and source_id:
             query = query.where(ComplaintAction.complaint_id == source_id)
         result = await self.db.execute(query)
-        return [action_to_dict(a, "complaint", a.complaint_id) for a in result.scalars().all()]
+        return [
+            action_to_dict(a, "complaint", a.complaint_id)
+            for a in result.scalars().all()
+        ]
 
     async def _list_investigation_actions(
         self, tenant_id, status_filter, source_type, source_id
@@ -429,4 +494,7 @@ class ActionService:
         if source_type == "investigation" and source_id:
             query = query.where(InvestigationAction.investigation_id == source_id)
         result = await self.db.execute(query)
-        return [action_to_dict(a, "investigation", a.investigation_id) for a in result.scalars().all()]
+        return [
+            action_to_dict(a, "investigation", a.investigation_id)
+            for a in result.scalars().all()
+        ]

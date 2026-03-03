@@ -10,13 +10,17 @@ class AcknowledgmentRequirementBase(BaseModel):
     """Base schema for acknowledgment requirements."""
 
     policy_id: int
-    acknowledgment_type: str = Field("read_only", description="Type: read_only, accept, quiz, sign")
+    acknowledgment_type: str = Field(
+        "read_only", description="Type: read_only, accept, quiz, sign"
+    )
     required_for_all: bool = False
     required_departments: Optional[List[str]] = None
     required_roles: Optional[List[str]] = None
     required_user_ids: Optional[List[int]] = None
     due_within_days: int = Field(30, ge=1, le=365)
-    reminder_days_before: Optional[List[int]] = Field(None, description="Days before due to send reminders")
+    reminder_days_before: Optional[List[int]] = Field(
+        None, description="Days before due to send reminders"
+    )
     re_acknowledge_on_update: bool = True
     re_acknowledge_period_months: Optional[int] = None
     quiz_questions: Optional[List[Dict[str, Any]]] = None

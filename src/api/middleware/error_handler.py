@@ -64,18 +64,26 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    async def http_exception_handler(
+        request: Request, exc: StarletteHTTPException
+    ) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         code = _STATUS_TO_ERROR_CODE.get(exc.status_code, f"HTTP_{exc.status_code}")
         details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
-        message = exc.detail if isinstance(exc.detail, str) else _status_phrase(exc.status_code)
+        message = (
+            exc.detail
+            if isinstance(exc.detail, str)
+            else _status_phrase(exc.status_code)
+        )
         return JSONResponse(
             status_code=exc.status_code,
             content=_build_envelope(code, message, request_id, details),
         )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         field_errors = []
         for error in exc.errors():
@@ -98,7 +106,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         logger.error(
             "Unhandled exception [request_id=%s]: %s\n%s",
@@ -108,7 +118,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=_build_envelope(ErrorCode.INTERNAL_ERROR, "Internal server error", request_id),
+            content=_build_envelope(
+                ErrorCode.INTERNAL_ERROR, "Internal server error", request_id
+            ),
         )
 
 

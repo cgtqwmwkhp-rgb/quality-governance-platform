@@ -79,7 +79,9 @@ class SMSService:
         else:
             logger.warning("Twilio credentials not configured. SMS disabled.")
 
-    async def send_sms(self, to: str, message: str, from_number: Optional[str] = None) -> SMSResult:
+    async def send_sms(
+        self, to: str, message: str, from_number: Optional[str] = None
+    ) -> SMSResult:
         """
         Send an SMS message.
 
@@ -93,26 +95,40 @@ class SMSService:
         """
         if not self.enabled:
             logger.warning(f"SMS disabled. Would send to {to}: {message[:50]}...")
-            return SMSResult(success=False, status=SMSStatus.FAILED, error_message="SMS service not configured")
+            return SMSResult(
+                success=False,
+                status=SMSStatus.FAILED,
+                error_message="SMS service not configured",
+            )
 
         # Validate phone number format
         normalized = self._normalize_phone_number(to)
         if not normalized:
-            return SMSResult(success=False, status=SMSStatus.FAILED, error_message="Invalid phone number format")
+            return SMSResult(
+                success=False,
+                status=SMSStatus.FAILED,
+                error_message="Invalid phone number format",
+            )
 
         # Truncate message if too long
         if len(message) > 1600:
             message = message[:1597] + "..."
 
         try:
-            sms = self.client.messages.create(body=message, from_=from_number or self.from_number, to=normalized)
+            sms = self.client.messages.create(
+                body=message, from_=from_number or self.from_number, to=normalized
+            )
 
             logger.info(f"SMS sent to {normalized}: SID={sms.sid}")
 
             return SMSResult(
                 success=True,
                 message_sid=sms.sid,
-                status=SMSStatus(sms.status) if sms.status in SMSStatus.__members__ else SMSStatus.QUEUED,
+                status=(
+                    SMSStatus(sms.status)
+                    if sms.status in SMSStatus.__members__
+                    else SMSStatus.QUEUED
+                ),
             )
 
         except Exception as e:
@@ -126,7 +142,9 @@ class SMSService:
                 error_message=str(e),
             )
 
-    async def send_bulk_sms(self, recipients: List[str], message: str) -> Dict[str, SMSResult]:
+    async def send_bulk_sms(
+        self, recipients: List[str], message: str
+    ) -> Dict[str, SMSResult]:
         """
         Send the same message to multiple recipients.
 
@@ -146,7 +164,11 @@ class SMSService:
         return results
 
     async def send_sos_alert(
-        self, recipients: List[str], reporter_name: str, location: str, gps_link: Optional[str] = None
+        self,
+        recipients: List[str],
+        reporter_name: str,
+        location: str,
+        gps_link: Optional[str] = None,
     ) -> Dict[str, SMSResult]:
         """
         Send SOS emergency alert SMS.
@@ -174,7 +196,11 @@ RESPOND IMMEDIATELY"""
         return await self.send_bulk_sms(recipients, message)
 
     async def send_riddor_alert(
-        self, recipients: List[str], incident_ref: str, incident_type: str, location: str
+        self,
+        recipients: List[str],
+        incident_ref: str,
+        incident_type: str,
+        location: str,
     ) -> Dict[str, SMSResult]:
         """
         Send RIDDOR reportable incident alert SMS.
@@ -200,7 +226,9 @@ Login to QGP to submit report."""
 
         return await self.send_bulk_sms(recipients, message)
 
-    async def send_action_reminder(self, phone: str, action_title: str, due_date: str, action_url: str) -> SMSResult:
+    async def send_action_reminder(
+        self, phone: str, action_title: str, due_date: str, action_url: str
+    ) -> SMSResult:
         """
         Send action item reminder SMS.
 
@@ -287,7 +315,11 @@ If you didn't request this, please ignore."""
 
         try:
             message = self.client.messages(message_sid).fetch()
-            return SMSStatus(message.status) if message.status in SMSStatus.__members__ else None
+            return (
+                SMSStatus(message.status)
+                if message.status in SMSStatus.__members__
+                else None
+            )
         except Exception as e:
             logger.error(f"Failed to get message status: {e}")
             return None

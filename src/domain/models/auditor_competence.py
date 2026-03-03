@@ -48,7 +48,10 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
 
     # Professional details
@@ -62,12 +65,16 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
     )
 
     # Experience
-    years_audit_experience: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    years_audit_experience: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
     total_audits_conducted: Mapped[int] = mapped_column(Integer, default=0)
     total_audits_as_lead: Mapped[int] = mapped_column(Integer, default=0)
 
     # Specializations (JSON array)
-    specializations: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ["ISO 9001", "ISO 14001", "Safety"]
+    specializations: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # ["ISO 9001", "ISO 14001", "Safety"]
 
     # Industries/sectors with experience
     industry_experience: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -82,8 +89,12 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
     availability_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Last assessment
-    last_competence_assessment: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_assessment_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_competence_assessment: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_assessment_due: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Overall competence score (0-100)
     competence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -114,16 +125,22 @@ class AuditorCertification(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Certification details
     certification_name: Mapped[str] = mapped_column(String(200), nullable=False)
     certification_body: Mapped[str] = mapped_column(String(200), nullable=False)
-    certification_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    certification_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # Standard/framework covered
-    standard_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # ISO 9001, ISO 14001, etc.
+    standard_code: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # ISO 9001, ISO 14001, etc.
 
     # Level
     certification_level: Mapped[Optional[str]] = mapped_column(
@@ -131,12 +148,17 @@ class AuditorCertification(Base, TimestampMixin):
     )  # Internal Auditor, Lead Auditor
 
     # Dates
-    issued_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    issued_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    expiry_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Status
     status: Mapped[CertificationStatus] = mapped_column(
-        SQLEnum(CertificationStatus, native_enum=False), default=CertificationStatus.ACTIVE
+        SQLEnum(CertificationStatus, native_enum=False),
+        default=CertificationStatus.ACTIVE,
     )
 
     # CPD/CPE requirements
@@ -151,7 +173,9 @@ class AuditorCertification(Base, TimestampMixin):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    profile: Mapped["AuditorProfile"] = relationship("AuditorProfile", back_populates="certifications")
+    profile: Mapped["AuditorProfile"] = relationship(
+        "AuditorProfile", back_populates="certifications"
+    )
 
     def __repr__(self) -> str:
         return f"<AuditorCertification(id={self.id}, name={self.certification_name}, status={self.status})>"
@@ -182,21 +206,29 @@ class AuditorTraining(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Training details
     training_name: Mapped[str] = mapped_column(String(200), nullable=False)
     training_provider: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    training_type: Mapped[str] = mapped_column(String(50), default="course")  # course, workshop, webinar, on_the_job
+    training_type: Mapped[str] = mapped_column(
+        String(50), default="course"
+    )  # course, workshop, webinar, on_the_job
 
     # Topic/area
     topic: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     standard_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Dates
-    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    end_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Duration
     duration_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -204,7 +236,9 @@ class AuditorTraining(Base, TimestampMixin):
 
     # Completion
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    completion_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completion_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Assessment
     assessment_passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
@@ -218,7 +252,9 @@ class AuditorTraining(Base, TimestampMixin):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    profile: Mapped["AuditorProfile"] = relationship("AuditorProfile", back_populates="training_records")
+    profile: Mapped["AuditorProfile"] = relationship(
+        "AuditorProfile", back_populates="training_records"
+    )
 
     def __repr__(self) -> str:
         return f"<AuditorTraining(id={self.id}, name={self.training_name}, completed={self.completed})>"
@@ -233,15 +269,21 @@ class CompetencyArea(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Area identification
-    code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    code: Mapped[str] = mapped_column(
+        String(50), nullable=False, unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Category
-    category: Mapped[str] = mapped_column(String(100), nullable=False)  # technical, behavioral, industry
+    category: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )  # technical, behavioral, industry
 
     # Applicable standards
-    applicable_standards: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ["ISO 9001", "ISO 14001"]
+    applicable_standards: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )  # ["ISO 9001", "ISO 14001"]
 
     # Proficiency levels and descriptions
     # JSON: {"1": "Basic awareness", "2": "Can perform with supervision", ...}
@@ -272,10 +314,14 @@ class AuditorCompetency(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
-        ForeignKey("auditor_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     competency_area_id: Mapped[int] = mapped_column(
-        ForeignKey("competency_areas.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("competency_areas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Current proficiency level (typically 1-5)
@@ -287,9 +333,15 @@ class AuditorCompetency(Base, TimestampMixin):
     evidence_links: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Assessment history
-    last_assessed: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    assessed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    assessment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # self, peer, supervisor, exam
+    last_assessed: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    assessed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    assessment_method: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # self, peer, supervisor, exam
 
     # Development plan
     development_plan: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -300,7 +352,9 @@ class AuditorCompetency(Base, TimestampMixin):
     gap_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    profile: Mapped["AuditorProfile"] = relationship("AuditorProfile", back_populates="competencies")
+    profile: Mapped["AuditorProfile"] = relationship(
+        "AuditorProfile", back_populates="competencies"
+    )
 
     def __repr__(self) -> str:
         return f"<AuditorCompetency(id={self.id}, profile={self.profile_id}, level={self.current_level})>"
@@ -335,7 +389,9 @@ class AuditAssignmentCriteria(Base, TimestampMixin):
     minimum_years_experience: Mapped[float] = mapped_column(Float, default=0)
 
     # Industry/sector requirements
-    required_industry_experience: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    required_industry_experience: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Additional requirements
     additional_requirements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

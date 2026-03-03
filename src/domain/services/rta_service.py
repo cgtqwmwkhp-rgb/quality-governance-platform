@@ -40,7 +40,9 @@ class RTAService:
         request_id: str | None = None,
     ) -> RoadTrafficCollision:
         """Create a new RTA with auto-generated reference number."""
-        ref_number = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
+        ref_number = await ReferenceNumberService.generate(
+            self.db, "rta", RoadTrafficCollision
+        )
         rta = RoadTrafficCollision(
             **rta_data.model_dump(),
             reference_number=ref_number,
@@ -215,7 +217,9 @@ class RTAService:
             LookupError: If the parent RTA is not found.
         """
         rta = await self.get_rta(rta_id, tenant_id)
-        ref_number = await ReferenceNumberService.generate(self.db, "rta_action", RTAAction)
+        ref_number = await ReferenceNumberService.generate(
+            self.db, "rta_action", RTAAction
+        )
 
         action = RTAAction(
             **action_data.model_dump(),
@@ -353,7 +357,8 @@ class RTAService:
         query = (
             select(InvestigationRun)
             .where(
-                InvestigationRun.assigned_entity_type == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
+                InvestigationRun.assigned_entity_type
+                == AssignedEntityType.ROAD_TRAFFIC_COLLISION,
                 InvestigationRun.assigned_entity_id == rta_id,
             )
             .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -362,7 +367,9 @@ class RTAService:
 
     # ---- Helpers ----
 
-    async def _get_rta_action_or_raise(self, action_id: int, tenant_id: int | None) -> RTAAction:
+    async def _get_rta_action_or_raise(
+        self, action_id: int, tenant_id: int | None
+    ) -> RTAAction:
         result = await self.db.execute(
             select(RTAAction).where(
                 RTAAction.id == action_id,

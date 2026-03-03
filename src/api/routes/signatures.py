@@ -77,7 +77,9 @@ class SignerResponse(BaseModel):
 class SignInput(BaseModel):
     signature_type: str = Field(..., pattern="^(drawn|typed|uploaded)$")
     signature_data: str = Field(..., min_length=1)
-    auth_method: str = Field(default="email", pattern="^(email|sms|password|biometric)$")
+    auth_method: str = Field(
+        default="email", pattern="^(email|sms|password|biometric)$"
+    )
     geo_location: Optional[str] = None
 
 
@@ -167,7 +169,9 @@ async def list_signature_requests(
     """List signature requests."""
     from src.domain.models.digital_signature import SignatureRequest
 
-    query = db.query(SignatureRequest).filter(SignatureRequest.tenant_id == current_user.tenant_id)
+    query = db.query(SignatureRequest).filter(
+        SignatureRequest.tenant_id == current_user.tenant_id
+    )
 
     if status:
         query = query.filter(SignatureRequest.status == status)
@@ -487,7 +491,11 @@ async def get_signature_stats(
     )
 
     # Total signatures
-    total_signatures = db.query(func.count(Signature.id)).filter(Signature.tenant_id == current_user.tenant_id).scalar()
+    total_signatures = (
+        db.query(func.count(Signature.id))
+        .filter(Signature.tenant_id == current_user.tenant_id)
+        .scalar()
+    )
 
     # This month
     this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)

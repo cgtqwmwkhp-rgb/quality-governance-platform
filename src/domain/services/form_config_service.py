@@ -18,7 +18,14 @@ from sqlalchemy.orm import selectinload
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.update import apply_updates
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
-from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
+from src.domain.models.form_config import (
+    Contract,
+    FormField,
+    FormStep,
+    FormTemplate,
+    LookupOption,
+    SystemSetting,
+)
 from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -66,7 +73,9 @@ class FormConfigService:
     ) -> dict[str, Any]:
         """List form templates with pagination."""
         query = (
-            select(FormTemplate).where(FormTemplate.tenant_id == tenant_id).options(selectinload(FormTemplate.steps))
+            select(FormTemplate)
+            .where(FormTemplate.tenant_id == tenant_id)
+            .options(selectinload(FormTemplate.steps))
         )
         if form_type:
             query = query.where(FormTemplate.form_type == form_type)
@@ -74,7 +83,9 @@ class FormConfigService:
             query = query.where(FormTemplate.is_active == is_active)
         query = query.order_by(FormTemplate.name)
 
-        count_result = await self.db.execute(select(func.count()).select_from(query.subquery()))
+        count_result = await self.db.execute(
+            select(func.count()).select_from(query.subquery())
+        )
         total: int = count_result.scalar_one()
 
         offset = (page - 1) * page_size
@@ -210,7 +221,9 @@ class FormConfigService:
         request_id: str,
     ) -> FormTemplate:
         """Update a form template."""
-        template = await self._get_or_raise(FormTemplate, template_id, tenant_id=tenant_id)
+        template = await self._get_or_raise(
+            FormTemplate, template_id, tenant_id=tenant_id
+        )
 
         update_data = apply_updates(template, data)
         template.updated_by_id = user_id
@@ -242,7 +255,9 @@ class FormConfigService:
         request_id: str,
     ) -> FormTemplate:
         """Publish a form template to make it available in the portal."""
-        template = await self._get_or_raise(FormTemplate, template_id, tenant_id=tenant_id)
+        template = await self._get_or_raise(
+            FormTemplate, template_id, tenant_id=tenant_id
+        )
 
         template.is_published = True
         template.published_at = datetime.now(timezone.utc)
@@ -272,7 +287,9 @@ class FormConfigService:
         request_id: str,
     ) -> None:
         """Delete a form template."""
-        template = await self._get_or_raise(FormTemplate, template_id, tenant_id=tenant_id)
+        template = await self._get_or_raise(
+            FormTemplate, template_id, tenant_id=tenant_id
+        )
 
         await record_audit_event(
             db=self.db,
@@ -611,7 +628,9 @@ class FormConfigService:
         tenant_id: int,
     ) -> SystemSetting:
         """Update a system setting by key."""
-        result = await self.db.execute(select(SystemSetting).where(SystemSetting.key == key))
+        result = await self.db.execute(
+            select(SystemSetting).where(SystemSetting.key == key)
+        )
         setting = result.scalar_one_or_none()
         if not setting:
             raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
@@ -686,7 +705,9 @@ class FormConfigService:
     ) -> LookupOption:
         """Update a lookup option."""
         result = await self.db.execute(
-            select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+            select(LookupOption)
+            .where(LookupOption.id == option_id)
+            .where(LookupOption.category == category)
         )
         option = result.scalar_one_or_none()
         if not option:
@@ -709,7 +730,9 @@ class FormConfigService:
     ) -> None:
         """Delete a lookup option."""
         result = await self.db.execute(
-            select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+            select(LookupOption)
+            .where(LookupOption.id == option_id)
+            .where(LookupOption.category == category)
         )
         option = result.scalar_one_or_none()
         if not option:

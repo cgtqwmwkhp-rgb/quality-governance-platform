@@ -225,7 +225,9 @@ class TestComplaintModel:
         from src.domain.models.complaint import ComplaintStatus
 
         # Check if has typical statuses
-        assert hasattr(ComplaintStatus, "CLOSED") or hasattr(ComplaintStatus, "RESOLVED")
+        assert hasattr(ComplaintStatus, "CLOSED") or hasattr(
+            ComplaintStatus, "RESOLVED"
+        )
 
     def test_complaint_priority_enum(self):
         """Complaint priority enum is defined."""
@@ -363,7 +365,9 @@ class TestInvestigationModel:
         try:
             from src.domain.models.investigation import Investigation
         except ImportError:
-            from src.domain.models.investigation import InvestigationRun as Investigation
+            from src.domain.models.investigation import (
+                InvestigationRun as Investigation,
+            )
 
         assert Investigation is not None
 

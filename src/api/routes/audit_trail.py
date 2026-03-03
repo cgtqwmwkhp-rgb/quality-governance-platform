@@ -111,7 +111,9 @@ def list_audit_logs(
     return entries
 
 
-@router.get("/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse])
+@router.get(
+    "/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse]
+)
 def get_entity_history(
     entity_type: str,
     entity_id: str,
@@ -284,8 +286,25 @@ def get_audit_stats(
 def list_actions(current_user: CurrentUser) -> Any:
     """Get list of possible audit actions."""
     return {
-        "data": ["create", "update", "delete", "view", "export", "approve", "reject", "assign"],
-        "auth": ["login", "logout", "login_failed", "password_change", "password_reset", "mfa_enabled", "mfa_disabled"],
+        "data": [
+            "create",
+            "update",
+            "delete",
+            "view",
+            "export",
+            "approve",
+            "reject",
+            "assign",
+        ],
+        "auth": [
+            "login",
+            "logout",
+            "login_failed",
+            "password_change",
+            "password_reset",
+            "mfa_enabled",
+            "mfa_disabled",
+        ],
         "admin": [
             "user_created",
             "user_deleted",
@@ -294,7 +313,13 @@ def list_actions(current_user: CurrentUser) -> Any:
             "permission_revoked",
             "settings_changed",
         ],
-        "system": ["backup_created", "backup_restored", "migration_run", "maintenance_started", "maintenance_ended"],
+        "system": [
+            "backup_created",
+            "backup_restored",
+            "migration_run",
+            "maintenance_started",
+            "maintenance_ended",
+        ],
     }
 
 

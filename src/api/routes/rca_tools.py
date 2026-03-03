@@ -51,7 +51,10 @@ class CreateFishboneRequest(BaseModel):
 
 
 class AddCauseRequest(BaseModel):
-    category: str = Field(..., description="manpower, method, machine, material, measurement, mother_nature")
+    category: str = Field(
+        ...,
+        description="manpower, method, machine, material, measurement, mother_nature",
+    )
     cause: str
     sub_causes: Optional[List[str]] = None
 

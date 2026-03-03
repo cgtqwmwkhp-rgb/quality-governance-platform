@@ -202,7 +202,9 @@ class TestAuditTemplateCRUD:
 
         assert response.status_code == 400
         resp_data = response.json()
-        error_msg = resp_data.get("error", {}).get("message", resp_data.get("detail", ""))
+        error_msg = resp_data.get("error", {}).get(
+            "message", resp_data.get("detail", "")
+        )
         assert "at least one question" in error_msg.lower()
 
     @pytest.mark.asyncio

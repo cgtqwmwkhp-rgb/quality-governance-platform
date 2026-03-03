@@ -14,8 +14,18 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
-from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
+from src.domain.models.complaint import (
+    Complaint,
+    ComplaintPriority,
+    ComplaintStatus,
+    ComplaintType,
+)
+from src.domain.models.incident import (
+    Incident,
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentType,
+)
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 from src.domain.services.reference_number import ReferenceNumberService
@@ -44,7 +54,9 @@ def _map_severity(severity: str) -> tuple:
         "high": (IncidentSeverity.HIGH, ComplaintPriority.HIGH),
         "critical": (IncidentSeverity.CRITICAL, ComplaintPriority.CRITICAL),
     }
-    return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
+    return severity_map.get(
+        severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM)
+    )
 
 
 def _get_status_label(status: str) -> str:
@@ -95,13 +107,19 @@ class PortalService:
         tracking_code = _generate_tracking_code()
         _ = _hash_tracking_code(tracking_code)  # noqa: F841
 
-        incident_severity, complaint_priority = _map_severity(data.get("severity", "medium"))
+        incident_severity, complaint_priority = _map_severity(
+            data.get("severity", "medium")
+        )
         is_anonymous = data.get("is_anonymous", False)
 
         if report_type == "incident":
-            return await self._submit_incident(data, incident_severity, is_anonymous, tracking_code)
+            return await self._submit_incident(
+                data, incident_severity, is_anonymous, tracking_code
+            )
         elif report_type == "complaint":
-            return await self._submit_complaint(data, complaint_priority, is_anonymous, tracking_code)
+            return await self._submit_complaint(
+                data, complaint_priority, is_anonymous, tracking_code
+            )
         elif report_type == "rta":
             return await self._submit_rta(data, is_anonymous, tracking_code)
         elif report_type == "near_miss":
@@ -110,9 +128,15 @@ class PortalService:
             raise ValueError(f"Unsupported report type: {report_type}")
 
     async def _submit_incident(
-        self, data: dict, severity: IncidentSeverity, is_anonymous: bool, tracking_code: str
+        self,
+        data: dict,
+        severity: IncidentSeverity,
+        is_anonymous: bool,
+        tracking_code: str,
     ) -> dict[str, Any]:
-        ref_number = await ReferenceNumberService.generate(self.db, "incident", Incident)
+        ref_number = await ReferenceNumberService.generate(
+            self.db, "incident", Incident
+        )
         incident = Incident(
             reference_number=ref_number,
             title=data["title"],
@@ -125,7 +149,9 @@ class PortalService:
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=1,
-            reporter_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            reporter_name=(
+                data.get("reporter_name") if not is_anonymous else "Anonymous"
+            ),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             source_form_id="portal_incident_v1",
             source_type="portal",
@@ -144,9 +170,15 @@ class PortalService:
         }
 
     async def _submit_complaint(
-        self, data: dict, priority: ComplaintPriority, is_anonymous: bool, tracking_code: str
+        self,
+        data: dict,
+        priority: ComplaintPriority,
+        is_anonymous: bool,
+        tracking_code: str,
     ) -> dict[str, Any]:
-        ref_number = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
+        ref_number = await ReferenceNumberService.generate(
+            self.db, "complaint", Complaint
+        )
         complaint = Complaint(
             reference_number=ref_number,
             title=data["title"],
@@ -156,7 +188,9 @@ class PortalService:
             status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
             tenant_id=1,
-            complainant_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            complainant_name=(
+                data.get("reporter_name") if not is_anonymous else "Anonymous"
+            ),
             complainant_email=data.get("reporter_email") if not is_anonymous else None,
             complainant_phone=data.get("reporter_phone") if not is_anonymous else None,
             source_form_id="portal_complaint_v1",
@@ -175,15 +209,21 @@ class PortalService:
             "qr_code_url": f"/api/v1/portal/qr/{ref_number}",
         }
 
-    async def _submit_rta(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
-        ref_number = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
+    async def _submit_rta(
+        self, data: dict, is_anonymous: bool, tracking_code: str
+    ) -> dict[str, Any]:
+        ref_number = await ReferenceNumberService.generate(
+            self.db, "rta", RoadTrafficCollision
+        )
         rta_severity_map = {
             "low": RTASeverity.DAMAGE_ONLY,
             "medium": RTASeverity.MINOR_INJURY,
             "high": RTASeverity.SERIOUS_INJURY,
             "critical": RTASeverity.FATAL,
         }
-        rta_severity = rta_severity_map.get(data.get("severity", "low").lower(), RTASeverity.DAMAGE_ONLY)
+        rta_severity = rta_severity_map.get(
+            data.get("severity", "low").lower(), RTASeverity.DAMAGE_ONLY
+        )
 
         rta = RoadTrafficCollision(
             reference_number=ref_number,
@@ -195,7 +235,9 @@ class PortalService:
             collision_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=1,
-            reporter_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            reporter_name=(
+                data.get("reporter_name") if not is_anonymous else "Anonymous"
+            ),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             driver_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
             source_form_id="portal_rta_v1",
@@ -213,14 +255,25 @@ class PortalService:
             "qr_code_url": f"/api/v1/portal/qr/{ref_number}",
         }
 
-    async def _submit_near_miss(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
-        ref_number = await ReferenceNumberService.generate(self.db, "near_miss", NearMiss)
-        priority_map = {"low": "LOW", "medium": "MEDIUM", "high": "HIGH", "critical": "CRITICAL"}
+    async def _submit_near_miss(
+        self, data: dict, is_anonymous: bool, tracking_code: str
+    ) -> dict[str, Any]:
+        ref_number = await ReferenceNumberService.generate(
+            self.db, "near_miss", NearMiss
+        )
+        priority_map = {
+            "low": "LOW",
+            "medium": "MEDIUM",
+            "high": "HIGH",
+            "critical": "CRITICAL",
+        }
         priority = priority_map.get(data.get("severity", "medium").lower(), "MEDIUM")
 
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            reporter_name=(
+                data.get("reporter_name") if not is_anonymous else "Anonymous"
+            ),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             contract=data.get("department") or "Not specified",
             location=data.get("location") or "Not specified",
@@ -265,15 +318,25 @@ class PortalService:
         elif reference_number.startswith("NM-"):
             return await self._track_near_miss(reference_number)
         else:
-            raise ValueError(f"Unrecognised reference number prefix: {reference_number}")
+            raise ValueError(
+                f"Unrecognised reference number prefix: {reference_number}"
+            )
 
     async def _track_incident(self, reference_number: str) -> dict[str, Any]:
-        result = await self.db.execute(select(Incident).where(Incident.reference_number == reference_number))
+        result = await self.db.execute(
+            select(Incident).where(Incident.reference_number == reference_number)
+        )
         incident = result.scalar_one_or_none()
         if not incident:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": incident.created_at.isoformat(), "event": "Report Submitted", "icon": "📋"}]
+        timeline = [
+            {
+                "date": incident.created_at.isoformat(),
+                "event": "Report Submitted",
+                "icon": "📋",
+            }
+        ]
         if incident.status != IncidentStatus.REPORTED:
             timeline.append(
                 {
@@ -297,12 +360,20 @@ class PortalService:
         }
 
     async def _track_complaint(self, reference_number: str) -> dict[str, Any]:
-        result = await self.db.execute(select(Complaint).where(Complaint.reference_number == reference_number))
+        result = await self.db.execute(
+            select(Complaint).where(Complaint.reference_number == reference_number)
+        )
         complaint = result.scalar_one_or_none()
         if not complaint:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": complaint.created_at.isoformat(), "event": "Complaint Submitted", "icon": "📋"}]
+        timeline = [
+            {
+                "date": complaint.created_at.isoformat(),
+                "event": "Complaint Submitted",
+                "icon": "📋",
+            }
+        ]
         if complaint.status != ComplaintStatus.RECEIVED:
             timeline.append(
                 {
@@ -328,13 +399,21 @@ class PortalService:
 
     async def _track_rta(self, reference_number: str) -> dict[str, Any]:
         result = await self.db.execute(
-            select(RoadTrafficCollision).where(RoadTrafficCollision.reference_number == reference_number)
+            select(RoadTrafficCollision).where(
+                RoadTrafficCollision.reference_number == reference_number
+            )
         )
         rta = result.scalar_one_or_none()
         if not rta:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": rta.created_at.isoformat(), "event": "RTA Report Submitted", "icon": "🚗"}]
+        timeline = [
+            {
+                "date": rta.created_at.isoformat(),
+                "event": "RTA Report Submitted",
+                "icon": "🚗",
+            }
+        ]
         if rta.status != RTAStatus.REPORTED:
             timeline.append(
                 {
@@ -358,12 +437,20 @@ class PortalService:
         }
 
     async def _track_near_miss(self, reference_number: str) -> dict[str, Any]:
-        result = await self.db.execute(select(NearMiss).where(NearMiss.reference_number == reference_number))
+        result = await self.db.execute(
+            select(NearMiss).where(NearMiss.reference_number == reference_number)
+        )
         near_miss = result.scalar_one_or_none()
         if not near_miss:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": near_miss.created_at.isoformat(), "event": "Near Miss Reported", "icon": "⚠️"}]
+        timeline = [
+            {
+                "date": near_miss.created_at.isoformat(),
+                "event": "Near Miss Reported",
+                "icon": "⚠️",
+            }
+        ]
         if near_miss.status != "REPORTED":
             timeline.append(
                 {
@@ -396,10 +483,14 @@ class PortalService:
         week_ago = now - timedelta(days=7)
 
         incidents_today = await self.db.execute(
-            select(func.count()).select_from(Incident).where(Incident.created_at >= today_start)
+            select(func.count())
+            .select_from(Incident)
+            .where(Incident.created_at >= today_start)
         )
         complaints_today = await self.db.execute(
-            select(func.count()).select_from(Complaint).where(Complaint.created_at >= today_start)
+            select(func.count())
+            .select_from(Complaint)
+            .where(Complaint.created_at >= today_start)
         )
         total_today = (incidents_today.scalar() or 0) + (complaints_today.scalar() or 0)
 
@@ -415,7 +506,9 @@ class PortalService:
             .where(Complaint.status == ComplaintStatus.CLOSED)
             .where(Complaint.updated_at >= week_ago)
         )
-        resolved_week = (resolved_incidents.scalar() or 0) + (resolved_complaints.scalar() or 0)
+        resolved_week = (resolved_incidents.scalar() or 0) + (
+            resolved_complaints.scalar() or 0
+        )
 
         return {
             "total_reports_today": total_today,
@@ -448,7 +541,9 @@ class PortalService:
             select(Incident).where(func.lower(Incident.reporter_email) == email_lower)
         )
         for inc in incidents_result.scalars().all():
-            status_val = inc.status.value if hasattr(inc.status, "value") else str(inc.status)
+            status_val = (
+                inc.status.value if hasattr(inc.status, "value") else str(inc.status)
+            )
             all_reports.append(
                 {
                     "reference_number": inc.reference_number,
@@ -463,10 +558,14 @@ class PortalService:
 
         # Complaints
         complaints_result = await self.db.execute(
-            select(Complaint).where(func.lower(Complaint.complainant_email) == email_lower)
+            select(Complaint).where(
+                func.lower(Complaint.complainant_email) == email_lower
+            )
         )
         for comp in complaints_result.scalars().all():
-            status_val = comp.status.value if hasattr(comp.status, "value") else str(comp.status)
+            status_val = (
+                comp.status.value if hasattr(comp.status, "value") else str(comp.status)
+            )
             all_reports.append(
                 {
                     "reference_number": comp.reference_number,
@@ -481,10 +580,14 @@ class PortalService:
 
         # RTAs
         rtas_result = await self.db.execute(
-            select(RoadTrafficCollision).where(func.lower(RoadTrafficCollision.reporter_email) == email_lower)
+            select(RoadTrafficCollision).where(
+                func.lower(RoadTrafficCollision.reporter_email) == email_lower
+            )
         )
         for rta in rtas_result.scalars().all():
-            status_val = rta.status.value if hasattr(rta.status, "value") else str(rta.status)
+            status_val = (
+                rta.status.value if hasattr(rta.status, "value") else str(rta.status)
+            )
             all_reports.append(
                 {
                     "reference_number": rta.reference_number,
@@ -498,7 +601,9 @@ class PortalService:
             )
 
         # Near misses
-        nm_result = await self.db.execute(select(NearMiss).where(func.lower(NearMiss.reporter_email) == email_lower))
+        nm_result = await self.db.execute(
+            select(NearMiss).where(func.lower(NearMiss.reporter_email) == email_lower)
+        )
         for nm in nm_result.scalars().all():
             all_reports.append(
                 {

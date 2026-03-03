@@ -127,7 +127,10 @@ class TelemetryEvent(BaseModel):
         if "result" in v and v["result"] not in ALLOWED_LOGIN_RESULTS:
             raise ValueError(f"result '{v['result']}' not in allowlist")
 
-        if "durationBucket" in v and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS:
+        if (
+            "durationBucket" in v
+            and v["durationBucket"] not in ALLOWED_DURATION_BUCKETS
+        ):
             raise ValueError(f"durationBucket '{v['durationBucket']}' not in allowlist")
 
         if "errorCode" in v and v["errorCode"] not in ALLOWED_ERROR_CODES:

@@ -93,7 +93,9 @@ async def list_workflow_rules(
     )
 
 
-@router.post("/rules", response_model=WorkflowRuleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/rules", response_model=WorkflowRuleResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_workflow_rule(
     rule_data: WorkflowRuleCreate,
     db: AsyncSession = Depends(get_db),
@@ -185,7 +187,9 @@ async def get_rule_executions(
     )
     executions = result.scalars().all()
 
-    count_result = await db.execute(select(func.count(RuleExecution.id)).where(RuleExecution.rule_id == rule_id))
+    count_result = await db.execute(
+        select(func.count(RuleExecution.id)).where(RuleExecution.rule_id == rule_id)
+    )
     total = count_result.scalar()
 
     return RuleExecutionListResponse(
@@ -218,7 +222,9 @@ async def list_sla_configurations(
     if filters:
         query = query.where(and_(*filters))
 
-    query = query.order_by(SLAConfiguration.entity_type, SLAConfiguration.match_priority.desc())
+    query = query.order_by(
+        SLAConfiguration.entity_type, SLAConfiguration.match_priority.desc()
+    )
 
     result = await db.execute(query)
     configs = result.scalars().all()
@@ -229,7 +235,11 @@ async def list_sla_configurations(
     )
 
 
-@router.post("/sla-configs", response_model=SLAConfigurationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sla-configs",
+    response_model=SLAConfigurationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_sla_configuration(
     config_data: SLAConfigurationCreate,
     db: AsyncSession = Depends(get_db),
@@ -253,7 +263,9 @@ async def get_sla_configuration(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
+    result = await db.execute(
+        select(SLAConfiguration).where(SLAConfiguration.id == config_id)
+    )
     config = result.scalar_one_or_none()
 
     if not config:
@@ -270,7 +282,9 @@ async def update_sla_configuration(
     current_user: dict = Depends(get_current_user),
 ):
     """Update an SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
+    result = await db.execute(
+        select(SLAConfiguration).where(SLAConfiguration.id == config_id)
+    )
     config = result.scalar_one_or_none()
 
     if not config:
@@ -294,7 +308,9 @@ async def delete_sla_configuration(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete an SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
+    result = await db.execute(
+        select(SLAConfiguration).where(SLAConfiguration.id == config_id)
+    )
     config = result.scalar_one_or_none()
 
     if not config:
@@ -333,7 +349,9 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found for this entity")
+        raise HTTPException(
+            status_code=404, detail="SLA tracking not found for this entity"
+        )
 
     now = datetime.utcnow()
 
@@ -347,9 +365,13 @@ async def get_sla_status(
         percent_elapsed = 100.0
         time_remaining = None
     else:
-        total_duration = (tracking.resolution_due - tracking.started_at).total_seconds() / 3600
+        total_duration = (
+            tracking.resolution_due - tracking.started_at
+        ).total_seconds() / 3600
         elapsed = (now - tracking.started_at).total_seconds() / 3600
-        percent_elapsed = min((elapsed / total_duration) * 100, 100) if total_duration > 0 else 100
+        percent_elapsed = (
+            min((elapsed / total_duration) * 100, 100) if total_duration > 0 else 100
+        )
         time_remaining = max((tracking.resolution_due - now).total_seconds() / 3600, 0)
 
         if tracking.warning_sent or percent_elapsed >= 75:
@@ -368,7 +390,9 @@ async def get_sla_status(
     )
 
 
-@router.post("/sla-tracking/{entity_type}/{entity_id}/pause", response_model=SLATrackingResponse)
+@router.post(
+    "/sla-tracking/{entity_type}/{entity_id}/pause", response_model=SLATrackingResponse
+)
 async def pause_sla_tracking(
     entity_type: str,
     entity_id: int,
@@ -385,7 +409,9 @@ async def pause_sla_tracking(
     return SLATrackingResponse.from_orm(tracking)
 
 
-@router.post("/sla-tracking/{entity_type}/{entity_id}/resume", response_model=SLATrackingResponse)
+@router.post(
+    "/sla-tracking/{entity_type}/{entity_id}/resume", response_model=SLATrackingResponse
+)
 async def resume_sla_tracking(
     entity_type: str,
     entity_id: int,
@@ -437,7 +463,11 @@ async def list_escalation_levels(
     )
 
 
-@router.post("/escalation-levels", response_model=EscalationLevelResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/escalation-levels",
+    response_model=EscalationLevelResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_escalation_level(
     level_data: EscalationLevelCreate,
     db: AsyncSession = Depends(get_db),
@@ -458,7 +488,9 @@ async def get_escalation_level(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
+    result = await db.execute(
+        select(EscalationLevel).where(EscalationLevel.id == level_id)
+    )
     level = result.scalar_one_or_none()
 
     if not level:
@@ -475,7 +507,9 @@ async def update_escalation_level(
     current_user: dict = Depends(get_current_user),
 ):
     """Update an escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
+    result = await db.execute(
+        select(EscalationLevel).where(EscalationLevel.id == level_id)
+    )
     level = result.scalar_one_or_none()
 
     if not level:
@@ -497,7 +531,9 @@ async def delete_escalation_level(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete an escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
+    result = await db.execute(
+        select(EscalationLevel).where(EscalationLevel.id == level_id)
+    )
     level = result.scalar_one_or_none()
 
     if not level:

@@ -86,7 +86,9 @@ class EvidenceService:
         module = __import__(module_path, fromlist=[class_name])
         model_class = getattr(module, class_name)
 
-        result = await self.db.execute(select(model_class).where(model_class.id == source_id))
+        result = await self.db.execute(
+            select(model_class).where(model_class.id == source_id)
+        )
         if result.scalar_one_or_none() is None:
             raise LookupError(f"Source {source_module} with ID {source_id} not found")
         return True
@@ -128,7 +130,8 @@ class EvidenceService:
             source_module_enum = EvidenceSourceModule(source_module)
         except ValueError:
             raise ValueError(
-                f"Invalid source module: {source_module}. " f"Valid modules: {[e.value for e in EvidenceSourceModule]}"
+                f"Invalid source module: {source_module}. "
+                f"Valid modules: {[e.value for e in EvidenceSourceModule]}"
             )
 
         await self.validate_source_exists(source_module, source_id)
@@ -146,13 +149,17 @@ class EvidenceService:
 
         file_size = len(file_content)
         if file_size > MAX_FILE_SIZE_BYTES:
-            raise ValueError(f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes")
+            raise ValueError(
+                f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes"
+            )
 
         checksum = hashlib.sha256(file_content).hexdigest()
 
         file_uuid = str(uuid.uuid4())
         safe_filename = (filename or "unnamed").replace("/", "_").replace("\\", "_")
-        storage_key = f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
+        storage_key = (
+            f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
+        )
 
         from src.infrastructure.storage import StorageError, storage_service
 
@@ -173,7 +180,9 @@ class EvidenceService:
         parsed_captured_at = None
         if captured_at:
             try:
-                parsed_captured_at = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+                parsed_captured_at = datetime.fromisoformat(
+                    captured_at.replace("Z", "+00:00")
+                )
             except ValueError:
                 pass
 
@@ -259,7 +268,9 @@ class EvidenceService:
                 raise ValueError(f"Invalid asset type: {asset_type}")
 
         if linked_investigation_id is not None:
-            query = query.where(EvidenceAsset.linked_investigation_id == linked_investigation_id)
+            query = query.where(
+                EvidenceAsset.linked_investigation_id == linked_investigation_id
+            )
 
         query = query.order_by(EvidenceAsset.created_at.desc(), EvidenceAsset.id.asc())
         return await paginate(self.db, query, params)
@@ -303,8 +314,13 @@ class EvidenceService:
         update_data = asset_data.model_dump(exclude_unset=True)
         if "visibility" in update_data and update_data["visibility"] is not None:
             asset.visibility = EvidenceVisibility(update_data["visibility"])
-        if "retention_policy" in update_data and update_data["retention_policy"] is not None:
-            asset.retention_policy = EvidenceRetentionPolicy(update_data["retention_policy"])
+        if (
+            "retention_policy" in update_data
+            and update_data["retention_policy"] is not None
+        ):
+            asset.retention_policy = EvidenceRetentionPolicy(
+                update_data["retention_policy"]
+            )
 
         apply_updates(asset, asset_data, exclude=_enum_fields)
         asset.updated_by_id = user_id
@@ -397,7 +413,9 @@ class EvidenceService:
 
         from src.infrastructure.storage import storage_service
 
-        content_disposition = f'attachment; filename="{asset.original_filename or "download"}"'
+        content_disposition = (
+            f'attachment; filename="{asset.original_filename or "download"}"'
+        )
         signed_url = storage_service().get_signed_url(
             storage_key=asset.storage_key,
             expires_in_seconds=expires_in,

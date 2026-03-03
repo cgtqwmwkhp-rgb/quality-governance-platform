@@ -33,7 +33,16 @@ Cross-Mapping to ISO Standards:
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,11 +67,15 @@ class UVDBSection(Base):
     iso_27001_mapping: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Metadata
-    is_mse_only: Mapped[bool] = mapped_column(Boolean, default=False)  # MSE = Main Site Evaluation
+    is_mse_only: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # MSE = Main Site Evaluation
     is_site_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     questions = relationship("UVDBQuestion", back_populates="section")
@@ -74,8 +87,12 @@ class UVDBQuestion(Base):
     __tablename__ = "uvdb_question"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    section_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_section.id"), nullable=False)
-    question_number: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., "1.1", "2.3.1"
+    section_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("uvdb_section.id"), nullable=False
+    )
+    question_number: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # e.g., "1.1", "2.3.1"
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Sub-questions for detailed compliance checking
@@ -90,7 +107,9 @@ class UVDBQuestion(Base):
     document_types: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     # Applicability
-    mse_applicable: Mapped[bool] = mapped_column(Boolean, default=True)  # Main Site Evaluation
+    mse_applicable: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )  # Main Site Evaluation
     site_applicable: Mapped[bool] = mapped_column(Boolean, default=True)  # Site Audit
 
     # Cross-reference to ISO clauses
@@ -102,7 +121,9 @@ class UVDBQuestion(Base):
     negative_indicators: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     section = relationship("UVDBSection", back_populates="questions")
@@ -114,26 +135,38 @@ class UVDBAudit(Base):
     __tablename__ = "uvdb_audit"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    audit_reference: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    audit_reference: Mapped[str] = mapped_column(
+        String(50), nullable=False, unique=True
+    )
 
     # Company details
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    company_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., "00019685"
-    supplier_registration: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    company_id: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # e.g., "00019685"
+    supplier_registration: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # Audit type
-    audit_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "B2", "B1", "C2"
+    audit_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # "B2", "B1", "C2"
     audit_scope: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Dates
     audit_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     next_audit_due: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    declaration_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    declaration_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Auditor details
     lead_auditor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    auditor_organization: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    auditor_organization: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
 
     # Scoring
     total_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -161,14 +194,18 @@ class UVDBAudit(Base):
     # CDM and licensing
     cdm_compliant: Mapped[bool] = mapped_column(Boolean, default=False)
     fors_accredited: Mapped[bool] = mapped_column(Boolean, default=False)
-    fors_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # Bronze, Silver, Gold
+    fors_level: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )  # Bronze, Silver, Gold
 
     # Notes
     audit_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     improvement_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     responses = relationship("UVDBAuditResponse", back_populates="audit")
@@ -180,12 +217,20 @@ class UVDBAuditResponse(Base):
     __tablename__ = "uvdb_audit_response"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    audit_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_audit.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_question.id"), nullable=False)
+    audit_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("uvdb_audit.id", ondelete="CASCADE"), nullable=False
+    )
+    question_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("uvdb_question.id"), nullable=False
+    )
 
     # Response
-    mse_response: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-3 score
-    site_response: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-3 score
+    mse_response: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # 0-3 score
+    site_response: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # 0-3 score
 
     # Sub-question responses (Yes/No/N/A for each)
     sub_question_responses: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
@@ -204,7 +249,9 @@ class UVDBAuditResponse(Base):
     positive_elements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationships
     audit = relationship("UVDBAudit", back_populates="responses")
@@ -217,7 +264,9 @@ class UVDBKPIRecord(Base):
     __tablename__ = "uvdb_kpi_record"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    audit_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_audit.id", ondelete="CASCADE"), nullable=False)
+    audit_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("uvdb_audit.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Reporting period
     year: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -229,9 +278,15 @@ class UVDBKPIRecord(Base):
 
     # Safety KPIs (15.2-15.11)
     fatalities: Mapped[int] = mapped_column(Integer, default=0)
-    riddor_reportable: Mapped[int] = mapped_column(Integer, default=0)  # HSE Reportable (15.3)
-    lost_time_incidents_1_7_days: Mapped[int] = mapped_column(Integer, default=0)  # 15.4
-    medical_treatment_incidents: Mapped[int] = mapped_column(Integer, default=0)  # MTI (15.5)
+    riddor_reportable: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # HSE Reportable (15.3)
+    lost_time_incidents_1_7_days: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # 15.4
+    medical_treatment_incidents: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # MTI (15.5)
     first_aid_incidents: Mapped[int] = mapped_column(Integer, default=0)  # 15.6
     dangerous_occurrences: Mapped[int] = mapped_column(Integer, default=0)  # 15.7
     near_misses: Mapped[int] = mapped_column(Integer, default=0)  # 15.8
@@ -245,11 +300,17 @@ class UVDBKPIRecord(Base):
     env_enforcement_actions: Mapped[int] = mapped_column(Integer, default=0)  # 15.14
 
     # Calculated rates
-    ltifr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Lost Time Injury Frequency Rate
-    trifr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Total Recordable Injury Frequency Rate
+    ltifr: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )  # Lost Time Injury Frequency Rate
+    trifr: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )  # Total Recordable Injury Frequency Rate
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class UVDBISOCrossMapping(Base):
@@ -258,15 +319,23 @@ class UVDBISOCrossMapping(Base):
     __tablename__ = "uvdb_iso_cross_mapping"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    uvdb_question_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_question.id"), nullable=False)
+    uvdb_question_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("uvdb_question.id"), nullable=False
+    )
 
     # ISO Standard mappings
-    iso_standard: Mapped[str] = mapped_column(String(20), nullable=False)  # "9001", "14001", "45001", "27001"
-    iso_clause: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., "5.1", "6.1.2"
+    iso_standard: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # "9001", "14001", "45001", "27001"
+    iso_clause: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # e.g., "5.1", "6.1.2"
     iso_clause_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Mapping strength
-    mapping_type: Mapped[str] = mapped_column(String(20), nullable=False, default="direct")
+    mapping_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="direct"
+    )
     # direct, partial, related
 
     mapping_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

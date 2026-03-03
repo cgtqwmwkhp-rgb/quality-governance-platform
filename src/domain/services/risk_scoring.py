@@ -61,7 +61,9 @@ class RiskScoringService:
             Dict with updated risk scores
         """
         # Get the incident
-        result = await self.db.execute(select(Incident).where(Incident.id == incident_id))
+        result = await self.db.execute(
+            select(Incident).where(Incident.id == incident_id)
+        )
         incident = result.scalar_one_or_none()
 
         if not incident:
@@ -71,7 +73,11 @@ class RiskScoringService:
         linked_risk_ids = []
         if getattr(incident, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
             try:
-                linked_risk_ids = [int(x.strip()) for x in str(incident.linked_risk_ids).split(",") if x.strip()]
+                linked_risk_ids = [
+                    int(x.strip())
+                    for x in str(incident.linked_risk_ids).split(",")
+                    if x.strip()
+                ]
             except ValueError:
                 pass
 
@@ -116,7 +122,9 @@ class RiskScoringService:
 
         Near misses affect the "velocity" component of risk.
         """
-        result = await self.db.execute(select(NearMiss).where(NearMiss.id == near_miss_id))
+        result = await self.db.execute(
+            select(NearMiss).where(NearMiss.id == near_miss_id)
+        )
         near_miss = result.scalar_one_or_none()
 
         if not near_miss:
@@ -327,7 +335,9 @@ class KRIService:
 
     async def calculate_kri(self, kri_id: int) -> Optional[Dict[str, Any]]:
         """Calculate and update a KRI value."""
-        result = await self.db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+        result = await self.db.execute(
+            select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
+        )
         kri = result.scalar_one_or_none()
 
         if not kri or not kri.auto_calculate:
@@ -387,7 +397,9 @@ class KRIService:
         elif data_source == "incident_rate_per_1000":
             return await self._calculate_incident_rate()
         elif data_source == "critical_incident_count":
-            return await self._count_incidents(days=30, severity=IncidentSeverity.CRITICAL)
+            return await self._count_incidents(
+                days=30, severity=IncidentSeverity.CRITICAL
+            )
         elif data_source == "open_incident_count":
             return await self._count_open_incidents()
         elif data_source == "incident_closure_rate":
@@ -485,7 +497,9 @@ class KRIService:
         cutoff = datetime.now(timezone.utc) - timedelta(days=90)
 
         if entity_type == "incident":
-            total_result = await self.db.execute(select(func.count(Incident.id)).where(Incident.created_at >= cutoff))
+            total_result = await self.db.execute(
+                select(func.count(Incident.id)).where(Incident.created_at >= cutoff)
+            )
             total = total_result.scalar() or 0
 
             closed_result = await self.db.execute(
@@ -508,7 +522,9 @@ class KRIService:
         """Count near misses in period."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-        result = await self.db.execute(select(func.count(NearMiss.id)).where(NearMiss.created_at >= cutoff))
+        result = await self.db.execute(
+            select(func.count(NearMiss.id)).where(NearMiss.created_at >= cutoff)
+        )
         return float(result.scalar() or 0)
 
     async def _calculate_near_miss_ratio(self) -> float:
@@ -528,7 +544,9 @@ class KRIService:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-        result = await self.db.execute(select(func.count(Complaint.id)).where(Complaint.created_at >= cutoff))
+        result = await self.db.execute(
+            select(func.count(Complaint.id)).where(Complaint.created_at >= cutoff)
+        )
         return float(result.scalar() or 0)
 
     async def _calculate_avg_resolution_days(self, entity_type: str) -> float:
@@ -584,7 +602,9 @@ class KRIService:
         from src.domain.models.audit import AuditFinding
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        result = await self.db.execute(select(func.count(AuditFinding.id)).where(AuditFinding.created_at >= cutoff))
+        result = await self.db.execute(
+            select(func.count(AuditFinding.id)).where(AuditFinding.created_at >= cutoff)
+        )
         return float(result.scalar() or 0)
 
     async def _count_high_risk_findings(self) -> float:
@@ -607,7 +627,8 @@ class KRIService:
             select(func.count(Risk.id)).where(
                 and_(
                     Risk.risk_level.in_(["high", "critical"]),  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
-                    Risk.is_active == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+                    Risk.is_active
+                    == True,  # noqa: E712  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
                 )
             )
         )
@@ -675,7 +696,11 @@ class KRIService:
         # Check if status worsened (compare enum ordinal values)
         if kri.current_status and str(new_status.value) > str(kri.current_status.value):  # type: ignore[operator]  # ThresholdStatus enum comparison  # TYPE-IGNORE: MYPY-OVERRIDE
             # Status worsened - create alert
-            threshold = kri.amber_threshold if new_status == ThresholdStatus.AMBER else kri.red_threshold
+            threshold = (
+                kri.amber_threshold
+                if new_status == ThresholdStatus.AMBER
+                else kri.red_threshold
+            )
 
             alert = KRIAlert(
                 kri_id=kri.id,

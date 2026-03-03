@@ -11,7 +11,17 @@ Provides complete tenant isolation with:
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base
@@ -30,8 +40,12 @@ class Tenant(Base):
 
     # Identification
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    domain: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    slug: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=False, index=True
+    )
+    domain: Mapped[Optional[str]] = mapped_column(
+        String(255), unique=True, nullable=True
+    )
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -42,12 +56,16 @@ class Tenant(Base):
     # Branding
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     favicon_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    primary_color: Mapped[str] = mapped_column(String(7), default="#3B82F6")  # Hex color
+    primary_color: Mapped[str] = mapped_column(
+        String(7), default="#3B82F6"
+    )  # Hex color
     secondary_color: Mapped[str] = mapped_column(String(7), default="#10B981")
     accent_color: Mapped[str] = mapped_column(String(7), default="#8B5CF6")
 
     # Theme
-    theme_mode: Mapped[str] = mapped_column(String(20), default="dark")  # light, dark, system
+    theme_mode: Mapped[str] = mapped_column(
+        String(20), default="dark"
+    )  # light, dark, system
     custom_css: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Contact
@@ -65,7 +83,9 @@ class Tenant(Base):
 
     # Settings
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
-    features_enabled: Mapped[dict] = mapped_column(JSON, default=dict)  # Feature flags per tenant
+    features_enabled: Mapped[dict] = mapped_column(
+        JSON, default=dict
+    )  # Feature flags per tenant
 
     # Limits
     max_users: Mapped[int] = mapped_column(Integer, default=50)
@@ -73,11 +93,15 @@ class Tenant(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    users = relationship("TenantUser", back_populates="tenant", cascade="all, delete-orphan")
+    users = relationship(
+        "TenantUser", back_populates="tenant", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Tenant {self.name} ({self.slug})>"
@@ -94,28 +118,40 @@ class TenantUser(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
 
     # Role within this tenant
-    role: Mapped[str] = mapped_column(String(50), default="user")  # owner, admin, manager, user, viewer
+    role: Mapped[str] = mapped_column(
+        String(50), default="user"
+    )  # owner, admin, manager, user, viewer
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)  # Primary tenant for this user
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # Primary tenant for this user
 
     # Permissions override (JSON for flexibility)
     custom_permissions: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Timestamps
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    last_accessed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_accessed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Relationships
     tenant = relationship("Tenant", back_populates="users")
 
     def __repr__(self) -> str:
-        return f"<TenantUser tenant={self.tenant_id} user={self.user_id} role={self.role}>"
+        return (
+            f"<TenantUser tenant={self.tenant_id} user={self.user_id} role={self.role}>"
+        )
 
 
 class TenantInvitation(Base):
@@ -127,16 +163,22 @@ class TenantInvitation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False
+    )
 
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="user")
 
     token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
 
-    invited_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    invited_by_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
 
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, accepted, expired, revoked
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending, accepted, expired, revoked
 
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

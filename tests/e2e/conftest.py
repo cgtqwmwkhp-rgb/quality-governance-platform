@@ -56,8 +56,16 @@ async def _seed_default_data():
         from src.infrastructure.database import engine
 
         async with engine.begin() as conn:
-            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
-            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
+            await conn.execute(
+                text(
+                    "SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"
+                )
+            )
+            await conn.execute(
+                text(
+                    "SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"
+                )
+            )
     except Exception:
         pass
 
@@ -184,7 +192,9 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Auto-skip quarantined tests."""
-    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23")
+    skip_phase34 = pytest.mark.skip(
+        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23"
+    )
     for item in items:
         if "phase34" in item.keywords:
             item.add_marker(skip_phase34)

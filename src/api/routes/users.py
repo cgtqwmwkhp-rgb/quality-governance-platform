@@ -29,7 +29,11 @@ router = APIRouter()
 async def search_users(
     db: DbSession,
     current_user: CurrentUser,
-    q: str = Query(..., min_length=1, description="Search query for email, first name, or last name"),
+    q: str = Query(
+        ...,
+        min_length=1,
+        description="Search query for email, first name, or last name",
+    ),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
     search_filter = f"%{q}%"
@@ -145,7 +149,9 @@ async def get_user(
     current_user: CurrentUser,
 ) -> UserResponse:
     """Get a specific user by ID."""
-    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
+    result = await db.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -165,7 +171,9 @@ async def update_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Update a user (superuser only)."""
-    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
+    result = await db.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -234,7 +242,9 @@ async def list_roles(
     return [RoleResponse.model_validate(r) for r in roles]
 
 
-@router.post("/roles/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/roles/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_role(
     role_data: RoleCreate,
     db: DbSession,

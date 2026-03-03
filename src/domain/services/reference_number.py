@@ -54,7 +54,9 @@ class ReferenceNumberService:
         pattern = f"{prefix}-{current_year}-%"
 
         result = await db.execute(
-            select(func.max(model_class.reference_number)).where(model_class.reference_number.like(pattern))
+            select(func.max(model_class.reference_number)).where(
+                model_class.reference_number.like(pattern)
+            )
         )
         max_ref = result.scalar()
 

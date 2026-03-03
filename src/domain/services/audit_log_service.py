@@ -17,7 +17,11 @@ from typing import Any, Optional
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
-from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
+from src.domain.models.audit_log import (
+    AuditLogEntry,
+    AuditLogExport,
+    AuditLogVerification,
+)
 
 
 class AuditLogService:
@@ -81,7 +85,9 @@ class AuditLogService:
         changed_fields = None
         if old_values and new_values:
             changed_fields = [
-                k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
+                k
+                for k in set(old_values.keys()) | set(new_values.keys())
+                if old_values.get(k) != new_values.get(k)
             ]
 
         timestamp = datetime.utcnow()
@@ -257,7 +263,9 @@ class AuditLogService:
         offset: int = 0,
     ) -> list[AuditLogEntry]:
         """Query audit log entries with filters."""
-        query = self.db.query(AuditLogEntry).filter(AuditLogEntry.tenant_id == tenant_id)
+        query = self.db.query(AuditLogEntry).filter(
+            AuditLogEntry.tenant_id == tenant_id
+        )
 
         if entity_type:
             query = query.filter(AuditLogEntry.entity_type == entity_type)
@@ -272,7 +280,12 @@ class AuditLogService:
         if date_to:
             query = query.filter(AuditLogEntry.timestamp <= date_to)
 
-        return query.order_by(desc(AuditLogEntry.timestamp)).offset(offset).limit(limit).all()
+        return (
+            query.order_by(desc(AuditLogEntry.timestamp))
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
     def get_entity_history(
         self,
@@ -322,7 +335,9 @@ class AuditLogService:
 
         Detects any tampering by recomputing and comparing hashes.
         """
-        query = self.db.query(AuditLogEntry).filter(AuditLogEntry.tenant_id == tenant_id)
+        query = self.db.query(AuditLogEntry).filter(
+            AuditLogEntry.tenant_id == tenant_id
+        )
 
         if start_sequence is not None:
             query = query.filter(AuditLogEntry.sequence >= start_sequence)
@@ -464,7 +479,9 @@ class AuditLogService:
             )
 
         # Compute hash of export for integrity
-        export_hash = hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
+        export_hash = hashlib.sha256(
+            json.dumps(data, sort_keys=True, default=str).encode()
+        ).hexdigest()
 
         # Record the export
         export_record = AuditLogExport(
