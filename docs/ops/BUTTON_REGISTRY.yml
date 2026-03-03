@@ -71,35 +71,36 @@ portal_actions:
     disabled_reason: null
     description: "Select RTA report type"
 
-  # Form Submissions
+  # Form Submissions (P1 — buttons only visible on final step of multi-step wizards;
+  # full submit flow is covered by WORKFLOW_REGISTRY P0 tests)
   - pageId: portal-report-incident
     actionId: submit-incident-form
     selector: "[data-testid='submit-report-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P0
+    criticality: P1
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Form validation incomplete"
+    disabled_reason: "Hidden until final step of multi-step form"
     description: "Submit incident report"
 
   - pageId: portal-report-near-miss
     actionId: submit-near-miss-form
     selector: "[data-testid='submit-report-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P0
+    criticality: P1
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Form validation incomplete"
+    disabled_reason: "Hidden until final step of multi-step form"
     description: "Submit near-miss report"
 
   - pageId: portal-report-rta
     actionId: submit-rta-form
-    selector: "[data-testid='submit-rta-btn']"
+    selector: "[data-testid='submit-report-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P0
+    criticality: P1
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Form validation incomplete"
+    disabled_reason: "Hidden until final step of multi-step form"
     description: "Submit RTA report"
 
 # ==============================================================================
@@ -291,6 +292,6 @@ draft_recovery_actions:
 # ==============================================================================
 summary:
   total_actions: 27
-  p0_actions: 14
-  p1_actions: 9
+  p0_actions: 11
+  p1_actions: 12
   p2_actions: 4

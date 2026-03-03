@@ -142,7 +142,8 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
         sessionStorage.setItem('platform_access_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
       // Reload so the React PortalAuthProvider picks up the stored session
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -155,7 +156,8 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -215,9 +217,10 @@ test.describe('Button Wiring Audit', () => {
           return;
         }
         
-        // Navigate to page
-        await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
+        // Navigate to page (domcontentloaded avoids hanging on slow API calls)
+        await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
+        await page.waitForTimeout(2000);
         
         // Try to find button with primary selector
         let button = page.locator(buttonEntry.selector).first();
