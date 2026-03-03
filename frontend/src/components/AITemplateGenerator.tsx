@@ -13,6 +13,8 @@ import {
   ClipboardCheck,
   AlertTriangle,
   X,
+  GraduationCap,
+  UserCheck,
 } from 'lucide-react';
 
 // ============================================================================
@@ -89,6 +91,20 @@ const PRESET_PROMPTS = [
     icon: Building2,
     description: 'Vendor qualification audit',
     prompt: 'Generate a supplier qualification assessment checklist covering quality systems, capacity, financial stability, delivery performance, sustainability practices, and compliance certifications.',
+  },
+  {
+    id: 'staff-induction',
+    label: 'Staff Induction',
+    icon: GraduationCap,
+    description: 'New starter onboarding checklist',
+    prompt: 'Generate a comprehensive staff induction checklist for new starters covering company policies, health and safety essentials, site orientation, emergency procedures, PPE requirements, reporting lines, and role-specific training sign-off.',
+  },
+  {
+    id: 'supervisor-assessment',
+    label: 'Technical Assessment',
+    icon: UserCheck,
+    description: 'Supervisor competency evaluation',
+    prompt: 'Generate a supervisor technical competency assessment template covering technical knowledge, risk assessment and method statements, safe systems of work, team supervision, equipment operation and safety, regulatory compliance awareness, problem solving, and incident reporting procedures.',
   },
 ];
 
@@ -207,6 +223,132 @@ const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[
           { id: 'q-12', text: 'Are 5S audits conducted regularly?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
           { id: 'q-13', text: 'Is there evidence of continuous improvement activities?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
           { id: 'q-14', text: 'Overall 5S score for this area', type: 'scale_1_5', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
+        ],
+      },
+    ];
+  }
+
+  if (lowerPrompt.includes('induction') || lowerPrompt.includes('onboarding') || lowerPrompt.includes('new starter')) {
+    return [
+      {
+        id: 'sec-policies',
+        title: 'Company Policies & Overview',
+        description: 'Essential company information and policy acknowledgment',
+        questions: [
+          { id: 'q-1', text: 'Has the employee been briefed on the company structure, values, and mission?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false, guidance: 'Cover organisational chart, reporting lines, and company objectives.' },
+          { id: 'q-2', text: 'Has the employee received and acknowledged the Employee Handbook?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true, guidance: 'Obtain signed acknowledgment form.' },
+          { id: 'q-3', text: 'Has the employee been briefed on the Equality, Diversity & Inclusion policy?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-4', text: 'Has the employee been briefed on disciplinary and grievance procedures?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-5', text: 'Has the employee been briefed on data protection and GDPR responsibilities?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        ],
+      },
+      {
+        id: 'sec-hs',
+        title: 'Health & Safety Essentials',
+        description: 'Core H&S obligations and hazard awareness',
+        questions: [
+          { id: 'q-6', text: 'Has the employee been briefed on the company Health & Safety Policy?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Ensure employee understands their duty of care and right to refuse unsafe work.' },
+          { id: 'q-7', text: 'Has the employee been shown how to report hazards, near misses, and unsafe conditions?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false },
+          { id: 'q-8', text: 'Has the employee been briefed on manual handling procedures and risk reduction?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-9', text: 'Has the employee been briefed on COSHH substances relevant to their role?', type: 'yes_no_na', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false, guidance: 'Mark N/A if role has no COSHH exposure.' },
+          { id: 'q-10', text: 'Has the employee been briefed on working at height procedures (if applicable)?', type: 'yes_no_na', required: false, weight: 2, riskLevel: 'critical', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-site',
+        title: 'Site Orientation & Emergency Procedures',
+        description: 'Familiarisation with site layout and emergency response',
+        questions: [
+          { id: 'q-11', text: 'Has the employee been shown all emergency exits and assembly points?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Walk the employee through all relevant exit routes from their work area.' },
+          { id: 'q-12', text: 'Has the employee been shown the location of fire extinguishers and first aid kits?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-13', text: 'Does the employee know who the designated first aiders and fire wardens are?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-14', text: 'Has the employee been shown welfare facilities (toilets, canteen, rest areas)?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-15', text: 'Has the employee been briefed on the site sign-in/sign-out procedure?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-ppe',
+        title: 'PPE & Equipment',
+        description: 'Personal protective equipment issue and training',
+        questions: [
+          { id: 'q-16', text: 'Has the employee been issued with all required PPE for their role?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Record items issued: hard hat, hi-vis, boots, gloves, eye protection, etc.' },
+          { id: 'q-17', text: 'Has the employee been trained on correct PPE use, care, and storage?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-18', text: 'Does the employee understand when and where PPE must be worn?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-19', text: 'Has the employee been shown how to request replacement PPE?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-role',
+        title: 'Role-Specific Training & Sign-Off',
+        description: 'Job-specific competence and supervisor confirmation',
+        questions: [
+          { id: 'q-20', text: 'Has the employee been briefed on their specific role, responsibilities, and expectations?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-21', text: 'Has the employee been introduced to their line manager and team?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-22', text: 'Has the employee been shown relevant risk assessments and method statements for their tasks?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-23', text: 'Are there any additional training needs identified for this employee?', type: 'text', required: false, weight: 1, riskLevel: 'medium', evidenceRequired: false, guidance: 'Record any specific training courses, tickets, or certifications required.' },
+          { id: 'q-24', text: 'Supervisor confirms this induction has been completed satisfactorily', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Both supervisor and employee should sign off on completion.' },
+        ],
+      },
+    ];
+  }
+
+  if (lowerPrompt.includes('supervisor') || lowerPrompt.includes('technical competency') || lowerPrompt.includes('competency assessment')) {
+    return [
+      {
+        id: 'sec-tech',
+        title: 'Technical Knowledge & Competency',
+        description: 'Core technical understanding relevant to the role',
+        questions: [
+          { id: 'q-1', text: 'Can the individual explain the technical processes and procedures relevant to their area of responsibility?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'high', evidenceRequired: true, guidance: 'Ask the individual to describe key processes. Assess depth and accuracy of understanding.' },
+          { id: 'q-2', text: 'Does the individual demonstrate understanding of equipment operation, capabilities, and limitations?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-3', text: 'Can the individual identify common faults, defects, or failure modes for equipment in their area?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-4', text: 'Does the individual understand relevant technical specifications, tolerances, and quality standards?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-risk',
+        title: 'Risk Assessment & Safe Systems of Work',
+        description: 'Ability to identify hazards and apply safe working practices',
+        questions: [
+          { id: 'q-5', text: 'Can the individual identify the key hazards associated with tasks in their area?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Present a scenario and ask the individual to identify hazards and controls.' },
+          { id: 'q-6', text: 'Can the individual explain the hierarchy of controls and how it applies to their work?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-7', text: 'Does the individual understand and correctly apply relevant method statements and RAMS?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-8', text: 'Can the individual conduct a dynamic risk assessment before starting a non-routine task?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Ask for a worked example of a point-of-work risk assessment.' },
+          { id: 'q-9', text: 'Does the individual understand permit-to-work procedures (if applicable)?', type: 'yes_no_na', required: true, weight: 2, riskLevel: 'critical', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-supervision',
+        title: 'Team Supervision & Communication',
+        description: 'Leadership, delegation, and communication skills',
+        questions: [
+          { id: 'q-10', text: 'Does the individual demonstrate the ability to brief a team clearly before starting work?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false, guidance: 'Observe or role-play a pre-task briefing. Assess clarity, completeness, and engagement.' },
+          { id: 'q-11', text: 'Can the individual allocate tasks appropriately based on competence and experience?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-12', text: 'Does the individual challenge unsafe behaviour constructively and effectively?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Present a scenario where a team member takes a shortcut. Assess the response.' },
+          { id: 'q-13', text: 'Can the individual communicate effectively with clients, subcontractors, and other trades?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-compliance',
+        title: 'Regulatory Compliance & Documentation',
+        description: 'Understanding of legal obligations and record-keeping',
+        questions: [
+          { id: 'q-14', text: 'Does the individual understand relevant regulatory requirements (e.g., CDM, LOLER, PUWER, COSHH)?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Assess knowledge of regulations applicable to their specific work activities.' },
+          { id: 'q-15', text: 'Can the individual correctly complete required inspection records, checklists, and reports?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+          { id: 'q-16', text: 'Does the individual understand their responsibilities under RIDDOR for incident reporting?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-17', text: 'Can the individual demonstrate they check and verify certifications, tickets, and training records for their team?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        ],
+      },
+      {
+        id: 'sec-incident',
+        title: 'Incident Response & Problem Solving',
+        description: 'Ability to respond to incidents and resolve issues',
+        questions: [
+          { id: 'q-18', text: 'Does the individual know the correct procedure for reporting and escalating incidents?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Walk through a scenario: someone is injured on site. Assess the response steps.' },
+          { id: 'q-19', text: 'Can the individual demonstrate basic first aid awareness appropriate to their role?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-20', text: 'Can the individual identify when to stop work due to unsafe conditions and who to notify?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false },
+          { id: 'q-21', text: 'Does the individual demonstrate logical problem-solving when faced with unexpected technical issues?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false, guidance: 'Present a realistic problem scenario and assess the approach taken.' },
+          { id: 'q-22', text: 'Overall competency verdict: is this individual competent to carry out their supervisory role unsupervised?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Provide clear justification for the verdict and document any development actions required.' },
         ],
       },
     ];
