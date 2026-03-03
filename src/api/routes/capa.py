@@ -1,4 +1,5 @@
 """CAPA (Corrective and Preventive Action) API routes — thin controller layer."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

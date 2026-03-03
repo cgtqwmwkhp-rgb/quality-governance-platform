@@ -5,6 +5,7 @@ Handles CRUD for actions spanning incidents, RTAs, complaints, and investigation
 Raises domain exceptions instead of HTTPException.
 
 """
+
 from __future__ import annotations
 
 import logging

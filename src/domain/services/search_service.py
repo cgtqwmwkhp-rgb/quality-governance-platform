@@ -2,6 +2,7 @@
 
 Extracts multi-entity search logic from the global_search route module.
 """
+
 from __future__ import annotations
 
 import logging

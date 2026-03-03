@@ -732,9 +732,7 @@ async def get_audit_responses(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    resp_result = await db.execute(
-        select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id)
-    )
+    resp_result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
     responses = list(resp_result.scalars().all())
 
     return {
@@ -796,9 +794,7 @@ async def get_audit_kpis(
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
     result = await db.execute(
-        select(UVDBKPIRecord)
-        .where(UVDBKPIRecord.audit_id == audit_id)
-        .order_by(UVDBKPIRecord.year.desc())
+        select(UVDBKPIRecord).where(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc())
     )
     kpis = list(result.scalars().all())
 
@@ -883,9 +879,7 @@ async def get_uvdb_dashboard(
     active_audits = active_result.scalar() or 0
 
     completed_result = await db.execute(
-        select(func.count()).select_from(
-            select(UVDBAudit).where(UVDBAudit.status == "completed").subquery()
-        )
+        select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())
     )
     completed_audits = completed_result.scalar() or 0
 

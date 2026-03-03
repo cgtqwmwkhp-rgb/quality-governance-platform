@@ -5,6 +5,7 @@ retried at most once; after the retry is dispatched the entry is marked with
 ``retried=True`` and a ``retried_at`` timestamp.
 
 """
+
 from __future__ import annotations
 
 import ast

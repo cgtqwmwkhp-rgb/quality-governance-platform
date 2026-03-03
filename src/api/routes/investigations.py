@@ -1,4 +1,5 @@
 """Investigation Run API routes."""
+
 from __future__ import annotations
 
 import math
@@ -20,6 +21,15 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
+from src.domain.models.investigation import (
+    AssignedEntityType,
+    InvestigationComment,
+    InvestigationCustomerPack,
+    InvestigationRevisionEvent,
+    InvestigationRun,
+    InvestigationStatus,
+    InvestigationTemplate,
+)
 
 
 class AutosaveRequest(BaseModel):
@@ -36,15 +46,7 @@ class CommentCreateRequest(BaseModel):
 
 class CustomerPackRequest(BaseModel):
     audience: str = Field(..., description="internal_customer or external_customer")
-from src.domain.models.investigation import (
-    AssignedEntityType,
-    InvestigationComment,
-    InvestigationCustomerPack,
-    InvestigationRevisionEvent,
-    InvestigationRun,
-    InvestigationStatus,
-    InvestigationTemplate,
-)
+
 
 router = APIRouter()
 
@@ -868,9 +870,9 @@ async def add_comment(
         event_type="COMMENT_ADDED",
         actor_id=current_user.id,
         metadata={
-            "section_id": section_id,
-            "field_id": field_id,
-            "is_reply": parent_comment_id is not None,
+            "section_id": body.section_id,
+            "field_id": body.field_id,
+            "is_reply": body.parent_comment_id is not None,
         },
     )
 
@@ -1105,9 +1107,8 @@ async def get_timeline(
     if not investigation:
         raise HTTPException(status_code=404, detail="Investigation not found")
 
-    events_query = (
-        select(InvestigationRevisionEvent)
-        .where(InvestigationRevisionEvent.investigation_id == investigation_id)
+    events_query = select(InvestigationRevisionEvent).where(
+        InvestigationRevisionEvent.investigation_id == investigation_id
     )
     if type and type != "all":
         events_query = events_query.where(InvestigationRevisionEvent.event_type == type.upper())
@@ -1159,12 +1160,9 @@ async def list_comments(
     if not investigation:
         raise HTTPException(status_code=404, detail="Investigation not found")
 
-    comments_query = (
-        select(InvestigationComment)
-        .where(
-            InvestigationComment.investigation_id == investigation_id,
-            InvestigationComment.deleted_at.is_(None),
-        )
+    comments_query = select(InvestigationComment).where(
+        InvestigationComment.investigation_id == investigation_id,
+        InvestigationComment.deleted_at.is_(None),
     )
 
     count_query = select(func.count()).select_from(comments_query.subquery())
@@ -1213,9 +1211,8 @@ async def list_packs(
     if not investigation:
         raise HTTPException(status_code=404, detail="Investigation not found")
 
-    packs_query = (
-        select(InvestigationCustomerPack)
-        .where(InvestigationCustomerPack.investigation_id == investigation_id)
+    packs_query = select(InvestigationCustomerPack).where(
+        InvestigationCustomerPack.investigation_id == investigation_id
     )
 
     count_query = select(func.count()).select_from(packs_query.subquery())
@@ -1277,6 +1274,7 @@ async def get_closure_validation(
         reason_codes.append("status_not_reviewable")
 
     from src.domain.models.investigation import InvestigationAction
+
     actions_query = select(func.count()).where(
         InvestigationAction.investigation_id == investigation_id,
         InvestigationAction.status.notin_(["completed", "cancelled"]),

@@ -272,9 +272,15 @@ class AuditService:
             pages=pages,
         )
 
-    _PROTECTED_FIELDS: frozenset[str] = frozenset({
-        "id", "tenant_id", "created_at", "created_by_id", "deleted_at",
-    })
+    _PROTECTED_FIELDS: frozenset[str] = frozenset(
+        {
+            "id",
+            "tenant_id",
+            "created_at",
+            "created_by_id",
+            "deleted_at",
+        }
+    )
 
     @staticmethod
     def _apply_dict(

@@ -107,11 +107,13 @@ class Settings(BaseSettings):
         """Return CORS origins appropriate for the current environment."""
         origins = list(self.cors_origins)
         if self.app_env != "production":
-            origins.extend([
-                "http://localhost:3000",
-                "http://localhost:8080",
-                "http://localhost:5173",
-            ])
+            origins.extend(
+                [
+                    "http://localhost:3000",
+                    "http://localhost:8080",
+                    "http://localhost:5173",
+                ]
+            )
         return origins
 
     # Logging

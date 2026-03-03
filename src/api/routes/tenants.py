@@ -7,6 +7,7 @@ Provides endpoints for:
 - Branding configuration
 - Tenant switching
 """
+
 from __future__ import annotations
 
 from datetime import datetime

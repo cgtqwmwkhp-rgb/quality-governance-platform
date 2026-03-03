@@ -8,6 +8,7 @@ Features:
 - Graceful fallback to in-memory when Redis unavailable
 - Different limits for authenticated vs anonymous users
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.iso27001 import (
@@ -211,9 +211,7 @@ async def get_asset(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get asset details"""
-    result = await db.execute(
-        select(InformationAsset).where(InformationAsset.id == asset_id)
-    )
+    result = await db.execute(select(InformationAsset).where(InformationAsset.id == asset_id))
     asset = result.scalar_one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -289,7 +287,9 @@ async def list_controls(
     partial = r.scalar() or 0
 
     r = await db.execute(
-        select(func.count()).where(ISO27001Control.implementation_status == "not_implemented").select_from(ISO27001Control)
+        select(func.count())
+        .where(ISO27001Control.implementation_status == "not_implemented")
+        .select_from(ISO27001Control)
     )
     not_impl = r.scalar() or 0
 
@@ -332,9 +332,7 @@ async def update_control(
     db: DbSession,
 ) -> dict[str, Any]:
     """Update control implementation status"""
-    result = await db.execute(
-        select(ISO27001Control).where(ISO27001Control.id == control_id)
-    )
+    result = await db.execute(select(ISO27001Control).where(ISO27001Control.id == control_id))
     control = result.scalar_one_or_none()
     if not control:
         raise HTTPException(status_code=404, detail="Control not found")
@@ -363,9 +361,7 @@ async def get_current_soa(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get current Statement of Applicability"""
-    result = await db.execute(
-        select(StatementOfApplicability).where(StatementOfApplicability.is_current == True)
-    )
+    result = await db.execute(select(StatementOfApplicability).where(StatementOfApplicability.is_current == True))
     soa = result.scalar_one_or_none()
 
     if not soa:
@@ -378,10 +374,12 @@ async def get_current_soa(
         applicable = r.scalar() or 0
 
         r = await db.execute(
-            select(func.count()).where(
+            select(func.count())
+            .where(
                 ISO27001Control.is_applicable == True,
                 ISO27001Control.implementation_status == "implemented",
-            ).select_from(ISO27001Control)
+            )
+            .select_from(ISO27001Control)
         )
         implemented = r.scalar() or 0
 
@@ -523,9 +521,7 @@ async def list_security_incidents(
     incidents = list(result.scalars().all())
 
     # Summary
-    r = await db.execute(
-        select(func.count()).where(SecurityIncident.status == "open").select_from(SecurityIncident)
-    )
+    r = await db.execute(select(func.count()).where(SecurityIncident.status == "open").select_from(SecurityIncident))
     open_count = r.scalar() or 0
 
     r = await db.execute(
@@ -589,9 +585,7 @@ async def update_security_incident(
     db: DbSession,
 ) -> dict[str, Any]:
     """Update security incident"""
-    result = await db.execute(
-        select(SecurityIncident).where(SecurityIncident.id == incident_id)
-    )
+    result = await db.execute(select(SecurityIncident).where(SecurityIncident.id == incident_id))
     incident = result.scalar_one_or_none()
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -694,16 +688,16 @@ async def get_isms_dashboard(
 ) -> dict[str, Any]:
     """Get ISMS dashboard summary"""
     # Assets
-    r = await db.execute(
-        select(func.count()).where(InformationAsset.is_active == True).select_from(InformationAsset)
-    )
+    r = await db.execute(select(func.count()).where(InformationAsset.is_active == True).select_from(InformationAsset))
     total_assets = r.scalar() or 0
 
     r = await db.execute(
-        select(func.count()).where(
+        select(func.count())
+        .where(
             InformationAsset.is_active == True,
             InformationAsset.criticality == "critical",
-        ).select_from(InformationAsset)
+        )
+        .select_from(InformationAsset)
     )
     critical_assets = r.scalar() or 0
 
@@ -716,9 +710,7 @@ async def get_isms_dashboard(
     )
     implemented_controls = r.scalar() or 0
 
-    r = await db.execute(
-        select(func.count()).where(ISO27001Control.is_applicable == True).select_from(ISO27001Control)
-    )
+    r = await db.execute(select(func.count()).where(ISO27001Control.is_applicable == True).select_from(ISO27001Control))
     applicable_controls = r.scalar() or 0
 
     # Risks
@@ -728,32 +720,34 @@ async def get_isms_dashboard(
     open_risks = r.scalar() or 0
 
     r = await db.execute(
-        select(func.count()).where(
+        select(func.count())
+        .where(
             InformationSecurityRisk.residual_risk_score > 16,
             InformationSecurityRisk.status != "closed",
-        ).select_from(InformationSecurityRisk)
+        )
+        .select_from(InformationSecurityRisk)
     )
     high_risks = r.scalar() or 0
 
     # Incidents
-    r = await db.execute(
-        select(func.count()).where(SecurityIncident.status == "open").select_from(SecurityIncident)
-    )
+    r = await db.execute(select(func.count()).where(SecurityIncident.status == "open").select_from(SecurityIncident))
     open_incidents = r.scalar() or 0
 
     r = await db.execute(
-        select(func.count()).where(
-            SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30)
-        ).select_from(SecurityIncident)
+        select(func.count())
+        .where(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
+        .select_from(SecurityIncident)
     )
     incidents_30d = r.scalar() or 0
 
     # Suppliers
     r = await db.execute(
-        select(func.count()).where(
+        select(func.count())
+        .where(
             SupplierSecurityAssessment.risk_level == "high",
             SupplierSecurityAssessment.status == "active",
-        ).select_from(SupplierSecurityAssessment)
+        )
+        .select_from(SupplierSecurityAssessment)
     )
     high_risk_suppliers = r.scalar() or 0
 

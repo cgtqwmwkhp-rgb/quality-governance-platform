@@ -1,4 +1,5 @@
 """Cross-standard ISO mapping management API."""
+
 from __future__ import annotations
 
 import logging
