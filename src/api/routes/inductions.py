@@ -3,10 +3,13 @@
 REST endpoints for induction/training runs and responses.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -102,11 +105,13 @@ async def create_induction_run(
     user: CurrentUser,
 ):
     """Create an induction run. Reference number is auto-generated as IND-YYYY-NNNN."""
-    supervisor_check = await GovernanceService.validate_supervisor(db, user.id, data.engineer_id)
+    supervisor_check = await GovernanceService.validate_supervisor(
+        db, user.id, data.engineer_id, tenant_id=user.tenant_id
+    )
     if not supervisor_check["valid"]:
         raise HTTPException(status_code=400, detail=supervisor_check["reason"])
 
-    template_check = await GovernanceService.check_template_approval(db, data.template_id)
+    template_check = await GovernanceService.check_template_approval(db, data.template_id, tenant_id=user.tenant_id)
     if not template_check["approved"]:
         raise HTTPException(status_code=400, detail=template_check["reason"])
 
@@ -278,7 +283,7 @@ async def complete_induction(
             not_yet_competent_count=score_result.not_yet_competent_count,
         )
     except Exception:
-        pass
+        logger.exception("Failed to send induction completion notification for run %s", run.id)
 
     await db.commit()
     await db.refresh(run)

@@ -550,17 +550,17 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 detail="An action with this reference number already exists",
             )
         else:
+            logger.error("Database error creating action: %s", error_msg[:500])
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database error while creating action: {error_msg[:200]}",
+                detail="Database error while creating action. Please try again.",
             )
     except Exception as e:
         await db.rollback()
-        # Log the FULL exception with traceback for diagnosis
-        logger.exception(f"Unexpected exception creating action: type={type(e).__name__}, msg={str(e)}")
+        logger.exception("Unexpected exception creating action: type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error creating action: {type(e).__name__}: {str(e)[:200]}",
+            detail="An unexpected error occurred while creating the action.",
         )
 
     if isinstance(action, CAPAAction):

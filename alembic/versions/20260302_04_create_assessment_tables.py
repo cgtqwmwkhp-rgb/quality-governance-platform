@@ -1,7 +1,7 @@
 """Create assessment execution tables.
 
 Revision ID: 20260302_assess
-Revises: 20260302_asset_reg
+Revises: 20260302_engineer
 Create Date: 2026-03-02 10:30:00.000000
 
 Creates assessment_runs and assessment_responses tables for on-the-job

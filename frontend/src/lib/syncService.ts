@@ -79,12 +79,13 @@ async function flushPending(): Promise<void> {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
-      await fetch(rec.url, {
+      const res = await fetch(rec.url, {
         method: rec.method,
         headers,
         body: rec.body ? JSON.stringify(rec.body) : undefined,
       })
 
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await deleteRecord(rec.id)
     } catch {
       await updateRetries(rec)

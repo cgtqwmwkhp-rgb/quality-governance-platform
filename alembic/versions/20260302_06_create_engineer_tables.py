@@ -1,7 +1,7 @@
 """Create engineer and competency tables for Workforce Development Platform.
 
 Revision ID: 20260302_engineer
-Revises: 20260302_induct
+Revises: 20260302_asset_reg
 Create Date: 2026-03-02 10:50:00.000000
 
 Creates engineers, competency_records, competency_requirements, and

@@ -178,7 +178,7 @@ export default function Training() {
                         <td className="py-3 px-4 text-sm text-foreground">{engineerMap[i.engineer_id] ?? `#${i.engineer_id}`}</td>
                         <td className="py-3 px-4 text-sm text-foreground">{templateMap[i.template_id] ?? `#${i.template_id}`}</td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">{i.asset_type_id ? (assetTypes.find(at => at.id === i.asset_type_id)?.name ?? `#${i.asset_type_id}`) : '—'}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{i.stage ?? '—'}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{i.stage?.replace(/_/g, ' ') ?? '—'}</td>
                         <td className="py-3 px-4">
                           <Badge variant={STATUS_VARIANTS[i.status] || 'secondary'}>
                             {i.status?.replace(/_/g, ' ') ?? '—'}

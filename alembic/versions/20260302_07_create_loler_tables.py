@@ -1,7 +1,7 @@
 """Create LOLER 1998 thorough examination tables.
 
 Revision ID: 20260302_loler
-Revises: 20260302_engineer
+Revises: 20260302_induct
 Create Date: 2026-03-02 11:00:00.000000
 
 Creates loler_examinations and loler_defects tables for LOLER

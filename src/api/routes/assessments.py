@@ -3,8 +3,11 @@
 REST endpoints for competency assessment runs and responses.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -104,11 +107,13 @@ async def create_assessment_run(
     user: CurrentUser,
 ):
     """Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN."""
-    supervisor_check = await GovernanceService.validate_supervisor(db, user.id, data.engineer_id)
+    supervisor_check = await GovernanceService.validate_supervisor(
+        db, user.id, data.engineer_id, tenant_id=user.tenant_id
+    )
     if not supervisor_check["valid"]:
         raise HTTPException(status_code=400, detail=supervisor_check["reason"])
 
-    template_check = await GovernanceService.check_template_approval(db, data.template_id)
+    template_check = await GovernanceService.check_template_approval(db, data.template_id, tenant_id=user.tenant_id)
     if not template_check["approved"]:
         raise HTTPException(status_code=400, detail=template_check["reason"])
 
@@ -292,7 +297,7 @@ async def complete_assessment(
             outcome=score_result.outcome,
         )
     except Exception:
-        pass
+        logger.exception("Failed to send assessment completion notification for run %s", run.id)
 
     await db.commit()
     await db.refresh(run)

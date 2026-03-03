@@ -186,7 +186,7 @@ export default function Assessments() {
                         <td className="py-3 px-4 text-sm text-muted-foreground">{a.asset_type_id ? (assetTypes.find(at => at.id === a.asset_type_id)?.name ?? `#${a.asset_type_id}`) : '—'}</td>
                         <td className="py-3 px-4">
                           <Badge variant={STATUS_VARIANTS[a.status] || 'secondary'}>
-                            {a.status?.replace('_', ' ') ?? '—'}
+                            {a.status?.replace(/_/g, ' ') ?? '—'}
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">
