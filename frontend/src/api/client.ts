@@ -1270,9 +1270,9 @@ export interface InductionResponseUpdate {
 export const workforceApi = {
   // Assessments
   listAssessments: (params?: Record<string, unknown>) =>
-    api.get<{items: AssessmentRun[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/assessments', { params }),
+    api.get<{items: AssessmentRun[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/assessments/', { params }),
   getAssessment: (id: string) => api.get<AssessmentRun>(`/api/v1/assessments/${id}`),
-  createAssessment: (data: unknown) => api.post<AssessmentRun>('/api/v1/assessments', data),
+  createAssessment: (data: unknown) => api.post<AssessmentRun>('/api/v1/assessments/', data),
   startAssessment: (id: string) => api.post<AssessmentRun>(`/api/v1/assessments/${id}/start`),
   completeAssessment: (id: string) => api.post<AssessmentRun>(`/api/v1/assessments/${id}/complete`),
   updateAssessment: (id: string, data: Record<string, unknown>) =>
@@ -1284,9 +1284,9 @@ export const workforceApi = {
 
   // Inductions
   listInductions: (params?: Record<string, unknown>) =>
-    api.get<{items: InductionRun[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/inductions', { params }),
+    api.get<{items: InductionRun[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/inductions/', { params }),
   getInduction: (id: string) => api.get<InductionRun>(`/api/v1/inductions/${id}`),
-  createInduction: (data: unknown) => api.post<InductionRun>('/api/v1/inductions', data),
+  createInduction: (data: unknown) => api.post<InductionRun>('/api/v1/inductions/', data),
   startInduction: (id: string) => api.post<InductionRun>(`/api/v1/inductions/${id}/start`),
   completeInduction: (id: string) => api.post<InductionRun>(`/api/v1/inductions/${id}/complete`),
   updateInduction: (id: string, data: Record<string, unknown>) =>
@@ -1298,7 +1298,7 @@ export const workforceApi = {
 
   // Engineers
   listEngineers: (params?: Record<string, unknown>) =>
-    api.get<{items: EngineerProfile[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/engineers', { params }),
+    api.get<{items: EngineerProfile[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/engineers/', { params }),
   getEngineer: (id: number) => api.get<EngineerProfile>(`/api/v1/engineers/${id}`),
   getCompetencies: (engineerId: number) =>
     api.get<CompetencyRecord[]>(`/api/v1/engineers/${engineerId}/competencies`),
@@ -1306,7 +1306,7 @@ export const workforceApi = {
   // Assets
   listAssetTypes: () => api.get<{items: AssetType[]}>('/api/v1/assets/asset-types'),
   listAssets: (params?: Record<string, unknown>) =>
-    api.get<{items: Asset[]; total: number}>('/api/v1/assets', { params }),
+    api.get<{items: Asset[]; total: number}>('/api/v1/assets/', { params }),
 
   // WDP Analytics
   getWdpSummary: () =>
@@ -1957,11 +1957,11 @@ export const usersApi = {
     if (params?.department) sp.set("department", params.department);
     if (params?.is_active !== undefined)
       sp.set("is_active", String(params.is_active));
-    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users?${sp}`);
+    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users/?${sp}`);
   },
   get: (id: number) => api.get<UserDetail>(`/api/v1/users/${id}`),
   create: (data: UserCreatePayload) =>
-    api.post<UserDetail>("/api/v1/users", data),
+    api.post<UserDetail>("/api/v1/users/", data),
   update: (id: number, data: UserUpdatePayload) =>
     api.patch<UserDetail>(`/api/v1/users/${id}`, data),
   delete: (id: number) => api.delete<void>(`/api/v1/users/${id}`),
@@ -2028,7 +2028,7 @@ export const auditTrailApi = {
       total: number;
       page: number;
       per_page: number;
-    }>(`/api/v1/audit-trail?${sp}`);
+    }>(`/api/v1/audit-trail/?${sp}`);
   },
   getEntry: (id: number) => api.get<AuditLogEntry>(`/api/v1/audit-trail/${id}`),
   getByEntity: (entityType: string, entityId: string) =>
@@ -2115,10 +2115,10 @@ export const riskRegisterApi = {
     if (params?.status) sp.set("status", params.status);
     if (params?.category) sp.set("category", params.category);
     if (params?.search) sp.set("search", params.search);
-    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register?${sp}`);
+    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register/?${sp}`);
   },
   create: (data: Partial<RiskEntry>) =>
-    api.post<RiskEntry>("/api/v1/risk-register", data),
+    api.post<RiskEntry>("/api/v1/risk-register/", data),
   get: (id: number) => api.get<RiskEntry>(`/api/v1/risk-register/${id}`),
   update: (id: number, data: Partial<RiskEntry>) =>
     api.put<RiskEntry>(`/api/v1/risk-register/${id}`, data),
@@ -2399,7 +2399,7 @@ export const notificationsApi = {
       items: NotificationEntry[];
       total: number;
       unread_count: number;
-    }>(`/api/v1/notifications?${sp}`);
+    }>(`/api/v1/notifications/?${sp}`);
   },
   getUnreadCount: () =>
     api.get<{ unread_count: number }>("/api/v1/notifications/unread-count"),
@@ -2851,7 +2851,7 @@ export const evidenceAssetsApi = {
         String(options.linked_investigation_id),
       );
     return api.get<EvidenceAssetListResponse>(
-      `/api/v1/evidence-assets?${params}`,
+      `/api/v1/evidence-assets/?${params}`,
     );
   },
 
