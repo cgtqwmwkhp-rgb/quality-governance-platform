@@ -219,6 +219,7 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
                 timeout: workflow.max_duration_seconds * 1000 
               });
               await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
+              await page.waitForTimeout(2000);
             }
             
             // Fill form fields if specified
@@ -238,17 +239,27 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Click element if selector specified (and not form_fields step)
             if (step.selector && !step.form_fields) {
               let element = page.locator(step.selector).first();
-              let visible = await element.isVisible().catch(() => false);
+              let found = false;
               
-              // Try fallback
-              if (!visible && step.fallback_selector) {
-                element = page.locator(step.fallback_selector).first();
-                visible = await element.isVisible().catch(() => false);
+              try {
+                await element.waitFor({ state: 'visible', timeout: 5000 });
+                found = true;
+              } catch {
+                // Try fallback
+                if (step.fallback_selector) {
+                  element = page.locator(step.fallback_selector).first();
+                  try {
+                    await element.waitFor({ state: 'visible', timeout: 3000 });
+                    found = true;
+                  } catch {
+                    // fallback also not found
+                  }
+                }
               }
               
-              if (visible) {
+              if (found) {
                 await element.click({ timeout: 5000 });
-                await page.waitForTimeout(500); // Brief pause for UI update
+                await page.waitForTimeout(500);
               } else {
                 throw new Error(`Element not found: ${step.selector}`);
               }
