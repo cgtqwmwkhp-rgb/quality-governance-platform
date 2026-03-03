@@ -161,7 +161,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
 const workflows = loadWorkflows();
 
 test.describe('Workflow Audit (P0 Critical Paths)', () => {
-  test.describe.configure({ mode: 'parallel' });
+  test.describe.configure({ mode: 'serial' });
   
   for (const workflow of workflows) {
     test(`[${workflow.criticality}] ${workflow.workflowId}: ${workflow.name}`, async ({ page }) => {

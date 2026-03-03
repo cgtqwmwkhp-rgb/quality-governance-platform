@@ -140,16 +140,22 @@ function isInternalLink(href: string, baseUrl: string): boolean {
   return false;
 }
 
-// Known valid routes from registry
+// Known valid routes from registry (load ALL routes, not just P0/P1)
 const validRoutePatterns = new Set<string>();
 function loadValidRoutes(): void {
-  const pages = loadPages();
-  pages.forEach(p => {
-    // Add exact routes
+  const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
+  const content = fs.readFileSync(registryPath, 'utf-8');
+  const registry = yaml.load(content) as any;
+
+  const allPages: PageEntry[] = [
+    ...(registry.public_routes || []),
+    ...(registry.portal_routes || []),
+    ...(registry.admin_routes || []),
+  ];
+
+  allPages.forEach(p => {
     validRoutePatterns.add(p.route);
-    // Add pattern for parameterized routes
     if (p.route.includes(':')) {
-      // Convert /incidents/:id to regex-like pattern
       const pattern = p.route.replace(/:[^/]+/g, '[^/]+');
       validRoutePatterns.add(pattern);
     }
@@ -198,7 +204,7 @@ function isKnownRoute(href: string): boolean {
 const pages = loadPages();
 
 test.describe('Link Audit', () => {
-  test.describe.configure({ mode: 'parallel' });
+  test.describe.configure({ mode: 'serial' });
   
   for (const pageEntry of pages) {
     test(`Links on ${pageEntry.pageId}: ${pageEntry.route}`, async ({ page, baseURL }) => {
