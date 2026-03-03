@@ -141,6 +141,8 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
         localStorage.setItem('portal_session_time', Date.now().toString());
         sessionStorage.setItem('platform_access_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
+      // Reload so the React PortalAuthProvider picks up the stored session
+      await page.reload({ waitUntil: 'networkidle' });
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -153,6 +155,7 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
+      await page.reload({ waitUntil: 'networkidle' });
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
