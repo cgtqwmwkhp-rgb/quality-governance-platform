@@ -21,9 +21,7 @@ class TestPoliciesPaginationRuntimeContract:
     """Test that Policies module honors the canonical pagination contract at runtime."""
 
     @pytest.mark.asyncio
-    async def test_pagination_parameters_honored(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_pagination_parameters_honored(self, client: AsyncClient, test_session, auth_headers):
         """Verify that page and page_size parameters are honored."""
         # Create 15 policies
         for i in range(15):
@@ -40,9 +38,7 @@ class TestPoliciesPaginationRuntimeContract:
         await test_session.commit()
 
         # Request page 2 with page_size 5
-        response = await client.get(
-            "/api/v1/policies?page=2&page_size=5", headers=auth_headers
-        )
+        response = await client.get("/api/v1/policies?page=2&page_size=5", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -52,9 +48,7 @@ class TestPoliciesPaginationRuntimeContract:
         assert data["total"] == 15
 
     @pytest.mark.asyncio
-    async def test_total_and_pages_correct(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_total_and_pages_correct(self, client: AsyncClient, test_session, auth_headers):
         """Verify that total and pages fields are calculated correctly."""
         # Create 23 policies
         for i in range(23):
@@ -71,9 +65,7 @@ class TestPoliciesPaginationRuntimeContract:
         await test_session.commit()
 
         # Request with page_size 10
-        response = await client.get(
-            "/api/v1/policies?page=1&page_size=10", headers=auth_headers
-        )
+        response = await client.get("/api/v1/policies?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -81,9 +73,7 @@ class TestPoliciesPaginationRuntimeContract:
         assert data["pages"] == math.ceil(23 / 10)  # Should be 3
 
     @pytest.mark.asyncio
-    async def test_ordering_deterministic_across_pages(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_ordering_deterministic_across_pages(self, client: AsyncClient, test_session, auth_headers):
         """Verify that ordering is deterministic across pages."""
         # Create 10 policies with same reference_number prefix but different IDs
         policies = []
@@ -103,12 +93,8 @@ class TestPoliciesPaginationRuntimeContract:
         await test_session.commit()
 
         # Fetch all items across 2 pages
-        response1 = await client.get(
-            "/api/v1/policies?page=1&page_size=5", headers=auth_headers
-        )
-        response2 = await client.get(
-            "/api/v1/policies?page=2&page_size=5", headers=auth_headers
-        )
+        response1 = await client.get("/api/v1/policies?page=1&page_size=5", headers=auth_headers)
+        response2 = await client.get("/api/v1/policies?page=2&page_size=5", headers=auth_headers)
 
         assert response1.status_code == 200
         assert response2.status_code == 200
@@ -129,9 +115,7 @@ class TestIncidentsPaginationRuntimeContract:
     """Test that Incidents module honors the canonical pagination contract at runtime."""
 
     @pytest.mark.asyncio
-    async def test_pagination_parameters_honored(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_pagination_parameters_honored(self, client: AsyncClient, test_session, auth_headers):
         """Verify that page and page_size parameters are honored."""
         # Create 12 incidents
         for i in range(12):
@@ -154,9 +138,7 @@ class TestIncidentsPaginationRuntimeContract:
         await test_session.commit()
 
         # Request page 2 with page_size 5
-        response = await client.get(
-            "/api/v1/incidents/?page=2&page_size=5", headers=auth_headers
-        )
+        response = await client.get("/api/v1/incidents/?page=2&page_size=5", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -166,9 +148,7 @@ class TestIncidentsPaginationRuntimeContract:
         assert data["total"] == 12
 
     @pytest.mark.asyncio
-    async def test_total_and_pages_correct(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_total_and_pages_correct(self, client: AsyncClient, test_session, auth_headers):
         """Verify that total and pages fields are calculated correctly."""
         # Create 17 incidents
         for i in range(17):
@@ -191,9 +171,7 @@ class TestIncidentsPaginationRuntimeContract:
         await test_session.commit()
 
         # Request with page_size 8
-        response = await client.get(
-            "/api/v1/incidents/?page=1&page_size=8", headers=auth_headers
-        )
+        response = await client.get("/api/v1/incidents/?page=1&page_size=8", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -201,9 +179,7 @@ class TestIncidentsPaginationRuntimeContract:
         assert data["pages"] == math.ceil(17 / 8)  # Should be 3
 
     @pytest.mark.asyncio
-    async def test_ordering_deterministic_across_pages(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_ordering_deterministic_across_pages(self, client: AsyncClient, test_session, auth_headers):
         """Verify that ordering is deterministic across pages."""
         # Create 8 incidents
         incidents = []
@@ -229,12 +205,8 @@ class TestIncidentsPaginationRuntimeContract:
         await test_session.commit()
 
         # Fetch all items across 2 pages
-        response1 = await client.get(
-            "/api/v1/incidents/?page=1&page_size=4", headers=auth_headers
-        )
-        response2 = await client.get(
-            "/api/v1/incidents/?page=2&page_size=4", headers=auth_headers
-        )
+        response1 = await client.get("/api/v1/incidents/?page=1&page_size=4", headers=auth_headers)
+        response2 = await client.get("/api/v1/incidents/?page=2&page_size=4", headers=auth_headers)
 
         assert response1.status_code == 200
         assert response2.status_code == 200
@@ -255,9 +227,7 @@ class TestComplaintsPaginationRuntimeContract:
     """Test that Complaints module honors the canonical pagination contract at runtime."""
 
     @pytest.mark.asyncio
-    async def test_pagination_parameters_honored(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_pagination_parameters_honored(self, client: AsyncClient, test_session, auth_headers):
         """Verify that page and page_size parameters are honored."""
         # Create 14 complaints
         for i in range(14):
@@ -276,9 +246,7 @@ class TestComplaintsPaginationRuntimeContract:
         await test_session.commit()
 
         # Request page 2 with page_size 6
-        response = await client.get(
-            "/api/v1/complaints/?page=2&page_size=6", headers=auth_headers
-        )
+        response = await client.get("/api/v1/complaints/?page=2&page_size=6", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -288,9 +256,7 @@ class TestComplaintsPaginationRuntimeContract:
         assert data["total"] == 14
 
     @pytest.mark.asyncio
-    async def test_total_and_pages_correct(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_total_and_pages_correct(self, client: AsyncClient, test_session, auth_headers):
         """Verify that total and pages fields are calculated correctly."""
         # Create 19 complaints
         for i in range(19):
@@ -309,9 +275,7 @@ class TestComplaintsPaginationRuntimeContract:
         await test_session.commit()
 
         # Request with page_size 7
-        response = await client.get(
-            "/api/v1/complaints/?page=1&page_size=7", headers=auth_headers
-        )
+        response = await client.get("/api/v1/complaints/?page=1&page_size=7", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -319,9 +283,7 @@ class TestComplaintsPaginationRuntimeContract:
         assert data["pages"] == math.ceil(19 / 7)  # Should be 3
 
     @pytest.mark.asyncio
-    async def test_ordering_deterministic_across_pages(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_ordering_deterministic_across_pages(self, client: AsyncClient, test_session, auth_headers):
         """Verify that ordering is deterministic across pages."""
         # Create 9 complaints
         complaints = []
@@ -343,15 +305,9 @@ class TestComplaintsPaginationRuntimeContract:
         await test_session.commit()
 
         # Fetch all items across 3 pages
-        response1 = await client.get(
-            "/api/v1/complaints/?page=1&page_size=3", headers=auth_headers
-        )
-        response2 = await client.get(
-            "/api/v1/complaints/?page=2&page_size=3", headers=auth_headers
-        )
-        response3 = await client.get(
-            "/api/v1/complaints/?page=3&page_size=3", headers=auth_headers
-        )
+        response1 = await client.get("/api/v1/complaints/?page=1&page_size=3", headers=auth_headers)
+        response2 = await client.get("/api/v1/complaints/?page=2&page_size=3", headers=auth_headers)
+        response3 = await client.get("/api/v1/complaints/?page=3&page_size=3", headers=auth_headers)
 
         assert response1.status_code == 200
         assert response2.status_code == 200

@@ -84,15 +84,9 @@ class GapClause(BaseModel):
 
 @router.get("/clauses", response_model=List[ClauseResponse])
 async def list_clauses(
-    standard: Optional[str] = Query(
-        None, description="Filter by ISO standard (iso9001, iso14001, iso45001)"
-    ),
-    level: Optional[int] = Query(
-        None, description="Filter by clause level (1=main, 2=sub)"
-    ),
-    search: Optional[str] = Query(
-        None, description="Search by keyword or clause number"
-    ),
+    standard: Optional[str] = Query(None, description="Filter by ISO standard (iso9001, iso14001, iso45001)"),
+    level: Optional[int] = Query(None, description="Filter by clause level (1=main, 2=sub)"),
+    search: Optional[str] = Query(None, description="Search by keyword or clause number"),
 ):
     """List all ISO clauses with optional filtering."""
 
@@ -177,9 +171,7 @@ async def link_evidence(request: EvidenceLinkRequest):
     # Validate clause IDs exist
     for clause_id in request.clause_ids:
         if not iso_compliance_service.get_clause(clause_id):
-            raise HTTPException(
-                status_code=400, detail=f"Invalid clause ID: {clause_id}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid clause ID: {clause_id}")
 
     # In production, this would save to database
     # For now, return success response
@@ -204,9 +196,7 @@ async def link_evidence(request: EvidenceLinkRequest):
 
 
 @router.get("/coverage")
-async def get_compliance_coverage(
-    standard: Optional[str] = Query(None, description="Filter by ISO standard")
-):
+async def get_compliance_coverage(standard: Optional[str] = Query(None, description="Filter by ISO standard")):
     """
     Get compliance coverage statistics showing how many clauses
     have evidence linked to them.
@@ -234,9 +224,7 @@ async def get_compliance_coverage(
 
 
 @router.get("/gaps")
-async def get_compliance_gaps(
-    standard: Optional[str] = Query(None, description="Filter by ISO standard")
-):
+async def get_compliance_gaps(standard: Optional[str] = Query(None, description="Filter by ISO standard")):
     """
     Get list of ISO clauses that have no evidence linked to them.
     These represent compliance gaps that need attention.
@@ -254,9 +242,7 @@ async def get_compliance_gaps(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid standard: {standard}")
 
-    coverage = iso_compliance_service.calculate_compliance_coverage(
-        mock_links, std_enum
-    )
+    coverage = iso_compliance_service.calculate_compliance_coverage(mock_links, std_enum)
 
     return {"total_gaps": coverage["gaps"], "gap_clauses": coverage["gap_clauses"]}
 
@@ -264,9 +250,7 @@ async def get_compliance_gaps(
 @router.get("/report")
 async def generate_compliance_report(
     standard: Optional[str] = Query(None, description="Filter by ISO standard"),
-    include_evidence: bool = Query(
-        True, description="Include evidence details in report"
-    ),
+    include_evidence: bool = Query(True, description="Include evidence details in report"),
 ):
     """
     Generate a comprehensive compliance report suitable for certification audits.
@@ -291,9 +275,7 @@ async def generate_compliance_report(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid standard: {standard}")
 
-    return iso_compliance_service.generate_audit_report(
-        mock_links, std_enum, include_evidence
-    )
+    return iso_compliance_service.generate_audit_report(mock_links, std_enum, include_evidence)
 
 
 @router.get("/standards")
@@ -306,13 +288,7 @@ async def list_standards():
             "name": "Quality Management System",
             "description": "Requirements for a quality management system",
             "clause_count": len(
-                [
-                    c
-                    for c in iso_compliance_service.get_all_clauses(
-                        ISOStandard.ISO_9001
-                    )
-                    if c.level == 2
-                ]
+                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_9001) if c.level == 2]
             ),
         },
         {
@@ -321,13 +297,7 @@ async def list_standards():
             "name": "Environmental Management System",
             "description": "Requirements for an environmental management system",
             "clause_count": len(
-                [
-                    c
-                    for c in iso_compliance_service.get_all_clauses(
-                        ISOStandard.ISO_14001
-                    )
-                    if c.level == 2
-                ]
+                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_14001) if c.level == 2]
             ),
         },
         {
@@ -336,13 +306,7 @@ async def list_standards():
             "name": "Occupational Health and Safety Management System",
             "description": "Requirements for an OH&S management system",
             "clause_count": len(
-                [
-                    c
-                    for c in iso_compliance_service.get_all_clauses(
-                        ISOStandard.ISO_45001
-                    )
-                    if c.level == 2
-                ]
+                [c for c in iso_compliance_service.get_all_clauses(ISOStandard.ISO_45001) if c.level == 2]
             ),
         },
     ]

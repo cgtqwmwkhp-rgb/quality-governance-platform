@@ -164,9 +164,7 @@ class CAPAService:
         current = action.status
 
         if new_status not in self.VALID_TRANSITIONS.get(current, []):
-            raise ValueError(
-                f"Invalid status transition from {current} to {new_status}"
-            )
+            raise ValueError(f"Invalid status transition from {current} to {new_status}")
 
         action.status = new_status
         if new_status == CAPAStatus.VERIFICATION:
@@ -231,18 +229,12 @@ class CAPAService:
         """Get aggregate CAPA statistics for a tenant."""
         tenant_filter = CAPAAction.tenant_id == tenant_id
 
-        total = await self.db.execute(
-            select(func.count(CAPAAction.id)).where(tenant_filter)
-        )
+        total = await self.db.execute(select(func.count(CAPAAction.id)).where(tenant_filter))
         open_count = await self.db.execute(
-            select(func.count(CAPAAction.id)).where(
-                tenant_filter, CAPAAction.status == CAPAStatus.OPEN
-            )
+            select(func.count(CAPAAction.id)).where(tenant_filter, CAPAAction.status == CAPAStatus.OPEN)
         )
         in_progress = await self.db.execute(
-            select(func.count(CAPAAction.id)).where(
-                tenant_filter, CAPAAction.status == CAPAStatus.IN_PROGRESS
-            )
+            select(func.count(CAPAAction.id)).where(tenant_filter, CAPAAction.status == CAPAStatus.IN_PROGRESS)
         )
         overdue = await self.db.execute(
             select(func.count(CAPAAction.id)).where(

@@ -43,28 +43,16 @@ class InductionRun(Base, TimestampMixin, AuditTrailMixin):
 
     __tablename__ = "induction_runs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    reference_number: Mapped[str] = mapped_column(
-        String(50), unique=True, nullable=False, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
 
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("audit_templates.id"), nullable=False, index=True
-    )
+    template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id"), nullable=False, index=True)
     template_version: Mapped[int] = mapped_column(Integer, default=1)
 
-    engineer_id: Mapped[int] = mapped_column(
-        ForeignKey("engineers.id"), nullable=False, index=True
-    )
-    supervisor_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
-    )
+    engineer_id: Mapped[int] = mapped_column(ForeignKey("engineers.id"), nullable=False, index=True)
+    supervisor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
 
-    asset_type_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("asset_types.id"), nullable=True, index=True
-    )
+    asset_type_id: Mapped[Optional[int]] = mapped_column(ForeignKey("asset_types.id"), nullable=True, index=True)
 
     title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -80,24 +68,16 @@ class InductionRun(Base, TimestampMixin, AuditTrailMixin):
         index=True,
     )
 
-    scheduled_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Counts
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     competent_count: Mapped[int] = mapped_column(Integer, default=0)
     not_yet_competent_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Relationships
     engineer: Mapped["Engineer"] = relationship("Engineer", foreign_keys=[engineer_id])
@@ -115,15 +95,9 @@ class InductionResponse(Base, TimestampMixin):
 
     __tablename__ = "induction_responses"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    run_id: Mapped[str] = mapped_column(
-        ForeignKey("induction_runs.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    question_id: Mapped[int] = mapped_column(
-        ForeignKey("audit_questions.id"), nullable=False, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id: Mapped[str] = mapped_column(ForeignKey("induction_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False, index=True)
 
     shown_explained: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -135,13 +109,9 @@ class InductionResponse(Base, TimestampMixin):
 
     # Per-item engineer sign-off
     engineer_signature: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    engineer_signed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    engineer_signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    run: Mapped["InductionRun"] = relationship(
-        "InductionRun", back_populates="responses"
-    )
+    run: Mapped["InductionRun"] = relationship("InductionRun", back_populates="responses")
 
     def __repr__(self) -> str:
         return f"<InductionResponse(id={self.id}, understanding={self.understanding})>"

@@ -64,9 +64,7 @@ async def list_templates(
     )
 
 
-@router.post(
-    "/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,

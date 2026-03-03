@@ -42,9 +42,7 @@ class PresenceResponse(BaseModel):
 
 
 @router.websocket("/ws/{user_id}")
-async def websocket_endpoint(
-    websocket: WebSocket, user_id: int, token: Optional[str] = Query(None)
-):
+async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional[str] = Query(None)):
     """
     WebSocket endpoint for real-time communication.
 
@@ -79,9 +77,7 @@ async def websocket_endpoint(
         await websocket.close(code=4003)
         return
 
-    connection = await connection_manager.connect(
-        websocket=websocket, user_id=user_id, metadata={"token": token}
-    )
+    connection = await connection_manager.connect(websocket=websocket, user_id=user_id, metadata={"token": token})
 
     try:
         while True:
@@ -155,9 +151,7 @@ async def get_user_presence(user_id: int, current_user: CurrentUser):
 
 
 @router.post("/broadcast")
-async def broadcast_message(
-    message: dict, current_user: CurrentUser, channel: Optional[str] = None
-):
+async def broadcast_message(message: dict, current_user: CurrentUser, channel: Optional[str] = None):
     """
     Broadcast a message to connected users.
 
@@ -171,8 +165,6 @@ async def broadcast_message(
             channel=channel, message=message, event_type="admin_broadcast"
         )
     else:
-        count = await connection_manager.broadcast_to_all(
-            message=message, event_type="admin_broadcast"
-        )
+        count = await connection_manager.broadcast_to_all(message=message, event_type="admin_broadcast")
 
     return {"success": True, "recipients": count, "channel": channel}

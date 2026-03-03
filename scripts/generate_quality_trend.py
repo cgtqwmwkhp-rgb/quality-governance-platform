@@ -248,20 +248,12 @@ def main():
     parser.add_argument("--quarantine-count", type=int, default=0)
 
     # CI info
-    parser.add_argument(
-        "--ci-run-id", type=str, default=os.environ.get("GITHUB_RUN_ID", "local")
-    )
-    parser.add_argument(
-        "--commit-sha", type=str, default=os.environ.get("GITHUB_SHA", "local")[:7]
-    )
-    parser.add_argument(
-        "--branch", type=str, default=os.environ.get("GITHUB_REF_NAME", "local")
-    )
+    parser.add_argument("--ci-run-id", type=str, default=os.environ.get("GITHUB_RUN_ID", "local"))
+    parser.add_argument("--commit-sha", type=str, default=os.environ.get("GITHUB_SHA", "local")[:7])
+    parser.add_argument("--branch", type=str, default=os.environ.get("GITHUB_REF_NAME", "local"))
 
     # Paths
-    parser.add_argument(
-        "--baseline-file", type=str, default="docs/evidence/e2e_baseline.json"
-    )
+    parser.add_argument("--baseline-file", type=str, default="docs/evidence/e2e_baseline.json")
     parser.add_argument("--output-dir", type=str, default=".")
 
     args = parser.parse_args()
@@ -278,9 +270,7 @@ def main():
         passed=args.integration_passed,
         skipped=args.integration_skipped,
         failed=args.integration_failed,
-        total=args.integration_passed
-        + args.integration_skipped
-        + args.integration_failed,
+        total=args.integration_passed + args.integration_skipped + args.integration_failed,
     )
 
     unit = TestResults(
@@ -324,9 +314,7 @@ def main():
     print(f"Integration: {report.integration_passed}/{report.integration_total}")
     print(f"Unit:        {report.unit_passed}/{report.unit_total}")
     print(f"Quarantine:  {report.quarantine_count}")
-    print(
-        f"Baseline:    {report.baseline_pass_count} (min: {report.baseline_min_acceptable})"
-    )
+    print(f"Baseline:    {report.baseline_pass_count} (min: {report.baseline_min_acceptable})")
     print("=" * 50)
 
     if report.all_gates_passed:

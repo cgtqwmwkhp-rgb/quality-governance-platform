@@ -57,9 +57,7 @@ def fetch_health(base_url: str, endpoint: str) -> tuple[int, bool]:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Verify staging and production environment sync"
-    )
+    parser = argparse.ArgumentParser(description="Verify staging and production environment sync")
     parser.add_argument("--staging-url", required=True, help="Staging environment URL")
     parser.add_argument("--prod-url", required=True, help="Production environment URL")
     parser.add_argument("--expected-sha", help="Expected git SHA (optional)")
@@ -81,9 +79,7 @@ def main():
     shas_match = staging_sha == prod_sha and staging_ok and prod_ok
     expected_match = True
     if args.expected_sha:
-        expected_match = (
-            staging_sha == args.expected_sha and prod_sha == args.expected_sha
-        )
+        expected_match = staging_sha == args.expected_sha and prod_sha == args.expected_sha
 
     all_healthy = staging_healthy and prod_healthy and staging_ready and prod_ready
     sync_ok = shas_match and expected_match and all_healthy
@@ -136,9 +132,7 @@ def main():
             print(f"Expected SHA: {args.expected_sha}")
             print(f"Expected Match: {'✅ YES' if expected_match else '❌ NO'}")
         print()
-        print(
-            f"Overall: {'✅ PASS - Environments are in sync' if sync_ok else '❌ FAIL - Environments NOT in sync'}"
-        )
+        print(f"Overall: {'✅ PASS - Environments are in sync' if sync_ok else '❌ FAIL - Environments NOT in sync'}")
         print("=" * 60)
 
     # Exit code

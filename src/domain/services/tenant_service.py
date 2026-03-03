@@ -133,19 +133,11 @@ class TenantService:
 
     def get_user_tenants(self, user_id: int) -> list[TenantUser]:
         """Get all tenants a user belongs to."""
-        return (
-            self.db.query(TenantUser)
-            .filter(TenantUser.user_id == user_id, TenantUser.is_active == True)
-            .all()
-        )
+        return self.db.query(TenantUser).filter(TenantUser.user_id == user_id, TenantUser.is_active == True).all()
 
     def get_tenant_users(self, tenant_id: int) -> list[TenantUser]:
         """Get all users in a tenant."""
-        return (
-            self.db.query(TenantUser)
-            .filter(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
-            .all()
-        )
+        return self.db.query(TenantUser).filter(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True).all()
 
     def add_user_to_tenant(
         self,
@@ -158,9 +150,7 @@ class TenantService:
         """Add a user to a tenant."""
         # Check if already exists
         existing = (
-            self.db.query(TenantUser)
-            .filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
-            .first()
+            self.db.query(TenantUser).filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id).first()
         )
 
         if existing:
@@ -187,9 +177,7 @@ class TenantService:
     def remove_user_from_tenant(self, tenant_id: int, user_id: int) -> bool:
         """Remove a user from a tenant."""
         tenant_user = (
-            self.db.query(TenantUser)
-            .filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
-            .first()
+            self.db.query(TenantUser).filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id).first()
         )
 
         if not tenant_user:
@@ -213,14 +201,10 @@ class TenantService:
         self.db.commit()
         return True
 
-    def update_user_role(
-        self, tenant_id: int, user_id: int, new_role: str
-    ) -> TenantUser:
+    def update_user_role(self, tenant_id: int, user_id: int, new_role: str) -> TenantUser:
         """Update a user's role in a tenant."""
         tenant_user = (
-            self.db.query(TenantUser)
-            .filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
-            .first()
+            self.db.query(TenantUser).filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id).first()
         )
 
         if not tenant_user:
@@ -235,15 +219,13 @@ class TenantService:
     def set_primary_tenant(self, user_id: int, tenant_id: int) -> TenantUser:
         """Set the primary tenant for a user."""
         # Clear existing primary
-        self.db.query(TenantUser).filter(
-            TenantUser.user_id == user_id, TenantUser.is_primary == True
-        ).update({"is_primary": False})
+        self.db.query(TenantUser).filter(TenantUser.user_id == user_id, TenantUser.is_primary == True).update(
+            {"is_primary": False}
+        )
 
         # Set new primary
         tenant_user = (
-            self.db.query(TenantUser)
-            .filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id)
-            .first()
+            self.db.query(TenantUser).filter(TenantUser.tenant_id == tenant_id, TenantUser.user_id == user_id).first()
         )
 
         if not tenant_user:
@@ -289,9 +271,7 @@ class TenantService:
         """Accept a tenant invitation."""
         invitation = (
             self.db.query(TenantInvitation)
-            .filter(
-                TenantInvitation.token == token, TenantInvitation.status == "pending"
-            )
+            .filter(TenantInvitation.token == token, TenantInvitation.status == "pending")
             .first()
         )
 
@@ -304,9 +284,7 @@ class TenantService:
             raise ValueError("Invitation has expired")
 
         # Add user to tenant
-        tenant_user = self.add_user_to_tenant(
-            invitation.tenant_id, user_id, invitation.role
-        )
+        tenant_user = self.add_user_to_tenant(invitation.tenant_id, user_id, invitation.role)
 
         # Mark invitation as accepted
         invitation.status = "accepted"
@@ -368,9 +346,7 @@ class TenantService:
             raise ValueError(f"Tenant {tenant_id} not found")
 
         current_users = (
-            self.db.query(TenantUser)
-            .filter(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
-            .count()
+            self.db.query(TenantUser).filter(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True).count()
         )
 
         return current_users, tenant.max_users

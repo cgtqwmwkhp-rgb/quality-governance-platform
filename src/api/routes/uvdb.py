@@ -716,9 +716,7 @@ async def get_audit_responses(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    responses = (
-        db.query(UVDBAuditResponse).filter(UVDBAuditResponse.audit_id == audit_id).all()
-    )
+    responses = db.query(UVDBAuditResponse).filter(UVDBAuditResponse.audit_id == audit_id).all()
 
     return {
         "audit_id": audit_id,
@@ -775,12 +773,7 @@ async def get_audit_kpis(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
-    kpis = (
-        db.query(UVDBKPIRecord)
-        .filter(UVDBKPIRecord.audit_id == audit_id)
-        .order_by(UVDBKPIRecord.year.desc())
-        .all()
-    )
+    kpis = db.query(UVDBKPIRecord).filter(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc()).all()
 
     return {
         "audit_id": audit_id,
@@ -821,9 +814,7 @@ async def get_iso_cross_mapping() -> dict[str, Any]:
                         "uvdb_section": section["number"],
                         "uvdb_question": question["number"],
                         "uvdb_text": (
-                            question["text"][:100] + "..."
-                            if len(question["text"]) > 100
-                            else question["text"]
+                            question["text"][:100] + "..." if len(question["text"]) > 100 else question["text"]
                         ),
                         "iso_9001": question["iso_mapping"].get("9001", []),
                         "iso_14001": question["iso_mapping"].get("14001", []),
@@ -854,20 +845,12 @@ async def get_uvdb_dashboard(
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
     total_audits = db.query(UVDBAudit).count()
-    active_audits = (
-        db.query(UVDBAudit)
-        .filter(UVDBAudit.status.in_(["scheduled", "in_progress"]))
-        .count()
-    )
-    completed_audits = (
-        db.query(UVDBAudit).filter(UVDBAudit.status == "completed").count()
-    )
+    active_audits = db.query(UVDBAudit).filter(UVDBAudit.status.in_(["scheduled", "in_progress"])).count()
+    completed_audits = db.query(UVDBAudit).filter(UVDBAudit.status == "completed").count()
 
     # Average score
     completed = (
-        db.query(UVDBAudit)
-        .filter(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None))
-        .all()
+        db.query(UVDBAudit).filter(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)).all()
     )
 
     avg_score = 0

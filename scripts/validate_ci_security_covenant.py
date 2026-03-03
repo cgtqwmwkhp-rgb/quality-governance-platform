@@ -52,12 +52,8 @@ def check_pull_request_target(workflow_path: Path, allowlist: List[str]) -> List
     # Check for pull_request_target
     if re.search(r"^\s*pull_request_target\s*:", content, re.MULTILINE):
         if workflow_path.name not in allowlist:
-            errors.append(
-                f"  ❌ {workflow_path.name}: Uses pull_request_target without allowlist entry"
-            )
-            errors.append(
-                f"     Add to {ALLOWLIST_FILE} if this is intentional and documented"
-            )
+            errors.append(f"  ❌ {workflow_path.name}: Uses pull_request_target without allowlist entry")
+            errors.append(f"     Add to {ALLOWLIST_FILE} if this is intentional and documented")
 
     return errors
 
@@ -89,9 +85,7 @@ def check_unsafe_secret_usage(workflow_path: Path) -> List[str]:
         if re.search(pattern, content, re.DOTALL):
             errors.append(f"  ⚠️  {workflow_path.name}: Potentially unsafe secret usage")
             errors.append(f"     {description}")
-            errors.append(
-                f"     Review to ensure secrets are not exposed to PR context"
-            )
+            errors.append(f"     Review to ensure secrets are not exposed to PR context")
 
     return errors
 
@@ -113,18 +107,14 @@ def main() -> int:
     # Load allowlist
     allowlist = load_allowlist(repo_root)
     if allowlist:
-        print(
-            f"Allowlist loaded: {len(allowlist)} workflow(s) permitted to use pull_request_target"
-        )
+        print(f"Allowlist loaded: {len(allowlist)} workflow(s) permitted to use pull_request_target")
         for workflow in allowlist:
             print(f"  - {workflow}")
         print()
 
     # Check all workflow files
     all_errors = []
-    workflow_files = list(workflows_dir.glob("*.yml")) + list(
-        workflows_dir.glob("*.yaml")
-    )
+    workflow_files = list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml"))
 
     for workflow_path in workflow_files:
         print(f"Checking: {workflow_path.name}")

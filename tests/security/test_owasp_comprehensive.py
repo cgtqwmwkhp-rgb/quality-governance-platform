@@ -222,9 +222,7 @@ class TestA03Injection:
                 headers=auth_headers,
             )
             # Should not cause server error
-            assert (
-                response.status_code != 500
-            ), f"SQL injection may have succeeded: {payload}"
+            assert response.status_code != 500, f"SQL injection may have succeeded: {payload}"
 
     def test_sql_injection_in_body(self, client):
         """SQL injection in request body is blocked."""
@@ -618,9 +616,4 @@ class TestAdditionalSecurity:
         for pattern in secret_patterns:
             if pattern in response_text:
                 # If found, ensure it's not an actual secret value
-                assert (
-                    "="
-                    not in response_text[
-                        response_text.find(pattern) : response_text.find(pattern) + 50
-                    ]
-                )
+                assert "=" not in response_text[response_text.find(pattern) : response_text.find(pattern) + 50]

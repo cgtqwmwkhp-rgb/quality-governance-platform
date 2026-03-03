@@ -44,9 +44,7 @@ def check_environment_safety() -> bool:
         errors.append(f"❌ FATAL: APP_ENV={app_env or 'unset'} - must be 'staging'")
 
     if uat_enabled != "true":
-        errors.append(
-            f"❌ FATAL: UAT_ENABLED={uat_enabled or 'unset'} - must be 'true'"
-        )
+        errors.append(f"❌ FATAL: UAT_ENABLED={uat_enabled or 'unset'} - must be 'true'")
 
     if errors:
         print("=" * 70)

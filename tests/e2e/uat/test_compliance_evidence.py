@@ -41,15 +41,11 @@ class TestStandardsAndControls:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_get_standard_with_controls(
-        self, admin_client: UATApiClient, uat_standard_ids: Dict[str, str]
-    ):
+    async def test_get_standard_with_controls(self, admin_client: UATApiClient, uat_standard_ids: Dict[str, str]):
         """Can get standard with its controls."""
         standard_id = uat_standard_ids["iso27001"]
 
-        response = await admin_client.get(
-            f"/api/v1/standards/{standard_id}?include=controls"
-        )
+        response = await admin_client.get(f"/api/v1/standards/{standard_id}?include=controls")
 
         # In real test:
         # assert response.status_code == 200
@@ -60,9 +56,7 @@ class TestStandardsAndControls:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_list_controls_for_standard(
-        self, admin_client: UATApiClient, uat_standard_ids: Dict[str, str]
-    ):
+    async def test_list_controls_for_standard(self, admin_client: UATApiClient, uat_standard_ids: Dict[str, str]):
         """Can list controls for a standard."""
         standard_id = uat_standard_ids["iso27001"]
 
@@ -76,18 +70,12 @@ class TestStandardsAndControls:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_controls_stable_ordering(
-        self, admin_client: UATApiClient, uat_standard_ids: Dict[str, str]
-    ):
+    async def test_controls_stable_ordering(self, admin_client: UATApiClient, uat_standard_ids: Dict[str, str]):
         """Controls list has stable ordering."""
         standard_id = uat_standard_ids["iso27001"]
 
-        response1 = await admin_client.get(
-            f"/api/v1/standards/{standard_id}/controls?sort=code"
-        )
-        response2 = await admin_client.get(
-            f"/api/v1/standards/{standard_id}/controls?sort=code"
-        )
+        response1 = await admin_client.get(f"/api/v1/standards/{standard_id}/controls?sort=code")
+        response2 = await admin_client.get(f"/api/v1/standards/{standard_id}/controls?sort=code")
 
         # In real test:
         # controls1 = response1.json()['items']
@@ -118,9 +106,7 @@ class TestEvidenceManagement:
             "uploaded_by_id": uat_user_ids["admin"],
         }
 
-        response = await admin_client.post(
-            f"/api/v1/controls/{control_id}/evidence", evidence_data
-        )
+        response = await admin_client.post(f"/api/v1/controls/{control_id}/evidence", evidence_data)
 
         # In real test:
         # assert response.status_code == 201
@@ -130,9 +116,7 @@ class TestEvidenceManagement:
         assert response["status"] in ("created", "ok")
 
     @pytest.mark.asyncio
-    async def test_list_evidence_for_control(
-        self, admin_client: UATApiClient, uat_control_ids: Dict[str, str]
-    ):
+    async def test_list_evidence_for_control(self, admin_client: UATApiClient, uat_control_ids: Dict[str, str]):
         """Can list evidence for a control."""
         control_id = uat_control_ids["iso_policies"]
 
@@ -146,9 +130,7 @@ class TestEvidenceManagement:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_evidence_has_no_pii(
-        self, admin_client: UATApiClient, uat_control_ids: Dict[str, str]
-    ):
+    async def test_evidence_has_no_pii(self, admin_client: UATApiClient, uat_control_ids: Dict[str, str]):
         """Evidence data contains no PII."""
         control_id = uat_control_ids["iso_policies"]
 
@@ -172,9 +154,7 @@ class TestComplianceScoring:
         """Can get compliance score for a standard."""
         standard_id = uat_standard_ids["iso27001"]
 
-        response = await admin_client.get(
-            f"/api/v1/standards/{standard_id}/compliance-score"
-        )
+        response = await admin_client.get(f"/api/v1/standards/{standard_id}/compliance-score")
 
         # In real test:
         # assert response.status_code == 200
@@ -198,9 +178,7 @@ class TestComplianceScoring:
         control_id = uat_control_ids["soc2_environment"]
 
         # Get initial score
-        response1 = await admin_client.get(
-            f"/api/v1/standards/{standard_id}/compliance-score"
-        )
+        response1 = await admin_client.get(f"/api/v1/standards/{standard_id}/compliance-score")
 
         # Add evidence
         evidence_data = {
@@ -209,14 +187,10 @@ class TestComplianceScoring:
             "evidence_type": "document",
             "uploaded_by_id": uat_user_ids["admin"],
         }
-        await admin_client.post(
-            f"/api/v1/controls/{control_id}/evidence", evidence_data
-        )
+        await admin_client.post(f"/api/v1/controls/{control_id}/evidence", evidence_data)
 
         # Get updated score
-        response2 = await admin_client.get(
-            f"/api/v1/standards/{standard_id}/compliance-score"
-        )
+        response2 = await admin_client.get(f"/api/v1/standards/{standard_id}/compliance-score")
 
         # In real test:
         # score1 = response1.json()['score']
@@ -262,9 +236,7 @@ class TestComplianceRoleRestrictions:
         assert response["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_readonly_user_cannot_add_evidence(
-        self, uat_config: UATConfig, uat_control_ids: Dict[str, str]
-    ):
+    async def test_readonly_user_cannot_add_evidence(self, uat_config: UATConfig, uat_control_ids: Dict[str, str]):
         """Readonly user cannot add evidence."""
         from conftest import UATApiClient
 
@@ -279,9 +251,7 @@ class TestComplianceRoleRestrictions:
             "evidence_type": "document",
         }
 
-        response = await client.post(
-            f"/api/v1/controls/{control_id}/evidence", evidence_data
-        )
+        response = await client.post(f"/api/v1/controls/{control_id}/evidence", evidence_data)
 
         # In real test:
         # assert response.status_code == 403

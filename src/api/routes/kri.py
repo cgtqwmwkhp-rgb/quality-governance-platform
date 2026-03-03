@@ -85,9 +85,7 @@ async def create_kri(
 ):
     """Create a new KRI."""
     # Check for duplicate code
-    existing = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code)
-    )
+    existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="KRI code already exists")
 
@@ -135,9 +133,7 @@ async def get_kri(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific KRI."""
-    result = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
 
     if not kri:
@@ -154,9 +150,7 @@ async def update_kri(
     current_user: dict = Depends(get_current_user),
 ):
     """Update a KRI."""
-    result = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
 
     if not kri:
@@ -181,9 +175,7 @@ async def delete_kri(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete a KRI."""
-    result = await db.execute(
-        select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
 
     if not kri:
@@ -340,9 +332,7 @@ async def get_risk_trend(
 # =============================================================================
 
 
-@router.post(
-    "/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse
-)
+@router.post("/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse)
 async def assess_incident_sif(
     incident_id: int,
     assessment: SIFAssessmentCreate,
@@ -370,9 +360,7 @@ async def assess_incident_sif(
     # If SIF or pSIF, trigger risk score update
     if assessment.is_sif or assessment.is_psif:
         scoring_service = RiskScoringService(db)
-        await scoring_service.recalculate_risk_score_for_incident(
-            incident_id, trigger_type="sif_assessment"
-        )
+        await scoring_service.recalculate_risk_score_for_incident(incident_id, trigger_type="sif_assessment")
 
     await db.commit()
     await db.refresh(incident)
@@ -391,9 +379,7 @@ async def assess_incident_sif(
     )
 
 
-@router.get(
-    "/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse
-)
+@router.get("/incidents/{incident_id}/sif-assessment", response_model=SIFAssessmentResponse)
 async def get_incident_sif_assessment(
     incident_id: int,
     db: AsyncSession = Depends(get_db),
@@ -407,9 +393,7 @@ async def get_incident_sif_assessment(
         raise HTTPException(status_code=404, detail="Incident not found")
 
     if not incident.sif_classification:
-        raise HTTPException(
-            status_code=404, detail="No SIF assessment found for this incident"
-        )
+        raise HTTPException(status_code=404, detail="No SIF assessment found for this incident")
 
     return SIFAssessmentResponse(
         incident_id=incident.id,

@@ -20,9 +20,7 @@ async def export_user_data(
     """
     service = GDPRService(db)
     try:
-        data = await service.export_user_data(
-            current_user.id, current_user.tenant_id or 0
-        )
+        data = await service.export_user_data(current_user.id, current_user.tenant_id or 0)
         return data
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -33,9 +31,7 @@ async def request_data_erasure(
     db: DbSession,
     current_user: CurrentUser,
     reason: str = Query("", description="Optional reason for data erasure request"),
-    confirm: bool = Query(
-        False, description="Confirmation flag - must be True to proceed"
-    ),
+    confirm: bool = Query(False, description="Confirmation flag - must be True to proceed"),
 ) -> dict:
     """Request data erasure (Right to Erasure, GDPR Art. 17).
 
@@ -50,9 +46,7 @@ async def request_data_erasure(
 
     service = GDPRService(db)
     try:
-        result = await service.request_erasure(
-            current_user.id, current_user.tenant_id or 0, reason
-        )
+        result = await service.request_erasure(current_user.id, current_user.tenant_id or 0, reason)
         return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

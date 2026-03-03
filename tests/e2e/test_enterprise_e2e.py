@@ -459,11 +459,7 @@ class TestDocumentControlE2E:
         policies_data = policies_response.json()
         assert isinstance(policies_data, (list, dict))
         if isinstance(policies_data, dict):
-            assert (
-                "items" in policies_data
-                or "results" in policies_data
-                or "data" in policies_data
-            )
+            assert "items" in policies_data or "results" in policies_data or "data" in policies_data
 
     def test_policy_workflow(self, client, auth_headers):
         """E2E: Policy creation and approval."""
@@ -788,9 +784,7 @@ class TestEdgeCasesE2E:
 
     def test_special_characters_handling(self, client):
         """E2E: Handle special characters."""
-        special_title = (
-            f"Test with émojis 🚨 and spëcial çharacters - {uuid4().hex[:8]}"
-        )
+        special_title = f"Test with émojis 🚨 and spëcial çharacters - {uuid4().hex[:8]}"
 
         response = client.post(
             "/api/v1/portal/reports/",
@@ -813,9 +807,7 @@ class TestEdgeCasesE2E:
         # Make multiple rapid requests
         responses = []
         for _ in range(5):
-            response = client.get(
-                "/api/v1/incidents?page=1&per_page=5", headers=auth_headers
-            )
+            response = client.get("/api/v1/incidents?page=1&per_page=5", headers=auth_headers)
             responses.append(response.status_code)
 
         # All should succeed
@@ -850,6 +842,4 @@ class TestE2ESummary:
             response = client.get(endpoint, headers=auth_headers)
             assert response.status_code == 200, f"Failed: {endpoint}"
             data = response.json()
-            assert isinstance(
-                data, (list, dict)
-            ), f"Invalid response type for {endpoint}"
+            assert isinstance(data, (list, dict)), f"Invalid response type for {endpoint}"

@@ -151,9 +151,7 @@ class TestApprovals:
         """Test approving a request."""
         payload = {"notes": "Approved after review"}
 
-        response = auth_client.post(
-            "/api/workflows/approvals/APR-001/approve", json=payload
-        )
+        response = auth_client.post("/api/workflows/approvals/APR-001/approve", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -164,18 +162,14 @@ class TestApprovals:
         """Test that rejection requires a reason."""
         payload = {"notes": "Some notes but no reason"}
 
-        response = auth_client.post(
-            "/api/workflows/approvals/APR-002/reject", json=payload
-        )
+        response = auth_client.post("/api/workflows/approvals/APR-002/reject", json=payload)
         assert response.status_code == 400
 
     def test_reject_request_with_reason(self, auth_client: Any) -> None:
         """Test rejecting a request with valid reason."""
         payload = {"reason": "Insufficient documentation provided"}
 
-        response = auth_client.post(
-            "/api/workflows/approvals/APR-002/reject", json=payload
-        )
+        response = auth_client.post("/api/workflows/approvals/APR-002/reject", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -188,9 +182,7 @@ class TestApprovals:
             "notes": "Bulk approved after batch review",
         }
 
-        response = auth_client.post(
-            "/api/workflows/approvals/bulk-approve", json=payload
-        )
+        response = auth_client.post("/api/workflows/approvals/bulk-approve", json=payload)
         assert response.status_code == 200
 
         result = response.json()
@@ -256,9 +248,7 @@ class TestEscalation:
             "new_priority": "critical",
         }
 
-        response = auth_client.post(
-            "/api/workflows/instances/WF-001/escalate", json=payload
-        )
+        response = auth_client.post("/api/workflows/instances/WF-001/escalate", json=payload)
         assert response.status_code == 200
 
         result = response.json()

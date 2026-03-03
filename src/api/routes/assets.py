@@ -87,9 +87,7 @@ async def get_asset_type(
 ):
     """Get a specific asset type."""
     service = AssetService(db)
-    asset_type = await service._get_entity(
-        AssetType, asset_type_id, tenant_id=user.tenant_id
-    )
+    asset_type = await service._get_entity(AssetType, asset_type_id, tenant_id=user.tenant_id)
     return AssetTypeResponse.model_validate(asset_type)
 
 
@@ -125,9 +123,7 @@ async def delete_asset_type(
     )
 
 
-@router.get(
-    "/asset-types/{asset_type_id}/templates", response_model=TemplateListResponse
-)
+@router.get("/asset-types/{asset_type_id}/templates", response_model=TemplateListResponse)
 async def get_templates_for_asset_type(
     asset_type_id: int,
     db: DbSession,

@@ -24,31 +24,21 @@ class RiskStatisticsService:
         """
         tenant_filter = Risk.tenant_id == tenant_id
 
-        total_result = await db.execute(
-            select(func.count()).select_from(Risk).where(tenant_filter)
-        )
+        total_result = await db.execute(select(func.count()).select_from(Risk).where(tenant_filter))
         total_risks = total_result.scalar() or 0
 
         active_result = await db.execute(
-            select(func.count())
-            .select_from(Risk)
-            .where(Risk.is_active == True, tenant_filter)
+            select(func.count()).select_from(Risk).where(Risk.is_active == True, tenant_filter)
         )
         active_risks = active_result.scalar() or 0
 
         category_result = await db.execute(
-            select(Risk.category, func.count())
-            .where(Risk.is_active == True, tenant_filter)
-            .group_by(Risk.category)
+            select(Risk.category, func.count()).where(Risk.is_active == True, tenant_filter).group_by(Risk.category)
         )
-        risks_by_category = {
-            row[0] or "uncategorized": row[1] for row in category_result.all()
-        }
+        risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
 
         level_result = await db.execute(
-            select(Risk.risk_level, func.count())
-            .where(Risk.is_active == True, tenant_filter)
-            .group_by(Risk.risk_level)
+            select(Risk.risk_level, func.count()).where(Risk.is_active == True, tenant_filter).group_by(Risk.risk_level)
         )
         risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
 
@@ -79,11 +69,7 @@ class RiskStatisticsService:
         )
         overdue_treatments = overdue_result.scalar() or 0
 
-        avg_result = await db.execute(
-            select(func.avg(Risk.risk_score)).where(
-                Risk.is_active == True, tenant_filter
-            )
-        )
+        avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True, tenant_filter))
         average_risk_score = float(avg_result.scalar() or 0)
 
         return {

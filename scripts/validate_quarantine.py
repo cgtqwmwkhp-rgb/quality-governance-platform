@@ -47,9 +47,7 @@ def parse_yaml_manually(content: str) -> dict:
             in_files = False
         elif current_quarantine:
             if stripped.startswith("expiry_date:"):
-                current_quarantine["expiry_date"] = (
-                    stripped.split(":")[1].strip().strip('"')
-                )
+                current_quarantine["expiry_date"] = stripped.split(":")[1].strip().strip('"')
             elif stripped.startswith("owner:"):
                 current_quarantine["owner"] = stripped.split(":")[1].strip().strip('"')
             elif stripped.startswith("marker:"):
@@ -64,23 +62,15 @@ def parse_yaml_manually(content: str) -> dict:
 
         # Parse metrics
         if stripped.startswith("baseline_quarantine_count:"):
-            result["metrics"]["baseline_quarantine_count"] = int(
-                stripped.split(":")[1].strip()
-            )
+            result["metrics"]["baseline_quarantine_count"] = int(stripped.split(":")[1].strip())
         elif stripped.startswith("max_allowed_quarantine_count:"):
-            result["metrics"]["max_allowed_quarantine_count"] = int(
-                stripped.split(":")[1].strip()
-            )
+            result["metrics"]["max_allowed_quarantine_count"] = int(stripped.split(":")[1].strip())
 
         # Parse settings
         if stripped.startswith("enforce_expiry:"):
-            result["settings"]["enforce_expiry"] = (
-                stripped.split(":")[1].strip().lower() == "true"
-            )
+            result["settings"]["enforce_expiry"] = stripped.split(":")[1].strip().lower() == "true"
         elif stripped.startswith("block_on_expiry:"):
-            result["settings"]["block_on_expiry"] = (
-                stripped.split(":")[1].strip().lower() == "true"
-            )
+            result["settings"]["block_on_expiry"] = stripped.split(":")[1].strip().lower() == "true"
 
     if current_quarantine:
         result["quarantines"].append(current_quarantine)
@@ -112,10 +102,7 @@ def validate_expiry_dates(policy: dict) -> list[str]:
         try:
             expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
             if today > expiry:
-                errors.append(
-                    f"{entry['id']}: EXPIRED on {expiry_str} "
-                    f"({(today - expiry).days} days ago)"
-                )
+                errors.append(f"{entry['id']}: EXPIRED on {expiry_str} " f"({(today - expiry).days} days ago)")
         except ValueError as e:
             errors.append(f"{entry.get('id', 'unknown')}: Invalid date format: {e}")
 
@@ -254,9 +241,7 @@ def main():
         print()
         print("Actions required:")
         print("  1. For expired quarantines: Fix the tests or request extension")
-        print(
-            "  2. For budget exceeded: Update max_allowed_quarantine_count with justification"
-        )
+        print("  2. For budget exceeded: Update max_allowed_quarantine_count with justification")
         print("  3. For missing fields: Add required metadata to entries")
         sys.exit(1)
     else:

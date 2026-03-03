@@ -81,17 +81,13 @@ class CarbonReportingYear(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # Reporting period
-    year_label: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # "YE2023", "YE2024"
+    year_label: Mapped[str] = mapped_column(String(20), nullable=False)  # "YE2023", "YE2024"
     year_number: Mapped[int] = mapped_column(Integer, nullable=False)  # 1, 2, 3...
     period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     # Organization context
-    organization_name: Mapped[str] = mapped_column(
-        String(255), default="Plantexpand Limited"
-    )
+    organization_name: Mapped[str] = mapped_column(String(255), default="Plantexpand Limited")
     reporting_boundary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sites_included: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
@@ -109,9 +105,7 @@ class CarbonReportingYear(Base):
     scope_2_location: Mapped[float] = mapped_column(Float, default=0)  # Location-based
     scope_2_market: Mapped[float] = mapped_column(Float, default=0)  # Market-based
     scope_3_total: Mapped[float] = mapped_column(Float, default=0)
-    total_emissions: Mapped[float] = mapped_column(
-        Float, default=0
-    )  # Market-based total
+    total_emissions: Mapped[float] = mapped_column(Float, default=0)  # Market-based total
     emissions_per_fte: Mapped[float] = mapped_column(Float, default=0)
 
     # Data quality scores (0-16)
@@ -123,12 +117,8 @@ class CarbonReportingYear(Base):
     # Certification status
     certification_status: Mapped[str] = mapped_column(String(30), default="draft")
     # draft, submitted, certified, expired
-    certificate_number: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
-    certification_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    certificate_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    certification_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Planet Mark assessor
@@ -136,23 +126,15 @@ class CarbonReportingYear(Base):
     assessment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Improvement targets
-    reduction_target_percent: Mapped[float] = mapped_column(
-        Float, default=5.0
-    )  # 5% default
-    target_emissions_per_fte: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
+    reduction_target_percent: Mapped[float] = mapped_column(Float, default=5.0)  # 5% default
+    target_emissions_per_fte: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     emission_sources = relationship("EmissionSource", back_populates="reporting_year")
-    improvement_actions = relationship(
-        "ImprovementAction", back_populates="reporting_year"
-    )
+    improvement_actions = relationship("ImprovementAction", back_populates="reporting_year")
     evidence_documents = relationship("CarbonEvidence", back_populates="reporting_year")
 
 
@@ -170,17 +152,11 @@ class EmissionSource(Base):
 
     # Source identification
     source_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    source_category: Mapped[str] = mapped_column(
-        String(100), nullable=False
-    )  # Fleet, Buildings, etc.
+    source_category: Mapped[str] = mapped_column(String(100), nullable=False)  # Fleet, Buildings, etc.
 
     # Scope classification
-    scope: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # scope_1, scope_2, scope_3
-    scope_3_category: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # cat_1 to cat_15
+    scope: Mapped[str] = mapped_column(String(20), nullable=False)  # scope_1, scope_2, scope_3
+    scope_3_category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # cat_1 to cat_15
 
     # Activity data
     activity_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -191,9 +167,7 @@ class EmissionSource(Base):
     # Emission factors
     emission_factor: Mapped[float] = mapped_column(Float, nullable=False)
     emission_factor_unit: Mapped[str] = mapped_column(String(100), nullable=False)
-    emission_factor_source: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
+    emission_factor_source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # e.g., "DEFRA 2023", "IEA 2023"
 
     # Calculated emissions
@@ -203,12 +177,8 @@ class EmissionSource(Base):
     n2o_tonnes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Data quality
-    data_quality_level: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="estimated"
-    )
-    data_quality_score: Mapped[int] = mapped_column(
-        Integer, default=2
-    )  # 0-4 per source
+    data_quality_level: Mapped[str] = mapped_column(String(30), nullable=False, default="estimated")
+    data_quality_score: Mapped[int] = mapped_column(Integer, default=2)  # 0-4 per source
     data_source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     data_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -222,14 +192,10 @@ class EmissionSource(Base):
     # e.g., [{"vehicle": "LD24VLP", "litres": 5000, "co2e": 12.5}, ...]
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    reporting_year = relationship(
-        "CarbonReportingYear", back_populates="emission_sources"
-    )
+    reporting_year = relationship("CarbonReportingYear", back_populates="emission_sources")
 
 
 class Scope3CategoryData(Base):
@@ -260,27 +226,19 @@ class Scope3CategoryData(Base):
 
     # Data quality
     data_quality_score: Mapped[int] = mapped_column(Integer, default=0)
-    calculation_method: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    calculation_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # spend-based, activity-based, supplier-specific, hybrid
 
     # Data sources
     data_sources: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    supplier_data_coverage: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )  # % of spend
+    supplier_data_coverage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # % of spend
 
     # Improvement recommendations
-    improvement_priority: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )
+    improvement_priority: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     improvement_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ImprovementAction(Base):
@@ -300,58 +258,34 @@ class ImprovementAction(Base):
     action_title: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # SMART criteria
-    specific: Mapped[str] = mapped_column(
-        Text, nullable=False
-    )  # What exactly will be done
-    measurable: Mapped[str] = mapped_column(
-        Text, nullable=False
-    )  # How success is measured
-    achievable_owner: Mapped[str] = mapped_column(
-        String(255), nullable=False
-    )  # Who is responsible
-    relevant: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # Why this matters
+    specific: Mapped[str] = mapped_column(Text, nullable=False)  # What exactly will be done
+    measurable: Mapped[str] = mapped_column(Text, nullable=False)  # How success is measured
+    achievable_owner: Mapped[str] = mapped_column(String(255), nullable=False)  # Who is responsible
+    relevant: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Why this matters
     time_bound: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # Deadline
 
     # Scheduling
-    scheduled_month: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # "Jul 25"
-    quarter: Mapped[Optional[str]] = mapped_column(
-        String(10), nullable=True
-    )  # "Q1", "Q2"
+    scheduled_month: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "Jul 25"
+    quarter: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # "Q1", "Q2"
 
     # Target scope
-    target_scope: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # scope_1, scope_2, scope_3
-    target_source: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )  # "Fleet", "Gas"
-    expected_reduction_pct: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
-    expected_reduction_tco2e: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
+    target_scope: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # scope_1, scope_2, scope_3
+    target_source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # "Fleet", "Gas"
+    expected_reduction_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    expected_reduction_tco2e: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Progress tracking
     status: Mapped[str] = mapped_column(String(30), default="planned")
     # planned, in_progress, completed, delayed, cancelled
     progress_percent: Mapped[int] = mapped_column(Integer, default=0)
-    actual_completion_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    actual_completion_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Evidence
     evidence_required: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     evidence_provided: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     # Results
-    actual_reduction_achieved: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
+    actual_reduction_achieved: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     lessons_learned: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Notifications
@@ -359,14 +293,10 @@ class ImprovementAction(Base):
     overdue_notified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    reporting_year = relationship(
-        "CarbonReportingYear", back_populates="improvement_actions"
-    )
+    reporting_year = relationship("CarbonReportingYear", back_populates="improvement_actions")
 
 
 class DataQualityAssessment(Base):
@@ -382,9 +312,7 @@ class DataQualityAssessment(Base):
     )
 
     # Assessment scope
-    scope: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # scope_1, scope_2, scope_3
+    scope: Mapped[str] = mapped_column(String(20), nullable=False)  # scope_1, scope_2, scope_3
 
     # Scoring breakdown (4 criteria, 4 points each = 16 max)
     completeness_score: Mapped[int] = mapped_column(Integer, default=0)  # 0-4
@@ -401,17 +329,11 @@ class DataQualityAssessment(Base):
 
     # Data sources analyzed
     sources_assessed: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    actual_data_percent: Mapped[float] = mapped_column(
-        Float, default=0
-    )  # % from actual reads
-    estimated_data_percent: Mapped[float] = mapped_column(
-        Float, default=0
-    )  # % estimated
+    actual_data_percent: Mapped[float] = mapped_column(Float, default=0)  # % from actual reads
+    estimated_data_percent: Mapped[float] = mapped_column(Float, default=0)  # % estimated
 
     # Recommendations
-    improvement_recommendations: Mapped[Optional[list]] = mapped_column(
-        JSONB, nullable=True
-    )
+    improvement_recommendations: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     priority_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     target_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
@@ -419,9 +341,7 @@ class DataQualityAssessment(Base):
     assessed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class CarbonEvidence(Base):
@@ -469,14 +389,10 @@ class CarbonEvidence(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    reporting_year = relationship(
-        "CarbonReportingYear", back_populates="evidence_documents"
-    )
+    reporting_year = relationship("CarbonReportingYear", back_populates="evidence_documents")
 
 
 class FleetEmissionRecord(Base):
@@ -493,12 +409,8 @@ class FleetEmissionRecord(Base):
 
     # Vehicle identification
     vehicle_registration: Mapped[str] = mapped_column(String(20), nullable=False)
-    vehicle_type: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )  # Van, Car, HGV
-    fuel_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # Diesel, Petrol, Electric, Hybrid
+    vehicle_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Van, Car, HGV
+    fuel_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Diesel, Petrol, Electric, Hybrid
 
     # Monthly fuel consumption
     month: Mapped[str] = mapped_column(String(10), nullable=False)  # "2025-07"
@@ -515,17 +427,13 @@ class FleetEmissionRecord(Base):
     # Data source
     data_source: Mapped[str] = mapped_column(String(50), nullable=False)
     # fuel_card, telematics, manual_entry
-    fuel_card_provider: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    fuel_card_provider: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Driver (for eco-driving tracking)
     driver_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class UtilityMeterReading(Base):
@@ -542,9 +450,7 @@ class UtilityMeterReading(Base):
 
     # Meter identification
     meter_reference: Mapped[str] = mapped_column(String(100), nullable=False)
-    utility_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # electricity, natural_gas
+    utility_type: Mapped[str] = mapped_column(String(50), nullable=False)  # electricity, natural_gas
     site_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Reading details
@@ -569,9 +475,7 @@ class UtilityMeterReading(Base):
     rego_certificate: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class SupplierEmissionData(Base):
@@ -596,12 +500,8 @@ class SupplierEmissionData(Base):
     spend_currency: Mapped[str] = mapped_column(String(10), default="GBP")
 
     # Emission data (if supplier provides)
-    supplier_reported_co2e: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
-    emission_intensity: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )  # tCO2e/£
+    supplier_reported_co2e: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    emission_intensity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # tCO2e/£
 
     # Calculated emissions (if using spend-based)
     spend_based_co2e: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -614,14 +514,10 @@ class SupplierEmissionData(Base):
 
     # Engagement
     engagement_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    last_contact_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
+    last_contact_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ISO14001CrossMapping(Base):
@@ -641,9 +537,7 @@ class ISO14001CrossMapping(Base):
     iso14001_title: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Mapping details
-    mapping_type: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )  # direct, partial, related
+    mapping_type: Mapped[str] = mapped_column(String(20), nullable=False)  # direct, partial, related
     alignment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Evidence sharing

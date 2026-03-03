@@ -80,9 +80,7 @@ class SmokeTestRunner:
             if response.status_code == expected_status:
                 self.passed += 1
                 self.log(f"{name}: {response.status_code}", "pass")
-                self.results.append(
-                    {"name": name, "status": "pass", "code": response.status_code}
-                )
+                self.results.append({"name": name, "status": "pass", "code": response.status_code})
                 return True
             else:
                 self.failed += 1
@@ -190,16 +188,10 @@ class SmokeTestRunner:
         )
 
         # Core workflow endpoints (expect 401 without auth - validates routes exist)
-        await self.test(
-            "List Incidents (protected)", f"{base}/incidents/", expected_status=401
-        )
-        await self.test(
-            "List Complaints (protected)", f"{base}/complaints/", expected_status=401
-        )
+        await self.test("List Incidents (protected)", f"{base}/incidents/", expected_status=401)
+        await self.test("List Complaints (protected)", f"{base}/complaints/", expected_status=401)
         await self.test("List RTAs (protected)", f"{base}/rtas/", expected_status=401)
-        await self.test(
-            "List Near Misses (protected)", f"{base}/near-misses/", expected_status=401
-        )
+        await self.test("List Near Misses (protected)", f"{base}/near-misses/", expected_status=401)
 
     async def run_all_tests(self):
         """Run all smoke tests."""
@@ -221,11 +213,7 @@ class SmokeTestRunner:
         print(f"   Total Tests: {total}")
         print(f"   Passed:      {self.passed} ✅")
         print(f"   Failed:      {self.failed} ❌")
-        print(
-            f"   Success Rate: {(self.passed/total)*100:.1f}%"
-            if total > 0
-            else "   No tests run"
-        )
+        print(f"   Success Rate: {(self.passed/total)*100:.1f}%" if total > 0 else "   No tests run")
         print("=" * 60)
 
         # Write results to JSON
@@ -249,12 +237,8 @@ class SmokeTestRunner:
 
 async def main():
     parser = argparse.ArgumentParser(description="Run smoke tests against the platform")
-    parser.add_argument(
-        "--staging", action="store_true", help="Test staging environment"
-    )
-    parser.add_argument(
-        "--production", action="store_true", help="Test production environment"
-    )
+    parser.add_argument("--staging", action="store_true", help="Test staging environment")
+    parser.add_argument("--production", action="store_true", help="Test production environment")
     args = parser.parse_args()
 
     environment = "production" if args.production else "staging"

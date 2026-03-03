@@ -25,28 +25,20 @@ async def validate_supervisor(
     db: DbSession,
     user: CurrentUser,
     supervisor_id: int = Query(..., description="User id of the supervisor"),
-    engineer_id: int = Query(
-        ..., description="Engineer id (engineers.id) being assessed"
-    ),
+    engineer_id: int = Query(..., description="Engineer id (engineers.id) being assessed"),
 ):
     """Validate that the supervisor is authorised to assess this engineer."""
-    return await GovernanceService.validate_supervisor(
-        db, supervisor_id, engineer_id, tenant_id=user.tenant_id
-    )
+    return await GovernanceService.validate_supervisor(db, supervisor_id, engineer_id, tenant_id=user.tenant_id)
 
 
-@router.get(
-    "/check-template/{template_id}", response_model=GovernanceTemplateCheckResponse
-)
+@router.get("/check-template/{template_id}", response_model=GovernanceTemplateCheckResponse)
 async def check_template_approval(
     template_id: int,
     db: DbSession,
     user: CurrentUser,
 ):
     """Check if a template is approved for use in assessments/inductions."""
-    return await GovernanceService.check_template_approval(
-        db, template_id, tenant_id=user.tenant_id
-    )
+    return await GovernanceService.check_template_approval(db, template_id, tenant_id=user.tenant_id)
 
 
 @router.get("/competency-gate", response_model=GovernanceCompetencyGateResponse)
@@ -57,9 +49,7 @@ async def check_competency_gate(
     asset_type_id: int = Query(..., description="Asset type id"),
 ):
     """Check if an engineer has the required competencies to work on an asset type."""
-    return await GovernanceService.check_competency_gate(
-        db, engineer_id, asset_type_id, tenant_id=user.tenant_id
-    )
+    return await GovernanceService.check_competency_gate(db, engineer_id, asset_type_id, tenant_id=user.tenant_id)
 
 
 @router.get(
@@ -72,6 +62,4 @@ async def get_scheduling_suggestions(
     user: CurrentUser,
 ):
     """Get scheduling suggestions for upcoming assessments (competencies due or expiring)."""
-    return await GovernanceService.get_scheduling_suggestions(
-        db, engineer_id, tenant_id=user.tenant_id
-    )
+    return await GovernanceService.get_scheduling_suggestions(db, engineer_id, tenant_id=user.tenant_id)

@@ -35,9 +35,7 @@ class TestIncidents409Handling:
         test_session.add(role)
         await test_session.flush()
 
-        await test_session.execute(
-            insert(user_roles).values(user_id=test_user.id, role_id=role.id)
-        )
+        await test_session.execute(insert(user_roles).values(user_id=test_user.id, role_id=role.id))
         await test_session.commit()
 
         # Create first incident with explicit reference number
@@ -51,15 +49,11 @@ class TestIncidents409Handling:
             "incident_date": datetime.now().isoformat(),
             "reference_number": ref_number,
         }
-        response = await client.post(
-            "/api/v1/incidents/", json=incident_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/incidents/", json=incident_data, headers=auth_headers)
         assert response.status_code == 201
 
         # Attempt to create another incident with the same reference number
-        response = await client.post(
-            "/api/v1/incidents/", json=incident_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/incidents/", json=incident_data, headers=auth_headers)
         assert response.status_code == 409
 
         # Assert canonical error envelope (supports both flat and nested formats)

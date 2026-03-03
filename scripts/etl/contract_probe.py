@@ -128,9 +128,7 @@ class ContractProbeResult:
                 "endpoints_checked": self.endpoints_checked,
                 "endpoints_passed": self.endpoints_passed,
                 "endpoints_failed": self.endpoints_failed,
-                "critical_failures": sum(
-                    1 for e in self.endpoints if not e.success and e.critical
-                ),
+                "critical_failures": sum(1 for e in self.endpoints if not e.success and e.critical),
             },
             "endpoints": [e.to_dict() for e in self.endpoints],
         }
@@ -199,15 +197,9 @@ def load_environment_config(env_name: str = "staging") -> Dict[str, Any]:
     Falls back to environment variable if file not found.
     """
     possible_paths = [
-        Path(__file__).parent.parent.parent
-        / "docs"
-        / "evidence"
-        / "environment_endpoints.json",
+        Path(__file__).parent.parent.parent / "docs" / "evidence" / "environment_endpoints.json",
         Path.cwd() / "docs" / "evidence" / "environment_endpoints.json",
-        Path(os.environ.get("GITHUB_WORKSPACE", "."))
-        / "docs"
-        / "evidence"
-        / "environment_endpoints.json",
+        Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "docs" / "evidence" / "environment_endpoints.json",
     ]
 
     config_path = None
@@ -360,15 +352,9 @@ class ContractProbe:
                 if status == 404:
                     # Check if body contains Azure ACA error message
                     # Look in both _raw field and stringified body
-                    body_str = (
-                        body.get("_raw", "") if isinstance(body, dict) else str(body)
-                    )
-                    if "Container App" in body_str and (
-                        "stopped" in body_str or "does not exist" in body_str
-                    ):
-                        result.errors.append(
-                            "Azure Container App is stopped or does not exist"
-                        )
+                    body_str = body.get("_raw", "") if isinstance(body, dict) else str(body)
+                    if "Container App" in body_str and ("stopped" in body_str or "does not exist" in body_str):
+                        result.errors.append("Azure Container App is stopped or does not exist")
                         return True, result, "ACA_NOT_DEPLOYED"
 
                 # Application is responding (even if 401/403/404)
@@ -403,9 +389,7 @@ class ContractProbe:
 
         # First, check without auth if auth is required
         if check.auth_required:
-            status, body, elapsed = self._make_request(
-                url, check.method, include_auth=False
-            )
+            status, body, elapsed = self._make_request(url, check.method, include_auth=False)
 
             result = EndpointProbeResult(
                 name=check.name,
@@ -427,9 +411,7 @@ class ContractProbe:
                 elif status == 404:
                     result.errors.append(f"Endpoint not found (404)")
                 else:
-                    result.errors.append(
-                        f"Expected {check.expected_status_without_auth} without auth, got {status}"
-                    )
+                    result.errors.append(f"Expected {check.expected_status_without_auth} without auth, got {status}")
                 return result
 
             # Auth is enforced - this is success for auth check
@@ -473,9 +455,7 @@ class ContractProbe:
             result.success = len(result.errors) == 0 and all(result.checks.values())
             return result
 
-    def run_full_probe(
-        self, env_name: str, platform: str = "unknown"
-    ) -> ContractProbeResult:
+    def run_full_probe(self, env_name: str, platform: str = "unknown") -> ContractProbeResult:
         """
         Run complete contract probe with explicit outcome.
 
@@ -623,9 +603,7 @@ def run_contract_probe(
     print(f"Target URL: {base_url}")
     print(f"Enforcement: {enforcement_mode.value}")
 
-    auth_token = os.environ.get("QGP_API_TOKEN") or os.environ.get(
-        "QGP_STAGING_READ_TOKEN"
-    )
+    auth_token = os.environ.get("QGP_API_TOKEN") or os.environ.get("QGP_STAGING_READ_TOKEN")
 
     probe = ContractProbe(
         base_url=base_url,
@@ -674,9 +652,7 @@ def main() -> int:
     print("-" * 70)
     for ep in result.endpoints:
         status_icon = "✅" if ep.success else ("⚠️" if not ep.critical else "❌")
-        print(
-            f"  {status_icon} {ep.name}: {ep.status_code} ({ep.response_time_ms:.1f}ms)"
-        )
+        print(f"  {status_icon} {ep.name}: {ep.status_code} ({ep.response_time_ms:.1f}ms)")
         if ep.errors:
             for err in ep.errors:
                 print(f"      └─ {err}")

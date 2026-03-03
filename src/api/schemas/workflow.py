@@ -42,29 +42,17 @@ class WorkflowRuleBase(BaseModel):
         ...,
         description="Entity: incident, near_miss, complaint, rta, audit, risk, etc.",
     )
-    trigger_event: str = Field(
-        ..., description="Event: created, updated, status_changed, sla_breach, etc."
-    )
-    conditions: Optional[Dict[str, Any]] = Field(
-        None, description="Condition JSON for rule evaluation"
-    )
-    delay_hours: Optional[float] = Field(
-        None, description="Hours to wait before executing (for escalation)"
-    )
-    delay_from_field: Optional[str] = Field(
-        None, description="Field to calculate delay from"
-    )
+    trigger_event: str = Field(..., description="Event: created, updated, status_changed, sla_breach, etc.")
+    conditions: Optional[Dict[str, Any]] = Field(None, description="Condition JSON for rule evaluation")
+    delay_hours: Optional[float] = Field(None, description="Hours to wait before executing (for escalation)")
+    delay_from_field: Optional[str] = Field(None, description="Field to calculate delay from")
     action_type: str = Field(
         ...,
         description="Action: send_email, assign_to_user, change_status, escalate, etc.",
     )
-    action_config: Dict[str, Any] = Field(
-        ..., description="Configuration for the action"
-    )
+    action_config: Dict[str, Any] = Field(..., description="Configuration for the action")
     priority: int = Field(100, description="Rule priority (lower = higher priority)")
-    stop_processing: bool = Field(
-        False, description="Stop processing rules after this one"
-    )
+    stop_processing: bool = Field(False, description="Stop processing rules after this one")
     is_active: bool = True
     department: Optional[str] = None
     contract: Optional[str] = None
@@ -148,32 +136,20 @@ class SLAConfigurationBase(BaseModel):
     """Base schema for SLA configurations."""
 
     entity_type: str = Field(..., description="Entity type this SLA applies to")
-    priority: Optional[str] = Field(
-        None, description="Priority level (critical, high, medium, low)"
-    )
-    category: Optional[str] = Field(
-        None, description="Category (incident type, complaint type, etc.)"
-    )
+    priority: Optional[str] = Field(None, description="Priority level (critical, high, medium, low)")
+    category: Optional[str] = Field(None, description="Category (incident type, complaint type, etc.)")
     department: Optional[str] = None
     contract: Optional[str] = None
-    acknowledgment_hours: Optional[float] = Field(
-        None, description="Hours to acknowledge"
-    )
+    acknowledgment_hours: Optional[float] = Field(None, description="Hours to acknowledge")
     response_hours: Optional[float] = Field(None, description="Hours to first response")
     resolution_hours: float = Field(..., description="Hours to resolution")
-    warning_threshold_percent: int = Field(
-        75, description="Percentage of SLA for warning"
-    )
-    business_hours_only: bool = Field(
-        True, description="Calculate using business hours only"
-    )
+    warning_threshold_percent: int = Field(75, description="Percentage of SLA for warning")
+    business_hours_only: bool = Field(True, description="Calculate using business hours only")
     business_start_hour: int = Field(9, ge=0, le=23)
     business_end_hour: int = Field(17, ge=0, le=23)
     exclude_weekends: bool = True
     is_active: bool = True
-    match_priority: int = Field(
-        0, description="Higher = more specific, evaluated first"
-    )
+    match_priority: int = Field(0, description="Higher = more specific, evaluated first")
 
 
 class SLAConfigurationCreate(SLAConfigurationBase):

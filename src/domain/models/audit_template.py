@@ -151,9 +151,7 @@ class AuditTemplate(Base):
         cascade="all, delete-orphan",
         order_by="AuditTemplateSection.order",
     )
-    versions = relationship(
-        "AuditTemplateVersion", back_populates="template", cascade="all, delete-orphan"
-    )
+    versions = relationship("AuditTemplateVersion", back_populates="template", cascade="all, delete-orphan")
     audit_runs = relationship("AuditRun", back_populates="template")
 
     @property
@@ -211,9 +209,7 @@ class AuditTemplateQuestion(Base):
     __tablename__ = "audit_template_questions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    section_id = Column(
-        String(36), ForeignKey("audit_template_sections.id"), nullable=False
-    )
+    section_id = Column(String(36), ForeignKey("audit_template_sections.id"), nullable=False)
 
     # Question Content
     text = Column(Text, nullable=False)
@@ -228,9 +224,7 @@ class AuditTemplateQuestion(Base):
 
     # Scoring
     weight = Column(Float, nullable=False, default=1.0)
-    risk_level: Mapped[Optional[RiskLevel]] = mapped_column(
-        SQLEnum(RiskLevel), nullable=True
-    )
+    risk_level: Mapped[Optional[RiskLevel]] = mapped_column(SQLEnum(RiskLevel), nullable=True)
     failure_triggers_action = Column(Boolean, default=False)
 
     # Evidence Requirements
@@ -241,14 +235,10 @@ class AuditTemplateQuestion(Base):
     iso_clause = Column(String(50), nullable=True)
 
     # Options (for multi_choice/checklist)
-    options = Column(
-        JSON, nullable=True, default=list
-    )  # [{id, label, value, score, isCorrect}]
+    options = Column(JSON, nullable=True, default=list)  # [{id, label, value, score, isCorrect}]
 
     # Conditional Logic
-    conditional_logic = Column(
-        JSON, nullable=True
-    )  # {enabled, showWhen, dependsOnQuestionId, value}
+    conditional_logic = Column(JSON, nullable=True)  # {enabled, showWhen, dependsOnQuestionId, value}
 
     # Tags
     tags = Column(JSON, nullable=True, default=list)
@@ -299,9 +289,7 @@ class AuditRun(Base):
     __tablename__ = "audit_builder_runs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    template_id = Column(
-        String(36), ForeignKey("audit_builder_templates.id"), nullable=False
-    )
+    template_id = Column(String(36), ForeignKey("audit_builder_templates.id"), nullable=False)
 
     # Reference
     reference_number = Column(String(50), unique=True, nullable=False)
@@ -343,12 +331,8 @@ class AuditRun(Base):
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="audit_runs")
-    responses = relationship(
-        "AuditResponse", back_populates="audit_run", cascade="all, delete-orphan"
-    )
-    findings = relationship(
-        "AuditFinding", back_populates="audit_run", cascade="all, delete-orphan"
-    )
+    responses = relationship("AuditResponse", back_populates="audit_run", cascade="all, delete-orphan")
+    findings = relationship("AuditFinding", back_populates="audit_run", cascade="all, delete-orphan")
 
 
 class AuditResponse(Base):
@@ -359,12 +343,8 @@ class AuditResponse(Base):
     __tablename__ = "audit_builder_responses"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    audit_run_id = Column(
-        String(36), ForeignKey("audit_builder_runs.id"), nullable=False
-    )
-    question_id = Column(
-        String(36), ForeignKey("audit_template_questions.id"), nullable=False
-    )
+    audit_run_id = Column(String(36), ForeignKey("audit_builder_runs.id"), nullable=False)
+    question_id = Column(String(36), ForeignKey("audit_template_questions.id"), nullable=False)
 
     # Response
     response = Column(JSON, nullable=True)  # Flexible to store any response type
@@ -402,12 +382,8 @@ class AuditFinding(Base):
     __tablename__ = "audit_builder_findings"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    audit_run_id = Column(
-        String(36), ForeignKey("audit_builder_runs.id"), nullable=False
-    )
-    question_id = Column(
-        String(36), ForeignKey("audit_template_questions.id"), nullable=True
-    )
+    audit_run_id = Column(String(36), ForeignKey("audit_builder_runs.id"), nullable=False)
+    question_id = Column(String(36), ForeignKey("audit_template_questions.id"), nullable=True)
 
     # Reference
     reference_number = Column(String(50), unique=True, nullable=False)
@@ -415,9 +391,7 @@ class AuditFinding(Base):
     # Finding Details
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    severity = Column(
-        String(50), nullable=False
-    )  # critical, high, medium, low, observation
+    severity = Column(String(50), nullable=False)  # critical, high, medium, low, observation
 
     # Status
     status = Column(

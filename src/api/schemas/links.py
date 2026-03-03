@@ -15,9 +15,7 @@ class ResourceLinks(BaseModel):
         populate_by_name = True
 
 
-def build_resource_links(
-    request_url: str, resource_type: str, resource_id: int | str
-) -> dict:
+def build_resource_links(request_url: str, resource_type: str, resource_id: int | str) -> dict:
     """Build HATEOAS links for a resource."""
     base = f"/api/v1/{resource_type}"
     return {

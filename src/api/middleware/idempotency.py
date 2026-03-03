@@ -59,9 +59,7 @@ async def _get_redis():
         _redis_available = False
         return None
     except Exception as e:
-        logger.debug(
-            f"Idempotency middleware: Redis unavailable, will skip idempotency: {e}"
-        )
+        logger.debug(f"Idempotency middleware: Redis unavailable, will skip idempotency: {e}")
         _redis_available = False
         return None
 
@@ -103,9 +101,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         redis_client = await _get_redis()
         if redis_client is None:
             # Redis unavailable - process request normally
-            logger.debug(
-                "Idempotency middleware: Redis unavailable, processing request normally"
-            )
+            logger.debug("Idempotency middleware: Redis unavailable, processing request normally")
             return await call_next(request)
 
         # Read request body to compute hash
@@ -147,26 +143,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 # Handle body encoding (may be base64 if original was binary)
                 body_content = cached_response["body"]
-                if (
-                    cached_response["headers"].get("X-Idempotency-Body-Encoding")
-                    == "base64"
-                ):
+                if cached_response["headers"].get("X-Idempotency-Body-Encoding") == "base64":
                     import base64
 
                     body_content = base64.b64decode(body_content)
                     # Remove the encoding header from response
                     response_headers = {
-                        k: v
-                        for k, v in cached_response["headers"].items()
-                        if k != "X-Idempotency-Body-Encoding"
+                        k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"
                     }
                 else:
                     response_headers = cached_response["headers"]
-                    body_content = (
-                        body_content.encode("utf-8")
-                        if isinstance(body_content, str)
-                        else body_content
-                    )
+                    body_content = body_content.encode("utf-8") if isinstance(body_content, str) else body_content
 
                 response = Response(
                     content=body_content,
@@ -207,11 +194,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 "transfer-encoding",
                 "upgrade",
             }
-            response_headers = {
-                k: v
-                for k, v in response.headers.items()
-                if k.lower() not in hop_by_hop_headers
-            }
+            response_headers = {k: v for k, v in response.headers.items() if k.lower() not in hop_by_hop_headers}
 
             # Decode body to string for storage (handle both text and binary)
             try:

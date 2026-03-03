@@ -43,18 +43,8 @@ class TestWorkflowEngine:
             ]
         }
 
-        assert (
-            ConditionEvaluator.evaluate(
-                condition, {"severity": "critical", "status": "open"}
-            )
-            is True
-        )
-        assert (
-            ConditionEvaluator.evaluate(
-                condition, {"severity": "low", "status": "open"}
-            )
-            is False
-        )
+        assert ConditionEvaluator.evaluate(condition, {"severity": "critical", "status": "open"}) is True
+        assert ConditionEvaluator.evaluate(condition, {"severity": "low", "status": "open"}) is False
 
     def test_condition_evaluator_or_logic(self):
         """Test OR condition logic."""
@@ -422,10 +412,7 @@ class TestIntegration:
         new_status = kri.calculate_status(new_value)
 
         # Should trigger alert because status worsened
-        should_alert = (
-            new_status == ThresholdStatus.RED
-            and kri.current_status != ThresholdStatus.RED
-        )
+        should_alert = new_status == ThresholdStatus.RED and kri.current_status != ThresholdStatus.RED
         assert should_alert is True
 
     def test_policy_update_triggers_reacknowledgment(self):

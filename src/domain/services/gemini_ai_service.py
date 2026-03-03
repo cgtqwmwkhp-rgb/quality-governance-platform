@@ -39,18 +39,14 @@ class GeminiAIService:
                 genai.configure(api_key=self.api_key)
                 self._client = genai.GenerativeModel(GEMINI_MODEL)
             except ImportError:
-                logger.warning(
-                    "google-generativeai not installed; AI features disabled"
-                )
+                logger.warning("google-generativeai not installed; AI features disabled")
                 return None
             except Exception as e:
                 logger.error("Failed to initialise Gemini client: %s", e)
                 return None
         return self._client
 
-    async def document_to_template(
-        self, file_content: bytes, filename: str, asset_type: Optional[str] = None
-    ) -> dict:
+    async def document_to_template(self, file_content: bytes, filename: str, asset_type: Optional[str] = None) -> dict:
         """Convert an uploaded document (PDF, image, etc.) into a structured audit template.
 
         Uses Gemini's multimodal capabilities for OCR + structured extraction.
@@ -97,15 +93,11 @@ Only return valid JSON, no markdown formatting."""
             import google.generativeai as genai
 
             mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-            with tempfile.NamedTemporaryFile(
-                suffix=Path(filename).suffix or ".bin", delete=False
-            ) as tmp:
+            with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix or ".bin", delete=False) as tmp:
                 tmp.write(file_content)
                 tmp_path = tmp.name
             try:
-                uploaded = genai.upload_file(
-                    path=tmp_path, display_name=filename, mime_type=mime_type
-                )
+                uploaded = genai.upload_file(path=tmp_path, display_name=filename, mime_type=mime_type)
                 response = client.generate_content([prompt, uploaded])
                 return response.text
             finally:
@@ -123,9 +115,7 @@ Only return valid JSON, no markdown formatting."""
             logger.error("Gemini document_to_template failed: %s", e)
             return self._fallback_template(filename)
 
-    async def web_search_enrichment(
-        self, asset_type: str, manufacturer: Optional[str] = None
-    ) -> dict:
+    async def web_search_enrichment(self, asset_type: str, manufacturer: Optional[str] = None) -> dict:
         """Search the web for manufacturer service recommendations and regulatory requirements.
 
         Uses Gemini with grounding/web search to find:
@@ -233,9 +223,7 @@ Only return valid JSON."""
             logger.error("Gemini template_to_assessment failed: %s", e)
             return template_data
 
-    async def generate_assessor_guidance(
-        self, question_text: str, asset_type: Optional[str] = None
-    ) -> dict:
+    async def generate_assessor_guidance(self, question_text: str, asset_type: Optional[str] = None) -> dict:
         """Generate detailed assessor guidance for a specific question/skill.
 
         Provides: what to look for, common mistakes, pass/fail indicators, training tips.

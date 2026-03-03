@@ -553,9 +553,7 @@ class TestFormFieldTypesE2E:
                     "width": "full",
                 },
             )
-            assert (
-                response.status_code == 201
-            ), f"Failed to create field type: {field_data['field_type']}"
+            assert response.status_code == 201, f"Failed to create field type: {field_data['field_type']}"
 
         # Verify all fields were created
         get_response = await async_client.get(

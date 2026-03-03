@@ -72,9 +72,7 @@ class _MetricsCollector:
             self._total_requests += 1
             if not success:
                 self._failed_requests += 1
-            self._status_counts[status_code] = (
-                self._status_counts.get(status_code, 0) + 1
-            )
+            self._status_counts[status_code] = self._status_counts.get(status_code, 0) + 1
 
     # ------------------------------------------------------------------
     # Windowed snapshot
@@ -100,9 +98,7 @@ class _MetricsCollector:
         budget_target = 99.9
         error_budget_total = (100.0 - budget_target) / 100.0 * total if total else 0
         budget_remaining_pct = (
-            ((error_budget_total - failed) / error_budget_total * 100)
-            if error_budget_total > 0
-            else 100.0
+            ((error_budget_total - failed) / error_budget_total * 100) if error_budget_total > 0 else 100.0
         )
 
         p50 = _percentile(sorted_latencies, 0.50)
@@ -160,14 +156,10 @@ class _MetricsCollector:
             data = json.loads(raw) if isinstance(raw, str) else raw
             with self._lock:
                 self._total_requests = max(self._total_requests, data.get("total", 0))
-                self._failed_requests = max(
-                    self._failed_requests, data.get("failed", 0)
-                )
+                self._failed_requests = max(self._failed_requests, data.get("failed", 0))
                 for code_str, cnt in data.get("status_counts", {}).items():
                     code = int(code_str)
-                    self._status_counts[code] = max(
-                        self._status_counts.get(code, 0), cnt
-                    )
+                    self._status_counts[code] = max(self._status_counts.get(code, 0), cnt)
             logger.info("SLO metrics restored from Redis")
         except Exception:
             logger.debug("SLO metric restore from Redis skipped")

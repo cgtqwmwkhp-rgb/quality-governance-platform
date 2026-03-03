@@ -73,9 +73,7 @@ class AzureADTokenValidator:
 
         # Build OIDC endpoints
         self._issuer = f"https://login.microsoftonline.com/{self.tenant_id}/v2.0"
-        self._jwks_uri = (
-            f"https://login.microsoftonline.com/{self.tenant_id}/discovery/v2.0/keys"
-        )
+        self._jwks_uri = f"https://login.microsoftonline.com/{self.tenant_id}/discovery/v2.0/keys"
 
         # JWKS client with caching
         self._jwks_client: Optional[PyJWKClient] = None
@@ -86,10 +84,7 @@ class AzureADTokenValidator:
         now = time.time()
 
         # Check if we need to refresh the client
-        if (
-            self._jwks_client is None
-            or (now - self._jwks_client_created_at) > self.cache_ttl_seconds
-        ):
+        if self._jwks_client is None or (now - self._jwks_client_created_at) > self.cache_ttl_seconds:
             self._jwks_client = PyJWKClient(self._jwks_uri)
             self._jwks_client_created_at = now
             logger.debug("Refreshed JWKS client cache")
@@ -169,9 +164,7 @@ def get_azure_ad_validator() -> AzureADTokenValidator:
     """Get the singleton Azure AD validator instance."""
     global _azure_ad_validator
     if _azure_ad_validator is None:
-        _azure_ad_validator = AzureADTokenValidator(
-            cache_ttl_seconds=settings.azure_ad_jwks_cache_ttl_seconds
-        )
+        _azure_ad_validator = AzureADTokenValidator(cache_ttl_seconds=settings.azure_ad_jwks_cache_ttl_seconds)
     return _azure_ad_validator
 
 

@@ -92,14 +92,10 @@ class Notification(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Recipient
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
 
     # Notification content
-    type: Mapped[NotificationType] = mapped_column(
-        SQLEnum(NotificationType), nullable=False, index=True
-    )
+    type: Mapped[NotificationType] = mapped_column(SQLEnum(NotificationType), nullable=False, index=True)
     priority: Mapped[NotificationPriority] = mapped_column(
         SQLEnum(NotificationPriority),
         nullable=False,
@@ -117,9 +113,7 @@ class Notification(Base):
     action_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Sender (if applicable)
-    sender_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    sender_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Additional data (JSON)
     extra_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
@@ -129,14 +123,10 @@ class Notification(Base):
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Delivery tracking
-    delivered_channels: Mapped[Optional[list]] = mapped_column(
-        JSON, nullable=True, default=list
-    )
+    delivered_channels: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self) -> str:
@@ -172,12 +162,8 @@ class Mention(Base):
     content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # Users involved
-    mentioned_user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
-    )
-    mentioned_by_user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False
-    )
+    mentioned_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    mentioned_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     # Context
     mention_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -210,12 +196,8 @@ class Assignment(Base):
     entity_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # Assignment details
-    assigned_to_user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
-    )
-    assigned_by_user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False
-    )
+    assigned_to_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     # Due date and priority
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -231,12 +213,12 @@ class Assignment(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
-        return f"<Assignment(id={self.id}, entity={self.entity_type}/{self.entity_id}, user={self.assigned_to_user_id})>"
+        return (
+            f"<Assignment(id={self.id}, entity={self.entity_type}/{self.entity_id}, user={self.assigned_to_user_id})>"
+        )
 
 
 class NotificationPreference(Base):
@@ -245,9 +227,7 @@ class NotificationPreference(Base):
     __tablename__ = "notification_preferences"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, unique=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True)
 
     # Channel preferences
     email_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -259,9 +239,7 @@ class NotificationPreference(Base):
 
     # Quiet hours
     quiet_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    quiet_hours_start: Mapped[Optional[str]] = mapped_column(
-        String(5), nullable=True
-    )  # HH:MM
+    quiet_hours_start: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)  # HH:MM
     quiet_hours_end: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
 
     # Category preferences (JSON map of type -> channels)
@@ -272,9 +250,7 @@ class NotificationPreference(Base):
     email_digest_frequency: Mapped[str] = mapped_column(String(20), default="daily")
 
     # Timestamps
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
         return f"<NotificationPreference(user_id={self.user_id})>"

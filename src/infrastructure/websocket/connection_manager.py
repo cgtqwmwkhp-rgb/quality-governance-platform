@@ -124,9 +124,7 @@ class ConnectionManager:
         logger.info(f"User {user_id} connected (connection_id={connection_id})")
 
         # Trigger connection event
-        await self._trigger_event(
-            "connect", {"user_id": user_id, "connection_id": connection_id}
-        )
+        await self._trigger_event("connect", {"user_id": user_id, "connection_id": connection_id})
 
         return connection
 
@@ -142,9 +140,7 @@ class ConnectionManager:
         # Remove from user's connections
         if user_id in self.user_connections:
             self.user_connections[user_id] = [
-                c
-                for c in self.user_connections[user_id]
-                if c.connection_id != connection.connection_id
+                c for c in self.user_connections[user_id] if c.connection_id != connection.connection_id
             ]
 
             # Clean up empty user entry
@@ -156,9 +152,7 @@ class ConnectionManager:
         for channel in list(connection.subscribed_channels):
             await self.unsubscribe_from_channel(connection, channel)
 
-        logger.info(
-            f"User {user_id} disconnected (connection_id={connection.connection_id})"
-        )
+        logger.info(f"User {user_id} disconnected (connection_id={connection.connection_id})")
 
         # Trigger disconnect event
         await self._trigger_event(
@@ -189,9 +183,7 @@ class ConnectionManager:
 
         logger.debug(f"User {connection.user_id} unsubscribed from channel: {channel}")
 
-    async def send_to_user(
-        self, user_id: int, message: Dict[str, Any], event_type: str = "notification"
-    ) -> int:
+    async def send_to_user(self, user_id: int, message: Dict[str, Any], event_type: str = "notification") -> int:
         """
         Send a message to all connections of a specific user.
 
@@ -264,9 +256,7 @@ class ConnectionManager:
 
         return sent_count
 
-    async def broadcast_to_all(
-        self, message: Dict[str, Any], event_type: str = "broadcast"
-    ) -> int:
+    async def broadcast_to_all(self, message: Dict[str, Any], event_type: str = "broadcast") -> int:
         """
         Broadcast a message to all connected users.
 
@@ -303,11 +293,7 @@ class ConnectionManager:
 
     def get_online_users(self) -> List[int]:
         """Get list of all online user IDs"""
-        return [
-            user_id
-            for user_id, presence in self.presence.items()
-            if presence.status == "online"
-        ]
+        return [user_id for user_id, presence in self.presence.items() if presence.status == "online"]
 
     def is_user_online(self, user_id: int) -> bool:
         """Check if a user is currently online"""
@@ -321,9 +307,7 @@ class ConnectionManager:
 
         # Send pong response
         try:
-            await connection.websocket.send_json(
-                {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
-            )
+            await connection.websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
         except Exception:
             pass
         return None
@@ -346,9 +330,7 @@ class ConnectionManager:
                 except Exception as e:
                     logger.error(f"Event handler error for {event}: {e}")
 
-    async def handle_message(
-        self, connection: UserConnection, message: str
-    ) -> Optional[Dict[str, Any]]:
+    async def handle_message(self, connection: UserConnection, message: str) -> Optional[Dict[str, Any]]:
         """
         Handle incoming WebSocket message from client.
 
@@ -410,9 +392,7 @@ class ConnectionManager:
         """Get connection statistics"""
         return {
             "total_users": len(self.user_connections),
-            "total_connections": sum(
-                len(conns) for conns in self.user_connections.values()
-            ),
+            "total_connections": sum(len(conns) for conns in self.user_connections.values()),
             "total_channels": len(self.channels),
             "online_users": len(self.get_online_users()),
             "channels": {name: len(users) for name, users in self.channels.items()},

@@ -203,9 +203,7 @@ def clean_db(db_session):
 def incident_data():
     """Factory for incident test data."""
 
-    def _create_incident(
-        title: str = "Test Incident", severity: str = "medium", **kwargs
-    ) -> dict:
+    def _create_incident(title: str = "Test Incident", severity: str = "medium", **kwargs) -> dict:
         return {
             "title": title,
             "description": kwargs.get("description", "Test incident description"),
@@ -222,9 +220,7 @@ def incident_data():
 def risk_data():
     """Factory for risk test data."""
 
-    def _create_risk(
-        title: str = "Test Risk", likelihood: int = 3, impact: int = 3, **kwargs
-    ) -> dict:
+    def _create_risk(title: str = "Test Risk", likelihood: int = 3, impact: int = 3, **kwargs) -> dict:
         return {
             "title": title,
             "description": kwargs.get("description", "Test risk description"),
@@ -241,9 +237,7 @@ def risk_data():
 def portal_report_data():
     """Factory for portal report test data."""
 
-    def _create_report(
-        report_type: str = "incident", title: str = "Test Report", **kwargs
-    ) -> dict:
+    def _create_report(report_type: str = "incident", title: str = "Test Report", **kwargs) -> dict:
         return {
             "report_type": report_type,
             "title": title,
@@ -286,9 +280,7 @@ def generate_test_reference(prefix: str = "TEST") -> str:
 
 def pytest_configure(config):
     """Configure custom pytest markers."""
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
-    )
+    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "e2e: marks tests as end-to-end tests")
     config.addinivalue_line("markers", "smoke: marks tests as smoke tests")

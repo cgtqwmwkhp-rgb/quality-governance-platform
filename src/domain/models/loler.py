@@ -43,30 +43,20 @@ class LOLERExamination(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     )
 
     # Asset
-    asset_id: Mapped[int] = mapped_column(
-        ForeignKey("assets.id"), nullable=False, index=True
-    )
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), nullable=False, index=True)
 
     # Examination details
     examination_type: Mapped[LOLERExaminationType] = mapped_column(
         SQLEnum(LOLERExaminationType, native_enum=False),
         default=LOLERExaminationType.THOROUGH_EXAMINATION,
     )
-    examination_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    next_examination_due: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    examination_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_examination_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Competent person
     competent_person_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    competent_person_employer: Mapped[Optional[str]] = mapped_column(
-        String(200), nullable=True
-    )
-    competent_person_qualification: Mapped[Optional[str]] = mapped_column(
-        String(200), nullable=True
-    )
+    competent_person_employer: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    competent_person_qualification: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # SWL at time of examination
     safe_working_load: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -85,9 +75,7 @@ class LOLERExamination(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     # Signature
     examiner_signature: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     asset: Mapped["Asset"] = relationship("Asset")
     defects: Mapped[List["LOLERDefect"]] = relationship(
@@ -114,30 +102,20 @@ class LOLERDefect(Base, TimestampMixin):
         SQLEnum(LOLERDefectCategory, native_enum=False), nullable=False
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    location_on_equipment: Mapped[Optional[str]] = mapped_column(
-        String(200), nullable=True
-    )
+    location_on_equipment: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     remedial_action: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     timescale: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Linked CAPA
-    capa_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("capa_actions.id"), nullable=True
-    )
+    capa_id: Mapped[Optional[int]] = mapped_column(ForeignKey("capa_actions.id"), nullable=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    examination: Mapped["LOLERExamination"] = relationship(
-        "LOLERExamination", back_populates="defects"
-    )
+    examination: Mapped["LOLERExamination"] = relationship("LOLERExamination", back_populates="defects")
 
     def __repr__(self) -> str:
         return f"<LOLERDefect(id={self.id}, category={self.category})>"

@@ -21,9 +21,7 @@ from .contract_probe import ContractProbe, run_contract_probe
 from .transformers import TransformError, get_transformer, sanitize_text
 from .validator import ValidationReport, validate_records
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -162,9 +160,7 @@ class ETLPipeline:
 
             if mapping.transformer:
                 transformer = get_transformer(mapping.transformer)
-                result[mapping.target_field] = transformer(
-                    source_value, mapping.source_column
-                )
+                result[mapping.target_field] = transformer(source_value, mapping.source_column)
             else:
                 result[mapping.target_field] = sanitize_text(source_value)
 
@@ -212,17 +208,12 @@ class ETLPipeline:
         )
 
         # Save validation report
-        report_path = (
-            self.config.output_directory
-            / f"validation_{entity_type.value}_{self.run_id}.json"
-        )
+        report_path = self.config.output_directory / f"validation_{entity_type.value}_{self.run_id}.json"
         with open(report_path, "w") as f:
             json.dump(report.to_dict(), f, indent=2)
 
         logger.info(f"Validation report saved: {report_path}")
-        logger.info(
-            f"Results: {report.valid_records} valid, {report.invalid_records} invalid"
-        )
+        logger.info(f"Results: {report.valid_records} valid, {report.invalid_records} invalid")
 
         return report
 
@@ -407,9 +398,7 @@ class ETLPipeline:
 
             # Log progress for large batches
             if (i + 1) % batch_size == 0:
-                logger.info(
-                    f"Progress: {i + 1}/{stats.total_records} records processed"
-                )
+                logger.info(f"Progress: {i + 1}/{stats.total_records} records processed")
 
         stats.end_time = datetime.utcnow()
 
@@ -417,9 +406,7 @@ class ETLPipeline:
         self._save_outputs(stats)
 
         # Save import summary
-        summary_path = (
-            self.config.output_directory / f"import_summary_{self.run_id}.json"
-        )
+        summary_path = self.config.output_directory / f"import_summary_{self.run_id}.json"
         with open(summary_path, "w") as f:
             json.dump(
                 {
@@ -445,10 +432,7 @@ class ETLPipeline:
     def _save_outputs(self, stats: PipelineStats) -> None:
         """Save stats and audit trail."""
         # Stats
-        stats_path = (
-            self.config.output_directory
-            / f"stats_{stats.entity_type}_{self.run_id}.json"
-        )
+        stats_path = self.config.output_directory / f"stats_{stats.entity_type}_{self.run_id}.json"
         with open(stats_path, "w") as f:
             json.dump(stats.to_dict(), f, indent=2)
 
@@ -472,28 +456,18 @@ def main():
         choices=["development", "staging", "production"],
         default="staging",
     )
-    parser.add_argument(
-        "--validate-only", action="store_true", help="Only validate, no transforms"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Validate and transform, no API calls"
-    )
+    parser.add_argument("--validate-only", action="store_true", help="Only validate, no transforms")
+    parser.add_argument("--dry-run", action="store_true", help="Validate and transform, no API calls")
     parser.add_argument(
         "--import",
         dest="do_import",
         action="store_true",
         help="Full import with API calls",
     )
-    parser.add_argument(
-        "--probe-contracts", action="store_true", help="Only probe API contracts"
-    )
+    parser.add_argument("--probe-contracts", action="store_true", help="Only probe API contracts")
     parser.add_argument("--source", type=str, help="Source CSV file")
-    parser.add_argument(
-        "--entity-type", choices=["incident", "complaint", "rta"], help="Entity type"
-    )
-    parser.add_argument(
-        "--batch-size", type=int, default=50, help="Batch size for progress logging"
-    )
+    parser.add_argument("--entity-type", choices=["incident", "complaint", "rta"], help="Entity type")
+    parser.add_argument("--batch-size", type=int, default=50, help="Batch size for progress logging")
 
     args = parser.parse_args()
 

@@ -278,9 +278,7 @@ async def list_near_miss_investigations(
     investigations = (await db.execute(query)).scalars().all()
 
     return {
-        "items": [
-            InvestigationRunResponse.model_validate(inv) for inv in investigations
-        ],
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
         "total": total,
         "page": page,
         "page_size": page_size,

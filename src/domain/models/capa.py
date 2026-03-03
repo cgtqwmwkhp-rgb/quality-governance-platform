@@ -51,17 +51,11 @@ class CAPAAction(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     capa_type: Any = Column(Enum(CAPAType), nullable=False)
-    status: Any = Column(
-        Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True
-    )
-    priority: Any = Column(
-        Enum(CAPAPriority), default=CAPAPriority.MEDIUM, nullable=False
-    )
+    status: Any = Column(Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True)
+    priority: Any = Column(Enum(CAPAPriority), default=CAPAPriority.MEDIUM, nullable=False)
     source_type: Any = Column(Enum(CAPASource), nullable=True)
     source_id = Column(Integer, nullable=True)
-    source_reference = Column(
-        String(100), nullable=True, index=True
-    )  # For UUID refs (assessment/induction runs)
+    source_reference = Column(String(100), nullable=True, index=True)  # For UUID refs (assessment/induction runs)
 
     root_cause = Column(Text, nullable=True)
     proposed_action = Column(Text, nullable=True)

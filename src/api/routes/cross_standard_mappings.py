@@ -62,15 +62,9 @@ class StandardsListResponse(BaseModel):
 async def list_mappings(
     db: DbSession,
     current_user: CurrentUser,
-    source_standard: str | None = Query(
-        None, description="Filter by source/primary standard"
-    ),
-    target_standard: str | None = Query(
-        None, description="Filter by target/mapped standard"
-    ),
-    clause: str | None = Query(
-        None, description="Filter by clause number (matches source or target)"
-    ),
+    source_standard: str | None = Query(None, description="Filter by source/primary standard"),
+    target_standard: str | None = Query(None, description="Filter by target/mapped standard"),
+    clause: str | None = Query(None, description="Filter by clause number (matches source or target)"),
 ) -> list[MappingResponse]:
     """List cross-standard mappings with optional filters."""
     from src.domain.models.ims_unification import CrossStandardMapping
@@ -82,8 +76,7 @@ async def list_mappings(
         query = query.where(CrossStandardMapping.mapped_standard == target_standard)
     if clause:
         query = query.where(
-            (CrossStandardMapping.primary_clause == clause)
-            | (CrossStandardMapping.mapped_clause == clause)
+            (CrossStandardMapping.primary_clause == clause) | (CrossStandardMapping.mapped_clause == clause)
         )
 
     result = await db.execute(query)
@@ -100,13 +93,9 @@ async def list_standards(
     """List all available ISO standards in the mapping database."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    primaries = await db.execute(
-        select(CrossStandardMapping.primary_standard).distinct()
-    )
+    primaries = await db.execute(select(CrossStandardMapping.primary_standard).distinct())
     mapped = await db.execute(select(CrossStandardMapping.mapped_standard).distinct())
-    all_standards = sorted(
-        {s for (s,) in primaries.all()} | {s for (s,) in mapped.all()}
-    )
+    all_standards = sorted({s for (s,) in primaries.all()} | {s for (s,) in mapped.all()})
     return {"standards": all_standards}
 
 
@@ -136,9 +125,7 @@ async def get_mapping(
     """Retrieve a single cross-standard mapping by ID."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    return await get_or_404(
-        db, CrossStandardMapping, mapping_id, tenant_id=current_user.tenant_id
-    )
+    return await get_or_404(db, CrossStandardMapping, mapping_id, tenant_id=current_user.tenant_id)
 
 
 @router.patch("/{mapping_id}", response_model=MappingResponse)
@@ -151,9 +138,7 @@ async def update_mapping(
     """Partially update a cross-standard mapping."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    mapping = await get_or_404(
-        db, CrossStandardMapping, mapping_id, tenant_id=current_user.tenant_id
-    )
+    mapping = await get_or_404(db, CrossStandardMapping, mapping_id, tenant_id=current_user.tenant_id)
     apply_updates(mapping, data)
     await db.commit()
     await db.refresh(mapping)
@@ -169,8 +154,6 @@ async def delete_mapping(
     """Delete a cross-standard mapping (admin only)."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    mapping = await get_or_404(
-        db, CrossStandardMapping, mapping_id, tenant_id=current_user.tenant_id
-    )
+    mapping = await get_or_404(db, CrossStandardMapping, mapping_id, tenant_id=current_user.tenant_id)
     await db.delete(mapping)
     await db.commit()

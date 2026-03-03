@@ -58,9 +58,7 @@ class AuditorCompetenceService:
 
     async def get_profile(self, user_id: int) -> Optional[AuditorProfile]:
         """Get auditor profile by user ID."""
-        result = await self.db.execute(
-            select(AuditorProfile).where(AuditorProfile.user_id == user_id)
-        )
+        result = await self.db.execute(select(AuditorProfile).where(AuditorProfile.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def update_profile(
@@ -88,9 +86,7 @@ class AuditorCompetenceService:
             return 0.0
 
         # Get all competencies with their areas
-        result = await self.db.execute(
-            select(AuditorCompetency).where(AuditorCompetency.profile_id == profile.id)
-        )
+        result = await self.db.execute(select(AuditorCompetency).where(AuditorCompetency.profile_id == profile.id))
         competencies = result.scalars().all()
 
         if not competencies:
@@ -270,9 +266,7 @@ class AuditorCompetenceService:
         cpd_hours_earned: Optional[float] = None,
     ) -> AuditorTraining:
         """Mark a training as completed."""
-        result = await self.db.execute(
-            select(AuditorTraining).where(AuditorTraining.id == training_id)
-        )
+        result = await self.db.execute(select(AuditorTraining).where(AuditorTraining.id == training_id))
         training = result.scalar_one_or_none()
 
         if not training:
@@ -376,15 +370,11 @@ class AuditorCompetenceService:
         level_key = profile.competence_level.value
 
         # Get all competency areas
-        area_result = await self.db.execute(
-            select(CompetencyArea).where(CompetencyArea.is_active == True)
-        )
+        area_result = await self.db.execute(select(CompetencyArea).where(CompetencyArea.is_active == True))
         areas = area_result.scalars().all()
 
         # Get current competencies
-        comp_result = await self.db.execute(
-            select(AuditorCompetency).where(AuditorCompetency.profile_id == profile.id)
-        )
+        comp_result = await self.db.execute(select(AuditorCompetency).where(AuditorCompetency.profile_id == profile.id))
         competencies = {c.competency_area_id: c for c in comp_result.scalars().all()}
 
         gaps = []
@@ -470,17 +460,11 @@ class AuditorCompetenceService:
             # Check experience
             if profile.total_audits_conducted < criteria.minimum_audits_conducted:
                 is_qualified = False
-                gaps.append(
-                    f"Requires {criteria.minimum_audits_conducted} audits conducted"
-                )
+                gaps.append(f"Requires {criteria.minimum_audits_conducted} audits conducted")
 
-            if (
-                profile.years_audit_experience or 0
-            ) < criteria.minimum_years_experience:
+            if (profile.years_audit_experience or 0) < criteria.minimum_years_experience:
                 is_qualified = False
-                gaps.append(
-                    f"Requires {criteria.minimum_years_experience} years experience"
-                )
+                gaps.append(f"Requires {criteria.minimum_years_experience} years experience")
 
             # Check certifications
             if criteria.required_certifications:
@@ -512,9 +496,7 @@ class AuditorCompetenceService:
             )
 
         # Sort by qualification status and score
-        qualified_auditors.sort(
-            key=lambda x: (not x["is_qualified"], -(x["competence_score"] or 0))
-        )
+        qualified_auditors.sort(key=lambda x: (not x["is_qualified"], -(x["competence_score"] or 0)))
 
         return qualified_auditors
 
@@ -538,17 +520,13 @@ class AuditorCompetenceService:
 
         # Average competence score
         avg_result = await self.db.execute(
-            select(func.avg(AuditorProfile.competence_score)).where(
-                AuditorProfile.is_active == True
-            )
+            select(func.avg(AuditorProfile.competence_score)).where(AuditorProfile.is_active == True)
         )
         avg_score = avg_result.scalar() or 0
 
         # Total active auditors
         total_result = await self.db.execute(
-            select(func.count(AuditorProfile.id)).where(
-                AuditorProfile.is_active == True
-            )
+            select(func.count(AuditorProfile.id)).where(AuditorProfile.is_active == True)
         )
         total_active = total_result.scalar() or 0
 

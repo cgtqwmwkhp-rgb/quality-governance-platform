@@ -57,19 +57,13 @@ class IncidentService:
         reference_number = data.get("reference_number")
         if reference_number:
             if not has_set_ref_permission:
-                raise PermissionError(
-                    "Not authorized to set explicit reference numbers"
-                )
+                raise PermissionError("Not authorized to set explicit reference numbers")
 
-            existing = await self.db.execute(
-                select(Incident).where(Incident.reference_number == reference_number)
-            )
+            existing = await self.db.execute(select(Incident).where(Incident.reference_number == reference_number))
             if existing.scalar_one_or_none():
                 raise ValueError("Duplicate reference number")
         else:
-            reference_number = await ReferenceNumberService.generate(
-                self.db, "incident", Incident
-            )
+            reference_number = await ReferenceNumberService.generate(self.db, "incident", Incident)
 
         incident = Incident(
             title=data["title"],
@@ -109,9 +103,7 @@ class IncidentService:
         await self.db.refresh(incident)
         await invalidate_tenant_cache(tenant_id, "incidents")
 
-        track_business_event(
-            "incident_created", {"severity": data.get("severity", "unknown")}
-        )
+        track_business_event("incident_created", {"severity": data.get("severity", "unknown")})
 
         return incident
 
@@ -122,9 +114,7 @@ class IncidentService:
             LookupError: If the incident is not found.
         """
         result = await self.db.execute(
-            select(Incident).where(
-                Incident.id == incident_id, Incident.tenant_id == tenant_id
-            )
+            select(Incident).where(Incident.id == incident_id, Incident.tenant_id == tenant_id)
         )
         incident = result.scalar_one_or_none()
         if incident is None:
@@ -169,9 +159,7 @@ class IncidentService:
             LookupError: If the incident is not found.
         """
         result = await self.db.execute(
-            select(Incident).where(
-                Incident.id == incident_id, Incident.tenant_id == tenant_id
-            )
+            select(Incident).where(Incident.id == incident_id, Incident.tenant_id == tenant_id)
         )
         incident = result.scalar_one_or_none()
         if incident is None:
@@ -214,9 +202,7 @@ class IncidentService:
             LookupError: If the incident is not found.
         """
         result = await self.db.execute(
-            select(Incident).where(
-                Incident.id == incident_id, Incident.tenant_id == tenant_id
-            )
+            select(Incident).where(Incident.id == incident_id, Incident.tenant_id == tenant_id)
         )
         incident = result.scalar_one_or_none()
         if incident is None:

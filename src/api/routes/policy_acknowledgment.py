@@ -69,9 +69,7 @@ async def create_acknowledgment_requirement(
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
 
-@router.get(
-    "/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse
-)
+@router.get("/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse)
 async def get_acknowledgment_requirement(
     requirement_id: int,
     db: AsyncSession = Depends(get_db),
@@ -79,9 +77,7 @@ async def get_acknowledgment_requirement(
 ):
     """Get an acknowledgment requirement."""
     result = await db.execute(
-        select(PolicyAcknowledgmentRequirement).where(
-            PolicyAcknowledgmentRequirement.id == requirement_id
-        )
+        select(PolicyAcknowledgmentRequirement).where(PolicyAcknowledgmentRequirement.id == requirement_id)
     )
     requirement = result.scalar_one_or_none()
 
@@ -146,9 +142,7 @@ async def get_acknowledgment(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a specific acknowledgment."""
-    result = await db.execute(
-        select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id)
-    )
+    result = await db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
     ack = result.scalar_one_or_none()
 
     if not ack:
@@ -190,9 +184,7 @@ async def update_reading_time(
     return {"message": "Reading time updated", "total_seconds": ack.time_spent_seconds}
 
 
-@router.post(
-    "/{acknowledgment_id}/acknowledge", response_model=PolicyAcknowledgmentResponse
-)
+@router.post("/{acknowledgment_id}/acknowledge", response_model=PolicyAcknowledgmentResponse)
 async def record_acknowledgment(
     acknowledgment_id: int,
     ack_data: RecordAcknowledgmentRequest,
@@ -227,9 +219,7 @@ async def record_acknowledgment(
 # =============================================================================
 
 
-@router.get(
-    "/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse
-)
+@router.get("/policies/{policy_id}/status", response_model=PolicyAcknowledgmentStatusResponse)
 async def get_policy_acknowledgment_status(
     policy_id: int,
     db: AsyncSession = Depends(get_db),

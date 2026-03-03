@@ -111,9 +111,7 @@ def list_audit_logs(
     return entries
 
 
-@router.get(
-    "/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse]
-)
+@router.get("/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse])
 def get_entity_history(
     entity_type: str,
     entity_id: str,

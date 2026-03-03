@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ALLOWED_IMPORT_DIR = os.environ.get(
-    "XML_IMPORT_DIR", os.path.join(tempfile.gettempdir(), "xml-imports")
-)
+ALLOWED_IMPORT_DIR = os.environ.get("XML_IMPORT_DIR", os.path.join(tempfile.gettempdir(), "xml-imports"))
 
 
 # ---------------------------------------------------------------------------
@@ -72,9 +70,7 @@ async def parse_xml_file(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post(
-    "/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def import_xml_file(
     file: UploadFile = File(...),
     db: DbSession = None,

@@ -101,9 +101,7 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_create_incident_auth_error(self, mock_urlopen):
         """Test auth error (401) - no retry."""
-        mock_urlopen.side_effect = self._mock_http_error(
-            401, {"detail": "Not authenticated"}
-        )
+        mock_urlopen.side_effect = self._mock_http_error(401, {"detail": "Not authenticated"})
 
         result = self.client.create_incident(
             {
@@ -125,9 +123,7 @@ class TestETLAPIClient(unittest.TestCase):
             self._mock_http_error(500, {"detail": "Internal error"}),
             MagicMock(
                 __enter__=MagicMock(
-                    return_value=self._mock_response(
-                        201, {"id": 456, "reference_number": "SAMPLE-INC-002"}
-                    )
+                    return_value=self._mock_response(201, {"id": 456, "reference_number": "SAMPLE-INC-002"})
                 )
             ),
         ]
@@ -145,17 +141,13 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_retry_on_429_with_retry_after(self, mock_urlopen):
         """Test retry on 429 with Retry-After header."""
-        error_429 = self._mock_http_error(
-            429, {"detail": "Rate limited"}, headers={"Retry-After": "0.01"}
-        )
+        error_429 = self._mock_http_error(429, {"detail": "Rate limited"}, headers={"Retry-After": "0.01"})
 
         mock_urlopen.side_effect = [
             error_429,
             MagicMock(
                 __enter__=MagicMock(
-                    return_value=self._mock_response(
-                        201, {"id": 789, "reference_number": "SAMPLE-INC-003"}
-                    )
+                    return_value=self._mock_response(201, {"id": 789, "reference_number": "SAMPLE-INC-003"})
                 )
             ),
         ]
@@ -173,9 +165,7 @@ class TestETLAPIClient(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_no_retry_on_400_error(self, mock_urlopen):
         """Test no retry on 400 error (bad request)."""
-        mock_urlopen.side_effect = self._mock_http_error(
-            400, {"detail": "Validation error"}
-        )
+        mock_urlopen.side_effect = self._mock_http_error(400, {"detail": "Validation error"})
 
         result = self.client.create_incident(
             {

@@ -178,11 +178,7 @@ class AnomalyDetector:
         if entity_type == "department":
             recent_incidents = (
                 self.db.query(Incident)
-                .filter(
-                    and_(
-                        Incident.department == entity, Incident.reported_date >= cutoff
-                    )
-                )
+                .filter(and_(Incident.department == entity, Incident.reported_date >= cutoff))
                 .all()
             )
         elif entity_type == "location":
@@ -230,11 +226,7 @@ class AnomalyDetector:
             "average": round(mean, 2),
             "threshold": round(threshold, 2),
             "std_dev": round(std_dev, 2),
-            "severity": (
-                "high"
-                if current_count > mean * 2
-                else "medium" if is_anomaly else "low"
-            ),
+            "severity": ("high" if current_count > mean * 2 else "medium" if is_anomaly else "low"),
             "message": (
                 f"Incident frequency for {entity} is {current_count}, which is significantly above the average of {mean:.1f}"
                 if is_anomaly
@@ -309,9 +301,7 @@ class IncidentPredictor:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        incidents = (
-            self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
-        )
+        incidents = self.db.query(Incident).filter(Incident.reported_date >= cutoff).all()
 
         if not incidents:
             return []
@@ -339,9 +329,7 @@ class IncidentPredictor:
         # Analyze by time of day
         high_risk_hours: list[int] = []
         for hour in range(24):
-            hour_incidents = [
-                i for i in incidents if i.incident_date and i.incident_date.hour == hour
-            ]
+            hour_incidents = [i for i in incidents if i.incident_date and i.incident_date.hour == hour]
             if len(hour_incidents) / max(total, 1) > 0.08:  # >8% in one hour
                 high_risk_hours.append(hour)
 
@@ -389,9 +377,7 @@ class IncidentPredictor:
 
         return risk_factors
 
-    def get_similar_incidents(
-        self, description: str, limit: int = 5
-    ) -> list[dict[str, Any]]:
+    def get_similar_incidents(self, description: str, limit: int = 5) -> list[dict[str, Any]]:
         """Find similar past incidents using keyword matching"""
         from src.domain.models.incident import Incident
 
@@ -458,9 +444,7 @@ class RecommendationEngine:
         # Rule-based recommendations
         return self._get_rule_based_recommendations(incident_description, category)
 
-    def _get_ai_recommendations(
-        self, description: str, category: Optional[str] = None
-    ) -> list[dict[str, Any]]:
+    def _get_ai_recommendations(self, description: str, category: Optional[str] = None) -> list[dict[str, Any]]:
         """Get recommendations from Claude AI"""
         prompt = f"""Analyze this workplace incident and provide 3-5 specific corrective action recommendations.
 
@@ -495,9 +479,7 @@ Format as JSON array with objects containing: title, description, priority, time
 
         return []
 
-    def _get_rule_based_recommendations(
-        self, description: str, category: Optional[str] = None
-    ) -> list[dict[str, Any]]:
+    def _get_rule_based_recommendations(self, description: str, category: Optional[str] = None) -> list[dict[str, Any]]:
         """Rule-based fallback recommendations"""
         keywords = TextAnalyzer.extract_keywords(description)
 
@@ -617,9 +599,7 @@ class RootCauseAnalyzer:
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
         incidents = (
             self.db.query(Incident)
-            .filter(
-                and_(Incident.reported_date >= cutoff, Incident.description.isnot(None))
-            )
+            .filter(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
             .all()
         )
 
@@ -632,9 +612,7 @@ class RootCauseAnalyzer:
                     {
                         "id": inc.id,
                         "title": inc.title,
-                        "date": (
-                            inc.incident_date.isoformat() if inc.incident_date else None
-                        ),
+                        "date": (inc.incident_date.isoformat() if inc.incident_date else None),
                         "department": inc.department,
                     }
                 )
@@ -649,11 +627,7 @@ class RootCauseAnalyzer:
                         "incident_count": len(cluster_incidents),
                         "incidents": cluster_incidents[:10],  # First 10
                         "departments_affected": list(
-                            set(
-                                i["department"]
-                                for i in cluster_incidents
-                                if i["department"]
-                            )
+                            set(i["department"] for i in cluster_incidents if i["department"])
                         ),
                         "suggested_action": f"Investigate systemic causes of {category.replace('_', ' ')} incidents",
                         "priority": (
@@ -693,9 +667,7 @@ class RootCauseAnalyzer:
 
             # Generate recommendations based on root cause keywords
             root_keywords = TextAnalyzer.extract_keywords(answers[-1])
-            recommendations = RecommendationEngine(
-                self.db
-            )._get_rule_based_recommendations(answers[-1], None)
+            recommendations = RecommendationEngine(self.db)._get_rule_based_recommendations(answers[-1], None)
             analysis["recommendations"] = recommendations
 
         return analysis

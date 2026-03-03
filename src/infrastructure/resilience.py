@@ -77,10 +77,7 @@ def get_circuit_breaker(name: str) -> Optional[CircuitBreaker]:
 
 def get_all_circuit_breaker_health() -> dict[str, dict]:
     """Get health status of all registered circuit breakers."""
-    return {
-        name: breaker.get_health()
-        for name, breaker in _circuit_breaker_registry.items()
-    }
+    return {name: breaker.get_health() for name, breaker in _circuit_breaker_registry.items()}
 
 
 # Universal circuit breaker decorator
@@ -116,10 +113,7 @@ def circuit_breaker(
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
             if not breaker.can_execute():
-                raise RuntimeError(
-                    f"Circuit breaker '{breaker.name}' is OPEN. "
-                    f"Service unavailable."
-                )
+                raise RuntimeError(f"Circuit breaker '{breaker.name}' is OPEN. " f"Service unavailable.")
 
             if breaker.state == CircuitState.HALF_OPEN:
                 breaker.half_open_calls += 1
@@ -135,10 +129,7 @@ def circuit_breaker(
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             if not breaker.can_execute():
-                raise RuntimeError(
-                    f"Circuit breaker '{breaker.name}' is OPEN. "
-                    f"Service unavailable."
-                )
+                raise RuntimeError(f"Circuit breaker '{breaker.name}' is OPEN. " f"Service unavailable.")
 
             if breaker.state == CircuitState.HALF_OPEN:
                 breaker.half_open_calls += 1

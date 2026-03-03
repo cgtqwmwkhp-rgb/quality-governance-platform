@@ -17,9 +17,7 @@ class InductionRunCreate(BaseModel):
     asset_type_id: Optional[int] = None
     title: Optional[str] = Field(None, max_length=300)
     location: Optional[str] = Field(None, max_length=200)
-    stage: str = Field(
-        default="stage_1_onsite", pattern="^(stage_1_onsite|stage_2_field)$"
-    )
+    stage: str = Field(default="stage_1_onsite", pattern="^(stage_1_onsite|stage_2_field)$")
     scheduled_date: Optional[datetime] = None
     notes: Optional[str] = None
 
@@ -31,9 +29,7 @@ class InductionRunUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = None
     stage: Optional[str] = Field(None, pattern="^(stage_1_onsite|stage_2_field)$")
-    status: Optional[str] = Field(
-        None, pattern="^(draft|in_progress|completed|cancelled)$"
-    )
+    status: Optional[str] = Field(None, pattern="^(draft|in_progress|completed|cancelled)$")
 
 
 class InductionRunResponse(BaseModel):
@@ -82,9 +78,7 @@ class InductionResponseCreate(BaseModel):
 
     question_id: int
     shown_explained: bool = False
-    understanding: Optional[str] = Field(
-        None, pattern="^(competent|not_yet_competent|na)$"
-    )
+    understanding: Optional[str] = Field(None, pattern="^(competent|not_yet_competent|na)$")
     supervisor_notes: Optional[str] = None
 
 
@@ -92,9 +86,7 @@ class InductionResponseUpdate(BaseModel):
     """Schema for updating an induction response."""
 
     shown_explained: Optional[bool] = None
-    understanding: Optional[str] = Field(
-        None, pattern="^(competent|not_yet_competent|na)$"
-    )
+    understanding: Optional[str] = Field(None, pattern="^(competent|not_yet_competent|na)$")
     supervisor_notes: Optional[str] = None
     engineer_signature: Optional[str] = None
     engineer_signed_at: Optional[datetime] = None

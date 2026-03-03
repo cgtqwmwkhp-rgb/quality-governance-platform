@@ -239,11 +239,7 @@ class CopilotService:
 
     def get_session(self, session_id: int) -> Optional[CopilotSession]:
         """Get a session by ID."""
-        return (
-            self.db.query(CopilotSession)
-            .filter(CopilotSession.id == session_id)
-            .first()
-        )
+        return self.db.query(CopilotSession).filter(CopilotSession.id == session_id).first()
 
     def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
         """Get the user's active session."""
@@ -254,9 +250,7 @@ class CopilotService:
             .first()
         )
 
-    def get_session_messages(
-        self, session_id: int, limit: int = 50
-    ) -> list[CopilotMessage]:
+    def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
         """Get messages for a session."""
         return (
             self.db.query(CopilotMessage)
@@ -309,9 +303,7 @@ class CopilotService:
 
         # Generate AI response
         start_time = time.time()
-        response_content, action_data = await self._generate_response(
-            content, history, context
-        )
+        response_content, action_data = await self._generate_response(content, history, context)
         latency_ms = int((time.time() - start_time) * 1000)
 
         # Save assistant message
@@ -370,9 +362,7 @@ class CopilotService:
 
         # In production, this would call the actual AI API
         # For now, we'll use pattern matching for demo
-        response_content, action_data = self._simulate_ai_response(
-            user_message, context
-        )
+        response_content, action_data = self._simulate_ai_response(user_message, context)
 
         return response_content, action_data
 
@@ -488,9 +478,7 @@ class CopilotService:
             return (explanation, None)
 
         # Navigation
-        if any(
-            word in message_lower for word in ["go to", "open", "show me", "navigate"]
-        ):
+        if any(word in message_lower for word in ["go to", "open", "show me", "navigate"]):
             destinations = {
                 "dashboard": "/",
                 "incidents": "/incidents",
@@ -590,11 +578,7 @@ class CopilotService:
         feedback_text: Optional[str] = None,
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
-        message = (
-            self.db.query(CopilotMessage)
-            .filter(CopilotMessage.id == message_id)
-            .first()
-        )
+        message = self.db.query(CopilotMessage).filter(CopilotMessage.id == message_id).first()
 
         if not message:
             raise ValueError(f"Message {message_id} not found")
@@ -653,18 +637,14 @@ class CopilotService:
         )
 
         if tenant_id:
-            query_db = query_db.filter(
-                (CopilotKnowledge.tenant_id == tenant_id)
-                | (CopilotKnowledge.tenant_id == None)
-            )
+            query_db = query_db.filter((CopilotKnowledge.tenant_id == tenant_id) | (CopilotKnowledge.tenant_id == None))
 
         if category:
             query_db = query_db.filter(CopilotKnowledge.category == category)
 
         # Simple keyword matching
         query_db = query_db.filter(
-            CopilotKnowledge.content.ilike(f"%{query}%")
-            | CopilotKnowledge.title.ilike(f"%{query}%")
+            CopilotKnowledge.content.ilike(f"%{query}%") | CopilotKnowledge.title.ilike(f"%{query}%")
         )
 
         return query_db.limit(limit).all()

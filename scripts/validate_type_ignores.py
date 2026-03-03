@@ -75,35 +75,23 @@ def main():
 
     # Check for generic type-ignores (no error code)
     if results["generic"]:
-        errors.append(
-            f"❌ Found {len(results['generic'])} generic type-ignore(s) without error codes:"
-        )
+        errors.append(f"❌ Found {len(results['generic'])} generic type-ignore(s) without error codes:")
         for item in results["generic"]:
             errors.append(f"   - {item}")
-        errors.append(
-            "   Fix: Use error-code-specific ignores (e.g. # type: ignore[arg-type])"
-        )
+        errors.append("   Fix: Use error-code-specific ignores (e.g. # type: ignore[arg-type])")
         errors.append("")
 
     # Warn about type-ignores without issue tags (non-blocking)
     if results["missing_issue_tag"]:
-        print(
-            f"⚠️  Found {len(results['missing_issue_tag'])} type-ignore(s) without issue tags (non-blocking)"
-        )
-        print(
-            f"   Recommendation: Add issue tags (e.g. # type: ignore[arg-type]  # TYPE-IGNORE: GH-123)"
-        )
+        print(f"⚠️  Found {len(results['missing_issue_tag'])} type-ignore(s) without issue tags (non-blocking)")
+        print(f"   Recommendation: Add issue tags (e.g. # type: ignore[arg-type]  # TYPE-IGNORE: GH-123)")
         print()
 
     # Check ceiling
     if results["total"] > MAX_TYPE_IGNORES:
-        errors.append(
-            f"❌ Type-ignore count ({results['total']}) exceeds ceiling ({MAX_TYPE_IGNORES})"
-        )
+        errors.append(f"❌ Type-ignore count ({results['total']}) exceeds ceiling ({MAX_TYPE_IGNORES})")
         errors.append(f"   Current: {results['total']}, Maximum: {MAX_TYPE_IGNORES}")
-        errors.append(
-            "   Fix: Remove unnecessary type-ignores or update MAX_TYPE_IGNORES with approval"
-        )
+        errors.append("   Fix: Remove unnecessary type-ignores or update MAX_TYPE_IGNORES with approval")
         errors.append("")
 
     if errors:

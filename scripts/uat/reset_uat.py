@@ -198,11 +198,7 @@ class UATResetManager:
 
             # Step 3: Seed fresh data
             manifest = self.seed_uat_data(dry_run)
-            results["seeded"] = (
-                manifest.counts
-                if hasattr(manifest, "counts")
-                else manifest.get("counts", {})
-            )
+            results["seeded"] = manifest.counts if hasattr(manifest, "counts") else manifest.get("counts", {})
 
             # Step 4: Save manifest
             manifest_path = self.save_manifest(manifest, "reset")

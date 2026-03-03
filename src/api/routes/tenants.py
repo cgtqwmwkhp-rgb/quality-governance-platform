@@ -293,9 +293,7 @@ def accept_invitation(
     service = TenantService(db)
 
     try:
-        tenant_user = service.accept_invitation(
-            token, user_id=1
-        )  # Should be current_user.id
+        tenant_user = service.accept_invitation(token, user_id=1)  # Should be current_user.id
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

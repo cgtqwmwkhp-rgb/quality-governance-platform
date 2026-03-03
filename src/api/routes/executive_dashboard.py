@@ -21,9 +21,7 @@ router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
 
 @router.get("", response_model=ExecutiveDashboardResponse)
 async def get_executive_dashboard(
-    period_days: int = Query(
-        30, ge=7, le=365, description="Period in days for metrics"
-    ),
+    period_days: int = Query(30, ge=7, le=365, description="Period in days for metrics"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):

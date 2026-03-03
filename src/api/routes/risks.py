@@ -102,9 +102,7 @@ async def list_risks(
 
     if search:
         search_filter = f"%{search}%"
-        query = query.where(
-            (Risk.title.ilike(search_filter)) | (Risk.description.ilike(search_filter))
-        )
+        query = query.where((Risk.title.ilike(search_filter)) | (Risk.description.ilike(search_filter)))
     if category:
         query = query.where(Risk.category == category)
     if status_filter:
@@ -195,26 +193,18 @@ async def get_risk_statistics(
     total_result = await db.execute(select(func.count()).select_from(Risk))
     total_risks = total_result.scalar() or 0
 
-    active_result = await db.execute(
-        select(func.count()).select_from(Risk).where(Risk.is_active == True)
-    )
+    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active == True))
     active_risks = active_result.scalar() or 0
 
     # Risks by category
     category_result = await db.execute(
-        select(Risk.category, func.count())
-        .where(Risk.is_active == True)
-        .group_by(Risk.category)
+        select(Risk.category, func.count()).where(Risk.is_active == True).group_by(Risk.category)
     )
-    risks_by_category = {
-        row[0] or "uncategorized": row[1] for row in category_result.all()
-    }
+    risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
 
     # Risks by level
     level_result = await db.execute(
-        select(Risk.risk_level, func.count())
-        .where(Risk.is_active == True)
-        .group_by(Risk.risk_level)
+        select(Risk.risk_level, func.count()).where(Risk.is_active == True).group_by(Risk.risk_level)
     )
     risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
 
@@ -246,9 +236,7 @@ async def get_risk_statistics(
     overdue_treatments = overdue_result.scalar() or 0
 
     # Average risk score
-    avg_result = await db.execute(
-        select(func.avg(Risk.risk_score)).where(Risk.is_active == True)
-    )
+    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True))
     average_risk_score = float(avg_result.scalar() or 0)
 
     return RiskStatistics(
@@ -485,9 +473,7 @@ async def update_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Update a risk control."""
-    result = await db.execute(
-        select(OperationalRiskControl).where(OperationalRiskControl.id == control_id)
-    )
+    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
     control = result.scalar_one_or_none()
 
     if not control:
@@ -520,9 +506,7 @@ async def delete_control(
     current_user: CurrentUser,
 ) -> None:
     """Soft delete a risk control."""
-    result = await db.execute(
-        select(OperationalRiskControl).where(OperationalRiskControl.id == control_id)
-    )
+    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
     control = result.scalar_one_or_none()
 
     if not control:
@@ -609,9 +593,7 @@ async def list_assessments(
 ) -> list[RiskAssessmentResponse]:
     """List all assessments for a risk (history)."""
     result = await db.execute(
-        select(RiskAssessment)
-        .where(RiskAssessment.risk_id == risk_id)
-        .order_by(RiskAssessment.assessment_date.desc())
+        select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
     )
     assessments = result.scalars().all()
 

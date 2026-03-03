@@ -267,20 +267,14 @@ class ComplianceAutomationService:
 
         # Apply filters
         if certificate_type:
-            certificates = [
-                c for c in certificates if c["certificate_type"] == certificate_type
-            ]
+            certificates = [c for c in certificates if c["certificate_type"] == certificate_type]
         if entity_type:
             certificates = [c for c in certificates if c["entity_type"] == entity_type]
         if status:
             certificates = [c for c in certificates if c["status"] == status]
         if expiring_within_days:
             cutoff = now + timedelta(days=expiring_within_days)
-            certificates = [
-                c
-                for c in certificates
-                if datetime.strptime(str(c["expiry_date"]), "%Y-%m-%d") <= cutoff
-            ]
+            certificates = [c for c in certificates if datetime.strptime(str(c["expiry_date"]), "%Y-%m-%d") <= cutoff]
 
         return certificates
 
@@ -350,11 +344,7 @@ class ComplianceAutomationService:
             audits = [a for a in audits if a["status"] == "overdue"]
         elif upcoming_days:
             cutoff = now + timedelta(days=upcoming_days)
-            audits = [
-                a
-                for a in audits
-                if datetime.strptime(str(a["next_due_date"]), "%Y-%m-%d") <= cutoff
-            ]
+            audits = [a for a in audits if datetime.strptime(str(a["next_due_date"]), "%Y-%m-%d") <= cutoff]
 
         return audits
 
@@ -489,9 +479,7 @@ class ComplianceAutomationService:
             "is_riddor": is_riddor,
             "riddor_types": riddor_types,
             "deadline": deadline.isoformat() if deadline else None,
-            "submission_url": (
-                "https://www.hse.gov.uk/riddor/report.htm" if is_riddor else None
-            ),
+            "submission_url": ("https://www.hse.gov.uk/riddor/report.htm" if is_riddor else None),
         }
 
     def prepare_riddor_submission(

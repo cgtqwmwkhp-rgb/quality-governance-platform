@@ -22,9 +22,7 @@ class FieldEncryptor:
         from cryptography.fernet import Fernet, MultiFernet
 
         keys = self._key.split(",")  # Support key rotation via comma-separated keys
-        fernets = [
-            Fernet(k.strip().encode() if isinstance(k, str) else k) for k in keys
-        ]
+        fernets = [Fernet(k.strip().encode() if isinstance(k, str) else k) for k in keys]
         self._cipher = MultiFernet(fernets) if len(fernets) > 1 else fernets[0]
 
     def encrypt(self, plaintext: str) -> str:

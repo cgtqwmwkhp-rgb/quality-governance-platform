@@ -115,9 +115,7 @@ async def list_complaints(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = None,
-    complainant_email: Optional[str] = Query(
-        None, description="Filter by complainant email"
-    ),
+    complainant_email: Optional[str] = Query(None, description="Filter by complainant email"),
 ) -> ComplaintListResponse:
     """
     List all complaints with deterministic ordering.
@@ -137,9 +135,7 @@ async def list_complaints(
     if complainant_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
-            current_user.has_permission("complaint:view_all")
-            if hasattr(current_user, "has_permission")
-            else False
+            current_user.has_permission("complaint:view_all") if hasattr(current_user, "has_permission") else False
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
@@ -162,8 +158,7 @@ async def list_complaints(
             description="Complaint list accessed with email filter",
             payload={
                 "filter_type": "complainant_email",
-                "is_own_email": user_email
-                and complainant_email.lower() == user_email.lower(),
+                "is_own_email": user_email and complainant_email.lower() == user_email.lower(),
                 "has_view_all_permission": has_view_all,
                 "is_superuser": is_superuser,
             },
@@ -335,9 +330,7 @@ async def list_complaint_investigations(
     investigations = result.scalars().all()
 
     return {
-        "items": [
-            InvestigationRunResponse.model_validate(inv) for inv in investigations
-        ],
+        "items": [InvestigationRunResponse.model_validate(inv) for inv in investigations],
         "total": total,
         "page": page,
         "page_size": page_size,

@@ -40,9 +40,7 @@ class TestDashboard:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get(
-            "/api/v1/incidents?page=1&per_page=5", headers=auth_headers
-        )
+        response = client.get("/api/v1/incidents?page=1&per_page=5", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, (list, dict))
@@ -124,9 +122,7 @@ class TestIncidentManagement:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get(
-            "/api/v1/incidents?page=1&per_page=10", headers=auth_headers
-        )
+        response = client.get("/api/v1/incidents?page=1&per_page=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data or isinstance(data, list)

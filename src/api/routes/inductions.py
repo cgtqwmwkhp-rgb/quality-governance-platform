@@ -89,9 +89,7 @@ async def list_induction_runs(
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.scalar(count_q)) or 0
     offset = (page - 1) * page_size
-    items_result = await db.execute(
-        query.offset(offset).limit(page_size).order_by(InductionRun.created_at.desc())
-    )
+    items_result = await db.execute(query.offset(offset).limit(page_size).order_by(InductionRun.created_at.desc()))
     items = items_result.scalars().all()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -104,24 +102,18 @@ async def list_induction_runs(
     )
 
 
-@router.post(
-    "/", response_model=InductionRunResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=InductionRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_induction_run(
     data: InductionRunCreate,
     db: DbSession,
     user: CurrentUser,
 ):
     """Create an induction run. Reference number is auto-generated as IND-YYYY-NNNN."""
-    supervisor_check = await GovernanceService.validate_supervisor(
-        db, user.id, data.engineer_id
-    )
+    supervisor_check = await GovernanceService.validate_supervisor(db, user.id, data.engineer_id)
     if not supervisor_check["valid"]:
         raise HTTPException(status_code=400, detail=supervisor_check["reason"])
 
-    template_check = await GovernanceService.check_template_approval(
-        db, data.template_id
-    )
+    template_check = await GovernanceService.check_template_approval(db, data.template_id)
     if not template_check["approved"]:
         raise HTTPException(status_code=400, detail=template_check["reason"])
 
@@ -154,11 +146,7 @@ async def get_induction_run(
     user: CurrentUser,
 ):
     """Get an induction run by ID."""
-    query = (
-        select(InductionRun)
-        .options(selectinload(InductionRun.responses))
-        .where(InductionRun.id == run_id)
-    )
+    query = select(InductionRun).options(selectinload(InductionRun.responses)).where(InductionRun.id == run_id)
     query = apply_tenant_filter(query, InductionRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -208,9 +196,7 @@ async def start_induction(
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
     if run.status != InductionStatus.DRAFT:
-        raise HTTPException(
-            status_code=400, detail="Induction can only be started from draft status"
-        )
+        raise HTTPException(status_code=400, detail="Induction can only be started from draft status")
     run.status = InductionStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
     await db.commit()
@@ -225,11 +211,7 @@ async def complete_induction(
     user: CurrentUser,
 ):
     """Complete an induction and run CompetencyScoringService.score_induction()."""
-    query = (
-        select(InductionRun)
-        .options(selectinload(InductionRun.responses))
-        .where(InductionRun.id == run_id)
-    )
+    query = select(InductionRun).options(selectinload(InductionRun.responses)).where(InductionRun.id == run_id)
     query = apply_tenant_filter(query, InductionRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -250,29 +232,21 @@ async def complete_induction(
     run.not_yet_competent_count = score_result.not_yet_competent_count
 
     # engineer_id FK now references engineers.id; look up Engineer for user_id
-    eng_result = await db.execute(
-        select(Engineer).where(Engineer.id == run.engineer_id)
-    )
+    eng_result = await db.execute(select(Engineer).where(Engineer.id == run.engineer_id))
     engineer = eng_result.scalar_one_or_none()
 
     if run.asset_type_id and engineer:
         from datetime import timedelta
 
         all_competent = score_result.not_yet_competent_count == 0
-        expiry = (
-            datetime.now(timezone.utc) + timedelta(days=365) if all_competent else None
-        )
+        expiry = datetime.now(timezone.utc) + timedelta(days=365) if all_competent else None
         competency = CompetencyRecord(
             engineer_id=run.engineer_id,
             asset_type_id=run.asset_type_id,
             template_id=run.template_id,
             source_type="induction",
             source_run_id=run.id,
-            state=(
-                CompetencyLifecycleState.ACTIVE
-                if all_competent
-                else CompetencyLifecycleState.FAILED
-            ),
+            state=(CompetencyLifecycleState.ACTIVE if all_competent else CompetencyLifecycleState.FAILED),
             outcome="pass" if all_competent else "not_yet_competent",
             assessed_at=datetime.now(timezone.utc),
             assessed_by_id=run.supervisor_id,
@@ -337,18 +311,13 @@ async def create_induction_response(
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
 
-    if (
-        run.status == InductionStatus.COMPLETED
-        or run.status == InductionStatus.CANCELLED
-    ):
+    if run.status == InductionStatus.COMPLETED or run.status == InductionStatus.CANCELLED:
         raise HTTPException(
             status_code=400,
             detail="Cannot add responses to a completed or cancelled induction",
         )
 
-    understanding_val = (
-        UnderstandingVerdict(data.understanding) if data.understanding else None
-    )
+    understanding_val = UnderstandingVerdict(data.understanding) if data.understanding else None
     response = InductionResponse(
         run_id=run_id,
         question_id=data.question_id,

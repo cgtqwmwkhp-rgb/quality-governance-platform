@@ -123,10 +123,7 @@ def check_type_changes(baseline: dict, current: dict) -> list[str]:
             current_type = current_props[field].get("type")
 
             if baseline_type != current_type:
-                issues.append(
-                    f"BREAKING: Type changed for {name}.{field}: "
-                    f"{baseline_type} -> {current_type}"
-                )
+                issues.append(f"BREAKING: Type changed for {name}.{field}: " f"{baseline_type} -> {current_type}")
 
     return issues
 
@@ -147,8 +144,7 @@ def check_new_required_fields(baseline: dict, current: dict) -> list[str]:
         new_required = current_required - baseline_required
         for field in new_required:
             issues.append(
-                f"BREAKING: New required field added to {name}: {field} "
-                "(existing clients may not send this)"
+                f"BREAKING: New required field added to {name}: {field} " "(existing clients may not send this)"
             )
 
     return issues

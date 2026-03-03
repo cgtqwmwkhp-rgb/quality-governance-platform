@@ -67,11 +67,7 @@ class CompetencyScoringService:
             elif verdict_val == "not_competent":
                 not_competent += 1
                 crit = criticality_map.get(r.question_id)
-                crit_val = (
-                    crit.value
-                    if hasattr(crit, "value")
-                    else str(crit) if crit else None
-                )
+                crit_val = crit.value if hasattr(crit, "value") else str(crit) if crit else None
                 if crit_val == "essential":
                     essential_failures += 1
                 else:
@@ -109,11 +105,7 @@ class CompetencyScoringService:
             understanding = getattr(r, "understanding", None)
             if understanding is None:
                 continue
-            understanding_val = (
-                understanding.value
-                if hasattr(understanding, "value")
-                else str(understanding)
-            )
+            understanding_val = understanding.value if hasattr(understanding, "value") else str(understanding)
 
             if understanding_val == "na":
                 na += 1

@@ -81,11 +81,7 @@ class AssetService:
         offset = (page - 1) * page_size
         count_q = select(func.count()).select_from(query.subquery())
         total: int = (await self.db.execute(count_q)).scalar_one()
-        items = (
-            (await self.db.execute(query.offset(offset).limit(page_size)))
-            .scalars()
-            .all()
-        )
+        items = (await self.db.execute(query.offset(offset).limit(page_size))).scalars().all()
         pages = (total + page_size - 1) // page_size if total > 0 else 0
         return PaginatedResult(
             items=list(items),
@@ -96,9 +92,7 @@ class AssetService:
         )
 
     @staticmethod
-    def _apply_dict(
-        entity: object, data: dict[str, Any], *, exclude: set[str] | None = None
-    ) -> None:
+    def _apply_dict(entity: object, data: dict[str, Any], *, exclude: set[str] | None = None) -> None:
         """Apply *data* values to a SQLAlchemy model instance."""
         exclude = exclude or set()
         for key, value in data.items():
@@ -131,9 +125,7 @@ class AssetService:
         )
         if search:
             pattern = f"%{search}%"
-            query = query.where(
-                AssetType.name.ilike(pattern) | AssetType.description.ilike(pattern)
-            )
+            query = query.where(AssetType.name.ilike(pattern) | AssetType.description.ilike(pattern))
         if category:
             try:
                 cat_enum = AssetCategory(category)
@@ -228,9 +220,7 @@ class AssetService:
         if search:
             pattern = f"%{search}%"
             query = query.where(
-                Asset.name.ilike(pattern)
-                | Asset.asset_number.ilike(pattern)
-                | Asset.description.ilike(pattern)
+                Asset.name.ilike(pattern) | Asset.asset_number.ilike(pattern) | Asset.description.ilike(pattern)
             )
         if asset_type_id is not None:
             query = query.where(Asset.asset_type_id == asset_type_id)

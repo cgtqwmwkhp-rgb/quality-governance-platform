@@ -104,9 +104,7 @@ async def create_investigation(
     request_id = "N/A"  # TODO: Get from request context
 
     # Validate template exists, create default if missing
-    template_query = select(InvestigationTemplate).where(
-        InvestigationTemplate.id == investigation_data.template_id
-    )
+    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation_data.template_id)
     template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
 
@@ -180,16 +178,12 @@ async def create_investigation(
     # Generate reference number
     from src.services.reference_number import ReferenceNumberService
 
-    reference_number = await ReferenceNumberService.generate(
-        db, "investigation", InvestigationRun
-    )
+    reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
 
     # Create investigation run
     investigation = InvestigationRun(
         template_id=investigation_data.template_id,
-        assigned_entity_type=AssignedEntityType(
-            investigation_data.assigned_entity_type
-        ),
+        assigned_entity_type=AssignedEntityType(investigation_data.assigned_entity_type),
         assigned_entity_id=investigation_data.assigned_entity_id,
         title=investigation_data.title,
         description=investigation_data.description,
@@ -231,9 +225,7 @@ async def list_investigations(
     if entity_type is not None:
         try:
             entity_type_enum = AssignedEntityType(entity_type)
-            query = query.where(
-                InvestigationRun.assigned_entity_type == entity_type_enum
-            )
+            query = query.where(InvestigationRun.assigned_entity_type == entity_type_enum)
         except ValueError:
             raise HTTPException(
                 status_code=400,
@@ -270,9 +262,7 @@ async def list_investigations(
             )
 
     # Deterministic ordering: created_at DESC, id ASC
-    query = query.order_by(
-        InvestigationRun.created_at.desc(), InvestigationRun.id.asc()
-    )
+    query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -368,9 +358,7 @@ async def update_investigation(
     if investigation_data.status:
         if investigation_data.status == "in_progress" and not investigation.started_at:
             setattr(investigation, "started_at", datetime.utcnow())
-        elif (
-            investigation_data.status == "completed" and not investigation.completed_at
-        ):
+        elif investigation_data.status == "completed" and not investigation.completed_at:
             setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
             setattr(investigation, "closed_at", datetime.utcnow())
@@ -457,9 +445,7 @@ async def create_investigation_from_record(
         )
 
     # Get source record
-    record, error = await InvestigationService.get_source_record(
-        db, source_type_enum, source_id
-    )
+    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
     if error:
         raise HTTPException(
             status_code=404,
@@ -475,19 +461,13 @@ async def create_investigation_from_record(
         )
 
     # Create source snapshot (immutable)
-    source_snapshot = InvestigationService.create_source_snapshot(
-        record, source_type_enum
-    )
+    source_snapshot = InvestigationService.create_source_snapshot(record, source_type_enum)
 
     # Map source to investigation data
-    data, mapping_log, level = InvestigationService.map_source_to_investigation(
-        record, source_type_enum
-    )
+    data, mapping_log, level = InvestigationService.map_source_to_investigation(record, source_type_enum)
 
     # Validate template exists or create default
-    template_query = select(InvestigationTemplate).where(
-        InvestigationTemplate.id == template_id
-    )
+    template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
     template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
 
@@ -519,9 +499,7 @@ async def create_investigation_from_record(
         )
 
     # Generate reference number
-    reference_number = await ReferenceNumberService.generate(
-        db, "investigation", InvestigationRun
-    )
+    reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
 
     # Create investigation
     from src.domain.models.investigation import InvestigationLevel as InvLevel
@@ -561,9 +539,7 @@ async def create_investigation_from_record(
     )
 
     # Link source evidence assets to investigation
-    evidence_assets = await InvestigationService.get_source_evidence_assets(
-        db, source_type_enum, source_id
-    )
+    evidence_assets = await InvestigationService.get_source_evidence_assets(db, source_type_enum, source_id)
     for asset in evidence_assets:
         asset.linked_investigation_id = investigation.id
 
@@ -581,9 +557,7 @@ async def list_source_records(
         ...,
         description="Source type (near_miss, road_traffic_collision, complaint, reporting_incident)",
     ),
-    q: Optional[str] = Query(
-        None, description="Search query (searches title, reference)"
-    ),
+    q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
 ):
@@ -670,9 +644,7 @@ async def list_source_records(
     total = await db.scalar(count_query) or 0
 
     # Apply deterministic ordering and pagination
-    base_query = base_query.order_by(
-        model_class.created_at.desc(), model_class.id.asc()
-    )
+    base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
     offset = (page - 1) * size
     base_query = base_query.offset(offset).limit(size)
 
@@ -687,9 +659,7 @@ async def list_source_records(
         InvestigationRun.assigned_entity_id.in_(source_ids),
     )
     inv_result = await db.execute(inv_query)
-    existing_investigations = {
-        inv.assigned_entity_id: inv for inv in inv_result.scalars().all()
-    }
+    existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}
 
     # Build response items
     items = []
@@ -703,9 +673,7 @@ async def list_source_records(
             status = status.value
 
         # Format created_at as date only (no PII)
-        created_date = (
-            record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
-        )
+        created_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else "Unknown"
 
         # === SAFE DISPLAY LABEL (NO PII) ===
         # Format: "{reference_number} — {status} — {date}"
@@ -723,9 +691,7 @@ async def list_source_records(
                 status=status,
                 created_at=record.created_at,
                 investigation_id=int(existing_inv.id) if existing_inv else None,
-                investigation_reference=(
-                    str(existing_inv.reference_number) if existing_inv else None
-                ),
+                investigation_reference=(str(existing_inv.reference_number) if existing_inv else None),
             )
         )
 
@@ -1054,14 +1020,12 @@ async def generate_customer_pack(
     evidence_assets = list(assets_result.scalars().all())
 
     # Generate pack with redaction
-    content, redaction_log, included_assets = (
-        InvestigationService.generate_customer_pack(
-            investigation=investigation,
-            audience=audience_enum,
-            evidence_assets=evidence_assets,
-            generated_by_id=current_user.id,
-            generated_by_role=None,  # TODO: Get user role
-        )
+    content, redaction_log, included_assets = InvestigationService.generate_customer_pack(
+        investigation=investigation,
+        audience=audience_enum,
+        evidence_assets=evidence_assets,
+        generated_by_id=current_user.id,
+        generated_by_role=None,  # TODO: Get user role
     )
 
     # Create pack entity

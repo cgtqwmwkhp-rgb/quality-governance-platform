@@ -91,9 +91,7 @@ class QGPUser(HttpUser):
             "title": f"Load Test Incident {random_string(8)}",
             "description": f"This is a test incident created during load testing at {datetime.now().isoformat()}",
             "severity": random.choice(["low", "medium", "high", "critical"]),
-            "incident_type": random.choice(
-                ["safety", "environmental", "quality", "security"]
-            ),
+            "incident_type": random.choice(["safety", "environmental", "quality", "security"]),
             "location": f"Test Location {random.randint(1, 100)}",
         }
         self.client.post(

@@ -42,9 +42,7 @@ async def test_incident(test_session, test_user):
     return incident
 
 
-async def test_incident_creation_records_audit_event(
-    client: AsyncClient, auth_headers, test_session
-):
+async def test_incident_creation_records_audit_event(client: AsyncClient, auth_headers, test_session):
     """Test that creating an incident succeeds (audit events are logged, not DB-persisted)."""
     data = {
         "title": "Audit Test Incident",

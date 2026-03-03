@@ -179,9 +179,7 @@ def check_endpoint_health(
     for attempt in range(MAX_RETRIES):
         start = time.time()
         try:
-            resp = requests.get(
-                url, headers={"Origin": CORS_ORIGIN}, timeout=TIMEOUT_SECONDS
-            )
+            resp = requests.get(url, headers={"Origin": CORS_ORIGIN}, timeout=TIMEOUT_SECONDS)
             latency_ms = int((time.time() - start) * 1000)
 
             if resp.status_code in accepted:
@@ -251,9 +249,7 @@ def get_auth_token(base_url: str, email: str, password: str) -> Optional[str]:
         return None
 
 
-def check_authenticated_endpoint(
-    base_url: str, endpoint: str, name: str, token: Optional[str]
-) -> CheckResult:
+def check_authenticated_endpoint(base_url: str, endpoint: str, name: str, token: Optional[str]) -> CheckResult:
     """Verify authenticated endpoint returns 200 when token provided."""
     if not token:
         return CheckResult(
@@ -305,9 +301,7 @@ def check_authenticated_endpoint(
         )
 
 
-def run_smoke_checks(
-    base_url: str, expected_sha: str, email: str, password: str
-) -> list[CheckResult]:
+def run_smoke_checks(base_url: str, expected_sha: str, email: str, password: str) -> list[CheckResult]:
     """Run all smoke checks and return results."""
     results = []
 
@@ -319,11 +313,7 @@ def run_smoke_checks(
     results.append(check_cors_preflight(base_url, "/api/v1/uvdb/sections"))
 
     # 3. Endpoint health checks
-    results.append(
-        check_endpoint_health(
-            base_url, "/api/v1/planet-mark/dashboard", "planetmark_dashboard"
-        )
-    )
+    results.append(check_endpoint_health(base_url, "/api/v1/planet-mark/dashboard", "planetmark_dashboard"))
     results.append(
         check_endpoint_health(
             base_url,
@@ -360,9 +350,7 @@ def print_results(results: list[CheckResult]) -> bool:
     print("\n" + "=" * 80)
     print("POST-DEPLOY SMOKE CHECK RESULTS")
     print("=" * 80)
-    print(
-        f"{'Check':<30} {'Endpoint':<30} {'Expected':<15} {'Observed':<15} {'Latency':<10} {'Status'}"
-    )
+    print(f"{'Check':<30} {'Endpoint':<30} {'Expected':<15} {'Observed':<15} {'Latency':<10} {'Status'}")
     print("-" * 80)
 
     all_passed = True
@@ -370,9 +358,7 @@ def print_results(results: list[CheckResult]) -> bool:
         status = "✅ PASS" if r.passed else "❌ FAIL"
         if not r.passed:
             all_passed = False
-        print(
-            f"{r.name:<30} {r.endpoint:<30} {r.expected:<15} {r.observed:<15} {r.latency_ms:>6}ms   {status}"
-        )
+        print(f"{r.name:<30} {r.endpoint:<30} {r.expected:<15} {r.observed:<15} {r.latency_ms:>6}ms   {status}")
         if r.error:
             print(f"{'':>30} Error: {r.error}")
 
@@ -388,12 +374,8 @@ def main():
     parser = argparse.ArgumentParser(description="Post-deploy runtime smoke check")
     parser.add_argument("--url", required=True, help="Base URL of the deployed API")
     parser.add_argument("--sha", default="", help="Expected build SHA (optional)")
-    parser.add_argument(
-        "--email", default="", help="Optional email for authenticated checks"
-    )
-    parser.add_argument(
-        "--password", default="", help="Optional password for authenticated checks"
-    )
+    parser.add_argument("--email", default="", help="Optional email for authenticated checks")
+    parser.add_argument("--password", default="", help="Optional password for authenticated checks")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 

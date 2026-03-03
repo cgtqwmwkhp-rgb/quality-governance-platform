@@ -58,26 +58,16 @@ class GovernanceService:
         if engineer.user_id == supervisor_id:
             return {"valid": False, "reason": "Supervisors cannot assess themselves"}
 
-        stmt = (
-            select(User)
-            .where(User.id == supervisor_id)
-            .options(selectinload(User.roles))
-        )
+        stmt = select(User).where(User.id == supervisor_id).options(selectinload(User.roles))
         result = await db.execute(stmt)
         supervisor = result.scalar_one_or_none()
         if not supervisor or not supervisor.is_active:
             return {"valid": False, "reason": "Supervisor not found or inactive"}
 
-        if (
-            tenant_id is not None
-            and supervisor.tenant_id is not None
-            and supervisor.tenant_id != tenant_id
-        ):
+        if tenant_id is not None and supervisor.tenant_id is not None and supervisor.tenant_id != tenant_id:
             return {"valid": False, "reason": "Supervisor not in tenant scope"}
 
-        role_names = (
-            {r.name.lower() for r in supervisor.roles} if supervisor.roles else set()
-        )
+        role_names = {r.name.lower() for r in supervisor.roles} if supervisor.roles else set()
         if "supervisor" not in role_names and "admin" not in role_names:
             return {
                 "valid": False,
@@ -87,9 +77,7 @@ class GovernanceService:
         return {"valid": True, "reason": None}
 
     @staticmethod
-    async def check_template_approval(
-        db: AsyncSession, template_id: int, tenant_id: Optional[int] = None
-    ) -> dict:
+    async def check_template_approval(db: AsyncSession, template_id: int, tenant_id: Optional[int] = None) -> dict:
         """Check if a template is approved for use in assessments/inductions.
 
         Only PUBLISHED templates can be used for execution.
@@ -146,9 +134,7 @@ class GovernanceService:
             eng_stmt = (
                 select(Engineer.id)
                 .where(Engineer.id == engineer_id)
-                .where(
-                    or_(Engineer.tenant_id == tenant_id, Engineer.tenant_id.is_(None))
-                )
+                .where(or_(Engineer.tenant_id == tenant_id, Engineer.tenant_id.is_(None)))
             )
             if (await db.scalar(eng_stmt)) is None:
                 return {
@@ -159,9 +145,7 @@ class GovernanceService:
             at_stmt = (
                 select(AssetType.id)
                 .where(AssetType.id == asset_type_id)
-                .where(
-                    or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None))
-                )
+                .where(or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)))
             )
             if (await db.scalar(at_stmt)) is None:
                 return {
@@ -216,9 +200,7 @@ class GovernanceService:
         }
 
     @staticmethod
-    async def get_scheduling_suggestions(
-        db: AsyncSession, engineer_id: int, tenant_id: Optional[int] = None
-    ) -> list:
+    async def get_scheduling_suggestions(db: AsyncSession, engineer_id: int, tenant_id: Optional[int] = None) -> list:
         """Get scheduling suggestions for upcoming assessments.
 
         Returns competency records that are due or expiring soon.
@@ -252,9 +234,7 @@ class GovernanceService:
 
         suggestions = []
         for r in records:
-            priority = (
-                "high" if r.state == CompetencyLifecycleState.EXPIRED else "medium"
-            )
+            priority = "high" if r.state == CompetencyLifecycleState.EXPIRED else "medium"
             suggestions.append(
                 {
                     "competency_record_id": r.id,
@@ -304,9 +284,7 @@ class NotificationService:
             type=NotificationType.AUDIT_COMPLETED,
             priority=NotificationPriority.MEDIUM,
             title="Assessment Complete",
-            message=messages.get(
-                outcome, f"Assessment completed with outcome: {outcome}"
-            ),
+            message=messages.get(outcome, f"Assessment completed with outcome: {outcome}"),
             entity_type="assessment",
             entity_id=assessment_run_id,
             extra_data={"notification_type": "assessment_complete", "outcome": outcome},

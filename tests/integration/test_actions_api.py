@@ -39,9 +39,7 @@ class TestActionsAPIAuth:
         assert response.headers.get("content-type") == "application/json"
 
     @pytest.mark.asyncio
-    async def test_create_action_with_invalid_token_returns_401(
-        self, client: AsyncClient
-    ):
+    async def test_create_action_with_invalid_token_returns_401(self, client: AsyncClient):
         """POST /api/v1/actions/ with invalid token should return 401."""
         payload = {
             "title": "Test Action",
@@ -63,9 +61,7 @@ class TestActionsAPIAuth:
         assert "code" in error or "message" in error
 
     @pytest.mark.asyncio
-    async def test_create_action_with_malformed_token_returns_401(
-        self, client: AsyncClient
-    ):
+    async def test_create_action_with_malformed_token_returns_401(self, client: AsyncClient):
         """POST /api/v1/actions/ with malformed token should return 401."""
         payload = {
             "title": "Test Action",
@@ -98,9 +94,7 @@ class TestActionsAPIValidation:
     """Test request validation for Actions API."""
 
     @pytest.mark.asyncio
-    async def test_create_action_missing_required_fields_returns_422(
-        self, client: AsyncClient
-    ):
+    async def test_create_action_missing_required_fields_returns_422(self, client: AsyncClient):
         """POST /api/v1/actions/ with missing required fields should return 422."""
         # Provide a dummy auth header - validation should fail before auth check
         # Actually, FastAPI checks auth first, so we'll skip auth checks here
@@ -269,20 +263,14 @@ class TestActionsAPIAuthenticatedNegative:
             "priority": "medium",
         }
 
-        response = await client.post(
-            "/api/v1/actions/", json=payload, headers=auth_headers
-        )
+        response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
         assert response.status_code == 404, (
             f"Expected 404 for non-existent source_id, got {response.status_code}. "
             "This should NOT be 500 - source entity validation must happen before commit."
         )
         error_msg = response.json().get("error", {}).get("message", "").lower()
-        assert (
-            "not found" in error_msg
-            or "not_found" in error_msg
-            or "entity_not_found" in error_msg
-        )
+        assert "not found" in error_msg or "not_found" in error_msg or "entity_not_found" in error_msg
 
     @pytest.mark.asyncio
     async def test_create_action_invalid_investigation_id_returns_404(
@@ -300,9 +288,7 @@ class TestActionsAPIAuthenticatedNegative:
             "priority": "high",
         }
 
-        response = await client.post(
-            "/api/v1/actions/", json=payload, headers=auth_headers
-        )
+        response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
         assert response.status_code == 404, (
             f"Expected 404 for non-existent investigation, got {response.status_code}. "
@@ -321,9 +307,7 @@ class TestActionsAPIAuthenticatedNegative:
             "source_id": 1,
         }
 
-        response = await client.post(
-            "/api/v1/actions/", json=payload, headers=auth_headers
-        )
+        response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
         assert response.status_code in (
             400,
@@ -331,11 +315,7 @@ class TestActionsAPIAuthenticatedNegative:
         ), f"Expected 400/422 for invalid source_type, got {response.status_code}"
         error_data = response.json().get("error", response.json())
         error_msg = error_data.get("message", "").lower()
-        assert (
-            "invalid" in error_msg
-            or "source_type" in error_msg
-            or "validation" in error_msg
-        )
+        assert "invalid" in error_msg or "source_type" in error_msg or "validation" in error_msg
 
     @pytest.mark.asyncio
     async def test_create_action_bad_due_date_parsed_gracefully(
@@ -377,15 +357,12 @@ class TestActionsAPIAuthenticatedNegative:
                 "due_date": date_str,
             }
 
-            response = await client.post(
-                "/api/v1/actions/", json=payload, headers=auth_headers
-            )
+            response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
             # Should be 201 (success) or possibly 422 for validation error
             # Should NEVER be 500
             assert response.status_code < 500, (
-                f"Date format '{date_str}' caused {response.status_code}. "
-                "Date parsing should never cause 500."
+                f"Date format '{date_str}' caused {response.status_code}. " "Date parsing should never cause 500."
             )
 
     @pytest.mark.asyncio
@@ -416,20 +393,12 @@ class TestActionsAPIAuthenticatedNegative:
             "source_id": incident.id,
         }
 
-        response = await client.post(
-            "/api/v1/actions/", json=payload, headers=auth_headers
-        )
+        response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
-        assert (
-            response.status_code == 201
-        ), f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
         data = response.json()
-        assert (
-            data.get("reference_number") is not None
-        ), "reference_number must never be null"
-        assert data["reference_number"].startswith(
-            "INA-"
-        ), f"Expected INA- prefix, got {data['reference_number']}"
+        assert data.get("reference_number") is not None, "reference_number must never be null"
+        assert data["reference_number"].startswith("INA-"), f"Expected INA- prefix, got {data['reference_number']}"
 
 
 class TestInvestigationActionsAPI:
@@ -441,9 +410,7 @@ class TestInvestigationActionsAPI:
     """
 
     @pytest.mark.asyncio
-    async def test_create_investigation_action_endpoint_accepts_source_type(
-        self, client: AsyncClient
-    ):
+    async def test_create_investigation_action_endpoint_accepts_source_type(self, client: AsyncClient):
         """POST /api/v1/actions/ with source_type=investigation should be accepted.
 
         The endpoint should accept 'investigation' as a valid source_type.
@@ -485,9 +452,7 @@ class TestInvestigationActionsAPI:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_investigation_action_accepts_valid_statuses(
-        self, client: AsyncClient
-    ):
+    async def test_investigation_action_accepts_valid_statuses(self, client: AsyncClient):
         """PATCH with investigation source_type accepts all valid status values."""
         valid_statuses = [
             "open",
@@ -501,9 +466,7 @@ class TestInvestigationActionsAPI:
                 "/api/v1/actions/1?source_type=investigation",
                 json={"status": status},
             )
-            assert (
-                response.status_code == 401
-            ), f"Investigation action status '{status}' should be accepted"
+            assert response.status_code == 401, f"Investigation action status '{status}' should be accepted"
 
 
 class TestActionLifecycleWorkflow:
@@ -519,9 +482,7 @@ class TestActionLifecycleWorkflow:
     """
 
     @pytest.mark.asyncio
-    async def test_create_action_for_investigation(
-        self, client: AsyncClient, auth_headers: dict, test_session
-    ):
+    async def test_create_action_for_investigation(self, client: AsyncClient, auth_headers: dict, test_session):
         """Create an action linked to an investigation and verify it persists."""
         # First create an investigation template and run
         from src.domain.models.investigation import (
@@ -560,13 +521,9 @@ class TestActionLifecycleWorkflow:
             "action_type": "corrective",
         }
 
-        response = await client.post(
-            "/api/v1/actions/", json=payload, headers=auth_headers
-        )
+        response = await client.post("/api/v1/actions/", json=payload, headers=auth_headers)
 
-        assert (
-            response.status_code == 201
-        ), f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
         data = response.json()
         assert data["title"] == "Lifecycle Test Action"
         assert data["status"] == "open"  # Initial status
@@ -578,9 +535,7 @@ class TestActionLifecycleWorkflow:
         return data["id"]
 
     @pytest.mark.asyncio
-    async def test_update_action_status_to_in_progress(
-        self, client: AsyncClient, auth_headers: dict, test_session
-    ):
+    async def test_update_action_status_to_in_progress(self, client: AsyncClient, auth_headers: dict, test_session):
         """Update action status from open to in_progress."""
         # First create the investigation and action
         from src.domain.models.investigation import (
@@ -617,9 +572,7 @@ class TestActionLifecycleWorkflow:
             "source_id": investigation.id,
             "priority": "medium",
         }
-        create_response = await client.post(
-            "/api/v1/actions/", json=create_payload, headers=auth_headers
-        )
+        create_response = await client.post("/api/v1/actions/", json=create_payload, headers=auth_headers)
         assert create_response.status_code == 201
         action_id = create_response.json()["id"]
 
@@ -638,9 +591,7 @@ class TestActionLifecycleWorkflow:
         assert data["status"] == "in_progress"
 
     @pytest.mark.asyncio
-    async def test_complete_action_with_notes(
-        self, client: AsyncClient, auth_headers: dict, test_session
-    ):
+    async def test_complete_action_with_notes(self, client: AsyncClient, auth_headers: dict, test_session):
         """Mark action as completed with completion notes and verify persistence."""
         from src.domain.models.investigation import (
             AssignedEntityType,
@@ -676,9 +627,7 @@ class TestActionLifecycleWorkflow:
             "source_id": investigation.id,
             "priority": "critical",
         }
-        create_response = await client.post(
-            "/api/v1/actions/", json=create_payload, headers=auth_headers
-        )
+        create_response = await client.post("/api/v1/actions/", json=create_payload, headers=auth_headers)
         assert create_response.status_code == 201
         action_id = create_response.json()["id"]
 
@@ -693,14 +642,10 @@ class TestActionLifecycleWorkflow:
             headers=auth_headers,
         )
 
-        assert (
-            complete_response.status_code == 200
-        ), f"Expected 200, got {complete_response.status_code}"
+        assert complete_response.status_code == 200, f"Expected 200, got {complete_response.status_code}"
         data = complete_response.json()
         assert data["status"] == "completed"
-        assert (
-            data["completed_at"] is not None
-        ), "completed_at should be set when status is completed"
+        assert data["completed_at"] is not None, "completed_at should be set when status is completed"
 
         # Verify persistence - refetch the action
         get_response = await client.get(
@@ -750,9 +695,7 @@ class TestActionLifecycleWorkflow:
             "source_type": "investigation",
             "source_id": investigation.id,
         }
-        create_response = await client.post(
-            "/api/v1/actions/", json=create_payload, headers=auth_headers
-        )
+        create_response = await client.post("/api/v1/actions/", json=create_payload, headers=auth_headers)
         action_id = create_response.json()["id"]
 
         # Complete the action
@@ -772,14 +715,10 @@ class TestActionLifecycleWorkflow:
         assert reopen_response.status_code == 200
         data = reopen_response.json()
         assert data["status"] == "open"
-        assert (
-            data["completed_at"] is None
-        ), "completed_at should be cleared when reopening"
+        assert data["completed_at"] is None, "completed_at should be cleared when reopening"
 
     @pytest.mark.asyncio
-    async def test_list_actions_shows_updated_status(
-        self, client: AsyncClient, auth_headers: dict, test_session
-    ):
+    async def test_list_actions_shows_updated_status(self, client: AsyncClient, auth_headers: dict, test_session):
         """Verify that list endpoint shows actions with updated status."""
         from src.domain.models.investigation import (
             AssignedEntityType,
@@ -814,9 +753,7 @@ class TestActionLifecycleWorkflow:
             "source_type": "investigation",
             "source_id": investigation.id,
         }
-        create_response = await client.post(
-            "/api/v1/actions/", json=create_payload, headers=auth_headers
-        )
+        create_response = await client.post("/api/v1/actions/", json=create_payload, headers=auth_headers)
         action_id = create_response.json()["id"]
 
         # Update status to pending_verification

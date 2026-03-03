@@ -12,9 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class AssetTypeBase(BaseModel):
     """Base schema for Asset Type."""
 
-    category: str = Field(
-        ..., description="Asset category (lifting, power, transport, etc.)"
-    )
+    category: str = Field(..., description="Asset category (lifting, power, transport, etc.)")
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
     icon: Optional[str] = Field(None, max_length=50)

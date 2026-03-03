@@ -85,16 +85,12 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
 
     token = login_resp.json().get("access_token")
     if not token:
-        results.append(
-            StepResult("login", False, "Missing access_token in login response")
-        )
+        results.append(StepResult("login", False, "Missing access_token in login response"))
         return results
     results.append(StepResult("login", True, "Authenticated"))
 
     # 1b) List findings (regression gate for findings 500)
-    findings_resp = _request(
-        "GET", f"{base_url}/api/v1/audits/findings?page=1&page_size=10", token=token
-    )
+    findings_resp = _request("GET", f"{base_url}/api/v1/audits/findings?page=1&page_size=10", token=token)
     if findings_resp.status_code != 200:
         results.append(
             StepResult(
@@ -159,9 +155,7 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "location": "E2E Validation Site",
         "scheduled_date": _now_iso(),
     }
-    run_resp = _request(
-        "POST", f"{base_url}/api/v1/audits/runs", token=token, payload=run_payload
-    )
+    run_resp = _request("POST", f"{base_url}/api/v1/audits/runs", token=token, payload=run_payload)
     if run_resp.status_code != 201:
         results.append(
             StepResult(
@@ -187,9 +181,7 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     )
 
     # 4) Fetch template detail and submit one response
-    template_resp = _request(
-        "GET", f"{base_url}/api/v1/audits/templates/{template_id}", token=token
-    )
+    template_resp = _request("GET", f"{base_url}/api/v1/audits/templates/{template_id}", token=token)
     if template_resp.status_code != 200:
         results.append(
             StepResult(
@@ -207,13 +199,9 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
             question_id = questions[0]["id"]
             break
     if not question_id:
-        results.append(
-            StepResult("template_detail", False, "Template has no questions")
-        )
+        results.append(StepResult("template_detail", False, "Template has no questions"))
         return results
-    results.append(
-        StepResult("template_detail", True, f"Using question_id={question_id}")
-    )
+    results.append(StepResult("template_detail", True, f"Using question_id={question_id}"))
 
     response_payload = {
         "question_id": question_id,
@@ -241,9 +229,7 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     results.append(StepResult("submit_response", True, "One response submitted"))
 
     # 5) Complete run
-    complete_resp = _request(
-        "POST", f"{base_url}/api/v1/audits/runs/{run_id}/complete", token=token
-    )
+    complete_resp = _request("POST", f"{base_url}/api/v1/audits/runs/{run_id}/complete", token=token)
     if complete_resp.status_code != 200:
         results.append(
             StepResult(
@@ -283,9 +269,7 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         return results
     finding_data = finding_resp.json()
     finding_ref = finding_data.get("reference_number", "N/A")
-    results.append(
-        StepResult("create_finding", True, f"Finding created ({finding_ref})")
-    )
+    results.append(StepResult("create_finding", True, f"Finding created ({finding_ref})"))
 
     # 7) Create incident from finding context (bridge to unified actions module)
     incident_payload = {
@@ -298,9 +282,7 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "location": "E2E Validation Site",
         "department": "Governance",
     }
-    incident_resp = _request(
-        "POST", f"{base_url}/api/v1/incidents/", token=token, payload=incident_payload
-    )
+    incident_resp = _request("POST", f"{base_url}/api/v1/incidents/", token=token, payload=incident_payload)
     if incident_resp.status_code != 201:
         results.append(
             StepResult(
@@ -328,9 +310,7 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "source_id": incident_id,
         "priority": "medium",
     }
-    action_resp = _request(
-        "POST", f"{base_url}/api/v1/actions/", token=token, payload=action_payload
-    )
+    action_resp = _request("POST", f"{base_url}/api/v1/actions/", token=token, payload=action_payload)
     if action_resp.status_code != 201:
         results.append(
             StepResult(

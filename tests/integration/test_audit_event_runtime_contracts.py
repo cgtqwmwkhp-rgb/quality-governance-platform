@@ -21,9 +21,7 @@ class TestPoliciesAuditEventRuntimeContract:
     """Test that Policies write operations succeed (audit events are logged)."""
 
     @pytest.mark.asyncio
-    async def test_create_policy_succeeds(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_create_policy_succeeds(self, client: AsyncClient, test_session, auth_headers):
         """Verify that creating a policy succeeds."""
         policy_data = {
             "title": "Test Policy",
@@ -31,18 +29,14 @@ class TestPoliciesAuditEventRuntimeContract:
             "document_type": "policy",
             "status": "draft",
         }
-        response = await client.post(
-            "/api/v1/policies", json=policy_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
         assert response.status_code == 201
 
         policy_id = response.json()["id"]
         assert policy_id is not None
 
     @pytest.mark.asyncio
-    async def test_update_policy_succeeds(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_update_policy_succeeds(self, client: AsyncClient, test_session, auth_headers):
         """Verify that updating a policy succeeds."""
         policy = Policy(
             title="Test Policy",
@@ -58,16 +52,12 @@ class TestPoliciesAuditEventRuntimeContract:
         await test_session.refresh(policy)
 
         update_data = {"title": "Updated Policy"}
-        response = await client.put(
-            f"/api/v1/policies/{policy.id}", json=update_data, headers=auth_headers
-        )
+        response = await client.put(f"/api/v1/policies/{policy.id}", json=update_data, headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["title"] == "Updated Policy"
 
     @pytest.mark.asyncio
-    async def test_delete_policy_succeeds(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_delete_policy_succeeds(self, client: AsyncClient, test_session, auth_headers):
         """Verify that deleting a policy succeeds."""
         policy = Policy(
             title="Test Policy",
@@ -83,9 +73,7 @@ class TestPoliciesAuditEventRuntimeContract:
         await test_session.refresh(policy)
         policy_id = policy.id
 
-        response = await client.delete(
-            f"/api/v1/policies/{policy_id}", headers=auth_headers
-        )
+        response = await client.delete(f"/api/v1/policies/{policy_id}", headers=auth_headers)
         assert response.status_code == 204
 
 
@@ -93,9 +81,7 @@ class TestIncidentsAuditEventRuntimeContract:
     """Test that Incidents write operations succeed (audit events are logged)."""
 
     @pytest.mark.asyncio
-    async def test_create_incident_succeeds(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_create_incident_succeeds(self, client: AsyncClient, test_session, auth_headers):
         """Verify that creating an incident succeeds."""
         incident_data = {
             "title": "Test Incident",
@@ -107,9 +93,7 @@ class TestIncidentsAuditEventRuntimeContract:
             "location": "Test Location",
             "department": "Test Department",
         }
-        response = await client.post(
-            "/api/v1/incidents/", json=incident_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/incidents/", json=incident_data, headers=auth_headers)
         assert response.status_code == 201
 
         incident_id = response.json()["id"]
@@ -120,9 +104,7 @@ class TestComplaintsAuditEventRuntimeContract:
     """Test that Complaints write operations succeed (audit events are logged)."""
 
     @pytest.mark.asyncio
-    async def test_create_complaint_succeeds(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_create_complaint_succeeds(self, client: AsyncClient, test_session, auth_headers):
         """Verify that creating a complaint succeeds."""
         complaint_data = {
             "title": "Test Complaint",
@@ -133,9 +115,7 @@ class TestComplaintsAuditEventRuntimeContract:
             "complainant_name": "Test User",
             "complainant_email": "test@example.com",
         }
-        response = await client.post(
-            "/api/v1/complaints/", json=complaint_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/complaints/", json=complaint_data, headers=auth_headers)
         assert response.status_code == 201
 
         complaint_id = response.json()["id"]

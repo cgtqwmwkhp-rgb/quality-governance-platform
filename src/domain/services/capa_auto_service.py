@@ -46,11 +46,7 @@ class CAPAAutoService:
         created = []
         for fq in failed_questions:
             criticality = fq.get("criticality", "good_to_have")
-            priority = (
-                CAPAPriority.CRITICAL
-                if criticality == "essential"
-                else CAPAPriority.HIGH
-            )
+            priority = CAPAPriority.CRITICAL if criticality == "essential" else CAPAPriority.HIGH
 
             due_days = 7 if criticality == "essential" else 30
             due_date = datetime.now(timezone.utc) + timedelta(days=due_days)
@@ -175,8 +171,7 @@ class CAPAAutoService:
                 source_reference=str(examination_id),
                 priority=priority_map.get(cat, CAPAPriority.MEDIUM),
                 created_by_id=created_by_id,
-                due_date=datetime.now(timezone.utc)
-                + timedelta(days=due_map.get(cat, 30)),
+                due_date=datetime.now(timezone.utc) + timedelta(days=due_map.get(cat, 30)),
                 tenant_id=tenant_id,
             )
             db.add(capa)

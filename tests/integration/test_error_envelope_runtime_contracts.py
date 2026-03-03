@@ -27,9 +27,7 @@ class TestPoliciesErrorEnvelopeRuntimeContract:
     """Test that Policies module returns canonical error envelopes at runtime."""
 
     @pytest.mark.asyncio
-    async def test_404_not_found_canonical_envelope(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_404_not_found_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
         """Verify that 404 errors return the canonical error envelope."""
         response = await client.get("/api/v1/policies/999999", headers=auth_headers)
         assert response.status_code == 404
@@ -46,9 +44,7 @@ class TestIncidentsErrorEnvelopeRuntimeContract:
     """Test that Incidents module returns canonical error envelopes at runtime."""
 
     @pytest.mark.asyncio
-    async def test_404_not_found_canonical_envelope(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_404_not_found_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
         """Verify that 404 errors return the canonical error envelope."""
         response = await client.get("/api/v1/incidents/999999", headers=auth_headers)
         assert response.status_code == 404
@@ -65,9 +61,7 @@ class TestComplaintsErrorEnvelopeRuntimeContract:
     """Test that Complaints module returns canonical error envelopes at runtime."""
 
     @pytest.mark.asyncio
-    async def test_404_not_found_canonical_envelope(
-        self, client: AsyncClient, test_session, auth_headers
-    ):
+    async def test_404_not_found_canonical_envelope(self, client: AsyncClient, test_session, auth_headers):
         """Verify that 404 errors return the canonical error envelope."""
         response = await client.get("/api/v1/complaints/999999", headers=auth_headers)
         assert response.status_code == 404
@@ -84,9 +78,7 @@ class TestConflictErrorEnvelopeRuntimeContract:
     """Test that 409 conflict errors return canonical error envelopes at runtime."""
 
     @pytest.mark.asyncio
-    async def test_409_conflict_canonical_envelope(
-        self, client: AsyncClient, test_user, test_session, auth_headers
-    ):
+    async def test_409_conflict_canonical_envelope(self, client: AsyncClient, test_user, test_session, auth_headers):
         """Verify that 409 conflict errors return the canonical error envelope."""
         from sqlalchemy import insert
 
@@ -100,9 +92,7 @@ class TestConflictErrorEnvelopeRuntimeContract:
         test_session.add(role)
         await test_session.flush()
 
-        await test_session.execute(
-            insert(user_roles).values(user_id=test_user.id, role_id=role.id)
-        )
+        await test_session.execute(insert(user_roles).values(user_id=test_user.id, role_id=role.id))
         await test_session.commit()
 
         policy_data = {
@@ -112,14 +102,10 @@ class TestConflictErrorEnvelopeRuntimeContract:
             "status": "draft",
             "reference_number": f"POL-409-{uuid.uuid4().hex[:8]}",
         }
-        response = await client.post(
-            "/api/v1/policies", json=policy_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
         assert response.status_code == 201
 
-        response = await client.post(
-            "/api/v1/policies", json=policy_data, headers=auth_headers
-        )
+        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
         assert response.status_code == 409
 
         data = response.json()

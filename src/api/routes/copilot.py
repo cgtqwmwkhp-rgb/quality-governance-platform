@@ -70,9 +70,7 @@ class MessageResponse(BaseModel):
 
 class FeedbackCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5)
-    feedback_type: str = Field(
-        ..., pattern="^(helpful|inaccurate|inappropriate|other)$"
-    )
+    feedback_type: str = Field(..., pattern="^(helpful|inaccurate|inappropriate|other)$")
     feedback_text: Optional[str] = None
 
 
@@ -281,9 +279,7 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(
-            status_code=404, detail=f"Action {data.action_name} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
 
     # Execute the action
     # This would actually perform the action

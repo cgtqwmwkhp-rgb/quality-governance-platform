@@ -129,9 +129,7 @@ class LocalFileStorageService(BlobStorageService):
     def __init__(self, base_path: str = "./storage/evidence"):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        logger.info(
-            f"LocalFileStorageService initialized at {self.base_path.absolute()}"
-        )
+        logger.info(f"LocalFileStorageService initialized at {self.base_path.absolute()}")
 
     def _get_full_path(self, storage_key: str) -> Path:
         """Get full filesystem path for storage key."""
@@ -169,9 +167,7 @@ class LocalFileStorageService(BlobStorageService):
                     )
                 )
 
-            logger.info(
-                f"Uploaded file to local storage: {storage_key} ({len(content)} bytes)"
-            )
+            logger.info(f"Uploaded file to local storage: {storage_key} ({len(content)} bytes)")
             return storage_key
         except Exception as e:
             logger.error(f"Local storage upload failed: {e}")
@@ -253,16 +249,12 @@ class AzureBlobStorageService(BlobStorageService):
 
     def __init__(self, connection_string: str, container_name: str):
         if not connection_string:
-            raise StorageNotConfiguredError(
-                "Azure Storage connection string not configured"
-            )
+            raise StorageNotConfiguredError("Azure Storage connection string not configured")
 
         self.container_name = container_name
         self._connection_string = connection_string
         self._client = None
-        logger.info(
-            f"AzureBlobStorageService initialized for container: {container_name}"
-        )
+        logger.info(f"AzureBlobStorageService initialized for container: {container_name}")
 
     def _get_client(self):
         """Lazy-load Azure Storage client."""
@@ -270,13 +262,9 @@ class AzureBlobStorageService(BlobStorageService):
             try:
                 from azure.storage.blob import BlobServiceClient
 
-                self._client = BlobServiceClient.from_connection_string(
-                    self._connection_string
-                )
+                self._client = BlobServiceClient.from_connection_string(self._connection_string)
             except ImportError:
-                raise StorageError(
-                    "azure-storage-blob package not installed. Run: pip install azure-storage-blob"
-                )
+                raise StorageError("azure-storage-blob package not installed. Run: pip install azure-storage-blob")
             except Exception as e:
                 raise StorageError(f"Failed to create Azure Storage client: {e}")
         return self._client
@@ -305,9 +293,7 @@ class AzureBlobStorageService(BlobStorageService):
                 metadata=metadata,
                 overwrite=True,
             )
-            logger.info(
-                f"Uploaded file to Azure Storage: {storage_key} ({len(content)} bytes)"
-            )
+            logger.info(f"Uploaded file to Azure Storage: {storage_key} ({len(content)} bytes)")
             return storage_key
         except Exception as e:
             logger.error(f"Azure storage upload failed: {e}")
@@ -349,11 +335,7 @@ class AzureBlobStorageService(BlobStorageService):
             expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
 
             # Parse account info from connection string
-            conn_parts = dict(
-                part.split("=", 1)
-                for part in self._connection_string.split(";")
-                if "=" in part
-            )
+            conn_parts = dict(part.split("=", 1) for part in self._connection_string.split(";") if "=" in part)
             account_name = conn_parts.get("AccountName", "")
             account_key = conn_parts.get("AccountKey", "")
 
@@ -367,7 +349,9 @@ class AzureBlobStorageService(BlobStorageService):
                 content_disposition=content_disposition,
             )
 
-            return f"https://{account_name}.blob.core.windows.net/{self.container_name}/{quote(storage_key)}?{sas_token}"
+            return (
+                f"https://{account_name}.blob.core.windows.net/{self.container_name}/{quote(storage_key)}?{sas_token}"
+            )
         except ImportError:
             raise StorageError("azure-storage-blob package not installed")
         except Exception as e:

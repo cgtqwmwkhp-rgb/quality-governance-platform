@@ -22,9 +22,7 @@ REQUIRED_FIELDS = {
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Validate release sign-off JSON artifact"
-    )
+    parser = argparse.ArgumentParser(description="Validate release sign-off JSON artifact")
     parser.add_argument("--file", required=True, help="Path to sign-off JSON file")
     parser.add_argument("--sha", required=True, help="Expected release SHA")
     args = parser.parse_args()
@@ -52,9 +50,7 @@ def main() -> int:
             return 1
 
     if data["release_sha"] != args.sha:
-        print(
-            f"ERROR: release_sha mismatch. expected={args.sha} actual={data['release_sha']}"
-        )
+        print(f"ERROR: release_sha mismatch. expected={args.sha} actual={data['release_sha']}")
         return 1
 
     if not data["governance_lead_approved"]:

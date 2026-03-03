@@ -99,9 +99,7 @@ def parse_override(override_data: Optional[dict]) -> Optional[Override]:
 
     if missing:
         print(f"⚠️  WARNING: Override present but missing required fields: {missing}")
-        print(
-            "   Override will be ignored. Required: issue_id, owner, expiry, reason, temporary_min_pass"
-        )
+        print("   Override will be ignored. Required: issue_id, owner, expiry, reason, temporary_min_pass")
         return None
 
     # Check expiry
@@ -109,12 +107,8 @@ def parse_override(override_data: Optional[dict]) -> Optional[Override]:
         expiry_date = datetime.fromisoformat(override_data["expiry"])
         if expiry_date.date() < datetime.now().date():
             print(f"⚠️  WARNING: Override expired on {override_data['expiry']}")
-            print(
-                f"   Owner: {override_data['owner']}, Issue: {override_data['issue_id']}"
-            )
-            print(
-                "   Override will be ignored. Update the expiry or remove the override."
-            )
+            print(f"   Owner: {override_data['owner']}, Issue: {override_data['issue_id']}")
+            print("   Override will be ignored. Update the expiry or remove the override.")
             return None
     except ValueError:
         print(f"⚠️  WARNING: Invalid expiry date format: {override_data['expiry']}")
@@ -130,9 +124,7 @@ def parse_override(override_data: Optional[dict]) -> Optional[Override]:
     )
 
 
-def compute_min_acceptable(
-    baseline: BaselineConfig, override: Optional[Override]
-) -> int:
+def compute_min_acceptable(baseline: BaselineConfig, override: Optional[Override]) -> int:
     """Compute minimum acceptable pass count."""
     if override:
         return override.temporary_min_pass
@@ -140,9 +132,7 @@ def compute_min_acceptable(
     return int(baseline.baseline_pass_count * baseline.min_acceptable_percentage / 100)
 
 
-def validate_gate(
-    current_passed: int, current_skipped: int, baseline_path: Path
-) -> bool:
+def validate_gate(current_passed: int, current_skipped: int, baseline_path: Path) -> bool:
     """
     Validate the baseline gate.
 
@@ -214,9 +204,7 @@ def validate_gate(
         print()
         print("   To resolve:")
         print("   1. Fix the failing tests, OR")
-        print(
-            "   2. Add a structured override to docs/evidence/e2e_baseline.json with:"
-        )
+        print("   2. Add a structured override to docs/evidence/e2e_baseline.json with:")
         print('      "override": {')
         print('        "issue_id": "GH-XXX",')
         print('        "owner": "your-github-handle",')
@@ -232,15 +220,9 @@ def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Validate E2E test results against baseline gate"
-    )
-    parser.add_argument(
-        "--passed", type=int, required=True, help="Number of tests that passed"
-    )
-    parser.add_argument(
-        "--skipped", type=int, default=0, help="Number of tests that were skipped"
-    )
+    parser = argparse.ArgumentParser(description="Validate E2E test results against baseline gate")
+    parser.add_argument("--passed", type=int, required=True, help="Number of tests that passed")
+    parser.add_argument("--skipped", type=int, default=0, help="Number of tests that were skipped")
     parser.add_argument(
         "--baseline-file",
         type=str,

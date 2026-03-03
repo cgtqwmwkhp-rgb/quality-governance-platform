@@ -126,9 +126,7 @@ def scan_file(filepath: Path, allowlist: Set[str]) -> List[Violation]:
     return violations
 
 
-def scan_directory(
-    directory: Path, file_patterns: List[str], allowlist: Set[str]
-) -> List[Violation]:
+def scan_directory(directory: Path, file_patterns: List[str], allowlist: Set[str]) -> List[Violation]:
     """Recursively scan directory for violations."""
     all_violations = []
 
@@ -170,9 +168,7 @@ def print_violations(violations: List[Violation]) -> None:
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Scan test files for API path drift violations"
-    )
+    parser = argparse.ArgumentParser(description="Scan test files for API path drift violations")
     parser.add_argument(
         "--directories",
         "-d",
@@ -187,9 +183,7 @@ def main():
         default=["*.py", "*.ts", "*.js", "*.spec.ts", "*.test.ts"],
         help="File patterns to scan (default: *.py, *.ts, *.js)",
     )
-    parser.add_argument(
-        "--allowlist", "-a", type=str, default=None, help="Path to allowlist JSON file"
-    )
+    parser.add_argument("--allowlist", "-a", type=str, default=None, help="Path to allowlist JSON file")
     parser.add_argument(
         "--output-json",
         "-o",

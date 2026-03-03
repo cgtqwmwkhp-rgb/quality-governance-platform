@@ -45,12 +45,8 @@ class QuickReportCreate(BaseModel):
     report_type: str = Field(..., description="Type: 'incident' or 'complaint'")
     title: str = Field(..., min_length=5, max_length=200, description="Brief title")
     description: str = Field(..., min_length=10, description="What happened?")
-    location: Optional[str] = Field(
-        None, max_length=200, description="Where did it occur?"
-    )
-    severity: str = Field(
-        default="medium", description="Severity: low, medium, high, critical"
-    )
+    location: Optional[str] = Field(None, max_length=200, description="Where did it occur?")
+    severity: str = Field(default="medium", description="Severity: low, medium, high, critical")
 
     # Reporter info (optional for anonymous)
     reporter_name: Optional[str] = Field(None, max_length=100)
@@ -146,9 +142,7 @@ def map_severity(severity: str) -> tuple:
         "high": (IncidentSeverity.HIGH, ComplaintPriority.HIGH),
         "critical": (IncidentSeverity.CRITICAL, ComplaintPriority.CRITICAL),
     }
-    return severity_map.get(
-        severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM)
-    )
+    return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
 
 
 def get_status_label(status: str) -> str:
@@ -226,9 +220,7 @@ async def submit_quick_report(
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             # CRITICAL: Set reporter info for My Reports identity linkage
-            reporter_name=(
-                report.reporter_name if not report.is_anonymous else "Anonymous"
-            ),
+            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_incident_v1",
@@ -265,15 +257,9 @@ async def submit_quick_report(
             priority=complaint_priority,
             status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
-            complainant_name=(
-                report.reporter_name if not report.is_anonymous else "Anonymous"
-            ),
-            complainant_email=(
-                report.reporter_email if not report.is_anonymous else None
-            ),
-            complainant_phone=(
-                report.reporter_phone if not report.is_anonymous else None
-            ),
+            complainant_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
+            complainant_email=(report.reporter_email if not report.is_anonymous else None),
+            complainant_phone=(report.reporter_phone if not report.is_anonymous else None),
             # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_complaint_v1",
             source_type="portal",
@@ -307,9 +293,7 @@ async def submit_quick_report(
             "high": RTASeverity.SERIOUS_INJURY,
             "critical": RTASeverity.FATAL,
         }
-        rta_severity = rta_severity_map.get(
-            report.severity.lower(), RTASeverity.DAMAGE_ONLY
-        )
+        rta_severity = rta_severity_map.get(report.severity.lower(), RTASeverity.DAMAGE_ONLY)
 
         # Create RTA record
         rta = RoadTrafficCollision(
@@ -321,13 +305,9 @@ async def submit_quick_report(
             location=report.location or "Not specified",
             collision_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
-            reporter_name=(
-                report.reporter_name if not report.is_anonymous else "Anonymous"
-            ),
+            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             reporter_email=report.reporter_email if not report.is_anonymous else None,
-            driver_name=(
-                report.reporter_name if not report.is_anonymous else "Anonymous"
-            ),
+            driver_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_rta_v1",
         )
@@ -365,9 +345,7 @@ async def submit_quick_report(
         # Create Near Miss record
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=(
-                report.reporter_name if not report.is_anonymous else "Anonymous"
-            ),
+            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             contract=report.department or "Not specified",
             location=report.location or "Not specified",
@@ -409,9 +387,7 @@ async def submit_quick_report(
 async def track_report(
     reference_number: str,
     db: DbSession,
-    tracking_code: Optional[str] = Query(
-        None, description="Required for anonymous reports"
-    ),
+    tracking_code: Optional[str] = Query(None, description="Required for anonymous reports"),
 ):
     """
     Track a report's status by reference number.
@@ -420,9 +396,7 @@ async def track_report(
     """
     # Determine report type from reference number prefix
     if reference_number.startswith("INC-"):
-        inc_query = select(Incident).where(
-            Incident.reference_number == reference_number
-        )
+        inc_query = select(Incident).where(Incident.reference_number == reference_number)
         inc_result = await db.execute(inc_query)
         incident = inc_result.scalar_one_or_none()
 
@@ -464,9 +438,7 @@ async def track_report(
         )
 
     elif reference_number.startswith("COMP-"):
-        comp_query = select(Complaint).where(
-            Complaint.reference_number == reference_number
-        )
+        comp_query = select(Complaint).where(Complaint.reference_number == reference_number)
         comp_result = await db.execute(comp_query)
         complaint = comp_result.scalar_one_or_none()
 
@@ -508,9 +480,7 @@ async def track_report(
         )
 
     elif reference_number.startswith("RTA-"):
-        rta_query = select(RoadTrafficCollision).where(
-            RoadTrafficCollision.reference_number == reference_number
-        )
+        rta_query = select(RoadTrafficCollision).where(RoadTrafficCollision.reference_number == reference_number)
         rta_result = await db.execute(rta_query)
         rta = rta_result.scalar_one_or_none()
 
@@ -618,14 +588,10 @@ async def get_portal_stats(db: DbSession):
 
     # Count today's reports
     incidents_today = await db.execute(
-        select(func.count())
-        .select_from(Incident)
-        .where(Incident.created_at >= today_start)
+        select(func.count()).select_from(Incident).where(Incident.created_at >= today_start)
     )
     complaints_today = await db.execute(
-        select(func.count())
-        .select_from(Complaint)
-        .where(Complaint.created_at >= today_start)
+        select(func.count()).select_from(Complaint).where(Complaint.created_at >= today_start)
     )
     total_today = (incidents_today.scalar() or 0) + (complaints_today.scalar() or 0)
 
@@ -642,9 +608,7 @@ async def get_portal_stats(db: DbSession):
         .where(Complaint.status == ComplaintStatus.CLOSED)
         .where(Complaint.updated_at >= week_ago)
     )
-    resolved_week = (resolved_incidents.scalar() or 0) + (
-        resolved_complaints.scalar() or 0
-    )
+    resolved_week = (resolved_incidents.scalar() or 0) + (resolved_complaints.scalar() or 0)
 
     return PortalStatsResponse(
         total_reports_today=total_today,
@@ -764,9 +728,7 @@ async def get_my_reports(
     all_reports: list[MyReportSummary] = []
 
     # Fetch incidents where user is reporter
-    incidents_query = select(Incident).where(
-        func.lower(Incident.reporter_email) == user_email
-    )
+    incidents_query = select(Incident).where(func.lower(Incident.reporter_email) == user_email)
     incidents_result = await db.execute(incidents_query)
     incidents = incidents_result.scalars().all()
 
@@ -776,25 +738,15 @@ async def get_my_reports(
                 reference_number=inc.reference_number,
                 report_type="incident",
                 title=inc.title,
-                status=(
-                    inc.status.value
-                    if hasattr(inc.status, "value")
-                    else str(inc.status)
-                ),
-                status_label=get_status_label(
-                    inc.status.value
-                    if hasattr(inc.status, "value")
-                    else str(inc.status)
-                ),
+                status=(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
+                status_label=get_status_label(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
                 submitted_at=inc.reported_date or inc.created_at,
                 updated_at=inc.updated_at or inc.created_at,
             )
         )
 
     # Fetch complaints where user is complainant
-    complaints_query = select(Complaint).where(
-        func.lower(Complaint.complainant_email) == user_email
-    )
+    complaints_query = select(Complaint).where(func.lower(Complaint.complainant_email) == user_email)
     complaints_result = await db.execute(complaints_query)
     complaints = complaints_result.scalars().all()
 
@@ -804,25 +756,15 @@ async def get_my_reports(
                 reference_number=comp.reference_number,
                 report_type="complaint",
                 title=comp.title,
-                status=(
-                    comp.status.value
-                    if hasattr(comp.status, "value")
-                    else str(comp.status)
-                ),
-                status_label=get_status_label(
-                    comp.status.value
-                    if hasattr(comp.status, "value")
-                    else str(comp.status)
-                ),
+                status=(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
+                status_label=get_status_label(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
                 submitted_at=comp.received_date or comp.created_at,
                 updated_at=comp.updated_at or comp.created_at,
             )
         )
 
     # Fetch RTAs where user is reporter
-    rtas_query = select(RoadTrafficCollision).where(
-        func.lower(RoadTrafficCollision.reporter_email) == user_email
-    )
+    rtas_query = select(RoadTrafficCollision).where(func.lower(RoadTrafficCollision.reporter_email) == user_email)
     rtas_result = await db.execute(rtas_query)
     rtas = rtas_result.scalars().all()
 
@@ -832,16 +774,8 @@ async def get_my_reports(
                 reference_number=rta.reference_number,
                 report_type="rta",
                 title=rta.title,
-                status=(
-                    rta.status.value
-                    if hasattr(rta.status, "value")
-                    else str(rta.status)
-                ),
-                status_label=get_status_label(
-                    rta.status.value
-                    if hasattr(rta.status, "value")
-                    else str(rta.status)
-                ),
+                status=(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
+                status_label=get_status_label(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
                 submitted_at=rta.reported_date or rta.created_at,
                 updated_at=rta.updated_at or rta.created_at,
             )

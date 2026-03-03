@@ -13,16 +13,12 @@ class RiskControlBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
-    control_type: str = Field(
-        default="preventive", pattern="^(preventive|detective|corrective|directive)$"
-    )
+    control_type: str = Field(default="preventive", pattern="^(preventive|detective|corrective|directive)$")
     implementation_status: str = Field(
         default="planned",
         pattern="^(planned|in_progress|implemented|not_implemented|not_applicable)$",
     )
-    effectiveness: Optional[str] = Field(
-        None, pattern="^(effective|partially_effective|ineffective|not_tested)$"
-    )
+    effectiveness: Optional[str] = Field(None, pattern="^(effective|partially_effective|ineffective|not_tested)$")
     owner_id: Optional[int] = None
 
     # Standard mapping
@@ -77,9 +73,7 @@ class RiskAssessmentBase(BaseModel):
     """Base schema for Risk Assessment (point-in-time evaluation)."""
 
     assessment_date: datetime
-    assessment_type: str = Field(
-        default="periodic", pattern="^(initial|periodic|triggered|post_incident)$"
-    )
+    assessment_type: str = Field(default="periodic", pattern="^(initial|periodic|triggered|post_incident)$")
 
     # Inherent risk (before controls)
     inherent_likelihood: int = Field(..., ge=1, le=5)
@@ -171,9 +165,7 @@ class RiskBase(BaseModel):
     linked_policy_ids: Optional[List[int]] = None
 
     # Treatment
-    treatment_strategy: str = Field(
-        default="mitigate", pattern="^(accept|mitigate|transfer|avoid|exploit)$"
-    )
+    treatment_strategy: str = Field(default="mitigate", pattern="^(accept|mitigate|transfer|avoid|exploit)$")
     treatment_plan: Optional[str] = None
     treatment_due_date: Optional[datetime] = None
 

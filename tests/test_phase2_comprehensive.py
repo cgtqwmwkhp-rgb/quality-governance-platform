@@ -45,9 +45,7 @@ class TestFiveWhysAnalysis:
             whys=[],
         )
 
-        analysis.add_why(
-            "Why did the equipment fail?", "The motor overheated", "Temperature logs"
-        )
+        analysis.add_why("Why did the equipment fail?", "The motor overheated", "Temperature logs")
 
         assert len(analysis.whys) == 1
         assert analysis.whys[0]["level"] == 1
@@ -549,9 +547,7 @@ class TestCompetenceIntegration:
         required_level_idx = level_order.index(criteria.minimum_auditor_level.value)
 
         meets_level = auditor_level_idx >= required_level_idx
-        meets_experience = (
-            qualified.total_audits_conducted >= criteria.minimum_audits_conducted
-        )
+        meets_experience = qualified.total_audits_conducted >= criteria.minimum_audits_conducted
 
         assert meets_level is True
         assert meets_experience is True

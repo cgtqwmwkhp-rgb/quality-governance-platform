@@ -316,9 +316,7 @@ class TestRiskManagementWorkflow:
         risks_data = risks_response.json()
         assert isinstance(risks_data, (list, dict))
         if isinstance(risks_data, dict):
-            assert (
-                "items" in risks_data or "results" in risks_data or "data" in risks_data
-            )
+            assert "items" in risks_data or "results" in risks_data or "data" in risks_data
 
         # Step 2: Get risk register heat map
         heatmap_response = client.get(

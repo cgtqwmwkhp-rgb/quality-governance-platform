@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
     default_retry_delay=30,
     queue="notifications",
 )
-def send_push_notification(
-    self, user_id: int, title: str, body: str, data: dict | None = None
-) -> dict:
+def send_push_notification(self, user_id: int, title: str, body: str, data: dict | None = None) -> dict:
     """Send a push notification to a user."""
     try:
         logger.info("Sending push notification to user %d: %s", user_id, title)

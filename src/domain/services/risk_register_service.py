@@ -51,11 +51,7 @@ class RiskRegisterService:
             conditions.append(EnterpriseRisk.residual_score >= min_score)
         if outside_appetite:
             conditions.append(EnterpriseRisk.is_within_appetite == False)  # noqa: E712
-        return (
-            select(EnterpriseRisk)
-            .where(and_(*conditions))
-            .order_by(EnterpriseRisk.residual_score.desc())
-        )
+        return select(EnterpriseRisk).where(and_(*conditions)).order_by(EnterpriseRisk.residual_score.desc())
 
     # ------------------------------------------------------------------
     # Risk detail
@@ -77,23 +73,17 @@ class RiskRegisterService:
         if not risk:
             raise NotFoundError(f"Risk {risk_id} not found")
 
-        mapping_result = await self.db.execute(
-            select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id)
-        )
+        mapping_result = await self.db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
         control_ids = [m.control_id for m in mapping_result.scalars().all()]
         controls: list[EnterpriseRiskControl] = []
         if control_ids:
             ctrl_result = await self.db.execute(
-                select(EnterpriseRiskControl).where(
-                    EnterpriseRiskControl.id.in_(control_ids)
-                )
+                select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids))
             )
             controls = list(ctrl_result.scalars().all())
 
         kri_result = await self.db.execute(
-            select(EnterpriseKeyRiskIndicator).where(
-                EnterpriseKeyRiskIndicator.risk_id == risk_id
-            )
+            select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id)
         )
         kris = list(kri_result.scalars().all())
 
@@ -116,9 +106,7 @@ class RiskRegisterService:
     # Risk mutations
     # ------------------------------------------------------------------
 
-    async def update_risk(
-        self, risk_id: int, tenant_id: int, updates: dict[str, Any]
-    ) -> EnterpriseRisk:
+    async def update_risk(self, risk_id: int, tenant_id: int, updates: dict[str, Any]) -> EnterpriseRisk:
         """Apply field-level updates to a risk (not scores)."""
         result = await self.db.execute(
             select(EnterpriseRisk).where(
@@ -161,20 +149,13 @@ class RiskRegisterService:
     async def list_controls(self) -> list[EnterpriseRiskControl]:
         """List all active risk controls."""
         result = await self.db.execute(
-            select(EnterpriseRiskControl).where(
-                EnterpriseRiskControl.is_active == True
-            )  # noqa: E712
+            select(EnterpriseRiskControl).where(EnterpriseRiskControl.is_active == True)  # noqa: E712
         )
         return list(result.scalars().all())
 
     async def create_control(self, data: dict[str, Any]) -> EnterpriseRiskControl:
         """Create a control with auto-generated reference."""
-        count = (
-            await self.db.scalar(
-                select(func.count()).select_from(EnterpriseRiskControl)
-            )
-            or 0
-        )
+        count = await self.db.scalar(select(func.count()).select_from(EnterpriseRiskControl)) or 0
         reference = f"CTRL-{(count + 1):04d}"
         control = EnterpriseRiskControl(reference=reference, **data)
         self.db.add(control)
@@ -241,9 +222,7 @@ class RiskRegisterService:
     async def list_appetite_statements(self) -> list[RiskAppetiteStatement]:
         """List active appetite statements."""
         result = await self.db.execute(
-            select(RiskAppetiteStatement).where(
-                RiskAppetiteStatement.is_active == True
-            )  # noqa: E712
+            select(RiskAppetiteStatement).where(RiskAppetiteStatement.is_active == True)  # noqa: E712
         )
         return list(result.scalars().all())
 
@@ -262,11 +241,7 @@ class RiskRegisterService:
         tenant_filter = EnterpriseRisk.tenant_id == tenant_id
         not_closed = EnterpriseRisk.status != "closed"
 
-        total_risks = await db.scalar(
-            select(func.count())
-            .select_from(EnterpriseRisk)
-            .where(tenant_filter, not_closed)
-        )
+        total_risks = await db.scalar(select(func.count()).select_from(EnterpriseRisk).where(tenant_filter, not_closed))
         critical_risks = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
@@ -275,16 +250,12 @@ class RiskRegisterService:
         high_risks = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
-            .where(
-                tenant_filter, EnterpriseRisk.residual_score.between(12, 16), not_closed
-            )
+            .where(tenant_filter, EnterpriseRisk.residual_score.between(12, 16), not_closed)
         )
         medium_risks = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
-            .where(
-                tenant_filter, EnterpriseRisk.residual_score.between(5, 11), not_closed
-            )
+            .where(tenant_filter, EnterpriseRisk.residual_score.between(5, 11), not_closed)
         )
         low_risks = await db.scalar(
             select(func.count())
@@ -294,9 +265,7 @@ class RiskRegisterService:
         outside_appetite = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
-            .where(
-                tenant_filter, EnterpriseRisk.is_within_appetite == False, not_closed
-            )  # noqa: E712
+            .where(tenant_filter, EnterpriseRisk.is_within_appetite == False, not_closed)  # noqa: E712
         )
         overdue_review = await db.scalar(
             select(func.count())
@@ -310,9 +279,7 @@ class RiskRegisterService:
         escalated = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
-            .where(
-                tenant_filter, EnterpriseRisk.is_escalated == True, not_closed
-            )  # noqa: E712
+            .where(tenant_filter, EnterpriseRisk.is_escalated == True, not_closed)  # noqa: E712
         )
 
         result = await db.execute(

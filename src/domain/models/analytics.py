@@ -113,9 +113,7 @@ class Dashboard(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
         return f"<Dashboard(id={self.id}, name={self.name})>"
@@ -181,9 +179,7 @@ class SavedReport(Base):
     report_type: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Configuration
-    dashboard_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("dashboards.id"), nullable=True
-    )
+    dashboard_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dashboards.id"), nullable=True)
     config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     filters: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
@@ -205,9 +201,7 @@ class SavedReport(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
         return f"<SavedReport(id={self.id}, name={self.name})>"
@@ -240,9 +234,7 @@ class BenchmarkData(Base):
     source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Timestamps
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self) -> str:
         return f"<BenchmarkData(category={self.category}, metric={self.metric})>"
@@ -278,9 +270,7 @@ class CostRecord(Base):
     # Dates
     cost_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    created_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     def __repr__(self) -> str:
         return f"<CostRecord(entity={self.entity_type}/{self.entity_id}, amount={self.amount})>"
@@ -304,12 +294,8 @@ class ROIInvestment(Base):
     investment_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     # Expected benefits
-    expected_annual_savings: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
-    expected_incident_reduction: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
+    expected_annual_savings: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    expected_incident_reduction: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     payback_period_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Actual results
@@ -321,12 +307,8 @@ class ROIInvestment(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-    created_by: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     def __repr__(self) -> str:
         return f"<ROIInvestment(id={self.id}, name={self.name})>"

@@ -42,9 +42,7 @@ router = APIRouter()
 class AssetCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     description: Optional[str] = None
-    asset_type: str = Field(
-        ..., description="hardware, software, data, service, people, physical"
-    )
+    asset_type: str = Field(..., description="hardware, software, data, service, people, physical")
     classification: str = Field(default="internal")
     owner_name: Optional[str] = None
     department: Optional[str] = None
@@ -159,12 +157,7 @@ async def list_assets(
         query = query.filter(InformationAsset.criticality == criticality)
 
     total = query.count()
-    assets = (
-        query.order_by(InformationAsset.criticality.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    assets = query.order_by(InformationAsset.criticality.desc()).offset(skip).limit(limit).all()
 
     return {
         "total": total,
@@ -178,9 +171,7 @@ async def list_assets(
                 "criticality": a.criticality,
                 "owner_name": a.owner_name,
                 "department": a.department,
-                "cia_score": a.confidentiality_requirement
-                + a.integrity_requirement
-                + a.availability_requirement,
+                "cia_score": a.confidentiality_requirement + a.integrity_requirement + a.availability_requirement,
             }
             for a in assets
         ],
@@ -239,19 +230,13 @@ async def get_asset(
         "confidentiality_requirement": asset.confidentiality_requirement,
         "integrity_requirement": asset.integrity_requirement,
         "availability_requirement": asset.availability_requirement,
-        "cia_score": asset.confidentiality_requirement
-        + asset.integrity_requirement
-        + asset.availability_requirement,
+        "cia_score": asset.confidentiality_requirement + asset.integrity_requirement + asset.availability_requirement,
         "dependencies": asset.dependencies,
         "dependent_processes": asset.dependent_processes,
         "applied_controls": asset.applied_controls,
         "status": asset.status,
-        "last_review_date": (
-            asset.last_review_date.isoformat() if asset.last_review_date else None
-        ),
-        "next_review_date": (
-            asset.next_review_date.isoformat() if asset.next_review_date else None
-        ),
+        "last_review_date": (asset.last_review_date.isoformat() if asset.last_review_date else None),
+        "next_review_date": (asset.next_review_date.isoformat() if asset.next_review_date else None),
     }
 
 
@@ -261,9 +246,7 @@ async def get_asset(
 @router.get("/controls", response_model=dict)
 async def list_controls(
     current_user: CurrentUser,
-    domain: Optional[str] = Query(
-        None, description="organizational, people, physical, technological"
-    ),
+    domain: Optional[str] = Query(None, description="organizational, people, physical, technological"),
     implementation_status: Optional[str] = Query(None),
     is_applicable: Optional[bool] = Query(None),
     skip: int = Query(0, ge=0),
@@ -276,36 +259,18 @@ async def list_controls(
     if domain:
         query = query.filter(ISO27001Control.domain == domain)
     if implementation_status:
-        query = query.filter(
-            ISO27001Control.implementation_status == implementation_status
-        )
+        query = query.filter(ISO27001Control.implementation_status == implementation_status)
     if is_applicable is not None:
         query = query.filter(ISO27001Control.is_applicable == is_applicable)
 
     total = query.count()
-    controls = (
-        query.order_by(ISO27001Control.control_id).offset(skip).limit(limit).all()
-    )
+    controls = query.order_by(ISO27001Control.control_id).offset(skip).limit(limit).all()
 
     # Summary
-    implemented = (
-        db.query(ISO27001Control)
-        .filter(ISO27001Control.implementation_status == "implemented")
-        .count()
-    )
-    partial = (
-        db.query(ISO27001Control)
-        .filter(ISO27001Control.implementation_status == "partial")
-        .count()
-    )
-    not_impl = (
-        db.query(ISO27001Control)
-        .filter(ISO27001Control.implementation_status == "not_implemented")
-        .count()
-    )
-    excluded = (
-        db.query(ISO27001Control).filter(ISO27001Control.is_applicable == False).count()
-    )
+    implemented = db.query(ISO27001Control).filter(ISO27001Control.implementation_status == "implemented").count()
+    partial = db.query(ISO27001Control).filter(ISO27001Control.implementation_status == "partial").count()
+    not_impl = db.query(ISO27001Control).filter(ISO27001Control.implementation_status == "not_implemented").count()
+    excluded = db.query(ISO27001Control).filter(ISO27001Control.is_applicable == False).count()
 
     return {
         "total": total,
@@ -314,9 +279,7 @@ async def list_controls(
             "partially_implemented": partial,
             "not_implemented": not_impl,
             "excluded": excluded,
-            "implementation_percentage": round(
-                (implemented / max(total - excluded, 1)) * 100, 1
-            ),
+            "implementation_percentage": round((implemented / max(total - excluded, 1)) * 100, 1),
         },
         "controls": [
             {
@@ -371,20 +334,12 @@ async def get_current_soa(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get current Statement of Applicability"""
-    soa = (
-        db.query(StatementOfApplicability)
-        .filter(StatementOfApplicability.is_current == True)
-        .first()
-    )
+    soa = db.query(StatementOfApplicability).filter(StatementOfApplicability.is_current == True).first()
 
     if not soa:
         # Return summary from controls
         total = db.query(ISO27001Control).count()
-        applicable = (
-            db.query(ISO27001Control)
-            .filter(ISO27001Control.is_applicable == True)
-            .count()
-        )
+        applicable = db.query(ISO27001Control).filter(ISO27001Control.is_applicable == True).count()
         implemented = (
             db.query(ISO27001Control)
             .filter(
@@ -401,17 +356,13 @@ async def get_current_soa(
             "applicable_controls": applicable,
             "excluded_controls": total - applicable,
             "implemented_controls": implemented,
-            "implementation_percentage": round(
-                (implemented / max(applicable, 1)) * 100, 1
-            ),
+            "implementation_percentage": round((implemented / max(applicable, 1)) * 100, 1),
         }
 
     return {
         "id": soa.id,
         "version": soa.version,
-        "effective_date": (
-            soa.effective_date.isoformat() if soa.effective_date else None
-        ),
+        "effective_date": (soa.effective_date.isoformat() if soa.effective_date else None),
         "approved_by": soa.approved_by,
         "approved_date": soa.approved_date.isoformat() if soa.approved_date else None,
         "scope_description": soa.scope_description,
@@ -421,9 +372,7 @@ async def get_current_soa(
         "implemented_controls": soa.implemented_controls,
         "partially_implemented": soa.partially_implemented,
         "not_implemented": soa.not_implemented,
-        "implementation_percentage": round(
-            (soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1
-        ),
+        "implementation_percentage": round((soa.implemented_controls / max(soa.applicable_controls, 1)) * 100, 1),
         "status": soa.status,
         "document_link": soa.document_link,
     }
@@ -443,26 +392,17 @@ async def list_security_risks(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List information security risks"""
-    query = db.query(InformationSecurityRisk).filter(
-        InformationSecurityRisk.status != "closed"
-    )
+    query = db.query(InformationSecurityRisk).filter(InformationSecurityRisk.status != "closed")
 
     if status:
         query = query.filter(InformationSecurityRisk.status == status)
     if treatment_option:
-        query = query.filter(
-            InformationSecurityRisk.treatment_option == treatment_option
-        )
+        query = query.filter(InformationSecurityRisk.treatment_option == treatment_option)
     if min_score:
         query = query.filter(InformationSecurityRisk.residual_risk_score >= min_score)
 
     total = query.count()
-    risks = (
-        query.order_by(InformationSecurityRisk.residual_risk_score.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    risks = query.order_by(InformationSecurityRisk.residual_risk_score.desc()).offset(skip).limit(limit).all()
 
     return {
         "total": total,
@@ -535,22 +475,11 @@ async def list_security_incidents(
         query = query.filter(SecurityIncident.incident_type == incident_type)
 
     total = query.count()
-    incidents = (
-        query.order_by(SecurityIncident.detected_date.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    incidents = query.order_by(SecurityIncident.detected_date.desc()).offset(skip).limit(limit).all()
 
     # Summary
-    open_count = (
-        db.query(SecurityIncident).filter(SecurityIncident.status == "open").count()
-    )
-    critical_count = (
-        db.query(SecurityIncident)
-        .filter(SecurityIncident.severity == "critical")
-        .count()
-    )
+    open_count = db.query(SecurityIncident).filter(SecurityIncident.status == "open").count()
+    critical_count = db.query(SecurityIncident).filter(SecurityIncident.severity == "critical").count()
 
     return {
         "total": total,
@@ -564,9 +493,7 @@ async def list_security_incidents(
                 "incident_type": i.incident_type,
                 "severity": i.severity,
                 "status": i.status,
-                "detected_date": (
-                    i.detected_date.isoformat() if i.detected_date else None
-                ),
+                "detected_date": (i.detected_date.isoformat() if i.detected_date else None),
                 "assigned_to_name": i.assigned_to_name,
                 "data_compromised": i.data_compromised,
             }
@@ -609,9 +536,7 @@ async def update_security_incident(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Update security incident"""
-    incident = (
-        db.query(SecurityIncident).filter(SecurityIncident.id == incident_id).first()
-    )
+    incident = db.query(SecurityIncident).filter(SecurityIncident.id == incident_id).first()
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
@@ -643,9 +568,7 @@ async def list_supplier_assessments(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List supplier security assessments"""
-    query = db.query(SupplierSecurityAssessment).filter(
-        SupplierSecurityAssessment.status == "active"
-    )
+    query = db.query(SupplierSecurityAssessment).filter(SupplierSecurityAssessment.status == "active")
 
     if rating:
         query = query.filter(SupplierSecurityAssessment.overall_rating == rating)
@@ -653,12 +576,7 @@ async def list_supplier_assessments(
         query = query.filter(SupplierSecurityAssessment.risk_level == risk_level)
 
     total = query.count()
-    suppliers = (
-        query.order_by(SupplierSecurityAssessment.next_assessment_date)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    suppliers = query.order_by(SupplierSecurityAssessment.next_assessment_date).offset(skip).limit(limit).all()
 
     return {
         "total": total,
@@ -673,11 +591,7 @@ async def list_supplier_assessments(
                 "iso27001_certified": s.iso27001_certified,
                 "soc2_certified": s.soc2_certified,
                 "risk_level": s.risk_level,
-                "next_assessment_date": (
-                    s.next_assessment_date.isoformat()
-                    if s.next_assessment_date
-                    else None
-                ),
+                "next_assessment_date": (s.next_assessment_date.isoformat() if s.next_assessment_date else None),
             }
             for s in suppliers
         ],
@@ -720,9 +634,7 @@ async def get_isms_dashboard(
 ) -> dict[str, Any]:
     """Get ISMS dashboard summary"""
     # Assets
-    total_assets = (
-        db.query(InformationAsset).filter(InformationAsset.is_active == True).count()
-    )
+    total_assets = db.query(InformationAsset).filter(InformationAsset.is_active == True).count()
     critical_assets = (
         db.query(InformationAsset)
         .filter(
@@ -735,20 +647,12 @@ async def get_isms_dashboard(
     # Controls
     total_controls = db.query(ISO27001Control).count()
     implemented_controls = (
-        db.query(ISO27001Control)
-        .filter(ISO27001Control.implementation_status == "implemented")
-        .count()
+        db.query(ISO27001Control).filter(ISO27001Control.implementation_status == "implemented").count()
     )
-    applicable_controls = (
-        db.query(ISO27001Control).filter(ISO27001Control.is_applicable == True).count()
-    )
+    applicable_controls = db.query(ISO27001Control).filter(ISO27001Control.is_applicable == True).count()
 
     # Risks
-    open_risks = (
-        db.query(InformationSecurityRisk)
-        .filter(InformationSecurityRisk.status != "closed")
-        .count()
-    )
+    open_risks = db.query(InformationSecurityRisk).filter(InformationSecurityRisk.status != "closed").count()
     high_risks = (
         db.query(InformationSecurityRisk)
         .filter(
@@ -759,14 +663,10 @@ async def get_isms_dashboard(
     )
 
     # Incidents
-    open_incidents = (
-        db.query(SecurityIncident).filter(SecurityIncident.status == "open").count()
-    )
+    open_incidents = db.query(SecurityIncident).filter(SecurityIncident.status == "open").count()
     incidents_30d = (
         db.query(SecurityIncident)
-        .filter(
-            SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30)
-        )
+        .filter(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
         .count()
     )
 
@@ -789,9 +689,7 @@ async def get_isms_dashboard(
             "total": total_controls,
             "applicable": applicable_controls,
             "implemented": implemented_controls,
-            "implementation_percentage": round(
-                (implemented_controls / max(applicable_controls, 1)) * 100, 1
-            ),
+            "implementation_percentage": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
         },
         "risks": {
             "open": open_risks,
@@ -804,7 +702,5 @@ async def get_isms_dashboard(
         "suppliers": {
             "high_risk": high_risk_suppliers,
         },
-        "compliance_score": round(
-            (implemented_controls / max(applicable_controls, 1)) * 100, 1
-        ),
+        "compliance_score": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
     }

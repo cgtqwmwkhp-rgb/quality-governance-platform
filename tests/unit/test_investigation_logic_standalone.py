@@ -251,28 +251,16 @@ def test_external_pack_redaction():
         },
     }
 
-    content, redaction_log, _ = generate_customer_pack(
-        investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, []
-    )
+    content, redaction_log, _ = generate_customer_pack(investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [])
 
     section = content["sections"]["section_1"]
 
     # Identity fields MUST be redacted
-    assert (
-        section["reporter_name"] == "[Name Redacted]"
-    ), f"reporter_name not redacted: {section['reporter_name']}"
-    assert (
-        section["reporter_email"] == "[Email Redacted]"
-    ), f"reporter_email not redacted: {section['reporter_email']}"
-    assert (
-        section["driver_name"] == "[Name Redacted]"
-    ), f"driver_name not redacted: {section['driver_name']}"
-    assert (
-        section["persons_involved"] == "[Redacted]"
-    ), f"persons_involved not redacted: {section['persons_involved']}"
-    assert (
-        section["witnesses"] == "[Redacted]"
-    ), f"witnesses not redacted: {section['witnesses']}"
+    assert section["reporter_name"] == "[Name Redacted]", f"reporter_name not redacted: {section['reporter_name']}"
+    assert section["reporter_email"] == "[Email Redacted]", f"reporter_email not redacted: {section['reporter_email']}"
+    assert section["driver_name"] == "[Name Redacted]", f"driver_name not redacted: {section['driver_name']}"
+    assert section["persons_involved"] == "[Redacted]", f"persons_involved not redacted: {section['persons_involved']}"
+    assert section["witnesses"] == "[Redacted]", f"witnesses not redacted: {section['witnesses']}"
     print("  ✓ All identity fields redacted")
 
     # Non-identity fields MUST be preserved
@@ -282,9 +270,7 @@ def test_external_pack_redaction():
     print("  ✓ Non-identity fields preserved")
 
     # Redaction log MUST have entries
-    assert (
-        len(redaction_log) >= 5
-    ), f"Expected >= 5 redactions, got {len(redaction_log)}"
+    assert len(redaction_log) >= 5, f"Expected >= 5 redactions, got {len(redaction_log)}"
     print(f"  ✓ Redaction log has {len(redaction_log)} entries")
 
     print("  ✅ EXTERNAL pack redaction correct\n")
@@ -309,9 +295,7 @@ def test_internal_pack_preserves_identities():
         },
     }
 
-    content, redaction_log, _ = generate_customer_pack(
-        investigation, CustomerPackAudience.INTERNAL_CUSTOMER, []
-    )
+    content, redaction_log, _ = generate_customer_pack(investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [])
 
     section = content["sections"]["section_1"]
     assert section["reporter_name"] == "John Smith", "Name should be preserved"
@@ -337,52 +321,31 @@ def test_evidence_visibility_matrix():
 
     # INTERNAL_ONLY - excluded from ALL packs
     asset_internal = {"id": 1, "visibility": EvidenceVisibility.INTERNAL_ONLY}
-    _, _, assets = generate_customer_pack(
-        investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [asset_internal]
-    )
-    assert (
-        assets[0]["included"] is False
-        and assets[0]["exclusion_reason"] == "INTERNAL_ONLY"
-    )
+    _, _, assets = generate_customer_pack(investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [asset_internal])
+    assert assets[0]["included"] is False and assets[0]["exclusion_reason"] == "INTERNAL_ONLY"
     print("  ✓ INTERNAL_ONLY excluded from INTERNAL pack")
 
-    _, _, assets = generate_customer_pack(
-        investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [asset_internal]
-    )
-    assert (
-        assets[0]["included"] is False
-        and assets[0]["exclusion_reason"] == "INTERNAL_ONLY"
-    )
+    _, _, assets = generate_customer_pack(investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [asset_internal])
+    assert assets[0]["included"] is False and assets[0]["exclusion_reason"] == "INTERNAL_ONLY"
     print("  ✓ INTERNAL_ONLY excluded from EXTERNAL pack")
 
     # INTERNAL_CUSTOMER - only in internal pack
     asset_int_cust = {"id": 2, "visibility": EvidenceVisibility.INTERNAL_CUSTOMER}
-    _, _, assets = generate_customer_pack(
-        investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [asset_int_cust]
-    )
+    _, _, assets = generate_customer_pack(investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [asset_int_cust])
     assert assets[0]["included"] is True
     print("  ✓ INTERNAL_CUSTOMER included in INTERNAL pack")
 
-    _, _, assets = generate_customer_pack(
-        investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [asset_int_cust]
-    )
-    assert (
-        assets[0]["included"] is False
-        and assets[0]["exclusion_reason"] == "INTERNAL_CUSTOMER_ONLY"
-    )
+    _, _, assets = generate_customer_pack(investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [asset_int_cust])
+    assert assets[0]["included"] is False and assets[0]["exclusion_reason"] == "INTERNAL_CUSTOMER_ONLY"
     print("  ✓ INTERNAL_CUSTOMER excluded from EXTERNAL pack")
 
     # EXTERNAL_ALLOWED - in both packs
     asset_ext = {"id": 3, "visibility": EvidenceVisibility.EXTERNAL_ALLOWED}
-    _, _, assets = generate_customer_pack(
-        investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [asset_ext]
-    )
+    _, _, assets = generate_customer_pack(investigation, CustomerPackAudience.INTERNAL_CUSTOMER, [asset_ext])
     assert assets[0]["included"] is True
     print("  ✓ EXTERNAL_ALLOWED included in INTERNAL pack")
 
-    _, _, assets = generate_customer_pack(
-        investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [asset_ext]
-    )
+    _, _, assets = generate_customer_pack(investigation, CustomerPackAudience.EXTERNAL_CUSTOMER, [asset_ext])
     assert assets[0]["included"] is True
     print("  ✓ EXTERNAL_ALLOWED included in EXTERNAL pack")
 
@@ -408,9 +371,7 @@ def test_pack_excludes_internal_data():
         content, _, _ = generate_customer_pack(investigation, audience, [])
         assert "comments" not in content, f"comments in {audience.value}"
         assert "revision_events" not in content, f"revision_events in {audience.value}"
-        assert (
-            "revision_history" not in content
-        ), f"revision_history in {audience.value}"
+        assert "revision_history" not in content, f"revision_history in {audience.value}"
         print(f"  ✓ {audience.value} excludes internal data")
 
     print("  ✅ Internal data correctly excluded\n")

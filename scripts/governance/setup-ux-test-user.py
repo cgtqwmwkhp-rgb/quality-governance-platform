@@ -30,9 +30,7 @@ import sys
 from datetime import datetime
 
 # Configure logging - never log sensitive data
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -51,9 +49,7 @@ def check_environment():
 
     if app_env != "staging":
         logger.error(f"❌ Refusing to run: APP_ENV={app_env}, expected 'staging'")
-        logger.error(
-            "This script only runs in staging to prevent accidental production changes."
-        )
+        logger.error("This script only runs in staging to prevent accidental production changes.")
         sys.exit(1)
 
     logger.info("✅ Environment check passed: staging")
@@ -166,17 +162,13 @@ def create_user_instructions(email: str):
     logger.info("")
     logger.info("SQL (example - adapt for your ORM/admin interface):")
     logger.info("")
-    logger.info(
-        "  INSERT INTO users (email, hashed_password, is_active, first_name, last_name)"
-    )
+    logger.info("  INSERT INTO users (email, hashed_password, is_active, first_name, last_name)")
     logger.info("  VALUES ('<email>', '<bcrypt_hash>', true, 'UX', 'TestRunner');")
     logger.info("")
     logger.info("  -- Then assign roles:")
     logger.info("  INSERT INTO user_roles (user_id, role_id)")
     logger.info("  SELECT u.id, r.id FROM users u, roles r")
-    logger.info(
-        "  WHERE u.email = '<email>' AND r.name IN ('user', 'employee', 'admin', 'viewer');"
-    )
+    logger.info("  WHERE u.email = '<email>' AND r.name IN ('user', 'employee', 'admin', 'viewer');")
     logger.info("")
     logger.info("Or use the admin UI to create the user and assign roles.")
     logger.info("")
@@ -185,9 +177,7 @@ def create_user_instructions(email: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Setup UX Test User for Staging")
-    parser.add_argument(
-        "--verify-only", action="store_true", help="Only verify authentication"
-    )
+    parser.add_argument("--verify-only", action="store_true", help="Only verify authentication")
     parser.add_argument("--create", action="store_true", help="Create or update user")
     args = parser.parse_args()
 

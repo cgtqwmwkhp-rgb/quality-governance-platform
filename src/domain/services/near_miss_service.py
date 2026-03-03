@@ -43,9 +43,7 @@ class NearMissService:
         Raises:
             ValueError: If data validation fails.
         """
-        reference_number = await ReferenceNumberService.generate(
-            self.db, "near_miss", NearMiss
-        )
+        reference_number = await ReferenceNumberService.generate(self.db, "near_miss", NearMiss)
 
         near_miss = NearMiss(
             **data.model_dump(),
@@ -86,9 +84,7 @@ class NearMissService:
             LookupError: If the near miss is not found.
         """
         result = await self.db.execute(
-            select(NearMiss).where(
-                NearMiss.id == near_miss_id, NearMiss.tenant_id == tenant_id
-            )
+            select(NearMiss).where(NearMiss.id == near_miss_id, NearMiss.tenant_id == tenant_id)
         )
         near_miss = result.scalar_one_or_none()
         if near_miss is None:

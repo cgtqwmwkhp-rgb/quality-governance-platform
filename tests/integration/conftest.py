@@ -71,9 +71,7 @@ class _MockUser:
         self.tenant_id = tenant_id
         self.last_login = None
         self.azure_oid = None
-        self.roles = (
-            [_MockRole(name=role_name, permissions=permissions)] if permissions else []
-        )
+        self.roles = [_MockRole(name=role_name, permissions=permissions)] if permissions else []
 
     @property
     def full_name(self) -> str:
@@ -290,16 +288,8 @@ async def _seed_default_data():
         from src.infrastructure.database import engine
 
         async with engine.begin() as conn:
-            await conn.execute(
-                text(
-                    "SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"
-                )
-            )
-            await conn.execute(
-                text(
-                    "SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"
-                )
-            )
+            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
+            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
     except Exception:
         pass
 
@@ -553,12 +543,8 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle quarantined tests."""
-    skip_phase34 = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23"
-    )
-    skip_contract = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. Expiry: 2026-03-23"
-    )
+    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23")
+    skip_contract = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. Expiry: 2026-03-23")
 
     for item in items:
         if "phase34" in item.keywords:
