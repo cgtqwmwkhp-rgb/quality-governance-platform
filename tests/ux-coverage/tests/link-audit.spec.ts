@@ -48,6 +48,7 @@ function loadPages(): PageEntry[] {
   const allPages: PageEntry[] = [
     ...(registry.public_routes || []),
     ...(registry.portal_routes || []),
+    ...(registry.workforce_routes || []),
     ...(registry.admin_routes || []),
   ];
   
