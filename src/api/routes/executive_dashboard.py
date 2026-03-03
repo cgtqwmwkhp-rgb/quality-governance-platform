@@ -10,10 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user, get_db
-from src.api.schemas.executive_dashboard import (
-    DashboardSummaryResponse,
-    ExecutiveDashboardResponse,
-)
+from src.api.schemas.executive_dashboard import DashboardSummaryResponse, ExecutiveDashboardResponse
 from src.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])

@@ -16,11 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
-from src.domain.models.investigation import (
-    InvestigationAction,
-    InvestigationActionStatus,
-    InvestigationRun,
-)
+from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric

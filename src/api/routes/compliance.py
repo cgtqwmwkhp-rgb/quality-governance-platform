@@ -14,11 +14,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.domain.services.iso_compliance_service import (
-    EvidenceLink,
-    ISOStandard,
-    iso_compliance_service,
-)
+from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 
 router = APIRouter()
 

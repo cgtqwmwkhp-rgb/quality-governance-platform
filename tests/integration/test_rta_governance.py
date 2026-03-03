@@ -6,12 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.rta import (
-    RoadTrafficCollision,
-    RTAAction,
-    RTASeverity,
-    RTAStatus,
-)
+from src.domain.models.rta import RoadTrafficCollision, RTAAction, RTASeverity, RTAStatus
 
 
 @pytest.mark.asyncio
@@ -242,11 +237,7 @@ async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth
 @pytest.mark.asyncio
 async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dict, test_session):
     """Test that RTA investigations linkage endpoint works and returns deterministic order."""
-    from src.domain.models.investigation import (
-        AssignedEntityType,
-        InvestigationRun,
-        InvestigationTemplate,
-    )
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
     now = datetime.now(timezone.utc)
 
@@ -319,11 +310,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
 async def test_complaint_investigations_linkage(client: AsyncClient, auth_headers: dict, test_session):
     """Test that complaint investigations linkage endpoint works and returns deterministic order."""
     from src.domain.models.complaint import Complaint
-    from src.domain.models.investigation import (
-        AssignedEntityType,
-        InvestigationRun,
-        InvestigationTemplate,
-    )
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
     now = datetime.now(timezone.utc)
 
@@ -426,11 +413,7 @@ async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dic
 @pytest.mark.asyncio
 async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
     """Test that RTA investigations pagination fields are correct."""
-    from src.domain.models.investigation import (
-        AssignedEntityType,
-        InvestigationRun,
-        InvestigationTemplate,
-    )
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
     now = datetime.now(timezone.utc)
 
@@ -566,11 +549,7 @@ async def test_rta_investigations_invalid_page_size_param(client: AsyncClient, a
 async def test_complaint_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
     """Test that complaint investigations pagination fields are correct."""
     from src.domain.models.complaint import Complaint
-    from src.domain.models.investigation import (
-        AssignedEntityType,
-        InvestigationRun,
-        InvestigationTemplate,
-    )
+    from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
     now = datetime.now(timezone.utc)
 

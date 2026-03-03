@@ -17,11 +17,7 @@ from typing import Any, Optional
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
-from src.domain.models.audit_log import (
-    AuditLogEntry,
-    AuditLogExport,
-    AuditLogVerification,
-)
+from src.domain.models.audit_log import AuditLogEntry, AuditLogExport, AuditLogVerification
 
 
 class AuditLogService:

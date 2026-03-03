@@ -12,21 +12,11 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.assessment import AssessmentRun
-from src.domain.models.capa import (
-    CAPAAction,
-    CAPAPriority,
-    CAPASource,
-    CAPAStatus,
-    CAPAType,
-)
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.induction import InductionRun
-from src.domain.models.investigation import (
-    InvestigationAction,
-    InvestigationActionStatus,
-    InvestigationRun,
-)
+from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 

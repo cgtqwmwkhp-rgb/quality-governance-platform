@@ -14,18 +14,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.complaint import (
-    Complaint,
-    ComplaintPriority,
-    ComplaintStatus,
-    ComplaintType,
-)
-from src.domain.models.incident import (
-    Incident,
-    IncidentSeverity,
-    IncidentStatus,
-    IncidentType,
-)
+from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 from src.domain.services.reference_number import ReferenceNumberService

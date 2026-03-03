@@ -485,11 +485,7 @@ class TestActionLifecycleWorkflow:
     async def test_create_action_for_investigation(self, client: AsyncClient, auth_headers: dict, test_session):
         """Create an action linked to an investigation and verify it persists."""
         # First create an investigation template and run
-        from src.domain.models.investigation import (
-            AssignedEntityType,
-            InvestigationRun,
-            InvestigationTemplate,
-        )
+        from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
         template = InvestigationTemplate(
             name="Lifecycle Test Template",
@@ -538,11 +534,7 @@ class TestActionLifecycleWorkflow:
     async def test_update_action_status_to_in_progress(self, client: AsyncClient, auth_headers: dict, test_session):
         """Update action status from open to in_progress."""
         # First create the investigation and action
-        from src.domain.models.investigation import (
-            AssignedEntityType,
-            InvestigationRun,
-            InvestigationTemplate,
-        )
+        from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
         template = InvestigationTemplate(
             name="Status Update Test Template",
@@ -593,11 +585,7 @@ class TestActionLifecycleWorkflow:
     @pytest.mark.asyncio
     async def test_complete_action_with_notes(self, client: AsyncClient, auth_headers: dict, test_session):
         """Mark action as completed with completion notes and verify persistence."""
-        from src.domain.models.investigation import (
-            AssignedEntityType,
-            InvestigationRun,
-            InvestigationTemplate,
-        )
+        from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
         template = InvestigationTemplate(
             name="Complete Action Test Template",
@@ -662,11 +650,7 @@ class TestActionLifecycleWorkflow:
         self, client: AsyncClient, auth_headers: dict, test_session
     ):
         """Changing status from completed to another status clears completed_at."""
-        from src.domain.models.investigation import (
-            AssignedEntityType,
-            InvestigationRun,
-            InvestigationTemplate,
-        )
+        from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
         template = InvestigationTemplate(
             name="Status Clear Test Template",
@@ -720,11 +704,7 @@ class TestActionLifecycleWorkflow:
     @pytest.mark.asyncio
     async def test_list_actions_shows_updated_status(self, client: AsyncClient, auth_headers: dict, test_session):
         """Verify that list endpoint shows actions with updated status."""
-        from src.domain.models.investigation import (
-            AssignedEntityType,
-            InvestigationRun,
-            InvestigationTemplate,
-        )
+        from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
         template = InvestigationTemplate(
             name="List Status Test Template",

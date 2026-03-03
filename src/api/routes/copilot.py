@@ -7,14 +7,7 @@ Interactive conversational AI assistant for QHSE management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 

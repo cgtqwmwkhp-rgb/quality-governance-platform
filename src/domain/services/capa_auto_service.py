@@ -10,13 +10,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.capa import (
-    CAPAAction,
-    CAPAPriority,
-    CAPASource,
-    CAPAStatus,
-    CAPAType,
-)
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)

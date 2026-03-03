@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.audit import (
+    ArchiveTemplateResponse,
     AuditQuestionCreate,
     AuditQuestionResponse,
     AuditQuestionUpdate,
@@ -24,7 +25,6 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
-    ArchiveTemplateResponse,
 )
 from src.domain.services.audit_service import AuditService
 

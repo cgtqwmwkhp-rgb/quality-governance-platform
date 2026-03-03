@@ -15,15 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.exceptions import NotFoundError
-from src.domain.models.asset import (
-    Asset,
-    AssetCategory,
-    AssetStatus,
-    AssetType,
-    TemplateAssetType,
-)
+from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType, TemplateAssetType
 from src.domain.models.audit import AuditTemplate
-
 
 # ---------------------------------------------------------------------------
 # Value objects

@@ -8,12 +8,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.policy import (
-    PolicyCreate,
-    PolicyListResponse,
-    PolicyResponse,
-    PolicyUpdate,
-)
+from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
 

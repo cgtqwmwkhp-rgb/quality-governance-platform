@@ -6,12 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.incident import (
-    Incident,
-    IncidentSeverity,
-    IncidentStatus,
-    IncidentType,
-)
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 
 
 @pytest.mark.asyncio

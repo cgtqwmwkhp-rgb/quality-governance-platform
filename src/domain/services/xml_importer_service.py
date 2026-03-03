@@ -7,10 +7,9 @@ compatible with AuditService.create_template(), create_section(), and create_que
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
-
-import xml.etree.ElementTree as ET
 
 import defusedxml.ElementTree as SafeET
 

@@ -9,12 +9,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.near_miss import (
-    NearMissCreate,
-    NearMissListResponse,
-    NearMissResponse,
-    NearMissUpdate,
-)
+from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 

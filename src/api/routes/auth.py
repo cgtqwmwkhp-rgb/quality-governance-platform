@@ -17,10 +17,7 @@ from src.api.schemas.auth import (
     TokenResponse,
 )
 from src.api.schemas.user import UserResponse
-from src.core.azure_auth import (
-    extract_user_info_from_azure_token,
-    validate_azure_id_token,
-)
+from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
     create_access_token,
     create_password_reset_token,

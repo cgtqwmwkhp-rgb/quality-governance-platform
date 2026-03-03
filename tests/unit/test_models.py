@@ -363,9 +363,7 @@ class TestInvestigationModel:
         try:
             from src.domain.models.investigation import Investigation
         except ImportError:
-            from src.domain.models.investigation import (
-                InvestigationRun as Investigation,
-            )
+            from src.domain.models.investigation import InvestigationRun as Investigation
 
         assert Investigation is not None
 

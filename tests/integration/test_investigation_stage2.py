@@ -80,11 +80,7 @@ class TestCustomerPackRedactionRules:
 
     async def test_external_pack_redacts_identity_fields(self):
         """Test EXTERNAL_CUSTOMER packs redact identity fields by default."""
-        from src.domain.models.investigation import (
-            CustomerPackAudience,
-            InvestigationLevel,
-            InvestigationStatus,
-        )
+        from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
         from src.services.investigation_service import InvestigationService
 
         # Create a mock investigation
@@ -132,11 +128,7 @@ class TestCustomerPackRedactionRules:
 
     async def test_internal_pack_preserves_identity_fields(self):
         """Test INTERNAL_CUSTOMER packs preserve identity fields."""
-        from src.domain.models.investigation import (
-            CustomerPackAudience,
-            InvestigationLevel,
-            InvestigationStatus,
-        )
+        from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
         from src.services.investigation_service import InvestigationService
 
         class MockInvestigation:
@@ -175,11 +167,7 @@ class TestCustomerPackRedactionRules:
         """Test customer packs never include internal comments."""
         # Comments are stored in investigation_comments table, not in investigation.data
         # The pack generation only uses investigation.data, so comments are automatically excluded
-        from src.domain.models.investigation import (
-            CustomerPackAudience,
-            InvestigationLevel,
-            InvestigationStatus,
-        )
+        from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
         from src.services.investigation_service import InvestigationService
 
         class MockInvestigation:
@@ -213,15 +201,8 @@ class TestEvidenceAssetVisibilityMatrix:
 
     async def test_internal_only_excluded_from_all_packs(self):
         """Test INTERNAL_ONLY assets are excluded from all customer packs."""
-        from src.domain.models.evidence_asset import (
-            EvidenceAssetType,
-            EvidenceVisibility,
-        )
-        from src.domain.models.investigation import (
-            CustomerPackAudience,
-            InvestigationLevel,
-            InvestigationStatus,
-        )
+        from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
+        from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
         from src.services.investigation_service import InvestigationService
 
         class MockAsset:
@@ -260,15 +241,8 @@ class TestEvidenceAssetVisibilityMatrix:
 
     async def test_internal_customer_assets_in_internal_pack_only(self):
         """Test INTERNAL_CUSTOMER assets only in internal packs."""
-        from src.domain.models.evidence_asset import (
-            EvidenceAssetType,
-            EvidenceVisibility,
-        )
-        from src.domain.models.investigation import (
-            CustomerPackAudience,
-            InvestigationLevel,
-            InvestigationStatus,
-        )
+        from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
+        from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
         from src.services.investigation_service import InvestigationService
 
         class MockAsset:
@@ -310,15 +284,8 @@ class TestEvidenceAssetVisibilityMatrix:
 
     async def test_external_allowed_assets_in_both_packs(self):
         """Test EXTERNAL_ALLOWED assets in both packs."""
-        from src.domain.models.evidence_asset import (
-            EvidenceAssetType,
-            EvidenceVisibility,
-        )
-        from src.domain.models.investigation import (
-            CustomerPackAudience,
-            InvestigationLevel,
-            InvestigationStatus,
-        )
+        from src.domain.models.evidence_asset import EvidenceAssetType, EvidenceVisibility
+        from src.domain.models.investigation import CustomerPackAudience, InvestigationLevel, InvestigationStatus
         from src.services.investigation_service import InvestigationService
 
         class MockAsset:

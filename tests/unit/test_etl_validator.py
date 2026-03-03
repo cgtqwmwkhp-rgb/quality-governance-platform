@@ -6,12 +6,7 @@ Stage 10: Data Foundation
 import pytest
 
 from scripts.etl.config import INCIDENT_MAPPINGS, EntityType
-from scripts.etl.validator import (
-    ValidationResult,
-    ValidationSeverity,
-    validate_record,
-    validate_records,
-)
+from scripts.etl.validator import ValidationResult, ValidationSeverity, validate_record, validate_records
 
 
 class TestValidateRecord:

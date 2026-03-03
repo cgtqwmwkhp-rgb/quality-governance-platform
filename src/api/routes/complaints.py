@@ -8,12 +8,7 @@ from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
-from src.api.schemas.complaint import (
-    ComplaintCreate,
-    ComplaintListResponse,
-    ComplaintResponse,
-    ComplaintUpdate,
-)
+from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
 

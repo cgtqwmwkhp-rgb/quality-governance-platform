@@ -5,9 +5,9 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, TimestampMixin

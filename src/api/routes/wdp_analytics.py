@@ -4,11 +4,7 @@ from fastapi import APIRouter
 from sqlalchemy import case, func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.analytics import (
-    WDPAnalyticsSummaryResponse,
-    WDPEngineerMatrixResponse,
-    WDPTrendsResponse,
-)
+from src.api.schemas.analytics import WDPAnalyticsSummaryResponse, WDPEngineerMatrixResponse, WDPTrendsResponse
 
 router = APIRouter()
 
@@ -25,11 +21,7 @@ def _tenant_filter(model, tenant_id):
 async def get_wdp_summary(db: DbSession, user: CurrentUser):
     """Get summary KPIs for the workforce development dashboard."""
     from src.domain.models.assessment import AssessmentRun, AssessmentStatus
-    from src.domain.models.engineer import (
-        CompetencyLifecycleState,
-        CompetencyRecord,
-        Engineer,
-    )
+    from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
     from src.domain.models.induction import InductionRun, InductionStatus
 
     tenant_filter_eng = _tenant_filter(Engineer, user.tenant_id)

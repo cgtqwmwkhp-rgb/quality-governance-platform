@@ -5,11 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from src.domain.models.complaint import (
-    ComplaintPriority,
-    ComplaintStatus,
-    ComplaintType,
-)
+from src.domain.models.complaint import ComplaintPriority, ComplaintStatus, ComplaintType
 
 
 class ComplaintBase(BaseModel):

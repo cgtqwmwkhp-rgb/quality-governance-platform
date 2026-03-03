@@ -15,12 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.core.security import get_password_hash
-from src.domain.models.incident import (
-    Incident,
-    IncidentSeverity,
-    IncidentStatus,
-    IncidentType,
-)
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
 

@@ -268,10 +268,7 @@ class IMSDashboardService:
     async def get_compliance_coverage(self) -> dict[str, Any]:
         """Return compliance evidence coverage statistics."""
         from src.domain.models.compliance_evidence import ComplianceEvidenceLink
-        from src.domain.services.iso_compliance_service import (
-            EvidenceLink,
-            iso_compliance_service,
-        )
+        from src.domain.services.iso_compliance_service import EvidenceLink, iso_compliance_service
 
         result = await self._db.execute(select(ComplianceEvidenceLink))
         links_raw = list(result.scalars().all())

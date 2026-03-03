@@ -21,6 +21,7 @@ from src.api.schemas.assessment import (
     AssessmentRunResponse,
     AssessmentRunUpdate,
 )
+from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.assessment import (
     AssessmentOutcome,
     AssessmentResponse,
@@ -28,19 +29,11 @@ from src.domain.models.assessment import (
     AssessmentStatus,
     CompetencyVerdict,
 )
-from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.audit import AuditTemplate
-from src.domain.models.engineer import (
-    CompetencyRecord,
-    CompetencyLifecycleState,
-    Engineer,
-)
+from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
-from src.domain.services.governance_service import (
-    GovernanceService,
-    NotificationService,
-)
+from src.domain.services.governance_service import GovernanceService, NotificationService
 
 router = APIRouter()
 

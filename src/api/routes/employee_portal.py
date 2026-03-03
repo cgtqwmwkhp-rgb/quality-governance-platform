@@ -16,18 +16,8 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
-from src.domain.models.complaint import (
-    Complaint,
-    ComplaintPriority,
-    ComplaintStatus,
-    ComplaintType,
-)
-from src.domain.models.incident import (
-    Incident,
-    IncidentSeverity,
-    IncidentStatus,
-    IncidentType,
-)
+from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 

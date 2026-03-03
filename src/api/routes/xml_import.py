@@ -8,7 +8,7 @@ import os
 import tempfile
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, status, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession

@@ -6,9 +6,9 @@ from src.api.routes import (
     actions,
     ai_intelligence,
     ai_templates,
+    analytics,
     assessments,
     assets,
-    analytics,
     audit_templates,
     audit_trail,
     auditor_competence,
@@ -22,10 +22,10 @@ from src.api.routes import (
     document_control,
     documents,
     employee_portal,
+    engineers,
     evidence_assets,
     executive_dashboard,
     form_config,
-    engineers,
     governance,
     incidents,
     inductions,
@@ -52,8 +52,8 @@ from src.api.routes import (
     uvdb,
     wdp_analytics,
     workflow,
-    xml_import,
     workflows,
+    xml_import,
 )
 
 router = APIRouter()

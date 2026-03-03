@@ -13,11 +13,7 @@ from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
-from src.api.exceptions import (
-    generic_exception_handler,
-    http_exception_handler,
-    validation_exception_handler,
-)
+from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware

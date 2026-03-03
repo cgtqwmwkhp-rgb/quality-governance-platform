@@ -22,11 +22,7 @@ from src.domain.exceptions import (
     StateTransitionError,
     ValidationError,
 )
-from src.domain.models.evidence_asset import (
-    EvidenceAsset,
-    EvidenceSourceModule,
-    EvidenceVisibility,
-)
+from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.investigation import (
     AssignedEntityType,
     CustomerPackAudience,

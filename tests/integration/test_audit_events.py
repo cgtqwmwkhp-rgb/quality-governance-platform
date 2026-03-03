@@ -10,12 +10,7 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.incident import (
-    Incident,
-    IncidentSeverity,
-    IncidentStatus,
-    IncidentType,
-)
+from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 
 
 @pytest.fixture

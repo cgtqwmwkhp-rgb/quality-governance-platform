@@ -493,13 +493,7 @@ class TestModelValidation:
 
     def test_workflow_rule_creation(self):
         """Test WorkflowRule model creation."""
-        from src.domain.models.workflow_rules import (
-            ActionType,
-            EntityType,
-            RuleType,
-            TriggerEvent,
-            WorkflowRule,
-        )
+        from src.domain.models.workflow_rules import ActionType, EntityType, RuleType, TriggerEvent, WorkflowRule
 
         rule = WorkflowRule(
             name="Test Rule",
@@ -536,10 +530,7 @@ class TestModelValidation:
 
     def test_policy_acknowledgment_requirement_creation(self):
         """Test PolicyAcknowledgmentRequirement model."""
-        from src.domain.models.policy_acknowledgment import (
-            AcknowledgmentType,
-            PolicyAcknowledgmentRequirement,
-        )
+        from src.domain.models.policy_acknowledgment import AcknowledgmentType, PolicyAcknowledgmentRequirement
 
         req = PolicyAcknowledgmentRequirement(
             policy_id=1,

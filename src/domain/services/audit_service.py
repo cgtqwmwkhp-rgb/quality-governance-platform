@@ -34,10 +34,7 @@ from src.domain.models.audit_log import AuditEvent
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import (
-    track_business_event,
-    track_metric,
-)
+from src.infrastructure.monitoring.azure_monitor import track_business_event, track_metric
 
 try:
     from opentelemetry import trace

@@ -122,12 +122,8 @@ class GovernanceService:
         Returns gate status and any missing/expired competencies.
         If tenant_id provided, engineer and records must belong to tenant.
         """
-        from src.domain.models.engineer import (
-            CompetencyRecord,
-            CompetencyLifecycleState,
-        )
         from src.domain.models.asset import AssetType
-        from src.domain.models.engineer import Engineer
+        from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
 
         # Verify engineer belongs to tenant
         if tenant_id is not None:
@@ -205,10 +201,7 @@ class GovernanceService:
 
         Returns competency records that are due or expiring soon.
         """
-        from src.domain.models.engineer import (
-            CompetencyRecord,
-            CompetencyLifecycleState,
-        )
+        from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord
 
         stmt = select(CompetencyRecord).where(
             CompetencyRecord.engineer_id == engineer_id,
@@ -267,11 +260,7 @@ class NotificationService:
         outcome: str,
     ) -> None:
         """Create notifications when an assessment is completed."""
-        from src.domain.models.notification import (
-            Notification,
-            NotificationPriority,
-            NotificationType,
-        )
+        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
 
         messages = {
             "pass": "Your competency assessment has been marked as PASS.",
@@ -314,11 +303,7 @@ class NotificationService:
         not_yet_competent_count: int,
     ) -> None:
         """Create notifications when an induction is completed."""
-        from src.domain.models.notification import (
-            Notification,
-            NotificationPriority,
-            NotificationType,
-        )
+        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
 
         if not_yet_competent_count > 0:
             msg = f"Your induction has been completed with {not_yet_competent_count} item(s) marked as 'Not Yet Competent'. CAPA actions will be generated."
@@ -350,11 +335,7 @@ class NotificationService:
         days_until_expiry: int,
     ) -> None:
         """Create notification for upcoming competency expiry."""
-        from src.domain.models.notification import (
-            Notification,
-            NotificationPriority,
-            NotificationType,
-        )
+        from src.domain.models.notification import Notification, NotificationPriority, NotificationType
 
         notification = Notification(
             user_id=engineer_id,

@@ -15,17 +15,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    Column,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-)
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin

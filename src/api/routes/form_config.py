@@ -34,14 +34,7 @@ from src.api.schemas.form_config import (
     SystemSettingResponse,
     SystemSettingUpdate,
 )
-from src.domain.models.form_config import (
-    Contract,
-    FormField,
-    FormStep,
-    FormTemplate,
-    LookupOption,
-    SystemSetting,
-)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()

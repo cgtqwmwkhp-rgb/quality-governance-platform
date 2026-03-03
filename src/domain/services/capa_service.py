@@ -14,13 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.capa import (
-    CAPAAction,
-    CAPAPriority,
-    CAPASource,
-    CAPAStatus,
-    CAPAType,
-)
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache

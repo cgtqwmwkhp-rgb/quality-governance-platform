@@ -12,16 +12,11 @@ try:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: F401
     from opentelemetry.metrics import Counter, Histogram, UpDownCounter  # noqa: F401
     from opentelemetry.sdk.metrics import MeterProvider  # noqa: F401
-    from opentelemetry.sdk.metrics.export import (
-        PeriodicExportingMetricReader,
-    )  # noqa: F401
+    from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader  # noqa: F401
     from opentelemetry.sdk.resources import Resource  # noqa: F401
     from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
     from opentelemetry.sdk.trace.export import BatchSpanProcessor  # noqa: F401
-    from opentelemetry.sdk.trace.sampling import (
-        ParentBased,
-        TraceIdRatioBased,
-    )  # noqa: F401
+    from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased  # noqa: F401
 
     _HAS_OTEL = True
 except ImportError:
@@ -122,10 +117,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     connection_string = settings.applicationinsights_connection_string or None
     if connection_string:
         try:
-            from azure.monitor.opentelemetry.exporter import (
-                AzureMonitorMetricExporter,
-                AzureMonitorTraceExporter,
-            )
+            from azure.monitor.opentelemetry.exporter import AzureMonitorMetricExporter, AzureMonitorTraceExporter
 
             trace_exporter = AzureMonitorTraceExporter(connection_string=connection_string)
             tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))

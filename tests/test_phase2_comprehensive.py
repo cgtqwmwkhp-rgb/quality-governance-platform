@@ -296,10 +296,7 @@ class TestAuditorCertification:
 
     def test_certification_creation(self):
         """Test creating a certification."""
-        from src.domain.models.auditor_competence import (
-            AuditorCertification,
-            CertificationStatus,
-        )
+        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
 
         cert = AuditorCertification(
             profile_id=1,
@@ -315,10 +312,7 @@ class TestAuditorCertification:
 
     def test_certification_validity_check(self):
         """Test certification validity checking."""
-        from src.domain.models.auditor_competence import (
-            AuditorCertification,
-            CertificationStatus,
-        )
+        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
 
         # Valid certification
         valid_cert = AuditorCertification(
@@ -346,10 +340,7 @@ class TestAuditorCertification:
 
     def test_days_until_expiry(self):
         """Test days until expiry calculation."""
-        from src.domain.models.auditor_competence import (
-            AuditorCertification,
-            CertificationStatus,
-        )
+        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
 
         cert = AuditorCertification(
             profile_id=1,
@@ -441,10 +432,7 @@ class TestAuditAssignmentCriteria:
 
     def test_criteria_creation(self):
         """Test creating assignment criteria."""
-        from src.domain.models.auditor_competence import (
-            AuditAssignmentCriteria,
-            CompetenceLevel,
-        )
+        from src.domain.models.auditor_competence import AuditAssignmentCriteria, CompetenceLevel
 
         criteria = AuditAssignmentCriteria(
             audit_type="ISO 9001 Certification Audit",
@@ -521,11 +509,7 @@ class TestCompetenceIntegration:
 
     def test_auditor_qualification_check(self):
         """Test checking if auditor meets criteria."""
-        from src.domain.models.auditor_competence import (
-            AuditAssignmentCriteria,
-            AuditorProfile,
-            CompetenceLevel,
-        )
+        from src.domain.models.auditor_competence import AuditAssignmentCriteria, AuditorProfile, CompetenceLevel
 
         # Define criteria
         criteria = AuditAssignmentCriteria(
@@ -587,10 +571,7 @@ class TestEdgeCases:
 
     def test_certification_no_expiry(self):
         """Test certification without expiry date."""
-        from src.domain.models.auditor_competence import (
-            AuditorCertification,
-            CertificationStatus,
-        )
+        from src.domain.models.auditor_competence import AuditorCertification, CertificationStatus
 
         cert = AuditorCertification(
             profile_id=1,

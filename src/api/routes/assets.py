@@ -8,7 +8,6 @@ from typing import Optional
 from fastapi import APIRouter, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.models.asset import AssetType
 from src.api.schemas.asset import (
     AssetCreate,
     AssetListResponse,
@@ -21,6 +20,7 @@ from src.api.schemas.asset import (
     AuditTemplateSummaryResponse,
     TemplateListResponse,
 )
+from src.domain.models.asset import AssetType
 from src.domain.services.asset_service import AssetService
 
 router = APIRouter()

@@ -13,12 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import (
-    CurrentSuperuser,
-    CurrentUser,
-    DbSession,
-    require_permission,
-)
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,

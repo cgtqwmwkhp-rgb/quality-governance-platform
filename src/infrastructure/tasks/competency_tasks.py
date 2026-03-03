@@ -21,6 +21,7 @@ def check_competency_expiry(self) -> dict:
     triggers notifications for engineers and their supervisors.
     """
     from sqlalchemy import update
+
     from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord
     from src.infrastructure.database import SessionLocal
 

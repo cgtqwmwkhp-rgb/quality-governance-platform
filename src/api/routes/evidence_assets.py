@@ -598,11 +598,7 @@ async def download_file_direct(
 
     from fastapi.responses import Response
 
-    from src.infrastructure.storage import (
-        LocalFileStorageService,
-        StorageError,
-        storage_service,
-    )
+    from src.infrastructure.storage import LocalFileStorageService, StorageError, storage_service
 
     # Only allow this endpoint for local storage
     svc = storage_service()

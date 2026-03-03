@@ -23,13 +23,7 @@ from src.domain.models.assessment import (
     AssessmentStatus,
     CompetencyVerdict,
 )
-from src.domain.models.asset import (
-    Asset,
-    AssetCategory,
-    AssetStatus,
-    AssetType,
-    TemplateAssetType,
-)
+from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType, TemplateAssetType
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -44,12 +38,7 @@ from src.domain.models.audit import (
     TemplateLifecycleStatus,
     TemplateVersion,
 )
-from src.domain.models.base import (
-    AuditTrailMixin,
-    ReferenceNumberMixin,
-    SoftDeleteMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.complaint import Complaint, ComplaintAction
 
 # Digital Signatures (Tier 2)
@@ -59,14 +48,6 @@ from src.domain.models.digital_signature import (
     SignatureRequest,
     SignatureRequestSigner,
     SignatureTemplate,
-)
-from src.domain.models.engineer import (
-    CompetencyLifecycleState,
-    CompetencyRecord,
-    CompetencyRequirement,
-    Engineer,
-    OnboardingChecklist,
-    OnboardingStatus,
 )
 from src.domain.models.document import (
     Document,
@@ -89,6 +70,14 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
+from src.domain.models.engineer import (
+    CompetencyLifecycleState,
+    CompetencyRecord,
+    CompetencyRequirement,
+    Engineer,
+    OnboardingChecklist,
+    OnboardingStatus,
+)
 
 # Evidence Assets (Shared Attachments Module)
 from src.domain.models.evidence_asset import (
@@ -100,14 +89,7 @@ from src.domain.models.evidence_asset import (
 )
 
 # Form Configuration (Admin Form Builder)
-from src.domain.models.form_config import (
-    Contract,
-    FormField,
-    FormStep,
-    FormTemplate,
-    LookupOption,
-    SystemSetting,
-)
+from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 
 # IMS Unification (Tier 1)
 from src.domain.models.ims_unification import (
@@ -122,12 +104,6 @@ from src.domain.models.ims_unification import (
     UnifiedAuditPlan,
 )
 from src.domain.models.incident import Incident, IncidentAction
-from src.domain.models.loler import (
-    LOLERDefect,
-    LOLERDefectCategory,
-    LOLERExamination,
-    LOLERExaminationType,
-)
 from src.domain.models.induction import (
     InductionResponse,
     InductionRun,
@@ -161,6 +137,7 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
 
 # Planet Mark Carbon Management
 from src.domain.models.planet_mark import (

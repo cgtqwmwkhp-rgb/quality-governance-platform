@@ -13,13 +13,7 @@ Uses deterministic seed data for repeatability.
 from typing import Any, Dict
 
 import pytest
-from conftest import (
-    UATApiClient,
-    UATConfig,
-    assert_no_pii,
-    assert_stable_ordering,
-    assert_uat_reference,
-)
+from conftest import UATApiClient, UATConfig, assert_no_pii, assert_stable_ordering, assert_uat_reference
 
 pytestmark = [
     pytest.mark.e2e,

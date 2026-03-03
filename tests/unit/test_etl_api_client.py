@@ -19,11 +19,7 @@ from unittest.mock import MagicMock, patch
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.etl.api_client import (
-    ETLAPIClient,
-    ImportRecord,
-    ImportResult,
-)  # noqa: E402
+from scripts.etl.api_client import ETLAPIClient, ImportRecord, ImportResult  # noqa: E402
 
 
 class TestETLAPIClient(unittest.TestCase):

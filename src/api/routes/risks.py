@@ -23,12 +23,7 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
-from src.domain.models.risk import (
-    OperationalRiskControl,
-    Risk,
-    RiskAssessment,
-    RiskStatus,
-)
+from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.services.reference_number import ReferenceNumberService
 
 router = APIRouter()

@@ -27,11 +27,7 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
-from src.domain.services.document_ai_service import (
-    DocumentAIService,
-    EmbeddingService,
-    VectorSearchService,
-)
+from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 
 router = APIRouter()
 

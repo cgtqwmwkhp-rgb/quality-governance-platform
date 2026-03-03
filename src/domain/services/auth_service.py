@@ -13,10 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.azure_auth import (
-    extract_user_info_from_azure_token,
-    validate_azure_id_token,
-)
+from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.config import settings
 from src.core.security import (
     create_access_token,

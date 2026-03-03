@@ -435,9 +435,7 @@ class TestComplianceAutomationService:
 
     def test_compliance_automation_import(self):
         """Compliance automation service can be imported."""
-        from src.domain.services.compliance_automation_service import (
-            ComplianceAutomationService,
-        )
+        from src.domain.services.compliance_automation_service import ComplianceAutomationService
 
         assert ComplianceAutomationService is not None
 
