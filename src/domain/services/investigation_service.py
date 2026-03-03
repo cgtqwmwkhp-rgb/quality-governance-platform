@@ -900,7 +900,10 @@ class InvestigationService:
             investigation.status = InvestigationStatus(new_status)
             InvestigationStatusManager.apply_status_timestamps(investigation, new_status)
 
+        _protected = {"id", "tenant_id", "created_at", "created_by_id", "deleted_at"}
         for key, value in updates.items():
+            if key in _protected:
+                continue
             setattr(investigation, key, value)
 
         investigation.updated_by_id = user_id

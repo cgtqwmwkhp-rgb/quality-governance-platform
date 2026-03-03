@@ -3,6 +3,7 @@
 Handles DomainError subclasses, HTTPException, RequestValidationError,
 and uncaught exceptions — all with a unified error envelope.
 """
+from __future__ import annotations
 
 import logging
 import traceback

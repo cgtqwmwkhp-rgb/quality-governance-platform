@@ -96,17 +96,23 @@ class Settings(BaseSettings):
     # Production SWA origins must be listed explicitly (no wildcards)
     # Regex in main.py serves as fallback for staging/preview environments
     cors_origins: List[str] = [
-        # Local development
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:5173",
         # Production Azure Static Web App (custom domain style)
         "https://app-qgp-prod.azurestaticapps.net",
         # Production Azure Static Web App (auto-generated style)
         "https://purple-water-03205fa03.6.azurestaticapps.net",
-        # Staging Azure Static Web App (if different)
-        # Add staging origin here when deployed
     ]
+
+    @property
+    def effective_cors_origins(self) -> List[str]:
+        """Return CORS origins appropriate for the current environment."""
+        origins = list(self.cors_origins)
+        if self.app_env != "production":
+            origins.extend([
+                "http://localhost:3000",
+                "http://localhost:8080",
+                "http://localhost:5173",
+            ])
+        return origins
 
     # Logging
     log_level: str = "INFO"

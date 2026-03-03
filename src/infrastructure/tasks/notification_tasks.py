@@ -1,4 +1,5 @@
 """Push notification batch tasks."""
+from __future__ import annotations
 
 import logging
 

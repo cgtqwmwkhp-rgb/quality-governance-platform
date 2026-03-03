@@ -1,10 +1,12 @@
 """Investigation Run API routes."""
+from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +20,27 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
+
+
+class AutosaveRequest(BaseModel):
+    data: dict
+    version: int
+
+
+class CommentCreateRequest(BaseModel):
+    content: str
+    section_id: str | None = None
+    field_id: str | None = None
+    parent_comment_id: int | None = None
+
+
+class CustomerPackRequest(BaseModel):
+    audience: str = Field(..., description="internal_customer or external_customer")
 from src.domain.models.investigation import (
     AssignedEntityType,
+    InvestigationComment,
+    InvestigationCustomerPack,
+    InvestigationRevisionEvent,
     InvestigationRun,
     InvestigationStatus,
     InvestigationTemplate,
@@ -710,8 +731,7 @@ async def list_source_records(
 @router.patch("/{investigation_id}/autosave", response_model=InvestigationRunResponse)
 async def autosave_investigation(
     investigation_id: int,
-    data: dict,
-    version: int,
+    body: AutosaveRequest,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -740,14 +760,14 @@ async def autosave_investigation(
         )
 
     # Optimistic locking: check version
-    if investigation.version != version:
+    if investigation.version != body.version:
         raise HTTPException(
             status_code=409,
             detail={
                 "error_code": "VERSION_CONFLICT",
                 "message": "Investigation was modified by another user",
                 "details": {
-                    "expected_version": version,
+                    "expected_version": body.version,
                     "current_version": investigation.version,
                 },
                 "request_id": request_id,
@@ -758,7 +778,7 @@ async def autosave_investigation(
     old_data = investigation.data
 
     # Update data and increment version
-    investigation.data = data  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
+    investigation.data = body.data  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
     investigation.version += 1  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
     investigation.updated_by_id = current_user.id
 
@@ -769,7 +789,7 @@ async def autosave_investigation(
         event_type="DATA_UPDATED",
         actor_id=current_user.id,
         old_value=old_data,
-        new_value=data,
+        new_value=body.data,
     )
 
     await db.commit()
@@ -781,12 +801,9 @@ async def autosave_investigation(
 @router.post("/{investigation_id}/comments", status_code=201)
 async def add_comment(
     investigation_id: int,
-    content: str,
+    body: CommentCreateRequest,
     db: DbSession,
     current_user: CurrentUser,
-    section_id: Optional[str] = None,
-    field_id: Optional[str] = None,
-    parent_comment_id: Optional[int] = None,
 ):
     """Add an internal comment to an investigation.
 
@@ -814,9 +831,9 @@ async def add_comment(
         )
 
     # Validate parent comment if provided
-    if parent_comment_id:
+    if body.parent_comment_id:
         parent_query = select(InvestigationComment).where(
-            InvestigationComment.id == parent_comment_id,
+            InvestigationComment.id == body.parent_comment_id,
             InvestigationComment.investigation_id == investigation_id,
             InvestigationComment.deleted_at.is_(None),
         )
@@ -827,7 +844,7 @@ async def add_comment(
                 status_code=404,
                 detail={
                     "error_code": "PARENT_COMMENT_NOT_FOUND",
-                    "message": f"Parent comment {parent_comment_id} not found",
+                    "message": f"Parent comment {body.parent_comment_id} not found",
                     "request_id": request_id,
                 },
             )
@@ -835,10 +852,10 @@ async def add_comment(
     # Create comment
     comment = InvestigationComment(
         investigation_id=investigation_id,
-        content=content,
-        section_id=section_id,
-        field_id=field_id,
-        parent_comment_id=parent_comment_id,
+        content=body.content,
+        section_id=body.section_id,
+        field_id=body.field_id,
+        parent_comment_id=body.parent_comment_id,
         author_id=current_user.id,
     )
 
@@ -963,7 +980,7 @@ async def approve_investigation(
 @router.post("/{investigation_id}/customer-pack")
 async def generate_customer_pack(
     investigation_id: int,
-    audience: str,
+    body: CustomerPackRequest,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -982,13 +999,13 @@ async def generate_customer_pack(
 
     # Validate audience
     try:
-        audience_enum = CustomerPackAudience(audience)
+        audience_enum = CustomerPackAudience(body.audience)
     except ValueError:
         raise HTTPException(
             status_code=400,
             detail={
                 "error_code": "INVALID_AUDIENCE",
-                "message": f"Invalid audience: {audience}",
+                "message": f"Invalid audience: {body.audience}",
                 "details": {"valid_audiences": [e.value for e in CustomerPackAudience]},
                 "request_id": request_id,
             },
@@ -1048,7 +1065,7 @@ async def generate_customer_pack(
         actor_id=current_user.id,
         metadata={
             "pack_uuid": pack.pack_uuid,
-            "audience": audience,
+            "audience": body.audience,
             "redaction_count": len(redaction_log),
             "assets_included": sum(1 for a in included_assets if a["included"]),
             "assets_excluded": sum(1 for a in included_assets if not a["included"]),
@@ -1069,4 +1086,210 @@ async def generate_customer_pack(
         "redaction_log": pack.redaction_log,
         "included_assets": pack.included_assets,
         "checksum": pack.checksum_sha256,
+    }
+
+
+@router.get("/{investigation_id}/timeline")
+async def get_timeline(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    type: Optional[str] = Query(None),
+):
+    """Get timeline (revision events) for an investigation."""
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+    if not investigation:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    events_query = (
+        select(InvestigationRevisionEvent)
+        .where(InvestigationRevisionEvent.investigation_id == investigation_id)
+    )
+    if type and type != "all":
+        events_query = events_query.where(InvestigationRevisionEvent.event_type == type.upper())
+
+    count_query = select(func.count()).select_from(events_query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    events_query = events_query.order_by(
+        InvestigationRevisionEvent.created_at.desc(),
+        InvestigationRevisionEvent.id.desc(),
+    )
+    events_query = events_query.offset((page - 1) * page_size).limit(page_size)
+    events_result = await db.execute(events_query)
+    events = list(events_result.scalars().all())
+
+    return {
+        "items": [
+            {
+                "id": e.id,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "event_type": e.event_type,
+                "field_path": e.field_path,
+                "old_value": str(e.old_value) if e.old_value is not None else None,
+                "new_value": str(e.new_value) if e.new_value is not None else None,
+                "actor_id": e.actor_id,
+                "event_metadata": e.event_metadata,
+            }
+            for e in events
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "investigation_id": investigation_id,
+    }
+
+
+@router.get("/{investigation_id}/comments")
+async def list_comments(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+):
+    """Get comments for an investigation, ordered by created_at DESC."""
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+    if not investigation:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    comments_query = (
+        select(InvestigationComment)
+        .where(
+            InvestigationComment.investigation_id == investigation_id,
+            InvestigationComment.deleted_at.is_(None),
+        )
+    )
+
+    count_query = select(func.count()).select_from(comments_query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    comments_query = comments_query.order_by(
+        InvestigationComment.created_at.desc(),
+        InvestigationComment.id.desc(),
+    )
+    comments_query = comments_query.offset((page - 1) * page_size).limit(page_size)
+    comments_result = await db.execute(comments_query)
+    comments = list(comments_result.scalars().all())
+
+    return {
+        "items": [
+            {
+                "id": c.id,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "author_id": c.author_id,
+                "content": c.content,
+                "section_id": c.section_id,
+                "field_id": c.field_id,
+                "parent_comment_id": c.parent_comment_id,
+            }
+            for c in comments
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "investigation_id": investigation_id,
+    }
+
+
+@router.get("/{investigation_id}/packs")
+async def list_packs(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+):
+    """Get customer pack summaries for an investigation (no full content)."""
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+    if not investigation:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    packs_query = (
+        select(InvestigationCustomerPack)
+        .where(InvestigationCustomerPack.investigation_id == investigation_id)
+    )
+
+    count_query = select(func.count()).select_from(packs_query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    packs_query = packs_query.order_by(
+        InvestigationCustomerPack.created_at.desc(),
+    )
+    packs_query = packs_query.offset((page - 1) * page_size).limit(page_size)
+    packs_result = await db.execute(packs_query)
+    packs = list(packs_result.scalars().all())
+
+    return {
+        "items": [
+            {
+                "id": p.id,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "pack_uuid": p.pack_uuid,
+                "audience": p.audience.value if hasattr(p.audience, "value") else str(p.audience),
+                "checksum_sha256": p.checksum_sha256,
+                "generated_by_id": p.generated_by_id,
+            }
+            for p in packs
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "investigation_id": investigation_id,
+    }
+
+
+@router.get("/{investigation_id}/closure-validation")
+async def get_closure_validation(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Check whether an investigation can be closed. Returns OK or BLOCKED."""
+    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    result = await db.execute(query)
+    investigation = result.scalar_one_or_none()
+    if not investigation:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    reason_codes: list[str] = []
+    missing_fields: list[str] = []
+
+    data = investigation.data or {}
+
+    if not data.get("root_cause"):
+        missing_fields.append("root_cause")
+        reason_codes.append("missing_root_cause")
+    if not data.get("findings"):
+        missing_fields.append("findings")
+    if not data.get("conclusion"):
+        missing_fields.append("conclusion")
+
+    if investigation.status not in ("under_review", "completed"):
+        reason_codes.append("status_not_reviewable")
+
+    from src.domain.models.investigation import InvestigationAction
+    actions_query = select(func.count()).where(
+        InvestigationAction.investigation_id == investigation_id,
+        InvestigationAction.status.notin_(["completed", "cancelled"]),
+    )
+    open_actions = (await db.execute(actions_query)).scalar() or 0
+    if open_actions > 0:
+        reason_codes.append("open_actions_remaining")
+
+    status = "OK" if (not reason_codes and not missing_fields) else "BLOCKED"
+
+    return {
+        "status": status,
+        "reason_codes": reason_codes,
+        "missing_fields": missing_fields,
+        "checked_at_utc": datetime.now(timezone.utc).isoformat(),
     }

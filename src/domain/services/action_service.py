@@ -3,7 +3,9 @@
 Extracts business logic from actions routes into a testable service class.
 Handles CRUD for actions spanning incidents, RTAs, complaints, and investigations.
 Raises domain exceptions instead of HTTPException.
+
 """
+from __future__ import annotations
 
 import logging
 from datetime import datetime
