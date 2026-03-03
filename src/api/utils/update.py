@@ -1,5 +1,7 @@
 """Shared model update utilities for API routes."""
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 
 from pydantic import BaseModel

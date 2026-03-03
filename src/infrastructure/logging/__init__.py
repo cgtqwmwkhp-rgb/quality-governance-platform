@@ -1,5 +1,7 @@
 """Structured JSON logging infrastructure with correlation context."""
 
+from __future__ import annotations
+
 import logging
 import logging.handlers
 import os

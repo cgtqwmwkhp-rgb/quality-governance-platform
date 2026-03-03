@@ -1,5 +1,7 @@
 """W3C Trace Context (traceparent) storage via contextvars."""
 
+from __future__ import annotations
+
 import contextvars
 import re
 from typing import Optional

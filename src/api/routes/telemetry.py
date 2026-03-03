@@ -22,6 +22,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, validator
 
+from src.api.dependencies import CurrentUser
+
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 logger = logging.getLogger(__name__)
@@ -312,7 +314,7 @@ async def receive_events_batch(batch: TelemetryBatch):
 
 
 @router.get("/metrics/{experiment_id}")
-async def get_metrics(experiment_id: str):
+async def get_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Get aggregated metrics for an experiment.
 
@@ -326,7 +328,7 @@ async def get_metrics(experiment_id: str):
 
 
 @router.delete("/metrics/{experiment_id}")
-async def reset_metrics(experiment_id: str):
+async def reset_metrics(experiment_id: str, current_user: CurrentUser):
     """
     Reset metrics for an experiment (staging only, for testing).
     """

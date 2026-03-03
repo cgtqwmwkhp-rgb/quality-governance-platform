@@ -4,6 +4,8 @@ Logs permanently failed tasks (after all retries exhausted) to the database
 for manual review and retry.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timezone
 

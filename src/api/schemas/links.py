@@ -1,5 +1,7 @@
 """HATEOAS link generation utilities."""
 
+from __future__ import annotations
+
 from pydantic import BaseModel
 
 

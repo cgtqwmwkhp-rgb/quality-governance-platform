@@ -1,5 +1,7 @@
 """Circuit breaker pattern for external service calls with metrics tracking."""
 
+from __future__ import annotations
+
 import asyncio
 import functools
 import logging

@@ -4,6 +4,8 @@ Extracts business logic from RTA routes into a testable service class.
 Raises domain exceptions instead of HTTPException.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Optional
 
