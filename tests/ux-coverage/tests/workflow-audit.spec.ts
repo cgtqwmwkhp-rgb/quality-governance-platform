@@ -130,7 +130,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
       }, process.env.PORTAL_TEST_TOKEN);
       // Reload so the React PortalAuthProvider picks up the stored session
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
+      await page.waitForTimeout(3000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -144,7 +145,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
+      await page.waitForTimeout(3000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -159,7 +161,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
 const workflows = loadWorkflows();
 
 test.describe('Workflow Audit (P0 Critical Paths)', () => {
-  test.describe.configure({ mode: 'serial' }); // Serial - workflows have state
+  test.describe.configure({ mode: 'parallel' });
   
   for (const workflow of workflows) {
     test(`[${workflow.criticality}] ${workflow.workflowId}: ${workflow.name}`, async ({ page }) => {

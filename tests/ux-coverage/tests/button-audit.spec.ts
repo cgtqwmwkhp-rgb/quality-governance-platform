@@ -172,7 +172,7 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
 const buttons = loadButtons();
 
 test.describe('Button Wiring Audit', () => {
-  test.describe.configure({ mode: 'serial' }); // Serial to avoid state conflicts
+  test.describe.configure({ mode: 'parallel' });
   
   for (const buttonEntry of buttons) {
     test(`[${buttonEntry.criticality}] ${buttonEntry.pageId}::${buttonEntry.actionId}`, async ({ page }) => {
