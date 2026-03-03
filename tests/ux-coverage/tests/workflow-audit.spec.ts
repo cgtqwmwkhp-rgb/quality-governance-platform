@@ -114,8 +114,22 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
       await page.evaluate((token) => {
-        localStorage.setItem('portal_token', token);
+        const demoUser = {
+          id: 'ux-test-user-001',
+          email: 'ux-test@plantexpand.com',
+          name: 'UX Test User',
+          firstName: 'UX',
+          lastName: 'Test',
+          jobTitle: 'Test Engineer',
+          department: 'QA',
+          isDemoUser: true,
+        };
+        localStorage.setItem('portal_user', JSON.stringify(demoUser));
+        localStorage.setItem('portal_session_time', Date.now().toString());
+        sessionStorage.setItem('platform_access_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
+      // Reload so the React PortalAuthProvider picks up the stored session
+      await page.reload({ waitUntil: 'networkidle' });
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -128,6 +142,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
+      await page.reload({ waitUntil: 'networkidle' });
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -135,7 +150,6 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
     }
   }
   
-  // For testing without real auth, we can skip auth-required workflows
   return false;
 }
 

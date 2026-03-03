@@ -97,6 +97,55 @@ portal_routes:
     description: "Portal help and FAQ"
 
 # ==============================================================================
+# WORKFORCE ROUTES (JWT Authentication - Staff/Admin)
+# ==============================================================================
+workforce_routes:
+  - pageId: workforce-assessments
+    route: /workforce/assessments
+    auth: jwt_admin
+    criticality: P2
+    component: Assessments
+    expected_empty_state: "Assessments list"
+    expected_degraded_state: null
+    description: "Workforce assessments"
+
+  - pageId: workforce-training
+    route: /workforce/training
+    auth: jwt_admin
+    criticality: P2
+    component: Training
+    expected_empty_state: "Training list"
+    expected_degraded_state: null
+    description: "Workforce training"
+
+  - pageId: workforce-engineers
+    route: /workforce/engineers
+    auth: jwt_admin
+    criticality: P2
+    component: Engineers
+    expected_empty_state: "Engineers list"
+    expected_degraded_state: null
+    description: "Engineers management"
+
+  - pageId: workforce-calendar
+    route: /workforce/calendar
+    auth: jwt_admin
+    criticality: P2
+    component: WorkforceCalendar
+    expected_empty_state: "Calendar view"
+    expected_degraded_state: null
+    description: "Workforce calendar"
+
+  - pageId: workforce-dashboard
+    route: /workforce/dashboard
+    auth: jwt_admin
+    criticality: P2
+    component: CompetencyDashboard
+    expected_empty_state: "Competency dashboard"
+    expected_degraded_state: null
+    description: "Workforce competency dashboard"
+
+# ==============================================================================
 # ADMIN ROUTES (JWT Authentication - Staff/Admin)
 # ==============================================================================
 admin_routes:
@@ -366,16 +415,16 @@ admin_routes:
     auth: jwt_admin
     criticality: P1
     component: RiskRegister
-    expected_empty_state: "Risk matrix visible"
+    expected_empty_state: "Enterprise risk register"
     expected_degraded_state: null
     description: "Enterprise risk register"
 
   - pageId: ims
     route: /ims
     auth: jwt_admin
-    criticality: P1
+    criticality: P2
     component: IMSDashboard
-    expected_empty_state: "IMS dashboard with empty metrics"
+    expected_empty_state: "IMS dashboard"
     expected_degraded_state: null
     description: "Integrated Management System dashboard"
 
@@ -384,25 +433,25 @@ admin_routes:
     auth: jwt_admin
     criticality: P2
     component: AIIntelligence
-    expected_empty_state: "AI dashboard visible"
-    expected_degraded_state: "AI features disabled banner"
-    description: "AI Intelligence hub"
+    expected_empty_state: "AI insights dashboard"
+    expected_degraded_state: null
+    description: "AI Intelligence dashboard"
 
   - pageId: uvdb
     route: /uvdb
     auth: jwt_admin
     criticality: P2
-    component: UVDBAudits
-    expected_empty_state: "UVDB audit list"
+    component: UVDB
+    expected_empty_state: "UVDB sections and questions"
     expected_degraded_state: null
-    description: "UVDB Achilles audits"
+    description: "UVDB Achilles audit management"
 
   - pageId: planet-mark
     route: /planet-mark
     auth: jwt_admin
     criticality: P2
     component: PlanetMark
-    expected_empty_state: "Carbon dashboard"
+    expected_empty_state: "Planet Mark carbon data"
     expected_degraded_state: null
     description: "Planet Mark carbon management"
 
@@ -411,27 +460,27 @@ admin_routes:
     auth: jwt_admin
     criticality: P2
     component: DigitalSignatures
-    expected_empty_state: "Signature requests list"
+    expected_empty_state: "Digital signatures list"
     expected_degraded_state: null
-    description: "Digital signatures"
+    description: "Digital signature management"
 
   - pageId: admin-dashboard
     route: /admin
     auth: jwt_admin
-    criticality: P1
+    criticality: P2
     component: AdminDashboard
-    expected_empty_state: "Admin panel visible"
+    expected_empty_state: "Admin dashboard"
     expected_degraded_state: null
-    description: "Admin configuration dashboard"
+    description: "Administration dashboard"
 
   - pageId: admin-forms
     route: /admin/forms
     auth: jwt_admin
-    criticality: P1
-    component: FormsList
-    expected_empty_state: "Form templates list"
+    criticality: P2
+    component: FormConfig
+    expected_empty_state: "Form configuration list"
     expected_degraded_state: null
-    description: "Form configuration list"
+    description: "Form configuration management"
 
   - pageId: admin-contracts
     route: /admin/contracts
@@ -451,11 +500,29 @@ admin_routes:
     expected_degraded_state: null
     description: "System settings"
 
+  - pageId: analytics-dashboards
+    route: /analytics/dashboards
+    auth: jwt_admin
+    criticality: P2
+    component: DashboardBuilder
+    expected_empty_state: "Dashboard builder"
+    expected_degraded_state: null
+    description: "Custom dashboard builder"
+
+  - pageId: analytics-reports
+    route: /analytics/reports
+    auth: jwt_admin
+    criticality: P2
+    component: ReportGenerator
+    expected_empty_state: "Report generator"
+    expected_degraded_state: null
+    description: "Custom report generator"
+
 # ==============================================================================
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 50
+  total_routes: 65
   p0_routes: 12
-  p1_routes: 22
-  p2_routes: 16
+  p1_routes: 23
+  p2_routes: 30

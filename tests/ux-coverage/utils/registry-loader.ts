@@ -63,6 +63,7 @@ export interface PageRegistry {
   version: string;
   public_routes: PageEntry[];
   portal_routes: PageEntry[];
+  workforce_routes: PageEntry[];
   admin_routes: PageEntry[];
 }
 
@@ -105,6 +106,7 @@ export function getAllPages(criticality?: 'P0' | 'P1' | 'P2'): PageEntry[] {
   const allPages = [
     ...registry.public_routes,
     ...registry.portal_routes,
+    ...(registry.workforce_routes || []),
     ...registry.admin_routes,
   ];
   
